@@ -275,6 +275,33 @@ describe("@slugbase/testing", () => {
   });
 });
 
+describe("@slugbase/testing-ports", () => {
+  it.each([
+    "packages/server/src/fixture.ts",
+    "packages/core/src/fixture.ts",
+    "apps/slugbase/src/fixture.ts",
+  ])("fails in production code: %s", async (file) => {
+    await failsWith(file, 'import "@slugbase/testing-ports";\n', IMPORT);
+  });
+
+  it.each([
+    "packages/core/test/fixture.test.ts",
+    "packages/core/test/helpers/fixture.ts",
+    "apps/slugbase/test/fixture.ts",
+    "packages/testing/src/fixture.ts",
+  ])("passes in test code, app tooling and the testing package: %s", async (file) => {
+    await passes(file, 'import "@slugbase/testing-ports";\n');
+  });
+
+  it("imports no workspace package", async () => {
+    await failsWith("packages/testing-ports/src/fixture.ts", 'import "@slugbase/core";\n', IMPORT);
+  });
+
+  it("keeps the testing package's src from importing @slugbase/testing itself", async () => {
+    await failsWith("packages/testing/src/fixture.ts", 'import "@slugbase/testing";\n', IMPORT);
+  });
+});
+
 describe("@slugbase/db/testing (T1)", () => {
   const HARNESS = 'import "@slugbase/db/testing";\n';
 
@@ -416,6 +443,19 @@ describe("CLAUDE.md sweeps", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
       .filter((file) => file !== "" && !file.startsWith("packages/adapters/src/egress/"));
     expect(files.length).toBeGreaterThan(0);
     const offenders = files.flatMap((file) =>
+      findRawOutbound(readFileSync(resolve(ROOT, file), "utf8"), file).map((found) => `${file} ${found}`),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  // The list CLAUDE.md gives the security audit. It matches the text `fetch(` too, so outside the
+  // egress adapter and the test files it may name only files whose syntax holds no outbound request.
+  it("sweep-raw-fetch names only the egress adapter, test files and files with no outbound request", () => {
+    const listed = sweep(["fetch(", "node:http", "undici"], "packages/**/*.ts");
+    expect(listed).toContain("packages/adapters/src/egress/egress.ts");
+    const isTest = (file: string): boolean => /(^|\/)test\//.test(file) || /\.test\.tsx?$/.test(file);
+    const others = listed.filter((file) => !file.startsWith("packages/adapters/src/egress/") && !isTest(file));
+    const offenders = others.flatMap((file) =>
       findRawOutbound(readFileSync(resolve(ROOT, file), "utf8"), file).map((found) => `${file} ${found}`),
     );
     expect(offenders).toEqual([]);

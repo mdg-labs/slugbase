@@ -3,10 +3,11 @@ import type { Database } from "@slugbase/db";
 import { defineOperation, jsonResponse, problemResponse, type OperationDefinition } from "@slugbase/contracts";
 import { z } from "zod";
 import type { ChainDependencies } from "../src/http/chain.ts";
-import { loadConfig } from "../src/config/index.ts";
+import { createRateLimitRegistry, loadConfig } from "../src/config/index.ts";
 import { createHookDispatcher, type HookDispatcher, type HookRegistration } from "../src/hooks/index.ts";
 import type { ContractDocument, Logger, ModuleContext, ServerModule } from "../src/create-server.ts";
 import { productionEnv } from "./config/support.ts";
+import { memoryRateLimiter } from "./http/rate-limit-support.ts";
 
 export interface RecordedLog {
   readonly level: "info" | "warn" | "error";
@@ -32,12 +33,15 @@ export function recordingLogger(): Logger & { readonly entries: RecordedLog[]; r
   return { entries, requests, info: record("info"), warn: record("warn"), error: record("error") };
 }
 
+// A server under test does not migrate when it starts unless the test asks for it: the databases of most
+// tests are fakes, and the migration of the real one has tests of its own.
 export function serverConfig(overrides: Record<string, string | undefined> = {}) {
-  return loadConfig("server", productionEnv(overrides)).config;
+  return loadConfig("server", productionEnv({ MIGRATE_ON_START: "false", ...overrides })).config;
 }
 
-export function adapters(): Adapters {
-  return unconfigured();
+/** Every port unconfigured except the rate limiter, which is in memory: the unconfigured one refuses every limited route. */
+export function adapters(config: ModuleContext["config"] = serverConfig()): Adapters {
+  return { ...unconfigured(), rateLimit: memoryRateLimiter(createRateLimitRegistry(config)) };
 }
 
 /** A hook dispatcher over the unconfigured client error-report source, for tests that do not exercise hooks. */
@@ -65,6 +69,12 @@ export function fakeDatabase(): FakeDatabase {
 export function tenantDependencies(): Pick<ChainDependencies, "tenantResolver" | "withTenant"> {
   const database = fakeDatabase();
   return { tenantResolver: adapters().tenantResolver, withTenant: database.withTenant.bind(database) };
+}
+
+/** The rate-limit dependencies of the chain for a test that does not exercise limits: the default registry over an in-memory limiter. */
+export function rateLimitDependencies(): Pick<ChainDependencies, "rateLimit" | "rateLimits"> {
+  const rateLimits = createRateLimitRegistry(serverConfig());
+  return { rateLimit: memoryRateLimiter(rateLimits), rateLimits };
 }
 
 export function operation(method: "get" | "post", path: string, operationId: string): OperationDefinition {

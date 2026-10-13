@@ -22,6 +22,17 @@ const notFound = (call: ApiCall): ApiResponse => ({
   body: { type: "about:blank", title: "Not Found", status: 404, instance: call.url },
 });
 
+const refused = (call: ApiCall): ApiResponse => ({
+  status: 403,
+  body: { type: "about:blank", title: "Forbidden", status: 403, instance: call.url },
+});
+
+const RANK: Readonly<Record<string, number>> = { member: 1, admin: 2, owner: 3 };
+
+/** What the chain answers: 403 to a principal below the policy of the operation, 404 to the others. */
+const answerByPolicy = (call: ApiCall): ApiResponse =>
+  (RANK[call.principal.role] ?? 0) < (RANK[call.operation.policy] ?? 0) ? refused(call) : notFound(call);
+
 describe("classifyOperations", () => {
   it("places each policy in one of the four kinds and counts them", () => {
     const result = classifyOperations(
@@ -124,6 +135,66 @@ describe("API mode", () => {
     expect(report.failures.every((failure) => failure.kind === "unexpected_status")).toBe(true);
     expect(report.failures[0]?.subject).toContain("getBookmark");
     expect(report.failures[0]?.detail).toContain("403");
+  });
+
+  describe("by the policy of the operation", () => {
+    const documentOfPolicy = (auth: string): unknown =>
+      documentOf([{ operationId: "getWidget", path: "/api/v1/widgets/{widgetId}", auth }]);
+    const answerByRole = (below: readonly string[]) => (call: ApiCall) =>
+      Promise.resolve(below.includes(call.principal.role) ? refused(call) : notFound(call));
+    const run = (auth: string, request: (call: ApiCall) => Promise<ApiResponse>) =>
+      runApiMatrix({ document: documentOfPolicy(auth), fixture: memoryFixture(), mapping: { widgetId: "bookmark" }, request });
+
+    it("expects 403 below an admin policy and 404 at or above it, and still calls every principal", async () => {
+      const seen: string[] = [];
+      const report = await run("admin", (call) => {
+        seen.push(call.principal.role);
+        return answerByRole(["member"])(call);
+      });
+      expect(report.failures).toEqual([]);
+      // three principals of A against the two bookmarks of B
+      expect(report.attempts).toBe(6);
+      expect([...new Set(seen)].sort()).toEqual(["admin", "member", "owner"]);
+    });
+
+    it("expects 403 for a member and an admin on an owner policy", async () => {
+      const report = await run("owner", answerByRole(["member", "admin"]));
+      expect(report.failures).toEqual([]);
+    });
+
+    it("keeps 404 for every principal on a member policy", async () => {
+      const report = await run("member", answerByRole([]));
+      expect(report.failures).toEqual([]);
+    });
+
+    it("fails a 404 below the policy: the handler was reached", async () => {
+      const report = await run("admin", (call) => Promise.resolve(notFound(call)));
+      expect(report.failures.map((failure) => failure.kind)).toEqual(["unexpected_status", "unexpected_status"]);
+      expect(report.failures.every((failure) => failure.detail.startsWith("as member of A"))).toBe(true);
+      expect(report.failures[0]?.detail).toContain("expected 403");
+    });
+
+    it("fails a 403 at or above the policy", async () => {
+      const report = await run("admin", answerByRole(["member", "admin"]));
+      expect(report.failures).toHaveLength(2);
+      expect(report.failures.every((failure) => failure.detail.startsWith("as admin of A"))).toBe(true);
+      expect(report.failures[0]?.detail).toContain("expected 404");
+    });
+
+    it("fails a 200 that returns the row of B to a principal at the policy", async () => {
+      const report = await run("admin", (call) =>
+        call.principal.role === "member" ? Promise.resolve(refused(call)) : Promise.resolve({ status: 200, body: { id: call.url } }),
+      );
+      expect(report.failures).toHaveLength(4);
+      expect(report.failures.every((failure) => failure.kind === "unexpected_status" && failure.detail.includes("expected 404"))).toBe(true);
+    });
+
+    it("still fails a refusal whose body quotes content of B", async () => {
+      const report = await run("admin", (call) =>
+        Promise.resolve(call.principal.role === "member" ? { status: 403, body: { detail: B_MARKER } } : notFound(call)),
+      );
+      expect(report.failures.map((failure) => failure.kind)).toEqual(["leaked_name", "leaked_name"]);
+    });
   });
 
   it("fails a 404 whose body names another row of B", async () => {
@@ -318,7 +389,7 @@ describe("API mode, query and body inputs", () => {
       mapping,
       request: (call) => {
         calls.push(call);
-        return Promise.resolve(notFound(call));
+        return Promise.resolve(answerByPolicy(call));
       },
     });
     expect(report.failures).toEqual([]);
@@ -341,7 +412,8 @@ describe("API mode, query and body inputs", () => {
       request: (call) => Promise.resolve({ status: call.operation.operationId === "transferOwnership" ? 200 : 403 }),
     });
     expect(new Set(report.failures.map((failure) => failure.kind))).toEqual(new Set(["unexpected_status"]));
-    expect(report.failures).toHaveLength(3 + 6);
+    // the 200 of the owner operation fails for all three principals; the 403 of the admin operation only for the two at or above its policy
+    expect(report.failures).toHaveLength(3 + 2 * 2);
   });
 
   it("fails an operation whose body input has no mapping, naming the operation and the input", async () => {

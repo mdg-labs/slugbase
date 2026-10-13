@@ -22,7 +22,7 @@ import {
 } from "../../src/create-server.ts";
 import { RouteTable, installChain, type ChainEnv } from "../../src/http/chain.ts";
 import type { EntitlementCheck, EntitlementSubject } from "../../src/http/authorize.ts";
-import { adapters, documentOf, fakeDatabase, hookDispatcher, recordingLogger, serverConfig, tenantDependencies } from "../support.ts";
+import { adapters, documentOf, fakeDatabase, hookDispatcher, recordingLogger, serverConfig, tenantDependencies, rateLimitDependencies } from "../support.ts";
 
 // Stages 4, 7 and 9 of the chain (doc 01 section 4), exercised through the
 // operations a test module registers, with stub authenticators and a stub
@@ -533,7 +533,7 @@ describe("an entitlement source", () => {
         hooks: hookDispatcher(),
         responseValidation: "throw",
         entitlements: check,
-        ...tenantDependencies(),
+        ...tenantDependencies(), ...rateLimitDependencies(),
       },
       {
         authentication: async (context, next) => {

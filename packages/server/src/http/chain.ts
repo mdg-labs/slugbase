@@ -1,7 +1,8 @@
 import type { OperationDefinition } from "@slugbase/contracts";
-import type { ChallengePort, ErrorReportPort, TenantResolver } from "@slugbase/core";
+import type { ChallengePort, ErrorReportPort, RateLimitPort, TenantResolver } from "@slugbase/core";
 import type { Database } from "@slugbase/db";
 import type { Context, Hono, MiddlewareHandler } from "hono";
+import type { RateLimitRegistry } from "../config/index.ts";
 import type { Logger } from "../create-server.ts";
 import type { HookDispatcher } from "../hooks/index.ts";
 import type { Metrics } from "../metrics/index.ts";
@@ -11,6 +12,7 @@ import { bodyLimits } from "./body-limits.ts";
 import { createCrossSiteProtection } from "./cross-site.ts";
 import { createSecurityHeaders } from "./headers.ts";
 import { failRequest, notFoundProblem, responseStage, type ResponseValidation } from "./problem.ts";
+import { createRateLimiting, type RateLimitState } from "./rate-limit.ts";
 import { createRequestContext } from "./request-context.ts";
 import { createTenantResolution, type RequestTenant } from "./tenant.ts";
 import { validation } from "./validation.ts";
@@ -81,6 +83,8 @@ export interface ChainEnv {
     principalType?: "anonymous" | "session" | "api-token";
     /** Set by the authentication stage when an authenticator accepted the request's credential; absent for an anonymous request. */
     principal?: Principal;
+    /** Set by the rate-limiting stage for a request it limited: what it took, for the `RateLimit` headers. */
+    rateLimit?: RateLimitState;
     /** Set by the tenant-resolution stage: the active workspace's internal UUID. */
     workspaceId?: string;
     /** Set by the tenant-resolution stage when the resolver found a workspace for the principal. */
@@ -136,6 +140,10 @@ export interface ChainDependencies {
   readonly challenge: ChallengePort;
   /** Receives every unexpected failure (stage 11). */
   readonly errors: ErrorReportPort;
+  /** The token buckets stage 6 takes from. */
+  readonly rateLimit: RateLimitPort;
+  /** The buckets of doc 04 section 7 with their configured limits (stage 6). */
+  readonly rateLimits: RateLimitRegistry;
   /** Resolves credentials into principals (stage 4); without one every request is anonymous. */
   readonly authenticators?: readonly Authenticator[];
   /** Derives the active workspace, member and role of a principal (stage 7). */
@@ -149,7 +157,7 @@ export interface ChainDependencies {
   /** How stage 11 treats a response that differs from its declared schema. */
   readonly responseValidation: ResponseValidation;
   /** Counts every request under its route template (doc 01 section 12). */
-  readonly metrics?: Pick<Metrics, "recordRequest">;
+  readonly metrics?: Pick<Metrics, "recordRequest" | "recordRateLimitRejection">;
 }
 
 interface CompiledRoute {
@@ -254,6 +262,8 @@ export function installChain(
     appOrigin,
     challenge,
     errors,
+    rateLimit,
+    rateLimits,
     hooks,
     responseValidation,
     metrics,
@@ -264,6 +274,13 @@ export function installChain(
   } = dependencies;
   const requestContext = createRequestContext({ logger, trustedProxyHops, ...(metrics === undefined ? {} : { metrics }) });
   const securityHeaders = createSecurityHeaders({ appOrigin });
+  const rateLimiting = createRateLimiting({
+    limiter: rateLimit,
+    registry: rateLimits,
+    logger,
+    errors,
+    ...(metrics === undefined ? {} : { recordRejection: (bucket: string) => { metrics.recordRateLimitRejection(bucket); } }),
+  });
 
   const implemented: StageImplementations = {
     "request-context": requestContext.stage,
@@ -271,6 +288,7 @@ export function installChain(
     "body-limits": bodyLimits,
     authentication: createAuthentication({ authenticators }),
     "cross-site-protection": createCrossSiteProtection({ appOrigin, challenge, logger }),
+    "rate-limiting": rateLimiting.stage,
     "tenant-resolution": createTenantResolution({ resolver: tenantResolver, withTenant }),
     validation,
     authorization: createAuthorization(entitlements === undefined ? {} : { entitlements }),
@@ -327,6 +345,8 @@ export function installChain(
     } catch (error) {
       fail(context, error);
     }
+    // Whatever answered, the headers of the buckets the request took from go on it.
+    rateLimiting.apply(context);
     for (const stage of responseStages) {
       try {
         await stage.run(context);

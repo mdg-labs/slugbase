@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { getApiConfig, getOpenApiDocument } from "@slugbase/contracts";
-import { unconfigured, type Adapters } from "@slugbase/core";
+import type { Adapters } from "@slugbase/core";
 import { describe, expect, it } from "vitest";
 import type { BuildInfo } from "../../src/build-info.ts";
 import { createServer } from "../../src/create-server.ts";
@@ -46,7 +46,7 @@ describe("GET /api/config", () => {
   });
 
   it("reports whether a port is configured, per port", async () => {
-    const ports = unconfigured();
+    const ports = adapters();
     const mail = { ...ports, mail: { ...ports.mail, available: true } };
     const ai = { ...ports, ai: { ...ports.ai, available: true } };
     const features = async (given: Adapters) =>

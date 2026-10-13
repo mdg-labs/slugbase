@@ -51,6 +51,18 @@ export const checkProbeRow = defineOperation({
   },
 });
 
+export const getProbeAdminRow = defineOperation({
+  method: "get",
+  path: "/api/v1/probe-admin-rows/{rowId}",
+  operationId: "getProbeAdminRow",
+  tag: "probe",
+  auth: "admin",
+  rate: "read",
+  scope: "read",
+  request: { params: RowParams },
+  responses: { 200: jsonResponse("The row", RowSchema), 401: unauthenticated, 403: forbidden, 404: notFound },
+});
+
 const WorkspaceSchema = z.strictObject({ workspaceId: z.uuid() });
 
 export const getProbeSettings = defineOperation({
@@ -111,6 +123,7 @@ export const getProbeMe = defineOperation({
 export const probeOperations: readonly OperationDefinition[] = [
   getProbeRow,
   checkProbeRow,
+  getProbeAdminRow,
   getProbeSettings,
   getProbeOwnership,
   getProbeInstance,
@@ -163,6 +176,10 @@ export function probeModule(probe: Probe, world: StubWorld): ServerModule {
           const row = await rowOf(context, params.rowId);
           return { status: 200, body: { id: row.id, matches: row.label === body.label } };
         }),
+        route(getProbeAdminRow).handle(async ({ params }, context) => {
+          const { id, label } = await rowOf(context, params.rowId);
+          return { status: 200, body: { id, label } };
+        }),
         route(getProbeSettings).handle(workspace),
         route(getProbeOwnership).handle(workspace),
         route(getProbeInstance).handle(() => ({ status: 200, body: { ok: true } })),
@@ -199,6 +216,7 @@ export function probeFixtures(probe: Probe): ContractFixtures {
   return {
     getProbeRow: { path: own, foreign: { path: foreign } },
     checkProbeRow: { path: own, body, foreign: { path: foreign, body } },
+    getProbeAdminRow: { path: own, foreign: { path: foreign } },
     getProbeSettings: {},
     getProbeOwnership: {},
     getProbeInstance: {},

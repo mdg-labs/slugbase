@@ -8,7 +8,7 @@ import { recordingLogger, serverConfig } from "../support.ts";
 import { buildDocument, type TestDocument } from "./build-document.ts";
 import { FIXTURES } from "./fixtures.ts";
 import { matrixRequest } from "./matrix.ts";
-import { getProbeRow, probeFixtures, probeModule, probeOperations } from "./probe-module.ts";
+import { getProbeAdminRow, getProbeRow, probeFixtures, probeModule, probeOperations } from "./probe-module.ts";
 import { createStubWorld, type StubWorld } from "./stubs.ts";
 import { appUrl, tenantDatabase } from "./support.ts";
 import { walkContract, type PolicyHooks } from "./walker.ts";
@@ -41,6 +41,21 @@ function serve(modules: readonly ServerModule[], document?: TestDocument): Serve
     database: tenantDatabase(database()),
     ...(document === undefined ? {} : { openApiDocument: document }),
   });
+}
+
+/** The constructed Critical of doc 10 section 6: the handler looks the row up as the table owner, in every workspace. */
+async function sneakyLookup({ params }: { params: { rowId: string } }): Promise<{ status: 200; body: { id: string; label: string } }> {
+  for (const workspaceId of [probe.fixture.a.id, probe.fixture.b.id]) {
+    const rows = await database().owner.begin(async (tx) => {
+      await tx`SELECT set_config('app.workspace_id', ${workspaceId}, true)`;
+      return tx.unsafe<{ id: string; label: string }[]>(`SELECT id, label FROM ${probe.table} WHERE id = $1`, [params.rowId]);
+    });
+    const row = rows[0];
+    if (row !== undefined) {
+      return { status: 200, body: { id: row.id, label: row.label } };
+    }
+  }
+  throw new ProblemError("not_found", "No such row.");
 }
 
 const origin = serverConfig({ NODE_ENV: "test" }).APP_ORIGIN;
@@ -84,18 +99,18 @@ describe("the hooks over a test module", () => {
     expect(report.failures).toEqual([]);
     expect(report.operations).toBe(probeOperations.length);
     expect(counted).toEqual({
-      authorized: 7,
+      authorized: 8,
       // every policy but the account one has a role below it
-      tooLowRole: 6,
+      tooLowRole: 7,
       // the one operation with a write scope
       readOnlyToken: 1,
       // the one operation that declares an entitlement
       withoutEntitlement: 1,
-      // the two operations that take the identifier of a row
-      workspaceA: 2,
+      // the three operations that take the identifier of a row
+      workspaceA: 3,
     });
     // the valid request and the one without credentials of each operation, and one request for each run of another hook
-    expect(report.calls).toBe(7 + 7 + 6 + 1 + 1 + 2);
+    expect(report.calls).toBe(8 + 8 + 7 + 1 + 1 + 3);
   });
 });
 
@@ -112,31 +127,18 @@ describe("the cross-tenant matrix in API mode over the server", () => {
       request: matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: probeFixtures(probe), credentialsOf: (principal) => world.credentialsOf(principal) }),
     });
     expect(report.failures).toEqual([]);
-    expect(report.classified.byKind["tenant-scoped"]).toBe(5);
-    // three principals of A against the two rows of B, on each of the two operations that take a row; once on the three that take none
-    expect(report.attempts).toBe(2 * 6 + 3 * 3);
+    expect(report.classified.byKind["tenant-scoped"]).toBe(6);
+    // three principals of A against the two rows of B, on each of the three operations that take a row; once on the three that take none
+    expect(report.attempts).toBe(3 * 6 + 3 * 3);
   });
 
   it("fails an operation that loads the row by id outside the tenant transaction", async () => {
-    // The constructed Critical of doc 10 section 6: the handler looks the row up as the table owner, in every workspace.
     const sneaky: ServerModule = {
       name: "sneaky",
       register: () => ({
         authenticators: world.authenticators,
         routes: [
-          route(getProbeRow).handle(async ({ params }) => {
-            for (const workspaceId of [probe.fixture.a.id, probe.fixture.b.id]) {
-              const rows = await database().owner.begin(async (tx) => {
-                await tx`SELECT set_config('app.workspace_id', ${workspaceId}, true)`;
-                return tx.unsafe<{ id: string; label: string }[]>(`SELECT id, label FROM ${probe.table} WHERE id = $1`, [params.rowId]);
-              });
-              const row = rows[0];
-              if (row !== undefined) {
-                return { status: 200, body: { id: row.id, label: row.label } };
-              }
-            }
-            throw new ProblemError("not_found", "No such row.");
-          }),
+          route(getProbeRow).handle(sneakyLookup),
         ],
       }),
     };
@@ -150,5 +152,30 @@ describe("the cross-tenant matrix in API mode over the server", () => {
     });
     expect(new Set(report.failures.map((failure) => failure.kind))).toEqual(new Set(["unexpected_status", "leaked_name"]));
     expect(report.failures.filter((failure) => failure.kind === "unexpected_status")).toHaveLength(6);
+  });
+
+  it("fails an admin operation that loads the row by id outside the tenant transaction, for the principals the policy admits only", async () => {
+    const sneaky: ServerModule = {
+      name: "sneaky-admin",
+      register: () => ({
+        authenticators: world.authenticators,
+        routes: [
+          route(getProbeAdminRow).handle(sneakyLookup),
+        ],
+      }),
+    };
+    const only = buildDocument([getProbeAdminRow], committed);
+    const server = serve([sneaky], only);
+    const report = await runApiMatrix({
+      document: only,
+      fixture: probe.fixture,
+      mapping,
+      request: matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: probeFixtures(probe), credentialsOf: (principal) => world.credentialsOf(principal) }),
+    });
+    expect(new Set(report.failures.map((failure) => failure.kind))).toEqual(new Set(["unexpected_status", "leaked_name"]));
+    // the member is refused by stage 9 before the handler runs; the admin and the owner reach it
+    const unexpected = report.failures.filter((failure) => failure.kind === "unexpected_status");
+    expect(unexpected).toHaveLength(4);
+    expect(unexpected.every((failure) => /^as (admin|owner) of A/.test(failure.detail))).toBe(true);
   });
 });

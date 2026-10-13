@@ -104,36 +104,76 @@ export interface ClientErrorReportRequest {
 }
 
 // @public
+export const EGRESS_MAX_REQUEST_BODY_BYTES = 1048576;
+
+// @public
+export class EgressBlocked extends EgressError {
+    constructor();
+}
+
+// @public (undocumented)
+export interface EgressBodylessRequest extends EgressRequestBase {
+    // (undocumented)
+    readonly body?: undefined;
+    // (undocumented)
+    readonly method?: "GET" | "HEAD";
+}
+
+// @public
+export class EgressError extends Error {
+    constructor(code?: EgressErrorCode, message?: string);
+    // (undocumented)
+    readonly code: EgressErrorCode;
+}
+
+// @public (undocumented)
+export type EgressErrorCode = "egress_failed" | "egress_blocked" | "egress_timeout" | "egress_too_large";
+
+// @public
 export interface EgressPort extends Port {
     // (undocumented)
     request(request: EgressRequest): Promise<EgressResponse>;
 }
 
 // @public (undocumented)
-export interface EgressRequest {
+export interface EgressPostRequest extends EgressRequestBase {
+    readonly body: Uint8Array;
     // (undocumented)
+    readonly method: "POST";
+}
+
+// @public (undocumented)
+export type EgressRequest = EgressBodylessRequest | EgressPostRequest;
+
+// @public (undocumented)
+export interface EgressRequestBase {
     readonly acceptContentTypes?: readonly string[];
     // (undocumented)
     readonly headers?: Readonly<Record<string, string>>;
-    // (undocumented)
-    readonly maxBytes?: number;
-    // (undocumented)
-    readonly method?: "GET" | "HEAD";
-    // (undocumented)
-    readonly timeoutMs?: number;
+    readonly maxBytes: number;
+    readonly timeoutMs: number;
     // (undocumented)
     readonly url: string;
 }
 
 // @public (undocumented)
 export interface EgressResponse {
-    // (undocumented)
     readonly body: Uint8Array;
     // (undocumented)
     readonly contentType: string | undefined;
     // (undocumented)
     readonly status: number;
     readonly url: string;
+}
+
+// @public
+export class EgressTimeout extends EgressError {
+    constructor();
+}
+
+// @public
+export class EgressTooLarge extends EgressError {
+    constructor();
 }
 
 // @public (undocumented)
@@ -280,12 +320,19 @@ export interface SealedSecret {
     readonly keyId: string;
 }
 
+// @public (undocumented)
+export interface SecretBoxOptions {
+    readonly aad: Uint8Array;
+}
+
 // @public
 export interface SecretBoxPort extends Port {
+    needsRotation(keyId: string): Promise<boolean>;
     // (undocumented)
-    open(sealed: SealedSecret): Promise<Uint8Array>;
+    open(sealed: SealedSecret, options: SecretBoxOptions): Promise<Uint8Array>;
+    reseal(sealed: SealedSecret, options: SecretBoxOptions): Promise<SealedSecret>;
     // (undocumented)
-    seal(plaintext: Uint8Array): Promise<SealedSecret>;
+    seal(plaintext: Uint8Array, options: SecretBoxOptions): Promise<SealedSecret>;
 }
 
 // @public

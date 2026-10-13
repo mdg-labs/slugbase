@@ -1,6 +1,7 @@
-import { unconfigured, type Adapters, type TenantResolution, type TenantResolver } from "@slugbase/core";
+import type { Adapters, TenantResolution, TenantResolver } from "@slugbase/core";
 import type { FixturePrincipal, TenantFixture } from "@slugbase/testing/tenancy";
 import type { ApiTokenPrincipal, Authenticator, SessionPrincipal } from "../../src/create-server.ts";
+import { adapters } from "../support.ts";
 import type { Credentials, PolicyHooks } from "./walker.ts";
 
 // The stub principals of the contract tests. Until the sign-in and token
@@ -22,7 +23,7 @@ export const INSTANCE_ADMIN_ACCOUNT = "0192f3a0-0000-7000-8000-00000000d002";
 export interface StubWorld {
   /** The authenticators a test module registers (`ModuleContribution.authenticators`). */
   readonly authenticators: readonly Authenticator[];
-  /** The adapters of the server under test: unconfigured ports, and the stub tenant resolver. */
+  /** The adapters of the server under test: unconfigured ports, the in-memory rate limiter and the stub tenant resolver. */
   adapters(): Adapters;
   readonly hooks: PolicyHooks;
   /** What a fixture principal sends: its session cookie. */
@@ -96,7 +97,7 @@ export function createStubWorld(fixture: TenantFixture): StubWorld {
 
   return {
     authenticators: [cookie, bearer],
-    adapters: () => ({ ...unconfigured(), tenantResolver: resolver }),
+    adapters: () => ({ ...adapters(), tenantResolver: resolver }),
     credentialsOf: (principal) => sessionCredentials(principal.accountId),
     hooks: {
       authorized: (operation) => authorized(operation.auth),

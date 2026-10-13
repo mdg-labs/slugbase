@@ -4,6 +4,7 @@ import {
   principalsOf,
   type FixtureIdentifier,
   type FixturePrincipal,
+  type PrincipalRole,
   type TenantFixture,
 } from "./fixture.js";
 import { kindOfParameter, PATH_PARAMETER_MAPPING, type PathParameterMapping } from "./mapping.js";
@@ -18,9 +19,25 @@ import type { MatrixFailure } from "./report.js";
 
 // API mode of the cross-tenant matrix (doc 08 section 3.3, D8): every principal
 // of workspace A attempts every tenant-scoped operation against every
-// identifier workspace B holds. Each attempt must answer 404 (never 403:
-// existence is not disclosed), must not quote anything of B, and must leave the
-// row-level checksum of B unchanged.
+// identifier workspace B holds. Each attempt must not quote anything of B and
+// must leave the row-level checksum of B unchanged, and answers by role:
+//
+//   at or above the policy   404 (never 403: existence is not disclosed)
+//   below the policy         403, the refusal of stage 9 of the chain, which
+//                            comes before any lookup and so discloses nothing
+//
+// The policy is the operation's `x-slugbase-auth` level: `member`, `admin` or
+// `owner`. A principal of workspace A below it never reaches the handler, so a
+// 404 is asserted exactly where a lookup happens.
+
+const ROLE_RANK: Readonly<Record<PrincipalRole, number>> = { member: 1, admin: 2, owner: 3 };
+
+/** The status the chain answers a principal of workspace A for a row of workspace B, by the policy of the operation. */
+function expectedStatus(policy: string, role: PrincipalRole): number {
+  const required = Object.hasOwn(ROLE_RANK, policy) ? ROLE_RANK[policy as PrincipalRole] : undefined;
+  // A policy outside the tenant-scoped ones does not reach here; it is held to the stricter answer.
+  return required !== undefined && ROLE_RANK[role] < required ? 403 : 404;
+}
 
 /** One request the matrix makes. */
 export interface ApiCall {
@@ -243,9 +260,14 @@ export async function runApiMatrix(options: ApiMatrixOptions): Promise<ApiMatrix
         }
 
         if (response !== undefined) {
-          if (targets.length > 0 && response.status !== 404) {
+          const expected = expectedStatus(operation.policy, principal.role);
+          if (targets.length > 0 && response.status !== expected) {
+            const reason =
+              expected === 404
+                ? "a 403 discloses that the row exists"
+                : `the ${operation.policy} policy refuses a ${principal.role} before any lookup`;
             failures.push(
-              failure(subject, "unexpected_status", `${where}: answered ${String(response.status)}, expected 404 (a 403 discloses that the row exists)`),
+              failure(subject, "unexpected_status", `${where}: answered ${String(response.status)}, expected ${String(expected)} (${reason})`),
             );
           }
           const leaked = leakedNames(response.body, names, `${decodeURIComponent(call.url)} ${bodyText(call.body)}`);

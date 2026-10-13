@@ -210,7 +210,7 @@ describe("the API Extractor setup of the workspace", () => {
     .sort();
 
   it("covers every package", () => {
-    expect(packages).toEqual(["adapters", "contracts", "core", "db", "email", "server", "testing", "ui", "web"]);
+    expect(packages).toEqual(["adapters", "contracts", "core", "db", "email", "server", "testing", "testing-ports", "ui", "web"]);
   });
 
   it.each(packages)("%s extends the shared base configuration and commits a report per entry point", (name) => {

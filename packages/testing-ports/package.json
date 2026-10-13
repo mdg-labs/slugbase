@@ -1,0 +1,24 @@
+{
+  "name": "@slugbase/testing-ports",
+  "version": "0.0.0",
+  "private": true,
+  "description": "In-memory implementations of the ports, for unit tests with no database",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "lint": "eslint --max-warnings=0 .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:unit": "vitest run --project unit",
+    "build": "tsc -p tsconfig.build.json",
+    "contracts:check": "node ../../tooling/api-report/api-report.ts check --package ."
+  }
+}

@@ -22,6 +22,8 @@ export type {
   SeatCheckInput,
   ServerHooks,
 } from "./hooks/index.ts";
+export { runMigrations } from "./migrate/index.ts";
+export type { MigrationRunOptions } from "./migrate/index.ts";
 export { createLogger } from "./http/logger.ts";
 export type { LogDestination, LoggerOptions } from "./http/logger.ts";
 export { ProblemError } from "./http/problem.ts";
@@ -52,6 +54,7 @@ export type {
   ModuleContext,
   ModuleContribution,
   Principal,
+  RateLimitState,
   RequestTenant,
   RouteBinding,
   RouteHandler,
@@ -61,6 +64,7 @@ export type {
   SessionPrincipal,
   StageName,
   StartOptions,
+  TakenLimit,
   ValidatedInput,
 } from "./create-server.ts";
 export * from "./worker/index.ts";

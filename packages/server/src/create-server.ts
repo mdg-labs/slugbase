@@ -1,11 +1,13 @@
 import { setTimeout as sleep } from "node:timers/promises";
 import { createAdaptorServer, type ServerType } from "@hono/node-server";
+import { getHealth, getReady, getVersion } from "@slugbase/contracts";
 import type { Adapters } from "@slugbase/core";
 import { createDatabase, type Database, type MigrationChain } from "@slugbase/db";
 import { Hono } from "hono";
 import { DEVELOPMENT_BUILD_INFO, type BuildInfo } from "./build-info.ts";
-import type { ServerConfig, WorkerConfig } from "./config/index.ts";
+import { createRateLimitRegistry, type ServerConfig, type WorkerConfig } from "./config/index.ts";
 import type { Authenticator } from "./http/authenticate.ts";
+import { bodyLimits } from "./http/body-limits.ts";
 import {
   RouteTable,
   installChain,
@@ -16,9 +18,10 @@ import {
   type StageName,
 } from "./http/chain.ts";
 import { createHookDispatcher, invalidHookRefusals, invalidHooks, type HookRefusals, type HookRegistration, type ServerHooks } from "./hooks/index.ts";
-import { responseStage } from "./http/problem.ts";
+import { ProblemError, responseStage } from "./http/problem.ts";
 import { validation } from "./http/validation.ts";
 import { createMetrics, startMetricsListener, type MetricsListener } from "./metrics/index.ts";
+import { assertApplicationRole, runMigrations } from "./migrate/index.ts";
 import { loadCommittedDocument } from "./routes/committed-document.ts";
 import { probeRoutes } from "./routes/health.ts";
 import { apiConfigRoute } from "./routes/meta/config.ts";
@@ -29,6 +32,7 @@ import { WebRootError, serveWebRoot } from "./routes/static.ts";
 import type { JobDefinition, ScheduleDefinition } from "./worker/job.ts";
 
 export type { ChainContext, ChainEnv, MatchedRoute, RouteBinding, RouteHandler, StageName, ValidatedInput } from "./http/chain.ts";
+export type { RateLimitState, TakenLimit } from "./http/rate-limit.ts";
 export type {
   ApiTokenPrincipal,
   Authenticator,
@@ -111,11 +115,18 @@ export interface CreateServerOptions {
    * server serves no app. A directory that does not exist or has no `index.html` refuses the start.
    */
   readonly webRoot?: string;
-  /** The tenant database; by default a pool on `DATABASE_URL`, opened on first use. The server closes it on shutdown. */
+  /**
+   * The tenant database; by default a pool on `DATABASE_URL`, opened on first use. The server closes it on shutdown.
+   * The role of `DATABASE_URL` is checked at start in production (Q56) only for the pool the server opens itself:
+   * a database passed in is connected by the caller, who answers for its role.
+   */
   readonly database?: Database;
   /** How long a shutdown lets in-flight requests finish before cutting them (doc 01 section 3 rule 2). */
   readonly shutdownTimeoutMs?: number;
 }
+
+/** The operations that stay answered while the server migrates: the process probes. */
+const PROBE_OPERATIONS: ReadonlySet<string> = new Set([getHealth.operationId, getReady.operationId, getVersion.operationId]);
 
 export interface StartOptions {
   /** Overrides `PORT`; 0 picks a free port. */
@@ -145,7 +156,13 @@ export interface Server {
   readonly schedules: readonly ScheduleDefinition[];
   /** Serves one request through the chain. */
   fetch(request: Request): Promise<Response>;
-  /** Listens on `PORT`, and on `METRICS_PORT` for the internal `/metrics` listener when it is set. */
+  /**
+   * Listens on `PORT`, and on `METRICS_PORT` for the internal `/metrics` listener when it is set.
+   * In production it first refuses a `DATABASE_URL` role that is a superuser or owns the database
+   * (Q56). With `MIGRATE_ON_START` it then migrates as `DATABASE_MIGRATE_URL` and resolves when that
+   * is done; meanwhile the probes answer, `/ready` is `503` and every other route is `503 unavailable`.
+   * A failed migration stops the listeners and rejects.
+   */
   start(options?: StartOptions): Promise<RunningServer>;
 }
 
@@ -372,9 +389,10 @@ export function createServer(options: CreateServerOptions): Server {
   // What the server serves itself, built before the pool is opened because reading its files can fail.
   // The probes read the migration sets of the finished composition, which the probes themselves are part of.
   let migrationSets: readonly MigrationChain[] = options.migrations;
+  const progress = { migrating: false };
   const buildInfo = options.buildInfo ?? DEVELOPMENT_BUILD_INFO;
   const builtInRoutes = [
-    ...probeRoutes({ buildInfo, databaseUrl: config.DATABASE_URL, chains: () => migrationSets, logger }),
+    ...probeRoutes({ buildInfo, databaseUrl: config.DATABASE_URL, chains: () => migrationSets, logger, migrating: () => progress.migrating }),
     apiConfigRoute({ config, buildInfo, adapters }),
     openApiRoute({ enabled: config.API_DOCS_ENABLED, document: options.openApiDocument }),
   ];
@@ -428,6 +446,14 @@ export function createServer(options: CreateServerOptions): Server {
   const responseValidation = config.NODE_ENV === "production" ? "strip" : "throw";
   const validateResponse = responseStage(responseValidation);
   const chainStages: StageImplementations = {
+    // The first stage that can answer without a dependency: while the server migrates, nothing but a
+    // probe goes further, so no authenticator or handler reads a schema that is not there yet.
+    "body-limits": (context, next) => {
+      if (progress.migrating && !PROBE_OPERATIONS.has(context.get("route")?.operation.operationId ?? "")) {
+        throw new ProblemError("unavailable", "The service is starting and will be available shortly.");
+      }
+      return bodyLimits(context, next);
+    },
     // An unmatched request has nothing to validate or authorize, so the stage that
     // precedes the handler is where a file is answered: every earlier stage has run,
     // and the response stages still see the answer.
@@ -461,6 +487,8 @@ export function createServer(options: CreateServerOptions): Server {
     appOrigin: config.APP_ORIGIN,
     challenge: adapters.challenge,
     errors: adapters.errors,
+    rateLimit: adapters.rateLimit,
+    rateLimits: createRateLimitRegistry(config),
     authenticators: composition.authenticators,
     tenantResolver: adapters.tenantResolver,
     withTenant: context.withTenant,
@@ -477,6 +505,23 @@ export function createServer(options: CreateServerOptions): Server {
     fetch: async (request) => app.fetch(request),
 
     async start(startOptions = {}) {
+      if (config.NODE_ENV === "production" && options.database === undefined) {
+        try {
+          await assertApplicationRole({
+            url: config.DATABASE_URL,
+            allowOwnerConnection: config.SLUGBASE_ALLOW_OWNER_CONNECTION,
+            logger,
+          });
+        } catch (error) {
+          await database.close();
+          throw error;
+        }
+      }
+      const migrateUrl = config.MIGRATE_ON_START ? config.DATABASE_MIGRATE_URL : undefined;
+      if (config.MIGRATE_ON_START && migrateUrl === undefined) {
+        await database.close();
+        throw new Error("DATABASE_MIGRATE_URL is required while MIGRATE_ON_START is true");
+      }
       let draining = false;
       const listener = createAdaptorServer({
         overrideGlobalObjects: false,
@@ -540,6 +585,20 @@ export function createServer(options: CreateServerOptions): Server {
           await (shutdown ??= stop());
           throw error;
         }
+      }
+
+      if (migrateUrl !== undefined) {
+        // The listeners are up and the chain answers the probes; everything else waits for this.
+        progress.migrating = true;
+        try {
+          logger.info("Migrating the database");
+          const { applied } = await runMigrations({ url: migrateUrl, chains: composition.migrations });
+          logger.info("The database is migrated", { applied: applied.length });
+        } catch (error) {
+          await (shutdown ??= stop());
+          throw error;
+        }
+        progress.migrating = false;
       }
 
       return {

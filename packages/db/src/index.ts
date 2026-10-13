@@ -1,3 +1,5 @@
+export { ConnectionRoleError, connectionRole } from "./connection-role.ts";
+export type { ConnectionRole, ConnectionRoleOptions } from "./connection-role.ts";
 export { CE_CHAIN, MigrationError, migrate, migrationLevel } from "./migrate.ts";
 export type {
   MigrateOptions,
@@ -24,3 +26,5 @@ export type {
 } from "./repositories/scoped.ts";
 export { listRepositoryMethods } from "./repositories/registry.ts";
 export type { RepositoryInput, RepositoryMethodEntry, ScopedMethod } from "./repositories/registry.ts";
+export { createRateLimitStore } from "./system/rate-limit.ts";
+export type { RateLimitStore, RateLimitStoreOptions, RateLimitTake, RateLimitTaken } from "./system/rate-limit.ts";

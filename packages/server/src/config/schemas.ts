@@ -2,6 +2,7 @@ import type { z } from "zod";
 import { composeEnvSchema } from "./fragment.ts";
 import {
   databaseFragment,
+  errorReportFragment,
   httpFragment,
   metricsFragment,
   migrateFragment,
@@ -10,6 +11,7 @@ import {
   secretsFragment,
   serverMigrationFragment,
 } from "./fragments.ts";
+import { rateLimitFragment } from "./rate-limits.ts";
 
 export const PROCESS_TYPES = ["server", "worker", "migrate"] as const;
 
@@ -27,7 +29,9 @@ export const serverFragments = [
   databaseFragment,
   serverMigrationFragment,
   httpFragment,
+  rateLimitFragment,
   metricsFragment,
+  errorReportFragment,
 ] as const;
 
 /** The worker never receives the migrator URL (doc 01 section 2.1). */
@@ -36,7 +40,9 @@ export const workerFragments = [
   originFragment,
   secretsFragment,
   databaseFragment,
+  rateLimitFragment,
   metricsFragment,
+  errorReportFragment,
 ] as const;
 
 export const migrateFragments = [runtimeFragment, migrateFragment] as const;

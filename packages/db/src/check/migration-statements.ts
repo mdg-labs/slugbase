@@ -6,11 +6,29 @@
 // else (a verb or an ALTER/DROP/CREATE form not listed, a SELECT, a call of any
 // other function) comes back as `unknown`, and the rule treats that as "not
 // safe", never as "fine".
+//
+// The system-function forms of doc 05 section 3.3 are read by their whole shape
+// (see the expand-contract rule for what it accepts of them): CREATE [OR REPLACE]
+// FUNCTION of any language (the body is a string that is not analysed),
+// ALTER FUNCTION ... OWNER TO slugbase_system, REVOKE ALL ON FUNCTION ... FROM
+// PUBLIC, GRANT EXECUTE ON FUNCTION ... TO slugbase_app, and GRANT CREATE ON
+// SCHEMA ... TO slugbase_system with the REVOKE CREATE that takes it back.
 
 export interface TableName {
   schema: string;
   name: string;
 }
+
+export interface FunctionIdentity {
+  name: TableName;
+  /** The types of the input arguments, in order, as written and separated by `, `. */
+  args: string;
+}
+
+/** The role that owns the system operations (doc 05 section 3.3). */
+export const SYSTEM_ROLE = "slugbase_system";
+/** The role the application runs as, which is granted EXECUTE on them. */
+export const APP_ROLE = "slugbase_app";
 
 export type Operation =
   | { kind: "drop-table"; table: TableName }
@@ -19,7 +37,7 @@ export type Operation =
   | { kind: "rename-table"; table: TableName; to: TableName }
   | { kind: "set-schema"; table: TableName; to: TableName }
   | { kind: "rename-column"; table: TableName; column: string; to: string }
-  | { kind: "add-column"; table: TableName; column: string; notNullWithoutDefault: boolean; rewritesTable: boolean }
+  | { kind: "add-column"; table: TableName; column: string; type: ColumnType; notNullWithoutDefault: boolean; rewritesTable: boolean; suppliesValue: boolean }
   | { kind: "alter-column-type"; table: TableName; column: string }
   | { kind: "set-not-null"; table: TableName; column: string }
   | { kind: "drop-default"; table: TableName; column: string }
@@ -27,9 +45,29 @@ export type Operation =
   | { kind: "add-validated-constraint"; table: TableName }
   | { kind: "add-primary-key-using-index"; table: TableName }
   | { kind: "revoke"; tables: TableName[] | undefined }
+  // volatileDefault: whether the default the type states is not a constant or a stable call; undefined when it states none, and a domain then takes its base's.
+  | { kind: "declares-type"; name: TableName; ownConstraints: boolean; base: ColumnType; volatileDefault: boolean | undefined }
+  // ALTER DOMAIN ... SET DEFAULT or DROP DEFAULT: the default the domain has from now on (false when it has none).
+  | { kind: "sets-default"; name: TableName; volatileDefault: boolean }
+  | { kind: "retypes"; names: TableName[] }
+  // A function is identified by its name and the types of its input arguments, as they are written.
+  | { kind: "declares-function"; fn: FunctionIdentity; returns: string; replace: boolean }
+  | { kind: "alters-function-owner"; fn: FunctionIdentity }
+  | { kind: "grants-function-execute"; fn: FunctionIdentity }
+  | { kind: "revokes-function-public"; fn: FunctionIdentity }
+  | { kind: "grants-schema-create"; schema: string }
+  | { kind: "revokes-schema-create"; schema: string }
   | { kind: "data-change"; statement: string }
   | { kind: "safe" }
-  | { kind: "unknown"; reason: string };
+  // keepsTypes: the statement is one the reader places as unsafe to run, but it declares a type or leaves every type as it is.
+  | { kind: "unknown"; reason: string; keepsTypes?: true };
+
+/**
+ * The type of a column or the base type of a domain: `builtin` for a type of PostgreSQL's
+ * own catalog and for any array type (neither is a domain), `named` for a type the migrations
+ * may declare (a name without a schema is in `public`), `unreadable` for text this check does not read.
+ */
+export type ColumnType = { kind: "builtin" } | { kind: "named"; name: TableName } | { kind: "unreadable" };
 
 export interface AnalysedStatement {
   /** The statement with comments removed, as written otherwise. */
@@ -38,7 +76,7 @@ export interface AnalysedStatement {
 }
 
 type Token =
-  | { kind: "word"; text: string }
+  | { kind: "word"; text: string; raw: string }
   | { kind: "ident"; text: string }
   | { kind: "string"; text: string }
   | { kind: "punct"; text: string };
@@ -72,6 +110,22 @@ const SAFE_SCHEMAS = new Set(["public", "pg_catalog"]);
 const NOT_A_COLUMN = new Set(["constraint", "primary", "unique", "check", "foreign", "exclude", "like", "not"]);
 const TABLE_CONSTRAINTS = new Set(["primary", "unique", "check", "foreign", "exclude", "not"]);
 const SERIAL_TYPES = new Set(["serial", "smallserial", "bigserial", "serial2", "serial4", "serial8"]);
+// Type names that PostgreSQL's grammar reads as its own types; a quoted name is not one of them.
+const SQL_TYPE_WORDS = new Set([
+  "integer", "int", "smallint", "bigint", "real", "float", "double", "decimal", "dec", "numeric", "boolean", "char", "character",
+  "varchar", "nchar", "national", "bit", "time", "timestamp", "interval",
+]);
+// Types of pg_catalog by their catalog names, which a quoted name can spell.
+const CATALOG_TYPES = new Set([
+  ...SERIAL_TYPES, "bool", "bytea", "char", "name", "int2", "int4", "int8", "text", "oid", "json", "jsonb", "jsonpath", "xml", "float4",
+  "float8", "bpchar", "varchar", "date", "time", "timetz", "timestamp", "timestamptz", "interval", "bit", "varbit", "numeric", "money",
+  "uuid", "tsvector", "tsquery", "inet", "cidr", "macaddr", "macaddr8", "point", "line", "lseg", "box", "path", "polygon", "circle",
+  "int4range", "int8range", "numrange", "tsrange", "tstzrange", "daterange", "int4multirange", "int8multirange", "nummultirange",
+  "tsmultirange", "tstzmultirange", "datemultirange", "pg_lsn", "pg_snapshot", "txid_snapshot", "xid", "xid8", "cid", "tid", "regclass",
+  "regtype", "regproc", "regprocedure", "regoper", "regoperator", "regconfig", "regdictionary", "regnamespace", "regrole", "regcollation",
+]);
+// Words that end the data type in a column or domain definition.
+const AFTER_TYPE = new Set(["collate", "default", "constraint", "not", "null", "check", "primary", "unique", "references", "generated", "compression", "storage"]);
 
 /** Splits a file at its top-level semicolons and removes the comments. Throws on text it cannot scan to the end. */
 export function splitSql(source: string): string[] {
@@ -199,7 +253,8 @@ function tokenize(statement: string): Token[] {
       while (end < statement.length && IDENTIFIER_PART.test(statement[end] ?? "")) {
         end += 1;
       }
-      tokens.push({ kind: "word", text: statement.slice(index, end).toLowerCase() });
+      const raw = statement.slice(index, end);
+      tokens.push({ kind: "word", text: raw.toLowerCase(), raw });
       index = end;
     } else {
       tokens.push({ kind: "punct", text: char });
@@ -286,6 +341,89 @@ class Cursor {
     }
     return { schema: DEFAULT_SCHEMA, name: first };
   }
+}
+
+/** Whether the type that starts at `from` is written as an array (`t[]`, `t[3]`, `t ARRAY`). */
+function isArrayType(tokens: readonly Token[], from: number): boolean {
+  let depth = 0;
+  for (let index = from; index < tokens.length; index += 1) {
+    const token = tokens[index];
+    if (token?.kind === "punct" && token.text === "(") {
+      depth += 1;
+    } else if (token?.kind === "punct" && token.text === ")") {
+      depth -= 1;
+    } else if (depth === 0 && token?.kind === "punct" && token.text === "[") {
+      return true;
+    } else if (depth === 0 && token?.kind === "word") {
+      if (token.text === "array") {
+        return true;
+      }
+      if (AFTER_TYPE.has(token.text)) {
+        return false;
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * The type that starts at the token `start`. PostgreSQL looks a name without a schema up in pg_catalog
+ * first, so a built-in name is the built-in type whatever the migrations declare; a name in any other
+ * schema, or one with three parts, is a type the migrations declare or this check cannot place.
+ */
+function readType(tokens: readonly Token[], start: number): ColumnType {
+  const first = tokens[start];
+  if (first === undefined || (first.kind !== "word" && first.kind !== "ident")) {
+    return { kind: "unreadable" };
+  }
+  let name: TableName = { schema: DEFAULT_SCHEMA, name: first.text };
+  let end = start + 1;
+  let builtin = CATALOG_TYPES.has(first.text) || (first.kind === "word" && SQL_TYPE_WORDS.has(first.text));
+  if (isPunct(tokens[end], ".")) {
+    const second = tokens[end + 1];
+    if ((second?.kind !== "word" && second?.kind !== "ident") || isPunct(tokens[end + 2], ".")) {
+      return { kind: "unreadable" };
+    }
+    name = { schema: first.text, name: second.text };
+    builtin = first.text === "pg_catalog" && CATALOG_TYPES.has(second.text);
+    end += 2;
+  }
+  return builtin || isArrayType(tokens, end) ? { kind: "builtin" } : { kind: "named", name };
+}
+
+/** Whether the definition of a domain, from its base type on, says CHECK or NOT NULL outside parentheses. */
+function hasDomainConstraint(tokens: readonly Token[]): boolean {
+  let depth = 0;
+  for (const [index, token] of tokens.entries()) {
+    if (token.kind === "punct" && token.text === "(") {
+      depth += 1;
+    } else if (token.kind === "punct" && token.text === ")") {
+      depth -= 1;
+    } else if (depth === 0 && token.kind === "word" && (token.text === "check" || (token.text === "not" && isWord(tokens[index + 1], "null")))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Whether the default a domain definition states, from its base type on, is not a constant or a call the
+ * rule accepts as stable; undefined when the definition has no DEFAULT outside parentheses. An explicit
+ * DEFAULT NULL is a default, so it replaces the one of a base domain. A CHECK expression in the same
+ * definition is scanned too, which only matters for a domain that has a constraint anyway.
+ */
+function domainDefault(tokens: readonly Token[]): boolean | undefined {
+  let depth = 0;
+  for (const [index, token] of tokens.entries()) {
+    if (token.kind === "punct" && token.text === "(") {
+      depth += 1;
+    } else if (token.kind === "punct" && token.text === ")") {
+      depth -= 1;
+    } else if (depth === 0 && token.kind === "word" && token.text === "default") {
+      return firstUnknownCall(tokens.slice(index + 1)) !== undefined;
+    }
+  }
+  return undefined;
 }
 
 /** The operations of one statement. */
@@ -397,8 +535,8 @@ function updatesTable(tokens: readonly Token[], start: number): boolean {
   return cursor.isWord("set");
 }
 
-function unknown(reason: string): Operation[] {
-  return [{ kind: "unknown", reason }];
+function unknown(reason: string, keepsTypes = false): Operation[] {
+  return [keepsTypes ? { kind: "unknown", reason, keepsTypes: true } : { kind: "unknown", reason }];
 }
 
 /** The first `name(` in the tokens that is not grammar, a name followed by its column list, or a known built-in. */
@@ -431,6 +569,59 @@ function firstUnknownCall(tokens: readonly Token[]): string | undefined {
     return `${token.text}()`;
   }
   return undefined;
+}
+
+// PostgreSQL cuts every identifier to 63 bytes (at a character boundary), so two spellings that agree up to there are one name.
+const IDENTIFIER_BYTES = 63;
+const PRINTABLE_ASCII = /^[\x20-\x7e]*$/;
+
+function clipIdentifier(text: string): string {
+  let bytes = 0;
+  let clipped = "";
+  for (const char of text) {
+    bytes += Buffer.byteLength(char);
+    if (bytes > IDENTIFIER_BYTES) {
+      break;
+    }
+    clipped += char;
+  }
+  return clipped;
+}
+
+/** Lower-cases the letters A to Z only, as PostgreSQL folds an unquoted name in a UTF8 database: no Unicode case mapping. */
+function foldAscii(text: string): string {
+  return text.replace(/[A-Z]/g, (letter) => letter.toLowerCase());
+}
+
+/**
+ * The form of a name that stands for it when it is compared: the letters A to Z folded to lower case (so a
+ * quoted name, which PostgreSQL keeps, is read as the unquoted name too) and the text cut to 63 bytes. It
+ * is given the name as written, never the tokenizer's lower-cased word, since JavaScript's case mapping
+ * changes characters PostgreSQL leaves alone (U+212A is `k` to it, a different 3-byte character to PostgreSQL).
+ */
+export function identifierForm(text: string): string {
+  return clipIdentifier(foldAscii(text));
+}
+
+/** Whether the name is longer than PostgreSQL's 63-byte identifier limit, so that it is stored cut. */
+function exceedsIdentifierLimit(text: string): boolean {
+  return Buffer.byteLength(text) > IDENTIFIER_BYTES;
+}
+
+/**
+ * The first word or quoted identifier of the statement that is one of `names` (the form `identifierForm`
+ * gives), in any letter case of A to Z and cut to 63 bytes as PostgreSQL cuts it, qualified or not, whatever follows
+ * it, or undefined. A function is also called without a following parenthesis (`(t).f` is `f(t)` for a row
+ * type `t`), so every mention of the name counts, wherever the reader would skip it as grammar.
+ */
+export function mentionOfAny(statement: string, names: ReadonlySet<string>): string | undefined {
+  let tokens: Token[];
+  try {
+    tokens = tokenize(statement);
+  } catch {
+    return undefined;
+  }
+  return tokens.find((token) => (token.kind === "word" || token.kind === "ident") && names.has(identifierForm(token.kind === "word" ? token.raw : token.text)))?.text;
 }
 
 function isPunct(token: Token | undefined, text: string): boolean {
@@ -487,7 +678,7 @@ function drop(cursor: Cursor): Operation[] {
 function create(cursor: Cursor): Operation[] {
   const replace = cursor.take("or", "replace");
   if (cursor.take("function")) {
-    return createFunction(cursor);
+    return createFunction(cursor, replace);
   }
   if (replace) {
     return unknown("a CREATE OR REPLACE form this check does not read");
@@ -520,9 +711,28 @@ function create(cursor: Cursor): Operation[] {
     return named && owner && cursor.done() ? [{ kind: "safe" }] : unknown("CREATE SCHEMA other than `CREATE SCHEMA name`");
   }
   if (cursor.take("type")) {
-    return cursor.tableName() !== undefined && cursor.take("as", "enum") && cursor.skipParenthesised() && cursor.done()
-      ? [{ kind: "safe" }]
+    const name = cursor.tableName();
+    return name !== undefined && cursor.take("as", "enum") && cursor.skipParenthesised() && cursor.done()
+      ? [{ kind: "declares-type", name, ownConstraints: false, base: { kind: "builtin" }, volatileDefault: false }]
       : unknown("CREATE TYPE other than an enum");
+  }
+  // A domain is not safe to create in a new migration, but the rule still needs to know it, with its
+  // constraints, for the columns that later migrations give its type.
+  if (cursor.take("domain")) {
+    const name = cursor.tableName();
+    cursor.take("as");
+    return name === undefined
+      ? unknown("a CREATE form this check does not read")
+      : [
+          ...unknown("a CREATE form this check does not read", true),
+          {
+            kind: "declares-type",
+            name,
+            ownConstraints: hasDomainConstraint(cursor.tokens.slice(cursor.position)),
+            base: readType(cursor.tokens, cursor.position),
+            volatileDefault: domainDefault(cursor.tokens.slice(cursor.position)),
+          },
+        ];
   }
   return unknown("a CREATE form this check does not read");
 }
@@ -547,23 +757,200 @@ function createIndex(cursor: Cursor): Operation[] {
     : [{ kind: "create-index", table, concurrently }];
 }
 
+// The tenant context functions are called by every policy and listed in SAFE_CALLS, so what they
+// compute is what the policies rely on: their definition stays one SELECT of built-ins.
+export const TENANT_FUNCTIONS = new Set(["app_workspace_id", "app_account_id"]);
+// Words after which the return type of CREATE FUNCTION ends.
+const AFTER_RETURN_TYPE = new Set([
+  "language", "as", "immutable", "stable", "volatile", "strict", "called", "security", "leakproof", "not", "parallel", "cost",
+  "rows", "set", "window", "transform", "support", "external", "returns",
+]);
+const ARGUMENT_MODES = new Set(["in", "out", "inout", "variadic"]);
+// A type that a "(" after its first word modifies (`varchar(10)`), or that its first word starts without naming it.
+const TYPES_WITH_MODIFIER = new Set(["varchar", "char", "character", "numeric", "decimal", "dec", "bit", "varbit", "float", "interval", "timestamptz", "timetz"]);
+const INTERVAL_FIELDS = new Set(["year", "month", "day", "hour", "minute", "second"]);
+
+/** The tokens in the order they were written, as one string: names in quotes keep them. */
+function render(tokens: readonly Token[]): string {
+  return tokens.map((token) => (token.kind === "ident" ? `"${token.text.replaceAll('"', '""')}"` : token.text)).join(" ");
+}
+
+/** Splits at the commas outside parentheses and brackets. */
+function splitTopLevel(tokens: readonly Token[]): Token[][] {
+  const groups: Token[][] = [[]];
+  let depth = 0;
+  for (const token of tokens) {
+    if (token.kind === "punct" && (token.text === "(" || token.text === "[")) {
+      depth += 1;
+    } else if (token.kind === "punct" && (token.text === ")" || token.text === "]")) {
+      depth -= 1;
+    }
+    if (depth === 0 && token.kind === "punct" && token.text === ",") {
+      groups.push([]);
+    } else {
+      groups.at(-1)?.push(token);
+    }
+  }
+  return groups;
+}
+
+/** The index of the first token outside parentheses and brackets that the test accepts, or -1. */
+function topLevelIndex(tokens: readonly Token[], test: (token: Token) => boolean): number {
+  let depth = 0;
+  for (const [index, token] of tokens.entries()) {
+    if (token.kind === "punct" && (token.text === "(" || token.text === "[")) {
+      depth += 1;
+    } else if (token.kind === "punct" && (token.text === ")" || token.text === "]")) {
+      depth -= 1;
+    } else if (depth === 0 && test(token)) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+/** Whether the argument (mode and default removed) is only a type, so that its first token is not an argument name. */
+function isTypeOnly(argument: readonly Token[]): boolean {
+  const [first, second] = argument;
+  if (argument.length === 1 || isPunct(second, ".") || isPunct(second, "[") || isWord(second, "array")) {
+    return true;
+  }
+  if (first?.kind !== "word") {
+    return false;
+  }
+  switch (first.text) {
+    case "double":
+      return isWord(second, "precision");
+    case "national":
+      return true;
+    case "character":
+    case "char":
+    case "nchar":
+    case "bit":
+      return isWord(second, "varying") || isPunct(second, "(");
+    case "timestamp":
+    case "time":
+      return isWord(second, "with") || isWord(second, "without") || isPunct(second, "(");
+    default:
+      return (TYPES_WITH_MODIFIER.has(first.text) && isPunct(second, "(")) || (first.text === "interval" && second?.kind === "word" && INTERVAL_FIELDS.has(second.text));
+  }
+}
+
 /**
- * CREATE FUNCTION is read only as `LANGUAGE sql` with one string body that is a
- * single SELECT calling known built-ins: a body of any other language or shape can
- * hold a statement the rule is there to stop, and runs whenever the function is called.
+ * The type of one argument of a function signature: a string for an input argument, null for an OUT
+ * argument (not part of the identity of the function), undefined when the argument is not read
+ * (VARIADIC, or no type). The name, the mode and the default are not part of the type.
  */
-function createFunction(cursor: Cursor): Operation[] {
-  const rest = cursor.tokens.slice(cursor.position);
+function argumentType(tokens: readonly Token[]): string | null | undefined {
+  let argument = tokens;
+  let output = false;
+  const mode = argument[0];
+  if (mode?.kind === "word" && ARGUMENT_MODES.has(mode.text) && argument.length > 1) {
+    if (mode.text === "variadic") {
+      return undefined;
+    }
+    output = mode.text === "out";
+    argument = argument.slice(1);
+  }
+  const defaultAt = topLevelIndex(argument, (token) => (token.kind === "word" && token.text === "default") || (token.kind === "punct" && token.text === "="));
+  if (defaultAt !== -1) {
+    argument = argument.slice(0, defaultAt);
+  }
+  const type = argument.length === 0 || isTypeOnly(argument) ? argument : argument.slice(1);
+  if (type.length === 0) {
+    return undefined;
+  }
+  return output ? null : render(type);
+}
+
+/**
+ * Whether the signature `name(arguments)` can be called with one positional argument of a type that is not a
+ * built-in (or an array): PostgreSQL calls such a function as `(t).name` when t is of that type, and every table
+ * is a row type. That is a first input argument of such a type, or a VARIADIC one, whose later input arguments
+ * all have a default or are VARIADIC (a variadic argument takes no values).
+ */
+function callableWithOneArgument(signature: readonly Token[]): boolean {
+  const open = signature.findIndex((token) => isPunct(token, "("));
+  const inputs = splitTopLevel(signature.slice(open + 1, -1)).filter((group) => group.length > 0 && !(group[0]?.kind === "word" && group[0].text === "out" && group.length > 1));
+  const [first, ...later] = inputs;
+  if (first === undefined) {
+    return false;
+  }
+  const split = (group: Token[]): { variadic: boolean; defaulted: boolean; type: Token[] } => {
+    let argument = group;
+    let variadic = false;
+    if (argument[0]?.kind === "word" && ARGUMENT_MODES.has(argument[0].text) && argument.length > 1) {
+      variadic = argument[0].text === "variadic";
+      argument = argument.slice(1);
+    }
+    const defaultAt = topLevelIndex(argument, (token) => (token.kind === "word" && token.text === "default") || isPunct(token, "="));
+    return { variadic, defaulted: defaultAt !== -1, type: defaultAt === -1 ? argument : argument.slice(0, defaultAt) };
+  };
+  if (!later.every((group) => split(group).defaulted || split(group).variadic)) {
+    return false;
+  }
+  const { variadic, type } = split(first);
+  return variadic || readType(type, isTypeOnly(type) ? 0 : 1).kind !== "builtin";
+}
+
+/** The types of the input arguments of the text between the parentheses of a function signature, or undefined when one is not read. */
+function inputArgumentTypes(tokens: readonly Token[]): string | undefined {
+  if (tokens.length === 0) {
+    return "";
+  }
+  const types: string[] = [];
+  for (const group of splitTopLevel(tokens)) {
+    const type = argumentType(group);
+    if (type === undefined) {
+      return undefined;
+    }
+    if (type !== null) {
+      types.push(type);
+    }
+  }
+  return types.join(", ");
+}
+
+/** `name(arguments)` of a function, with the cursor after the closing parenthesis; undefined when it is not read, and a name without an argument list is not. */
+function functionIdentity(cursor: Cursor): FunctionIdentity | undefined {
+  const name = cursor.tableName();
+  if (name === undefined || cursor.isPunct(".") || !cursor.isPunct("(")) {
+    return undefined;
+  }
+  const open = cursor.position;
+  if (!cursor.skipParenthesised()) {
+    return undefined;
+  }
+  const args = inputArgumentTypes(cursor.tokens.slice(open + 1, cursor.position - 1));
+  return args === undefined ? undefined : { name, args };
+}
+
+/** The return type of CREATE FUNCTION as written, from the tokens after the argument list; empty when it states none. */
+function returnType(rest: readonly Token[]): string {
+  const returns = topLevelIndex(rest, (token) => token.kind === "word" && token.text === "returns");
+  if (returns === -1) {
+    return "";
+  }
+  const after = rest.slice(returns + 1);
+  const end = topLevelIndex(after, (token) => token.kind === "word" && AFTER_RETURN_TYPE.has(token.text));
+  return render(end === -1 ? after : after.slice(0, end));
+}
+
+/**
+ * The reason a tenant context function is not a `LANGUAGE sql` function of one string body that is a
+ * single SELECT calling known built-ins, or undefined when it is one.
+ */
+function tenantFunctionProblem(rest: readonly Token[]): string | undefined {
   const language = rest.findIndex((token) => token.kind === "word" && token.text === "language");
   const languageName = rest[language + 1];
   if (language === -1 || languageName?.kind !== "word" || languageName.text !== "sql") {
-    return unknown("CREATE FUNCTION in a language other than sql");
+    return "CREATE FUNCTION of a tenant context function in a language other than sql";
   }
   const bodies = rest.flatMap((token, offset) => (token.kind === "string" && isWord(rest[offset - 1], "as") ? [token.text] : []));
   const strings = rest.filter((token) => token.kind === "string");
   const body = bodies[0];
   if (bodies.length !== 1 || strings.length !== 1 || body === undefined) {
-    return unknown("CREATE FUNCTION without exactly one string body");
+    return "CREATE FUNCTION of a tenant context function without exactly one string body";
   }
   const dollar = /^(\$(?:[^$]*)\$)([\s\S]*)\1$/.exec(body);
   const inner = dollar !== null ? (dollar[2] ?? "") : body.slice(1, -1).replaceAll("''", "'");
@@ -573,14 +960,68 @@ function createFunction(cursor: Cursor): Operation[] {
     statements = splitSql(inner);
     bodyTokens = tokenize(statements[0] ?? "");
   } catch {
-    return unknown("CREATE FUNCTION with a body this check cannot read");
+    return "CREATE FUNCTION of a tenant context function with a body this check cannot read";
   }
   const first = bodyTokens[0];
   if (statements.length !== 1 || first?.kind !== "word" || first.text !== "select") {
-    return unknown("CREATE FUNCTION whose body is not a single SELECT");
+    return "CREATE FUNCTION of a tenant context function whose body is not a single SELECT";
   }
   const call = firstUnknownCall(bodyTokens);
-  return call === undefined ? [{ kind: "safe" }] : unknown(`CREATE FUNCTION whose body calls ${call}, which this check does not know to be safe`);
+  return call === undefined ? undefined : `CREATE FUNCTION of a tenant context function whose body calls ${call}, which this check does not know to be safe`;
+}
+
+/**
+ * CREATE [OR REPLACE] FUNCTION name(arguments) [RETURNS type] ... LANGUAGE name ... AS body, in any
+ * language and with or without SECURITY DEFINER. The body is a string that runs only when the function
+ * is called. A migration can call a function it declares, also without a parenthesis (`(t).name` is
+ * `name(t)` for a row type), so the expand-contract rule rejects a statement that mentions the name of a
+ * function the chain declares (compared as PostgreSQL compares names, see `identifierForm`), outside the
+ * statements that declare, hand over or grant on it. The body is therefore not analysed as migration
+ * statements. Five things are not read: a function named like one of the built-ins that the check lets a
+ * migration call, or like a word it reads as grammar before a parenthesis (a function of that name could
+ * then run in a statement the check accepts); a function named with more than 63 bytes, which PostgreSQL
+ * stores under a shorter name; a function whose name, quoted or not, has a character outside printable
+ * ASCII (the names the check holds are then all ASCII, which PostgreSQL folds and compares as the check does);
+ * a function that field-selection notation can call, which is one that can be
+ * called with a single argument of a type that is not a built-in (see `callableWithOneArgument`); and a
+ * tenant context function that is anything but one SELECT of built-ins.
+ */
+function createFunction(cursor: Cursor, replace: boolean): Operation[] {
+  const start = cursor.position;
+  const fn = functionIdentity(cursor);
+  if (fn === undefined) {
+    return unknown("CREATE FUNCTION without a name and an argument list this check can read");
+  }
+  const head = cursor.tokens.slice(start, cursor.position);
+  const written = head.slice(0, head.findIndex((token) => token.kind === "punct" && token.text === "("));
+  if (written.some((token) => !PRINTABLE_ASCII.test(token.kind === "word" ? token.raw : token.text))) {
+    return unknown("CREATE FUNCTION named with a character outside printable ASCII, whose name PostgreSQL may spell differently from the way this check compares names");
+  }
+  if (exceedsIdentifierLimit(fn.name.name)) {
+    return unknown(`CREATE FUNCTION named ${fn.name.name}, which is longer than PostgreSQL's 63-byte identifier limit, so that PostgreSQL stores it under a shorter name than the one this check would compare`);
+  }
+  if (callableWithOneArgument(cursor.tokens.slice(start, cursor.position))) {
+    return unknown("CREATE FUNCTION that can be called with one argument of a type that is not a built-in scalar, which field-selection notation (`(t).name`) can do on a row type");
+  }
+  const rest = cursor.tokens.slice(cursor.position);
+  const language = topLevelIndex(rest, (token) => token.kind === "word" && token.text === "language");
+  const languageName = rest[language + 1];
+  if (language === -1 || (languageName?.kind !== "word" && languageName?.kind !== "ident")) {
+    return unknown("CREATE FUNCTION without a LANGUAGE this check can read");
+  }
+  if (!rest.some((token, offset) => token.kind === "string" && isWord(rest[offset - 1], "as"))) {
+    return unknown("CREATE FUNCTION without a string body");
+  }
+  const lowered = fn.name.name.toLowerCase();
+  if (SAFE_CALLS.has(lowered)) {
+    const problem = fn.name.schema === DEFAULT_SCHEMA && TENANT_FUNCTIONS.has(lowered) ? tenantFunctionProblem(rest) : `CREATE FUNCTION named ${fn.name.name}, like a built-in this check lets a migration call`;
+    if (problem !== undefined) {
+      return unknown(problem);
+    }
+  } else if (SYNTAX_BEFORE_PAREN.has(lowered) || NAME_INTRODUCERS.has(lowered)) {
+    return unknown(`CREATE FUNCTION named ${fn.name.name}, like a word this check reads as grammar before a parenthesis`);
+  }
+  return [{ kind: "declares-function", fn, returns: returnType(rest), replace }];
 }
 
 function isWord(token: Token | undefined, word: string): boolean {
@@ -613,12 +1054,75 @@ function alter(cursor: Cursor): Operation[] {
   if (cursor.take("policy")) {
     return [{ kind: "safe" }];
   }
+  if (cursor.take("function")) {
+    return alterFunction(cursor);
+  }
   if (cursor.take("default", "privileges")) {
     return alterDefaultPrivileges(cursor);
+  }
+  if (cursor.take("domain")) {
+    return alterType(cursor, true);
+  }
+  if (cursor.take("type")) {
+    return alterType(cursor, false);
   }
   // ALTER VIEW and ALTER INDEX accept a table's name too (checked against PostgreSQL 18), so
   // none of the object kinds is read as touching only its own kind.
   return unknown("an ALTER form this check does not read");
+}
+
+/**
+ * ALTER FUNCTION name(arguments) OWNER TO slugbase_system, which hands a function over to the role that
+ * owns the system operations. Every other action, and any other owner, is not read.
+ */
+function alterFunction(cursor: Cursor): Operation[] {
+  const fn = functionIdentity(cursor);
+  if (fn !== undefined && cursor.take("owner", "to")) {
+    const role = cursor.identifier();
+    if (role === SYSTEM_ROLE && !cursor.isPunct(".") && cursor.done()) {
+      return [{ kind: "alters-function-owner", fn }];
+    }
+  }
+  return unknown(`ALTER FUNCTION other than OWNER TO ${SYSTEM_ROLE}`);
+}
+
+// ALTER DOMAIN actions that add no constraint and rename nothing.
+const DOMAIN_ACTIONS_KEEPING_CONSTRAINTS = [["owner", "to"], ["rename", "constraint"], ["drop", "constraint"], ["drop", "not", "null"]];
+
+/**
+ * ALTER DOMAIN and ALTER TYPE are not safe to run in a new migration, and they can change what a
+ * name means to the rule: a domain gains a constraint, or a type takes the name of another. Every
+ * name such an action touches stops being one this check can show to be free of constraints.
+ */
+function alterType(cursor: Cursor, domain: boolean): Operation[] {
+  const name = cursor.tableName();
+  if (name === undefined) {
+    return unknown("an ALTER form this check does not read");
+  }
+  const names = [name];
+  let retypes = domain;
+  if (cursor.take("rename", "to")) {
+    const to = cursor.identifier();
+    if (to !== undefined) {
+      names.push({ schema: name.schema, name: to });
+    }
+    retypes = true;
+  } else if (cursor.take("set", "schema")) {
+    const schema = cursor.identifier();
+    if (schema !== undefined) {
+      names.push({ schema, name: name.name });
+    }
+    retypes = true;
+  } else if (domain && cursor.take("set", "default")) {
+    return [...unknown("an ALTER form this check does not read", true), { kind: "sets-default", name, volatileDefault: firstUnknownCall(cursor.tokens.slice(cursor.position)) !== undefined }];
+  } else if (domain && cursor.take("drop", "default")) {
+    return [...unknown("an ALTER form this check does not read", true), { kind: "sets-default", name, volatileDefault: false }];
+  } else if (domain && DOMAIN_ACTIONS_KEEPING_CONSTRAINTS.some((words) => words.every((word, offset) => cursor.isWord(word, offset)))) {
+    retypes = false;
+  }
+  return retypes
+    ? [...unknown("an ALTER form this check does not read"), { kind: "retypes", names }]
+    : unknown("an ALTER form this check does not read", true);
 }
 
 const DEFAULT_PRIVILEGE_OBJECTS = new Set(["tables", "sequences", "functions", "routines", "types", "schemas"]);
@@ -716,6 +1220,67 @@ function tableNames(cursor: Cursor): TableName[] | undefined {
   return ok ? names : undefined;
 }
 
+/** `name {, name}` as plain names, none schema-qualified; undefined when one is not read. */
+function plainNames(cursor: Cursor): string[] | undefined {
+  const names: string[] = [];
+  const ok = commaSeparated(cursor, () => {
+    const name = cursor.identifier();
+    if (name === undefined || cursor.isPunct(".")) {
+      return false;
+    }
+    names.push(name);
+    return true;
+  });
+  return ok ? names : undefined;
+}
+
+/** The privileges of a GRANT or REVOKE as words, `ALL [PRIVILEGES]` being `all`; a column list is not read. */
+function privilegeWords(cursor: Cursor): string[] | undefined {
+  const words: string[] = [];
+  const ok = commaSeparated(cursor, () => {
+    if (cursor.take("all")) {
+      cursor.take("privileges");
+      words.push("all");
+      return true;
+    }
+    const token = cursor.peek();
+    if (token?.kind !== "word") {
+      return false;
+    }
+    cursor.position += 1;
+    words.push(token.text);
+    return true;
+  });
+  return ok ? words : undefined;
+}
+
+/**
+ * The system-function forms of GRANT, read by their whole shape: EXECUTE on a function to slugbase_app,
+ * and CREATE on one schema to slugbase_system. Any other GRANT on a function, and any GRANT on a schema
+ * that includes CREATE (also through ALL), is unknown; undefined when the statement is of neither kind.
+ */
+function grantFunctionOrSchemaCreate(cursor: Cursor): Operation[] | undefined {
+  const start = cursor.position;
+  const words = privilegeWords(cursor);
+  if (words !== undefined && cursor.take("on", "function")) {
+    const fn = functionIdentity(cursor);
+    const roles = fn !== undefined && cursor.take("to") ? plainNames(cursor) : undefined;
+    return fn !== undefined && words.length === 1 && words[0] === "execute" && roles?.length === 1 && roles[0] === APP_ROLE && cursor.done()
+      ? [{ kind: "grants-function-execute", fn }]
+      : unknown(`GRANT on a function other than EXECUTE to ${APP_ROLE}`);
+  }
+  if (words !== undefined && cursor.take("on", "schema") && (words.includes("create") || words.includes("all"))) {
+    const schemas = plainNames(cursor);
+    const roles = schemas !== undefined && cursor.take("to") ? plainNames(cursor) : undefined;
+    const [schema] = schemas ?? [];
+    return schema !== undefined && schemas?.length === 1 && words.length === 1 && words[0] === "create" && roles?.length === 1 && roles[0] === SYSTEM_ROLE && cursor.done()
+      ? [{ kind: "grants-schema-create", schema }]
+      : unknown(`GRANT of CREATE on a schema other than CREATE on one schema to ${SYSTEM_ROLE}`);
+  }
+  cursor.position = start;
+  return undefined;
+}
+
 /** One privilege, or ALL [PRIVILEGES], with the optional column list of a table privilege. */
 function privilegeItem(cursor: Cursor, allowed: ReadonlySet<string>): boolean {
   if (cursor.take("all")) {
@@ -776,6 +1341,10 @@ function privilegesOn(cursor: Cursor): { tables: TableName[] | undefined } | und
  */
 function grant(cursor: Cursor): Operation[] {
   const unread = unknown("GRANT in a form this check does not read");
+  const systemForm = grantFunctionOrSchemaCreate(cursor);
+  if (systemForm !== undefined) {
+    return systemForm;
+  }
   if (privilegesOn(cursor) === undefined || !cursor.take("to") || !commaSeparated(cursor, () => plainName(cursor))) {
     return unread;
   }
@@ -784,11 +1353,49 @@ function grant(cursor: Cursor): Operation[] {
 }
 
 /**
+ * The system-function forms of REVOKE, read by their whole shape: ALL on a function from PUBLIC, and
+ * CREATE on one schema from slugbase_system. Any other REVOKE on a function is unknown, and any other
+ * on a schema is left to the general reading; undefined when the statement is of neither kind.
+ */
+function revokeFunctionOrSchemaCreate(cursor: Cursor): Operation[] | undefined {
+  const start = cursor.position;
+  const words = privilegeWords(cursor);
+  const restrict = (): void => {
+    if (!cursor.take("cascade")) {
+      cursor.take("restrict");
+    }
+  };
+  if (words !== undefined && cursor.take("on", "function")) {
+    const fn = functionIdentity(cursor);
+    const roles = fn !== undefined && cursor.take("from") ? plainNames(cursor) : undefined;
+    restrict();
+    return fn !== undefined && words.length === 1 && words[0] === "all" && roles?.length === 1 && roles[0] === "public" && cursor.done()
+      ? [{ kind: "revokes-function-public", fn }]
+      : unknown("REVOKE on a function other than ALL from PUBLIC");
+  }
+  if (words?.length === 1 && words[0] === "create" && cursor.take("on", "schema")) {
+    const schemas = plainNames(cursor);
+    const roles = schemas !== undefined && cursor.take("from") ? plainNames(cursor) : undefined;
+    restrict();
+    const [schema] = schemas ?? [];
+    if (schema !== undefined && schemas?.length === 1 && roles?.length === 1 && roles[0] === SYSTEM_ROLE && cursor.done()) {
+      return [{ kind: "revokes-schema-create", schema }];
+    }
+  }
+  cursor.position = start;
+  return undefined;
+}
+
+/**
  * REVOKE [GRANT OPTION FOR] privileges ON object FROM roles [CASCADE | RESTRICT]. A revocation
  * takes access from a role the previous release may still use, so it is a step of its own for the
  * rule to place. It is read by its whole shape, as GRANT is.
  */
 function revoke(cursor: Cursor): Operation[] {
+  const systemForm = cursor.isWord("grant") ? undefined : revokeFunctionOrSchemaCreate(cursor);
+  if (systemForm !== undefined) {
+    return systemForm;
+  }
   cursor.take("grant", "option", "for");
   const object = privilegesOn(cursor);
   if (object === undefined || !cursor.take("from") || !commaSeparated(cursor, () => plainName(cursor))) {
@@ -921,8 +1528,9 @@ function alterAction(table: TableName, action: Cursor): Operation[] {
     if (column === undefined) {
       return unknown("ADD COLUMN without a name");
     }
+    const type = readType(action.tokens, action.position);
     const definition = readDefinition(action);
-    const operations: Operation[] = [{ kind: "add-column", table, column, notNullWithoutDefault: definition.notNull && !definition.supplies, rewritesTable: definition.rewritesTable }];
+    const operations: Operation[] = [{ kind: "add-column", table, column, type, notNullWithoutDefault: definition.notNull && !definition.supplies, rewritesTable: definition.rewritesTable, suppliesValue: definition.supplies }];
     // A column constraint builds an index or checks every existing row, as the table constraint does.
     if (definition.unique || definition.primaryKey) {
       operations.push({ kind: "create-index", table, concurrently: false });
@@ -1044,12 +1652,13 @@ function isVirtualGenerated(definition: Cursor, offset: number): boolean {
  * What the rest of an ADD COLUMN definition says at its top level (words inside
  * parentheses, such as a type's arguments or a CHECK expression, do not count):
  * NOT NULL, a column constraint that builds an index or is checked against the
- * rows, whether it supplies a value (DEFAULT, a generated value, identity or a serial type),
+ * rows, whether it supplies a value (DEFAULT <expression>, a generated value, identity or a serial type;
+ * the DEFAULT of COMPRESSION DEFAULT and STORAGE DEFAULT is no value),
  * and whether it rewrites the table: a serial type, an identity column and a generated column
  * that is not marked VIRTUAL write every existing row (PostgreSQL 17 has stored generated
  * columns only, so a GENERATED form this reader does not recognise counts as rewriting),
  * while a nullable column or a constant or stable DEFAULT is recorded in the catalog alone
- * unless the column's type is a domain with constraints (not yet checked).
+ * unless the column's type is a domain with constraints (the type is read by `readType`).
  */
 function readDefinition(definition: Cursor): {
   notNull: boolean;
@@ -1078,7 +1687,10 @@ function readDefinition(definition: Cursor): {
       if (token.text === "not" && definition.isWord("null", offset + 1)) {
         found.notNull = true;
       } else if (token.text === "default") {
-        found.supplies = true;
+        // COMPRESSION DEFAULT and STORAGE DEFAULT name a method, not a value for the column.
+        if (offset === 0 || !(definition.isWord("compression", offset - 1) || definition.isWord("storage", offset - 1))) {
+          found.supplies = true;
+        }
       } else if (token.text === "generated") {
         found.supplies = true;
         if (!isVirtualGenerated(definition, offset)) {

@@ -10,6 +10,7 @@ import type { Context } from 'hono';
 import { Database } from '@slugbase/db';
 import { EmptyResponse } from '@slugbase/contracts';
 import { JsonResponse } from '@slugbase/contracts';
+import { MigrateResult } from '@slugbase/db';
 import { MigrationChain } from '@slugbase/db';
 import { OperationDefinition } from '@slugbase/contracts';
 import { Problem } from '@slugbase/contracts';
@@ -60,6 +61,7 @@ export interface ChainEnv {
         logger?: Logger;
         principalType?: "anonymous" | "session" | "api-token";
         principal?: Principal;
+        rateLimit?: RateLimitState;
         workspaceId?: string;
         tenant?: RequestTenant;
         hooks?: HookDispatcher;
@@ -122,6 +124,9 @@ export interface CookieAuthenticator {
 
 // @public
 export function createLogger(input: LoggerOptions): Logger;
+
+// @public (undocumented)
+export function createRateLimitRegistry(config: RateLimitConfig): RateLimitRegistry;
 
 // @public
 export function createServer(options: CreateServerOptions): Server;
@@ -272,6 +277,7 @@ export const envSchemas: {
     SESSION_SECRET: z.ZodString;
     ENCRYPTION_KEY: z.ZodString;
     ENCRYPTION_KEY_ID: z.ZodString;
+    ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<readonly PreviousKey[], string>>>, unknown>;
     } & {
     DATABASE_URL: z.ZodString;
     SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
@@ -285,7 +291,9 @@ export const envSchemas: {
     DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>;
     } & {
     METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
-    }>;
+    } & {
+    ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    } & Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>;
     readonly worker: EnvSchema<    {
     NODE_ENV: z.ZodEnum<{
     development: "development";
@@ -307,12 +315,15 @@ export const envSchemas: {
     SESSION_SECRET: z.ZodString;
     ENCRYPTION_KEY: z.ZodString;
     ENCRYPTION_KEY_ID: z.ZodString;
+    ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<readonly PreviousKey[], string>>>, unknown>;
     } & {
     DATABASE_URL: z.ZodString;
     SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
     } & {
     METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
-    }>;
+    } & {
+    ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    } & Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>;
     readonly migrate: EnvSchema<    {
     NODE_ENV: z.ZodEnum<{
     development: "development";
@@ -332,6 +343,11 @@ export const envSchemas: {
     DATABASE_MIGRATE_URL: z.ZodString;
     }>;
 };
+
+// @public
+export const errorReportFragment: EnvFragment<    {
+ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+}>;
 
 // @public (undocumented)
 export const HOOK_NAMES: readonly ["seatCheck", "deletionGuard", "registrationPolicy"];
@@ -412,6 +428,9 @@ export type JobPayload = Readonly<Record<string, JobScalar>>;
 
 // @public
 export type JobScalar = string | number | boolean | null | undefined;
+
+// @public
+export function limitName(bucket: string, scope: RateScope): string;
 
 // @public
 export function loadBuildInfo(file: URL | string): BuildInfo;
@@ -524,6 +543,12 @@ DATABASE_MIGRATE_URL: z.ZodString;
 }>];
 
 // @public (undocumented)
+export interface MigrationRunOptions {
+    readonly chains?: readonly MigrationChain[];
+    readonly url: string;
+}
+
+// @public (undocumented)
 export const MIN_SESSION_SECRET_LENGTH = 32;
 
 // @public
@@ -558,6 +583,13 @@ export const originFragment: EnvFragment<    {
 APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
 }>;
 
+// @public (undocumented)
+export interface PreviousKey {
+    readonly key: string;
+    // (undocumented)
+    readonly keyId: string;
+}
+
 // @public
 export type Principal = SessionPrincipal | ApiTokenPrincipal;
 
@@ -585,6 +617,122 @@ export const PROCESS_TYPES: readonly ["server", "worker", "migrate"];
 
 // @public (undocumented)
 export type ProcessType = (typeof PROCESS_TYPES)[number];
+
+// @public (undocumented)
+export const RATE_LIMIT_BUCKETS: readonly RateLimitBucket[];
+
+// @public (undocumented)
+export const RATE_LIMIT_DEFAULTS: {
+    readonly login: {
+        readonly ip: "10/min";
+        readonly email: "20/hour";
+    };
+    readonly mfa: {
+        readonly ip: "10/min";
+        readonly account: "30/hour";
+    };
+    readonly register: {
+        readonly ip: "5/hour";
+    };
+    readonly reset: {
+        readonly ip: "5/hour";
+        readonly email: "3/hour";
+    };
+    readonly token_redeem: {
+        readonly ip: "10/hour";
+    };
+    readonly token_create: {
+        readonly account: "20/hour";
+    };
+    readonly setup: {
+        readonly ip: "10/hour";
+    };
+    readonly go: {
+        readonly ip: "600/min";
+        readonly account: "300/min";
+    };
+    readonly read: {
+        readonly ip: "1200/min";
+        readonly account: "1200/min";
+    };
+    readonly write: {
+        readonly ip: "300/min";
+        readonly account: "120/min";
+    };
+    readonly bulk: {
+        readonly account: "20/hour";
+    };
+    readonly fetch: {
+        readonly ip: "120/min";
+        readonly account: "60/min";
+    };
+    readonly ai: {
+        readonly account: "60/hour";
+        readonly workspace: "600/hour";
+    };
+    readonly public: {
+        readonly ip: "300/min";
+    };
+};
+
+// @public (undocumented)
+export const RATE_LIMIT_SCOPES: readonly ["ip", "account", "workspace", "email"];
+
+// @public
+export type RateLimitBucket = keyof RateLimitDefaults;
+
+// @public
+export type RateLimitConfig = {
+    readonly [Key in RateLimitKey]: RateLimitSpec;
+};
+
+// @public (undocumented)
+export type RateLimitDefaults = typeof RATE_LIMIT_DEFAULTS;
+
+// @public
+export const rateLimitFragment: EnvFragment<Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>;
+
+// @public
+export type RateLimitKey = {
+    [Bucket in RateLimitBucket]: {
+        [Scope in keyof RateLimitDefaults[Bucket] & string]: `RATE_LIMIT_${Uppercase<Bucket>}_${Uppercase<Scope>}`;
+    }[keyof RateLimitDefaults[Bucket] & string];
+}[RateLimitBucket];
+
+// @public (undocumented)
+export function rateLimitKey(bucket: string, scope: RateScope): string;
+
+// @public (undocumented)
+export interface RateLimitRegistry {
+    scopesOf(bucket: string): readonly ScopeLimit[] | undefined;
+    window(name: string): RateLimitWindow | undefined;
+}
+
+// @public
+export interface RateLimitSpec {
+    // (undocumented)
+    readonly count: number;
+    // (undocumented)
+    readonly windowSeconds: number;
+}
+
+// @public
+export interface RateLimitState {
+    readonly retryAfterSeconds?: number;
+    // (undocumented)
+    readonly taken: readonly TakenLimit[];
+}
+
+// @public
+export interface RateLimitWindow {
+    // (undocumented)
+    readonly capacity: number;
+    // (undocumented)
+    readonly refillPerSecond: number;
+}
+
+// @public (undocumented)
+export type RateScope = (typeof RATE_LIMIT_SCOPES)[number];
 
 // @public
 export interface RefineContext {
@@ -709,6 +857,9 @@ export type RouteRequest<Op extends OperationDefinition> = RequestPart<Op, "para
 // @public
 export type RouteResult<Op extends OperationDefinition> = ResponseResult<Op["responses"]>;
 
+// @public
+export function runMigrations(options: MigrationRunOptions): Promise<MigrateResult>;
+
 // @public (undocumented)
 export interface RunningServer {
     readonly metricsPort?: number;
@@ -753,6 +904,16 @@ export interface ScheduleDefinition {
     readonly payload?: JobPayload;
 }
 
+// @public
+export interface ScopeLimit {
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly scope: RateScope;
+    // (undocumented)
+    readonly spec: RateLimitSpec;
+}
+
 // @public (undocumented)
 export interface SeatCheckAnswer {
     readonly seatLimit: number | null;
@@ -773,6 +934,7 @@ export const secretsFragment: EnvFragment<    {
 SESSION_SECRET: z.ZodString;
 ENCRYPTION_KEY: z.ZodString;
 ENCRYPTION_KEY_ID: z.ZodString;
+ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<readonly PreviousKey[], string>>>, unknown>;
 }>;
 
 // @public (undocumented)
@@ -812,6 +974,7 @@ APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
 SESSION_SECRET: z.ZodString;
 ENCRYPTION_KEY: z.ZodString;
 ENCRYPTION_KEY_ID: z.ZodString;
+ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<readonly PreviousKey[], string>>>, unknown>;
 } & {
 DATABASE_URL: z.ZodString;
 SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
@@ -825,7 +988,9 @@ API_DOCS_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, st
 DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>;
 } & {
 METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
-}>;
+} & {
+ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+} & Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>;
 
 // @public
 export const serverFragments: readonly [EnvFragment<    {
@@ -849,6 +1014,7 @@ APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
 SESSION_SECRET: z.ZodString;
 ENCRYPTION_KEY: z.ZodString;
 ENCRYPTION_KEY_ID: z.ZodString;
+ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<readonly PreviousKey[], string>>>, unknown>;
 }>, EnvFragment<    {
 DATABASE_URL: z.ZodString;
 SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
@@ -860,8 +1026,10 @@ PORT: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
 TRUSTED_PROXY_HOPS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
 API_DOCS_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>;
-}>, EnvFragment<    {
+}>, EnvFragment<Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>, EnvFragment<    {
 METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
+}>, EnvFragment<    {
+ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 }>];
 
 // @public
@@ -902,6 +1070,18 @@ export type StageName = (typeof CHAIN_STAGES)[number];
 export interface StartOptions {
     readonly metricsPort?: number;
     readonly port?: number;
+}
+
+// @public
+export interface TakenLimit {
+    // (undocumented)
+    readonly limit: number;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly remaining: number;
+    // (undocumented)
+    readonly window: RateLimitWindow;
 }
 
 // @public
@@ -951,12 +1131,15 @@ APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
 SESSION_SECRET: z.ZodString;
 ENCRYPTION_KEY: z.ZodString;
 ENCRYPTION_KEY_ID: z.ZodString;
+ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<readonly PreviousKey[], string>>>, unknown>;
 } & {
 DATABASE_URL: z.ZodString;
 SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 } & {
 METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
-}>;
+} & {
+ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+} & Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>;
 
 // @public
 export const workerFragments: readonly [EnvFragment<    {
@@ -980,11 +1163,14 @@ APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
 SESSION_SECRET: z.ZodString;
 ENCRYPTION_KEY: z.ZodString;
 ENCRYPTION_KEY_ID: z.ZodString;
+ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<readonly PreviousKey[], string>>>, unknown>;
 }>, EnvFragment<    {
 DATABASE_URL: z.ZodString;
 SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
-}>, EnvFragment<    {
+}>, EnvFragment<Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>, EnvFragment<    {
 METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
+}>, EnvFragment<    {
+ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 }>];
 
 // @public (undocumented)

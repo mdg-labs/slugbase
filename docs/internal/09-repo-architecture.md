@@ -10,7 +10,7 @@ A monorepo suits a product where one developer ships one artefact. SlugBase has 
 
 | Repository | Visibility | Owns | Why separate |
 |---|---|---|---|
-| `mdg-labs/slugbase` | Public, AGPL-3.0 | CE and every package Cloud builds on: contracts, core, db, server, adapters, email, ui, web, testing; the CE image | The CE must be fully open, buildable and runnable on its own (D20). Anything in it is published the moment it is pushed |
+| `mdg-labs/slugbase` | Public, AGPL-3.0 | CE and every package Cloud builds on: contracts, core, db, server, adapters, email, ui, web, testing, testing-ports; the CE image | The CE must be fully open, buildable and runnable on its own (D20). Anything in it is published the moment it is pushed |
 | The private Cloud repository | Private, proprietary | The SlugBase Cloud composition of CE, plus Cloud-only modules, web extensions and tooling (Cloud doc 09 §1) | Billing, operator tooling and infrastructure details must never be public (§4) |
 | The billing service | Private, proprietary | The central MDG Labs billing service, shared by every MDG Labs product (Cloud doc 09 §1) | SlugBase Cloud talks to it only through its API; CE never does |
 
@@ -69,8 +69,11 @@ slugbase/
 │   │                             src/components/ui/, SlugBase tokens and particles; components.json with the @coss registry
 │   ├── web/                      @slugbase/web — the SPA as a library: createWebApp({ extensions }),
 │   │                             routes, slots, i18n catalogs
-│   └── testing/                  @slugbase/testing — Postgres test harness, factories, two-workspace fixtures,
+│   ├── testing/                  @slugbase/testing — Postgres test harness, factories, two-workspace fixtures,
 │                                 the cross-tenant matrix runner, MSW handlers generated from contracts
+│   └── testing-ports/            @slugbase/testing-ports — the in-memory ports (InMemoryMail, FakeAi, FakeIdentity,
+│                                 FakeEgress, FixedClock, SequenceIds); imports no workspace package, so core's
+│                                 unit tests can use it, and @slugbase/testing re-exports it
 │
 ├── apps/
 │   └── slugbase/                 the CE composition root: server main (CE adapters, no extra modules),
@@ -90,10 +93,10 @@ Package boundaries are enforced by `eslint-plugin-boundaries` (or dependency-cru
 | `adapters` | `core`, `contracts`, the public entry of `db` | `server`, `db` internals |
 | `server` | `core`, `db`, `contracts` | `adapters` (adapters are injected by the app) |
 | `web` | `contracts`, `ui` | `core`, `db`, `server` |
-| `ui`, `email` | no workspace package | every workspace package (widening needs an edit here) |
+| `ui`, `email`, `testing-ports` | no workspace package | every workspace package (widening needs an edit here) |
 | `apps/*` | everything | — |
 
-`fetch`, `node:http(s)` and `undici` are importable only inside `adapters/src/egress/` (doc 01 §10); the raw database handle only inside `db` (doc 01 §5.3); `@slugbase/testing` and `@slugbase/db/testing` only from test files, `test/` folders and `apps/*` development tooling (and `@slugbase/db/testing` from `packages/testing`, which wraps it).
+`fetch`, `node:http(s)` and `undici` are importable only inside `adapters/src/egress/` (doc 01 §10); the raw database handle only inside `db` (doc 01 §5.3); `@slugbase/testing`, `@slugbase/testing-ports` and `@slugbase/db/testing` only from test files, `test/` folders and `apps/*` development tooling (and `@slugbase/db/testing` and `@slugbase/testing-ports` from `packages/testing`, which wraps and re-exports them). `core` lists `@slugbase/testing-ports` as a development dependency; the package has no workspace dependency, which keeps the package graph acyclic (doc 08 §3.1).
 
 ### 2.2 The private Cloud repository
 

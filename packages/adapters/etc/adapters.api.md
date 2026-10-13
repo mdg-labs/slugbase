@@ -4,6 +4,104 @@
 
 ```ts
 
+import { EgressPort } from '@slugbase/core';
+import { EgressRequest } from '@slugbase/core';
+import { EgressResponse } from '@slugbase/core';
+import type { ErrorReportPort } from '@slugbase/core';
+import type { RateLimitPort } from '@slugbase/core';
+import type { RateLimitStore } from '@slugbase/db';
+import type { SecretBoxPort } from '@slugbase/core';
+
+// @public
+export interface BucketLimit {
+    // (undocumented)
+    readonly capacity: number;
+    // (undocumented)
+    readonly refillPerSecond: number;
+}
+
+// @public (undocumented)
+export interface CreateEgressOptions {
+    readonly nodeEnv: string;
+    readonly resolve?: EgressResolver;
+    readonly testOnly?: {
+        readonly allowNonPublicAddresses?: boolean;
+        readonly allowAddresses?: readonly string[];
+        readonly ca?: string | Buffer;
+        readonly dnsServers?: readonly string[];
+    };
+}
+
+// @public
+export function createRateLimiter(options: CreateRateLimiterOptions): RateLimitPort;
+
+// @public (undocumented)
+export interface CreateRateLimiterOptions {
+    readonly limits: (bucket: string) => BucketLimit | undefined;
+    readonly store: Pick<RateLimitStore, "take">;
+}
+
+// @public
+export function createSecretBox(options: CreateSecretBoxOptions): SecretBoxPort;
+
+// @public (undocumented)
+export interface CreateSecretBoxOptions {
+    readonly current: SecretBoxKey;
+    readonly previous?: readonly SecretBoxKey[];
+}
+
+// @public
+export function createSentryErrorReport(options: CreateSentryErrorReportOptions): ErrorReportPort;
+
+// @public (undocumented)
+export interface CreateSentryErrorReportOptions {
+    readonly dsn: string;
+    // (undocumented)
+    readonly environment?: string;
+    readonly flushTimeoutMs?: number;
+    // (undocumented)
+    readonly release?: string;
+}
+
+// @public
+export type EgressResolver = (hostname: string) => Promise<readonly string[]>;
+
+// @public
+export class HttpEgress implements EgressPort {
+    constructor(options: CreateEgressOptions);
+    // (undocumented)
+    readonly available = true;
+    // (undocumented)
+    request(request: EgressRequest): Promise<EgressResponse>;
+}
+
+// @public
+export class RateLimitError extends Error {
+    constructor(reason: RateLimitErrorReason);
+    // (undocumented)
+    readonly reason: RateLimitErrorReason;
+}
+
+// @public
+export type RateLimitErrorReason = "unknown_bucket" | "invalid_request" | "invalid_store_answer";
+
+// @public
+export class SecretBoxError extends Error {
+    constructor(operation: SecretBoxOperation);
+    // (undocumented)
+    readonly operation: SecretBoxOperation;
+}
+
+// @public (undocumented)
+export interface SecretBoxKey {
+    readonly key: Uint8Array;
+    // (undocumented)
+    readonly keyId: string;
+}
+
+// @public (undocumented)
+export type SecretBoxOperation = "configure" | "seal" | "open";
+
 // (No @packageDocumentation comment for this package)
 
 ```

@@ -1,6 +1,7 @@
 {
   "migrations": {
     "20261011134302_add_extensions_and_tenant_functions": "e6faf169aaa55b2cabd311b10d81ea08c8e09aa8d91448f99e2bb833668f070a",
-    "20261012103429_add_sql_definitions": "4f60d8b4a6898bd8b25b00bce4adf198a2ffb6fbff604bbd38ab0e56fab05e9d"
+    "20261012103429_add_sql_definitions": "4f60d8b4a6898bd8b25b00bce4adf198a2ffb6fbff604bbd38ab0e56fab05e9d",
+    "20261012224854_add_rate_limit_buckets": "616a821449c0d1d5417dbc319d45da5ff173b1828980d0726b6c934e9527e0a4"
   }
 }

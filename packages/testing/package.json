@@ -35,6 +35,8 @@
     "contracts:check": "node ../../tooling/api-report/api-report.ts check --package ."
   },
   "dependencies": {
-    "@slugbase/db": "workspace:*"
+    "@slugbase/core": "workspace:*",
+    "@slugbase/db": "workspace:*",
+    "@slugbase/testing-ports": "workspace:*"
   }
 }

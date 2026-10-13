@@ -13,8 +13,33 @@ import { SQL } from 'drizzle-orm';
 // @public
 export const CE_CHAIN: MigrationChain;
 
+// @public (undocumented)
+export interface ConnectionRole {
+    ownsDatabase: boolean;
+    role: string;
+    superuser: boolean;
+}
+
+// @public
+export function connectionRole(options: ConnectionRoleOptions): Promise<ConnectionRole>;
+
+// @public
+export class ConnectionRoleError extends Error {
+    constructor(message: string, code?: string);
+    // (undocumented)
+    readonly code: string | undefined;
+}
+
+// @public (undocumented)
+export interface ConnectionRoleOptions {
+    url: string;
+}
+
 // @public
 export function createDatabase(options: DatabaseOptions): Database;
+
+// @public
+export function createRateLimitStore(options: RateLimitStoreOptions): RateLimitStore;
 
 // @public
 export interface Database {
@@ -84,6 +109,38 @@ export function migrationLevel(options: MigrationLevelOptions): Promise<Migratio
 export interface MigrationLevelOptions {
     chains?: readonly MigrationChain[];
     url: string;
+}
+
+// @public (undocumented)
+export interface RateLimitStore {
+    close(): Promise<void>;
+    take(request: RateLimitTake): Promise<RateLimitTaken>;
+}
+
+// @public (undocumented)
+export interface RateLimitStoreOptions {
+    poolSize?: number;
+    url: string;
+}
+
+// @public
+export interface RateLimitTake {
+    // (undocumented)
+    readonly capacity: number;
+    // (undocumented)
+    readonly cost: number;
+    // (undocumented)
+    readonly key: string;
+    // (undocumented)
+    readonly refillPerSecond: number;
+}
+
+// @public (undocumented)
+export interface RateLimitTaken {
+    // (undocumented)
+    readonly allowed: boolean;
+    readonly remaining: number;
+    readonly retryAfterSeconds: number;
 }
 
 // @public

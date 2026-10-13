@@ -9,7 +9,7 @@ import {
   DEVELOPMENT_SESSION_SECRET,
 } from "./development-defaults.ts";
 import { envBoolean } from "./env-boolean.ts";
-import { base64Key, baseUrl, envInteger, optional, originUrl, postgresUrl } from "./fields.ts";
+import { KEY_ID_PATTERN, base64Key, baseUrl, envInteger, optional, originUrl, postgresUrl, previousKeys, sentryDsn } from "./fields.ts";
 import { envFragment, type RefineContext } from "./fragment.ts";
 
 export const NODE_ENVS = ["development", "test", "production"] as const;
@@ -38,14 +38,18 @@ export const originFragment = envFragment({
   },
 });
 
-/** The session secret and the secret-box key (Q13), for the server and the worker. */
+/**
+ * The session secret and the secret-box keys (Q13), for the server and the worker. The previous keys
+ * only open values sealed before a rotation; the current key seals.
+ */
 export const secretsFragment = envFragment({
   shape: {
     SESSION_SECRET: z.string().refine((value) => value !== "", { error: "is required" }),
     ENCRYPTION_KEY: base64Key(32),
-    ENCRYPTION_KEY_ID: z.string().refine((value) => /^[A-Za-z0-9._-]{1,64}$/.test(value), {
+    ENCRYPTION_KEY_ID: z.string().refine((value) => KEY_ID_PATTERN.test(value), {
       error: "must be 1 to 64 letters, digits, dots, hyphens or underscores",
     }),
+    ENCRYPTION_KEY_PREVIOUS: previousKeys(32),
   },
   developmentDefaults: {
     SESSION_SECRET: DEVELOPMENT_SESSION_SECRET,
@@ -55,6 +59,10 @@ export const secretsFragment = envFragment({
   refine(values, context) {
     if (context.production && values.SESSION_SECRET.length < MIN_SESSION_SECRET_LENGTH) {
       context.issue("SESSION_SECRET", `must be at least ${String(MIN_SESSION_SECRET_LENGTH)} characters in production`);
+    }
+    const ids = [values.ENCRYPTION_KEY_ID, ...values.ENCRYPTION_KEY_PREVIOUS.map((previous) => previous.keyId)];
+    if (new Set(ids).size !== ids.length) {
+      context.issue("ENCRYPTION_KEY_PREVIOUS", "must not repeat a key id or use the id of ENCRYPTION_KEY_ID");
     }
   },
 });
@@ -126,4 +134,12 @@ export const httpFragment = envFragment({
  */
 export const metricsFragment = envFragment({
   shape: { METRICS_PORT: optional(envInteger({ min: 1, max: 65535 })) },
+});
+
+/**
+ * The error-report destination (doc 01 sections 6 and 11), for the server and the worker. Unset
+ * selects the no-op adapter, which reports nothing beyond the log.
+ */
+export const errorReportFragment = envFragment({
+  shape: { ERROR_REPORT_DSN: optional(sentryDsn()) },
 });

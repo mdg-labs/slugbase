@@ -50,6 +50,8 @@ describe(".env.example", () => {
   it("holds the schema defaults for the keys that have one", () => {
     const { config } = loadConfig("server", Object.fromEntries(example));
     expect(example.get("METRICS_PORT")).toBe("");
+    expect(example.get("ERROR_REPORT_DSN")).toBe("");
+    expect(config.ERROR_REPORT_DSN).toBeUndefined();
     expect(config.METRICS_PORT).toBeUndefined();
     expect(config).toMatchObject({
       PORT: Number(example.get("PORT")),

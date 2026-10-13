@@ -1,4 +1,5 @@
 import { setTimeout as sleep } from "node:timers/promises";
+import type { Adapters } from "@slugbase/core";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { getConstructionPlans } from "pg-boss";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -56,12 +57,12 @@ afterEach(async () => {
   await Promise.all(started.splice(0).map((worker) => worker.shutdown()));
 });
 
-async function startWorker(modules: ServerModule[], shutdownTimeoutMs?: number) {
+async function startWorker(modules: ServerModule[], shutdownTimeoutMs?: number, errors?: Adapters["errors"]) {
   const logger = recordingLogger();
   const fake = fakeDatabase();
   const worker = createWorker({
     config: workerConfig(),
-    adapters: adapters(),
+    adapters: errors === undefined ? adapters() : { ...adapters(), errors },
     modules,
     logger,
     database: fake,
@@ -184,6 +185,37 @@ describe("two workers on one database", () => {
     expect(gaps).toHaveLength(2);
     expect(gaps[0]).toBeGreaterThanOrEqual(900);
     expect(gaps[1]).toBeGreaterThanOrEqual(1900);
+  }, 90_000);
+
+  it("reports every failed attempt through the error port under the job's name, and a failing reporter does not change the outcome", async () => {
+    const reported: { error: unknown; route: string | undefined }[] = [];
+    let reporterCalls = 0;
+    const errors: Adapters["errors"] = {
+      available: true,
+      capture: (error, context) => {
+        reporterCalls += 1;
+        reported.push({ error, route: context?.route });
+        return reporterCalls === 1 ? Promise.reject(new Error("reporter down")) : Promise.resolve();
+      },
+    };
+    const failure = new Error("job exploded");
+    const failing = defineJob({
+      name: "test.reported",
+      payload,
+      retry: { limit: 1, delaySeconds: 1, backoff: false },
+      handle: () => Promise.reject(failure),
+    });
+    const { running, logger } = await startWorker([moduleOf("a", [failing])], undefined, errors);
+
+    await running.enqueue(failing, { id: "x" });
+    await until(async () => (await jobRows("test.reported")).some((row) => row.state === "failed"), 60_000, "the job to fail");
+
+    expect(reported).toEqual([
+      { error: failure, route: "test.reported" },
+      { error: failure, route: "test.reported" },
+    ]);
+    expect(await jobRows("test.reported")).toMatchObject([{ state: "failed", retry_count: 1 }]);
+    expect(logger.entries.filter((entry) => entry.message === "Error report failed")).toHaveLength(1);
   }, 90_000);
 
   it("leaves the same state when the same job is delivered twice", async () => {

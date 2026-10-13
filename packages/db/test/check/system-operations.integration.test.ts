@@ -74,8 +74,10 @@ function fixture(options: Fixture = {}): string {
   ].join("\n");
 }
 
+// The scratch databases are clones of the migrated template, so they hold the
+// shipped system operations; the registry under test is theirs plus its own.
 async function lint(database: TestDatabase, registry: readonly string[]): Promise<readonly Finding[]> {
-  return createSystemOperationsRule(registry).run({ packageDir: PACKAGE, sql: database.app, hashSqlFiles });
+  return createSystemOperationsRule([...systemOperations, ...registry]).run({ packageDir: PACKAGE, sql: database.app, hashSqlFiles });
 }
 
 async function lintFixture(options: Fixture): Promise<readonly Finding[]> {
@@ -94,8 +96,8 @@ afterEach(async () => {
 }, HOOK_TIMEOUT_MS);
 
 describe("the shipped chain", () => {
-  it("has an empty registry and passes", async () => {
-    expect(systemOperations).toEqual([]);
+  it("registers the shipped system operations and passes", async () => {
+    expect(systemOperations).toEqual(["sys_rate_limit_take"]);
     expect(checkRules).toContain(systemOperationsRule);
     const database = await scratch();
     expect(await systemOperationsRule.run({ packageDir: PACKAGE, sql: database.app, hashSqlFiles })).toEqual([]);

@@ -291,12 +291,24 @@ describe("roles in pg_roles", () => {
     ]);
   });
 
-  it("makes only the migrator a member, and only of slugbase_owner", async () => {
+  it("makes the migrator a member of slugbase_owner and slugbase_owner a member of slugbase_system, and nothing else", async () => {
     const rows = await owner<{ role: string; member: string }[]>`
       SELECT pg_get_userbyid(roleid) AS role, pg_get_userbyid(member) AS member
       FROM pg_auth_members
       WHERE pg_get_userbyid(roleid) = ANY(${ROLE_NAMES}) OR pg_get_userbyid(member) = ANY(${ROLE_NAMES})`;
-    expect([...rows]).toEqual([{ role: "slugbase_owner", member: "slugbase_migrator" }]);
+    expect([...rows].sort((a, b) => a.role.localeCompare(b.role))).toEqual([
+      { role: "slugbase_owner", member: "slugbase_migrator" },
+      { role: "slugbase_system", member: "slugbase_owner" },
+    ]);
+    const options = await owner<{ role: string; member: string; inherit: boolean; set: boolean; admin: boolean }[]>`
+      SELECT pg_get_userbyid(roleid) AS role, pg_get_userbyid(member) AS member,
+             inherit_option AS inherit, set_option AS set, admin_option AS admin
+      FROM pg_auth_members
+      WHERE pg_get_userbyid(roleid) = ANY(${ROLE_NAMES}) ORDER BY 1`;
+    expect([...options]).toEqual([
+      { role: "slugbase_owner", member: "slugbase_migrator", inherit: false, set: true, admin: false },
+      { role: "slugbase_system", member: "slugbase_owner", inherit: true, set: true, admin: false },
+    ]);
   });
 
   it("lets nobody own an object but slugbase_owner", async () => {
@@ -350,7 +362,6 @@ describe("behaviour of the roles", () => {
     expect(await sqlState(() => migrator.unsafe("CREATE TABLE public.direct (id int)"))).toBe(
       "42501",
     );
-    expect(await sqlState(() => migrator.unsafe("SET ROLE slugbase_system"))).toBe("42501");
     await migrator.begin(async (tx) => {
       await tx.unsafe("SET LOCAL ROLE slugbase_owner");
       await tx.unsafe("CREATE TABLE public.via_owner (id int)");
@@ -358,6 +369,32 @@ describe("behaviour of the roles", () => {
     const rows = await owner<{ tableowner: string }[]>`
       SELECT tableowner FROM pg_tables WHERE tablename = 'via_owner'`;
     expect(rows.map((row) => row.tableowner)).toEqual(["slugbase_owner"]);
+  });
+});
+
+describe("slugbase_system", () => {
+  it("is reached through slugbase_owner only, and can create nothing", async () => {
+    await migrator.begin(async (tx) => {
+      await tx.unsafe("SET LOCAL ROLE slugbase_owner");
+      await tx.unsafe("SET LOCAL ROLE slugbase_system");
+      const role = await tx<{ current_user: string }[]>`SELECT current_user`;
+      expect(role[0]?.current_user).toBe("slugbase_system");
+    });
+    await expect(
+      migrator.begin(async (tx) => {
+        await tx.unsafe("SET LOCAL ROLE slugbase_system");
+        await tx.unsafe("CREATE TABLE public.via_system (id int)");
+      }),
+    ).rejects.toMatchObject({ code: "42501" });
+    expect(await sqlState(() => app.unsafe("SET ROLE slugbase_system"))).toBe("42501");
+  });
+
+  it("is not passed on to slugbase_app, and keeps BYPASSRLS to itself", async () => {
+    const rows = await owner<{ app_bypass: boolean; owner_bypass: boolean; owner_inherits_system: boolean }[]>`
+      SELECT (SELECT rolbypassrls FROM pg_roles WHERE rolname = 'slugbase_app') AS app_bypass,
+             (SELECT rolbypassrls FROM pg_roles WHERE rolname = 'slugbase_owner') AS owner_bypass,
+             pg_has_role('slugbase_owner', 'slugbase_system', 'USAGE') AS owner_inherits_system`;
+    expect([...rows]).toEqual([{ app_bypass: false, owner_bypass: false, owner_inherits_system: true }]);
   });
 });
 

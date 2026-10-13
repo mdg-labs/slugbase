@@ -23,6 +23,11 @@ const valid = {
   ENCRYPTION_KEY_ID: "k1",
 };
 
+// A server that starts without a database behind it: outside production it does not check the role of
+// DATABASE_URL, and it does not migrate. The tests of the migration and of that check have a database
+// of their own in main.integration.test.ts.
+const standalone = { ...valid, NODE_ENV: "test", MIGRATE_ON_START: "false" };
+
 function start(env: Record<string, string>, ...args: string[]) {
   const result = spawnSync(process.execPath, ["src/main.ts", ...args], {
     cwd: APP,
@@ -103,9 +108,11 @@ async function runServer(env: Record<string, string>, ...args: string[]): Promis
   }
 }
 
-describe("apps/slugbase main", () => {
+// Every test starts the app as a child process, whose cold start alone can approach vitest's 5 s
+// default on a busy runner; the tests get the bound the child processes already have.
+describe("apps/slugbase main", { timeout: 60_000 }, () => {
   it("starts the server, answers through the middleware chain and exits 0 on SIGTERM", async () => {
-    const { status, output, response } = await runServer(valid);
+    const { status, output, response } = await runServer(standalone);
     expect(status, output).toBe(0);
     expect(output).toContain("Configuration loaded");
     expect(output).toContain("Shutdown complete");
@@ -114,7 +121,7 @@ describe("apps/slugbase main", () => {
   });
 
   it("answers with an X-Request-Id and writes one pino line per request without the raw path", async () => {
-    const { status, output, response } = await runServer(valid);
+    const { status, output, response } = await runServer(standalone);
     expect(status, output).toBe(0);
     const requestId = /^x-request-id: (\S+)$/im.exec(response)?.[1];
     expect(requestId).toBeDefined();
@@ -129,7 +136,7 @@ describe("apps/slugbase main", () => {
   });
 
   it("starts the server for the server command", async () => {
-    const { status, output } = await runServer(valid, "server");
+    const { status, output } = await runServer(standalone, "server");
     expect(status, output).toBe(0);
     expect(output).toContain('"Listening"');
   });
@@ -139,7 +146,7 @@ describe("apps/slugbase main", () => {
     const publicPort = await freePort();
     const child = spawn(process.execPath, ["src/main.ts", "server"], {
       cwd: APP,
-      env: { PATH: process.env["PATH"] ?? "", ...valid, PORT: String(publicPort), METRICS_PORT: String(metricsPort) },
+      env: { PATH: process.env["PATH"] ?? "", ...standalone, PORT: String(publicPort), METRICS_PORT: String(metricsPort) },
     });
     let output = "";
     const exited = new Promise<number | null>((resolveExit) => {
@@ -178,8 +185,12 @@ describe("apps/slugbase main", () => {
     }
   });
 
-  it("accepts the migrate command", () => {
-    expect(start(valid, "migrate").status).toBe(0);
+  it("runs the migrate command, and exits non-zero naming no connection string when the database cannot be reached", () => {
+    const { status, output } = start(valid, "migrate");
+    expect(status, output).toBe(1);
+    expect(output).toContain("Configuration loaded");
+    expect(output).not.toContain("Zq8-prod-mig-pw");
+    expect(output).not.toContain("postgres://");
   });
 
   it("exits non-zero when the port is taken", async () => {
@@ -193,7 +204,7 @@ describe("apps/slugbase main", () => {
     try {
       const result = spawnSync(process.execPath, ["src/main.ts", "server"], {
         cwd: APP,
-        env: { PATH: process.env["PATH"] ?? "", ...valid, PORT: String(port) },
+        env: { PATH: process.env["PATH"] ?? "", ...standalone, PORT: String(port) },
         encoding: "utf8",
         timeout: 30_000,
       });
@@ -233,18 +244,57 @@ describe("apps/slugbase main", () => {
 
   it("validates the schema of the command it runs", () => {
     const migrateOnly = { NODE_ENV: valid.NODE_ENV, DATABASE_MIGRATE_URL: valid.DATABASE_MIGRATE_URL };
-    expect(start(migrateOnly, "migrate").status).toBe(0);
+    // The migrate command needs nothing but its own keys: it gets as far as the database.
+    expect(start(migrateOnly, "migrate").output).toContain("Configuration loaded");
     const worker = start(migrateOnly, "worker");
     expect(worker.status).toBe(1);
     expect(worker.output).toContain("DATABASE_URL");
   });
 
   it("warns once about unknown SLUGBASE_* keys, naming keys only", async () => {
-    const { status, output } = await runServer({ ...valid, SLUGBASE_NOT_A_KEY: "value-qx72" });
+    const { status, output } = await runServer({ ...standalone, SLUGBASE_NOT_A_KEY: "value-qx72" });
     expect(status).toBe(0);
     expect(output).toContain("SLUGBASE_NOT_A_KEY");
     expect(output).not.toContain("value-qx72");
     expect(output.match(/Unknown SLUGBASE_/g)).toHaveLength(1);
+  });
+
+  it("builds the secret box from the configured keys before it serves, and logs no key", async () => {
+    const previous = randomBytes(32).toString("base64");
+    const { status, output } = await runServer({ ...standalone, ENCRYPTION_KEY_PREVIOUS: `k0:${previous}` });
+    expect(status, output).toBe(0);
+    const lines = output
+      .split("\n")
+      .filter((line) => line.startsWith("{"))
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    const ready = lines.findIndex((line) => line["msg"] === "Secret box ready");
+    expect(ready).toBeGreaterThanOrEqual(0);
+    expect(lines[ready]).toMatchObject({ keyId: "k1", previousKeys: 1 });
+    expect(ready).toBeLessThan(lines.findIndex((line) => line["msg"] === "Listening"));
+    expect(output).not.toContain(ENCRYPTION_KEY);
+    expect(output).not.toContain(previous);
+  });
+
+  it("builds the rate limiter before it serves, without connecting to the database to do so", async () => {
+    // `standalone` names a database host that does not exist: a limiter that connected at start-up could not.
+    const { status, output } = await runServer(standalone);
+    expect(status, output).toBe(0);
+    const messages = output
+      .split("\n")
+      .filter((line) => line.startsWith("{"))
+      .map((line) => (JSON.parse(line) as Record<string, unknown>)["msg"]);
+    const ready = messages.indexOf("Rate limiter ready");
+    expect(ready).toBeGreaterThanOrEqual(0);
+    expect(ready).toBeLessThan(messages.indexOf("Listening"));
+  });
+
+  it("refuses to start with a previous key that is not 32 bytes, naming the key and never the value", () => {
+    const short = Buffer.alloc(16, 4).toString("base64");
+    const { status, output } = start({ ...valid, ENCRYPTION_KEY_PREVIOUS: `k0:${short}` });
+    expect(status).toBe(1);
+    expect(output).toContain("ENCRYPTION_KEY_PREVIOUS");
+    expect(output).not.toContain(short);
+    expect(output).not.toContain("Configuration loaded");
   });
 
   it("exits non-zero for an unknown command", () => {

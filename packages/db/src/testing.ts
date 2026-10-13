@@ -256,6 +256,34 @@ async function installRoles(server: Server, database: string): Promise<void> {
   }
 }
 
+// The statements of roles.sql that set the privileges on the current database:
+// each is a `SELECT format(..., current_database())` the script runs with
+// \gexec. CREATE DATABASE ... TEMPLATE copies no database-level ACL, so a clone
+// is given them again, from the script itself, so a real install and a test
+// database are provisioned by the same text.
+const DATABASE_PRIVILEGES = /^SELECT (format\('(?:REVOKE|GRANT) [^\n]* ON DATABASE %I [^\n]*, current_database\(\)\))$/gm;
+
+function databasePrivilegeStatements(): string[] {
+  const statements = [...readFileSync(ROLES_SQL, "utf8").matchAll(DATABASE_PRIVILEGES)].map((match) => match[1] ?? "");
+  if (statements.length === 0) {
+    throw new Error("found no database-level GRANT or REVOKE in roles.sql to give a test database");
+  }
+  return statements;
+}
+
+// Gives the clone `name` the database-level privileges roles.sql gives a database.
+async function grantDatabasePrivileges(admin: TestSql, name: string): Promise<void> {
+  assertTestName(name);
+  for (const statement of databasePrivilegeStatements()) {
+    const rows = await admin.unsafe<{ format: string }[]>(`SELECT ${statement.replace("current_database()", `'${name}'::name`)}`);
+    const command = rows[0]?.format;
+    if (command === undefined) {
+      throw new Error("a database-level statement of roles.sql produced no command");
+    }
+    await admin.unsafe(command);
+  }
+}
+
 // Runs `work` while holding a session advisory lock of its own connection.
 async function withAdvisoryLock<T>(server: Server, label: string, work: (admin: TestSql) => Promise<T>): Promise<T> {
   const admin = openAdmin(server);
@@ -391,6 +419,7 @@ export async function createTestDatabase(options: TestDatabaseOptions = {}): Pro
     const built = await ensureTemplate(server, templateName, chains);
     await session.admin.unsafe(`CREATE DATABASE ${quote(name)} TEMPLATE ${quote(templateName)}`);
     created = true;
+    await grantDatabasePrivileges(session.admin, name);
     const app = open(server, { username: "slugbase_app", password: APP_PASSWORD }, name, { max: APP_POOL_SIZE });
     pools.push(app);
     // The owner role cannot log in; the migrator can act as it, so its
