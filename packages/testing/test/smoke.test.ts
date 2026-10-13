@@ -13,7 +13,7 @@ const manifest = JSON.parse(
 describe("@slugbase/testing", () => {
   it("exposes only its declared entry points", () => {
     expect(manifest.name).toBe("@slugbase/testing");
-    expect(Object.keys(manifest.exports)).toEqual([".","./db","./msw","./tenancy"]);
+    expect(Object.keys(manifest.exports)).toEqual([".", "./db", "./msw", "./msw/node", "./tenancy"]);
   });
 
   it("loads src/index.ts", async () => {
