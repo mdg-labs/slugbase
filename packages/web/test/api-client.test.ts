@@ -8,9 +8,9 @@ function transport(response: () => Response) {
 
 describe("the API client", () => {
   it("calls the same origin with the session cookie and returns the typed body", async () => {
-    const fetch = transport(() => json(CONFIG_BODY));
-    const { data } = await createApiClient({ fetch }).GET("/api/config");
-    const request = fetch.mock.calls[0]?.[0];
+    const send = transport(() => json(CONFIG_BODY));
+    const { data } = await createApiClient({ fetch: send }).GET("/api/config");
+    const request = send.mock.calls[0]?.[0];
     expect(request?.url).toBe(`${globalThis.location.origin}/api/config`);
     expect(request?.credentials).toBe("same-origin");
     expect(data?.product.name).toBe(CONFIG_BODY.product.name);
