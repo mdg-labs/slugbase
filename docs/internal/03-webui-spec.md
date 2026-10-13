@@ -115,6 +115,7 @@ The prototype's design tokens (`colors_and_type.css`) are mapped onto coss's the
 | `--muted-foreground` | `#a7adc2` | `#4a4f63` | `--fg-muted` |
 | `--primary` | `#7782f7` | `#5b66e8` | `--accent` (periwinkle) |
 | `--primary-foreground` | `#0b0c14` | `#ffffff` | `--accent-fg` |
+| `--primary-text` | same as `--primary` (`#7782f7`) | `#4a55d8` | AA text variant |
 | `--ring` | `#7782f7` | `#5b66e8` | focus ring |
 | `--border`, `--input` | `rgba(255,255,255,.10)` | `rgba(16,18,32,.11)` | `--border` |
 | `--success` / `--warning` / `--destructive` | `#45c98a` / `#e6b24e` / `#f0686b` | `#1f9d68` / `#b8861f` / `#d6494d` | semantic |
@@ -122,7 +123,7 @@ The prototype's design tokens (`colors_and_type.css`) are mapped onto coss's the
 | `--info` | `#56b6e6` | `#2b8fc4` | prototype folder blue |
 | `--radius` | `6px` (sm 4, lg 8, xl 12) | same | `--r-*` |
 
-**Semantic colours as text.** The light-theme fills of `--success`, `--warning` and `--destructive` measure 3.45, 3.25 and 4.27 against white, below the 4.5 : 1 that body text needs. The fills keep the values above and are used for icons, dots, borders and badge backgrounds; any text set in a semantic colour (status labels, inline error messages, validation text) uses the `*-text` variant, which measures at least 4.9 : 1 on every light surface. In the dark theme the fills already pass and the variants equal them. A unit test parses the theme CSS and checks every text and background pair for both themes (doc 08).
+**Semantic and primary colours as text.** The light-theme fills of `--success`, `--warning` and `--destructive` measure 3.45, 3.25 and 4.27 against white, below the 4.5 : 1 that body text needs. The fills keep the values above and are used for icons, dots, borders and badge backgrounds; any text set in a semantic colour (status labels, inline error messages, validation text) uses the `*-text` variant, which measures at least 4.9 : 1 on every light surface. The light `--primary` measures 4.27 : 1 on `--background` and 4.16 : 1 on `--muted`, so primary-coloured text (an inline link, a selected label) uses `--primary-text`, which measures at least 5.2 : 1 on `--background`, `--card`, `--sidebar` and `--muted`; the `--primary` fill and `--ring` keep their values. In the dark theme the fills already pass and the variants equal them. A unit test parses the theme CSS and checks every text and background pair for both themes (doc 08).
 
 Type scale follows the prototype's dense tool scale: body 13 px / 18 px, small 12 px, micro 11 px uppercase labels with wide tracking, H1 22 px, H2 18 px, mono 12.5 px. Motion: 110 / 170 / 230 ms with the prototype's easing; all motion respects `prefers-reduced-motion`. A member-chosen **accent** (Q36) swaps `--primary` and `--ring` among six presets; periwinkle is the default.
 

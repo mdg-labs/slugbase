@@ -65,6 +65,7 @@ describe("theme.css compiled with Tailwind", () => {
       "text-muted-foreground",
       "border-border",
       "text-success-text",
+      "text-primary-text",
       "bg-folder-8",
       "text-sm",
       "text-micro",
@@ -77,6 +78,7 @@ describe("theme.css compiled with Tailwind", () => {
     expect(output).toContain("background-color: var(--primary)");
     expect(output).toContain("color: var(--muted-foreground)");
     expect(output).toContain("color: var(--success-text)");
+    expect(output).toContain("color: var(--primary-text)");
     expect(output).toContain("background-color: var(--folder-8)");
     expect(output).toContain("font-size: var(--text-micro)");
     expect(output).toContain("font-family: var(--font-mono)");

@@ -26,6 +26,7 @@ const DOC_TABLE: readonly (readonly [string, string, string])[] = [
   ["muted-foreground", "#a7adc2", "#4a4f63"],
   ["primary", "#7782f7", "#5b66e8"],
   ["primary-foreground", "#0b0c14", "#ffffff"],
+  ["primary-text", "#7782f7", "#4a55d8"],
   ["ring", "#7782f7", "#5b66e8"],
   ["border", "rgba(255,255,255,.10)", "rgba(16,18,32,.11)"],
   ["input", "rgba(255,255,255,.10)", "rgba(16,18,32,.11)"],
@@ -166,6 +167,10 @@ describe.each(THEME_NAMES)("WCAG AA contrast in the %s theme", (name) => {
     expect(ratio(foreground, background)).toBeGreaterThanOrEqual(TEXT_MINIMUM);
   });
 
+  it.each(SURFACES)("primary text reads on %s", (surface) => {
+    expect(ratio("primary-text", surface)).toBeGreaterThanOrEqual(TEXT_MINIMUM);
+  });
+
   it.each(SEMANTIC.flatMap((colour) => SURFACES.map((surface) => [colour, surface] as const)))(
     "%s text variants read on %s",
     (colour, surface) => {
@@ -202,6 +207,15 @@ describe("why the semantic text variants exist", () => {
         expect(contrast(themes.light.resolve(`${colour}-text`), themes.light.resolve(surface))).toBeGreaterThanOrEqual(4.9);
       }
     }
+  });
+
+  it("measures the light primary fill below the AA text minimum on the page background and the muted surface", () => {
+    expect(contrast(themes.light.resolve("primary"), themes.light.resolve("background"))).toBeCloseTo(4.27, 2);
+    expect(contrast(themes.light.resolve("primary"), themes.light.resolve("muted"))).toBeCloseTo(4.16, 2);
+  });
+
+  it("keeps the dark primary text equal to the fill, which already passes", () => {
+    expect(themes.dark.resolve("primary-text")).toBe(themes.dark.resolve("primary"));
   });
 
   it("keeps the dark text variants equal to the fills, which already pass", () => {
