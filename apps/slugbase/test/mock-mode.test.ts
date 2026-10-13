@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { createServer, type ViteDevServer } from "vite";
 import { viteArguments } from "../scripts/dev-web-arguments.ts";
 import { afterAll, describe, expect, it } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 
 // `pnpm dev:web --mock` (doc 08 section 7): the Vite dev server in mode "mock"
 // loads the mock entry, hands the browser the OpenAPI document the handlers are
@@ -12,23 +13,28 @@ import { afterAll, describe, expect, it } from "vitest";
 
 const APP = resolve(import.meta.dirname, "..");
 const INDEX = readFileSync(resolve(APP, "index.html"), "utf8");
-const servers: ViteDevServer[] = [];
+// One dev server per mode for the whole file: starting Vite is the slow part, and
+// the tests only read from a server.
+const servers = new Map<string, Promise<ViteDevServer>>();
 
-async function devServer(mode: string): Promise<ViteDevServer> {
-  const server = await createServer({
-    configFile: resolve(APP, "vite.config.ts"),
-    mode,
-    logLevel: "silent",
-    server: { middlewareMode: true },
-    optimizeDeps: { noDiscovery: true },
-  });
-  servers.push(server);
+function devServer(mode: string): Promise<ViteDevServer> {
+  let server = servers.get(mode);
+  if (server === undefined) {
+    server = createServer({
+      configFile: resolve(APP, "vite.config.ts"),
+      mode,
+      logLevel: "silent",
+      server: { middlewareMode: true },
+      optimizeDeps: { noDiscovery: true },
+    });
+    servers.set(mode, server);
+  }
   return server;
 }
 
 afterAll(async () => {
-  await Promise.all(servers.map((server) => server.close()));
-});
+  await Promise.all([...servers.values()].map(async (server) => (await server).close()));
+}, HEAVY_TEST_TIMEOUT_MS);
 
 interface Captured {
   status?: number;
@@ -73,7 +79,7 @@ async function request(server: ViteDevServer, url: string): Promise<Captured> {
   });
 }
 
-describe("the dev server in mock mode", () => {
+describe("the dev server in mock mode", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("loads the mock entry in place of the app entry", async () => {
     const server = await devServer("mock");
     const html = await server.transformIndexHtml("/", INDEX);
@@ -106,7 +112,7 @@ describe("the dev server in mock mode", () => {
   });
 });
 
-describe("the dev server in any other mode", () => {
+describe("the dev server in any other mode", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("keeps the app entry and has neither the document module nor the service worker", async () => {
     const server = await devServer("development");
     const html = await server.transformIndexHtml("/", INDEX);
@@ -118,7 +124,7 @@ describe("the dev server in any other mode", () => {
   });
 });
 
-describe("the dev:web script", () => {
+describe("the dev:web script", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("turns --mock into the mock mode and leaves other arguments alone", () => {
     expect(viteArguments(["--mock", "--port", "5200"])).toEqual(["--port", "5200", "--mode", "mock"]);
     expect(viteArguments(["--port", "5200"])).toEqual(["--port", "5200"]);

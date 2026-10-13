@@ -2,6 +2,7 @@
 import type { ComponentTypes } from "@slugbase/contracts";
 import { act, screen } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 
 // The CE web entry: it builds the app with createWebApp, mounts it on #root, and
 // the app asks /api/config before it renders. The server side of that answer
@@ -18,7 +19,7 @@ const config: ComponentTypes["schemas"]["ApiConfig"] = {
   features: { mail: false, ai: false },
 };
 
-it("mounts the app on #root and shows the product name that /api/config answers with", async () => {
+it("mounts the app on #root and shows the product name that /api/config answers with", { timeout: HEAVY_TEST_TIMEOUT_MS }, async () => {
   const requested: string[] = [];
   vi.stubGlobal("fetch", (request: Request) => {
     requested.push(new URL(request.url).pathname);

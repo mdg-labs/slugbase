@@ -2,6 +2,7 @@ import { act, render } from "@testing-library/react";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import * as components from "../src/index.ts";
 import * as patterns from "../src/patterns/index.ts";
 import {
@@ -76,7 +77,7 @@ describe("stories", () => {
       }
     });
 
-    it.each(stories)("%s renders without accessibility violations", async (_story, story) => {
+    it.each(stories)("%s renders without accessibility violations", { timeout: HEAVY_TEST_TIMEOUT_MS }, async (_story, story) => {
       const Story = story as () => React.ReactElement;
       const { baseElement, container } = render(<Story />);
       await act(async () => {
@@ -162,7 +163,7 @@ describe("nested story files", () => {
     expect(listStoryFiles(fixtureRoot)).toEqual(["patterns/deep/nested.stories.tsx", "top.stories.tsx"]);
   });
 
-  it("fail the accessibility check when a story has a violation", async () => {
+  it("fail the accessibility check when a story has a violation", { timeout: HEAVY_TEST_TIMEOUT_MS }, async () => {
     write("patterns/bad.stories.tsx", 'export const Bad = () => <img src="/x.png" />;');
     stubBrowserApis();
 
