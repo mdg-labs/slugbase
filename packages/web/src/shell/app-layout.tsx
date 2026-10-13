@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 import { useConfig } from "../config/config-context.tsx";
 import { Slot, useExtensions } from "../extensions/index.ts";
 import { docsUrl } from "./docs-url.ts";
+import { OfflineBanner } from "./offline-banner.tsx";
 
 /**
  * The in-app layout route: the app shell around the page of the current route.
@@ -83,6 +84,7 @@ export function AppLayout(): ReactElement {
       }
       productName={product.name}
     >
+      <OfflineBanner />
       <Slot name="banner.entitlement" />
       <Outlet />
     </AppShell>

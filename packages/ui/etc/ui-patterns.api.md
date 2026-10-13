@@ -4,11 +4,14 @@
 
 ```ts
 
+import { CompassIcon } from 'lucide-react';
 import { HomeIcon } from 'lucide-react';
 import { InboxIcon } from 'lucide-react';
 import { LifeBuoyIcon } from 'lucide-react';
+import { LockIcon } from 'lucide-react';
 import type { ReactElement } from 'react';
 import type { ReactNode } from 'react';
+import { TriangleAlertIcon } from 'lucide-react';
 
 // @public
 export function AppShell(input: AppShellProps): ReactElement;
@@ -39,6 +42,40 @@ export interface AppShellProps {
 }
 
 // @public
+export function Banner(input: BannerProps): ReactElement;
+
+// @public (undocumented)
+export interface BannerProps {
+    action?: ReactNode;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    description?: ReactNode;
+    // (undocumented)
+    title: ReactNode;
+    variant?: BannerVariant;
+}
+
+// @public (undocumented)
+export type BannerVariant = "error" | "info" | "success" | "warning";
+
+export { CompassIcon }
+
+// @public
+export function CopyValue(input: CopyValueProps): ReactElement;
+
+// @public (undocumented)
+export interface CopyValueProps {
+    // (undocumented)
+    className?: string;
+    copiedLabel: string;
+    copyLabel: string;
+    label: string;
+    // (undocumented)
+    value: string;
+}
+
+// @public
 export function EmptyState(input: EmptyStateProps): ReactElement;
 
 // @public (undocumented)
@@ -50,6 +87,23 @@ export interface EmptyStateProps {
     icon?: ReactNode;
     // (undocumented)
     title: ReactNode;
+}
+
+// @public
+export const feedbackToast: {
+    info: (title: string, description?: string) => string;
+    success: (title: string, description?: string) => string;
+    error: (title: string, description?: string) => string;
+};
+
+// @public
+export function FeedbackToastProvider(input: FeedbackToastProviderProps): ReactElement;
+
+// @public (undocumented)
+export interface FeedbackToastProviderProps {
+    // (undocumented)
+    children: ReactNode;
+    regionLabel: string;
 }
 
 export { HomeIcon }
@@ -69,6 +123,8 @@ export interface LoadingProps {
     label: string;
 }
 
+export { LockIcon }
+
 // @public (undocumented)
 export const MAIN_CONTENT_ID = "main-content";
 
@@ -80,6 +136,8 @@ export interface ThemeToggleProps {
     switchToDark: string;
     switchToLight: string;
 }
+
+export { TriangleAlertIcon }
 
 // (No @packageDocumentation comment for this package)
 

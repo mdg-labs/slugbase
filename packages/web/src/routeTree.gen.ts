@@ -11,6 +11,8 @@
 import { Route as rootRouteImport } from "./routes/__root.tsx";
 import { Route as AppRouteImport } from "./routes/_app.tsx";
 import { Route as AppIndexRouteImport } from "./routes/_app/index.tsx";
+import { Route as AppSplatRouteImport } from "./routes/_app/$.tsx";
+import { Route as App403RouteImport } from "./routes/_app/403.tsx";
 
 const AppRoute = AppRouteImport.update({
   id: "/_app",
@@ -21,24 +23,40 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: "/",
   getParentRoute: () => AppRoute,
 } as any);
+const AppSplatRoute = AppSplatRouteImport.update({
+  id: "/$",
+  path: "/$",
+  getParentRoute: () => AppRoute,
+} as any);
+const App403Route = App403RouteImport.update({
+  id: "/403",
+  path: "/403",
+  getParentRoute: () => AppRoute,
+} as any);
 
 export interface FileRoutesByFullPath {
   "/": typeof AppIndexRoute;
+  "/$": typeof AppSplatRoute;
+  "/403": typeof App403Route;
 }
 export interface FileRoutesByTo {
+  "/$": typeof AppSplatRoute;
+  "/403": typeof App403Route;
   "/": typeof AppIndexRoute;
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport;
   "/_app": typeof AppRouteWithChildren;
+  "/_app/$": typeof AppSplatRoute;
+  "/_app/403": typeof App403Route;
   "/_app/": typeof AppIndexRoute;
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
-  fullPaths: "/";
+  fullPaths: "/" | "/$" | "/403";
   fileRoutesByTo: FileRoutesByTo;
-  to: "/";
-  id: "__root__" | "/_app" | "/_app/";
+  to: "/$" | "/403" | "/";
+  id: "__root__" | "/_app" | "/_app/$" | "/_app/403" | "/_app/";
   fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
@@ -61,14 +79,32 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AppIndexRouteImport;
       parentRoute: typeof AppRoute;
     };
+    "/_app/$": {
+      id: "/_app/$";
+      path: "/$";
+      fullPath: "/$";
+      preLoaderRoute: typeof AppSplatRouteImport;
+      parentRoute: typeof AppRoute;
+    };
+    "/_app/403": {
+      id: "/_app/403";
+      path: "/403";
+      fullPath: "/403";
+      preLoaderRoute: typeof App403RouteImport;
+      parentRoute: typeof AppRoute;
+    };
   }
 }
 
 interface AppRouteChildren {
+  AppSplatRoute: typeof AppSplatRoute;
+  App403Route: typeof App403Route;
   AppIndexRoute: typeof AppIndexRoute;
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppSplatRoute: AppSplatRoute,
+  App403Route: App403Route,
   AppIndexRoute: AppIndexRoute,
 };
 
