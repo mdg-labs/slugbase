@@ -604,9 +604,17 @@ describe("how the statement reader places the system-function forms", () => {
 });
 
 describe("the migration of the rate-limit operation (#58)", () => {
-  const FIXTURE_TAG = "20261012193525_add_rate_limit_buckets";
-  const fixture = readFileSync(new URL("fixtures/20261012193525_add_rate_limit_buckets.sql", import.meta.url), "utf8");
+  // The migration that ships, read from the migrations folder as `migrate` applies it.
+  const RATE_LIMIT_TAG = "20261012224854_add_rate_limit_buckets";
+  const rateLimit = readFileSync(new URL(`../../migrations/${RATE_LIMIT_TAG}.sql`, import.meta.url), "utf8");
   const shipped = ["20261011134302_add_extensions_and_tenant_functions", "20261012103429_add_sql_definitions"] as const;
+
+  // A mutation of the shipped SQL; one whose search text is not in the file fails here instead of testing nothing.
+  function mutated(search: string, replacement: string): string {
+    const sql = rateLimit.replace(search, replacement);
+    expect(sql).not.toBe(rateLimit);
+    return sql;
+  }
 
   function chain(releaseAfter: number): GitPackage {
     const repository = new GitPackage();
@@ -623,37 +631,37 @@ describe("the migration of the rate-limit operation (#58)", () => {
 
   it("passes the rule as a migration added after the two released ones", async () => {
     const repository = chain(1);
-    repository.migration(FIXTURE_TAG, fixture, []);
+    repository.migration(RATE_LIMIT_TAG, rateLimit, []);
     expect(await inspect(repository)).toEqual([]);
   });
 
   it("passes the rule when no migration is released yet", async () => {
     const repository = chain(-1);
-    repository.migration(FIXTURE_TAG, fixture, []);
+    repository.migration(RATE_LIMIT_TAG, rateLimit, []);
     expect(await inspect(repository)).toEqual([]);
   });
 
   it("passes the rule when it is added with the migration that created the tenant functions already released only", async () => {
     const repository = chain(0);
-    repository.migration(FIXTURE_TAG, fixture, []);
+    repository.migration(RATE_LIMIT_TAG, rateLimit, []);
     expect(await inspect(repository)).toEqual([]);
   });
 
   it("passes the rule when a later migration re-emits it with the function released", async () => {
     const repository = chain(1);
-    repository.migration(FIXTURE_TAG, fixture, []);
+    repository.migration(RATE_LIMIT_TAG, rateLimit, []);
     repository.commit("rate limit");
     repository.tag("v1.1.0");
-    repository.migration("20261101000000_add_more_sql", fixture, []);
+    repository.migration("20261101000000_add_more_sql", rateLimit, []);
     expect(await inspect(repository)).toEqual([]);
   });
 
   it("rejects a later re-emission that changes the return type of the released function", async () => {
     const repository = chain(1);
-    repository.migration(FIXTURE_TAG, fixture, []);
+    repository.migration(RATE_LIMIT_TAG, rateLimit, []);
     repository.commit("rate limit");
     repository.tag("v1.1.0");
-    repository.migration("20261101000000_change_take", fixture.replace("RETURNS TABLE (allowed boolean, remaining double precision, retry_after_seconds double precision)", "RETURNS TABLE (allowed boolean, remaining double precision)"), []);
+    repository.migration("20261101000000_change_take", mutated("RETURNS TABLE (allowed boolean, remaining double precision, retry_after_seconds double precision)", "RETURNS TABLE (allowed boolean, remaining double precision)"), []);
     const findings = await inspect(repository);
     expect(findings).toHaveLength(1);
     expect(findings[0]?.object).toBe("migrations/20261101000000_change_take.sql");
@@ -662,7 +670,7 @@ describe("the migration of the rate-limit operation (#58)", () => {
 
   it("rejects the migration when the ownership is handed to another role", async () => {
     const repository = chain(1);
-    repository.migration(FIXTURE_TAG, fixture.replace("OWNER TO slugbase_system;", "OWNER TO slugbase_app;"), []);
+    repository.migration(RATE_LIMIT_TAG, mutated("OWNER TO slugbase_system;", "OWNER TO slugbase_app;"), []);
     const findings = await inspect(repository);
     expect(findings).toHaveLength(1);
     expect(findings[0]?.message).toContain("ALTER FUNCTION other than OWNER TO slugbase_system");
@@ -670,7 +678,7 @@ describe("the migration of the rate-limit operation (#58)", () => {
 
   it("rejects the migration when the schema CREATE grant is not revoked", async () => {
     const repository = chain(1);
-    repository.migration(FIXTURE_TAG, fixture.replace("REVOKE CREATE ON SCHEMA public FROM slugbase_system;", ""), []);
+    repository.migration(RATE_LIMIT_TAG, mutated("REVOKE CREATE ON SCHEMA public FROM slugbase_system;", ""), []);
     const findings = await inspect(repository);
     expect(findings.map(({ message }) => message)).toEqual([
       expect.stringContaining("between GRANT CREATE ON SCHEMA public and its REVOKE"),
