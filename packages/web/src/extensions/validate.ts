@@ -9,8 +9,10 @@ function assertAbsolutePath(path: string, what: string, extensionId: string): vo
 
 /**
  * Refuses an extension list the app cannot start with: an empty or repeated id,
- * a slot name outside the closed set, a path that is not absolute, or a route
- * path that another extension or the app (`reservedPaths`) already owns.
+ * a slot name outside the closed set, a path that is not absolute, a route path
+ * other than `/` that ends in `/` (the router would match it in place of the
+ * same path without the slash), or a route path that another extension or the
+ * app (`reservedPaths`) already owns.
  */
 export function assertValidExtensions(extensions: readonly WebExtension[], reservedPaths: readonly string[] = []): void {
   const ids = new Set<string>();
@@ -32,6 +34,9 @@ export function assertValidExtensions(extensions: readonly WebExtension[], reser
     }
     for (const { path } of extension.routes ?? []) {
       assertAbsolutePath(path, "route path", id);
+      if (path.length > 1 && path.endsWith("/")) {
+        throw new Error(`The route path "${path}" of the web extension "${id}" must not end with "/"`);
+      }
       if (routePaths.has(path)) {
         throw new Error(`The route path "${path}" of the web extension "${id}" is already taken`);
       }

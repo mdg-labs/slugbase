@@ -36,6 +36,15 @@ describe("assertValidExtensions", () => {
     }).toThrow(/route path "billing".*must start with "\/"/);
   });
 
+  it("rejects a route path other than the root that ends in a slash", () => {
+    expect(() => {
+      assertValidExtensions([{ id: "billing", routes: [{ path: "/plan/", component: () => null }] }], ["/plan"]);
+    }).toThrow(/route path "\/plan\/" of the web extension "billing" must not end with "\/"/);
+    expect(() => {
+      assertValidExtensions([{ id: "billing", routes: [{ path: "/", component: () => null }] }]);
+    }).not.toThrow();
+  });
+
   it("rejects a route path that two extensions or the app already own", () => {
     const page = { path: "/plan", component: () => null };
     expect(() => {
