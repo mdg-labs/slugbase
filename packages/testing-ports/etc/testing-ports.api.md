@@ -88,6 +88,28 @@ export class FixedClock {
     set(instant: Date | number): void;
 }
 
+// @public
+export class InMemoryMail {
+    // (undocumented)
+    readonly available = true;
+    clear(): void;
+    // (undocumented)
+    send(message: InMemoryMailMessage): Promise<void>;
+    get sent(): readonly InMemoryMailMessage[];
+}
+
+// @public
+export interface InMemoryMailMessage {
+    // (undocumented)
+    readonly data: Readonly<Record<string, string | number | boolean>>;
+    // (undocumented)
+    readonly locale: string;
+    // (undocumented)
+    readonly template: string;
+    // (undocumented)
+    readonly to: string;
+}
+
 // (No @packageDocumentation comment for this package)
 
 ```

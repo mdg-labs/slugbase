@@ -6,6 +6,8 @@ export {
   LOG_LEVELS,
   MIN_SESSION_SECRET_LENGTH,
   NODE_ENVS,
+  SMTP_KEYS,
+  SMTP_SECURITIES,
   databaseFragment,
   errorReportFragment,
   httpFragment,
@@ -15,6 +17,7 @@ export {
   runtimeFragment,
   secretsFragment,
   serverMigrationFragment,
+  smtpFragment,
 } from "./fragments.ts";
 export type { PreviousKey } from "./fields.ts";
 export {

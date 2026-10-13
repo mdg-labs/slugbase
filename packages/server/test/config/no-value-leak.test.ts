@@ -33,6 +33,10 @@ const REFUSED: readonly { key: string; value: string }[] = [
   { key: "DOCS_BASE_URL", value: "ftp://qx56.example.com/docs" },
   { key: "NODE_ENV", value: "prod-qx57" },
   { key: "ERROR_REPORT_DSN", value: "https://qx64-key@errors.example.com/not-a-project" },
+  { key: "SMTP_HOST", value: "smtp://qx71.example.com" },
+  { key: "SMTP_PORT", value: "port-qx72" },
+  { key: "SMTP_SECURITY", value: "security-qx73" },
+  { key: "SMTP_FROM", value: "from-qx74" },
 ];
 
 // The message, the stack, the cause and every own property, however they are rendered.

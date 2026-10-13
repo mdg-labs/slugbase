@@ -2,12 +2,15 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   HttpEgress,
+  createLogOnlyMail,
   createRateLimiter,
   createSecretBox,
   createSentryErrorReport,
+  createSmtpMail,
+  type MailTemplates,
 } from "@slugbase/adapters";
 import "@slugbase/contracts";
-import { unconfigured, type Adapters } from "@slugbase/core";
+import { unconfigured, type Adapters, type MailPort } from "@slugbase/core";
 import { createRateLimitStore, type MigrationChain } from "@slugbase/db";
 import "@slugbase/email";
 import {
@@ -131,6 +134,20 @@ const MIGRATIONS: readonly MigrationChain[] = [];
 
 const RATE_LIMIT_POOL_SIZE = 4;
 
+// The mail flows and their templates arrive with the first flow that sends mail; until then no template
+// is registered, and a message that names one is refused by the SMTP adapter instead of being sent.
+const MAIL_TEMPLATES: MailTemplates = {};
+
+// Mail is the SMTP adapter when the operator set the SMTP keys, and the log-only adapter, which reports
+// itself unavailable, when not. The configuration refuses a partial set, so the keys are all set or all unset.
+function composeMail(config: ServerConfig | WorkerConfig, logger: Logger): MailPort {
+  const { SMTP_HOST: host, SMTP_PORT: port, SMTP_SECURITY: security, SMTP_USER: user, SMTP_PASS: pass, SMTP_FROM: from } = config;
+  if (host === undefined || port === undefined || security === undefined || user === undefined || pass === undefined || from === undefined) {
+    return createLogOnlyMail({ logger });
+  }
+  return createSmtpMail({ host, port, security, auth: { user, pass }, from, templates: MAIL_TEMPLATES });
+}
+
 // The secret box is built from the environment by the server and the worker
 // alike: `ENCRYPTION_KEY` seals, the previous keys only open. A key the box
 // refuses stops the process before it serves or works. Error reporting is the
@@ -162,7 +179,9 @@ export function composeAdapters(config: ServerConfig | WorkerConfig, logger: Log
     limits: (name) => limits.window(name),
   });
   logger.info("Rate limiter ready", { buckets: RATE_LIMIT_BUCKETS.length });
-  return { ...defaults, secretBox, errors, egress: new HttpEgress({ nodeEnv: config.NODE_ENV }), rateLimit };
+  const mail = composeMail(config, logger);
+  logger.info(mail.available ? "Mail ready" : "Mail is off; messages are only logged");
+  return { ...defaults, mail, secretBox, errors, egress: new HttpEgress({ nodeEnv: config.NODE_ENV }), rateLimit };
 }
 
 async function runServer(config: ServerConfig, trap: SignalTrap): Promise<void> {

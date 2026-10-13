@@ -9,8 +9,20 @@ import {
   DEVELOPMENT_SESSION_SECRET,
 } from "./development-defaults.ts";
 import { envBoolean } from "./env-boolean.ts";
-import { KEY_ID_PATTERN, base64Key, baseUrl, envInteger, optional, originUrl, postgresUrl, previousKeys, sentryDsn } from "./fields.ts";
-import { envFragment, type RefineContext } from "./fragment.ts";
+import {
+  KEY_ID_PATTERN,
+  base64Key,
+  baseUrl,
+  envInteger,
+  mailbox,
+  optional,
+  originUrl,
+  postgresUrl,
+  previousKeys,
+  relayHost,
+  sentryDsn,
+} from "./fields.ts";
+import { envFragment, requireAllOrNone, type RefineContext } from "./fragment.ts";
 
 export const NODE_ENVS = ["development", "test", "production"] as const;
 export const LOG_LEVELS = ["fatal", "error", "warn", "info", "debug", "trace", "silent"] as const;
@@ -142,4 +154,26 @@ export const metricsFragment = envFragment({
  */
 export const errorReportFragment = envFragment({
   shape: { ERROR_REPORT_DSN: optional(sentryDsn()) },
+});
+
+export const SMTP_SECURITIES = ["tls", "starttls", "none"] as const;
+
+export const SMTP_KEYS = ["SMTP_HOST", "SMTP_PORT", "SMTP_SECURITY", "SMTP_USER", "SMTP_PASS", "SMTP_FROM"] as const;
+
+/**
+ * The SMTP relay of the mail adapter (doc 01 sections 6 and 11), for the server and the worker. All
+ * six keys unset selects the log-only adapter; a partial set refuses to start and names the missing keys.
+ */
+export const smtpFragment = envFragment({
+  shape: {
+    SMTP_HOST: optional(relayHost()),
+    SMTP_PORT: optional(envInteger({ min: 1, max: 65535 })),
+    SMTP_SECURITY: optional(z.enum(SMTP_SECURITIES, { error: `must be one of ${SMTP_SECURITIES.join(", ")}` })),
+    SMTP_USER: optional(z.string()),
+    SMTP_PASS: optional(z.string()),
+    SMTP_FROM: optional(mailbox()),
+  },
+  refine(values, context) {
+    requireAllOrNone(SMTP_KEYS, values, context);
+  },
 });

@@ -6,3 +6,5 @@ export type {
   FakeEgressResponse,
   FakeEgressRoute,
 } from "./egress.ts";
+export { InMemoryMail } from "./mail.ts";
+export type { InMemoryMailMessage } from "./mail.ts";

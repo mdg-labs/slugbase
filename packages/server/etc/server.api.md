@@ -293,6 +293,17 @@ export const envSchemas: {
     METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
     } & {
     ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    } & {
+    SMTP_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    SMTP_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
+    SMTP_SECURITY: z.ZodPreprocess<z.ZodOptional<z.ZodEnum<{
+    tls: "tls";
+    starttls: "starttls";
+    none: "none";
+    }>>, unknown>;
+    SMTP_USER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    SMTP_PASS: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    SMTP_FROM: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
     } & Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>;
     readonly worker: EnvSchema<    {
     NODE_ENV: z.ZodEnum<{
@@ -323,6 +334,17 @@ export const envSchemas: {
     METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
     } & {
     ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    } & {
+    SMTP_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    SMTP_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
+    SMTP_SECURITY: z.ZodPreprocess<z.ZodOptional<z.ZodEnum<{
+    tls: "tls";
+    starttls: "starttls";
+    none: "none";
+    }>>, unknown>;
+    SMTP_USER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    SMTP_PASS: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    SMTP_FROM: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
     } & Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>;
     readonly migrate: EnvSchema<    {
     NODE_ENV: z.ZodEnum<{
@@ -990,6 +1012,17 @@ DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string
 METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 } & {
 ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+} & {
+SMTP_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+SMTP_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
+SMTP_SECURITY: z.ZodPreprocess<z.ZodOptional<z.ZodEnum<{
+tls: "tls";
+starttls: "starttls";
+none: "none";
+}>>, unknown>;
+SMTP_USER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+SMTP_PASS: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+SMTP_FROM: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 } & Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>;
 
 // @public
@@ -1030,6 +1063,17 @@ DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string
 METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 }>, EnvFragment<    {
 ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+}>, EnvFragment<    {
+SMTP_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+SMTP_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
+SMTP_SECURITY: z.ZodPreprocess<z.ZodOptional<z.ZodEnum<{
+tls: "tls";
+starttls: "starttls";
+none: "none";
+}>>, unknown>;
+SMTP_USER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+SMTP_PASS: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+SMTP_FROM: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 }>];
 
 // @public
@@ -1062,6 +1106,26 @@ export interface SessionPrincipal extends Extract<TenantPrincipal, {
 }> {
     readonly instanceAdmin: boolean;
 }
+
+// @public (undocumented)
+export const SMTP_KEYS: readonly ["SMTP_HOST", "SMTP_PORT", "SMTP_SECURITY", "SMTP_USER", "SMTP_PASS", "SMTP_FROM"];
+
+// @public (undocumented)
+export const SMTP_SECURITIES: readonly ["tls", "starttls", "none"];
+
+// @public
+export const smtpFragment: EnvFragment<    {
+SMTP_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+SMTP_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
+SMTP_SECURITY: z.ZodPreprocess<z.ZodOptional<z.ZodEnum<{
+tls: "tls";
+starttls: "starttls";
+none: "none";
+}>>, unknown>;
+SMTP_USER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+SMTP_PASS: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+SMTP_FROM: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+}>;
 
 // @public (undocumented)
 export type StageName = (typeof CHAIN_STAGES)[number];
@@ -1139,6 +1203,17 @@ SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransf
 METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 } & {
 ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+} & {
+SMTP_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+SMTP_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
+SMTP_SECURITY: z.ZodPreprocess<z.ZodOptional<z.ZodEnum<{
+tls: "tls";
+starttls: "starttls";
+none: "none";
+}>>, unknown>;
+SMTP_USER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+SMTP_PASS: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+SMTP_FROM: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 } & Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>;
 
 // @public
@@ -1171,6 +1246,17 @@ SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransf
 METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 }>, EnvFragment<    {
 ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+}>, EnvFragment<    {
+SMTP_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+SMTP_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
+SMTP_SECURITY: z.ZodPreprocess<z.ZodOptional<z.ZodEnum<{
+tls: "tls";
+starttls: "starttls";
+none: "none";
+}>>, unknown>;
+SMTP_USER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+SMTP_PASS: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+SMTP_FROM: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 }>];
 
 // @public (undocumented)
