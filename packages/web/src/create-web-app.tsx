@@ -1,14 +1,16 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
-import { Spinner, ThemeProvider } from "@slugbase/ui";
+import { ThemeProvider } from "@slugbase/ui";
 import { Suspense, use, type ComponentType, type ReactElement } from "react";
 import { createApiClient } from "./api/client.ts";
 import { fetchConfig, type ConfigResult } from "./config/bootstrap.ts";
 import { ConfigFailure } from "./config/config-failure.tsx";
 import { ConfigProvider } from "./config/config-context.tsx";
-import { assertValidExtensions, type WebExtension } from "./extensions.ts";
+import { ExtensionsProvider, type WebExtension } from "./extensions/index.ts";
+import { I18nProvider } from "./i18n/i18n-provider.tsx";
 import { createQueryClient } from "./query-client.ts";
 import { createAppRouter } from "./router.ts";
+import { ShellLoading } from "./shell/shell-loading.tsx";
 
 export interface CreateWebAppOptions {
   /** What the composition adds; CE passes none. */
@@ -22,23 +24,31 @@ export interface CreateWebAppOptions {
  * shows the failure view instead (doc 01 section 11). Throws on an invalid extension list.
  */
 export function createWebApp({ extensions }: CreateWebAppOptions): ComponentType {
-  assertValidExtensions(extensions);
-
   const api = createApiClient();
   const queryClient = createQueryClient();
-  const router = createAppRouter({ queryClient, api });
+  // Validates the extension list: nothing is requested for one the app cannot start with.
+  const router = createAppRouter({ queryClient, api }, extensions);
   const configResult = fetchConfig(api);
 
   function Product({ result }: { result: Promise<ConfigResult> }): ReactElement {
     const loaded = use(result);
     if (loaded.status === "failed") {
-      return <ConfigFailure requestId={loaded.requestId} />;
+      // No configuration, so no account preference or default locale: the browser's languages, then English.
+      return (
+        <I18nProvider>
+          <ConfigFailure requestId={loaded.requestId} />
+        </I18nProvider>
+      );
     }
     return (
       <ConfigProvider config={loaded.config}>
-        <QueryClientProvider client={queryClient}>
-          <RouterProvider router={router} />
-        </QueryClientProvider>
+        <I18nProvider defaultLocale={loaded.config.defaultLocale}>
+          <QueryClientProvider client={queryClient}>
+            <ExtensionsProvider extensions={extensions}>
+              <RouterProvider router={router} />
+            </ExtensionsProvider>
+          </QueryClientProvider>
+        </I18nProvider>
       </ConfigProvider>
     );
   }
@@ -46,7 +56,14 @@ export function createWebApp({ extensions }: CreateWebAppOptions): ComponentType
   return function WebApp(): ReactElement {
     return (
       <ThemeProvider>
-        <Suspense fallback={<Spinner className="m-auto size-6" />}>
+        <Suspense
+          fallback={
+            // No configuration yet, so the browser's languages, then English, as for the failure view.
+            <I18nProvider>
+              <ShellLoading />
+            </I18nProvider>
+          }
+        >
           <Product result={configResult} />
         </Suspense>
       </ThemeProvider>

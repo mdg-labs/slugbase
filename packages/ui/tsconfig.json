@@ -17,6 +17,9 @@
     "../../vitest.shared.ts",
     "vitest.config.ts",
     "src",
-    "test"
+    "test",
+    "stories",
+    ".ladle/components.tsx",
+    ".ladle/css.d.ts"
   ]
 }

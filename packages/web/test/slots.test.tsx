@@ -1,0 +1,146 @@
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createWebApp } from "../src/index.ts";
+import { ExtensionsProvider, Slot } from "../src/extensions/index.ts";
+import { FixtureBanner, FixtureDashboardTop, FixtureFooter, fixtureExtension, secondFooter } from "./fixture-extension.tsx";
+import { CONFIG_BODY, json, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
+
+beforeEach(() => {
+  stubBrowserApis();
+  stubMatchMedia();
+  vi.stubGlobal("fetch", () => Promise.resolve(json(CONFIG_BODY)));
+  vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["en-US", "en"]);
+  window.history.replaceState(null, "", "/");
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  document.documentElement.removeAttribute("lang");
+});
+
+describe("Slot", () => {
+  it("renders the components of the extensions in registration order, without a wrapper element", () => {
+    const { container } = render(
+      <ExtensionsProvider extensions={[secondFooter("first"), { id: "other" }, secondFooter("second")]}>
+        <Slot name="sidebar.footer" />
+      </ExtensionsProvider>,
+    );
+
+    expect(Array.from(container.children, (child) => `${child.tagName}:${child.textContent}`)).toEqual(["P:first", "P:second"]);
+  });
+
+  it("renders nothing for a slot no extension fills", () => {
+    const { container } = render(
+      <ExtensionsProvider extensions={[fixtureExtension]}>
+        <Slot name="dashboard.top" />
+      </ExtensionsProvider>,
+    );
+
+    expect(container.childNodes).toHaveLength(0);
+  });
+
+  it("refuses to run outside the web app", () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    expect(() => render(<Slot name="sidebar.footer" />)).toThrow(/inside the web app/);
+  });
+});
+
+describe("the mounted slots without extensions", () => {
+  it("leave the shell and Home exactly as the app renders them", async () => {
+    const App = createWebApp({ extensions: [] });
+
+    const { container } = await renderApp(<App />);
+
+    await screen.findByRole("main");
+    const main = screen.getByRole("main");
+    expect(main.firstElementChild?.getAttribute("data-slot")).toBe("empty");
+    expect(main.children).toHaveLength(1);
+    const footer = container.querySelector("[data-slot='sidebar-footer']");
+    expect(footer?.children).toHaveLength(1);
+    expect(footer?.firstElementChild?.getAttribute("data-slot")).toBe("sidebar-menu");
+  });
+});
+
+describe("a fixture extension", () => {
+  it("fills sidebar.footer above Help & docs", async () => {
+    const App = createWebApp({ extensions: [fixtureExtension] });
+
+    const { container } = await renderApp(<App />);
+
+    const footer = await waitForFooter(container);
+    const text = footer.textContent;
+    expect(text.indexOf("Fixture usage meter")).toBeGreaterThanOrEqual(0);
+    expect(text.indexOf("Fixture usage meter")).toBeLessThan(text.indexOf("Help & docs"));
+  });
+
+  it("adds a navigation item after Home and a page behind it", async () => {
+    const App = createWebApp({ extensions: [fixtureExtension] });
+
+    await renderApp(<App />);
+
+    const nav = await screen.findByRole("navigation", { name: "Main navigation" });
+    const links = within(nav).getAllByRole("link");
+    expect(links.map((link) => link.textContent)).toEqual(["Home", "Plan & billing"]);
+    expect(links[1]?.getAttribute("href")).toBe("/settings/billing");
+
+    fireEvent.click(links[1] as HTMLElement);
+
+    const main = await screen.findByRole("heading", { name: "Fixture billing page" });
+    expect(screen.getByRole("main").contains(main)).toBe(true);
+    expect(window.location.pathname).toBe("/settings/billing");
+    expect(within(nav).getByRole("link", { name: "Plan & billing" }).getAttribute("aria-current")).toBe("page");
+    expect(within(nav).getByRole("link", { name: "Home" }).getAttribute("aria-current")).toBeNull();
+  });
+
+  it("serves its page when the app opens on it", async () => {
+    window.history.replaceState(null, "", "/settings/billing");
+    const App = createWebApp({ extensions: [fixtureExtension] });
+
+    await renderApp(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Fixture billing page" })).toBeTruthy();
+  });
+
+  it("fills banner.entitlement above the page and dashboard.top above the Home content", async () => {
+    const App = createWebApp({
+      extensions: [{ id: "notices", slots: { "banner.entitlement": FixtureBanner, "dashboard.top": FixtureDashboardTop } }],
+    });
+
+    await renderApp(<App />);
+
+    const main = await screen.findByRole("main");
+    const banner = within(main).getByText("Fixture limit banner");
+    const top = within(main).getByText("Fixture dashboard notice");
+    const home = within(main).getByRole("heading", { level: 1 });
+    expect(banner.compareDocumentPosition(top) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(top.compareDocumentPosition(home) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("does not leave its page or link behind in the next app built without it", async () => {
+    createWebApp({ extensions: [fixtureExtension] });
+    const App = createWebApp({ extensions: [] });
+
+    await renderApp(<App />);
+
+    const nav = await screen.findByRole("navigation", { name: "Main navigation" });
+    expect(within(nav).getAllByRole("link").map((link) => link.textContent)).toEqual(["Home"]);
+  });
+
+  it("is refused before anything is requested when its page takes a path of the app", () => {
+    const fetch = vi.fn(() => Promise.resolve(json(CONFIG_BODY)));
+    vi.stubGlobal("fetch", fetch);
+    expect(() => createWebApp({ extensions: [{ id: "home", routes: [{ path: "/", component: FixtureFooter }] }] })).toThrow(
+      /route path "\/" of the web extension "home" is already taken/,
+    );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+async function waitForFooter(container: HTMLElement): Promise<HTMLElement> {
+  await screen.findByRole("main");
+  const footer = container.querySelector<HTMLElement>("[data-slot='sidebar-footer']");
+  if (footer === null) {
+    throw new Error("the sidebar footer did not render");
+  }
+  return footer;
+}

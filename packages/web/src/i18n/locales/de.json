@@ -1,0 +1,28 @@
+{
+  "shell": {
+    "skipToContent": "Zum Inhalt springen",
+    "toggleSidebar": "Seitenleiste umschalten",
+    "navigation": "Hauptnavigation",
+    "drawerTitle": "Navigation",
+    "drawerDescription": "Links zu den Seiten der App.",
+    "drawerClose": "Navigation schließen",
+    "breadcrumb": "Brotkrumennavigation",
+    "home": "Start",
+    "helpAndDocs": "Hilfe & Doku",
+    "switchToDark": "Zum dunklen Design wechseln",
+    "switchToLight": "Zum hellen Design wechseln",
+    "loading": "Wird geladen"
+  },
+  "home": {
+    "empty": {
+      "title": "Willkommen bei {name}",
+      "description": "Lesezeichen mit kurzen, privaten Slugs."
+    }
+  },
+  "configFailure": {
+    "title": "Die App konnte nicht geladen werden",
+    "description": "Die Einstellungen dieses Servers konnten nicht gelesen werden. Lade die Seite neu und melde es deiner Administration, wenn es weiter auftritt.",
+    "reload": "Neu laden",
+    "requestId": "Anfrage-ID"
+  }
+}

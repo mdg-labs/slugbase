@@ -1,6 +1,7 @@
 import js from "@eslint/js";
 import globals from "globals";
 import tseslint from "typescript-eslint";
+import { literalStringConfig } from "./scripts/i18n-eslint.mjs";
 import { vocabularyPlugin } from "./tooling/vocabulary/eslint-plugin.ts";
 
 const TS_FILES = ["**/*.{ts,tsx,mts,cts}"];
@@ -250,6 +251,15 @@ export const boundaryRules = {
   },
 };
 
+// Every user-facing string comes from the i18n catalogs (D19): a literal string
+// in the JSX of the UI packages is an error. The same policy runs in
+// `pnpm i18n:check` (scripts/check-i18n.mjs).
+export const i18nRules = literalStringConfig([
+  "packages/web/src/**/*.tsx",
+  "packages/ui/src/**/*.tsx",
+  "packages/email/src/**/*.tsx",
+]);
+
 export default [
   ignores,
   ...javascriptRules,
@@ -259,4 +269,5 @@ export default [
   componentLibraryRules,
   vocabularyRules,
   boundaryRules,
+  i18nRules,
 ];

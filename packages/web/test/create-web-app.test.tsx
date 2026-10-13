@@ -1,7 +1,12 @@
 import { render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createWebApp, useConfig } from "../src/index.ts";
 import { CONFIG_BODY, PRODUCT_NAME, json, problem, renderApp, stubMatchMedia } from "./support.tsx";
+
+const WELCOME = `Welcome to ${PRODUCT_NAME}`;
+const WELCOME_DE = `Willkommen bei ${PRODUCT_NAME}`;
+const TAGLINE_EN = "Bookmarks with short, private slugs.";
+const TAGLINE_DE = "Lesezeichen mit kurzen, privaten Slugs.";
 
 type Transport = (request: Request) => Promise<Response>;
 
@@ -13,7 +18,13 @@ function stubTransport(handler: Transport) {
 
 beforeEach(() => {
   stubMatchMedia();
+  vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["en-US", "en"]);
   window.history.replaceState(null, "", "/");
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  document.documentElement.removeAttribute("lang");
 });
 
 describe("createWebApp", () => {
@@ -25,7 +36,7 @@ describe("createWebApp", () => {
 
     await renderApp(<App />);
 
-    expect(await screen.findByRole("heading", { name: PRODUCT_NAME })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: WELCOME })).toBeTruthy();
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -36,10 +47,10 @@ describe("createWebApp", () => {
 
     await renderApp(<App />);
 
-    expect(screen.queryByRole("heading", { name: PRODUCT_NAME })).toBeNull();
+    expect(screen.queryByRole("heading", { name: WELCOME })).toBeNull();
     expect(screen.getByRole("status")).toBeTruthy();
     answer(json(CONFIG_BODY));
-    expect(await screen.findByRole("heading", { name: PRODUCT_NAME })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: WELCOME })).toBeTruthy();
   });
 
   it("shows the failure view with the request id and none of the problem detail when the server answers a problem", async () => {
@@ -51,7 +62,7 @@ describe("createWebApp", () => {
     expect(await screen.findByText("The app could not be loaded")).toBeTruthy();
     expect(screen.getByText("req-4711")).toBeTruthy();
     expect(screen.queryByText(/db\.internal/)).toBeNull();
-    expect(screen.queryByRole("heading", { name: PRODUCT_NAME })).toBeNull();
+    expect(screen.queryByRole("heading", { name: WELCOME })).toBeNull();
   });
 
   it.each([
@@ -69,15 +80,77 @@ describe("createWebApp", () => {
     expect(screen.queryByText(/Request ID/)).toBeNull();
   });
 
-  it("writes the failure view in German for a German browser", async () => {
-    vi.spyOn(window.navigator, "language", "get").mockReturnValue("de-AT");
+  it("writes the failure view in English with lang=en for an English browser", async () => {
+    stubTransport(() => Promise.resolve(problem(500, "internal", "req-1")));
+    const App = createWebApp({ extensions: [] });
+
+    await renderApp(<App />);
+
+    expect(await screen.findByText("The app could not be loaded")).toBeTruthy();
+    expect(screen.getByText(/The settings of this server could not be read/)).toBeTruthy();
+    expect(screen.getByText(/Request ID/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Reload" })).toBeTruthy();
+    expect(document.documentElement.lang).toBe("en");
+  });
+
+  it("writes the failure view in German with lang=de for a German browser", async () => {
+    vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["de-AT"]);
     stubTransport(() => Promise.resolve(problem(500, "internal", "req-1")));
     const App = createWebApp({ extensions: [] });
 
     await renderApp(<App />);
 
     expect(await screen.findByText("Die App konnte nicht geladen werden")).toBeTruthy();
+    expect(screen.getByText(/Die Einstellungen dieses Servers konnten nicht gelesen werden/)).toBeTruthy();
+    expect(screen.getByText(/Anfrage-ID/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Neu laden" })).toBeTruthy();
+    expect(screen.queryByText("The app could not be loaded")).toBeNull();
+    expect(document.documentElement.lang).toBe("de");
+  });
+
+  it("writes the failure view in English with lang=en for a browser whose languages are unsupported", async () => {
+    vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["fr-FR"]);
+    stubTransport(() => Promise.resolve(problem(500, "internal", "req-1")));
+    const App = createWebApp({ extensions: [] });
+
+    await renderApp(<App />);
+
+    expect(await screen.findByText("The app could not be loaded")).toBeTruthy();
+    expect(document.documentElement.lang).toBe("en");
+  });
+
+  it("renders the root view in English with lang=en for an English browser", async () => {
+    stubTransport(() => Promise.resolve(json(CONFIG_BODY)));
+    const App = createWebApp({ extensions: [] });
+
+    await renderApp(<App />);
+
+    expect(await screen.findByRole("heading", { name: WELCOME })).toBeTruthy();
+    expect(document.documentElement.lang).toBe("en");
+  });
+
+  it("renders the root view in German with lang=de for a German browser", async () => {
+    vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["de-AT"]);
+    stubTransport(() => Promise.resolve(json(CONFIG_BODY)));
+    const App = createWebApp({ extensions: [] });
+
+    await renderApp(<App />);
+
+    expect(await screen.findByRole("heading", { name: WELCOME_DE })).toBeTruthy();
+    expect(screen.getByText(TAGLINE_DE)).toBeTruthy();
+    expect(screen.queryByText(TAGLINE_EN)).toBeNull();
+    expect(document.documentElement.lang).toBe("de");
+  });
+
+  it("uses the server's default locale when the browser accepts none of the catalogs", async () => {
+    vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["fr-FR"]);
+    stubTransport(() => Promise.resolve(json({ ...CONFIG_BODY, defaultLocale: "de" })));
+    const App = createWebApp({ extensions: [] });
+
+    await renderApp(<App />);
+
+    expect(await screen.findByText(TAGLINE_DE)).toBeTruthy();
+    expect(document.documentElement.lang).toBe("de");
   });
 
   it("refuses two extensions with one id before it requests anything", () => {

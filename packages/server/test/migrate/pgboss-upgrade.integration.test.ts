@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { setTimeout as sleep } from "node:timers/promises";
 import { MigrationError } from "@slugbase/db";
+import { withTestDatabase } from "@slugbase/testing/db";
 import { PgBoss, getRollbackPlans, getUninstallPlans } from "pg-boss";
 import { describe, expect, it } from "vitest";
 import { runMigrations } from "../../src/migrate/index.ts";
@@ -198,10 +199,12 @@ describe("a pg-boss schema older than this build's", () => {
 
 const PENDING_TABLE = "drizzle.pgboss_pending_builds";
 
-// A transaction that holds a snapshot until `release` is called: a concurrent index build waits for it after its second scan.
-function holdSnapshot(): { held: Promise<void>; release: () => void; done: Promise<unknown> } {
+// A transaction that holds a snapshot until `release` is called: a concurrent index build waits for it after its second scan. `virtualxid` is the
+// virtual transaction id that build waits on, as `pg_locks` shows it.
+function holdSnapshot(): { held: Promise<void>; release: () => void; done: Promise<unknown>; virtualxid: () => string } {
   let holding!: () => void;
   let release!: () => void;
+  let virtualxid = "";
   const held = new Promise<void>((resolve) => {
     holding = resolve;
   });
@@ -210,15 +213,17 @@ function holdSnapshot(): { held: Promise<void>; release: () => void; done: Promi
   });
   const done = database().owner.begin("ISOLATION LEVEL REPEATABLE READ", async (tx) => {
     await tx`SELECT count(*) FROM pg_class`;
+    const [own] = await tx<{ virtualxid: string }[]>`SELECT virtualxid FROM pg_locks WHERE pid = pg_backend_pid() AND locktype = 'virtualxid'`;
+    virtualxid = own?.virtualxid ?? "";
     holding();
     await released;
   });
-  return { held, release, done };
+  return { held, release, done, virtualxid: () => virtualxid };
 }
 
 // The pool acts as the owner role, which may not see the activity of a session
 // of the migrator; the migrator may, and its session is put back as it was.
-async function asMigrator<T>(run: (connection: { unsafe: (text: string) => Promise<Record<string, unknown>[]> }) => Promise<T>): Promise<T> {
+async function asMigrator<T>(run: (connection: { unsafe: (text: string, params?: string[]) => Promise<Record<string, unknown>[]> }) => Promise<T>): Promise<T> {
   const connection = await database().owner.reserve();
   try {
     await connection.unsafe("SET ROLE slugbase_migrator");
@@ -229,13 +234,30 @@ async function asMigrator<T>(run: (connection: { unsafe: (text: string) => Promi
   }
 }
 
-// The backend of the pg-boss step of migrate while it runs a concurrent index build.
-async function buildBackend(waitingForLock: boolean): Promise<number | undefined> {
+// What a concurrent index build is blocked on, as `pg_locks` shows it: another transaction's virtual transaction id, which is how it waits for the
+// snapshots older than its second scan, or a lock on a relation, which is how it queues for a table.
+type Blocked = { virtualxid: string } | { relation: string };
+
+// The backend of the pg-boss step of migrate while it runs a concurrent index build in this test's own database: the cluster is shared, and the same step of another database is not ours to cancel.
+// Without `blocked` any build is found, as soon as it is active; with it, only one that waits for exactly that, which is the one thing a test can cancel
+// knowing how far the build got.
+async function buildBackend(blocked?: Blocked): Promise<number | undefined> {
+  const params = [database().name];
+  let waiting = "true";
+  if (blocked !== undefined) {
+    // The migrator may not read the schema of a table it is not named for, so the relation is resolved as the owner.
+    const relation = "relation" in blocked ? (await rows<{ oid: string | null }>(`SELECT to_regclass('${blocked.relation}')::oid::text AS oid`))[0]?.oid : undefined;
+    const on = "virtualxid" in blocked ? "l.locktype = 'virtualxid' AND l.virtualxid = $2" : "l.locktype = 'relation' AND l.relation = $2::oid";
+    params.push("virtualxid" in blocked ? blocked.virtualxid : (relation ?? "0"));
+    waiting = `a.wait_event_type = 'Lock' AND EXISTS (SELECT 1 FROM pg_locks l WHERE l.pid = a.pid AND NOT l.granted AND ${on})`;
+  }
   const found = await asMigrator((connection) =>
-    connection.unsafe(`
-      SELECT pid FROM pg_stat_activity
-       WHERE application_name = 'slugbase-migrate-pgboss' AND state = 'active'
-         AND query ILIKE '%INDEX CONCURRENTLY%' AND ${waitingForLock ? "wait_event_type = 'Lock'" : "true"}`),
+    connection.unsafe(
+      `SELECT a.pid FROM pg_stat_activity a
+        WHERE a.datname = $1 AND a.application_name = 'slugbase-migrate-pgboss' AND a.state = 'active'
+          AND a.query ILIKE '%INDEX CONCURRENTLY%' AND ${waiting}`,
+      params,
+    ),
   );
   const pid = found[0]?.["pid"];
   return typeof pid === "number" ? pid : undefined;
@@ -252,15 +274,61 @@ async function indexState(name: string): Promise<{ oid: number; valid: boolean }
   return found[0];
 }
 
+describe("the lookup of the index build of an upgrade", () => {
+  it("ignores the same step running in another database", async () => {
+    await withTestDatabase(async (other) => {
+      const decoy = await other.owner.reserve();
+      let sleeping: Promise<unknown> | undefined;
+      let pid = 0;
+      try {
+        await decoy.unsafe("SET application_name = 'slugbase-migrate-pgboss'");
+        const [self] = await decoy.unsafe<{ pid: number }[]>("SELECT pg_backend_pid() AS pid");
+        pid = self?.pid ?? 0;
+        expect(pid).toBeGreaterThan(0);
+        sleeping = decoy.unsafe("SELECT pg_sleep(30) /* INDEX CONCURRENTLY */").then(
+          () => undefined,
+          () => undefined,
+        );
+        // Without the filter on the database the lookup would return this backend, so it has to be visible to the migrator first.
+        const visible = (): Promise<boolean> =>
+          asMigrator(async (connection) => {
+            const found = await connection.unsafe(
+              `SELECT 1 FROM pg_stat_activity
+                WHERE pid = $1 AND datname = $2 AND application_name = 'slugbase-migrate-pgboss'
+                  AND state = 'active' AND query ILIKE '%INDEX CONCURRENTLY%'`,
+              [String(pid), other.name],
+            );
+            return found.length === 1;
+          });
+        await expect.poll(visible, { interval: 20, timeout: 10_000 }).toBe(true);
+        expect(other.name).not.toBe(database().name);
+
+        expect(await buildBackend()).toBeUndefined();
+        expect(await buildBackend({ relation: "pg_catalog.pg_class" })).toBeUndefined();
+      } finally {
+        if (pid > 0) {
+          await cancelBackend(pid);
+        }
+        await sleeping;
+        decoy.release();
+      }
+    });
+  });
+});
+
 describe("the index builds of an upgrade that stopped", () => {
   it("are finished by the next run, which drops the INVALID index the stopped build left", async () => {
     await behind(1);
     const reader = holdSnapshot();
     await reader.held;
     const first = failureOf(() => runMigrations({ url: migratorUrl() }));
-    // The transaction of the upgrade has stamped the version; the build still waits for the snapshot.
+    // The transaction of the upgrade has stamped the version. A build that is merely running has not necessarily put its index in the catalog yet, and
+    // cancelled there it leaves none; one that waits for the held snapshot has done so, and leaves the index INVALID.
     await expect.poll(schemaVersion, { interval: 20, timeout: 10_000 }).toBe(expected);
-    const pid = await expect.poll(() => buildBackend(false), { interval: 20, timeout: 10_000 }).toBeDefined().then(() => buildBackend(false));
+    const waitingOnSnapshot = (): Promise<number | undefined> => buildBackend({ virtualxid: reader.virtualxid() });
+    await expect.poll(waitingOnSnapshot, { interval: 20, timeout: 10_000 }).toBeDefined();
+    const pid = await waitingOnSnapshot();
+    expect((await indexState("job_common_i13"))?.valid).toBe(false);
     await cancelBackend(pid ?? 0);
     await first;
     reader.release();
@@ -291,11 +359,13 @@ describe("the index builds of an upgrade that stopped", () => {
     const first = failureOf(() => runMigrations({ url: migratorUrl() }));
     await expect.poll(schemaVersion, { interval: 20, timeout: 10_000 }).toBe(expected);
     // Once the version is stamped nothing else takes this table's lock: the second build of the upgrade queues on it.
+    // The build of the first table may still wait for the snapshot after the reader is released, so the one to cancel is the one that queues on the partition.
     const blocker = database().owner.begin(async (tx) => {
       await tx.unsafe(`LOCK TABLE ${PGBOSS_SCHEMA}.${partition} IN SHARE ROW EXCLUSIVE MODE`);
       reader.release();
-      await expect.poll(() => buildBackend(true), { interval: 20, timeout: 10_000 }).toBeDefined();
-      await cancelBackend((await buildBackend(true)) ?? 0);
+      const queuedOnPartition = (): Promise<number | undefined> => buildBackend({ relation: `${PGBOSS_SCHEMA}.${partition}` });
+      await expect.poll(queuedOnPartition, { interval: 20, timeout: 10_000 }).toBeDefined();
+      await cancelBackend((await queuedOnPartition()) ?? 0);
       await first;
     });
     await blocker;

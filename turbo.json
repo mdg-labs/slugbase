@@ -1,7 +1,7 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "agentGuidance": false,
-  "globalDependencies": ["eslint.config.js", "tooling/boundaries/**", "tooling/vocabulary/**", "vitest.shared.ts", "tsconfig.base.json"],
+  "globalDependencies": ["eslint.config.js", "scripts/i18n-eslint.mjs", "tooling/boundaries/**", "tooling/vocabulary/**", "vitest.shared.ts", "tsconfig.base.json"],
   "tasks": {
     "lint": {
       "dependsOn": ["^build"],
@@ -72,6 +72,7 @@
       "cache": false
     },
     "i18n:check": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/scripts/check-i18n.mjs", "$TURBO_ROOT$/scripts/i18n-eslint.mjs"],
       "outputs": []
     }
   }

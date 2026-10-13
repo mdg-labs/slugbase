@@ -10,8 +10,10 @@ services:
   postgres:
     image: postgres:18
     # Postgres listens on the published port inside the container too, so the
-    # default Postgres port is not mapped anywhere.
-    command: ["postgres", "-c", "port=54329"]
+    # default Postgres port is not mapped anywhere. max_connections is raised
+    # from the default of 100 so that several concurrent integration runs
+    # (doc 08 section 1.2) and the developer's own processes fit.
+    command: ["postgres", "-c", "port=54329", "-c", "max_connections=300"]
     environment:
       POSTGRES_USER: slugbase
       POSTGRES_PASSWORD: slugbase

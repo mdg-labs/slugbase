@@ -8,5 +8,5 @@
     "allowImportingTsExtensions": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["../../vitest.shared.ts", "vitest.config.ts", "vite.config.ts", "src", "test"]
+  "include": ["../../vitest.shared.ts", "vitest.config.ts", "vite.config.ts", "src", "test", "mock", "scripts"]
 }

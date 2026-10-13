@@ -4,6 +4,86 @@
 
 ```ts
 
+import { HttpHandler } from 'msw';
+
+// @public
+export function baseFixtures(document: OpenApiDocument): Readonly<Record<string, unknown>>;
+
+// @public
+export function createHandlers(document: OpenApiDocument, options?: CreateHandlersOptions): HttpHandler[];
+
+// @public (undocumented)
+export interface CreateHandlersOptions {
+    readonly baseUrl?: string;
+    readonly fixtures?: Readonly<Record<string, unknown>>;
+    readonly scenario?: Scenario;
+}
+
+// @public (undocumented)
+export interface DeclaredResponse {
+    readonly content: ReadonlyMap<string, unknown>;
+    // (undocumented)
+    readonly headers: ReadonlyMap<string, unknown>;
+    // (undocumented)
+    readonly status: number;
+}
+
+// @public (undocumented)
+export const DEFAULT_SCENARIO: Scenario;
+
+// @public (undocumented)
+export interface DocumentOperation {
+    // (undocumented)
+    readonly method: HttpMethod;
+    // (undocumented)
+    readonly operationId: string;
+    readonly path: string;
+    // (undocumented)
+    readonly responses: readonly DeclaredResponse[];
+}
+
+// @public
+export function fixtureFor(document: OpenApiDocument, schema: unknown): unknown;
+
+// @public
+export function handlerPath(template: string): string;
+
+// @public (undocumented)
+export type HttpMethod = "get" | "put" | "post" | "delete" | "patch" | "head" | "options";
+
+// @public
+export function listOperations(document: OpenApiDocument): DocumentOperation[];
+
+// @public (undocumented)
+export interface OpenApiDocument {
+    // (undocumented)
+    readonly components?: Readonly<Record<string, unknown>>;
+    // (undocumented)
+    readonly openapi: string;
+    // (undocumented)
+    readonly paths: Readonly<Record<string, unknown>>;
+}
+
+// @public (undocumented)
+export function parseDocument(value: unknown): OpenApiDocument;
+
+// @public
+export interface Scenario {
+    readonly fixtures?: Readonly<Record<string, unknown>>;
+    // (undocumented)
+    readonly name: string;
+    readonly statuses?: Readonly<Record<string, number>>;
+}
+
+// @public
+export const SCENARIO_PARAMETER = "scenario";
+
+// @public
+export function scenarioFromSearch(search: string, scenarios?: Readonly<Record<string, Scenario>>): Scenario;
+
+// @public
+export const SCENARIOS: Readonly<Record<string, Scenario>>;
+
 // (No @packageDocumentation comment for this package)
 
 ```

@@ -40,6 +40,8 @@ pnpm dev:services:down
 
 The port is deliberately not `5432`, so a developer's own Postgres never collides with it and an agent can never connect to the wrong one by default.
 
+**Concurrent runs.** The stack serves several `pnpm test:integration` or `pnpm gate` runs at once, because each run holds a bounded number of connections. `packages/db` and `packages/server` run at most two test files at a time (`maxWorkers` in each package's `vitest.config.ts`), and the harness opens at most one superuser session, four `slugbase_app` and two owner connections per file (§3.2). One `pnpm test:integration` run peaked at 38 connections above what the stack held before it (sampled with `SELECT count(*) FROM pg_stat_activity WHERE backend_type = 'client backend'`). `compose.dev.yml` therefore starts Postgres with `max_connections=300`: three runs at that peak add up to about 115, which the Postgres default of 100 cannot hold, and the rest is room for the app, the worker and other sessions on the machine. The stack supports three concurrent runs. A change to `compose.dev.yml` applies when `pnpm dev:services` next recreates the container. If a run fails with `too many clients already` or `remaining connection slots are reserved`, the stack still has the old limit (`SHOW max_connections`).
+
 ### 1.3 Running the app
 
 ```bash
@@ -98,7 +100,7 @@ React components are tested with Testing Library and `vitest-axe` for component-
 2. Each test file gets `CREATE DATABASE test_<random> TEMPLATE slugbase_tpl_<hash>` — tens of milliseconds — and drops it afterwards.
 3. Tests connect as `slugbase_app` exactly like the server does. Only fixtures connect as the owner role, to insert data RLS would refuse.
 
-The harness needs `SLUGBASE_TEST_PG_URL` (a superuser URL); it defaults to the `compose.dev.yml` Postgres. In CI it points at a service container (§6). Because databases are per file and named randomly, any number of scratch clones can run `pnpm gate` against the same Postgres concurrently.
+The harness needs `SLUGBASE_TEST_PG_URL` (a superuser URL); it defaults to the `compose.dev.yml` Postgres. In CI it points at a service container (§6). Because databases are per file and named randomly, concurrent runs never collide with one another; how many runs fit at once is bounded by the connection limit of the dev Postgres, which supports three (§1.2).
 
 Every changed migration, custom SQL file or `roles.sql` leaves one more template behind, and the harness never drops one on its own: scratch clones at different hashes run at the same time. `pnpm --filter @slugbase/db test:prune-templates` drops the `slugbase_tpl_*` templates that nothing uses (template names as arguments limit it to those). It never lists or touches a database outside the `slugbase_tpl_<hash>` names, and it keeps the template of the current hash and any template that is:
 

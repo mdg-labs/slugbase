@@ -18,6 +18,10 @@
       "types": "./dist/msw.d.ts",
       "import": "./dist/msw.js"
     },
+    "./msw/node": {
+      "types": "./dist/msw/node.d.ts",
+      "import": "./dist/msw/node.js"
+    },
     "./tenancy": {
       "types": "./dist/tenancy.d.ts",
       "import": "./dist/tenancy.js"
@@ -37,6 +41,10 @@
   "dependencies": {
     "@slugbase/core": "workspace:*",
     "@slugbase/db": "workspace:*",
-    "@slugbase/testing-ports": "workspace:*"
+    "@slugbase/testing-ports": "workspace:*",
+    "msw": "^2.15.0"
+  },
+  "devDependencies": {
+    "zod": "^4.6.5"
   }
 }

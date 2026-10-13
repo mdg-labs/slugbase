@@ -3,11 +3,12 @@ import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:f
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 
 const WEB = resolve(import.meta.dirname, "..");
 
 describe("the generated route tree", () => {
-  it("is what the generator makes from the files under src/routes", () => {
+  it("is what the generator makes from the files under src/routes", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     const scratch = mkdtempSync(join(tmpdir(), "slugbase-route-tree-"));
     try {
       cpSync(join(WEB, "src", "routes"), join(scratch, "routes"), { recursive: true });

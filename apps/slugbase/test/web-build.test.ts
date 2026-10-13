@@ -98,3 +98,58 @@ describe("served by the server", () => {
     expect(((await response.json()) as { product: { name: string } }).product.name).toBe("SlugBase Test Build");
   });
 });
+
+// The mock of `pnpm dev:web --mock` (doc 08 section 7) is a development tool: the
+// build, in any mode, carries neither its worker script nor its handlers nor its
+// fixtures.
+const MOCK_MARKERS = [
+  "mockServiceWorker",
+  "SlugBase Mock",
+  "setupWorker",
+  "createHandlers",
+  "scenarioFromSearch",
+  "@mswjs",
+  "virtual:slugbase-openapi",
+  "/mock/main",
+];
+
+function filesUnder(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) =>
+    entry.isDirectory() ? filesUnder(join(directory, entry.name)) : [join(directory, entry.name)],
+  );
+}
+
+describe.each([["production", undefined], ["mock", "mock"]] as const)("the %s build output", (_name, mode) => {
+  let buildDir: string;
+
+  beforeAll(async () => {
+    buildDir = mkdtempSync(join(tmpdir(), "slugbase-web-nomock-"));
+    await build({
+      configFile: resolve(APP, "vite.config.ts"),
+      logLevel: "silent",
+      ...(mode === undefined ? {} : { mode }),
+      build: { outDir: buildDir, emptyOutDir: true },
+    });
+  }, 120_000);
+
+  afterAll(() => {
+    rmSync(buildDir, { recursive: true, force: true });
+  });
+
+  it("has no service worker script", () => {
+    const files = filesUnder(buildDir);
+    expect(files.length).toBeGreaterThan(2);
+    expect(files.filter((file) => /mockServiceWorker/i.test(file))).toEqual([]);
+  });
+
+  it("holds no text of the mock in any file", () => {
+    for (const file of filesUnder(buildDir)) {
+      if (/\.(?:js|css|html|map|json|txt)$/.test(file)) {
+        const text = readFileSync(file, "utf8");
+        for (const marker of MOCK_MARKERS) {
+          expect(text.includes(marker), `${marker} in ${file}`).toBe(false);
+        }
+      }
+    }
+  });
+});

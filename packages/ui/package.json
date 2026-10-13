@@ -10,6 +10,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./patterns": {
+      "types": "./dist/patterns/index.d.ts",
+      "import": "./dist/patterns/index.js"
+    },
     "./styles/theme.css": {
       "types": "./dist/styles/theme.d.ts",
       "default": "./src/styles/theme.css"
@@ -24,6 +28,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:unit": "vitest run --project unit",
     "build": "tsc -p tsconfig.build.json",
+    "ladle": "ladle serve",
+    "i18n:check": "node ../../scripts/check-i18n.mjs .",
     "contracts:check": "node ../../tooling/api-report/api-report.ts check --package ."
   },
   "peerDependencies": {
@@ -40,13 +46,16 @@
     "tailwind-merge": "^3.7.0"
   },
   "devDependencies": {
+    "@ladle/react": "^5.1.1",
     "@slugbase/testing": "workspace:*",
+    "@tailwindcss/vite": "^4.3.3",
     "@testing-library/react": "^16.3.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.3",
     "vitest-axe": "^0.1.0"
   }
 }

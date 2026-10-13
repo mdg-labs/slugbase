@@ -11,3 +11,14 @@ affected and no patched version exists; the latest @rushstack/ts-command-line \
 still depends on argparse 1.x. It runs only inside API Extractor's \
 command-line parsing at build time, on arguments the repository's own scripts \
 pass; no request, user content or other untrusted input reaches it."""
+
+[[IgnoredVulns]]
+id = "GHSA-vfj7-8cjw-p6xm"
+ignoreUntil = 2027-01-13
+reason = """\
+braces 3.0.3 reaches the lockfile only through the dev dependency \
+@ladle/react, globby, fast-glob and micromatch. No patched release exists. \
+It runs only in the Ladle workshop, which globs the story pattern from the \
+checked-in .ladle/config.mjs; no request, user content or other untrusted \
+input reaches it. The same exception is recorded in \
+pnpm.auditConfig.ignoreGhsas."""

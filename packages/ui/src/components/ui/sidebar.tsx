@@ -55,6 +55,18 @@ export const sidebarMenuButtonVariants = cva(
   },
 );
 
+export type SidebarMobileLabels = {
+  title: string;
+  description: string;
+  close: string;
+};
+
+const DEFAULT_MOBILE_LABELS: SidebarMobileLabels = {
+  close: "Close",
+  description: "Displays the mobile sidebar.",
+  title: "Sidebar",
+};
+
 export type SidebarContextProps = {
   state: "expanded" | "collapsed";
   open: boolean;
@@ -106,13 +118,20 @@ export function SidebarProvider({
         _setOpen(openState);
       }
 
-      // This sets the cookie to keep the sidebar state.
-      await cookieStore.set({
-        expires: Date.now() + SIDEBAR_COOKIE_MAX_AGE * 1000,
-        name: SIDEBAR_COOKIE_NAME,
-        path: "/",
-        value: String(openState),
-      });
+      // This sets the cookie to keep the sidebar state. The Cookie Store API is missing in some
+      // browsers and its promise can reject; the sidebar then works for the session without it.
+      if (typeof cookieStore !== "undefined") {
+        try {
+          await cookieStore.set({
+            expires: Date.now() + SIDEBAR_COOKIE_MAX_AGE * 1000,
+            name: SIDEBAR_COOKIE_NAME,
+            path: "/",
+            value: String(openState),
+          });
+        } catch {
+          // Not remembered; the toggle itself has already applied.
+        }
+      }
     },
     [setOpenProp, open],
   );
@@ -182,6 +201,7 @@ export function Sidebar({
   side = "left",
   variant = "sidebar",
   collapsible = "offcanvas",
+  mobileLabels = DEFAULT_MOBILE_LABELS,
   className,
   children,
   ...props
@@ -189,6 +209,8 @@ export function Sidebar({
   side?: "left" | "right";
   variant?: "sidebar" | "floating" | "inset";
   collapsible?: "offcanvas" | "icon" | "none";
+  /** The accessible texts of the drawer shown below the `md` breakpoint. */
+  mobileLabels?: SidebarMobileLabels;
 }): React.ReactElement {
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
 
@@ -215,6 +237,7 @@ export function Sidebar({
           data-mobile="true"
           data-sidebar="sidebar"
           data-slot="sidebar"
+          closeProps={{ "aria-label": mobileLabels.close }}
           side={side}
           style={
             {
@@ -223,8 +246,8 @@ export function Sidebar({
           }
         >
           <SheetHeader className="sr-only">
-            <SheetTitle>Sidebar</SheetTitle>
-            <SheetDescription>Displays the mobile sidebar.</SheetDescription>
+            <SheetTitle>{mobileLabels.title}</SheetTitle>
+            <SheetDescription>{mobileLabels.description}</SheetDescription>
           </SheetHeader>
           <div className="flex h-full w-full flex-col">{children}</div>
         </SheetPopup>
@@ -283,8 +306,12 @@ export function Sidebar({
 export function SidebarTrigger({
   className,
   onClick,
+  label = "Toggle Sidebar",
   ...props
-}: React.ComponentProps<typeof Button>): React.ReactElement {
+}: React.ComponentProps<typeof Button> & {
+  /** The accessible name of the button. */
+  label?: string;
+}): React.ReactElement {
   const { toggleSidebar } = useSidebar();
 
   return (
@@ -301,20 +328,24 @@ export function SidebarTrigger({
       {...props}
     >
       <PanelLeftIcon />
-      <span className="sr-only">Toggle Sidebar</span>
+      <span className="sr-only">{label}</span>
     </Button>
   );
 }
 
 export function SidebarRail({
   className,
+  label = "Toggle Sidebar",
   ...props
-}: React.ComponentProps<"button">): React.ReactElement {
+}: React.ComponentProps<"button"> & {
+  /** The accessible name and the title of the rail. */
+  label?: string;
+}): React.ReactElement {
   const { toggleSidebar } = useSidebar();
 
   return (
     <button
-      aria-label="Toggle Sidebar"
+      aria-label={label}
       className={cn(
         "absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 transition-all ease-linear after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] hover:after:bg-sidebar-border group-data-[side=left]:-right-4 group-data-[side=right]:left-0 sm:flex",
         "in-data-[side=left]:cursor-w-resize in-data-[side=right]:cursor-e-resize",
@@ -328,7 +359,7 @@ export function SidebarRail({
       data-slot="sidebar-rail"
       onClick={toggleSidebar}
       tabIndex={-1}
-      title="Toggle Sidebar"
+      title={label}
       type="button"
       {...props}
     />
