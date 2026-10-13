@@ -1,7 +1,10 @@
 import { render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createWebApp, useConfig } from "../src/index.ts";
 import { CONFIG_BODY, PRODUCT_NAME, json, problem, renderApp, stubMatchMedia } from "./support.tsx";
+
+const TAGLINE_EN = "Bookmarks with short, private slugs.";
+const TAGLINE_DE = "Lesezeichen mit kurzen, privaten Slugs.";
 
 type Transport = (request: Request) => Promise<Response>;
 
@@ -13,7 +16,13 @@ function stubTransport(handler: Transport) {
 
 beforeEach(() => {
   stubMatchMedia();
+  vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["en-US", "en"]);
   window.history.replaceState(null, "", "/");
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  document.documentElement.removeAttribute("lang");
 });
 
 describe("createWebApp", () => {
@@ -78,6 +87,40 @@ describe("createWebApp", () => {
 
     expect(await screen.findByText("Die App konnte nicht geladen werden")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Neu laden" })).toBeTruthy();
+  });
+
+  it("renders the root view in English with lang=en for an English browser", async () => {
+    stubTransport(() => Promise.resolve(json(CONFIG_BODY)));
+    const App = createWebApp({ extensions: [] });
+
+    await renderApp(<App />);
+
+    expect(await screen.findByRole("heading", { name: PRODUCT_NAME })).toBeTruthy();
+    expect(document.documentElement.lang).toBe("en");
+  });
+
+  it("renders the root view in German with lang=de for a German browser", async () => {
+    vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["de-AT"]);
+    stubTransport(() => Promise.resolve(json(CONFIG_BODY)));
+    const App = createWebApp({ extensions: [] });
+
+    await renderApp(<App />);
+
+    expect(await screen.findByRole("heading", { name: PRODUCT_NAME })).toBeTruthy();
+    expect(screen.getByText(TAGLINE_DE)).toBeTruthy();
+    expect(screen.queryByText(TAGLINE_EN)).toBeNull();
+    expect(document.documentElement.lang).toBe("de");
+  });
+
+  it("uses the server's default locale when the browser accepts none of the catalogs", async () => {
+    vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["fr-FR"]);
+    stubTransport(() => Promise.resolve(json({ ...CONFIG_BODY, defaultLocale: "de" })));
+    const App = createWebApp({ extensions: [] });
+
+    await renderApp(<App />);
+
+    expect(await screen.findByText(TAGLINE_DE)).toBeTruthy();
+    expect(document.documentElement.lang).toBe("de");
   });
 
   it("refuses two extensions with one id before it requests anything", () => {

@@ -7,6 +7,7 @@ import { fetchConfig, type ConfigResult } from "./config/bootstrap.ts";
 import { ConfigFailure } from "./config/config-failure.tsx";
 import { ConfigProvider } from "./config/config-context.tsx";
 import { assertValidExtensions, type WebExtension } from "./extensions.ts";
+import { I18nProvider } from "./i18n/i18n-provider.tsx";
 import { createQueryClient } from "./query-client.ts";
 import { createAppRouter } from "./router.ts";
 
@@ -36,9 +37,11 @@ export function createWebApp({ extensions }: CreateWebAppOptions): ComponentType
     }
     return (
       <ConfigProvider config={loaded.config}>
-        <QueryClientProvider client={queryClient}>
-          <RouterProvider router={router} />
-        </QueryClientProvider>
+        <I18nProvider defaultLocale={loaded.config.defaultLocale}>
+          <QueryClientProvider client={queryClient}>
+            <RouterProvider router={router} />
+          </QueryClientProvider>
+        </I18nProvider>
       </ConfigProvider>
     );
   }
