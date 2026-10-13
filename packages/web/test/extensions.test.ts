@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertValidExtensions } from "../src/extensions.ts";
+import { SLOT_NAMES, assertValidExtensions, isSlotName } from "../src/extensions/index.ts";
 
 describe("assertValidExtensions", () => {
   it("accepts no extensions and distinct ids", () => {
@@ -21,5 +21,62 @@ describe("assertValidExtensions", () => {
     expect(() => {
       assertValidExtensions([{ id: " " }]);
     }).toThrow(/non-empty id/);
+  });
+
+  it("rejects a slot name outside the closed set and names it", () => {
+    const unknown = { "sidebar.header": () => null } as never;
+    expect(() => {
+      assertValidExtensions([{ id: "billing", slots: unknown }]);
+    }).toThrow(/"billing" fills the unknown slot "sidebar.header"/);
+  });
+
+  it("rejects a route path that is not absolute", () => {
+    expect(() => {
+      assertValidExtensions([{ id: "billing", routes: [{ path: "billing", component: () => null }] }]);
+    }).toThrow(/route path "billing".*must start with "\/"/);
+  });
+
+  it("rejects a route path that two extensions or the app already own", () => {
+    const page = { path: "/plan", component: () => null };
+    expect(() => {
+      assertValidExtensions([
+        { id: "a", routes: [page] },
+        { id: "b", routes: [page] },
+      ]);
+    }).toThrow(/route path "\/plan" of the web extension "b" is already taken/);
+    expect(() => {
+      assertValidExtensions([{ id: "a", routes: [{ path: "/", component: () => null }] }], ["/"]);
+    }).toThrow(/route path "\/" of the web extension "a" is already taken/);
+  });
+
+  it("rejects a navigation item without an absolute target or without a label", () => {
+    expect(() => {
+      assertValidExtensions([{ id: "a", navigation: [{ to: "plan", label: "Plan" }] }]);
+    }).toThrow(/navigation target "plan".*must start with "\/"/);
+    expect(() => {
+      assertValidExtensions([{ id: "a", navigation: [{ to: "/plan", label: " " }] }]);
+    }).toThrow(/navigation item "\/plan".*needs a label/);
+  });
+});
+
+describe("the slot names", () => {
+  it("are the nine of doc 03, in its order", () => {
+    expect(SLOT_NAMES).toEqual([
+      "sidebar.workspacePlan",
+      "sidebar.footer",
+      "banner.entitlement",
+      "entitlement.upgradeAction",
+      "accountMenu.items",
+      "settings.workspace.nav",
+      "settings.workspace.members.seats",
+      "dashboard.top",
+      "auth.register.footer",
+    ]);
+  });
+
+  it("are told from other strings", () => {
+    expect(isSlotName("dashboard.top")).toBe(true);
+    expect(isSlotName("dashboard.bottom")).toBe(false);
+    expect(isSlotName("toString")).toBe(false);
   });
 });

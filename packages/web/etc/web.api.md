@@ -6,6 +6,8 @@
 
 import { ComponentType } from 'react';
 import type { ComponentTypes } from '@slugbase/contracts';
+import type { FunctionComponent } from 'react';
+import type { ReactNode } from 'react';
 
 // @public
 export type ApiConfig = ComponentTypes["schemas"]["ApiConfig"];
@@ -37,12 +39,39 @@ export interface CreateWebAppOptions {
 }
 
 // @public
+export const SLOT_NAMES: readonly ["sidebar.workspacePlan", "sidebar.footer", "banner.entitlement", "entitlement.upgradeAction", "accountMenu.items", "settings.workspace.nav", "settings.workspace.members.seats", "dashboard.top", "auth.register.footer"];
+
+// @public
+export type SlotName = (typeof SLOT_NAMES)[number];
+
+// @public
 export function useConfig(): ApiConfig;
 
 // @public
 export interface WebExtension {
     readonly id: string;
+    readonly navigation?: readonly WebExtensionNavigationItem[];
+    readonly routes?: readonly WebExtensionRoute[];
+    readonly slots?: WebExtensionSlots;
 }
+
+// @public
+export interface WebExtensionNavigationItem {
+    readonly icon?: ReactNode;
+    readonly label: string;
+    readonly to: string;
+}
+
+// @public
+export interface WebExtensionRoute {
+    readonly component: FunctionComponent;
+    readonly path: string;
+}
+
+// @public
+export type WebExtensionSlots = {
+    readonly [Name in SlotName]?: ComponentType;
+};
 
 // (No @packageDocumentation comment for this package)
 

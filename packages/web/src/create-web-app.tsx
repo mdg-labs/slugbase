@@ -6,7 +6,7 @@ import { createApiClient } from "./api/client.ts";
 import { fetchConfig, type ConfigResult } from "./config/bootstrap.ts";
 import { ConfigFailure } from "./config/config-failure.tsx";
 import { ConfigProvider } from "./config/config-context.tsx";
-import { assertValidExtensions, type WebExtension } from "./extensions.ts";
+import { ExtensionsProvider, type WebExtension } from "./extensions/index.ts";
 import { I18nProvider } from "./i18n/i18n-provider.tsx";
 import { createQueryClient } from "./query-client.ts";
 import { createAppRouter } from "./router.ts";
@@ -24,11 +24,10 @@ export interface CreateWebAppOptions {
  * shows the failure view instead (doc 01 section 11). Throws on an invalid extension list.
  */
 export function createWebApp({ extensions }: CreateWebAppOptions): ComponentType {
-  assertValidExtensions(extensions);
-
   const api = createApiClient();
   const queryClient = createQueryClient();
-  const router = createAppRouter({ queryClient, api });
+  // Validates the extension list: nothing is requested for one the app cannot start with.
+  const router = createAppRouter({ queryClient, api }, extensions);
   const configResult = fetchConfig(api);
 
   function Product({ result }: { result: Promise<ConfigResult> }): ReactElement {
@@ -45,7 +44,9 @@ export function createWebApp({ extensions }: CreateWebAppOptions): ComponentType
       <ConfigProvider config={loaded.config}>
         <I18nProvider defaultLocale={loaded.config.defaultLocale}>
           <QueryClientProvider client={queryClient}>
-            <RouterProvider router={router} />
+            <ExtensionsProvider extensions={extensions}>
+              <RouterProvider router={router} />
+            </ExtensionsProvider>
           </QueryClientProvider>
         </I18nProvider>
       </ConfigProvider>

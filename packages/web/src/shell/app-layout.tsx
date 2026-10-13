@@ -12,6 +12,7 @@ import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { useConfig } from "../config/config-context.tsx";
+import { Slot, useExtensions } from "../extensions/index.ts";
 import { docsUrl } from "./docs-url.ts";
 
 /**
@@ -22,6 +23,7 @@ export function AppLayout(): ReactElement {
   const { t } = useTranslation();
   const { product, docsBaseUrl } = useConfig();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const extensions = useExtensions();
 
   return (
     <AppShell
@@ -36,17 +38,20 @@ export function AppLayout(): ReactElement {
         </Breadcrumb>
       }
       footer={
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              render={<a href={docsUrl(docsBaseUrl)} rel="noreferrer" target="_blank" />}
-              tooltip={t("shell.helpAndDocs")}
-            >
-              <LifeBuoyIcon aria-hidden="true" />
-              <span>{t("shell.helpAndDocs")}</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <>
+          <Slot name="sidebar.footer" />
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                render={<a href={docsUrl(docsBaseUrl)} rel="noreferrer" target="_blank" />}
+                tooltip={t("shell.helpAndDocs")}
+              >
+                <LifeBuoyIcon aria-hidden="true" />
+                <span>{t("shell.helpAndDocs")}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </>
       }
       labels={{
         skipToContent: t("shell.skipToContent"),
@@ -64,10 +69,21 @@ export function AppLayout(): ReactElement {
               <span>{t("shell.home")}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
+          {extensions.flatMap(({ id, navigation = [] }) =>
+            navigation.map(({ to, label, icon }) => (
+              <SidebarMenuItem key={`${id}:${to}`}>
+                <SidebarMenuButton isActive={pathname === to || pathname.startsWith(`${to}/`)} render={<Link to={to} />} tooltip={label}>
+                  {icon}
+                  <span>{label}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            )),
+          )}
         </SidebarMenu>
       }
       productName={product.name}
     >
+      <Slot name="banner.entitlement" />
       <Outlet />
     </AppShell>
   );
