@@ -2,7 +2,7 @@ name: CI
 
 # The jobs of doc 08 §6.2 run in parallel, each inside node:24-bookworm with
 # the same setup, so the file can move to other runners unchanged (doc 08
-# §6.1). No job references a secret, and the workflow never runs on
+# §6.1); `build` is the exception, because it needs Docker (see there). No job references a secret, and the workflow never runs on
 # pull_request_target, so a run for a fork pull request holds nothing but a
 # read-only token (doc 10 T16). Job names are required by branch protection;
 # rename one only together with that rule.
@@ -181,19 +181,50 @@ jobs:
           SLUGBASE_DB_CHECK_CONTRACT: ${{ github.event_name == 'push' && 'pending' || contains(github.event.pull_request.labels.*.name, 'migration:contract') }}
       - run: pnpm test:integration
 
+  # The only job that is not in the node container: it builds the image and starts
+  # it with Docker Compose (scripts/smoke-image.sh), which needs the runner's own
+  # Docker daemon and its published ports. Node comes from setup-node instead, at
+  # the major version of .nvmrc, and the same setup action installs the workspace.
   build:
     name: build
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    container: node:24-bookworm
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
       - uses: ./.github/actions/setup
         with:
           turbo-cache-key: build
       - run: pnpm build
+      # compose-cli.integration.test.ts runs only where the docker CLI with the
+      # compose plugin is present, and the integration job's container has neither;
+      # here they must run, so a skipped or failed case fails the step.
+      - name: Test compose.yml under Docker Compose
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/compose-cli.json"
+          pnpm --filter slugbase exec vitest run --project integration compose-cli \
+            --reporter=default --reporter=json --outputFile.json="$report"
+          jq -e '.numTotalTests > 0 and .numPassedTests == .numTotalTests and .numPendingTests == 0 and .numTodoTests == 0' "$report" > /dev/null
+      - name: Test the smoke script
+        run: bash scripts/smoke-image.test.sh
+      # Built here and not pushed (doc 08 §6.2); the script takes it by name. The
+      # commit is passed in so that /version must report the commit under test.
+      - name: Build the image
+        env:
+          BUILD_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          docker build -f apps/slugbase/Dockerfile --build-arg "BUILD_COMMIT=$BUILD_COMMIT" -t slugbase:ci .
+      - name: Smoke-test the image
+        env:
+          BUILD_COMMIT: ${{ github.sha }}
+          SLUGBASE_IMAGE: slugbase:ci
+        run: bash scripts/smoke-image.sh
 
   audit:
     name: audit
