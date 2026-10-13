@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
 import { setTimeout as sleep } from "node:timers/promises";
 import { MigrationError } from "@slugbase/db";
+import { withTestDatabase } from "@slugbase/testing/db";
 import { PgBoss, getRollbackPlans, getUninstallPlans } from "pg-boss";
 import { describe, expect, it } from "vitest";
 import { runMigrations } from "../../src/migrate/index.ts";
@@ -218,7 +219,7 @@ function holdSnapshot(): { held: Promise<void>; release: () => void; done: Promi
 
 // The pool acts as the owner role, which may not see the activity of a session
 // of the migrator; the migrator may, and its session is put back as it was.
-async function asMigrator<T>(run: (connection: { unsafe: (text: string) => Promise<Record<string, unknown>[]> }) => Promise<T>): Promise<T> {
+async function asMigrator<T>(run: (connection: { unsafe: (text: string, params?: string[]) => Promise<Record<string, unknown>[]> }) => Promise<T>): Promise<T> {
   const connection = await database().owner.reserve();
   try {
     await connection.unsafe("SET ROLE slugbase_migrator");
@@ -229,13 +230,15 @@ async function asMigrator<T>(run: (connection: { unsafe: (text: string) => Promi
   }
 }
 
-// The backend of the pg-boss step of migrate while it runs a concurrent index build.
+// The backend of the pg-boss step of migrate while it runs a concurrent index build in this test's own database: the cluster is shared, and the same step of another database is not ours to cancel.
 async function buildBackend(waitingForLock: boolean): Promise<number | undefined> {
   const found = await asMigrator((connection) =>
-    connection.unsafe(`
-      SELECT pid FROM pg_stat_activity
-       WHERE application_name = 'slugbase-migrate-pgboss' AND state = 'active'
-         AND query ILIKE '%INDEX CONCURRENTLY%' AND ${waitingForLock ? "wait_event_type = 'Lock'" : "true"}`),
+    connection.unsafe(
+      `SELECT pid FROM pg_stat_activity
+        WHERE datname = $1 AND application_name = 'slugbase-migrate-pgboss' AND state = 'active'
+          AND query ILIKE '%INDEX CONCURRENTLY%' AND ${waitingForLock ? "wait_event_type = 'Lock'" : "true"}`,
+      [database().name],
+    ),
   );
   const pid = found[0]?.["pid"];
   return typeof pid === "number" ? pid : undefined;
@@ -251,6 +254,48 @@ async function indexState(name: string): Promise<{ oid: number; valid: boolean }
      WHERE c.relname = '${name}' AND c.relnamespace = '${PGBOSS_SCHEMA}'::regnamespace`);
   return found[0];
 }
+
+describe("the lookup of the index build of an upgrade", () => {
+  it("ignores the same step running in another database", async () => {
+    await withTestDatabase(async (other) => {
+      const decoy = await other.owner.reserve();
+      let sleeping: Promise<unknown> | undefined;
+      let pid = 0;
+      try {
+        await decoy.unsafe("SET application_name = 'slugbase-migrate-pgboss'");
+        const [self] = await decoy.unsafe<{ pid: number }[]>("SELECT pg_backend_pid() AS pid");
+        pid = self?.pid ?? 0;
+        expect(pid).toBeGreaterThan(0);
+        sleeping = decoy.unsafe("SELECT pg_sleep(30) /* INDEX CONCURRENTLY */").then(
+          () => undefined,
+          () => undefined,
+        );
+        // Without the filter on the database the lookup would return this backend, so it has to be visible to the migrator first.
+        const visible = (): Promise<boolean> =>
+          asMigrator(async (connection) => {
+            const found = await connection.unsafe(
+              `SELECT 1 FROM pg_stat_activity
+                WHERE pid = $1 AND datname = $2 AND application_name = 'slugbase-migrate-pgboss'
+                  AND state = 'active' AND query ILIKE '%INDEX CONCURRENTLY%'`,
+              [String(pid), other.name],
+            );
+            return found.length === 1;
+          });
+        await expect.poll(visible, { interval: 20, timeout: 10_000 }).toBe(true);
+        expect(other.name).not.toBe(database().name);
+
+        expect(await buildBackend(false)).toBeUndefined();
+        expect(await buildBackend(true)).toBeUndefined();
+      } finally {
+        if (pid > 0) {
+          await cancelBackend(pid);
+        }
+        await sleeping;
+        decoy.release();
+      }
+    });
+  });
+});
 
 describe("the index builds of an upgrade that stopped", () => {
   it("are finished by the next run, which drops the INVALID index the stopped build left", async () => {
