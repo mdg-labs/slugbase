@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 interface Manifest {
@@ -7,7 +8,7 @@ interface Manifest {
 }
 
 const manifest = JSON.parse(
-  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+  readFileSync(resolve(import.meta.dirname, "../package.json"), "utf8"),
 ) as Manifest;
 
 describe("@slugbase/ui", () => {

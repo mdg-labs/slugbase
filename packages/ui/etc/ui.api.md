@@ -4,6 +4,391 @@
 
 ```ts
 
+import { ClassProp } from 'class-variance-authority/types';
+import { ClassValue } from 'clsx';
+import { Input as InputPrimitive } from '@base-ui/react/input';
+import { Loader2Icon } from 'lucide-react';
+import * as React_2 from 'react';
+import type { default as React_3 } from 'react';
+import { ScrollArea as ScrollAreaPrimitive } from '@base-ui/react/scroll-area';
+import { Separator as SeparatorPrimitive } from '@base-ui/react/separator';
+import { Dialog as SheetPrimitive } from '@base-ui/react/dialog';
+import { Toast as ToastPrimitive } from '@base-ui/react/toast';
+import { Tooltip as TooltipPrimitive } from '@base-ui/react/tooltip';
+import { useRender } from '@base-ui/react/use-render';
+import { VariantProps } from 'class-variance-authority';
+
+// @public (undocumented)
+export function Alert(input: React_2.ComponentProps<"div"> & VariantProps<typeof alertVariants>): React_2.ReactElement;
+
+// @public (undocumented)
+export function AlertAction(input: React_2.ComponentProps<"div">): React_2.ReactElement;
+
+// @public (undocumented)
+export function AlertDescription(input: React_2.ComponentProps<"div">): React_2.ReactElement;
+
+// @public (undocumented)
+export function AlertTitle(input: React_2.ComponentProps<"div">): React_2.ReactElement;
+
+// @public (undocumented)
+export const alertVariants: (props?: ({
+    variant?: "default" | "error" | "info" | "success" | "warning" | null | undefined;
+} & ClassProp) | undefined) => string;
+
+// @public (undocumented)
+export const anchoredToastManager: ReturnType<typeof ToastPrimitive.createToastManager>;
+
+// @public (undocumented)
+export function AnchoredToastProvider(input: AnchoredToastProviderProps): React_3.ReactElement;
+
+// @public (undocumented)
+export interface AnchoredToastProviderProps extends ToastPrimitive.Provider.Props {
+    // (undocumented)
+    portalProps?: React_3.ComponentProps<typeof ToastPrimitive.Portal>;
+}
+
+// @public (undocumented)
+export function Breadcrumb(input: React_2.ComponentProps<"nav">): React_2.ReactElement;
+
+// @public (undocumented)
+export function BreadcrumbEllipsis(input: React_2.ComponentProps<"span">): React_2.ReactElement;
+
+// @public (undocumented)
+export function BreadcrumbItem(input: React_2.ComponentProps<"li">): React_2.ReactElement;
+
+// @public (undocumented)
+export function BreadcrumbLink(input: useRender.ComponentProps<"a">): React_2.ReactElement;
+
+// @public (undocumented)
+export function BreadcrumbList(input: React_2.ComponentProps<"ol">): React_2.ReactElement;
+
+// @public (undocumented)
+export function BreadcrumbPage(input: React_2.ComponentProps<"span">): React_2.ReactElement;
+
+// @public (undocumented)
+export function BreadcrumbSeparator(input: React_2.ComponentProps<"li">): React_2.ReactElement;
+
+// @public (undocumented)
+export type Breakpoint = keyof typeof BREAKPOINTS;
+
+// @public (undocumented)
+export type BreakpointQuery = Breakpoint | `max-${Breakpoint}` | `${Breakpoint}:max-${Breakpoint}`;
+
+// @public (undocumented)
+export const BREAKPOINTS: {
+    readonly "2xl": 1536;
+    readonly "3xl": 1600;
+    readonly "4xl": 2000;
+    readonly lg: 1024;
+    readonly md: 800;
+    readonly sm: 640;
+    readonly xl: 1280;
+};
+
+// @public (undocumented)
+export function Button(input: ButtonProps): React_2.ReactElement;
+
+// @public (undocumented)
+export interface ButtonProps extends useRender.ComponentProps<"button"> {
+    // (undocumented)
+    loading?: boolean;
+    // (undocumented)
+    size?: VariantProps<typeof buttonVariants>["size"];
+    // (undocumented)
+    variant?: VariantProps<typeof buttonVariants>["variant"];
+}
+
+// @public (undocumented)
+export const buttonVariants: (props?: ({
+    size?: "lg" | "sm" | "xl" | "default" | "icon" | "icon-lg" | "icon-sm" | "icon-xl" | "icon-xs" | "xs" | null | undefined;
+    variant?: "link" | "default" | "destructive" | "destructive-outline" | "ghost" | "outline" | "secondary" | null | undefined;
+} & ClassProp) | undefined) => string;
+
+// @public (undocumented)
+export function cn(...inputs: ClassValue[]): string;
+
+// @public (undocumented)
+export function Empty(input: React_3.ComponentProps<"div">): React_3.ReactElement;
+
+// @public (undocumented)
+export function EmptyContent(input: React_3.ComponentProps<"div">): React_3.ReactElement;
+
+// @public (undocumented)
+export function EmptyDescription(input: React_3.ComponentProps<"p">): React_3.ReactElement;
+
+// @public (undocumented)
+export function EmptyHeader(input: React_3.ComponentProps<"div">): React_3.ReactElement;
+
+// @public (undocumented)
+export function EmptyMedia(input: React_3.ComponentProps<"div"> & VariantProps<typeof emptyMediaVariants>): React_3.ReactElement;
+
+// @public (undocumented)
+export const emptyMediaVariants: (props?: ({
+    variant?: "default" | "icon" | null | undefined;
+} & ClassProp) | undefined) => string;
+
+// @public (undocumented)
+export function EmptyTitle(input: React_3.ComponentProps<"div">): React_3.ReactElement;
+
+// @public (undocumented)
+export function Input(input: InputProps): React_2.ReactElement;
+
+export { InputPrimitive }
+
+// @public (undocumented)
+export type InputProps = Omit<InputPrimitive.Props & React_2.RefAttributes<HTMLInputElement>, "size"> & {
+    size?: "sm" | "default" | "lg" | number;
+    unstyled?: boolean;
+    nativeInput?: boolean;
+};
+
+// @public (undocumented)
+export type MediaQueryInput = {
+    min?: Breakpoint | number;
+    max?: Breakpoint | number;
+    pointer?: "coarse" | "fine";
+};
+
+// @public (undocumented)
+export function ScrollArea(input: ScrollAreaPrimitive.Root.Props & {
+    scrollFade?: boolean;
+    scrollbarGutter?: boolean;
+    fill?: boolean;
+    clampContentMinWidth?: boolean;
+    overscrollContain?: boolean;
+}): React_3.ReactElement;
+
+export { ScrollAreaPrimitive }
+
+// @public (undocumented)
+export function ScrollBar(input: ScrollAreaPrimitive.Scrollbar.Props): React_3.ReactElement;
+
+// @public (undocumented)
+export function Separator(input: SeparatorPrimitive.Props): React_3.ReactElement;
+
+export { SeparatorPrimitive }
+
+// @public (undocumented)
+export const Sheet: typeof SheetPrimitive.Root;
+
+// @public (undocumented)
+function SheetBackdrop(input: SheetPrimitive.Backdrop.Props): React_3.ReactElement;
+export { SheetBackdrop }
+export { SheetBackdrop as SheetOverlay }
+
+// @public (undocumented)
+export function SheetClose(props: SheetPrimitive.Close.Props): React_3.ReactElement;
+
+// @public (undocumented)
+export function SheetDescription(input: SheetPrimitive.Description.Props): React_3.ReactElement;
+
+// @public (undocumented)
+export function SheetFooter(input: useRender.ComponentProps<"div"> & {
+    variant?: "default" | "bare";
+}): React_3.ReactElement;
+
+// @public (undocumented)
+export function SheetHeader(input: useRender.ComponentProps<"div">): React_3.ReactElement;
+
+// @public (undocumented)
+export function SheetPanel(input: useRender.ComponentProps<"div"> & {
+    scrollFade?: boolean;
+}): React_3.ReactElement;
+
+// @public (undocumented)
+function SheetPopup(input: SheetPrimitive.Popup.Props & {
+    showCloseButton?: boolean;
+    side?: "right" | "left" | "top" | "bottom";
+    variant?: "default" | "inset";
+    closeProps?: SheetPrimitive.Close.Props;
+    portalProps?: SheetPrimitive.Portal.Props;
+}): React_3.ReactElement;
+export { SheetPopup as SheetContent }
+export { SheetPopup }
+
+// @public (undocumented)
+export const SheetPortal: typeof SheetPrimitive.Portal;
+
+export { SheetPrimitive }
+
+// @public (undocumented)
+export function SheetTitle(input: SheetPrimitive.Title.Props): React_3.ReactElement;
+
+// @public (undocumented)
+export function SheetTrigger(props: SheetPrimitive.Trigger.Props): React_3.ReactElement;
+
+// @public (undocumented)
+export function SheetViewport(input: SheetPrimitive.Viewport.Props & {
+    side?: "right" | "left" | "top" | "bottom";
+    variant?: "default" | "inset";
+}): React_3.ReactElement;
+
+// @public (undocumented)
+export function Sidebar(input: React_2.ComponentProps<"div"> & {
+    side?: "left" | "right";
+    variant?: "sidebar" | "floating" | "inset";
+    collapsible?: "offcanvas" | "icon" | "none";
+}): React_2.ReactElement;
+
+// @public (undocumented)
+export function SidebarContent(input: React_2.ComponentProps<"div">): React_2.ReactElement;
+
+// @public (undocumented)
+export const SidebarContext: React_2.Context<SidebarContextProps | null>;
+
+// @public (undocumented)
+export type SidebarContextProps = {
+    state: "expanded" | "collapsed";
+    open: boolean;
+    setOpen: (open: boolean) => void;
+    openMobile: boolean;
+    setOpenMobile: (open: boolean) => void;
+    isMobile: boolean;
+    toggleSidebar: () => void;
+};
+
+// @public (undocumented)
+export function SidebarFooter(input: React_2.ComponentProps<"div">): React_2.ReactElement;
+
+// @public (undocumented)
+export function SidebarGroup(input: React_2.ComponentProps<"div">): React_2.ReactElement;
+
+// @public (undocumented)
+export function SidebarGroupAction(input: useRender.ComponentProps<"button">): React_2.ReactElement;
+
+// @public (undocumented)
+export function SidebarGroupContent(input: React_2.ComponentProps<"div">): React_2.ReactElement;
+
+// @public (undocumented)
+export function SidebarGroupLabel(input: useRender.ComponentProps<"div">): React_2.ReactElement;
+
+// @public (undocumented)
+export function SidebarHeader(input: React_2.ComponentProps<"div">): React_2.ReactElement;
+
+// @public (undocumented)
+export function SidebarInput(input: React_2.ComponentProps<typeof Input>): React_2.ReactElement;
+
+// @public (undocumented)
+export function SidebarInset(input: React_2.ComponentProps<"main">): React_2.ReactElement;
+
+// @public (undocumented)
+export function SidebarMenu(input: React_2.ComponentProps<"ul">): React_2.ReactElement;
+
+// @public (undocumented)
+export function SidebarMenuAction(input: useRender.ComponentProps<"button"> & {
+    showOnHover?: boolean;
+}): React_2.ReactElement;
+
+// @public (undocumented)
+export function SidebarMenuBadge(input: React_2.ComponentProps<"div">): React_2.ReactElement;
+
+// @public (undocumented)
+export function SidebarMenuButton(input: useRender.ComponentProps<"button"> & {
+    isActive?: boolean;
+    tooltip?: string | React_2.ComponentProps<typeof TooltipPopup>;
+} & VariantProps<typeof sidebarMenuButtonVariants>): React_2.ReactElement;
+
+// @public (undocumented)
+export const sidebarMenuButtonVariants: (props?: ({
+    size?: "lg" | "sm" | "default" | null | undefined;
+    variant?: "default" | "outline" | null | undefined;
+} & ClassProp) | undefined) => string;
+
+// @public (undocumented)
+export function SidebarMenuItem(input: React_2.ComponentProps<"li">): React_2.ReactElement;
+
+// @public (undocumented)
+export function SidebarMenuSkeleton(input: React_2.ComponentProps<"div"> & {
+    showIcon?: boolean;
+}): React_2.ReactElement;
+
+// @public (undocumented)
+export function SidebarMenuSub(input: React_2.ComponentProps<"ul">): React_2.ReactElement;
+
+// @public (undocumented)
+export function SidebarMenuSubButton(input: useRender.ComponentProps<"a"> & {
+    size?: "sm" | "md";
+    isActive?: boolean;
+}): React_2.ReactElement;
+
+// @public (undocumented)
+export function SidebarMenuSubItem(input: React_2.ComponentProps<"li">): React_2.ReactElement;
+
+// @public (undocumented)
+export function SidebarProvider(input: React_2.ComponentProps<"div"> & {
+    defaultOpen?: boolean;
+    open?: boolean;
+    onOpenChange?: (open: boolean) => void;
+}): React_2.ReactElement;
+
+// @public (undocumented)
+export function SidebarRail(input: React_2.ComponentProps<"button">): React_2.ReactElement;
+
+// @public (undocumented)
+export function SidebarSeparator(input: React_2.ComponentProps<typeof Separator>): React_2.ReactElement;
+
+// @public (undocumented)
+export function SidebarTrigger(input: React_2.ComponentProps<typeof Button>): React_2.ReactElement;
+
+// @public (undocumented)
+export function Skeleton(input: React_3.ComponentProps<"div">): React_3.ReactElement;
+
+// @public (undocumented)
+export function Spinner(input: React_3.ComponentProps<typeof Loader2Icon>): React_3.ReactElement;
+
+// @public (undocumented)
+export const toastManager: ReturnType<typeof ToastPrimitive.createToastManager>;
+
+// @public (undocumented)
+export type ToastPosition = "top-left" | "top-center" | "top-right" | "bottom-left" | "bottom-center" | "bottom-right";
+
+export { ToastPrimitive }
+
+// @public (undocumented)
+export function ToastProvider(input: ToastProviderProps): React_3.ReactElement;
+
+// @public (undocumented)
+export interface ToastProviderProps extends ToastPrimitive.Provider.Props {
+    // (undocumented)
+    portalProps?: React_3.ComponentProps<typeof ToastPrimitive.Portal>;
+    // (undocumented)
+    position?: ToastPosition;
+}
+
+// @public (undocumented)
+export const Tooltip: typeof TooltipPrimitive.Root;
+
+// @public (undocumented)
+export const TooltipCreateHandle: typeof TooltipPrimitive.createHandle;
+
+// @public (undocumented)
+function TooltipPopup(input: TooltipPrimitive.Popup.Props & {
+    align?: TooltipPrimitive.Positioner.Props["align"];
+    side?: TooltipPrimitive.Positioner.Props["side"];
+    sideOffset?: TooltipPrimitive.Positioner.Props["sideOffset"];
+    anchor?: TooltipPrimitive.Positioner.Props["anchor"];
+    portalProps?: TooltipPrimitive.Portal.Props;
+}): React_3.ReactElement;
+export { TooltipPopup as TooltipContent }
+export { TooltipPopup }
+
+export { TooltipPrimitive }
+
+// @public (undocumented)
+export const TooltipProvider: typeof TooltipPrimitive.Provider;
+
+// @public (undocumented)
+export function TooltipTrigger(props: TooltipPrimitive.Trigger.Props): React_3.ReactElement;
+
+// @public (undocumented)
+export function useIsMobile(): boolean;
+
+// @public (undocumented)
+export function useMediaQuery(query: BreakpointQuery | MediaQueryInput | (string & {})): boolean;
+
+// @public (undocumented)
+export function useSidebar(): SidebarContextProps;
+
 // (No @packageDocumentation comment for this package)
 
 ```

@@ -106,6 +106,8 @@ const PROCESS_NOT_A_REFERENCE = [
 ].join(", ");
 const PROCESS_MODULE = "/^(node:)?process$/";
 
+const PROCESS_IMPORT_PATHS = ["process", "node:process"].map((name) => ({ name, message: PROCESS_ENV_MESSAGE }));
+
 export const processEnvRules = {
   files: ["packages/*/src/**/*.{ts,tsx,mts,cts,js,mjs,cjs}", "apps/*/src/**/*.{ts,tsx,mts,cts,js,mjs,cjs}"],
   ignores: [
@@ -154,9 +156,80 @@ export const processEnvRules = {
         message: PROCESS_ENV_MESSAGE,
       },
     ],
+    "no-restricted-imports": ["error", { paths: PROCESS_IMPORT_PATHS }],
+  },
+};
+
+// coss ui is the only component library (doc 03 "coss first, coss only", D13).
+// Base UI primitives arrive through the vendored coss components; any other
+// component, headless-primitive or toast library is banned from the UI and web
+// sources. The block repeats the process-import and process-syntax bans of
+// processEnvRules because a later no-restricted-imports or no-restricted-syntax
+// entry replaces an earlier one for the same files.
+const SECOND_LIBRARY_MESSAGE =
+  "coss ui (vendored in @slugbase/ui) is the only component library; add the component with the shadcn CLI from the @coss registry instead (doc 03, D13).";
+const SECOND_LIBRARY_GROUPS = [
+  "@radix-ui/*",
+  "radix-ui",
+  "@headlessui/*",
+  "@ariakit/*",
+  "@ark-ui/*",
+  "@react-aria/*",
+  "@react-stately/*",
+  "@react-spectrum/*",
+  "@adobe/react-spectrum",
+  "react-aria",
+  "react-aria-components",
+  "react-stately",
+  "@mui/*",
+  "@chakra-ui/*",
+  "@mantine/*",
+  "@nextui-org/*",
+  "@heroui/*",
+  "@fluentui/*",
+  "@blueprintjs/*",
+  "@ant-design/*",
+  "antd",
+  "react-bootstrap",
+  "semantic-ui-react",
+  "primereact",
+  "cmdk",
+  "vaul",
+  "sonner",
+  "react-hot-toast",
+  "react-toastify",
+  "react-select",
+];
+
+// Dynamic import("pkg") bypasses no-restricted-imports, so the same packages are
+// matched on ImportExpression, as a string literal or a static template literal.
+// A selector regex cannot hold "/", hence \x2f; "pkg/*" bans the scope, "pkg" the
+// package and its subpaths.
+const escapeForSelector = (name) => name.replace(/[\\^$.*+?()|{}]/g, "\\$&").replaceAll("/", "\\x2f");
+const SECOND_LIBRARY_MODULE = `/^(${SECOND_LIBRARY_GROUPS.map((group) =>
+  group.endsWith("/*") ? escapeForSelector(group.slice(0, -1)) : `${escapeForSelector(group)}(\\x2f|$)`,
+).join("|")})/`;
+
+export const componentLibraryRules = {
+  files: ["packages/ui/src/**/*.{ts,tsx,mts,cts}", "packages/web/src/**/*.{ts,tsx,mts,cts}"],
+  rules: {
     "no-restricted-imports": [
       "error",
-      { paths: ["process", "node:process"].map((name) => ({ name, message: PROCESS_ENV_MESSAGE })) },
+      {
+        paths: PROCESS_IMPORT_PATHS,
+        patterns: [{ group: SECOND_LIBRARY_GROUPS, message: SECOND_LIBRARY_MESSAGE }],
+      },
+    ],
+    "no-restricted-syntax": [
+      ...processEnvRules.rules["no-restricted-syntax"],
+      {
+        selector: `ImportExpression > Literal[value=${SECOND_LIBRARY_MODULE}]`,
+        message: SECOND_LIBRARY_MESSAGE,
+      },
+      {
+        selector: `ImportExpression > TemplateLiteral > TemplateElement[value.cooked=${SECOND_LIBRARY_MODULE}]`,
+        message: SECOND_LIBRARY_MESSAGE,
+      },
     ],
   },
 };
@@ -177,4 +250,13 @@ export const boundaryRules = {
   },
 };
 
-export default [ignores, ...javascriptRules, ...typescriptRules, projectRules, processEnvRules, vocabularyRules, boundaryRules];
+export default [
+  ignores,
+  ...javascriptRules,
+  ...typescriptRules,
+  projectRules,
+  processEnvRules,
+  componentLibraryRules,
+  vocabularyRules,
+  boundaryRules,
+];
