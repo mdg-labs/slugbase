@@ -20,6 +20,8 @@ existing line by adding its PR number.
 - **label-gated check** — a CI step reads a pull request's labels, but the workflow trigger omits the `labeled`/`unlabeled` events, so adding or removing the label never re-runs it — PR 381
 - **floating image** — a rig meant for repeatable measurement pulls a floating tag (`latest`), so a re-run can measure a different build than the recorded baseline — PR 381
 
+- **runtime floor** — code relies on a runtime API newer than the declared engine floor (`import.meta.main` under `engines` `>=24.0.0`), so a permitted runtime silently skips the code it guards — PR 409
+
 ## Design docs
 
 - **cache key** — a cached value depends on a scope the key omits (an account-scoped value in a workspace-keyed cache) — PR 354
@@ -37,3 +39,5 @@ existing line by adding its PR number.
 ## Tests
 
 - **vacuous wait** — a test waits for a later event (a late answer, a timer) but asserts nothing after it, so it passes whatever that event does — PR 397
+- **stale fixture** — a test reads a draft copy of a shipped artifact (a migration) instead of the file that ships, so it checks content that never runs — PR 409
+- **stale workaround** — a test keeps a workaround for a harness gap the same change closes, with a comment that is no longer true and a tool requirement no other test has — PR 409
