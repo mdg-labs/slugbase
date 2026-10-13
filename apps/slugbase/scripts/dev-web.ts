@@ -6,7 +6,7 @@
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
-import { viteArguments } from "./dev-web-arguments.ts";
+import { exitCodeFor, viteArguments } from "./dev-web-arguments.ts";
 
 const require = createRequire(import.meta.url);
 const manifestPath = require.resolve("vite/package.json");
@@ -20,5 +20,5 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 }
 
 child.on("exit", (code, signal) => {
-  process.exitCode = code ?? (signal === null ? 1 : 130);
+  process.exitCode = exitCodeFor(code, signal);
 });

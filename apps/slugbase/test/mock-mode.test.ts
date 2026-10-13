@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import { createServer, type ViteDevServer } from "vite";
-import { viteArguments } from "../scripts/dev-web-arguments.ts";
+import { exitCodeFor, viteArguments } from "../scripts/dev-web-arguments.ts";
 import { afterAll, describe, expect, it } from "vitest";
 import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 
@@ -129,6 +129,14 @@ describe("the dev:web script", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(viteArguments(["--mock", "--port", "5200"])).toEqual(["--port", "5200", "--mode", "mock"]);
     expect(viteArguments(["--port", "5200"])).toEqual(["--port", "5200"]);
     expect(viteArguments([])).toEqual([]);
+  });
+
+  it("exits with Vite's code, or with 128 plus the number of the signal that ended Vite", () => {
+    expect(exitCodeFor(0, null)).toBe(0);
+    expect(exitCodeFor(2, null)).toBe(2);
+    expect(exitCodeFor(null, "SIGINT")).toBe(130);
+    expect(exitCodeFor(null, "SIGTERM")).toBe(143);
+    expect(exitCodeFor(null, null)).toBe(1);
   });
 
   it("starts Vite with the arguments it builds", () => {
