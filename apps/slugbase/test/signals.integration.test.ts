@@ -33,29 +33,6 @@ function databaseUrl(database: TestDatabase, pool: "app" | "owner" = "app"): str
   return url.href;
 }
 
-const SERVER = new URL(process.env["SLUGBASE_TEST_PG_URL"] ?? "postgres://slugbase:slugbase@127.0.0.1:54329/slugbase_dev");
-const SUPERUSER = { username: decodeURIComponent(SERVER.username), password: decodeURIComponent(SERVER.password) };
-
-// The harness clones a database from its template, and a clone has none of the template's privileges
-// on the database itself, so slugbase_owner, which `migrate` creates its bookkeeping schema as, cannot
-// create anything in it. This gives the clone the grant roles.sql gives a provisioned database.
-function allowMigrations(database: TestDatabase): void {
-  const result = spawnSync("psql", ["-X", "-v", "ON_ERROR_STOP=1", "-c", `GRANT CREATE ON DATABASE ${database.name} TO slugbase_owner`], {
-    encoding: "utf8",
-    env: {
-      PATH: process.env["PATH"] ?? "",
-      PGHOST: SERVER.hostname,
-      PGPORT: SERVER.port === "" ? "5432" : SERVER.port,
-      PGDATABASE: database.name,
-      PGUSER: SUPERUSER.username,
-      PGPASSWORD: SUPERUSER.password,
-    },
-  });
-  if (result.error !== undefined || result.status !== 0) {
-    throw new Error(`provisioning the test database with psql failed (psql must be on the PATH): ${result.stderr}`);
-  }
-}
-
 function runMigrate(database: TestDatabase) {
   const result = spawnSync(process.execPath, ["src/main.ts", "migrate"], {
     cwd: APP,
@@ -127,7 +104,6 @@ describe("apps/slugbase main worker, signalled while it starts", () => {
 
   beforeAll(async () => {
     migrated = await createTestDatabase();
-    allowMigrations(migrated);
     const result = runMigrate(migrated);
     expect(result.status, result.output).toBe(0);
     bare = await createTestDatabase();
