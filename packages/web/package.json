@@ -20,6 +20,7 @@
     "typecheck": "tsr generate && tsc --noEmit -p tsconfig.json",
     "test:unit": "vitest run --project unit",
     "build": "tsr generate && tsc -p tsconfig.build.json",
+    "i18n:check": "node ../../scripts/check-i18n.mjs --require-catalogs .",
     "contracts:check": "node ../../tooling/api-report/api-report.ts check --package ."
   },
   "dependencies": {
