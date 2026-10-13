@@ -141,6 +141,8 @@
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-destructive-text: var(--destructive-text);
+  --color-destructive-button: var(--destructive-button);
+  --color-destructive-button-foreground: var(--destructive-button-foreground);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
   --color-success-text: var(--success-text);
@@ -259,6 +261,8 @@
   --warning-foreground: var(--warning-text);
   --destructive-foreground: var(--destructive-text);
   --info-foreground: var(--info-text);
+  --destructive-button: var(--destructive);
+  --destructive-button-foreground: #0b0c14;
 
   --sidebar: #101220;
   --sidebar-foreground: var(--foreground);
@@ -314,6 +318,8 @@
   --warning-foreground: var(--warning-text);
   --destructive-foreground: var(--destructive-text);
   --info-foreground: var(--info-text);
+  --destructive-button: #b4282d;
+  --destructive-button-foreground: #ffffff;
 
   --sidebar: #ffffff;
   --sidebar-foreground: var(--foreground);
@@ -369,6 +375,8 @@
     --warning-foreground: var(--warning-text);
     --destructive-foreground: var(--destructive-text);
     --info-foreground: var(--info-text);
+    --destructive-button: #b4282d;
+    --destructive-button-foreground: #ffffff;
 
     --sidebar: #ffffff;
     --sidebar-foreground: var(--foreground);

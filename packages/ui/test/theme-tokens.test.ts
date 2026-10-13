@@ -37,6 +37,8 @@ const DOC_TABLE: readonly (readonly [string, string, string])[] = [
   ["warning-text", "#e6b24e", "#8a6100"],
   ["destructive-text", "#f0686b", "#b4282d"],
   ["info", "#56b6e6", "#2b8fc4"],
+  ["destructive-button", "#f0686b", "#b4282d"],
+  ["destructive-button-foreground", "#0b0c14", "#ffffff"],
 ];
 
 describe("theme.css tokens", () => {
@@ -167,6 +169,10 @@ describe.each(THEME_NAMES)("WCAG AA contrast in the %s theme", (name) => {
     expect(ratio(foreground, background)).toBeGreaterThanOrEqual(TEXT_MINIMUM);
   });
 
+  it("the destructive button label reads on the destructive button fill", () => {
+    expect(ratio("destructive-button-foreground", "destructive-button")).toBeGreaterThanOrEqual(TEXT_MINIMUM);
+  });
+
   it.each(SURFACES)("primary text reads on %s", (surface) => {
     expect(ratio("primary-text", surface)).toBeGreaterThanOrEqual(TEXT_MINIMUM);
   });
@@ -199,6 +205,17 @@ describe("why the semantic text variants exist", () => {
     expect(contrast(fills.resolve("success"), "#ffffff")).toBeCloseTo(3.45, 2);
     expect(contrast(fills.resolve("warning"), "#ffffff")).toBeCloseTo(3.25, 2);
     expect(contrast(fills.resolve("destructive"), "#ffffff")).toBeCloseTo(4.27, 2);
+  });
+
+  it("measures white on the plain destructive fill below the AA text minimum in both themes", () => {
+    expect(contrast("#ffffff", themes.dark.resolve("destructive"))).toBeCloseTo(3.04, 2);
+    expect(contrast("#ffffff", themes.light.resolve("destructive"))).toBeCloseTo(4.27, 2);
+  });
+
+  it("measures the destructive button pair at 6.4:1 in both themes", () => {
+    for (const theme of [themes.dark, themes.light]) {
+      expect(contrast(theme.resolve("destructive-button-foreground"), theme.resolve("destructive-button"))).toBeCloseTo(6.4, 1);
+    }
   });
 
   it("measures the light text variants at 4.9:1 or more on every light surface", () => {

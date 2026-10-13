@@ -14,6 +14,17 @@ describe("Button", () => {
     await expectNoViolations(container);
   });
 
+  it.each(["dark", "light"])("renders the destructive variant on the destructive button tokens in the %s theme", async (theme) => {
+    document.documentElement.classList.add(theme);
+    const { container } = render(<Button variant="destructive">Delete</Button>);
+
+    const button = screen.getByRole("button", { name: "Delete" });
+    expect(button.className).toContain("bg-destructive-button");
+    expect(button.className).toContain("text-destructive-button-foreground");
+    expect(button.className).not.toContain("text-white");
+    await expectNoViolations(container);
+  });
+
   it("does not fire while disabled", () => {
     const onClick = vi.fn();
     render(

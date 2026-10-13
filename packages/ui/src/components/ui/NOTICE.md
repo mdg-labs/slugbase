@@ -5,12 +5,15 @@ The files in this directory are copied from coss ui (https://coss.com/ui). The s
 https://github.com/cosscom/ui. That directory is licensed under the MIT License, reproduced below; the rest of the
 upstream repository is AGPL-3.0 and is not vendored here.
 
-Two changes are made after a copy:
+These changes are made after a copy:
 
 - the `@/` import aliases the CLI writes become relative `.ts`/`.tsx` paths, so the package compiles with `tsc`
   under NodeNext;
 - a variants helper, constant or type that a public signature names is exported, so API Extractor can report
-  it from the package entry point.
+  it from the package entry point;
+- `button.tsx`: the `destructive` variant takes its fill, border, shadow and label from `destructive-button` and
+  `destructive-button-foreground` (`theme.css`) in place of `destructive` and `text-white`, so the label meets
+  WCAG AA 4.5 : 1 in both themes (doc 03 "Theme tokens").
 
 ## MIT License
 
