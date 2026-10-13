@@ -12,12 +12,13 @@ import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { RATE_LIMIT_BUCKETS, createRateLimitRegistry } from "../../src/config/index.ts";
+import { createAuthentication, type Authenticator } from "../../src/http/authenticate.ts";
 import { RouteTable, installChain, type ChainEnv, type RouteBinding, type StageImplementations } from "../../src/http/chain.ts";
 import { ProblemError } from "../../src/http/problem.ts";
 import { hookDispatcher, recordingLogger, serverConfig, tenantDependencies } from "../support.ts";
 import { memoryRateLimiter } from "./rate-limit-support.ts";
 
-// Stage 6 of the chain (doc 01 section 4, doc 04 section 7, doc 10 T9),
+// Stages 3a and 6 of the chain (doc 01 section 4, doc 04 section 7, doc 10 T9),
 // exercised through the chain with an in-memory limiter that does the
 // arithmetic of the Postgres adapter. The Postgres adapter and a real socket
 // are in the composition's integration test.
@@ -225,6 +226,92 @@ describe("the rate-limit stage", () => {
       { bucket: "ai:workspace", key: "w" },
       { bucket: "login", key: "unknown" },
     ]);
+  });
+
+  describe("before authentication (T9)", () => {
+    function rejectingBearer(): { readonly authenticator: Authenticator; readonly lookups: () => number } {
+      let lookups = 0;
+      return {
+        authenticator: {
+          credential: "bearer",
+          authenticate: () => {
+            lookups += 1;
+            return Promise.resolve(undefined);
+          },
+        },
+        lookups: () => lookups,
+      };
+    }
+
+    it("counts a request with a bad bearer token against the IP bucket and answers 429 after the burst, not 401", async () => {
+      const { authenticator } = rejectingBearer();
+      const { get, rejections } = build([PUBLIC], {
+        env: { RATE_LIMIT_PUBLIC_IP: "3/min" },
+        stages: { authentication: createAuthentication({ authenticators: [authenticator] }) },
+      });
+      const bad = (token: string) => get("/api/v1/open", { authorization: `Bearer ${token}` });
+      expect((await bad("slb_one")).status).toBe(401);
+      expect((await bad("slb_two")).status).toBe(401);
+      expect((await bad("slb_three")).status).toBe(401);
+      const denied = await bad("slb_four");
+      expect(denied.status).toBe(429);
+      expect(denied.headers.get("retry-after")).toBe("20");
+      expect(denied.headers.get("ratelimit-policy")).toBe('"public";q=3;w=60');
+      expect(denied.headers.get("ratelimit")).toBe('"public";r=0;t=60');
+      expect(await denied.json()).toMatchObject({ code: "rate_limited", status: 429 });
+      expect(rejections).toEqual(["public"]);
+    });
+
+    it("stops 1000 requests from one IP with random bearer tokens reaching the token lookup after the burst", async () => {
+      const { authenticator, lookups } = rejectingBearer();
+      const { get } = build([PUBLIC], {
+        env: { RATE_LIMIT_PUBLIC_IP: "20/min" },
+        stages: { authentication: createAuthentication({ authenticators: [authenticator] }) },
+      });
+      const statuses = new Map<number, number>();
+      for (let request = 0; request < 1000; request += 1) {
+        const response = await get("/api/v1/open", { authorization: `Bearer slb_${crypto.randomUUID()}` });
+        statuses.set(response.status, (statuses.get(response.status) ?? 0) + 1);
+      }
+      expect(Object.fromEntries(statuses)).toEqual({ 401: 20, 429: 980 });
+      expect(lookups()).toBe(20);
+    });
+
+    it("takes the IP bucket before authentication and the account and workspace buckets after it", async () => {
+      const trace: string[] = [];
+      const { get, memory } = build([READ], {
+        stages: {
+          authentication: async (context, next) => {
+            trace.push(`authentication after ${memory.takes.map((take) => take.bucket).join(",") || "nothing"}`);
+            context.set("principal", { kind: "session", accountId: "a", activeWorkspaceId: undefined, instanceAdmin: false });
+            return next();
+          },
+        },
+      });
+      await get("/api/v1/items");
+      expect(trace).toEqual(["authentication after read"]);
+      expect(memory.takes.map((take) => take.bucket)).toEqual(["read", "read:account"]);
+    });
+
+    it("does not limit a bucket declared none or a machine route before authentication, and answers 503 when the limiter fails there", async () => {
+      const none = route(limited("/api/v1/probe", "probe", "none"));
+      const machine = route(limited("/api/v1/hook", "hook", "read", { audience: "machine", auth: "machine" }));
+      const unlimited = build([none, machine], { env: { RATE_LIMIT_READ_IP: "1/min" } });
+      for (let request = 0; request < 3; request += 1) {
+        expect((await unlimited.get("/api/v1/probe")).status).toBe(200);
+        expect((await unlimited.get("/api/v1/hook")).status).toBe(200);
+      }
+      expect(unlimited.memory.takes).toEqual([]);
+
+      const { authenticator, lookups } = rejectingBearer();
+      const down = build([PUBLIC], {
+        limiter: () => ({ available: true, consume: () => Promise.reject(new Error("down")) }),
+        stages: { authentication: createAuthentication({ authenticators: [authenticator] }) },
+      });
+      const response = await down.get("/api/v1/open", { authorization: "Bearer slb_x" });
+      expect(response.status).toBe(503);
+      expect(lookups()).toBe(0);
+    });
   });
 
   describe("the client IP (T9)", () => {

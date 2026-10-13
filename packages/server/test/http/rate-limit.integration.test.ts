@@ -1,9 +1,9 @@
 import { connect } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
-import { createServer, type RunningServer } from "../../src/create-server.ts";
+import { createServer, type RunningServer, type ServerModule } from "../../src/create-server.ts";
 import { adapters, fakeDatabase, recordingLogger, serverConfig } from "../support.ts";
 
-// Stage 6 over a real socket (doc 10 T9): GET /api/config, bucket `public`, is
+// Stages 3a and 6 over a real socket (doc 10 T9): GET /api/config, bucket `public`, is
 // refused after the configured burst, and the client address the bucket is
 // keyed by comes from the connection or the trusted X-Forwarded-For entry,
 // never from the entries a client can write. The client is a raw socket: the
@@ -42,12 +42,12 @@ afterEach(async () => {
   await Promise.all(running.splice(0).map((server) => server.shutdown()));
 });
 
-async function listen(hops: number, burst: number): Promise<number> {
+async function listen(hops: number, burst: number, modules: readonly ServerModule[] = []): Promise<number> {
   const config = serverConfig({ TRUSTED_PROXY_HOPS: String(hops), RATE_LIMIT_PUBLIC_IP: `${String(burst)}/min` });
   const server = createServer({
     config,
     adapters: adapters(config),
-    modules: [],
+    modules,
     migrations: [],
     logger: recordingLogger(),
     database: fakeDatabase(),
@@ -91,5 +91,34 @@ describe("the rate-limit stage over a socket", () => {
       statuses.push((await get(port, { "X-Forwarded-For": `192.0.2.${String(spoof)}`, "X-Real-IP": `192.0.2.${String(spoof)}` })).status);
     }
     expect(statuses).toEqual([200, 200, 200, 429, 429, 429]);
+  });
+
+  it("answers GET /api/config with a bad bearer token 401 within the burst and 429 after it, without another token lookup", async () => {
+    let lookups = 0;
+    const rejecting: ServerModule = {
+      name: "rejecting-bearer",
+      register: () => ({
+        authenticators: [
+          {
+            credential: "bearer",
+            authenticate: () => {
+              lookups += 1;
+              return Promise.resolve(undefined);
+            },
+          },
+        ],
+      }),
+    };
+    const port = await listen(0, 3, [rejecting]);
+    const answers: Answer[] = [];
+    for (let request = 0; request < 6; request += 1) {
+      answers.push(await get(port, { Authorization: `Bearer slb_${crypto.randomUUID()}` }));
+    }
+    expect(answers.map((answer) => answer.status)).toEqual([401, 401, 401, 429, 429, 429]);
+    expect(lookups).toBe(3);
+    const denied = answers[3];
+    expect(denied?.headers.get("retry-after")).toMatch(/^[1-9]\d*$/);
+    expect(denied?.headers.get("ratelimit")).toMatch(/^"public";r=0;t=\d+$/);
+    expect(JSON.parse(denied?.body ?? "{}")).toMatchObject({ code: "rate_limited", status: 429 });
   });
 });

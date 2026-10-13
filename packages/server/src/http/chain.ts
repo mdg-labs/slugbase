@@ -31,6 +31,7 @@ export const REQUEST_STAGES = [
   "request-context",
   "security-headers",
   "body-limits",
+  "ip-rate-limiting",
   "authentication",
   "cross-site-protection",
   "rate-limiting",
@@ -83,7 +84,7 @@ export interface ChainEnv {
     principalType?: "anonymous" | "session" | "api-token";
     /** Set by the authentication stage when an authenticator accepted the request's credential; absent for an anonymous request. */
     principal?: Principal;
-    /** Set by the rate-limiting stage for a request it limited: what it took, for the `RateLimit` headers. */
+    /** Set by the rate-limiting stages for a request they limited: what they took, for the `RateLimit` headers. */
     rateLimit?: RateLimitState;
     /** Set by the tenant-resolution stage: the active workspace's internal UUID. */
     workspaceId?: string;
@@ -286,6 +287,7 @@ export function installChain(
     "request-context": requestContext.stage,
     "security-headers": securityHeaders.stage,
     "body-limits": bodyLimits,
+    "ip-rate-limiting": rateLimiting.ipStage,
     authentication: createAuthentication({ authenticators }),
     "cross-site-protection": createCrossSiteProtection({ appOrigin, challenge, logger }),
     "rate-limiting": rateLimiting.stage,
