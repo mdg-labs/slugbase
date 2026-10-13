@@ -7,5 +7,6 @@
     "rewriteRelativeImportExtensions": true,
     "noUncheckedSideEffectImports": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/web.tsx", "src/vite-env.d.ts"]
 }
