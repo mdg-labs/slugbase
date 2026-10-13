@@ -10,7 +10,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
-    "build": "tsc -p tsconfig.build.json && vite build",
+    "build": "node scripts/build.ts",
+    "dev:server": "node --env-file-if-exists=../../.env --watch src/main.ts server",
+    "dev:worker": "node --env-file-if-exists=../../.env src/main.ts migrate && node --env-file-if-exists=../../.env --watch src/main.ts worker",
     "dev:web": "node scripts/dev-web.ts"
   },
   "dependencies": {

@@ -60,6 +60,27 @@
       "dependsOn": ["^build"],
       "outputs": ["dist/**"]
     },
+    "slugbase#build": {
+      "dependsOn": ["^build"],
+      "passThroughEnv": ["BUILD_COMMIT"],
+      "outputs": ["dist/**"],
+      "cache": false
+    },
+    "dev:server": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "persistent": true
+    },
+    "dev:worker": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "persistent": true
+    },
+    "dev:web": {
+      "dependsOn": ["^build"],
+      "cache": false,
+      "persistent": true
+    },
     "contracts:check": {
       "dependsOn": ["^build", "build"],
       "outputs": [],

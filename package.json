@@ -28,6 +28,7 @@
     "api:extract": "turbo run build && node tooling/api-report/api-report.ts extract",
     "dev:services": "docker compose -f compose.dev.yml up -d --wait",
     "dev:services:down": "docker compose -f compose.dev.yml down",
+    "dev": "turbo run dev:server dev:worker dev:web",
     "dev:web": "pnpm --filter slugbase dev:web",
     "dev:env": "node scripts/dev-env.mjs",
     "ui:ladle": "pnpm --filter @slugbase/ui ladle"
