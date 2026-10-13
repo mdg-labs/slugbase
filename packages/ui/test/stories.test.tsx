@@ -2,7 +2,8 @@ import { act, render } from "@testing-library/react";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import * as entry from "../src/index.ts";
+import * as components from "../src/index.ts";
+import * as patterns from "../src/patterns/index.ts";
 import {
   exportsWithoutStory,
   listStoryFiles,
@@ -11,6 +12,9 @@ import {
   type StoryFile,
 } from "./story-coverage.ts";
 import { expectNoViolations, stubBrowserApis, stubCookieStore, stubMatchMedia } from "./support.tsx";
+
+// What `@slugbase/ui` and `@slugbase/ui/patterns` export; each needs a story about it.
+const entry = { ...components, ...patterns };
 
 const STORIES_DIR = resolve(import.meta.dirname, "../stories");
 
@@ -95,6 +99,10 @@ describe("story coverage", () => {
     };
   });
 
+  it("counts the exports of the patterns subpath with those of the package entry", () => {
+    expect(Object.keys(entry)).toEqual(expect.arrayContaining(["Button", "AppShell", "EmptyState", "Loading", "ThemeToggle"]));
+  });
+
   it("has a story about every exported component and pattern", () => {
     expect(exportsWithoutStory({ ...entry }, stories)).toEqual([]);
   });
@@ -112,12 +120,12 @@ describe("story coverage", () => {
 
   it("covers a pattern exported later only through a story that declares it", () => {
     const Pattern = (): null => null;
-    const exported = { ...entry, AppShell: Pattern, AppShellAlias: Pattern, appShellHelper: Pattern };
-    const shellStory = { file: "patterns/app-shell.stories.tsx", subject: ["AppShellAlias"], source: "export const Shell = () => <AppShellAlias />;" };
+    const exported = { ...entry, FuturePattern: Pattern, FuturePatternAlias: Pattern, futurePatternHelper: Pattern };
+    const patternStory = { file: "patterns/future-pattern.stories.tsx", subject: ["FuturePatternAlias"], source: "export const Shell = () => <FuturePatternAlias />;" };
 
-    expect(exportsWithoutStory(exported, stories)).toEqual(["AppShell/AppShellAlias"]);
-    expect(exportsWithoutStory(exported, [...stories, shellStory])).toEqual([]);
-    expect(exportsWithoutStory(exported, [...stories, { ...shellStory, subject: [] }])).toEqual(["AppShell/AppShellAlias"]);
+    expect(exportsWithoutStory(exported, stories)).toEqual(["FuturePattern/FuturePatternAlias"]);
+    expect(exportsWithoutStory(exported, [...stories, patternStory])).toEqual([]);
+    expect(exportsWithoutStory(exported, [...stories, { ...patternStory, subject: [] }])).toEqual(["FuturePattern/FuturePatternAlias"]);
   });
 
   it("does not count an import as use", () => {

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   Sidebar,
   SidebarContent,
@@ -71,5 +71,49 @@ describe("Sidebar", () => {
     expect(await screen.findByRole("dialog", { name: "Sidebar" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Bookmarks" })).toBeTruthy();
     await expectNoViolations(baseElement);
+  });
+
+  describe("persisting the open state", () => {
+    const unhandled: unknown[] = [];
+    const collect = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+
+    beforeEach(() => {
+      unhandled.length = 0;
+      process.on("unhandledRejection", collect);
+      stubMatchMedia(false);
+    });
+
+    afterEach(() => {
+      process.off("unhandledRejection", collect);
+    });
+
+    async function toggleAndSettle(): Promise<void> {
+      fireEvent.click(screen.getByRole("button", { name: "Toggle sidebar" }));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+
+    it("still toggles when the Cookie Store API is missing", async () => {
+      Reflect.deleteProperty(globalThis, "cookieStore");
+      const { container } = render(<Shell />);
+
+      await toggleAndSettle();
+
+      expect(container.querySelector("[data-slot='sidebar']")?.getAttribute("data-state")).toBe("collapsed");
+      expect(unhandled).toEqual([]);
+    });
+
+    it("still toggles when the Cookie Store API rejects", async () => {
+      const cookies = stubCookieStore();
+      cookies.set.mockRejectedValue(new Error("blocked"));
+      const { container } = render(<Shell />);
+
+      await toggleAndSettle();
+
+      expect(cookies.set).toHaveBeenCalledTimes(1);
+      expect(container.querySelector("[data-slot='sidebar']")?.getAttribute("data-state")).toBe("collapsed");
+      expect(unhandled).toEqual([]);
+    });
   });
 });

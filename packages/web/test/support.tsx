@@ -7,16 +7,29 @@ afterEach(() => {
   vi.unstubAllGlobals();
   document.documentElement.className = "";
   window.localStorage.clear();
+  Reflect.deleteProperty(Element.prototype, "getAnimations");
 });
 
-/** jsdom has no matchMedia, which the theme provider reads. */
-export function stubMatchMedia(): void {
+/** jsdom has no matchMedia, which the theme provider reads. `narrow` makes the `max-width` queries of the drawer breakpoint match. */
+export function stubMatchMedia(narrow = false): void {
   vi.stubGlobal("matchMedia", (query: string) => ({
-    matches: false,
+    matches: narrow && query.includes("max-width"),
     media: query,
     addEventListener: () => undefined,
     removeEventListener: () => undefined,
   }));
+}
+
+class ResizeObserverStub {
+  observe(): void {}
+  unobserve(): void {}
+  disconnect(): void {}
+}
+
+/** jsdom lacks ResizeObserver and Element.getAnimations, which Base UI reads. */
+export function stubBrowserApis(): void {
+  vi.stubGlobal("ResizeObserver", ResizeObserverStub);
+  Object.defineProperty(Element.prototype, "getAnimations", { configurable: true, value: () => [] });
 }
 
 export const PRODUCT_NAME = "Bookmarks Test Instance";

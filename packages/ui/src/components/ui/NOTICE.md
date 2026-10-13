@@ -14,6 +14,11 @@ These changes are made after a copy:
 - `button.tsx`: the `destructive` variant takes its fill, border, shadow and label from `destructive-button` and
   `destructive-button-foreground` (`theme.css`) in place of `destructive` and `text-white`, so the label meets
   WCAG AA 4.5 : 1 in both themes (doc 03 "Theme tokens").
+- `sidebar.tsx`: the write of the open state through the Cookie Store API is skipped when `cookieStore` is
+  missing and its rejection is caught, so toggling the sidebar never raises an unhandled rejection in a browser
+  without the API; `Sidebar` takes `mobileLabels` (`title`, `description`, `close`) for the drawer texts,
+  `SidebarTrigger` and `SidebarRail` take `label`, each defaulting to the English text upstream ships, so the
+  app shell can render them from its catalogs.
 
 ## MIT License
 

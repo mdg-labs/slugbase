@@ -13,7 +13,7 @@ const ENTRY_POINTS: Record<string, string[]> = {
   server: ["."],
   adapters: ["."],
   email: ["."],
-  ui: [".", "./styles/theme.css"],
+  ui: [".", "./patterns", "./styles/theme.css"],
   web: ["."],
   testing: [".", "./db", "./msw", "./msw/node", "./tenancy"],
 };

@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createWebApp, useConfig } from "../src/index.ts";
 import { CONFIG_BODY, PRODUCT_NAME, json, problem, renderApp, stubMatchMedia } from "./support.tsx";
 
+const WELCOME = `Welcome to ${PRODUCT_NAME}`;
+const WELCOME_DE = `Willkommen bei ${PRODUCT_NAME}`;
 const TAGLINE_EN = "Bookmarks with short, private slugs.";
 const TAGLINE_DE = "Lesezeichen mit kurzen, privaten Slugs.";
 
@@ -34,7 +36,7 @@ describe("createWebApp", () => {
 
     await renderApp(<App />);
 
-    expect(await screen.findByRole("heading", { name: PRODUCT_NAME })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: WELCOME })).toBeTruthy();
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -45,10 +47,10 @@ describe("createWebApp", () => {
 
     await renderApp(<App />);
 
-    expect(screen.queryByRole("heading", { name: PRODUCT_NAME })).toBeNull();
+    expect(screen.queryByRole("heading", { name: WELCOME })).toBeNull();
     expect(screen.getByRole("status")).toBeTruthy();
     answer(json(CONFIG_BODY));
-    expect(await screen.findByRole("heading", { name: PRODUCT_NAME })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: WELCOME })).toBeTruthy();
   });
 
   it("shows the failure view with the request id and none of the problem detail when the server answers a problem", async () => {
@@ -60,7 +62,7 @@ describe("createWebApp", () => {
     expect(await screen.findByText("The app could not be loaded")).toBeTruthy();
     expect(screen.getByText("req-4711")).toBeTruthy();
     expect(screen.queryByText(/db\.internal/)).toBeNull();
-    expect(screen.queryByRole("heading", { name: PRODUCT_NAME })).toBeNull();
+    expect(screen.queryByRole("heading", { name: WELCOME })).toBeNull();
   });
 
   it.each([
@@ -123,7 +125,7 @@ describe("createWebApp", () => {
 
     await renderApp(<App />);
 
-    expect(await screen.findByRole("heading", { name: PRODUCT_NAME })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: WELCOME })).toBeTruthy();
     expect(document.documentElement.lang).toBe("en");
   });
 
@@ -134,7 +136,7 @@ describe("createWebApp", () => {
 
     await renderApp(<App />);
 
-    expect(await screen.findByRole("heading", { name: PRODUCT_NAME })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: WELCOME_DE })).toBeTruthy();
     expect(screen.getByText(TAGLINE_DE)).toBeTruthy();
     expect(screen.queryByText(TAGLINE_EN)).toBeNull();
     expect(document.documentElement.lang).toBe("de");

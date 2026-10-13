@@ -10,6 +10,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./patterns": {
+      "types": "./dist/patterns/index.d.ts",
+      "import": "./dist/patterns/index.js"
+    },
     "./styles/theme.css": {
       "types": "./dist/styles/theme.d.ts",
       "default": "./src/styles/theme.css"

@@ -14,7 +14,7 @@ const manifest = JSON.parse(
 describe("@slugbase/ui", () => {
   it("exposes only its declared entry points", () => {
     expect(manifest.name).toBe("@slugbase/ui");
-    expect(Object.keys(manifest.exports)).toEqual([".", "./styles/theme.css"]);
+    expect(Object.keys(manifest.exports)).toEqual([".", "./patterns", "./styles/theme.css"]);
   });
 
   it("loads src/index.ts", async () => {

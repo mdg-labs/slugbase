@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
-import { Spinner, ThemeProvider } from "@slugbase/ui";
+import { ThemeProvider } from "@slugbase/ui";
 import { Suspense, use, type ComponentType, type ReactElement } from "react";
 import { createApiClient } from "./api/client.ts";
 import { fetchConfig, type ConfigResult } from "./config/bootstrap.ts";
@@ -10,6 +10,7 @@ import { assertValidExtensions, type WebExtension } from "./extensions.ts";
 import { I18nProvider } from "./i18n/i18n-provider.tsx";
 import { createQueryClient } from "./query-client.ts";
 import { createAppRouter } from "./router.ts";
+import { ShellLoading } from "./shell/shell-loading.tsx";
 
 export interface CreateWebAppOptions {
   /** What the composition adds; CE passes none. */
@@ -54,7 +55,14 @@ export function createWebApp({ extensions }: CreateWebAppOptions): ComponentType
   return function WebApp(): ReactElement {
     return (
       <ThemeProvider>
-        <Suspense fallback={<Spinner className="m-auto size-6" />}>
+        <Suspense
+          fallback={
+            // No configuration yet, so the browser's languages, then English, as for the failure view.
+            <I18nProvider>
+              <ShellLoading />
+            </I18nProvider>
+          }
+        >
           <Product result={configResult} />
         </Suspense>
       </ThemeProvider>

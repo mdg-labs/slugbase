@@ -112,7 +112,7 @@ describe("ICU messages", () => {
 describe("I18nProvider", () => {
   function Heading() {
     const { t } = useTranslation();
-    return <h1>{t("landing.tagline")}</h1>;
+    return <h1>{t("home.empty.description")}</h1>;
   }
 
   it("sets lang on <html> and translates for the account preference", () => {

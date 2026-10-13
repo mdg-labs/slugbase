@@ -233,6 +233,7 @@ export function Sidebar(input: React_2.ComponentProps<"div"> & {
     side?: "left" | "right";
     variant?: "sidebar" | "floating" | "inset";
     collapsible?: "offcanvas" | "icon" | "none";
+    mobileLabels?: SidebarMobileLabels;
 }): React_2.ReactElement;
 
 // @public (undocumented)
@@ -320,6 +321,13 @@ export function SidebarMenuSubButton(input: useRender.ComponentProps<"a"> & {
 export function SidebarMenuSubItem(input: React_2.ComponentProps<"li">): React_2.ReactElement;
 
 // @public (undocumented)
+export type SidebarMobileLabels = {
+    title: string;
+    description: string;
+    close: string;
+};
+
+// @public (undocumented)
 export function SidebarProvider(input: React_2.ComponentProps<"div"> & {
     defaultOpen?: boolean;
     open?: boolean;
@@ -327,13 +335,17 @@ export function SidebarProvider(input: React_2.ComponentProps<"div"> & {
 }): React_2.ReactElement;
 
 // @public (undocumented)
-export function SidebarRail(input: React_2.ComponentProps<"button">): React_2.ReactElement;
+export function SidebarRail(input: React_2.ComponentProps<"button"> & {
+    label?: string;
+}): React_2.ReactElement;
 
 // @public (undocumented)
 export function SidebarSeparator(input: React_2.ComponentProps<typeof Separator>): React_2.ReactElement;
 
 // @public (undocumented)
-export function SidebarTrigger(input: React_2.ComponentProps<typeof Button>): React_2.ReactElement;
+export function SidebarTrigger(input: React_2.ComponentProps<typeof Button> & {
+    label?: string;
+}): React_2.ReactElement;
 
 // @public (undocumented)
 export function Skeleton(input: React_3.ComponentProps<"div">): React_3.ReactElement;

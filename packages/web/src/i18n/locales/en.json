@@ -1,7 +1,23 @@
 {
-  "landing": {
-    "heading": "{name}",
-    "tagline": "Bookmarks with short, private slugs."
+  "shell": {
+    "skipToContent": "Skip to content",
+    "toggleSidebar": "Toggle sidebar",
+    "navigation": "Main navigation",
+    "drawerTitle": "Navigation",
+    "drawerDescription": "Links to the pages of the app.",
+    "drawerClose": "Close navigation",
+    "breadcrumb": "Breadcrumb",
+    "home": "Home",
+    "helpAndDocs": "Help & docs",
+    "switchToDark": "Switch to dark theme",
+    "switchToLight": "Switch to light theme",
+    "loading": "Loading"
+  },
+  "home": {
+    "empty": {
+      "title": "Welcome to {name}",
+      "description": "Bookmarks with short, private slugs."
+    }
   },
   "configFailure": {
     "title": "The app could not be loaded",

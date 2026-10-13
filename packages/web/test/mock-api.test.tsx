@@ -50,7 +50,7 @@ describe("the web app against the generated handlers", () => {
 
     await renderApp(<App />);
 
-    expect(await screen.findByRole("heading", { name: "SlugBase Mock" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Welcome to SlugBase Mock" })).toBeTruthy();
   });
 
   it("turns a declared problem response into an ApiProblemError", async () => {

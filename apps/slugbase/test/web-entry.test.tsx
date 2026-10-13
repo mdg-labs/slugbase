@@ -37,7 +37,7 @@ it("mounts the app on #root and shows the product name that /api/config answers 
     await import("../src/web.tsx");
   });
 
-  const heading = await screen.findByRole("heading", { name: "Bookmarks Entry Test" });
+  const heading = await screen.findByRole("heading", { name: "Welcome to Bookmarks Entry Test" });
   expect(heading.closest("#root")).not.toBeNull();
   expect(requested).toEqual(["/api/config"]);
 });
