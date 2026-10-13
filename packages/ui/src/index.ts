@@ -20,3 +20,12 @@ export * from "./components/ui/skeleton.tsx";
 export * from "./components/ui/spinner.tsx";
 export * from "./components/ui/toast.tsx";
 export * from "./components/ui/tooltip.tsx";
+export {
+  THEME_STORAGE_KEY,
+  ThemeProvider,
+  useTheme,
+  type ResolvedTheme,
+  type Theme,
+  type ThemeContextValue,
+  type ThemeProviderProps,
+} from "./theme/theme-provider.tsx";

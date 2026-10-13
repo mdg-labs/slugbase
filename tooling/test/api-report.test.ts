@@ -218,7 +218,7 @@ describe("the API Extractor setup of the workspace", () => {
     const config = JSON.parse(readFileSync(join(directory, "api-extractor.json"), "utf8")) as { extends: string };
     expect(config.extends).toBe("../../api-extractor.base.json");
     const entries = Object.keys(manifest(join(directory, "package.json")).exports);
-    const expected = entries.map((subpath) => (subpath === "." ? `${name}.api.md` : `${name}-${subpath.slice(2)}.api.md`));
+    const expected = entries.map((subpath) => (subpath === "." ? `${name}.api.md` : `${name}-${subpath.slice(2).replaceAll("/", "-")}.api.md`));
     expect(readdirSync(join(directory, "etc")).sort()).toEqual(expected.sort());
   });
 

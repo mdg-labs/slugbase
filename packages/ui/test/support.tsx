@@ -4,7 +4,10 @@ import { axe } from "vitest-axe";
 
 afterEach(() => {
   cleanup();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  document.documentElement.className = "";
+  window.localStorage.clear();
   Reflect.deleteProperty(Element.prototype, "getAnimations");
 });
 

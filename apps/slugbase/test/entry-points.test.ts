@@ -13,7 +13,7 @@ const ENTRY_POINTS: Record<string, string[]> = {
   server: ["."],
   adapters: ["."],
   email: ["."],
-  ui: ["."],
+  ui: [".", "./styles/theme.css"],
   web: ["."],
   testing: [".", "./db", "./msw", "./tenancy"],
 };
@@ -41,7 +41,8 @@ describe.each(Object.entries(ENTRY_POINTS))("@slugbase/%s", (name, entries) => {
 
   it.each(entries)("resolves the %s entry point to a built file", (entry) => {
     const resolved = import.meta.resolve(specifier(name, entry));
-    expect(resolved).toMatch(/\/dist\/[a-z]+\.js$/);
+    // A stylesheet entry ships its source file; every script entry is a built file.
+    expect(resolved).toMatch(entry.endsWith(".css") ? /\/src\/styles\/[a-z]+\.css$/ : /\/dist\/[a-z]+\.js$/);
     expect(existsSync(fileURLToPath(resolved))).toBe(true);
   });
 

@@ -10,6 +10,8 @@ import { Input as InputPrimitive } from '@base-ui/react/input';
 import { Loader2Icon } from 'lucide-react';
 import * as React_2 from 'react';
 import type { default as React_3 } from 'react';
+import { ReactElement } from 'react';
+import { ReactNode } from 'react';
 import { ScrollArea as ScrollAreaPrimitive } from '@base-ui/react/scroll-area';
 import { Separator as SeparatorPrimitive } from '@base-ui/react/separator';
 import { Dialog as SheetPrimitive } from '@base-ui/react/dialog';
@@ -148,6 +150,9 @@ export type MediaQueryInput = {
     max?: Breakpoint | number;
     pointer?: "coarse" | "fine";
 };
+
+// @public (undocumented)
+export type ResolvedTheme = "light" | "dark";
 
 // @public (undocumented)
 export function ScrollArea(input: ScrollAreaPrimitive.Root.Props & {
@@ -337,6 +342,31 @@ export function Skeleton(input: React_3.ComponentProps<"div">): React_3.ReactEle
 export function Spinner(input: React_3.ComponentProps<typeof Loader2Icon>): React_3.ReactElement;
 
 // @public (undocumented)
+export type Theme = "light" | "dark" | "system";
+
+// @public (undocumented)
+export const THEME_STORAGE_KEY = "slugbase-theme";
+
+// @public (undocumented)
+export interface ThemeContextValue {
+    resolvedTheme: ResolvedTheme;
+    // (undocumented)
+    setTheme: (theme: Theme) => void;
+    theme: Theme;
+}
+
+// @public
+export function ThemeProvider(input: ThemeProviderProps): ReactElement;
+
+// @public (undocumented)
+export interface ThemeProviderProps {
+    // (undocumented)
+    children: ReactNode;
+    defaultTheme?: Theme;
+    storageKey?: string;
+}
+
+// @public (undocumented)
 export const toastManager: ReturnType<typeof ToastPrimitive.createToastManager>;
 
 // @public (undocumented)
@@ -388,6 +418,9 @@ export function useMediaQuery(query: BreakpointQuery | MediaQueryInput | (string
 
 // @public (undocumented)
 export function useSidebar(): SidebarContextProps;
+
+// @public (undocumented)
+export function useTheme(): ThemeContextValue;
 
 // (No @packageDocumentation comment for this package)
 
