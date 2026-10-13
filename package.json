@@ -29,7 +29,8 @@
     "dev:services": "docker compose -f compose.dev.yml up -d --wait",
     "dev:services:down": "docker compose -f compose.dev.yml down",
     "dev:web": "pnpm --filter slugbase dev:web",
-    "dev:env": "node scripts/dev-env.mjs"
+    "dev:env": "node scripts/dev-env.mjs",
+    "ui:ladle": "pnpm --filter @slugbase/ui ladle"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -46,6 +47,11 @@
     "vitest": "^5.0.3"
   },
   "pnpm": {
+    "auditConfig": {
+      "ignoreGhsas": [
+        "GHSA-vfj7-8cjw-p6xm"
+      ]
+    },
     "overrides": {
       "@esbuild-kit/core-utils>esbuild": "^0.25.0",
       "@ai-sdk/provider-utils": "^4.0.33"

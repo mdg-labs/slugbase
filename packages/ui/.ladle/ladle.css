@@ -1,0 +1,4 @@
+@import "../src/styles/theme.css";
+
+/* The stories live outside src/, which theme.css scans; their layout classes need scanning too. */
+@source "../stories";
