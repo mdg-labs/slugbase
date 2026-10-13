@@ -1,0 +1,156 @@
+# The self-hosting stack of SlugBase Community Edition (doc 01 section 2.1): the
+# server, the worker and the PostgreSQL 18 database they share. There is no TLS
+# and no reverse proxy here: bring your own and point it at the server's port
+# (APP_ORIGIN is the https origin your users see).
+#
+#   cp .env.example .env     then set the keys listed under "Self-hosting with
+#                            compose.yml" in .env.example
+#   docker compose up -d
+#
+# The server's entrypoint runs `migrate` as slugbase_migrator before it starts, so
+# there is no separate migration step. Only the server receives that role's URL;
+# the worker and the database's published surface (none) never do.
+#
+# The image is the published one; SLUGBASE_IMAGE names another (a pinned release,
+# or a locally built tag). `docker compose up --build` builds it from this
+# checkout instead of pulling it, and tags it with that name.
+#
+# Compose reads .env by itself. To use another file: docker compose --env-file <file> ...
+# The environment of the containers is listed here key by key (a key that is not
+# set in the file or the shell is not passed on and the process default applies),
+# so nothing else in .env, the database passwords included, reaches the server or
+# the worker.
+
+x-slugbase-image: &slugbase-image
+  image: ${SLUGBASE_IMAGE:-ghcr.io/mdg-labs/slugbase:latest}
+  build:
+    context: .
+    dockerfile: apps/slugbase/Dockerfile
+    args:
+      BUILD_COMMIT: ${BUILD_COMMIT:-unknown}
+      VERSION: ${VERSION:-unreleased}
+
+# What the image's process needs to run read-only and unprivileged. The image
+# already runs as 10001:10001; the numeric user is repeated so that the file does
+# not depend on it.
+x-slugbase-hardening: &slugbase-hardening
+  user: "10001:10001"
+  read_only: true
+  tmpfs:
+    - /tmp
+  cap_drop:
+    - ALL
+  security_opt:
+    - no-new-privileges:true
+  restart: unless-stopped
+  # The processes finish in-flight work for up to 25 seconds on SIGTERM (doc 01 section 3).
+  stop_grace_period: 30s
+
+# Shared by the server and the worker. DATABASE_URL is slugbase_app; no
+# DATABASE_MIGRATE_URL here (the server alone gets it, below).
+x-slugbase-environment: &slugbase-environment
+  NODE_ENV: production
+  APP_ORIGIN: ${APP_ORIGIN:?APP_ORIGIN is required and is the https origin users reach SlugBase at}
+  DATABASE_URL: postgres://slugbase_app:${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}@postgres:5432/slugbase
+  SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
+  ENCRYPTION_KEY: ${ENCRYPTION_KEY:?ENCRYPTION_KEY is required}
+  ENCRYPTION_KEY_ID: ${ENCRYPTION_KEY_ID:?ENCRYPTION_KEY_ID is required}
+  ENCRYPTION_KEY_PREVIOUS:
+  LOG_LEVEL:
+  METRICS_PORT:
+  ERROR_REPORT_DSN:
+  SMTP_HOST:
+  SMTP_PORT:
+  SMTP_SECURITY:
+  SMTP_USER:
+  SMTP_PASS:
+  SMTP_FROM:
+  RATE_LIMIT_LOGIN_IP:
+  RATE_LIMIT_LOGIN_EMAIL:
+  RATE_LIMIT_MFA_IP:
+  RATE_LIMIT_MFA_ACCOUNT:
+  RATE_LIMIT_REGISTER_IP:
+  RATE_LIMIT_RESET_IP:
+  RATE_LIMIT_RESET_EMAIL:
+  RATE_LIMIT_TOKEN_REDEEM_IP:
+  RATE_LIMIT_TOKEN_CREATE_IP:
+  RATE_LIMIT_TOKEN_CREATE_ACCOUNT:
+  RATE_LIMIT_SETUP_IP:
+  RATE_LIMIT_GO_IP:
+  RATE_LIMIT_GO_ACCOUNT:
+  RATE_LIMIT_READ_IP:
+  RATE_LIMIT_READ_ACCOUNT:
+  RATE_LIMIT_WRITE_IP:
+  RATE_LIMIT_WRITE_ACCOUNT:
+  RATE_LIMIT_BULK_IP:
+  RATE_LIMIT_BULK_ACCOUNT:
+  RATE_LIMIT_FETCH_IP:
+  RATE_LIMIT_FETCH_ACCOUNT:
+  RATE_LIMIT_AI_IP:
+  RATE_LIMIT_AI_ACCOUNT:
+  RATE_LIMIT_AI_WORKSPACE:
+  RATE_LIMIT_PUBLIC_IP:
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: slugbase
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: slugbase
+      # Passwords of the two login roles that roles.sql creates on first start.
+      PROVISION_APP_PASSWORD: ${APP_DB_PASSWORD:?APP_DB_PASSWORD is required}
+      PROVISION_MIGRATOR_PASSWORD: ${MIGRATOR_DB_PASSWORD:?MIGRATOR_DB_PASSWORD is required}
+    # No ports: the database is reachable from the other services of this file only.
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      # Runs once, when the data volume is empty; it never changes a password
+      # afterwards (rotate one with ALTER ROLE).
+      - ./packages/db/provision/roles.sql:/docker-entrypoint-initdb.d/10-roles.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U slugbase -d slugbase"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+      start_period: 10s
+    restart: unless-stopped
+    # Postgres stops fast on SIGINT, and waits for clients on SIGTERM.
+    stop_grace_period: 30s
+
+  slugbase:
+    <<: [*slugbase-image, *slugbase-hardening]
+    command: ["server"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      <<: *slugbase-environment
+      DATABASE_MIGRATE_URL: postgres://slugbase_migrator:${MIGRATOR_DB_PASSWORD:?MIGRATOR_DB_PASSWORD is required}@postgres:5432/slugbase
+      PORT:
+      TRUSTED_PROXY_HOPS:
+      API_DOCS_ENABLED:
+      DOCS_BASE_URL:
+      MIGRATE_ON_START:
+    # Published on the loopback address unless SLUGBASE_BIND says otherwise; the
+    # operator's reverse proxy takes it from there.
+    ports:
+      - "${SLUGBASE_BIND:-127.0.0.1}:${PORT:-3000}:${PORT:-3000}"
+    # Ready once the migration has run and the database is at the level this build expects.
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:' + (process.env.PORT || 3000) + '/ready').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  slugbase-worker:
+    <<: [*slugbase-image, *slugbase-hardening]
+    command: ["worker"]
+    # The server has migrated the database by the time it is healthy.
+    depends_on:
+      slugbase:
+        condition: service_healthy
+    environment: *slugbase-environment
+
+volumes:
+  postgres-data:
