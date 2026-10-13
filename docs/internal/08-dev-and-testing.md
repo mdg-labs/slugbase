@@ -16,7 +16,7 @@ SlugBase is built almost entirely by agents (D21). An agent's work is only as go
 
 | Tool | Version | Why |
 |---|---|---|
-| Node.js | 24.x (`.nvmrc`) | D5. `package.json` `engines` and a `preinstall` check enforce it |
+| Node.js | 24.2 or later 24.x (`.nvmrc`) | D5. The direct-entry checks use `import.meta.main`, added in Node 24.2.0. `package.json` `engines` and a `preinstall` check enforce it |
 | pnpm | 10.x (`packageManager` field) | Installed with `npm i -g pnpm@10` or Corepack where available |
 | Docker + Compose plugin | current | Development Postgres and Mailpit; integration tests; image builds |
 | `actionlint` | current | Only for workflow changes |
