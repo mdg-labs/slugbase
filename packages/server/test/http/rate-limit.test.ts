@@ -222,6 +222,7 @@ describe("the rate-limit stage", () => {
     await get("/api/v1/suggest", { "x-account": "a", "x-workspace": "w" });
     await get("/api/v1/login", { "x-account": "a" });
     expect(memory.takes).toEqual([
+      { bucket: "ai", key: "unknown" },
       { bucket: "ai:account", key: "a" },
       { bucket: "ai:workspace", key: "w" },
       { bucket: "login", key: "unknown" },
@@ -276,6 +277,26 @@ describe("the rate-limit stage", () => {
       expect(Object.fromEntries(statuses)).toEqual({ 401: 20, 429: 980 });
       expect(lookups()).toBe(20);
     });
+
+    it.each(["token_create", "bulk", "ai"] as const)(
+      "stops 1000 requests from one IP with random bearer tokens reaching the token lookup of a %s route after the burst",
+      async (bucket) => {
+        const { authenticator, lookups } = rejectingBearer();
+        const guarded = route(limited("/api/v1/guarded", "guarded", bucket, { auth: "member" }));
+        const { get, rejections } = build([guarded], {
+          env: { [`RATE_LIMIT_${bucket.toUpperCase()}_IP`]: "20/hour" },
+          stages: { authentication: createAuthentication({ authenticators: [authenticator] }) },
+        });
+        const statuses = new Map<number, number>();
+        for (let request = 0; request < 1000; request += 1) {
+          const response = await get("/api/v1/guarded", { authorization: `Bearer slb_${crypto.randomUUID()}` });
+          statuses.set(response.status, (statuses.get(response.status) ?? 0) + 1);
+        }
+        expect(Object.fromEntries(statuses)).toEqual({ 401: 20, 429: 980 });
+        expect(lookups()).toBe(20);
+        expect(new Set(rejections)).toEqual(new Set([bucket]));
+      },
+    );
 
     it("takes the IP bucket before authentication and the account and workspace buckets after it", async () => {
       const trace: string[] = [];
@@ -413,14 +434,25 @@ describe("the bucket registry", () => {
     expect([...RATE_LIMIT_BUCKETS].sort()).toEqual(RATE_BUCKETS.filter((bucket) => bucket !== "none").sort());
   });
 
+  it("gives every bucket a limit per IP, so that stage 3a covers each of them", () => {
+    const registry = createRateLimitRegistry(serverConfig());
+    for (const bucket of RATE_LIMIT_BUCKETS) {
+      const limits = registry.scopesOf(bucket) ?? [];
+      expect(limits[0]?.scope, bucket).toBe("ip");
+      expect(limits[0]?.name, bucket).toBe(bucket);
+      expect(registry.window(bucket), bucket).toBeDefined();
+    }
+  });
+
   it("names the limits of each bucket as the rate-limit port sees them", () => {
     const registry = createRateLimitRegistry(serverConfig());
     expect(registry.scopesOf("go")?.map((limit) => limit.name)).toEqual(["go", "go:account"]);
-    expect(registry.scopesOf("ai")?.map((limit) => limit.name)).toEqual(["ai:account", "ai:workspace"]);
+    expect(registry.scopesOf("ai")?.map((limit) => limit.name)).toEqual(["ai", "ai:account", "ai:workspace"]);
     expect(registry.scopesOf("login")?.map((limit) => limit.name)).toEqual(["login", "login:email"]);
     expect(registry.scopesOf("none")).toBeUndefined();
     expect(registry.window("read")).toEqual({ capacity: 1200, refillPerSecond: 20 });
     expect(registry.window("ai:workspace")).toEqual({ capacity: 600, refillPerSecond: 600 / 3600 });
-    expect(registry.window("ai")).toBeUndefined();
+    expect(registry.window("ai")).toEqual({ capacity: 60, refillPerSecond: 60 / 3600 });
+    expect(registry.window("ai:account")).toEqual({ capacity: 60, refillPerSecond: 60 / 3600 });
   });
 });

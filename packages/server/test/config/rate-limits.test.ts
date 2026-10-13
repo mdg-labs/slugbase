@@ -26,6 +26,19 @@ describe("the RATE_LIMIT_<BUCKET>_<SCOPE> keys", () => {
     expect(() => loadConfig("migrate", productionEnv({ RATE_LIMIT_PUBLIC_IP: "1/min" }))).not.toThrow();
   });
 
+  it("give every bucket a limit per IP, and none of them a per-account limit below it", () => {
+    for (const bucket of RATE_LIMIT_BUCKETS) {
+      expect(Object.keys(RATE_LIMIT_DEFAULTS[bucket]), bucket).toContain("ip");
+    }
+    const registry = createRateLimitRegistry(loadConfig("server", productionEnv()).config);
+    for (const bucket of ["token_create", "bulk", "ai"] as const) {
+      const perIp = registry.window(bucket);
+      const perAccount = registry.window(`${bucket}:account`);
+      expect(perIp, bucket).toBeDefined();
+      expect(perIp?.capacity, bucket).toBeGreaterThanOrEqual(perAccount?.capacity ?? 0);
+    }
+  });
+
   it("are listed in .env.example with the default of doc 04 section 7", () => {
     for (const bucket of RATE_LIMIT_BUCKETS) {
       for (const [scope, value] of Object.entries<string>(RATE_LIMIT_DEFAULTS[bucket])) {
@@ -45,6 +58,7 @@ describe("the RATE_LIMIT_<BUCKET>_<SCOPE> keys", () => {
       reset: [5, 3600],
       "reset:email": [3, 3600],
       token_redeem: [10, 3600],
+      token_create: [20, 3600],
       "token_create:account": [20, 3600],
       setup: [10, 3600],
       go: [600, 60],
@@ -53,9 +67,11 @@ describe("the RATE_LIMIT_<BUCKET>_<SCOPE> keys", () => {
       "read:account": [1200, 60],
       write: [300, 60],
       "write:account": [120, 60],
+      bulk: [20, 3600],
       "bulk:account": [20, 3600],
       fetch: [120, 60],
       "fetch:account": [60, 60],
+      ai: [60, 3600],
       "ai:account": [60, 3600],
       "ai:workspace": [600, 3600],
       public: [300, 60],

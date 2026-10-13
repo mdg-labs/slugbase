@@ -664,6 +664,7 @@ export const RATE_LIMIT_DEFAULTS: {
         readonly ip: "10/hour";
     };
     readonly token_create: {
+        readonly ip: "20/hour";
         readonly account: "20/hour";
     };
     readonly setup: {
@@ -682,6 +683,7 @@ export const RATE_LIMIT_DEFAULTS: {
         readonly account: "120/min";
     };
     readonly bulk: {
+        readonly ip: "20/hour";
         readonly account: "20/hour";
     };
     readonly fetch: {
@@ -689,6 +691,7 @@ export const RATE_LIMIT_DEFAULTS: {
         readonly account: "60/min";
     };
     readonly ai: {
+        readonly ip: "60/hour";
         readonly account: "60/hour";
         readonly workspace: "600/hour";
     };

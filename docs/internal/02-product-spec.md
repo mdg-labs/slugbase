@@ -487,12 +487,12 @@ Token buckets through `RateLimitPort` (doc 01 §8.2); each operation names its b
 | `register` | Registration | 5 / hour | — |
 | `reset` | Password-reset request, verification resend, email-change request, invitation resend | 5 / hour | 3 / hour per target email |
 | `token_redeem` | Redeeming an emailed or invitation token (verify email, reset password, confirm or cancel an email change, inspect and accept an invitation) | 10 / hour | — |
-| `token_create` | API token creation | — | 20 / hour per account |
+| `token_create` | API token creation | 20 / hour | 20 / hour per account |
 | `setup` | First-run setup | 10 / hour | — |
 | `go` | `/go` resolution, choosing a candidate, slug suggestions and recording an open | 600 / min | 300 / min per account |
 | `fetch` | Synchronous metadata fetch, favicon cache misses | 120 / min | 60 / min per account |
-| `ai` | AI suggestions | — | 60 / hour per account; 600 / hour per workspace |
-| `bulk` | Bulk bookmark actions, import and export | — | 20 / hour per account |
+| `ai` | AI suggestions | 60 / hour | 60 / hour per account; 600 / hour per workspace |
+| `bulk` | Bulk bookmark actions, import and export | 20 / hour | 20 / hour per account |
 | `read` | Every other authenticated read | 1 200 / min | 1 200 / min per account |
 | `write` | Every other authenticated mutation | 300 / min | 120 / min per account |
 | `public` | `GET /api/config`, setup status, `/opensearch.xml` and the public reads modules declare | 300 / min | — |
