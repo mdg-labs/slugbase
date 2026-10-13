@@ -2,5 +2,11 @@
   "landing": {
     "heading": "{name}",
     "tagline": "Lesezeichen mit kurzen, privaten Slugs."
+  },
+  "configFailure": {
+    "title": "Die App konnte nicht geladen werden",
+    "description": "Die Einstellungen dieses Servers konnten nicht gelesen werden. Lade die Seite neu und melde es deiner Administration, wenn es weiter auftritt.",
+    "reload": "Neu laden",
+    "requestId": "Anfrage-ID"
   }
 }

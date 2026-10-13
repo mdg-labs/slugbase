@@ -78,15 +78,43 @@ describe("createWebApp", () => {
     expect(screen.queryByText(/Request ID/)).toBeNull();
   });
 
-  it("writes the failure view in German for a German browser", async () => {
-    vi.spyOn(window.navigator, "language", "get").mockReturnValue("de-AT");
+  it("writes the failure view in English with lang=en for an English browser", async () => {
+    stubTransport(() => Promise.resolve(problem(500, "internal", "req-1")));
+    const App = createWebApp({ extensions: [] });
+
+    await renderApp(<App />);
+
+    expect(await screen.findByText("The app could not be loaded")).toBeTruthy();
+    expect(screen.getByText(/The settings of this server could not be read/)).toBeTruthy();
+    expect(screen.getByText(/Request ID/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Reload" })).toBeTruthy();
+    expect(document.documentElement.lang).toBe("en");
+  });
+
+  it("writes the failure view in German with lang=de for a German browser", async () => {
+    vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["de-AT"]);
     stubTransport(() => Promise.resolve(problem(500, "internal", "req-1")));
     const App = createWebApp({ extensions: [] });
 
     await renderApp(<App />);
 
     expect(await screen.findByText("Die App konnte nicht geladen werden")).toBeTruthy();
+    expect(screen.getByText(/Die Einstellungen dieses Servers konnten nicht gelesen werden/)).toBeTruthy();
+    expect(screen.getByText(/Anfrage-ID/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Neu laden" })).toBeTruthy();
+    expect(screen.queryByText("The app could not be loaded")).toBeNull();
+    expect(document.documentElement.lang).toBe("de");
+  });
+
+  it("writes the failure view in English with lang=en for a browser whose languages are unsupported", async () => {
+    vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["fr-FR"]);
+    stubTransport(() => Promise.resolve(problem(500, "internal", "req-1")));
+    const App = createWebApp({ extensions: [] });
+
+    await renderApp(<App />);
+
+    expect(await screen.findByText("The app could not be loaded")).toBeTruthy();
+    expect(document.documentElement.lang).toBe("en");
   });
 
   it("renders the root view in English with lang=en for an English browser", async () => {

@@ -2,5 +2,11 @@
   "landing": {
     "heading": "{name}",
     "tagline": "Bookmarks with short, private slugs."
+  },
+  "configFailure": {
+    "title": "The app could not be loaded",
+    "description": "The settings of this server could not be read. Reload the page, and tell your administrator if this continues.",
+    "reload": "Reload",
+    "requestId": "Request ID"
   }
 }

@@ -33,7 +33,12 @@ export function createWebApp({ extensions }: CreateWebAppOptions): ComponentType
   function Product({ result }: { result: Promise<ConfigResult> }): ReactElement {
     const loaded = use(result);
     if (loaded.status === "failed") {
-      return <ConfigFailure requestId={loaded.requestId} />;
+      // No configuration, so no account preference or default locale: the browser's languages, then English.
+      return (
+        <I18nProvider>
+          <ConfigFailure requestId={loaded.requestId} />
+        </I18nProvider>
+      );
     }
     return (
       <ConfigProvider config={loaded.config}>
