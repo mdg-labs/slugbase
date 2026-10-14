@@ -5,7 +5,7 @@ import { getConstructionPlans } from "pg-boss";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { loadConfig } from "../../src/config/index.ts";
 import { createWorker } from "../../src/worker/index.ts";
-import type { RunningWorker } from "../../src/worker/index.ts";
+import type { JobDefinition, RunningWorker } from "../../src/worker/index.ts";
 import { productionEnv } from "../config/support.ts";
 import { adapters, fakeDatabase, recordingLogger } from "../support.ts";
 
@@ -136,6 +136,41 @@ function purgeLogs(logger: ReturnType<typeof recordingLogger>): PurgeLog[] {
   return logger.entries.filter((entry) => entry.message === "Retention purge finished");
 }
 
+function deletedSessions(log: PurgeLog): number {
+  const { deleted } = log.fields;
+  if (typeof deleted === "object" && deleted !== null && "sessions" in deleted && typeof deleted.sessions === "number") {
+    return deleted.sessions;
+  }
+  throw new Error("a purge log without a session count");
+}
+
+async function databaseNow(): Promise<Date> {
+  const rows = await database().owner<{ at: Date }[]>`SELECT now() AS at`;
+  return rows[0]?.at ?? new Date(0);
+}
+
+// The schedule fires at the top of the hour, whenever the suite happens to run. A test that counts runs takes
+// the schedule out of play once its workers are up and enqueues every run itself; the next test's worker
+// registers it again.
+async function removeHourlySchedule(): Promise<void> {
+  await database().owner`DELETE FROM pgboss.schedule WHERE name = ${JOB}`;
+}
+
+async function enqueueRun(running: RunningWorker, job: JobDefinition): Promise<string> {
+  const id = await running.enqueue(job, {});
+  if (id === null) {
+    throw new Error("the purge job was not enqueued");
+  }
+  return id;
+}
+
+// A tick that landed before the schedule was removed shows up here as a job nobody enqueued.
+async function expectOnlyEnqueuedRuns(since: Date, enqueued: readonly string[]): Promise<void> {
+  const rows = await database().owner<{ id: string }[]>`
+    SELECT id FROM pgboss.job WHERE name = ${JOB} AND created_on >= ${since}`;
+  expect(rows.map((row) => row.id).sort()).toEqual([...enqueued].sort());
+}
+
 describe("the retention purge of a worker without modules", () => {
   it("registers the job and an hourly schedule", async () => {
     const { created } = ceWorker();
@@ -157,6 +192,7 @@ describe("the retention purge of a worker without modules", () => {
     await clearSessions();
     const mine = await seedAccount();
     const other = await seedAccount();
+    const since = await databaseNow();
     await seedSession(mine, -HOUR_MS, 100 * DAY_MS);
     await seedSession(mine, 10 * DAY_MS, -HOUR_MS);
     await seedSession(other, -DAY_MS, -DAY_MS);
@@ -171,11 +207,14 @@ describe("the retention purge of a worker without modules", () => {
       return;
     }
 
-    await running.enqueue(job, {});
+    await removeHourlySchedule();
+
+    const run = await enqueueRun(running, job);
 
     await until(() => purgeLogs(logger).length > 0, 15_000, "the purge job to run");
     expect(await sessionIds()).toEqual([live, otherLive].sort());
     expect(purgeLogs(logger).map((entry) => entry.fields)).toEqual([{ deleted: { sessions: 3 } }]);
+    await expectOnlyEnqueuedRuns(since, [run]);
   });
 
   it("finishes a backlog of more than one batch across runs", async () => {
@@ -183,6 +222,7 @@ describe("the retention purge of a worker without modules", () => {
     const owner = await seedAccount();
     const live = await seedSession(owner, DAY_MS, DAY_MS);
     const extra = 50;
+    const since = await databaseNow();
     await seedExpiredSessions(owner, BATCH + extra);
     const { created, logger } = ceWorker();
     const running = await created.start();
@@ -193,26 +233,31 @@ describe("the retention purge of a worker without modules", () => {
       return;
     }
 
-    await running.enqueue(job, {});
+    await removeHourlySchedule();
+
+    const first = await enqueueRun(running, job);
     await until(() => purgeLogs(logger).length === 1, 15_000, "the first run");
     expect((await sessionIds()).length).toBe(extra + 1);
 
-    await running.enqueue(job, {});
+    const second = await enqueueRun(running, job);
     await until(() => purgeLogs(logger).length === 2, 15_000, "the second run");
     expect(await sessionIds()).toEqual([live]);
     expect(purgeLogs(logger).map((entry) => entry.fields)).toEqual([
       { deleted: { sessions: BATCH } },
       { deleted: { sessions: extra } },
     ]);
+    await expectOnlyEnqueuedRuns(since, [first, second]);
   }, 60_000);
 
-  it("runs once per tick when two workers start together", async () => {
+  it("runs once per tick when two workers start together, and the counts add up to the rows seeded", async () => {
     await clearSessions();
     const owner = await seedAccount();
     const live = await seedSession(owner, DAY_MS, DAY_MS);
-    await seedSession(owner, -HOUR_MS, DAY_MS);
-    const sinceRow = await database().owner<{ at: Date }[]>`SELECT now() AS at`;
-    const since = sinceRow[0]?.at ?? new Date(0);
+    const expired = 3;
+    for (let n = 0; n < expired; n += 1) {
+      await seedSession(owner, -HOUR_MS, DAY_MS);
+    }
+    const since = await databaseNow();
     const first = ceWorker();
     const second = ceWorker();
     started.push(...(await Promise.all([first.created.start(), second.created.start()])));
@@ -235,6 +280,9 @@ describe("the retention purge of a worker without modules", () => {
     expect(rows.length).toBeGreaterThan(0);
     expect(new Set((await ticks()).map((row) => row.singleton_on)).size).toBe(rows.length);
     expect(runs).toBe(rows.length);
+    // Whichever tick ran first took the expired rows; the runs after it found none, so the counts add up to the seed.
+    const purged = [...purgeLogs(first.logger), ...purgeLogs(second.logger)].reduce((sum, log) => sum + deletedSessions(log), 0);
+    expect(purged).toBe(expired);
     expect(await sessionIds()).toEqual([live]);
     for (const { logger } of [first, second]) {
       expect(logger.entries.filter((entry) => entry.level === "error")).toEqual([]);
