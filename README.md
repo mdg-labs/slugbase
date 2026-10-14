@@ -19,4 +19,4 @@ Both run the same code from this repository; Cloud adds hosting and billing, not
 
 ## Licence
 
-[AGPL-3.0](LICENSE).
+Copyright (C) 2026 Michael David Guggenbichler (MDG Labs). Licensed under AGPL-3.0-only — see [LICENSE](LICENSE).
