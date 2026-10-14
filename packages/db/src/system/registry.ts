@@ -18,4 +18,7 @@ export const systemOperations: readonly string[] = [
   "sys_session_revoke",
   "sys_list_sessions",
   "sys_session_revoke_all",
+  "app_member_workspace_ids",
+  "sys_account_has_password",
+  "sys_retention_purge",
 ];

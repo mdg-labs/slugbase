@@ -5,19 +5,17 @@ import { use, type ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createApiClient } from "../src/api/client.ts";
 import { createWebApp, type WebExtension } from "../src/index.ts";
-import { CONFIG_BODY, PRODUCT_NAME, json, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
+import { PRODUCT_NAME, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
 type Transport = (request: Request) => Promise<Response>;
 
 const INTERNAL_DETAIL = "SELECT * FROM accounts WHERE email = 'a@example.org' at /srv/app/db.ts:42:7";
 
-/** Answers `/api/config` and hands every other call to `other`. */
+/** Answers `/api/config` and the session check of a signed-in visitor, and hands every other call to `other`. */
 function stubApi(other: Transport = () => Promise.reject(new Error("unexpected call"))): void {
   vi.stubGlobal(
     "fetch",
-    vi.fn<Transport>((request) =>
-      new URL(request.url).pathname === "/api/config" ? Promise.resolve(json(CONFIG_BODY)) : other(request),
-    ),
+    vi.fn<Transport>((request) => signedIn(request, other)),
   );
 }
 

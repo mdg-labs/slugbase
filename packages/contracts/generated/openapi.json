@@ -1,6 +1,82 @@
 {
   "components": {
     "schemas": {
+      "Account": {
+        "additionalProperties": false,
+        "properties": {
+          "accent": {
+            "description": "The accent colour, a token name of the palette; null when none was chosen",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "aiOptOut": {
+            "description": "Whether the account opted out of AI features",
+            "type": "boolean"
+          },
+          "defaultView": {
+            "description": "How bookmark lists are shown unless a list says otherwise",
+            "enum": [
+              "grid",
+              "table"
+            ],
+            "type": "string"
+          },
+          "displayName": {
+            "description": "The name shown to other members",
+            "type": "string"
+          },
+          "email": {
+            "description": "The account's email address, as stored",
+            "type": "string"
+          },
+          "emailVerified": {
+            "description": "Whether the email address was verified",
+            "type": "boolean"
+          },
+          "hasPassword": {
+            "description": "Whether the account can sign in with a password; false for an account that signs in through an identity provider only",
+            "type": "boolean"
+          },
+          "id": {
+            "description": "The account's identifier",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "locale": {
+            "description": "The language of the account's emails and of the app unless the browser overrides it",
+            "enum": [
+              "en",
+              "de"
+            ],
+            "type": "string"
+          },
+          "theme": {
+            "description": "The colour scheme the account chose",
+            "enum": [
+              "light",
+              "dark",
+              "system"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "displayName",
+          "locale",
+          "theme",
+          "accent",
+          "defaultView",
+          "aiOptOut",
+          "emailVerified",
+          "hasPassword"
+        ],
+        "type": "object"
+      },
       "ApiConfig": {
         "additionalProperties": false,
         "properties": {
@@ -130,6 +206,74 @@
         },
         "required": [
           "next"
+        ],
+        "type": "object"
+      },
+      "Me": {
+        "additionalProperties": false,
+        "properties": {
+          "account": {
+            "$ref": "#/components/schemas/Account"
+          },
+          "activeWorkspaceId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The workspace the request acts in: the session's active one, else the member's most recently active one, else null; an API token's is the workspace it is bound to"
+          },
+          "clientErrorReportDsn": {
+            "description": "The public DSN a browser error reporter initialises with; present only for a session, and only when the deployment registers a source",
+            "type": "string"
+          },
+          "memberships": {
+            "description": "The workspaces the account is a member of, without one being deleted",
+            "items": {
+              "$ref": "#/components/schemas/Membership"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "account",
+          "memberships",
+          "activeWorkspaceId"
+        ],
+        "type": "object"
+      },
+      "Membership": {
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "description": "The workspace's name",
+            "type": "string"
+          },
+          "role": {
+            "description": "The account's role in the workspace",
+            "enum": [
+              "owner",
+              "admin",
+              "member"
+            ],
+            "type": "string"
+          },
+          "workspaceId": {
+            "description": "The workspace's identifier",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "name",
+          "role"
         ],
         "type": "object"
       },
@@ -635,6 +779,60 @@
         ],
         "x-slugbase-auth": "partial",
         "x-slugbase-rate": "write"
+      }
+    },
+    "/api/v1/me": {
+      "get": {
+        "operationId": "getMe",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Me"
+                }
+              }
+            },
+            "description": "The account with its memberships and active workspace; no hash and no secret"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no valid credential, or the session's second factor is not complete"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again"
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Read the signed-in account",
+        "tags": [
+          "me"
+        ],
+        "x-slugbase-auth": "account",
+        "x-slugbase-rate": "read",
+        "x-slugbase-scope": "read"
       }
     },
     "/api/v1/me/sessions": {

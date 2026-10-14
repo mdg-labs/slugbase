@@ -13,6 +13,8 @@
 // ALTER FUNCTION ... OWNER TO slugbase_system, REVOKE ALL ON FUNCTION ... FROM
 // PUBLIC, GRANT EXECUTE ON FUNCTION ... TO slugbase_app, and GRANT CREATE ON
 // SCHEMA ... TO slugbase_system with the REVOKE CREATE that takes it back.
+// CREATE [OR REPLACE] TRIGGER ... BEFORE UPDATE ... FOR EACH ROW EXECUTE FUNCTION f()
+// is read the same way, by its whole shape.
 
 export interface TableName {
   schema: string;
@@ -55,6 +57,11 @@ export type Operation =
   | { kind: "alters-function-owner"; fn: FunctionIdentity }
   | { kind: "grants-function-execute"; fn: FunctionIdentity }
   | { kind: "revokes-function-public"; fn: FunctionIdentity }
+  // CREATE [OR REPLACE] TRIGGER name BEFORE UPDATE ON table FOR EACH ROW EXECUTE FUNCTION fn(): the one trigger form read, whose function is
+  // named without a call the migration could run. A trigger body runs on a row write, which a migration does not make (D25). name is the
+  // trigger's name as PostgreSQL compares it (see `triggerName`); with replace, the statement takes the place of a trigger of that name on
+  // that table, whatever shape it has.
+  | { kind: "creates-trigger"; table: TableName; name: string; fn: FunctionIdentity; replace: boolean }
   | { kind: "grants-schema-create"; schema: string }
   | { kind: "revokes-schema-create"; schema: string }
   | { kind: "data-change"; statement: string }
@@ -99,11 +106,12 @@ const SYNTAX_BEFORE_PAREN = new Set([
   "varying", "on", "only", "table", "union", "intersect", "except", "join", "limit", "by",
 ]);
 // Built-in functions and type names whose call or modifier a migration may carry. The
-// two `app_` functions are the tenant context functions of this package, whose
-// definitions this check itself restricts to a single SELECT of built-ins.
+// `app_` functions are the tenant context functions of this package, whose
+// definitions this check itself restricts to a single SELECT of built-ins and of
+// these functions.
 const SAFE_CALLS = new Set([
   "nullif", "coalesce", "current_setting", "lower", "upper", "length", "now", "to_tsvector", "setweight",
-  "app_workspace_id", "app_account_id",
+  "app_workspace_id", "app_account_id", "app_member_workspace_ids",
   "varchar", "char", "character", "numeric", "decimal", "bit", "varbit", "time", "timetz", "timestamp", "timestamptz", "interval",
 ]);
 const SAFE_SCHEMAS = new Set(["public", "pg_catalog"]);
@@ -680,6 +688,9 @@ function create(cursor: Cursor): Operation[] {
   if (cursor.take("function")) {
     return createFunction(cursor, replace);
   }
+  if (cursor.take("trigger")) {
+    return createTrigger(cursor, replace);
+  }
   if (replace) {
     return unknown("a CREATE OR REPLACE form this check does not read");
   }
@@ -737,6 +748,66 @@ function create(cursor: Cursor): Operation[] {
   return unknown("a CREATE form this check does not read");
 }
 
+/**
+ * The name of a trigger as PostgreSQL compares it: an unquoted name has the letters A to Z folded to lower case,
+ * a quoted one keeps its case (`"T"` and `t` are two triggers, `T` and `t` one), and both are cut to 63 bytes.
+ */
+function triggerName(token: Token | undefined): string | undefined {
+  if (token?.kind === "word") {
+    return identifierForm(token.raw);
+  }
+  return token?.kind === "ident" ? clipIdentifier(token.text) : undefined;
+}
+
+/**
+ * The table of a trigger as PostgreSQL compares it, from the tokens of its name (`name` or `schema . name`, as
+ * `Cursor.tableName` reads them): each part is the form `triggerName` gives, an unquoted part folded on the text
+ * as written and a quoted one kept, both cut to 63 bytes. The tokenizer's own text lower-cases with JavaScript's
+ * mapping and is not cut, so it would keep apart two spellings of a table whose name is longer than 63 bytes.
+ */
+function triggerTable(tokens: readonly Token[]): TableName {
+  const name = triggerName(tokens.at(-1)) ?? "";
+  const schema = tokens.length === 3 ? triggerName(tokens[0]) : DEFAULT_SCHEMA;
+  return { schema: schema ?? DEFAULT_SCHEMA, name };
+}
+
+/**
+ * CREATE [OR REPLACE] TRIGGER name BEFORE UPDATE ON table FOR EACH ROW EXECUTE FUNCTION fn(), read by its
+ * whole shape. The function runs on a row write, never when the trigger is created, and the shape names it
+ * without arguments, a condition or a column list. The rule accepts it only for a trigger function the
+ * chain declares, and OR REPLACE only over the trigger of that name and table that the chain created with
+ * the same function (the statement again), or where it has read every earlier statement and so can show
+ * there is no such trigger: PostgreSQL replaces a trigger of any timing, event, condition and function, so
+ * the operation carries the trigger's name and the flag. The trigger is identified by its name and table,
+ * the schema and the name of the table each compared as PostgreSQL compares a name (see `triggerName`). A trigger of any other timing or event, a
+ * constraint trigger and an event trigger (which fires on DDL, so inside a migration) are not read, and
+ * neither is an OR REPLACE whose trigger or table name has a character outside printable ASCII, since the
+ * names the rule compares are ASCII.
+ */
+function createTrigger(cursor: Cursor, replace: boolean): Operation[] {
+  const problem = unknown("CREATE TRIGGER other than `CREATE TRIGGER name BEFORE UPDATE ON table FOR EACH ROW EXECUTE FUNCTION function()`");
+  const start = cursor.position;
+  const name = triggerName(cursor.peek());
+  if (name === undefined || cursor.identifier() === undefined || !cursor.take("before", "update", "on")) {
+    return problem;
+  }
+  const tableStart = cursor.position;
+  if (cursor.tableName() === undefined || !cursor.take("for", "each", "row", "execute", "function")) {
+    return problem;
+  }
+  const table = triggerTable(cursor.tokens.slice(tableStart, cursor.position - 5));
+  const written = cursor.tokens.slice(start, cursor.position).filter((token) => token.kind === "word" || token.kind === "ident");
+  if (replace && written.some((token) => !PRINTABLE_ASCII.test(token.kind === "word" ? token.raw : token.text))) {
+    return unknown("CREATE OR REPLACE TRIGGER named with a character outside printable ASCII, whose name PostgreSQL may spell differently from the way this check compares names");
+  }
+  const fn = cursor.tableName();
+  if (fn === undefined || !cursor.isPunct("(") || !cursor.isPunct(")", 1)) {
+    return problem;
+  }
+  cursor.position += 2;
+  return cursor.done() ? [{ kind: "creates-trigger", table, name, fn: { name: fn, args: "" }, replace }] : problem;
+}
+
 function createIndex(cursor: Cursor): Operation[] {
   cursor.take("unique");
   if (!cursor.take("index")) {
@@ -758,8 +829,9 @@ function createIndex(cursor: Cursor): Operation[] {
 }
 
 // The tenant context functions are called by every policy and listed in SAFE_CALLS, so what they
-// compute is what the policies rely on: their definition stays one SELECT of built-ins.
-export const TENANT_FUNCTIONS = new Set(["app_workspace_id", "app_account_id"]);
+// compute is what the policies rely on: their definition stays one SELECT that calls only built-ins and
+// these functions.
+export const TENANT_FUNCTIONS = new Set(["app_workspace_id", "app_account_id", "app_member_workspace_ids"]);
 // Words after which the return type of CREATE FUNCTION ends.
 const AFTER_RETURN_TYPE = new Set([
   "language", "as", "immutable", "stable", "volatile", "strict", "called", "security", "leakproof", "not", "parallel", "cost",

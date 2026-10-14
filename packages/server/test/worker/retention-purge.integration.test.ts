@@ -1,0 +1,243 @@
+import { randomUUID } from "node:crypto";
+import { setTimeout as sleep } from "node:timers/promises";
+import { useTestDatabase } from "@slugbase/testing/db";
+import { getConstructionPlans } from "pg-boss";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { loadConfig } from "../../src/config/index.ts";
+import { createWorker } from "../../src/worker/index.ts";
+import type { RunningWorker } from "../../src/worker/index.ts";
+import { productionEnv } from "../config/support.ts";
+import { adapters, fakeDatabase, recordingLogger } from "../support.ts";
+
+// The worker the CE image starts, with no module of its own, runs retention.purge
+// every hour (doc 05 section 6, doc 01 section 8.1). The purge is a pg-boss job
+// the worker registers and schedules; it reaches the tables as slugbase_app
+// through sys_retention_purge and logs how many rows it deleted per table.
+
+const database = useTestDatabase();
+
+const JOB = "retention.purge";
+const BATCH = 5_000;
+const HOUR_MS = 3_600_000;
+const DAY_MS = 24 * HOUR_MS;
+
+function appUrl(): string {
+  const { options } = database().app;
+  const url = new URL("postgres://localhost");
+  url.hostname = String(options.host[0]);
+  url.port = String(options.port[0]);
+  url.username = options.user;
+  url.password = String(options.pass);
+  url.pathname = `/${options.database}`;
+  return url.href;
+}
+
+beforeAll(async () => {
+  const owner = database().owner;
+  const session = await owner.reserve();
+  try {
+    await session.unsafe(getConstructionPlans("pgboss", { createSchema: false }));
+  } finally {
+    session.release();
+  }
+}, 120_000);
+
+const started: RunningWorker[] = [];
+
+afterEach(async () => {
+  await Promise.all(started.splice(0).map((worker) => worker.shutdown()));
+});
+
+function ceWorker() {
+  const logger = recordingLogger();
+  const created = createWorker({
+    config: loadConfig("worker", { ...productionEnv(), NODE_ENV: "test", DATABASE_URL: appUrl() }).config,
+    adapters: adapters(),
+    modules: [],
+    logger,
+    database: fakeDatabase(),
+    pollingIntervalSeconds: 0.5,
+  });
+  return { created, logger };
+}
+
+async function until(check: () => Promise<boolean> | boolean, timeoutMs: number, what: string): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!(await check())) {
+    if (Date.now() > deadline) {
+      throw new Error(`timed out waiting for ${what}`);
+    }
+    await sleep(100);
+  }
+}
+
+let accountNumber = 0;
+
+async function seedAccount(): Promise<string> {
+  accountNumber += 1;
+  const id = randomUUID();
+  await database().owner.begin(async (tx) => {
+    await tx`SELECT set_config('app.account_id', ${id}, true)`;
+    await tx`
+      INSERT INTO accounts (id, email, display_name, password_hash)
+      VALUES (${id}, ${`worker-retention${String(accountNumber)}@example.test`}, 'Test account', '$argon2id$stub')`;
+  });
+  return id;
+}
+
+// `sessions` has forced row-level security and no policy; the owner reaches it as slugbase_system, the role of
+// the system operations, which is what the fixtures and the assertions on the rows stand for.
+async function seedSession(accountId: string, expiresInMs: number, absoluteExpiresInMs: number): Promise<string> {
+  const id = randomUUID();
+  await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    await tx`
+      INSERT INTO sessions (id, token_hash, account_id, level, remember, created_at, last_seen_at, expires_at, absolute_expires_at)
+      VALUES (${id}, decode(md5(${id}) || md5(${id} || 'x'), 'hex'), ${accountId}, 'full', false,
+              now() - interval '200 days', now() - interval '1 day',
+              now() + ${expiresInMs} * interval '1 millisecond',
+              now() + ${absoluteExpiresInMs} * interval '1 millisecond')`;
+  });
+  return id;
+}
+
+async function seedExpiredSessions(accountId: string, count: number): Promise<void> {
+  await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    await tx`
+      INSERT INTO sessions (id, token_hash, account_id, level, remember, created_at, last_seen_at, expires_at, absolute_expires_at)
+      SELECT gen_random_uuid(), decode(md5('a' || n::text) || md5('b' || n::text), 'hex'), ${accountId}, 'full', false,
+             now() - interval '200 days', now() - interval '1 day',
+             now() - interval '1 hour', now() + interval '10 days'
+      FROM generate_series(1, ${count}) AS n`;
+  });
+}
+
+async function sessionIds(): Promise<string[]> {
+  const ids = await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    return (await tx<{ id: string }[]>`SELECT id FROM sessions ORDER BY id`).map((row) => row.id);
+  });
+  return ids;
+}
+
+async function clearSessions(): Promise<void> {
+  await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    await tx`DELETE FROM sessions`;
+  });
+}
+
+interface PurgeLog {
+  readonly fields: Readonly<Record<string, unknown>>;
+}
+
+function purgeLogs(logger: ReturnType<typeof recordingLogger>): PurgeLog[] {
+  return logger.entries.filter((entry) => entry.message === "Retention purge finished");
+}
+
+describe("the retention purge of a worker without modules", () => {
+  it("registers the job and an hourly schedule", async () => {
+    const { created } = ceWorker();
+    expect(created.jobs.map((job) => job.name)).toContain(JOB);
+    expect(created.schedules.filter((schedule) => schedule.job === JOB)).toEqual([
+      { name: JOB, cron: "0 * * * *", job: JOB },
+    ]);
+
+    started.push(await created.start());
+
+    const queues = await database().owner<{ name: string }[]>`SELECT name FROM pgboss.queue WHERE name = ${JOB}`;
+    expect(queues.map((row) => row.name)).toEqual([JOB]);
+    const schedules = await database().owner<{ key: string; cron: string }[]>`
+      SELECT key, cron FROM pgboss.schedule WHERE name = ${JOB}`;
+    expect(schedules).toEqual([{ key: JOB, cron: "0 * * * *" }]);
+  });
+
+  it("deletes expired and over-cap sessions when the job runs, keeps the live ones, and logs the counts only", async () => {
+    await clearSessions();
+    const mine = await seedAccount();
+    const other = await seedAccount();
+    await seedSession(mine, -HOUR_MS, 100 * DAY_MS);
+    await seedSession(mine, 10 * DAY_MS, -HOUR_MS);
+    await seedSession(other, -DAY_MS, -DAY_MS);
+    const live = await seedSession(mine, 10 * DAY_MS, 100 * DAY_MS);
+    const otherLive = await seedSession(other, HOUR_MS, 100 * DAY_MS);
+    const { created, logger } = ceWorker();
+    const running = await created.start();
+    started.push(running);
+    const job = created.jobs.find((candidate) => candidate.name === JOB);
+    expect(job).toBeDefined();
+    if (job === undefined) {
+      return;
+    }
+
+    await running.enqueue(job, {});
+
+    await until(() => purgeLogs(logger).length > 0, 15_000, "the purge job to run");
+    expect(await sessionIds()).toEqual([live, otherLive].sort());
+    expect(purgeLogs(logger).map((entry) => entry.fields)).toEqual([{ deleted: { sessions: 3 } }]);
+  });
+
+  it("finishes a backlog of more than one batch across runs", async () => {
+    await clearSessions();
+    const owner = await seedAccount();
+    const live = await seedSession(owner, DAY_MS, DAY_MS);
+    const extra = 50;
+    await seedExpiredSessions(owner, BATCH + extra);
+    const { created, logger } = ceWorker();
+    const running = await created.start();
+    started.push(running);
+    const job = created.jobs.find((candidate) => candidate.name === JOB);
+    expect(job).toBeDefined();
+    if (job === undefined) {
+      return;
+    }
+
+    await running.enqueue(job, {});
+    await until(() => purgeLogs(logger).length === 1, 15_000, "the first run");
+    expect((await sessionIds()).length).toBe(extra + 1);
+
+    await running.enqueue(job, {});
+    await until(() => purgeLogs(logger).length === 2, 15_000, "the second run");
+    expect(await sessionIds()).toEqual([live]);
+    expect(purgeLogs(logger).map((entry) => entry.fields)).toEqual([
+      { deleted: { sessions: BATCH } },
+      { deleted: { sessions: extra } },
+    ]);
+  }, 60_000);
+
+  it("runs once per tick when two workers start together", async () => {
+    await clearSessions();
+    const owner = await seedAccount();
+    const live = await seedSession(owner, DAY_MS, DAY_MS);
+    await seedSession(owner, -HOUR_MS, DAY_MS);
+    const sinceRow = await database().owner<{ at: Date }[]>`SELECT now() AS at`;
+    const since = sinceRow[0]?.at ?? new Date(0);
+    const first = ceWorker();
+    const second = ceWorker();
+    started.push(...(await Promise.all([first.created.start(), second.created.start()])));
+    // The schedule fires at the top of the hour; the test moves it to every minute so a tick comes within the test.
+    await database().owner`UPDATE pgboss.schedule SET cron = '* * * * *' WHERE name = ${JOB}`;
+
+    // Each tick is forwarded as one row of pg-boss's own queue, filed under the tick's minute, and becomes one job.
+    const jobs = async () =>
+      database().owner<{ state: string }[]>`
+        SELECT state FROM pgboss.job WHERE name = ${JOB} AND created_on >= ${since} ORDER BY created_on`;
+    const ticks = async () =>
+      database().owner<{ singleton_on: string }[]>`
+        SELECT singleton_on::text AS singleton_on FROM pgboss.job
+        WHERE name = '__pgboss__send-it' AND singleton_key = ${`${JOB}__${JOB}`} AND created_on >= ${since}`;
+    await until(async () => (await jobs()).some((row) => row.state === "completed"), 150_000, "the first tick");
+    await sleep(5000);
+
+    const rows = await jobs();
+    const runs = purgeLogs(first.logger).length + purgeLogs(second.logger).length;
+    expect(rows.length).toBeGreaterThan(0);
+    expect(new Set((await ticks()).map((row) => row.singleton_on)).size).toBe(rows.length);
+    expect(runs).toBe(rows.length);
+    expect(await sessionIds()).toEqual([live]);
+    for (const { logger } of [first, second]) {
+      expect(logger.entries.filter((entry) => entry.level === "error")).toEqual([]);
+    }
+  }, 240_000);
+});

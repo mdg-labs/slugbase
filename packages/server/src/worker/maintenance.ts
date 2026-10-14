@@ -1,4 +1,4 @@
-import type { RateLimitStore } from "@slugbase/db";
+import type { RateLimitStore, RetentionStore } from "@slugbase/db";
 import { z } from "zod";
 import type { ServerModule } from "../create-server.ts";
 import { defineJob, defineSchedule } from "./job.ts";
@@ -9,17 +9,32 @@ import { defineJob, defineSchedule } from "./job.ts";
 /** How often the idle buckets of the rate limiter are purged; they are idle for an hour before they go. */
 const PURGE_IDLE_BUCKETS_CRON = "*/15 * * * *";
 
+/** `retention.purge` runs at the top of every hour (doc 01 section 8.1). */
+const RETENTION_PURGE_CRON = "0 * * * *";
+
+export interface MaintenanceStores {
+  readonly rateLimit: Pick<RateLimitStore, "purgeIdle">;
+  readonly retention: Pick<RetentionStore, "purge">;
+}
+
 /**
- * Deletes the rate-limit buckets idle for more than an hour through the
- * system operation of `@slugbase/db`. A second run finds nothing more to
- * delete, so the job is idempotent.
+ * Two jobs, each through a system operation of `@slugbase/db`. Both are
+ * idempotent: a second run finds nothing more to delete than what has become
+ * due since.
+ *
+ * `rateLimit.purgeIdle` deletes the rate-limit buckets idle for more than an
+ * hour. `retention.purge` deletes, per table, one batch of the rows past their
+ * retention (doc 05 section 6) and logs how many it deleted per table, never a
+ * row; a table with more due rows than a batch is finished by the next runs.
+ * Its schedule is a pg-boss schedule, which runs once per tick across all
+ * workers.
  */
-export function createMaintenanceModule(store: Pick<RateLimitStore, "purgeIdle">): ServerModule {
+export function createMaintenanceModule(stores: MaintenanceStores): ServerModule {
   const purgeIdleBuckets = defineJob({
     name: "rateLimit.purgeIdle",
     payload: z.object({}),
     handle: async (_payload, context) => {
-      const deleted = await store.purgeIdle();
+      const deleted = await stores.rateLimit.purgeIdle();
       context.logger.info("Idle rate-limit buckets purged", { deleted });
     },
   });
@@ -28,5 +43,23 @@ export function createMaintenanceModule(store: Pick<RateLimitStore, "purgeIdle">
     cron: PURGE_IDLE_BUCKETS_CRON,
     job: purgeIdleBuckets.name,
   });
-  return { name: "@slugbase/server/maintenance", register: () => ({ jobs: [purgeIdleBuckets], schedules: [schedule] }) };
+  const retentionPurge = defineJob({
+    name: "retention.purge",
+    payload: z.object({}),
+    handle: async (_payload, context) => {
+      const counts = await stores.retention.purge();
+      context.logger.info("Retention purge finished", {
+        deleted: Object.fromEntries(counts.map(({ table, deleted }) => [table, deleted])),
+      });
+    },
+  });
+  const retentionSchedule = defineSchedule({
+    name: "retention.purge",
+    cron: RETENTION_PURGE_CRON,
+    job: retentionPurge.name,
+  });
+  return {
+    name: "@slugbase/server/maintenance",
+    register: () => ({ jobs: [purgeIdleBuckets, retentionPurge], schedules: [schedule, retentionSchedule] }),
+  };
 }

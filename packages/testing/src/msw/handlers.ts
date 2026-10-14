@@ -13,6 +13,16 @@ import { DEFAULT_SCENARIO, type Scenario } from "./scenarios.js";
 
 const PROBLEM_MEDIA_TYPE = "application/problem+json";
 
+// A schema of type string would give `Set-Cookie` the value `string`, which the cookie store of the MSW
+// server cannot parse: it answers 500. Any operation that declares the header gets a cookie that parses,
+// shaped like the session cookie of doc 04 section 4.1 without the `__Host-` prefix and `Secure` that
+// only an https origin accepts.
+const MOCK_SET_COOKIE = "slugbase_session=mock-session; Path=/; HttpOnly; SameSite=Lax";
+
+function headerValue(document: OpenApiDocument, name: string, schema: unknown): string {
+  return name.toLowerCase() === "set-cookie" ? MOCK_SET_COOKIE : String(fixtureFor(document, schema));
+}
+
 // The stable code a problem document carries for each status the contract
 // declares (doc 04 section 3.2).
 const PROBLEM_CODE: Readonly<Record<number, string>> = {
@@ -108,9 +118,11 @@ function buildResponse(
   response: DeclaredResponse,
   fixtures: Readonly<Record<string, unknown>>,
 ): () => Response {
-  const headers = new Headers();
+  // Entries, not a `Headers`: a `Headers` copied into the response init loses every header once it holds a
+  // `Set-Cookie`, so each answer builds its own from the entries.
+  const headers: [string, string][] = [];
   for (const [name, schema] of response.headers) {
-    headers.set(name, String(fixtureFor(document, schema)));
+    headers.push([name, headerValue(document, name, schema)]);
   }
   const content = operation.method === "head" ? undefined : pickContent(response);
   if (content === undefined) {
@@ -127,8 +139,8 @@ function buildResponse(
     value = problemBody(value, response.status, operation);
   }
   const body = isJson ? JSON.stringify(value) : String(value);
-  headers.set("Content-Type", mediaType);
-  return () => new HttpResponse(body, { status: response.status, headers: new Headers(headers) });
+  const bodyHeaders = [...headers.filter(([name]) => name.toLowerCase() !== "content-type"), ["Content-Type", mediaType]] satisfies [string, string][];
+  return () => new HttpResponse(body, { status: response.status, headers: new Headers(bodyHeaders) });
 }
 
 const BUILDERS: Readonly<Record<HttpMethod, typeof http.get>> = {

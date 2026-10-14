@@ -166,7 +166,7 @@ Every tenant-owned row carries `workspace_id`. An account can be a member of sev
 
 ### 5.2 Tenant resolution is a port
 
-`TenantResolver` turns an authenticated request into `{ workspaceId, memberId, role }`. The v1 adapter reads the session's active workspace (and, for API tokens, the token's workspace binding). Subdomain or path tenancy would be a different adapter; no application code changes.
+`TenantResolver` turns an authenticated request into `{ workspaceId, memberId, role }`. The v1 adapter, which the server uses unless the composition supplies another, reads the principal's memberships once per request, in an account-level transaction on row-level security alone (§5.4), so a workspace it is not a member of is never made the transaction's workspace. A session acts in its active workspace while the account is a member of it; when the session has none, or the account is no longer a member (or the workspace is being deleted), the resolver re-derives the member's most recently active membership (`last_active_at`, then `joined_at`) or finds none, and the request is account-level. An API token acts in its bound workspace only, and the resolver finds none when the account is no longer a member. `memberId` is the account id (a membership is keyed by workspace and account). For a session request the resolver also moves the membership's `last_active_at`, at most once a minute (doc 05 §2.2); a session still waiting for its second factor is not resolved at all. A principal without a workspace gets `404 not_found` from every operation whose policy is `member`, `admin` or `owner` (doc 04 §3.2). Subdomain or path tenancy would be a different adapter; no application code changes.
 
 ### 5.3 Enforcement layer 1 — the scoped data-access layer
 
@@ -263,7 +263,7 @@ Billing data does not live in SlugBase's database; it stays in the billing servi
 
 ### 7.4 Contracts
 
-What Cloud may depend on, and therefore what CE must keep stable or version: the `createServer`/`createWebApp` signatures, the port interfaces, the module interface including the hooks of §13, the domain event catalog, the web slot names, the exported repositories and authorization helpers, and the `public` schema. Each lives in an explicitly exported entry point; anything not exported is not a contract.
+What Cloud may depend on, and therefore what CE must keep stable or version: the `createServer`/`createWebApp` signatures, the port interfaces, the module interface including the hooks of §13, the domain event catalog, the web slot names (for example `auth.footer`), the exported repositories and authorization helpers, and the `public` schema. Each lives in an explicitly exported entry point; anything not exported is not a contract.
 
 ### 7.5 The entitlement catalog
 

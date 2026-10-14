@@ -172,7 +172,7 @@ function setup(options: SetupOptions = {}) {
 
   const operations = {
     anonymous: operationOf("/api/v1/open", "openThing", "anonymous"),
-    account: operationOf("/api/v1/me", "getMe", "account", { scope: "read" }),
+    account: operationOf("/api/v1/account-check", "checkAccount", "account", { scope: "read" }),
     member: operationOf("/api/v1/bookmarks", "listBookmarks", "member", { scope: "read" }),
     memberWrite: operationOf("/api/v1/bookmarks", "createBookmark", "member", { method: "post", scope: "write", body: true }),
     admin: operationOf("/api/v1/members", "listMembers", "admin", { scope: "read" }),
@@ -248,7 +248,7 @@ describe("the failure scenario (T3): an anonymous caller of an operation that re
   it.each([
     ["/api/v1/members"],
     ["/api/v1/workspace"],
-    ["/api/v1/me"],
+    ["/api/v1/account-check"],
     ["/api/v1/instance/accounts"],
   ])("answers 401 on %s too", async (path) => {
     const { server, seen } = setup();
@@ -398,14 +398,41 @@ describe("stage 7: tenant resolution", () => {
     const stranger = setup({
       resolver: { available: true, resolve: () => Promise.resolve(undefined) },
     });
-    const forbidden = await stranger.server.fetch(get("/api/v1/bookmarks", cookieOf("member")));
-    expect(forbidden.status).toBe(403);
-    expect(await codeOf(forbidden)).toBe("forbidden");
+    for (const path of ["/api/v1/bookmarks", "/api/v1/members", "/api/v1/workspace"]) {
+      const missing = await stranger.server.fetch(get(path, cookieOf("owner")));
+      expect(missing.status, path).toBe(404);
+      expect(await codeOf(missing), path).toBe("not_found");
+    }
     expect(stranger.seen).toEqual([]);
 
-    const account = await stranger.server.fetch(get("/api/v1/me", cookieOf("member")));
+    const account = await stranger.server.fetch(get("/api/v1/account-check", cookieOf("member")));
     expect(account.status).toBe(200);
-    expect(stranger.seen).toEqual([{ operationId: "getMe", principal: session("member"), tenant: undefined }]);
+    expect(stranger.seen).toEqual([{ operationId: "checkAccount", principal: session("member"), tenant: undefined }]);
+  });
+
+  it("hands the resolver the request's identifier, which the tenant transaction it opens is named after", async () => {
+    const requests: string[] = [];
+    const { server } = setup({
+      resolver: {
+        available: true,
+        resolve: (_principal, request) => {
+          requests.push(request.requestId);
+          return Promise.resolve({ workspaceId: WORKSPACE, memberId: MEMBER_ID, role: "member" });
+        },
+      },
+    });
+    const response = await server.fetch(get("/api/v1/bookmarks", { ...cookieOf("member"), "x-request-id": "req-from-the-edge" }));
+    expect(response.status).toBe(200);
+    expect(requests).toEqual(["req-from-the-edge"]);
+  });
+
+  it("resolves no workspace for a session still waiting for its second factor, and asks it for the factor", async () => {
+    const { server, seen, resolved } = setup();
+    const response = await server.fetch(get("/api/v1/bookmarks", { cookie: "sid=member; state=partial" }));
+    expect(response.status).toBe(401);
+    expect(await codeOf(response)).toBe("mfa_required");
+    expect(resolved).toEqual([]);
+    expect(seen).toEqual([]);
   });
 
   it("answers 401 for a token whose workspace the resolver no longer finds", async () => {
@@ -460,7 +487,7 @@ describe("stage 9: authorization", () => {
 
   it("lets any signed-in account call an account operation", async () => {
     const { server } = setup();
-    expect((await server.fetch(get("/api/v1/me", cookieOf("member")))).status).toBe(200);
+    expect((await server.fetch(get("/api/v1/account-check", cookieOf("member")))).status).toBe(200);
   });
 
   it("admits an instance admin session only to an instanceAdmin operation", async () => {
@@ -578,12 +605,12 @@ describe("stage 9: declared re-authentication and completed second factor (T18)"
   it("does not ask for re-authentication on an operation that does not declare it", async () => {
     const { server } = setup();
     expect((await server.fetch(get("/api/v1/bookmarks", withState("member", "stale")))).status).toBe(200);
-    expect((await server.fetch(get("/api/v1/me", withState("member", "none")))).status).toBe(200);
+    expect((await server.fetch(get("/api/v1/account-check", withState("member", "none")))).status).toBe(200);
   });
 
   describe("a session whose second factor is pending", () => {
     it.each([
-      ["/api/v1/me", "member"],
+      ["/api/v1/account-check", "member"],
       ["/api/v1/bookmarks", "member"],
       ["/api/v1/members", "admin"],
       ["/api/v1/workspace", "owner"],

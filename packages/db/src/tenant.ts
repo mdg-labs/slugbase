@@ -138,7 +138,8 @@ export function tenantHandle(tx: TenantTx): DrizzleTransaction {
  * security (doc 05 section 3.1).
  */
 export function bindTenantDatabase(client: postgres.Sql): Pick<Database, "withTenant"> {
-  const db = drizzle(client);
+  // The schema names its columns in camel case and drizzle-kit writes them in snake case (drizzle.config.ts); the runtime has to read them the same way.
+  const db = drizzle(client, { casing: "snake_case" });
   const active = new AsyncLocalStorage<{ tx: TenantTx }>();
 
   return {

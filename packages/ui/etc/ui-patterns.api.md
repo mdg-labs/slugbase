@@ -4,14 +4,37 @@
 
 ```ts
 
+import { ChangeEventHandler } from 'react';
 import { CompassIcon } from 'lucide-react';
 import { HomeIcon } from 'lucide-react';
 import { InboxIcon } from 'lucide-react';
 import { LifeBuoyIcon } from 'lucide-react';
 import { LockIcon } from 'lucide-react';
-import type { ReactElement } from 'react';
-import type { ReactNode } from 'react';
+import { LogOutIcon } from 'lucide-react';
+import { ReactElement } from 'react';
+import { ReactNode } from 'react';
+import { Ref } from 'react';
 import { TriangleAlertIcon } from 'lucide-react';
+
+// @public
+export function AccountMenu(input: AccountMenuProps): ReactElement;
+
+// @public (undocumented)
+export interface AccountMenuItem {
+    icon?: ReactNode;
+    id: string;
+    // (undocumented)
+    label: string;
+    // (undocumented)
+    onSelect: () => void;
+}
+
+// @public (undocumented)
+export interface AccountMenuProps {
+    // (undocumented)
+    items: readonly AccountMenuItem[];
+    label: string;
+}
 
 // @public
 export function AppShell(input: AppShellProps): ReactElement;
@@ -42,6 +65,19 @@ export interface AppShellProps {
 }
 
 // @public
+export function AuthCard(input: AuthCardProps): ReactElement;
+
+// @public (undocumented)
+export interface AuthCardProps {
+    children: ReactNode;
+    // (undocumented)
+    description?: ReactNode;
+    footer?: ReactNode;
+    productName: string;
+    title: ReactNode;
+}
+
+// @public
 export function Banner(input: BannerProps): ReactElement;
 
 // @public (undocumented)
@@ -58,6 +94,26 @@ export interface BannerProps {
 
 // @public (undocumented)
 export type BannerVariant = "error" | "info" | "success" | "warning";
+
+// @public
+export function CheckboxField(input: CheckboxFieldProps): ReactElement;
+
+// @public (undocumented)
+export interface CheckboxFieldProps {
+    // (undocumented)
+    checked?: boolean;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    defaultChecked?: boolean;
+    // (undocumented)
+    disabled?: boolean;
+    // (undocumented)
+    label: ReactNode;
+    name?: string;
+    // (undocumented)
+    onCheckedChange?: (checked: boolean) => void;
+}
 
 export { CompassIcon }
 
@@ -106,6 +162,21 @@ export interface FeedbackToastProviderProps {
     regionLabel: string;
 }
 
+// @public
+export function FormField(input: FormFieldProps): ReactElement;
+
+// @public (undocumented)
+export interface FormFieldProps {
+    children: ReactNode;
+    // (undocumented)
+    className?: string;
+    description?: ReactNode;
+    error?: ReactNode;
+    // (undocumented)
+    label: ReactNode;
+    name?: string;
+}
+
 export { HomeIcon }
 
 export { InboxIcon }
@@ -125,8 +196,38 @@ export interface LoadingProps {
 
 export { LockIcon }
 
+export { LogOutIcon }
+
 // @public (undocumented)
 export const MAIN_CONTENT_ID = "main-content";
+
+// @public
+export function SecretInput(input: SecretInputProps): ReactElement;
+
+// @public (undocumented)
+export interface SecretInputProps {
+    autoComplete?: "current-password" | "new-password";
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    defaultValue?: string;
+    // (undocumented)
+    disabled?: boolean;
+    hideLabel: string;
+    // (undocumented)
+    name?: string;
+    // (undocumented)
+    onChange?: ChangeEventHandler<HTMLInputElement>;
+    // (undocumented)
+    placeholder?: string;
+    // (undocumented)
+    ref?: Ref<HTMLInputElement>;
+    // (undocumented)
+    required?: boolean;
+    showLabel: string;
+    // (undocumented)
+    value?: string;
+}
 
 // @public
 export function ThemeToggle(input: ThemeToggleProps): ReactElement;

@@ -184,7 +184,7 @@ The CE repository is public from its first commit, and `CLAUDE.md` restates this
 - **No secrets, ever**, including token-shaped examples (`<your API token>`).
 - **No issue or commit text that describes Cloud internals** (§3.3).
 - **No Cloud-only docs**: doc 07 (except its CE self-host section), doc 11, the billing half of doc 06, legal drafts, runbooks and Cloud assessments live in the private Cloud repository.
-- **Mechanical guards**: a `forbidden-terms` check (`scripts/check-forbidden-terms.sh`, run by the `forbidden-terms` workflow until CE's lint step takes it over), GitHub secret scanning with push protection, and the verifier's hazard check. The concrete patterns live only in `scripts/forbidden-terms.txt`, which holds generic patterns for the categories above; this doc does not repeat them.
+- **Mechanical guards**: a `forbidden-terms` check (`scripts/check-forbidden-terms.sh`, run by `pnpm lint`, and so by the CI `lint` job and `pnpm gate`), GitHub secret scanning with push protection, and the verifier's hazard check. The concrete patterns live only in `scripts/forbidden-terms.txt`, which holds generic patterns for the categories above; this doc does not repeat them.
 
 **What is welcome.** The line is drawn at how Cloud is run and built, not at whether it exists. CE promotes SlugBase Cloud as the managed alternative to self-hosting, in the README, the user docs and the product itself:
 

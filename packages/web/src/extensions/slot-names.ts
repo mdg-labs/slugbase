@@ -12,10 +12,11 @@ export const SLOT_NAMES = [
   "settings.workspace.nav",
   "settings.workspace.members.seats",
   "dashboard.top",
+  "auth.footer",
   "auth.register.footer",
 ] as const;
 
-/** One of the nine slot names; any other string is a type error. */
+/** One of the ten slot names; any other string is a type error. */
 export type SlotName = (typeof SLOT_NAMES)[number];
 
 export function isSlotName(name: string): name is SlotName {

@@ -13,16 +13,40 @@ import { I18nProvider } from "../src/i18n/i18n-provider.tsx";
 import { createQueryClient } from "../src/query-client.ts";
 import { createAppRouter } from "../src/router.ts";
 import { createSessionExpiry, SessionExpiryHandler } from "../src/shell/session-expiry.tsx";
-import { CONFIG_BODY, json, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
+import { CONFIG_BODY, SESSION_PATH, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
 type Transport = (request: Request) => Promise<Response>;
 
+/**
+ * A server whose session check passes until `other` answers `401 unauthenticated` to a call: from then on the
+ * session is gone, and the check fails as well.
+ */
 function stubApi(other: Transport): ReturnType<typeof vi.fn<Transport>> {
-  const fetch = vi.fn<Transport>((request) =>
-    new URL(request.url).pathname === "/api/config" ? Promise.resolve(json(CONFIG_BODY)) : other(request),
-  );
+  let ended = false;
+  const fetch = vi.fn<Transport>((request) => {
+    if (new URL(request.url).pathname === SESSION_PATH && ended) {
+      return Promise.resolve(problem(401, "unauthenticated", "req-1"));
+    }
+    return signedIn(request, async (call) => {
+      const response = await other(call);
+      ended ||= response.status === 401 && !(await response.clone().text()).includes("reauth_required");
+      return response;
+    });
+  });
   vi.stubGlobal("fetch", fetch);
   return fetch;
+}
+
+/** A server whose session check answers `code`, as for a visitor who is not signed in; `ok` is a signed-in visitor. */
+function stubSessionCheck(code: "ok" | "unauthenticated" | "unavailable", status: number): void {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<Transport>((request) =>
+      code !== "ok" && new URL(request.url).pathname === SESSION_PATH
+        ? Promise.resolve(problem(status, code, "req-1"))
+        : signedIn(request, () => Promise.reject(new Error("unexpected call"))),
+    ),
+  );
 }
 
 function CallsApi({ calls }: { calls: number }): ReactElement {
@@ -122,6 +146,42 @@ describe("an API call answered 401", () => {
   });
 });
 
+describe("a visitor who is not signed in", () => {
+  it("is sent to /login?next=<the page they asked for> before the page is shown", async () => {
+    stubSessionCheck("unauthenticated", 401);
+
+    await open("/protected?tab=plan#top", protectedPage());
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/login");
+    });
+    expect(window.location.search).toBe(`?next=${encodeURIComponent("/protected?tab=plan#top")}`);
+    expect(await screen.findByRole("heading", { level: 1, name: "Sign in" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Protected page" })).toBeNull();
+    expect(screen.getAllByText("Your session has ended")).toHaveLength(1);
+  });
+
+  it("is sent to /login from the home page too", async () => {
+    stubSessionCheck("unauthenticated", 401);
+
+    await open("/", protectedPage());
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Sign in" })).toBeTruthy();
+    expect(window.location.pathname).toBe("/login");
+  });
+
+  it("sees the error page, not the app, when the session check fails for another reason", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    stubSessionCheck("unavailable", 503);
+
+    await open("/protected", protectedPage());
+
+    expect(await screen.findByText("Something went wrong")).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Protected page" })).toBeNull();
+    expect(window.location.pathname).toBe("/protected");
+  });
+});
+
 describe("a 401 from /api/config", () => {
   it("shows the failure view and does not navigate", async () => {
     vi.stubGlobal("fetch", vi.fn<Transport>(() => Promise.resolve(problem(401, "unauthenticated", "req-1"))));
@@ -136,7 +196,8 @@ describe("a 401 from /api/config", () => {
 });
 
 describe("the session expiry handler with a memory history", () => {
-  function mount(entry: string) {
+  function mount(entry: string, session: "in" | "out" = "in") {
+    stubSessionCheck(session === "in" ? "ok" : "unauthenticated", session === "in" ? 200 : 401);
     const history = createMemoryHistory({ initialEntries: [entry] });
     const queryClient = createQueryClient();
     const expiry = createSessionExpiry();
@@ -179,7 +240,7 @@ describe("the session expiry handler with a memory history", () => {
   });
 
   it("leaves the sign-in page where it is, without a second toast", async () => {
-    const { history, expiry, ui } = mount("/login?next=%2Fprotected");
+    const { history, expiry, ui } = mount("/login?next=%2Fprotected", "out");
     await renderApp(ui);
     await screen.findByRole("main");
 

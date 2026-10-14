@@ -1,0 +1,181 @@
+import { Button, Input } from "@slugbase/ui";
+import { Banner, CheckboxField, FormField, SecretInput } from "@slugbase/ui/patterns";
+import { useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "@tanstack/react-router";
+import { useEffect, useRef, useState, type ReactElement, type SyntheticEvent } from "react";
+import { useTranslation } from "react-i18next";
+import { ApiProblemError } from "../api/client.ts";
+import { safeNextPath } from "./next-path.ts";
+
+type FieldName = "email" | "password";
+type FieldErrors = Partial<Record<FieldName, "required" | "invalid">>;
+
+/** Why a sign-in did not go through, as far as the form tells the visitor. */
+type Failure =
+  | { readonly kind: "credentials" }
+  | { readonly kind: "rateLimited"; readonly seconds: number | undefined }
+  | { readonly kind: "invalid" }
+  | { readonly kind: "unavailable" };
+
+const SECONDS_PER_MINUTE = 60;
+
+function fieldErrorsOf(error: ApiProblemError): FieldErrors {
+  const fields: FieldErrors = {};
+  for (const { path } of error.errors) {
+    if (path === "email" || path === "password") {
+      fields[path] = "invalid";
+    }
+  }
+  return fields;
+}
+
+/** What a sign-in answered with, as the visitor is told it: every wrong credential answers alike (doc 04 section 3.2). */
+function failureOf(error: unknown): { failure: Failure; fields: FieldErrors } {
+  if (error instanceof ApiProblemError) {
+    if (error.status === 401 && error.code === "unauthenticated") {
+      return { failure: { kind: "credentials" }, fields: {} };
+    }
+    if (error.status === 429) {
+      return { failure: { kind: "rateLimited", seconds: error.retryAfterSeconds }, fields: {} };
+    }
+    if (error.status === 422) {
+      return { failure: { kind: "invalid" }, fields: fieldErrorsOf(error) };
+    }
+  }
+  return { failure: { kind: "unavailable" }, fields: {} };
+}
+
+/** The sign-in form: email, password and "Remember me". On success it goes to `next` when that is a path of this origin, otherwise home. */
+export function LoginForm({ next }: { next: string | undefined }): ReactElement {
+  const { t } = useTranslation();
+  const router = useRouter();
+  const queryClient = useQueryClient();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const [failure, setFailure] = useState<Failure | undefined>(undefined);
+  const [submitting, setSubmitting] = useState(false);
+  const emailInput = useRef<HTMLInputElement>(null);
+  const passwordInput = useRef<HTMLInputElement>(null);
+  const request = useRef<AbortController | null>(null);
+
+  useEffect(
+    () => () => {
+      request.current?.abort();
+    },
+    [],
+  );
+
+  function fieldMessage(field: FieldName): string | undefined {
+    const error = fieldErrors[field];
+    if (error === undefined) {
+      return undefined;
+    }
+    if (field === "email") {
+      return error === "required" ? t("login.field.email.required") : t("login.field.email.invalid");
+    }
+    return error === "required" ? t("login.field.password.required") : t("login.field.password.invalid");
+  }
+
+  function failureMessage(value: Failure): string {
+    switch (value.kind) {
+      case "credentials":
+        return t("login.error.credentials");
+      case "invalid":
+        return t("login.error.invalid");
+      case "unavailable":
+        return t("login.error.unavailable");
+      case "rateLimited":
+        if (value.seconds === undefined) {
+          return t("login.error.rateLimited.unknown");
+        }
+        return value.seconds < SECONDS_PER_MINUTE
+          ? t("login.error.rateLimited.seconds", { count: value.seconds })
+          : t("login.error.rateLimited.minutes", { count: Math.ceil(value.seconds / SECONDS_PER_MINUTE) });
+    }
+  }
+
+  async function submit(event: SyntheticEvent): Promise<void> {
+    event.preventDefault();
+    if (submitting) {
+      return;
+    }
+    const address = email.trim();
+    const missing: FieldErrors = {
+      ...(address === "" ? { email: "required" as const } : {}),
+      ...(password === "" ? { password: "required" as const } : {}),
+    };
+    setFailure(undefined);
+    setFieldErrors(missing);
+    if (missing.email !== undefined || missing.password !== undefined) {
+      (missing.email === undefined ? passwordInput : emailInput).current?.focus();
+      return;
+    }
+    const controller = new AbortController();
+    request.current = controller;
+    setSubmitting(true);
+    try {
+      const { error } = await router.options.context.api.POST("/api/v1/auth/login", {
+        body: { email: address, password, remember },
+        signal: controller.signal,
+      });
+      if (error !== undefined) {
+        throw new Error("The sign-in did not answer with a problem document", { cause: error });
+      }
+    } catch (caught) {
+      if (controller.signal.aborted) {
+        return;
+      }
+      const { failure: reason, fields } = failureOf(caught);
+      setFailure(reason);
+      setFieldErrors(fields);
+      setSubmitting(false);
+      return;
+    }
+    // What the previous visitor of this browser left in the cache is not for the next one.
+    queryClient.clear();
+    router.history.replace(safeNextPath(next));
+  }
+
+  const emailError = fieldMessage("email");
+  const passwordError = fieldMessage("password");
+  return (
+    <form
+      className="flex flex-col gap-4"
+      noValidate
+      onSubmit={(event) => {
+        void submit(event);
+      }}
+    >
+      {failure === undefined ? null : <Banner title={failureMessage(failure)} variant="error" />}
+      <FormField error={emailError} label={t("login.email.label")} name="email">
+        <Input
+          autoComplete="username"
+          onChange={(event) => {
+            setEmail(event.target.value);
+          }}
+          ref={emailInput}
+          type="email"
+          value={email}
+        />
+      </FormField>
+      <FormField error={passwordError} label={t("login.password.label")} name="password">
+        <SecretInput
+          autoComplete="current-password"
+          hideLabel={t("login.password.hide")}
+          onChange={(event) => {
+            setPassword(event.target.value);
+          }}
+          ref={passwordInput}
+          showLabel={t("login.password.show")}
+          value={password}
+        />
+      </FormField>
+      <CheckboxField checked={remember} label={t("login.remember")} name="remember" onCheckedChange={setRemember} />
+      <Button loading={submitting} type="submit">
+        {t("login.submit")}
+      </Button>
+    </form>
+  );
+}

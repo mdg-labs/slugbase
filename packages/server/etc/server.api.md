@@ -131,6 +131,9 @@ export function createAccountOnlyTenantResolver(): TenantResolver;
 // @public
 export function createLogger(input: LoggerOptions): Logger;
 
+// @public
+export function createMembershipTenantResolver(input: MembershipTenantResolverOptions): TenantResolver;
+
 // @public (undocumented)
 export function createRateLimitRegistry(config: RateLimitConfig): RateLimitRegistry;
 
@@ -513,6 +516,12 @@ export interface MatchedRoute {
     // (undocumented)
     readonly operation: OperationDefinition;
     readonly params: Readonly<Record<string, string>>;
+}
+
+// @public (undocumented)
+export interface MembershipTenantResolverOptions {
+    readonly now?: () => number;
+    readonly withTenant: Database["withTenant"];
 }
 
 // @public (undocumented)

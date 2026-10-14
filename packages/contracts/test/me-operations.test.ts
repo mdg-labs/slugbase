@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildOpenApiDocument, serializeOpenApiDocument } from "../src/openapi/generate.ts";
-import { RevokeSessionsQuerySchema, SessionIdParamsSchema, SessionListQuerySchema, SessionListSchema, SessionSchema } from "../src/operations/me.ts";
+import { AccountSchema, MembershipSchema, MeSchema, RevokeSessionsQuerySchema, SessionIdParamsSchema, SessionListQuerySchema, SessionListSchema, SessionSchema } from "../src/operations/me.ts";
 import { operations } from "../src/operations/index.ts";
 
 type Obj = Record<string, unknown>;
@@ -88,5 +88,68 @@ describe("the session operations", () => {
     }
     const list = schemas["SessionList"] as { required: string[] };
     expect([...list.required].sort()).toEqual(["items", "nextCursor"]);
+  });
+});
+
+describe("the account operation", () => {
+  const operation = paths["/api/v1/me"]?.["get"];
+
+  it("is getMe: an account operation in the read bucket that a read-scope API token may call", () => {
+    expect(operation?.["operationId"]).toBe("getMe");
+    expect(operation?.["x-slugbase-auth"]).toBe("account");
+    expect(operation?.["x-slugbase-rate"]).toBe("read");
+    expect(operation?.["x-slugbase-scope"]).toBe("read");
+    expect(operation?.["x-slugbase-reauth"]).toBeUndefined();
+    expect(operation?.["requestBody"]).toBeUndefined();
+    expect(operation?.["parameters"]).toBeUndefined();
+  });
+
+  it("declares application/problem+json for every client error, among them 401", () => {
+    const responses = responsesOf(operation);
+    const clientErrors = Object.keys(responses).filter((status) => status.startsWith("4"));
+    expect(clientErrors).toContain("401");
+    for (const status of clientErrors) {
+      expect(Object.keys(responses[status]?.content ?? {}), status).toEqual(["application/problem+json"]);
+    }
+    expect(responsesOf(operation)["200"]?.content).toEqual({ "application/json": { schema: { $ref: "#/components/schemas/Me" } } });
+  });
+
+  it("answers closed objects that carry no hash and no secret, with the DSN as the one optional field", () => {
+    const me = schemas["Me"] as { additionalProperties: unknown; properties: Obj; required: string[] };
+    expect(me.additionalProperties).toBe(false);
+    expect(Object.keys(me.properties).sort()).toEqual(["account", "activeWorkspaceId", "clientErrorReportDsn", "memberships"]);
+    expect([...me.required].sort()).toEqual(["account", "activeWorkspaceId", "memberships"]);
+    const account = schemas["Account"] as { additionalProperties: unknown; properties: Obj; required: string[] };
+    expect(account.additionalProperties).toBe(false);
+    expect(Object.keys(account.properties).sort()).toEqual([
+      "accent", "aiOptOut", "defaultView", "displayName", "email", "emailVerified", "hasPassword", "id", "locale", "theme",
+    ]);
+    expect([...account.required].sort()).toEqual(Object.keys(account.properties).sort());
+    const membership = schemas["Membership"] as { additionalProperties: unknown; properties: Obj; required: string[] };
+    expect(membership.additionalProperties).toBe(false);
+    expect(Object.keys(membership.properties).sort()).toEqual(["name", "role", "workspaceId"]);
+  });
+
+  it("accepts the shape the server answers and refuses an extra field or a role outside the three", () => {
+    const account = {
+      id: "0192f3a0-0000-7000-8000-0000000000a1",
+      email: "ada@example.test",
+      displayName: "Ada",
+      locale: "de",
+      theme: "dark",
+      accent: null,
+      defaultView: "table",
+      aiOptOut: false,
+      emailVerified: true,
+      hasPassword: false,
+    };
+    const membership = { workspaceId: "0192f3a0-0000-7000-8000-0000000000b1", name: "Notes", role: "admin" };
+    expect(MeSchema.safeParse({ account, memberships: [membership], activeWorkspaceId: null }).success).toBe(true);
+    expect(MeSchema.safeParse({ account, memberships: [], activeWorkspaceId: membership.workspaceId, clientErrorReportDsn: "https://k@e.example/1" }).success).toBe(true);
+    expect(MeSchema.safeParse({ account, memberships: [] }).success).toBe(false);
+    expect(AccountSchema.safeParse({ ...account, passwordHash: "x" }).success).toBe(false);
+    expect(AccountSchema.safeParse({ ...account, locale: "fr" }).success).toBe(false);
+    expect(MembershipSchema.safeParse({ ...membership, role: "guest" }).success).toBe(false);
+    expect(MembershipSchema.safeParse({ ...membership, joinedAt: "2026-01-01T00:00:00Z" }).success).toBe(false);
   });
 });

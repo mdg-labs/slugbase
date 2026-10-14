@@ -5,6 +5,7 @@ import type { Adapters } from "@slugbase/core";
 import { createAuthStore, createDatabase, type AuthStore, type Database, type MigrationChain } from "@slugbase/db";
 import { Hono } from "hono";
 import { DEVELOPMENT_BUILD_INFO, type BuildInfo } from "./build-info.ts";
+import { createMembershipTenantResolver, defersToMembershipResolver } from "./auth/tenant-resolver.ts";
 import { createRateLimitRegistry, type ServerConfig, type WorkerConfig } from "./config/index.ts";
 import type { Authenticator } from "./http/authenticate.ts";
 import { bodyLimits } from "./http/body-limits.ts";
@@ -25,6 +26,7 @@ import { assertApplicationRole, runMigrations } from "./migrate/index.ts";
 import { loadCommittedDocument } from "./routes/committed-document.ts";
 import { probeRoutes } from "./routes/health.ts";
 import { authContribution } from "./routes/auth/index.ts";
+import { profileRoutes } from "./routes/me/profile.ts";
 import { apiConfigRoute } from "./routes/meta/config.ts";
 import { apiDocs } from "./routes/meta/docs.ts";
 import { isOpenApiDocument, openApiRoute } from "./routes/meta/openapi.ts";
@@ -426,6 +428,8 @@ export function createServer(options: CreateServerOptions): Server {
     adapters,
     withTenant: metrics.instrumentTenant(database.withTenant.bind(database)),
   });
+  // The signed-in account is part of the server like its sign-in: it reads the account's own rows and memberships.
+  builtInRoutes.push(...profileRoutes({ withTenant: context.withTenant }));
 
   let composition: Composition;
   let webFiles: Unrouted | undefined;
@@ -506,7 +510,10 @@ export function createServer(options: CreateServerOptions): Server {
     rateLimit: adapters.rateLimit,
     rateLimits: createRateLimitRegistry(config),
     authenticators: composition.authenticators,
-    tenantResolver: adapters.tenantResolver,
+    // A composition that has not chosen a resolver gets the one that reads the principal's memberships (doc 01 section 5.2).
+    tenantResolver: defersToMembershipResolver(adapters.tenantResolver)
+      ? createMembershipTenantResolver({ withTenant: context.withTenant })
+      : adapters.tenantResolver,
     withTenant: context.withTenant,
     responseValidation,
     metrics,

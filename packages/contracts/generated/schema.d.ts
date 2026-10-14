@@ -52,6 +52,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the signed-in account */
+        get: operations["getMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/sessions": {
         parameters: {
             query?: never;
@@ -159,6 +176,40 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        Account: {
+            /** @description The accent colour, a token name of the palette; null when none was chosen */
+            accent: string | null;
+            /** @description Whether the account opted out of AI features */
+            aiOptOut: boolean;
+            /**
+             * @description How bookmark lists are shown unless a list says otherwise
+             * @enum {string}
+             */
+            defaultView: "grid" | "table";
+            /** @description The name shown to other members */
+            displayName: string;
+            /** @description The account's email address, as stored */
+            email: string;
+            /** @description Whether the email address was verified */
+            emailVerified: boolean;
+            /** @description Whether the account can sign in with a password; false for an account that signs in through an identity provider only */
+            hasPassword: boolean;
+            /**
+             * Format: uuid
+             * @description The account's identifier
+             */
+            id: string;
+            /**
+             * @description The language of the account's emails and of the app unless the browser overrides it
+             * @enum {string}
+             */
+            locale: "en" | "de";
+            /**
+             * @description The colour scheme the account chose
+             * @enum {string}
+             */
+            theme: "light" | "dark" | "system";
+        };
         ApiConfig: {
             /**
              * @description The API version the server speaks
@@ -213,6 +264,29 @@ export interface components {
              * @constant
              */
             next: "done";
+        };
+        Me: {
+            account: components["schemas"]["Account"];
+            /** @description The workspace the request acts in: the session's active one, else the member's most recently active one, else null; an API token's is the workspace it is bound to */
+            activeWorkspaceId: string | null;
+            /** @description The public DSN a browser error reporter initialises with; present only for a session, and only when the deployment registers a source */
+            clientErrorReportDsn?: string;
+            /** @description The workspaces the account is a member of, without one being deleted */
+            memberships: components["schemas"]["Membership"][];
+        };
+        Membership: {
+            /** @description The workspace's name */
+            name: string;
+            /**
+             * @description The account's role in the workspace
+             * @enum {string}
+             */
+            role: "owner" | "admin" | "member";
+            /**
+             * Format: uuid
+             * @description The workspace's identifier
+             */
+            workspaceId: string;
         };
         OpenApiDocument: {
             info: {
@@ -461,6 +535,53 @@ export interface operations {
             };
             /** @description The request did not come from the application itself */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account with its memberships and active workspace; no hash and no secret */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Me"];
+                };
+            };
+            /** @description There is no valid credential, or the session's second factor is not complete */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

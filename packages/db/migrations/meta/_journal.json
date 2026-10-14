@@ -43,6 +43,27 @@
       "when": 1791975399234,
       "tag": "20261014105639_add_session_management",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791980569301,
+      "tag": "20261014122249_add_updated_at_trigger",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1791984407380,
+      "tag": "20261014132647_add_workspaces",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791985429431,
+      "tag": "20261014134349_add_retention_purge",
+      "breakpoints": true
     }
   ]
 }

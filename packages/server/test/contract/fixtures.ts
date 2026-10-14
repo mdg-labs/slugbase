@@ -18,6 +18,7 @@ export const FIXTURES: ContractFixtures = {
   getOpenApiDocument: {},
   login: { body: { ...WALKER_ACCOUNT, remember: false } },
   logout: {},
+  getMe: {},
   listSessions: {},
   // The walker has one session, which every call of the walk needs; a revocation that succeeds is covered by the session route tests.
   revokeSession: { path: { id: UNKNOWN_SESSION_ID }, status: 404 },

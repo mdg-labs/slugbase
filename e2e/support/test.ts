@@ -2,7 +2,7 @@ import { expect, test as base, type Locator } from "@playwright/test";
 import { findViolations, loadAllowlist } from "./axe.ts";
 
 export interface App {
-  /** Opens a path, waits for `ready` to show, and runs the accessibility check on the page. */
+  /** Opens a path, waits for `ready` to show, and runs the accessibility check on the page it ends on (after any redirect). */
   visit: (path: string, ready: Locator) => Promise<void>;
   /** Runs the accessibility check on the page as it is now (after a theme change, say). */
   scan: () => Promise<void>;
@@ -33,7 +33,11 @@ export const test = base.extend<{ app: App }>({
       visit: async (path, ready) => {
         await page.goto(path);
         await expect(ready).toBeVisible();
+        // A page that sends the visitor elsewhere (the sign-in page, for a visitor without a session)
+        // is covered by the check of the page it ends on.
+        const requested = new URL(path, page.url()).href;
         await scan();
+        scanned.add(requested);
       },
     });
     expect([...visited].filter((url) => !scanned.has(url)), "pages visited without an accessibility check").toEqual([]);

@@ -21,11 +21,23 @@ export class ApiProblemError extends Error {
         code: ApiProblemCode;
         status: number;
         requestId: string;
+        errors?: readonly {
+            readonly path: string;
+            readonly code: string;
+        }[] | undefined;
+        retryAfterSeconds?: number | undefined;
     });
     // (undocumented)
     readonly code: ApiProblemCode;
     // (undocumented)
+    readonly errors: readonly {
+        readonly path: string;
+        readonly code: string;
+    }[];
+    // (undocumented)
     readonly requestId: string;
+    // (undocumented)
+    readonly retryAfterSeconds: number | undefined;
     // (undocumented)
     readonly status: number;
 }
@@ -39,7 +51,7 @@ export interface CreateWebAppOptions {
 }
 
 // @public
-export const SLOT_NAMES: readonly ["sidebar.workspacePlan", "sidebar.footer", "banner.entitlement", "entitlement.upgradeAction", "accountMenu.items", "settings.workspace.nav", "settings.workspace.members.seats", "dashboard.top", "auth.register.footer"];
+export const SLOT_NAMES: readonly ["sidebar.workspacePlan", "sidebar.footer", "banner.entitlement", "entitlement.upgradeAction", "accountMenu.items", "settings.workspace.nav", "settings.workspace.members.seats", "dashboard.top", "auth.footer", "auth.register.footer"];
 
 // @public
 export type SlotName = (typeof SLOT_NAMES)[number];

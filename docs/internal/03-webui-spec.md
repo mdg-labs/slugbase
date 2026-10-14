@@ -191,13 +191,14 @@ Slots CE's shell renders; with no extensions they render nothing. Cloud fills th
 | `settings.workspace.nav` | Extra items in the Workspace settings navigation |
 | `settings.workspace.members.seats` | Seat summary on the Members page |
 | `dashboard.top` | Above the dashboard counts |
+| `auth.footer` | Footer of the authentication card on every auth page, beside the language switch (legal links on Cloud) |
 | `auth.register.footer` | Under the registration form (terms acceptance on Cloud) |
 
 ---
 
 ## 1. Auth pages
 
-All auth pages use one centred **authentication card** on the canvas background with the SlugBase mark, the card content, and a footer with language switch and (Cloud, via slot) legal links. Copy is non-enumerating everywhere (doc 02 §1).
+All auth pages use one centred **authentication card** on the canvas background with the SlugBase mark, the card content, and a footer with language switch and (Cloud, via slot `auth.footer`) legal links. Copy is non-enumerating everywhere (doc 02 §1).
 
 ### 1.1 `/setup` — First-run setup
 

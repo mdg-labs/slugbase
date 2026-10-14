@@ -1,14 +1,15 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createWebApp } from "../src/index.ts";
-import { ExtensionsProvider, Slot } from "../src/extensions/index.ts";
+import { AuthPage } from "../src/auth/auth-page.tsx";
+import { ExtensionsProvider, Slot, type WebExtension } from "../src/extensions/index.ts";
 import { FixtureBanner, FixtureDashboardTop, FixtureFooter, fixtureExtension, secondFooter } from "./fixture-extension.tsx";
-import { CONFIG_BODY, json, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
+import { CONFIG_BODY, SESSION_PATH, json, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
 beforeEach(() => {
   stubBrowserApis();
   stubMatchMedia();
-  vi.stubGlobal("fetch", () => Promise.resolve(json(CONFIG_BODY)));
+  vi.stubGlobal("fetch", (request: Request) => signedIn(request));
   vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["en-US", "en"]);
   window.history.replaceState(null, "", "/");
 });
@@ -133,6 +134,65 @@ describe("a fixture extension", () => {
       /route path "\/" of the web extension "home" is already taken/,
     );
     expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+const LEGAL_LINKS: WebExtension = {
+  id: "legal",
+  slots: {
+    "auth.footer": () => (
+      <nav aria-label="Legal">
+        <a href="/imprint">Imprint</a>
+      </nav>
+    ),
+  },
+};
+
+const authFooter = (container: HTMLElement): HTMLElement | null => container.querySelector("[data-slot='auth-card-footer']");
+
+describe("auth.footer", () => {
+  it("shows an extension's links in the footer of the sign-in page", async () => {
+    vi.stubGlobal("fetch", (request: Request) =>
+      new URL(request.url).pathname === SESSION_PATH ? Promise.resolve(problem(401, "unauthenticated", "req-session")) : signedIn(request),
+    );
+    window.history.replaceState(null, "", "/login");
+    const App = createWebApp({ extensions: [LEGAL_LINKS] });
+
+    const { container } = await renderApp(<App />);
+
+    await screen.findByRole("heading", { level: 1, name: "Sign in" });
+    const footer = authFooter(container);
+    expect(footer).not.toBeNull();
+    expect(within(footer as HTMLElement).getByRole("link", { name: "Imprint" }).getAttribute("href")).toBe("/imprint");
+  });
+
+  it("leaves the sign-in page without a footer when no extension fills it", async () => {
+    vi.stubGlobal("fetch", (request: Request) =>
+      new URL(request.url).pathname === SESSION_PATH ? Promise.resolve(problem(401, "unauthenticated", "req-session")) : signedIn(request),
+    );
+    window.history.replaceState(null, "", "/login");
+    const App = createWebApp({ extensions: [fixtureExtension] });
+
+    const { container } = await renderApp(<App />);
+
+    await screen.findByRole("heading", { level: 1, name: "Sign in" });
+    expect(authFooter(container)).toBeNull();
+    expect(screen.queryByRole("link", { name: "Imprint" })).toBeNull();
+  });
+
+  it("shows on every page that sits in the shared authentication page, and only with an extension", () => {
+    const page = (
+      <AuthPage productName="SlugBase" title="Create your account">
+        <p>Registration form</p>
+      </AuthPage>
+    );
+
+    const filled = render(<ExtensionsProvider extensions={[LEGAL_LINKS]}>{page}</ExtensionsProvider>);
+    expect(within(authFooter(filled.container) as HTMLElement).getByRole("link", { name: "Imprint" })).toBeTruthy();
+    filled.unmount();
+
+    const empty = render(<ExtensionsProvider extensions={[]}>{page}</ExtensionsProvider>);
+    expect(authFooter(empty.container)).toBeNull();
   });
 });
 

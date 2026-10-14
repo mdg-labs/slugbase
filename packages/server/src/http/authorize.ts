@@ -41,6 +41,7 @@ const DETAILS = {
   mfa_required: "A second factor is required.",
   reauth_required: "Recent re-authentication is required.",
   forbidden: "You do not have access to this resource.",
+  not_found: "No such resource.",
   token_scope: "This token's scope does not allow this operation.",
   entitlement_required: "This feature is not available.",
 } as const;
@@ -61,11 +62,12 @@ function reauthenticatedRecently(reauthAt: Date | undefined): boolean {
  * mfa_required`); an API token is accepted only by an operation that declares a
  * scope and not at all by one that declares `reauth` (`403 forbidden`), and a
  * read-only token not by a write (`403 token_scope`); `member`, `admin` and
- * `owner` need the role of the resolved workspace or a higher one,
- * `instanceAdmin` an instance-admin session (`403 forbidden`); an operation that
- * declares `reauth` needs a session re-authenticated within
- * `REAUTH_WINDOW_MS` (`401 reauth_required`); a declared entitlement must be
- * held (`403 entitlement_required`).
+ * `owner` need the role of the resolved workspace or a higher one (`403
+ * forbidden`), and a principal with no workspace is answered `404 not_found`
+ * by all three; `instanceAdmin` needs an instance-admin session (`403
+ * forbidden`); an operation that declares `reauth` needs a session
+ * re-authenticated within `REAUTH_WINDOW_MS` (`401 reauth_required`); a declared
+ * entitlement must be held (`403 entitlement_required`).
  */
 export function createAuthorization({ entitlements = denyEntitlements }: AuthorizationOptions = {}): RequestStage {
   return async (context, next) => {
@@ -102,9 +104,15 @@ export function createAuthorization({ entitlements = denyEntitlements }: Authori
     }
 
     const role = ROLE_REQUIRED[auth];
-    // Written as "not at least" so a role outside the order is refused rather than passed.
-    if (role !== undefined && (tenant === undefined || !(ROLE_RANK[tenant.role] >= ROLE_RANK[role]))) {
-      throw new ProblemError("forbidden", DETAILS.forbidden);
+    if (role !== undefined) {
+      // A principal with no workspace has nothing a workspace operation could name (doc 04 section 3.2).
+      if (tenant === undefined) {
+        throw new ProblemError("not_found", DETAILS.not_found);
+      }
+      // Written as "not at least" so a role outside the order is refused rather than passed.
+      if (!(ROLE_RANK[tenant.role] >= ROLE_RANK[role])) {
+        throw new ProblemError("forbidden", DETAILS.forbidden);
+      }
     }
     if (auth === "instanceAdmin" && !(principal.kind === "session" && principal.instanceAdmin)) {
       throw new ProblemError("forbidden", DETAILS.forbidden);

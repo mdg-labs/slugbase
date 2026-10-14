@@ -379,7 +379,12 @@ export interface TenantResolution {
 // @public
 export interface TenantResolver extends Port {
     // (undocumented)
-    resolve(principal: TenantPrincipal): Promise<TenantResolution | undefined>;
+    resolve(principal: TenantPrincipal, request: TenantResolveRequest): Promise<TenantResolution | undefined>;
+}
+
+// @public
+export interface TenantResolveRequest {
+    readonly requestId: string;
 }
 
 // @public

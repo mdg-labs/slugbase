@@ -7,6 +7,30 @@
 import { z } from 'zod';
 
 // @public (undocumented)
+export const AccountSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    email: z.ZodString;
+    displayName: z.ZodString;
+    locale: z.ZodEnum<{
+        en: "en";
+        de: "de";
+    }>;
+    theme: z.ZodEnum<{
+        light: "light";
+        dark: "dark";
+        system: "system";
+    }>;
+    accent: z.ZodNullable<z.ZodString>;
+    defaultView: z.ZodEnum<{
+        grid: "grid";
+        table: "table";
+    }>;
+    aiOptOut: z.ZodBoolean;
+    emailVerified: z.ZodBoolean;
+    hasPassword: z.ZodBoolean;
+}, z.core.$strict>;
+
+// @public (undocumented)
 export const ApiConfigSchema: z.ZodObject<{
     apiVersion: z.ZodLiteral<"v1">;
     origin: z.ZodURL;
@@ -54,6 +78,18 @@ export interface ComponentTypes {
     responses: never;
     // (undocumented)
     schemas: {
+        Account: {
+            accent: string | null;
+            aiOptOut: boolean;
+            defaultView: "grid" | "table";
+            displayName: string;
+            email: string;
+            emailVerified: boolean;
+            hasPassword: boolean;
+            id: string;
+            locale: "en" | "de";
+            theme: "light" | "dark" | "system";
+        };
         ApiConfig: {
             apiVersion: "v1";
             defaultLocale: string;
@@ -79,6 +115,17 @@ export interface ComponentTypes {
         };
         LoginResult: {
             next: "done";
+        };
+        Me: {
+            account: ComponentTypes["schemas"]["Account"];
+            activeWorkspaceId: string | null;
+            clientErrorReportDsn?: string;
+            memberships: ComponentTypes["schemas"]["Membership"][];
+        };
+        Membership: {
+            name: string;
+            role: "owner" | "admin" | "member";
+            workspaceId: string;
         };
         OpenApiDocument: {
             info: {
@@ -196,6 +243,58 @@ export const getHealth: {
         status: z.ZodLiteral<"ok">;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
         readonly 400: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const getMe: {
+    readonly method: "get";
+    readonly path: "/api/v1/me";
+    readonly operationId: "getMe";
+    readonly tag: "me";
+    readonly summary: "Read the signed-in account";
+    readonly auth: "account";
+    readonly rate: "read";
+    readonly scope: "read";
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        account: z.ZodObject<{
+        id: z.ZodUUID;
+        email: z.ZodString;
+        displayName: z.ZodString;
+        locale: z.ZodEnum<{
+        en: "en";
+        de: "de";
+        }>;
+        theme: z.ZodEnum<{
+        light: "light";
+        dark: "dark";
+        system: "system";
+        }>;
+        accent: z.ZodNullable<z.ZodString>;
+        defaultView: z.ZodEnum<{
+        grid: "grid";
+        table: "table";
+        }>;
+        aiOptOut: z.ZodBoolean;
+        emailVerified: z.ZodBoolean;
+        hasPassword: z.ZodBoolean;
+        }, z.core.$strict>;
+        memberships: z.ZodArray<z.ZodObject<{
+        workspaceId: z.ZodUUID;
+        name: z.ZodString;
+        role: z.ZodEnum<{
+        member: "member";
+        admin: "admin";
+        owner: "owner";
+        }>;
+        }, z.core.$strict>>;
+        activeWorkspaceId: z.ZodNullable<z.ZodUUID>;
+        clientErrorReportDsn: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 401: ProblemResponse;
+        readonly 429: ProblemResponse;
+        readonly 503: ProblemResponse;
     };
 };
 
@@ -405,6 +504,54 @@ export const logout: {
     };
 };
 
+// @public (undocumented)
+export const MembershipSchema: z.ZodObject<{
+    workspaceId: z.ZodUUID;
+    name: z.ZodString;
+    role: z.ZodEnum<{
+        member: "member";
+        admin: "admin";
+        owner: "owner";
+    }>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const MeSchema: z.ZodObject<{
+    account: z.ZodObject<{
+        id: z.ZodUUID;
+        email: z.ZodString;
+        displayName: z.ZodString;
+        locale: z.ZodEnum<{
+            en: "en";
+            de: "de";
+        }>;
+        theme: z.ZodEnum<{
+            light: "light";
+            dark: "dark";
+            system: "system";
+        }>;
+        accent: z.ZodNullable<z.ZodString>;
+        defaultView: z.ZodEnum<{
+            grid: "grid";
+            table: "table";
+        }>;
+        aiOptOut: z.ZodBoolean;
+        emailVerified: z.ZodBoolean;
+        hasPassword: z.ZodBoolean;
+    }, z.core.$strict>;
+    memberships: z.ZodArray<z.ZodObject<{
+        workspaceId: z.ZodUUID;
+        name: z.ZodString;
+        role: z.ZodEnum<{
+            member: "member";
+            admin: "admin";
+            owner: "owner";
+        }>;
+    }, z.core.$strict>>;
+    activeWorkspaceId: z.ZodNullable<z.ZodUUID>;
+    clientErrorReportDsn: z.ZodOptional<z.ZodString>;
+}, z.core.$strict>;
+
 // @public
 export const OpenApiDocumentSchema: z.ZodObject<{
     openapi: z.ZodString;
@@ -510,6 +657,50 @@ export interface OperationTypes {
                 };
             };
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    getMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["Me"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1016,6 +1207,23 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["getMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/api/v1/me/sessions": {
         parameters: {
             query?: never;
@@ -1506,6 +1714,9 @@ export const VersionInfoSchema: z.ZodObject<{
     commit: z.ZodString;
     builtAt: z.ZodString;
 }, z.core.$strict>;
+
+// @public (undocumented)
+export const WORKSPACE_ROLES: readonly ["owner", "admin", "member"];
 
 // (No @packageDocumentation comment for this package)
 

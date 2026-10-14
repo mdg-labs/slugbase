@@ -10,12 +10,18 @@
 
 import { Route as rootRouteImport } from "./routes/__root.tsx";
 import { Route as AppRouteImport } from "./routes/_app.tsx";
+import { Route as LoginRouteImport } from "./routes/login.tsx";
 import { Route as AppIndexRouteImport } from "./routes/_app/index.tsx";
 import { Route as AppSplatRouteImport } from "./routes/_app/$.tsx";
 import { Route as App403RouteImport } from "./routes/_app/403.tsx";
 
 const AppRoute = AppRouteImport.update({
   id: "/_app",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const LoginRoute = LoginRouteImport.update({
+  id: "/login",
+  path: "/login",
   getParentRoute: () => rootRouteImport,
 } as any);
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -36,10 +42,12 @@ const App403Route = App403RouteImport.update({
 
 export interface FileRoutesByFullPath {
   "/": typeof AppIndexRoute;
+  "/login": typeof LoginRoute;
   "/$": typeof AppSplatRoute;
   "/403": typeof App403Route;
 }
 export interface FileRoutesByTo {
+  "/login": typeof LoginRoute;
   "/$": typeof AppSplatRoute;
   "/403": typeof App403Route;
   "/": typeof AppIndexRoute;
@@ -47,20 +55,22 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport;
   "/_app": typeof AppRouteWithChildren;
+  "/login": typeof LoginRoute;
   "/_app/$": typeof AppSplatRoute;
   "/_app/403": typeof App403Route;
   "/_app/": typeof AppIndexRoute;
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
-  fullPaths: "/" | "/$" | "/403";
+  fullPaths: "/" | "/login" | "/$" | "/403";
   fileRoutesByTo: FileRoutesByTo;
-  to: "/$" | "/403" | "/";
-  id: "__root__" | "/_app" | "/_app/$" | "/_app/403" | "/_app/";
+  to: "/login" | "/$" | "/403" | "/";
+  id: "__root__" | "/_app" | "/login" | "/_app/$" | "/_app/403" | "/_app/";
   fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren;
+  LoginRoute: typeof LoginRoute;
 }
 
 declare module "@tanstack/react-router" {
@@ -70,6 +80,13 @@ declare module "@tanstack/react-router" {
       path: "";
       fullPath: "/";
       preLoaderRoute: typeof AppRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/login": {
+      id: "/login";
+      path: "/login";
+      fullPath: "/login";
+      preLoaderRoute: typeof LoginRouteImport;
       parentRoute: typeof rootRouteImport;
     };
     "/_app/": {
@@ -112,6 +129,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren);
 
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
+  LoginRoute: LoginRoute,
 };
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -103,7 +103,7 @@ export function createStubWorld(fixture: TenantFixture): StubWorld {
     hooks: {
       authorized: (operation) => authorized(operation.auth),
       tooLowRole: (operation) => {
-        // The account just below the policy: a role below it, no workspace at all below `member`, a non-admin below `instanceAdmin`.
+        // The account just below the policy: a role below it, no workspace at all below `member` (answered 404), a non-admin below `instanceAdmin`.
         const account = Object.hasOwn(justBelow, operation.auth) ? justBelow[operation.auth] : undefined;
         return account === undefined ? undefined : sessionCredentials(account);
       },
