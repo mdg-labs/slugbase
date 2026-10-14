@@ -477,7 +477,7 @@ export interface components {
             nextCursor: string | null;
         };
         SetupRequest: {
-            /** @description The first account's display name */
+            /** @description The first account's display name; surrounding whitespace is removed */
             displayName: string;
             /**
              * Format: email

@@ -181,6 +181,27 @@ describe("PATCH /api/v1/me", () => {
     expect(await (await patch(world, { as: browser, body: { displayName: longest } })).json()).toMatchObject({ displayName: longest });
   });
 
+  it("counts the name in characters and measures it after the whitespace is removed, and stores the trimmed name", async () => {
+    const world = serve();
+    const ada = await seedAccount(database());
+    const browser = await signIn(world, ada);
+    const emoji = "\u{1F600}";
+
+    for (const name of [emoji.repeat(60), emoji.repeat(100), "x".repeat(100)]) {
+      const stored = await patch(world, { as: browser, body: { displayName: `  ${name}  ` } });
+      expect(stored.status).toBe(200);
+      expect(await stored.json()).toMatchObject({ displayName: name });
+      expect(await snapshot(ada.id)).toMatchObject({ display_name: name });
+    }
+
+    for (const name of [emoji.repeat(101), `  ${"x".repeat(101)}  `]) {
+      const refused = await patch(world, { as: browser, body: { displayName: name } });
+      expect(refused.status).toBe(422);
+      expect(await problem(refused)).toMatchObject({ code: "validation_failed", errors: [{ path: "displayName", code: "too_big" }] });
+    }
+    expect(await snapshot(ada.id)).toMatchObject({ display_name: "x".repeat(100) });
+  });
+
   it.each([
     ["the email", { email: "taken@example.test" }],
     ["the instance admin flag", { isInstanceAdmin: true }],

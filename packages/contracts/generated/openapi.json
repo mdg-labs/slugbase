@@ -648,7 +648,7 @@
         "additionalProperties": false,
         "properties": {
           "displayName": {
-            "description": "The first account's display name",
+            "description": "The first account's display name; surrounding whitespace is removed",
             "maxLength": 100,
             "minLength": 1,
             "type": "string"

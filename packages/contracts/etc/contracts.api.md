@@ -325,6 +325,9 @@ export interface ComponentTypes {
 // @public
 export function defineOperation<const D extends OperationDefinition>(definition: D): D;
 
+// @public
+export const DisplayNameSchema: z.ZodString;
+
 // @public (undocumented)
 export interface EmptyResponse {
     // (undocumented)

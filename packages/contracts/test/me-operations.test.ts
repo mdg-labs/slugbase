@@ -220,6 +220,12 @@ describe("the profile and preferences operation", () => {
     [{ displayName: "x".repeat(100), locale: "de" }, true],
     [{ displayName: "" }, false],
     [{ displayName: "x".repeat(101) }, false],
+    [{ displayName: "  " + "x".repeat(100) + "  " }, true],
+    [{ displayName: "  " + "x".repeat(101) + "  " }, false],
+    [{ displayName: "   " }, false],
+    [{ displayName: "\u{1F600}".repeat(60) }, true],
+    [{ displayName: "\u{1F600}".repeat(100) }, true],
+    [{ displayName: "\u{1F600}".repeat(101) }, false],
     [{ displayName: null }, false],
     [{ locale: "fr" }, false],
     [{ locale: null }, false],
@@ -246,6 +252,27 @@ describe("the profile and preferences operation", () => {
     [{ consentAt: "2026-01-01T00:00:00Z" }, false],
   ])("%j is accepted: %s", (body, accepted) => {
     expect(UpdateAccountRequestSchema.safeParse(body).success).toBe(accepted);
+  });
+});
+
+describe("the display name rule", () => {
+  const astral = "\u{1F600}";
+
+  it("trims the name and counts code points, so what the request parses to is what is stored", () => {
+    expect(UpdateAccountRequestSchema.parse({ displayName: "  Ada  " })).toEqual({ displayName: "Ada" });
+    expect(UpdateAccountRequestSchema.parse({ displayName: astral.repeat(60) })).toEqual({ displayName: astral.repeat(60) });
+    expect(UpdateAccountRequestSchema.parse({ displayName: ` ${"x".repeat(100)} ` })).toEqual({ displayName: "x".repeat(100) });
+  });
+
+  it.each([
+    ["blank after trimming", "   ", "too_small"],
+    ["empty", "", "too_small"],
+    ["101 astral code points", astral.repeat(101), "too_big"],
+    ["101 letters between spaces", ` ${"x".repeat(101)} `, "too_big"],
+  ])("refuses a name that is %s with the displayName field named", (_label, displayName, code) => {
+    const result = UpdateAccountRequestSchema.safeParse({ displayName });
+    expect(result.success).toBe(false);
+    expect(result.error?.issues.map((issue) => ({ path: issue.path, code: issue.code }))).toEqual([{ path: ["displayName"], code }]);
   });
 });
 

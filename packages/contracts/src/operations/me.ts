@@ -45,6 +45,18 @@ export const MembershipSchema = z
   })
   .meta({ id: "Membership" });
 
+/**
+ * The display name rule of doc 02 section 2: the name with its surrounding whitespace removed, 1 to 100
+ * characters. Zod counts a character as one code point, as PostgreSQL's length() does, and a parsed value
+ * is the trimmed name that is stored.
+ */
+export const DisplayNameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(100)
+  .describe("The name shown to other members, 1 to 100 characters; surrounding whitespace is removed and a name that is blank after that is refused");
+
 export const AccountSchema = z
   .strictObject({
     id: z.uuid().describe("The account's identifier"),
@@ -65,7 +77,7 @@ export const AccountSchema = z
 
 export const UpdateAccountRequestSchema = z
   .strictObject({
-    displayName: z.string().min(1).max(100).optional().describe("The name shown to other members, 1 to 100 characters; surrounding whitespace is removed and a name that is blank after that is refused"),
+    displayName: DisplayNameSchema.optional(),
     locale: z.enum(["en", "de"]).optional().describe("The language of the account's emails and of the app unless the browser overrides it"),
     theme: ThemeSchema.optional(),
     accent: AccentSchema.optional(),

@@ -21,9 +21,6 @@ export interface ProfileRoutesOptions {
   readonly withTenant: Database["withTenant"];
 }
 
-/** A field error of a name that is blank once the surrounding whitespace is removed, which the schema's length check cannot see. */
-const BLANK_NAME = { path: "displayName", code: "too_small" } as const;
-
 function accountBody(profile: AccountProfile) {
   return {
     id: profile.id,
@@ -74,13 +71,9 @@ export function profileRoutes({ withTenant }: ProfileRoutesOptions): RouteBindin
       if (principal === undefined) {
         throw new ProblemError("unauthenticated", "Authentication is required.");
       }
-      const displayName = body.displayName?.trim();
-      if (displayName === "") {
-        throw new ProblemError("validation_failed", "The request did not pass validation.", { errors: [BLANK_NAME] });
-      }
       const profile = await withTenant({ accountId: principal.accountId, requestId: requestIdOf(context) }, (tx) =>
         accountProfileRepository(tx).updateProfile({
-          ...(displayName === undefined ? {} : { displayName }),
+          ...(body.displayName === undefined ? {} : { displayName: body.displayName }),
           ...(body.locale === undefined ? {} : { locale: body.locale }),
           ...(body.theme === undefined ? {} : { theme: body.theme }),
           ...(body.accent === undefined ? {} : { accent: body.accent }),
