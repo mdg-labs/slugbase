@@ -27,8 +27,14 @@ export interface CreateWebAppOptions {
  */
 export function createWebApp({ extensions }: CreateWebAppOptions): ComponentType {
   const sessionExpiry = createSessionExpiry();
-  const api = createApiClient({ onUnauthenticated: sessionExpiry.notify });
   const queryClient = createQueryClient();
+  const api = createApiClient({
+    onUnauthenticated: () => {
+      // Nothing cached belongs to a session that has ended, and the session check must ask again.
+      queryClient.clear();
+      sessionExpiry.notify();
+    },
+  });
   // Validates the extension list: nothing is requested for one the app cannot start with.
   const router = createAppRouter({ queryClient, api }, extensions);
   const configResult = fetchConfig(api);

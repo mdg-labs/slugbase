@@ -15,7 +15,9 @@
     "offline": {
       "title": "Du bist offline",
       "description": "Änderungen können erst wieder gespeichert werden, wenn deine Verbindung zurück ist."
-    }
+    },
+    "account": "Konto",
+    "signOut": "Abmelden"
   },
   "home": {
     "empty": {
@@ -61,6 +63,46 @@
       "description": "Versuche es erneut. Melde es deiner Administration, wenn es weiter auftritt.",
       "offline": "Du bist offline. Prüfe deine Verbindung und versuche es erneut.",
       "requestId": "Anfrage-ID: {requestId}"
+    }
+  },
+  "login": {
+    "title": "Anmelden",
+    "description": "Melde dich bei {name} an.",
+    "email": {
+      "label": "E-Mail"
+    },
+    "password": {
+      "label": "Passwort",
+      "show": "Passwort anzeigen",
+      "hide": "Passwort verbergen"
+    },
+    "remember": "Angemeldet bleiben",
+    "submit": "Anmelden",
+    "field": {
+      "email": {
+        "required": "Gib deine E-Mail-Adresse ein.",
+        "invalid": "Prüfe die E-Mail-Adresse."
+      },
+      "password": {
+        "required": "Gib dein Passwort ein.",
+        "invalid": "Prüfe das Passwort."
+      }
+    },
+    "error": {
+      "credentials": "Die E-Mail-Adresse oder das Passwort ist falsch.",
+      "invalid": "Prüfe deine Eingaben und versuche es erneut.",
+      "unavailable": "Das Anmelden ist gerade nicht möglich. Versuche es gleich noch einmal.",
+      "rateLimited": {
+        "unknown": "Zu viele Anmeldeversuche. Versuche es später erneut.",
+        "seconds": "Zu viele Anmeldeversuche. Versuche es in {count, plural, one {# Sekunde} other {# Sekunden}} erneut.",
+        "minutes": "Zu viele Anmeldeversuche. Versuche es in {count, plural, one {# Minute} other {# Minuten}} erneut."
+      }
+    }
+  },
+  "signOut": {
+    "failed": {
+      "title": "Du bist weiterhin angemeldet",
+      "description": "Das Abmelden hat nicht geklappt. Versuche es erneut."
     }
   }
 }

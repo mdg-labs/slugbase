@@ -2,7 +2,7 @@ import { fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createWebApp } from "../src/index.ts";
 import { docsUrl } from "../src/shell/docs-url.ts";
-import { CONFIG_BODY, PRODUCT_NAME, json, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
+import { CONFIG_BODY, PRODUCT_NAME, json, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
 type Transport = (request: Request) => Promise<Response>;
 
@@ -13,7 +13,9 @@ function stubTransport(handler: Transport) {
 }
 
 function stubConfig(overrides: Record<string, unknown> = {}): void {
-  stubTransport(() => Promise.resolve(json({ ...CONFIG_BODY, ...overrides })));
+  stubTransport((request) =>
+    new URL(request.url).pathname === "/api/config" ? Promise.resolve(json({ ...CONFIG_BODY, ...overrides })) : signedIn(request),
+  );
 }
 
 beforeEach(() => {
@@ -115,7 +117,11 @@ describe("the app shell around the Home route", () => {
 describe("the app shell while the configuration loads", () => {
   it("shows the loading skeleton as a status until /api/config answers", async () => {
     let answer: (response: Response) => void = () => undefined;
-    stubTransport(() => new Promise<Response>((resolve) => (answer = resolve)));
+    stubTransport((request) =>
+      new URL(request.url).pathname === "/api/config"
+        ? new Promise<Response>((resolve) => (answer = resolve))
+        : signedIn(request),
+    );
     const App = createWebApp({ extensions: [] });
 
     const { container } = await renderApp(<App />);

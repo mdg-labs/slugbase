@@ -5,9 +5,9 @@ import { expect, it, vi } from "vitest";
 import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 
 // The CE web entry: it builds the app with createWebApp, mounts it on #root, and
-// the app asks /api/config before it renders. The server side of that answer
-// (the product name from the build info) is checked with the built app in
-// web-build.test.ts; here the answer is typed from the contract.
+// the app asks /api/config before it renders and then checks the session for its first
+// page. The server side of the configuration answer (the product name from the build info)
+// is checked with the built app in web-build.test.ts; here the answer is typed from the contract.
 
 const config: ComponentTypes["schemas"]["ApiConfig"] = {
   apiVersion: "v1",
@@ -40,5 +40,5 @@ it("mounts the app on #root and shows the product name that /api/config answers 
 
   const heading = await screen.findByRole("heading", { name: "Welcome to Bookmarks Entry Test" });
   expect(heading.closest("#root")).not.toBeNull();
-  expect(requested).toEqual(["/api/config"]);
+  expect(requested).toEqual(["/api/config", "/api/v1/me/sessions"]);
 });

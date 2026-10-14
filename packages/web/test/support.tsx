@@ -44,6 +44,25 @@ export const CONFIG_BODY = {
   product: { name: PRODUCT_NAME, version: "0.0.0" },
 } as const;
 
+export const SESSION_PATH = "/api/v1/me/sessions";
+
+export const SESSION_BODY = { items: [], nextCursor: null } as const;
+
+/**
+ * The answers of a server with a signed-in visitor: the configuration, the session check, and `other` for
+ * every other call.
+ */
+export function signedIn(
+  request: Request,
+  other: (request: Request) => Promise<Response> = () => Promise.reject(new Error("unexpected call")),
+): Promise<Response> {
+  const { pathname } = new URL(request.url);
+  if (pathname === "/api/config") {
+    return Promise.resolve(json(CONFIG_BODY));
+  }
+  return pathname === SESSION_PATH ? Promise.resolve(json(SESSION_BODY)) : other(request);
+}
+
 export function json(body: unknown, init: ResponseInit & { contentType?: string } = {}): Response {
   const { contentType = "application/json", ...rest } = init;
   return new Response(JSON.stringify(body), {

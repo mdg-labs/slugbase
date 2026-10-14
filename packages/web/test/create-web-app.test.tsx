@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createWebApp, useConfig } from "../src/index.ts";
-import { CONFIG_BODY, PRODUCT_NAME, json, problem, renderApp, stubMatchMedia } from "./support.tsx";
+import { CONFIG_BODY, PRODUCT_NAME, SESSION_PATH, json, problem, renderApp, signedIn, stubMatchMedia } from "./support.tsx";
 
 const WELCOME = `Welcome to ${PRODUCT_NAME}`;
 const WELCOME_DE = `Willkommen bei ${PRODUCT_NAME}`;
@@ -29,7 +29,7 @@ afterEach(() => {
 
 describe("createWebApp", () => {
   it("requests /api/config before anything renders and shows the product name from it", async () => {
-    const fetch = stubTransport(() => Promise.resolve(json(CONFIG_BODY)));
+    const fetch = stubTransport((request) => signedIn(request));
     const App = createWebApp({ extensions: [] });
     expect(fetch).toHaveBeenCalledTimes(1);
     expect(fetch.mock.calls[0]?.[0].url).toBe(`${window.location.origin}/api/config`);
@@ -37,12 +37,16 @@ describe("createWebApp", () => {
     await renderApp(<App />);
 
     expect(await screen.findByRole("heading", { name: WELCOME })).toBeTruthy();
-    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls.map(([request]) => new URL(request.url).pathname)).toEqual(["/api/config", SESSION_PATH]);
   });
 
   it("renders nothing of the product while the configuration is on its way", async () => {
     let answer: (response: Response) => void = () => undefined;
-    stubTransport(() => new Promise<Response>((resolve) => (answer = resolve)));
+    stubTransport((request) =>
+      new URL(request.url).pathname === "/api/config"
+        ? new Promise<Response>((resolve) => (answer = resolve))
+        : signedIn(request),
+    );
     const App = createWebApp({ extensions: [] });
 
     await renderApp(<App />);

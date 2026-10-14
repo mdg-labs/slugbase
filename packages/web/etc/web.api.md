@@ -21,11 +21,23 @@ export class ApiProblemError extends Error {
         code: ApiProblemCode;
         status: number;
         requestId: string;
+        errors?: readonly {
+            readonly path: string;
+            readonly code: string;
+        }[] | undefined;
+        retryAfterSeconds?: number | undefined;
     });
     // (undocumented)
     readonly code: ApiProblemCode;
     // (undocumented)
+    readonly errors: readonly {
+        readonly path: string;
+        readonly code: string;
+    }[];
+    // (undocumented)
     readonly requestId: string;
+    // (undocumented)
+    readonly retryAfterSeconds: number | undefined;
     // (undocumented)
     readonly status: number;
 }

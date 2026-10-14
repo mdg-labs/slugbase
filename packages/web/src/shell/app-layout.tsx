@@ -7,10 +7,11 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@slugbase/ui";
-import { AppShell, HomeIcon, LifeBuoyIcon, ThemeToggle } from "@slugbase/ui/patterns";
+import { AccountMenu, AppShell, HomeIcon, LifeBuoyIcon, LogOutIcon, ThemeToggle } from "@slugbase/ui/patterns";
 import { Link, Outlet, useRouterState } from "@tanstack/react-router";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
+import { useSignOut } from "../auth/sign-out.ts";
 import { useConfig } from "../config/config-context.tsx";
 import { Slot, useExtensions } from "../extensions/index.ts";
 import { docsUrl } from "./docs-url.ts";
@@ -25,10 +26,20 @@ export function AppLayout(): ReactElement {
   const { product, docsBaseUrl } = useConfig();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const extensions = useExtensions();
+  const signOut = useSignOut();
+  const accountItems = [{ id: "sign-out", label: t("shell.signOut"), icon: <LogOutIcon aria-hidden="true" />, onSelect: signOut }];
 
   return (
     <AppShell
-      actions={<ThemeToggle switchToDark={t("shell.switchToDark")} switchToLight={t("shell.switchToLight")} />}
+      actions={
+        <>
+          <ThemeToggle switchToDark={t("shell.switchToDark")} switchToLight={t("shell.switchToLight")} />
+          <AccountMenu
+            items={accountItems}
+            label={t("shell.account")}
+          />
+        </>
+      }
       breadcrumb={
         <Breadcrumb aria-label={t("shell.breadcrumb")}>
           <BreadcrumbList>

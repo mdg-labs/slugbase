@@ -3,12 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createWebApp } from "../src/index.ts";
 import { ExtensionsProvider, Slot } from "../src/extensions/index.ts";
 import { FixtureBanner, FixtureDashboardTop, FixtureFooter, fixtureExtension, secondFooter } from "./fixture-extension.tsx";
-import { CONFIG_BODY, json, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
+import { CONFIG_BODY, json, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
 beforeEach(() => {
   stubBrowserApis();
   stubMatchMedia();
-  vi.stubGlobal("fetch", () => Promise.resolve(json(CONFIG_BODY)));
+  vi.stubGlobal("fetch", (request: Request) => signedIn(request));
   vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["en-US", "en"]);
   window.history.replaceState(null, "", "/");
 });

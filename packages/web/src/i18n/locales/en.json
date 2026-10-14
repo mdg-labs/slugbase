@@ -15,7 +15,9 @@
     "offline": {
       "title": "You are offline",
       "description": "Changes cannot be saved until your connection is back."
-    }
+    },
+    "account": "Account",
+    "signOut": "Sign out"
   },
   "home": {
     "empty": {
@@ -61,6 +63,46 @@
       "description": "Try again. If this continues, tell your administrator.",
       "offline": "You are offline. Check your connection and try again.",
       "requestId": "Request ID: {requestId}"
+    }
+  },
+  "login": {
+    "title": "Sign in",
+    "description": "Sign in to {name}.",
+    "email": {
+      "label": "Email"
+    },
+    "password": {
+      "label": "Password",
+      "show": "Show password",
+      "hide": "Hide password"
+    },
+    "remember": "Remember me",
+    "submit": "Sign in",
+    "field": {
+      "email": {
+        "required": "Enter your email address.",
+        "invalid": "Check the email address."
+      },
+      "password": {
+        "required": "Enter your password.",
+        "invalid": "Check the password."
+      }
+    },
+    "error": {
+      "credentials": "The email address or the password is wrong.",
+      "invalid": "Check your entries and try again.",
+      "unavailable": "Signing in is not possible right now. Try again in a moment.",
+      "rateLimited": {
+        "unknown": "Too many sign-in attempts. Try again later.",
+        "seconds": "Too many sign-in attempts. Try again in {count, plural, one {# second} other {# seconds}}.",
+        "minutes": "Too many sign-in attempts. Try again in {count, plural, one {# minute} other {# minutes}}."
+      }
+    }
+  },
+  "signOut": {
+    "failed": {
+      "title": "You are still signed in",
+      "description": "Signing out did not work. Try again."
     }
   }
 }
