@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Slot } from "../extensions/index.ts";
 
 const PROFILE_PATH = "/settings/account";
+const PREFERENCES_PATH = "/settings/account/preferences";
 
 /**
  * The layout of the settings pages (doc 03 section 11): the settings navigation beside the page, a
@@ -18,7 +19,15 @@ export function SettingsLayout(): ReactElement {
     {
       id: "account",
       label: t("settings.nav.account"),
-      items: [{ id: "profile", label: t("settings.nav.profile"), link: <Link to={PROFILE_PATH} />, current: pathname === PROFILE_PATH }],
+      items: [
+        { id: "profile", label: t("settings.nav.profile"), link: <Link to={PROFILE_PATH} />, current: pathname === PROFILE_PATH },
+        {
+          id: "preferences",
+          label: t("settings.nav.preferences"),
+          link: <Link to={PREFERENCES_PATH} />,
+          current: pathname === PREFERENCES_PATH,
+        },
+      ],
     },
   ];
   return (
@@ -31,6 +40,8 @@ export function SettingsLayout(): ReactElement {
         onNavigate={(id) => {
           if (id === "profile") {
             void router.navigate({ to: PROFILE_PATH });
+          } else if (id === "preferences") {
+            void router.navigate({ to: PREFERENCES_PATH });
           }
         }}
       />

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { useTestDatabase } from "@slugbase/testing/db";
-import type { AuthStore } from "@slugbase/db";
+import { ACCENT_PRESETS as CONTRACT_ACCENT_PRESETS } from "@slugbase/contracts";
+import { ACCENT_PRESETS as DB_ACCENT_PRESETS, type AuthStore } from "@slugbase/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createAccountOnlyTenantResolver } from "../../src/auth/tenant-resolver.ts";
 import { createServer, type Authenticator, type Server } from "../../src/create-server.ts";
@@ -146,7 +147,10 @@ describe("PATCH /api/v1/me", () => {
       theme: "system",
       accent: null,
       defaultView: "grid",
+      singleKeyShortcuts: true,
       aiOptOut: false,
+      analyticsConsent: "unset",
+      onboarding: { browserSetupDone: false, importDone: false, checklistDismissed: false },
       emailVerified: true,
       hasPassword: true,
     });
@@ -182,7 +186,8 @@ describe("PATCH /api/v1/me", () => {
     ["the instance admin flag", { isInstanceAdmin: true }],
     ["the account id", { id: "0192f3a0-0000-7000-8000-0000000000a1" }],
     ["the password hash", { passwordHash: "x" }],
-    ["a column of the profile that has its own operation", { theme: "dark" }],
+    ["the sign-in alerts flag, which has its own operation", { signinAlerts: false }],
+    ["the time of the consent choice", { consentAt: "2026-01-01T00:00:00Z" }],
     ["an unknown field beside a valid one", { displayName: "Valid", unknown: 1 }],
   ])("refuses a body that names %s with 422 validation_failed and changes nothing", async (_name, body) => {
     const world = serve();
@@ -203,6 +208,17 @@ describe("PATCH /api/v1/me", () => {
     ["a null name", { displayName: null }],
     ["a language outside en and de", { locale: "fr" }],
     ["a null language", { locale: null }],
+    ["a theme outside light, dark and system", { theme: "blue" }],
+    ["an accent that is a free colour", { accent: "#ff0000" }],
+    ["an accent that is not a preset", { accent: "red" }],
+    ["a null accent", { accent: null }],
+    ["a default view outside grid and table", { defaultView: "list" }],
+    ["a single-key shortcuts flag that is not a boolean", { singleKeyShortcuts: "off" }],
+    ["an AI opt-out that is not a boolean", { aiOptOut: 1 }],
+    ["an analytics consent outside unset, granted and denied", { analyticsConsent: "maybe" }],
+    ["an onboarding state with a key of its own", { onboarding: { importDone: true, anything: true } }],
+    ["an onboarding flag that is not a boolean", { onboarding: { importDone: "yes" } }],
+    ["a valid preference beside one that is refused", { theme: "dark", accent: "#fff" }],
     ["a name that is not a string", { displayName: 7 }],
     ["an array", []],
     ["a string", '"text"'],
@@ -217,6 +233,73 @@ describe("PATCH /api/v1/me", () => {
     expect(response.status).toBe(422);
     expect((await problem(response)).code).toBe("validation_failed");
     expect(await snapshot(ada.id)).toEqual(before);
+  });
+
+  it("takes the accent presets the repository reads back", () => {
+    expect([...CONTRACT_ACCENT_PRESETS]).toEqual([...DB_ACCENT_PRESETS]);
+  });
+
+  it("changes the preferences, answers them and shows them on the next read", async () => {
+    const world = serve();
+    const ada = await seedAccount(database());
+    const browser = await signIn(world, ada);
+
+    const response = await patch(world, {
+      as: browser,
+      body: { theme: "dark", accent: "teal", defaultView: "table", singleKeyShortcuts: false, aiOptOut: true, analyticsConsent: "granted" },
+    });
+
+    expect(response.status).toBe(200);
+    const expected = { theme: "dark", accent: "teal", defaultView: "table", singleKeyShortcuts: false, aiOptOut: true, analyticsConsent: "granted" };
+    expect(await response.json()).toMatchObject(expected);
+    expect((await me(world, browser)).account).toMatchObject(expected);
+    expect(await snapshot(ada.id)).toMatchObject({
+      theme: "dark",
+      accent: "teal",
+      default_bookmark_view: "table",
+      single_key_shortcuts: false,
+      ai_opt_out: true,
+      analytics_consent: "granted",
+      consent_at: expect.any(Date) as Date,
+    });
+  });
+
+  it("stores the consent choice with its time, and clears the time when the choice goes back to unset", async () => {
+    const world = serve();
+    const ada = await seedAccount(database());
+    const browser = await signIn(world, ada);
+    expect((await snapshot(ada.id))["consent_at"]).toBeNull();
+
+    await patch(world, { as: browser, body: { analyticsConsent: "denied" } });
+    expect(await snapshot(ada.id)).toMatchObject({ analytics_consent: "denied", consent_at: expect.any(Date) as Date });
+
+    await patch(world, { as: browser, body: { analyticsConsent: "unset" } });
+    expect(await snapshot(ada.id)).toMatchObject({ analytics_consent: "unset", consent_at: null });
+  });
+
+  it("merges onboarding keys, keeps the ones the body leaves out, and answers every key", async () => {
+    const world = serve();
+    const ada = await seedAccount(database());
+    const browser = await signIn(world, ada);
+
+    const first = await patch(world, { as: browser, body: { onboarding: { importDone: true } } });
+    expect(((await first.json()) as { onboarding: unknown }).onboarding).toEqual({ browserSetupDone: false, importDone: true, checklistDismissed: false });
+    const second = await patch(world, { as: browser, body: { onboarding: { checklistDismissed: true } } });
+    expect(((await second.json()) as { onboarding: unknown }).onboarding).toEqual({ browserSetupDone: false, importDone: true, checklistDismissed: true });
+    expect((await me(world, browser)).account["onboarding"]).toEqual({ browserSetupDone: false, importDone: true, checklistDismissed: true });
+    expect((await snapshot(ada.id))["onboarding"]).toEqual({ importDone: true, checklistDismissed: true });
+  });
+
+  it("changes only the caller's preferences", async () => {
+    const world = serve();
+    const ada = await seedAccount(database());
+    const grace = await seedAccount(database());
+    const adas = await signIn(world, ada);
+    const before = await snapshot(grace.id);
+
+    expect((await patch(world, { as: adas, body: { theme: "light", accent: "rose", singleKeyShortcuts: false, onboarding: { importDone: true } } })).status).toBe(200);
+
+    expect(await snapshot(grace.id)).toEqual(before);
   });
 
   it("refuses a name that is blank once its whitespace is removed, with the field named", async () => {

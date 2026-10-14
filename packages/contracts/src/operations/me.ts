@@ -7,6 +7,36 @@ import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimi
 
 export const WORKSPACE_ROLES = ["owner", "admin", "member"] as const;
 
+export const THEMES = ["light", "dark", "system"] as const;
+/** The six accent presets of doc 03 (Q36): a name of the palette, never a free colour. Periwinkle is the default. */
+export const ACCENT_PRESETS = ["periwinkle", "violet", "rose", "amber", "green", "teal"] as const;
+export const BOOKMARK_VIEWS = ["grid", "table"] as const;
+export const ANALYTICS_CONSENTS = ["unset", "granted", "denied"] as const;
+
+const ThemeSchema = z.enum(THEMES).describe("The colour scheme the account chose; system follows the operating system");
+const AccentSchema = z.enum(ACCENT_PRESETS).describe("The accent colour, one of the six preset names");
+const DefaultViewSchema = z.enum(BOOKMARK_VIEWS).describe("How bookmark lists are shown unless a list says otherwise");
+const AnalyticsConsentSchema = z
+  .enum(ANALYTICS_CONSENTS)
+  .describe("Whether the account agreed to product analytics; a choice is stored with the time it was made, and unset clears that time");
+
+const OnboardingFlags = {
+  browserSetupDone: z.boolean().describe("Whether the browser setup step of the Getting started checklist is done"),
+  importDone: z.boolean().describe("Whether the import step of the Getting started checklist is done"),
+  checklistDismissed: z.boolean().describe("Whether the Getting started checklist is dismissed"),
+};
+
+export const OnboardingSchema = z.strictObject(OnboardingFlags).meta({ id: "Onboarding" });
+
+export const OnboardingChangesSchema = z
+  .strictObject({
+    browserSetupDone: OnboardingFlags.browserSetupDone.optional(),
+    importDone: OnboardingFlags.importDone.optional(),
+    checklistDismissed: OnboardingFlags.checklistDismissed.optional(),
+  })
+  .describe("The checklist keys to change; a key left out keeps its value")
+  .meta({ id: "OnboardingChanges" });
+
 export const MembershipSchema = z
   .strictObject({
     workspaceId: z.uuid().describe("The workspace's identifier"),
@@ -21,10 +51,13 @@ export const AccountSchema = z
     email: z.string().describe("The account's email address, as stored"),
     displayName: z.string().describe("The name shown to other members"),
     locale: z.enum(["en", "de"]).describe("The language of the account's emails and of the app unless the browser overrides it"),
-    theme: z.enum(["light", "dark", "system"]).describe("The colour scheme the account chose"),
-    accent: z.string().nullable().describe("The accent colour, a token name of the palette; null when none was chosen"),
-    defaultView: z.enum(["grid", "table"]).describe("How bookmark lists are shown unless a list says otherwise"),
+    theme: ThemeSchema,
+    accent: AccentSchema.nullable().describe("The accent colour, one of the six preset names; null when none was chosen, which shows the default"),
+    defaultView: DefaultViewSchema,
+    singleKeyShortcuts: z.boolean().describe("Whether single-key shortcuts are on; modifier shortcuts always work"),
     aiOptOut: z.boolean().describe("Whether the account opted out of AI features"),
+    analyticsConsent: AnalyticsConsentSchema,
+    onboarding: OnboardingSchema.describe("The stored state of the Getting started checklist"),
     emailVerified: z.boolean().describe("Whether the email address was verified"),
     hasPassword: z.boolean().describe("Whether the account can sign in with a password; false for an account that signs in through an identity provider only"),
   })
@@ -34,6 +67,13 @@ export const UpdateAccountRequestSchema = z
   .strictObject({
     displayName: z.string().min(1).max(100).optional().describe("The name shown to other members, 1 to 100 characters; surrounding whitespace is removed and a name that is blank after that is refused"),
     locale: z.enum(["en", "de"]).optional().describe("The language of the account's emails and of the app unless the browser overrides it"),
+    theme: ThemeSchema.optional(),
+    accent: AccentSchema.optional(),
+    defaultView: DefaultViewSchema.optional(),
+    singleKeyShortcuts: z.boolean().optional().describe("Whether single-key shortcuts are on; modifier shortcuts always work"),
+    aiOptOut: z.boolean().optional().describe("Whether the account opted out of AI features"),
+    analyticsConsent: AnalyticsConsentSchema.optional(),
+    onboarding: OnboardingChangesSchema.optional(),
   })
   .meta({ id: "UpdateAccountRequest" });
 
@@ -174,7 +214,7 @@ export const updateMe = defineOperation({
   path: "/api/v1/me",
   operationId: "updateMe",
   tag: "me",
-  summary: "Change the signed-in account's display name and language",
+  summary: "Change the signed-in account's profile and preferences",
   auth: "account",
   rate: "write",
   request: { body: UpdateAccountRequestSchema },
@@ -183,7 +223,7 @@ export const updateMe = defineOperation({
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse("The request did not come from the application itself"),
-    422: problemResponse("The body did not pass validation: an unknown field, a name that is empty or longer than 100 characters, or a language other than en and de"),
+    422: problemResponse("The body did not pass validation: an unknown field or onboarding key, a name that is empty or longer than 100 characters, or a value outside the one the field allows (a language other than en and de, an accent that is not a preset name)"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },

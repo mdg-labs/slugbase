@@ -5,15 +5,37 @@
         "additionalProperties": false,
         "properties": {
           "accent": {
-            "description": "The accent colour, a token name of the palette; null when none was chosen",
-            "type": [
-              "string",
-              "null"
-            ]
+            "anyOf": [
+              {
+                "description": "The accent colour, one of the six preset names",
+                "enum": [
+                  "periwinkle",
+                  "violet",
+                  "rose",
+                  "amber",
+                  "green",
+                  "teal"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The accent colour, one of the six preset names; null when none was chosen, which shows the default"
           },
           "aiOptOut": {
             "description": "Whether the account opted out of AI features",
             "type": "boolean"
+          },
+          "analyticsConsent": {
+            "description": "Whether the account agreed to product analytics; a choice is stored with the time it was made, and unset clears that time",
+            "enum": [
+              "unset",
+              "granted",
+              "denied"
+            ],
+            "type": "string"
           },
           "defaultView": {
             "description": "How bookmark lists are shown unless a list says otherwise",
@@ -53,8 +75,16 @@
             ],
             "type": "string"
           },
+          "onboarding": {
+            "$ref": "#/components/schemas/Onboarding",
+            "description": "The stored state of the Getting started checklist"
+          },
+          "singleKeyShortcuts": {
+            "description": "Whether single-key shortcuts are on; modifier shortcuts always work",
+            "type": "boolean"
+          },
           "theme": {
-            "description": "The colour scheme the account chose",
+            "description": "The colour scheme the account chose; system follows the operating system",
             "enum": [
               "light",
               "dark",
@@ -71,7 +101,10 @@
           "theme",
           "accent",
           "defaultView",
+          "singleKeyShortcuts",
           "aiOptOut",
+          "analyticsConsent",
+          "onboarding",
           "emailVerified",
           "hasPassword"
         ],
@@ -279,6 +312,48 @@
           "name",
           "role"
         ],
+        "type": "object"
+      },
+      "Onboarding": {
+        "additionalProperties": false,
+        "properties": {
+          "browserSetupDone": {
+            "description": "Whether the browser setup step of the Getting started checklist is done",
+            "type": "boolean"
+          },
+          "checklistDismissed": {
+            "description": "Whether the Getting started checklist is dismissed",
+            "type": "boolean"
+          },
+          "importDone": {
+            "description": "Whether the import step of the Getting started checklist is done",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "browserSetupDone",
+          "importDone",
+          "checklistDismissed"
+        ],
+        "type": "object"
+      },
+      "OnboardingChanges": {
+        "additionalProperties": false,
+        "description": "The checklist keys to change; a key left out keeps its value",
+        "properties": {
+          "browserSetupDone": {
+            "description": "Whether the browser setup step of the Getting started checklist is done",
+            "type": "boolean"
+          },
+          "checklistDismissed": {
+            "description": "Whether the Getting started checklist is dismissed",
+            "type": "boolean"
+          },
+          "importDone": {
+            "description": "Whether the import step of the Getting started checklist is done",
+            "type": "boolean"
+          }
+        },
         "type": "object"
       },
       "OpenApiDocument": {
@@ -605,6 +680,39 @@
       "UpdateAccountRequest": {
         "additionalProperties": false,
         "properties": {
+          "accent": {
+            "description": "The accent colour, one of the six preset names",
+            "enum": [
+              "periwinkle",
+              "violet",
+              "rose",
+              "amber",
+              "green",
+              "teal"
+            ],
+            "type": "string"
+          },
+          "aiOptOut": {
+            "description": "Whether the account opted out of AI features",
+            "type": "boolean"
+          },
+          "analyticsConsent": {
+            "description": "Whether the account agreed to product analytics; a choice is stored with the time it was made, and unset clears that time",
+            "enum": [
+              "unset",
+              "granted",
+              "denied"
+            ],
+            "type": "string"
+          },
+          "defaultView": {
+            "description": "How bookmark lists are shown unless a list says otherwise",
+            "enum": [
+              "grid",
+              "table"
+            ],
+            "type": "string"
+          },
           "displayName": {
             "description": "The name shown to other members, 1 to 100 characters; surrounding whitespace is removed and a name that is blank after that is refused",
             "maxLength": 100,
@@ -616,6 +724,22 @@
             "enum": [
               "en",
               "de"
+            ],
+            "type": "string"
+          },
+          "onboarding": {
+            "$ref": "#/components/schemas/OnboardingChanges"
+          },
+          "singleKeyShortcuts": {
+            "description": "Whether single-key shortcuts are on; modifier shortcuts always work",
+            "type": "boolean"
+          },
+          "theme": {
+            "description": "The colour scheme the account chose; system follows the operating system",
+            "enum": [
+              "light",
+              "dark",
+              "system"
             ],
             "type": "string"
           }
@@ -1020,7 +1144,7 @@
                 }
               }
             },
-            "description": "The body did not pass validation: an unknown field, a name that is empty or longer than 100 characters, or a language other than en and de"
+            "description": "The body did not pass validation: an unknown field or onboarding key, a name that is empty or longer than 100 characters, or a value outside the one the field allows (a language other than en and de, an accent that is not a preset name)"
           },
           "429": {
             "content": {
@@ -1054,7 +1178,7 @@
             "description": "The service is temporarily unavailable"
           }
         },
-        "summary": "Change the signed-in account's display name and language",
+        "summary": "Change the signed-in account's profile and preferences",
         "tags": [
           "me"
         ],

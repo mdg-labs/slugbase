@@ -6,6 +6,7 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   document.documentElement.className = "";
+  document.documentElement.removeAttribute("data-accent");
   window.localStorage.clear();
   Reflect.deleteProperty(Element.prototype, "getAnimations");
 });
@@ -46,11 +47,35 @@ export const CONFIG_BODY = {
 
 export const SESSION_PATH = "/api/v1/me/sessions";
 
+export const ME_PATH = "/api/v1/me";
+
+export const ACCOUNT_BODY = {
+  id: "0192f3a0-bbbb-7000-8000-000000000001",
+  email: "ada@example.org",
+  displayName: "Ada Lovelace",
+  locale: "en",
+  theme: "system",
+  accent: null,
+  defaultView: "grid",
+  singleKeyShortcuts: true,
+  aiOptOut: false,
+  analyticsConsent: "unset",
+  onboarding: { browserSetupDone: false, importDone: false, checklistDismissed: false },
+  emailVerified: true,
+  hasPassword: true,
+} as const;
+
+/** The signed-in account of a test server. It chose the language of the browser, so a test that opens the app in German sees German. */
+export function meBody(): object {
+  const german = globalThis.navigator.languages.some((language) => language.toLowerCase().startsWith("de"));
+  return { account: german ? { ...ACCOUNT_BODY, locale: "de" } : ACCOUNT_BODY, memberships: [], activeWorkspaceId: null };
+}
+
 export const SESSION_BODY = { items: [], nextCursor: null } as const;
 
 /**
- * The answers of a server with a signed-in visitor: the configuration, the session check, and `other` for
- * every other call.
+ * The answers of a server with a signed-in visitor: the configuration, the session check, their account,
+ * and `other` for every other call.
  */
 export function signedIn(
   request: Request,
@@ -59,6 +84,9 @@ export function signedIn(
   const { pathname } = new URL(request.url);
   if (pathname === "/api/config") {
     return Promise.resolve(json(CONFIG_BODY));
+  }
+  if (pathname === ME_PATH && request.method === "GET") {
+    return Promise.resolve(json(meBody()));
   }
   return pathname === SESSION_PATH ? Promise.resolve(json(SESSION_BODY)) : other(request);
 }

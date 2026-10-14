@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildOpenApiDocument, serializeOpenApiDocument } from "../src/openapi/generate.ts";
-import { AccountSchema, MembershipSchema, MeSchema, RevokeSessionsQuerySchema, SessionIdParamsSchema, SessionListQuerySchema, SessionListSchema, SessionSchema, UpdateAccountRequestSchema } from "../src/operations/me.ts";
+import { ACCENT_PRESETS, AccountSchema, MembershipSchema, MeSchema, RevokeSessionsQuerySchema, SessionIdParamsSchema, SessionListQuerySchema, SessionListSchema, SessionSchema, UpdateAccountRequestSchema } from "../src/operations/me.ts";
 import { operations } from "../src/operations/index.ts";
 
 type Obj = Record<string, unknown>;
@@ -122,7 +122,7 @@ describe("the account operation", () => {
     const account = schemas["Account"] as { additionalProperties: unknown; properties: Obj; required: string[] };
     expect(account.additionalProperties).toBe(false);
     expect(Object.keys(account.properties).sort()).toEqual([
-      "accent", "aiOptOut", "defaultView", "displayName", "email", "emailVerified", "hasPassword", "id", "locale", "theme",
+      "accent", "aiOptOut", "analyticsConsent", "defaultView", "displayName", "email", "emailVerified", "hasPassword", "id", "locale", "onboarding", "singleKeyShortcuts", "theme",
     ]);
     expect([...account.required].sort()).toEqual(Object.keys(account.properties).sort());
     const membership = schemas["Membership"] as { additionalProperties: unknown; properties: Obj; required: string[] };
@@ -139,7 +139,10 @@ describe("the account operation", () => {
       theme: "dark",
       accent: null,
       defaultView: "table",
+      singleKeyShortcuts: true,
       aiOptOut: false,
+      analyticsConsent: "unset",
+      onboarding: { browserSetupDone: false, importDone: true, checklistDismissed: false },
       emailVerified: true,
       hasPassword: false,
     };
@@ -149,12 +152,15 @@ describe("the account operation", () => {
     expect(MeSchema.safeParse({ account, memberships: [] }).success).toBe(false);
     expect(AccountSchema.safeParse({ ...account, passwordHash: "x" }).success).toBe(false);
     expect(AccountSchema.safeParse({ ...account, locale: "fr" }).success).toBe(false);
+    expect(AccountSchema.safeParse({ ...account, accent: "#ff0000" }).success).toBe(false);
+    expect(AccountSchema.safeParse({ ...account, accent: "teal" }).success).toBe(true);
+    expect(AccountSchema.safeParse({ ...account, onboarding: { importDone: true } }).success).toBe(false);
     expect(MembershipSchema.safeParse({ ...membership, role: "guest" }).success).toBe(false);
     expect(MembershipSchema.safeParse({ ...membership, joinedAt: "2026-01-01T00:00:00Z" }).success).toBe(false);
   });
 });
 
-describe("the profile operation", () => {
+describe("the profile and preferences operation", () => {
   const operation = paths["/api/v1/me"]?.["patch"];
 
   it("is updateMe: an account operation in the write bucket that no API token may call", () => {
@@ -180,13 +186,32 @@ describe("the profile operation", () => {
     }
   });
 
-  it("takes a closed object of two optional fields: a name of 1 to 100 characters and a locale of en or de", () => {
+  it("takes a closed object of optional fields: the profile and the preferences, never the email or a flag of the account", () => {
     const request = schemas["UpdateAccountRequest"] as { additionalProperties: unknown; properties: Record<string, Obj>; required?: string[] };
     expect(request.additionalProperties).toBe(false);
-    expect(Object.keys(request.properties).sort()).toEqual(["displayName", "locale"]);
+    expect(Object.keys(request.properties).sort()).toEqual([
+      "accent", "aiOptOut", "analyticsConsent", "defaultView", "displayName", "locale", "onboarding", "singleKeyShortcuts", "theme",
+    ]);
     expect(request.required).toBeUndefined();
     expect(request.properties["displayName"]).toMatchObject({ type: "string", minLength: 1, maxLength: 100 });
     expect(request.properties["locale"]).toMatchObject({ enum: ["en", "de"] });
+    expect(request.properties["theme"]).toMatchObject({ enum: ["light", "dark", "system"] });
+    expect(request.properties["accent"]).toMatchObject({ enum: ["periwinkle", "violet", "rose", "amber", "green", "teal"] });
+    expect(request.properties["defaultView"]).toMatchObject({ enum: ["grid", "table"] });
+    expect(request.properties["analyticsConsent"]).toMatchObject({ enum: ["unset", "granted", "denied"] });
+    expect(request.properties["singleKeyShortcuts"]).toMatchObject({ type: "boolean" });
+    expect(request.properties["aiOptOut"]).toMatchObject({ type: "boolean" });
+    const onboarding = schemas["OnboardingChanges"] as { additionalProperties: unknown; properties: Obj; required?: string[] };
+    expect(onboarding.additionalProperties).toBe(false);
+    expect(Object.keys(onboarding.properties).sort()).toEqual(["browserSetupDone", "checklistDismissed", "importDone"]);
+    expect(onboarding.required).toBeUndefined();
+  });
+
+  it("names six accent presets and no colour value", () => {
+    expect(ACCENT_PRESETS).toHaveLength(6);
+    for (const preset of ACCENT_PRESETS) {
+      expect(preset).toMatch(/^[a-z]+$/);
+    }
   });
 
   it.each([
@@ -201,7 +226,24 @@ describe("the profile operation", () => {
     [{ email: "other@example.test" }, false],
     [{ isInstanceAdmin: true }, false],
     [{ id: "0192f3a0-0000-7000-8000-0000000000a1" }, false],
-    [{ theme: "dark" }, false],
+    [{ theme: "dark" }, true],
+    [{ theme: "system", accent: "periwinkle", defaultView: "table", singleKeyShortcuts: false, aiOptOut: true, analyticsConsent: "denied" }, true],
+    [{ onboarding: {} }, true],
+    [{ onboarding: { importDone: true, browserSetupDone: false, checklistDismissed: true } }, true],
+    [{ theme: "blue" }, false],
+    [{ theme: null }, false],
+    [{ accent: "#ff0000" }, false],
+    [{ accent: "red" }, false],
+    [{ accent: null }, false],
+    [{ defaultView: "list" }, false],
+    [{ singleKeyShortcuts: "no" }, false],
+    [{ aiOptOut: 1 }, false],
+    [{ analyticsConsent: "maybe" }, false],
+    [{ onboarding: { extra: true } }, false],
+    [{ onboarding: { importDone: "yes" } }, false],
+    [{ onboarding: null }, false],
+    [{ signinAlerts: false }, false],
+    [{ consentAt: "2026-01-01T00:00:00Z" }, false],
   ])("%j is accepted: %s", (body, accepted) => {
     expect(UpdateAccountRequestSchema.safeParse(body).success).toBe(accepted);
   });

@@ -9,13 +9,15 @@ export interface ThemeToggleProps {
   switchToDark: string;
   /** The same while the dark theme shows: it switches to light. */
   switchToLight: string;
+  /** Called with the theme the button switched to, after it applied; the app saves the choice with it. */
+  onToggle?: (next: ResolvedTheme) => void;
 }
 
 /**
  * The icon button of the top bar that flips the theme between light and dark;
- * the `system` choice is made in the account preferences. It needs a ThemeProvider.
+ * the `system` choice is made in the account preferences, where the app also keeps the choice. It needs a ThemeProvider.
  */
-export function ThemeToggle({ switchToDark, switchToLight }: ThemeToggleProps): ReactElement {
+export function ThemeToggle({ switchToDark, switchToLight, onToggle }: ThemeToggleProps): ReactElement {
   const { resolvedTheme, setTheme } = useTheme();
   const dark = resolvedTheme === "dark";
   const label = dark ? switchToLight : switchToDark;
@@ -28,6 +30,7 @@ export function ThemeToggle({ switchToDark, switchToLight }: ThemeToggleProps): 
             aria-label={label}
             onClick={() => {
               setTheme(next);
+              onToggle?.(next);
             }}
             size="icon"
             variant="ghost"

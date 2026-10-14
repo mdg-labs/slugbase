@@ -13,7 +13,12 @@ import {
 export type Theme = "light" | "dark" | "system";
 export type ResolvedTheme = "light" | "dark";
 
+/** The six accent presets of Q36; `theme.css` styles each as a `data-accent` value. Periwinkle is the default and needs no attribute. */
+export type Accent = "periwinkle" | "violet" | "rose" | "amber" | "green" | "teal";
+export const ACCENTS: readonly Accent[] = ["periwinkle", "violet", "rose", "amber", "green", "teal"];
+
 export const THEME_STORAGE_KEY = "slugbase-theme";
+export const ACCENT_STORAGE_KEY = "slugbase-accent";
 
 const THEMES: readonly Theme[] = ["light", "dark", "system"];
 const DARK_QUERY = "(prefers-color-scheme: dark)";
@@ -24,12 +29,19 @@ export interface ThemeContextValue {
   /** What the document shows: the choice, or the system preference when the choice is `system`. */
   resolvedTheme: ResolvedTheme;
   setTheme: (theme: Theme) => void;
+  /** The accent preset the member chose; null while none was, which shows the default. */
+  accent: Accent | null;
+  setAccent: (accent: Accent | null) => void;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 function isTheme(value: unknown): value is Theme {
   return THEMES.some((theme) => theme === value);
+}
+
+function isAccent(value: unknown): value is Accent {
+  return ACCENTS.some((accent) => accent === value);
 }
 
 // Storage can be missing or throw (blocked cookies, private mode, quota); a
@@ -43,9 +55,22 @@ function readStoredTheme(storageKey: string): Theme | undefined {
   }
 }
 
-function storeTheme(storageKey: string, theme: Theme): void {
+function readStoredAccent(storageKey: string): Accent | null {
   try {
-    window.localStorage.setItem(storageKey, theme);
+    const stored = window.localStorage.getItem(storageKey);
+    return isAccent(stored) ? stored : null;
+  } catch {
+    return null;
+  }
+}
+
+function store(storageKey: string, value: string | null): void {
+  try {
+    if (value === null) {
+      window.localStorage.removeItem(storageKey);
+    } else {
+      window.localStorage.setItem(storageKey, value);
+    }
   } catch {
     // Not remembered; the choice still applies until the page is closed.
   }
@@ -73,21 +98,26 @@ export interface ThemeProviderProps {
   defaultTheme?: Theme;
   /** The `localStorage` key that keeps the choice. */
   storageKey?: string;
+  /** The `localStorage` key that keeps the accent. */
+  accentStorageKey?: string;
 }
 
 /**
  * Keeps the light, dark or system choice and applies it as a `light` or `dark`
  * class on the root element, which `theme.css` styles. The class is set from
  * script that ships with the app bundle, so no inline script is needed and a
- * `script-src 'self'` policy holds. Until account preferences exist (Phase 2)
- * the choice lives in `localStorage` alone.
+ * `script-src 'self'` policy holds. The accent is a `data-accent` attribute on
+ * the root element. Both choices live in `localStorage`, which the page shows
+ * until the app applies the account's own.
  */
 export function ThemeProvider({
   children,
   defaultTheme = "system",
   storageKey = THEME_STORAGE_KEY,
+  accentStorageKey = ACCENT_STORAGE_KEY,
 }: ThemeProviderProps): ReactElement {
   const [theme, setThemeState] = useState<Theme>(() => readStoredTheme(storageKey) ?? defaultTheme);
+  const [accent, setAccentState] = useState<Accent | null>(() => readStoredAccent(accentStorageKey));
   const systemDark = useSyncExternalStore(subscribeToSystemTheme, systemPrefersDark, serverSystemTheme);
   const resolvedTheme: ResolvedTheme = theme === "system" ? (systemDark ? "dark" : "light") : theme;
 
@@ -97,17 +127,34 @@ export function ThemeProvider({
     root.classList.add(resolvedTheme);
   }, [resolvedTheme]);
 
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    if (accent === null) {
+      root.removeAttribute("data-accent");
+    } else {
+      root.setAttribute("data-accent", accent);
+    }
+  }, [accent]);
+
   const setTheme = useCallback(
     (next: Theme) => {
       setThemeState(next);
-      storeTheme(storageKey, next);
+      store(storageKey, next);
     },
     [storageKey],
   );
 
+  const setAccent = useCallback(
+    (next: Accent | null) => {
+      setAccentState(next);
+      store(accentStorageKey, next);
+    },
+    [accentStorageKey],
+  );
+
   const value = useMemo<ThemeContextValue>(
-    () => ({ theme, resolvedTheme, setTheme }),
-    [theme, resolvedTheme, setTheme],
+    () => ({ theme, resolvedTheme, setTheme, accent, setAccent }),
+    [theme, resolvedTheme, setTheme, accent, setAccent],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { THEME_STORAGE_KEY, ThemeProvider, useTheme, type Theme } from "../src/index.ts";
+import { ACCENT_STORAGE_KEY, THEME_STORAGE_KEY, ThemeProvider, useTheme, type Accent, type Theme } from "../src/index.ts";
 import "./support.tsx";
 
 interface SystemTheme {
@@ -154,6 +154,65 @@ describe("ThemeProvider", () => {
 
     expect(window.localStorage.getItem("custom-theme")).toBe("dark");
     expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBeNull();
+  });
+});
+
+function AccentProbe(): React.ReactElement {
+  const { accent, setAccent } = useTheme();
+  return (
+    <div>
+      <p data-testid="accent">{accent ?? "none"}</p>
+      {(["teal", null] as const satisfies readonly (Accent | null)[]).map((choice) => (
+        <button key={choice ?? "default"} onClick={() => { setAccent(choice); }} type="button">
+          {choice ?? "default"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+describe("the accent", () => {
+  it("shows no accent attribute until one is chosen, then sets and removes data-accent and remembers it", () => {
+    stubSystemTheme(false);
+    render(
+      <ThemeProvider>
+        <AccentProbe />
+      </ThemeProvider>,
+    );
+    expect(screen.getByTestId("accent").textContent).toBe("none");
+    expect(document.documentElement.hasAttribute("data-accent")).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "teal" }));
+
+    expect(document.documentElement.getAttribute("data-accent")).toBe("teal");
+    expect(window.localStorage.getItem(ACCENT_STORAGE_KEY)).toBe("teal");
+
+    fireEvent.click(screen.getByRole("button", { name: "default" }));
+
+    expect(document.documentElement.hasAttribute("data-accent")).toBe(false);
+    expect(window.localStorage.getItem(ACCENT_STORAGE_KEY)).toBeNull();
+  });
+
+  it("restores the stored accent, and ignores a stored value that is not a preset", () => {
+    stubSystemTheme(false);
+    window.localStorage.setItem(ACCENT_STORAGE_KEY, "rose");
+    const first = render(
+      <ThemeProvider>
+        <AccentProbe />
+      </ThemeProvider>,
+    );
+    expect(document.documentElement.getAttribute("data-accent")).toBe("rose");
+    first.unmount();
+    document.documentElement.removeAttribute("data-accent");
+
+    window.localStorage.setItem(ACCENT_STORAGE_KEY, "#ff0000");
+    render(
+      <ThemeProvider>
+        <AccentProbe />
+      </ThemeProvider>,
+    );
+    expect(screen.getByTestId("accent").textContent).toBe("none");
+    expect(document.documentElement.hasAttribute("data-accent")).toBe(false);
   });
 });
 

@@ -7,15 +7,30 @@ import { tenantHandle, type TenantTx } from "../tenant.ts";
 // password, which the column privileges keep the application from reading.
 // Nothing secret is selected.
 
+export const ACCENT_PRESETS = ["periwinkle", "violet", "rose", "amber", "green", "teal"] as const;
+export type AccentPreset = (typeof ACCENT_PRESETS)[number];
+
+/** The checklist state of doc 02 section 9.3 that is stored; the other checklist items are derived from data. */
+export interface Onboarding {
+  readonly browserSetupDone: boolean;
+  readonly importDone: boolean;
+  readonly checklistDismissed: boolean;
+}
+
+export type AnalyticsConsent = "unset" | "granted" | "denied";
+
 export interface AccountProfile {
   readonly id: string;
   readonly email: string;
   readonly displayName: string;
   readonly locale: "en" | "de";
   readonly theme: "light" | "dark" | "system";
-  readonly accent: string | null;
+  readonly accent: AccentPreset | null;
   readonly defaultBookmarkView: "grid" | "table";
+  readonly singleKeyShortcuts: boolean;
   readonly aiOptOut: boolean;
+  readonly analyticsConsent: AnalyticsConsent;
+  readonly onboarding: Onboarding;
   readonly emailVerified: boolean;
   readonly hasPassword: boolean;
 }
@@ -29,10 +44,27 @@ function oneOf<T extends string>(column: string, value: string, allowed: readonl
   return found;
 }
 
-/** The columns of the profile an account changes itself; a field left out keeps its value. */
+/**
+ * The columns of the profile an account changes itself; a field left out keeps its value. A choice of
+ * `analyticsConsent` is stored with the time it was made (`consent_at`), and `unset` clears that time. The
+ * `onboarding` keys given are merged into the stored state; the others keep their value.
+ */
 export interface AccountProfileChanges {
   readonly displayName?: string;
   readonly locale?: "en" | "de";
+  readonly theme?: "light" | "dark" | "system";
+  readonly accent?: AccentPreset;
+  readonly defaultBookmarkView?: "grid" | "table";
+  readonly singleKeyShortcuts?: boolean;
+  readonly aiOptOut?: boolean;
+  readonly analyticsConsent?: AnalyticsConsent;
+  readonly onboarding?: Partial<Onboarding>;
+}
+
+function onboardingOf(stored: unknown): Onboarding {
+  const keys = typeof stored === "object" && stored !== null ? stored : {};
+  const flag = (key: keyof Onboarding): boolean => Reflect.get(keys, key) === true;
+  return { browserSetupDone: flag("browserSetupDone"), importDone: flag("importDone"), checklistDismissed: flag("checklistDismissed") };
 }
 
 export interface AccountProfileRepository {
@@ -41,7 +73,8 @@ export interface AccountProfileRepository {
   /**
    * Writes the changes to the account of the transaction and answers its profile afterwards; undefined when no
    * such row is visible. The row is the one `app.account_id` names, never one the caller names, and the
-   * application role holds the update privilege on these two columns only. No change writes nothing.
+   * application role holds the update privilege on the columns of these changes only. The changes are one
+   * statement, so all of them apply or none does. No change writes nothing.
    */
   updateProfile(changes: AccountProfileChanges): Promise<AccountProfile | undefined>;
 }
@@ -60,7 +93,10 @@ export function accountProfileRepository(tx: TenantTx): AccountProfileRepository
           theme: accounts.theme,
           accent: accounts.accent,
           defaultBookmarkView: accounts.defaultBookmarkView,
+          singleKeyShortcuts: accounts.singleKeyShortcuts,
           aiOptOut: accounts.aiOptOut,
+          analyticsConsent: accounts.analyticsConsent,
+          onboarding: accounts.onboarding,
         })
         .from(accounts)
         .where(eq(accounts.id, tx.accountId));
@@ -78,23 +114,29 @@ export function accountProfileRepository(tx: TenantTx): AccountProfileRepository
         displayName: row.displayName,
         locale: oneOf("locale", row.locale, ["en", "de"]),
         theme: oneOf("theme", row.theme, ["light", "dark", "system"]),
-        accent: row.accent,
+        accent: row.accent === null ? null : oneOf("accent", row.accent, ACCENT_PRESETS),
         defaultBookmarkView: oneOf("default_bookmark_view", row.defaultBookmarkView, ["grid", "table"]),
+        singleKeyShortcuts: row.singleKeyShortcuts,
         aiOptOut: row.aiOptOut,
+        analyticsConsent: oneOf("analytics_consent", row.analyticsConsent, ["unset", "granted", "denied"]),
+        onboarding: onboardingOf(row.onboarding),
         emailVerified: row.emailVerifiedAt !== null,
         hasPassword,
       };
     },
-    async updateProfile({ displayName, locale }) {
-      if (displayName !== undefined || locale !== undefined) {
-        const updated = await tenantHandle(tx)
-          .update(accounts)
-          .set({
-            ...(displayName === undefined ? {} : { displayName }),
-            ...(locale === undefined ? {} : { locale }),
-          })
-          .where(eq(accounts.id, tx.accountId))
-          .returning({ id: accounts.id });
+    async updateProfile(changes) {
+      const { onboarding, analyticsConsent, ...columns } = changes;
+      const set = {
+        ...columns,
+        ...(analyticsConsent === undefined
+          ? {}
+          : { analyticsConsent, consentAt: analyticsConsent === "unset" ? null : sql`now()` }),
+        ...(onboarding === undefined || Object.keys(onboarding).length === 0
+          ? {}
+          : { onboarding: sql`${accounts.onboarding} || ${JSON.stringify(onboarding)}::jsonb` }),
+      };
+      if (Object.keys(set).length > 0) {
+        const updated = await tenantHandle(tx).update(accounts).set(set).where(eq(accounts.id, tx.accountId)).returning({ id: accounts.id });
         if (updated.length === 0) {
           return undefined;
         }

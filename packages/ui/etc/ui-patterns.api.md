@@ -18,6 +18,29 @@ import { SettingsIcon } from 'lucide-react';
 import { TriangleAlertIcon } from 'lucide-react';
 
 // @public
+export type Accent = "periwinkle" | "violet" | "rose" | "amber" | "green" | "teal";
+
+// @public
+export function AccentChoice(input: AccentChoiceProps): ReactElement;
+
+// @public (undocumented)
+export interface AccentChoiceProps {
+    // (undocumented)
+    className?: string;
+    description?: ReactNode;
+    // (undocumented)
+    disabled?: boolean;
+    error?: ReactNode;
+    label: ReactNode;
+    name?: string;
+    names: Readonly<Record<Accent, string>>;
+    // (undocumented)
+    onValueChange: (value: Accent) => void;
+    // (undocumented)
+    value: Accent;
+}
+
+// @public
 export function AccountAvatar(input: AccountAvatarProps): ReactElement;
 
 // @public (undocumented)
@@ -214,6 +237,9 @@ export { LogOutIcon }
 // @public (undocumented)
 export const MAIN_CONTENT_ID = "main-content";
 
+// @public (undocumented)
+export type ResolvedTheme = "light" | "dark";
+
 // @public
 export function SecretInput(input: SecretInputProps): ReactElement;
 
@@ -240,6 +266,37 @@ export interface SecretInputProps {
     showLabel: string;
     // (undocumented)
     value?: string;
+}
+
+// @public
+export function SegmentedChoice(input: SegmentedChoiceProps): ReactElement;
+
+// @public (undocumented)
+export interface SegmentedChoiceOption {
+    // (undocumented)
+    icon?: ReactNode;
+    // (undocumented)
+    label: string;
+    // (undocumented)
+    value: string;
+}
+
+// @public (undocumented)
+export interface SegmentedChoiceProps {
+    // (undocumented)
+    className?: string;
+    description?: ReactNode;
+    // (undocumented)
+    disabled?: boolean;
+    error?: ReactNode;
+    label: ReactNode;
+    name?: string;
+    // (undocumented)
+    onValueChange: (value: string) => void;
+    // (undocumented)
+    options: readonly SegmentedChoiceOption[];
+    // (undocumented)
+    value: string;
 }
 
 // @public
@@ -322,10 +379,31 @@ export interface SettingsSectionProps {
 }
 
 // @public
+export function SettingSwitch(input: SettingSwitchProps): ReactElement;
+
+// @public (undocumented)
+export interface SettingSwitchProps {
+    // (undocumented)
+    checked: boolean;
+    // (undocumented)
+    className?: string;
+    description?: ReactNode;
+    // (undocumented)
+    disabled?: boolean;
+    error?: ReactNode;
+    // (undocumented)
+    label: ReactNode;
+    name?: string;
+    // (undocumented)
+    onCheckedChange: (checked: boolean) => void;
+}
+
+// @public
 export function ThemeToggle(input: ThemeToggleProps): ReactElement;
 
 // @public (undocumented)
 export interface ThemeToggleProps {
+    onToggle?: (next: ResolvedTheme) => void;
     switchToDark: string;
     switchToLight: string;
 }

@@ -20,6 +20,15 @@ import { Tooltip as TooltipPrimitive } from '@base-ui/react/tooltip';
 import { useRender } from '@base-ui/react/use-render';
 import { VariantProps } from 'class-variance-authority';
 
+// @public
+export type Accent = "periwinkle" | "violet" | "rose" | "amber" | "green" | "teal";
+
+// @public (undocumented)
+export const ACCENT_STORAGE_KEY = "slugbase-accent";
+
+// @public (undocumented)
+export const ACCENTS: readonly Accent[];
+
 // @public (undocumented)
 export function Alert(input: React_2.ComponentProps<"div"> & VariantProps<typeof alertVariants>): React_2.ReactElement;
 
@@ -228,6 +237,22 @@ export function SheetViewport(input: SheetPrimitive.Viewport.Props & {
     variant?: "default" | "inset";
 }): React_3.ReactElement;
 
+// @public
+export interface ShortcutBinding {
+    key: string;
+    mod?: boolean;
+}
+
+// @public
+export function ShortcutsProvider(input: ShortcutsProviderProps): ReactElement;
+
+// @public (undocumented)
+export interface ShortcutsProviderProps {
+    // (undocumented)
+    children: ReactNode;
+    singleKey: boolean;
+}
+
 // @public (undocumented)
 export function Sidebar(input: React_2.ComponentProps<"div"> & {
     side?: "left" | "right";
@@ -361,7 +386,10 @@ export const THEME_STORAGE_KEY = "slugbase-theme";
 
 // @public (undocumented)
 export interface ThemeContextValue {
+    accent: Accent | null;
     resolvedTheme: ResolvedTheme;
+    // (undocumented)
+    setAccent: (accent: Accent | null) => void;
     // (undocumented)
     setTheme: (theme: Theme) => void;
     theme: Theme;
@@ -372,6 +400,7 @@ export function ThemeProvider(input: ThemeProviderProps): ReactElement;
 
 // @public (undocumented)
 export interface ThemeProviderProps {
+    accentStorageKey?: string;
     // (undocumented)
     children: ReactNode;
     defaultTheme?: Theme;
@@ -428,6 +457,9 @@ export function useIsMobile(): boolean;
 
 // @public (undocumented)
 export function useMediaQuery(query: BreakpointQuery | MediaQueryInput | (string & {})): boolean;
+
+// @public
+export function useShortcut(binding: ShortcutBinding, handler: (event: KeyboardEvent) => void): void;
 
 // @public (undocumented)
 export function useSidebar(): SidebarContextProps;

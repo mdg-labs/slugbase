@@ -78,6 +78,13 @@
       "when": 1791998241022,
       "tag": "20261014171721_add_account_profile_update",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792009388721,
+      "tag": "20261014202308_add_account_preferences_update",
+      "breakpoints": true
     }
   ]
 }

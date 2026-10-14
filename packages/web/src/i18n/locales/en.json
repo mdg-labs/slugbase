@@ -31,7 +31,8 @@
     "navigation": "Settings",
     "nav": {
       "account": "Account",
-      "profile": "Profile"
+      "profile": "Profile",
+      "preferences": "Preferences"
     },
     "account": {
       "title": "Profile",
@@ -71,6 +72,68 @@
         "title": "Your profile could not be loaded",
         "description": "Try again. If this continues, tell your administrator.",
         "retry": "Try again"
+      }
+    },
+    "preferences": {
+      "title": "Preferences",
+      "status": {
+        "saving": "Saving…",
+        "saved": "All changes saved"
+      },
+      "appearance": {
+        "title": "Appearance",
+        "description": "How the app looks and how bookmark lists open."
+      },
+      "theme": {
+        "label": "Theme",
+        "description": "System follows the setting of your device.",
+        "option": {
+          "system": "System",
+          "dark": "Dark",
+          "light": "Light"
+        }
+      },
+      "accent": {
+        "label": "Accent colour",
+        "description": "Colours buttons, switches and the focus ring.",
+        "option": {
+          "periwinkle": "Periwinkle",
+          "violet": "Violet",
+          "rose": "Rose",
+          "amber": "Amber",
+          "green": "Green",
+          "teal": "Teal"
+        }
+      },
+      "view": {
+        "label": "Default bookmark view",
+        "description": "How your bookmark lists open.",
+        "option": {
+          "grid": "Grid",
+          "table": "Table"
+        }
+      },
+      "shortcuts": {
+        "title": "Keyboard",
+        "description": "Shortcuts that hold Ctrl or Command always work.",
+        "single": {
+          "label": "Single-key shortcuts",
+          "description": "Act with one key, for example C to create a bookmark. Turn this off if keys are triggered by accident."
+        }
+      },
+      "ai": {
+        "title": "AI suggestions",
+        "description": "This server can suggest titles, tags and folders for your bookmarks.",
+        "optOut": {
+          "label": "Don't use AI suggestions for me",
+          "description": "No bookmark of yours is sent to the AI service."
+        }
+      },
+      "error": {
+        "saveFailed": "This change was not saved."
+      },
+      "loadFailed": {
+        "title": "Your preferences could not be loaded"
       }
     }
   },

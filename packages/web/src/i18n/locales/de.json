@@ -31,7 +31,8 @@
     "navigation": "Einstellungen",
     "nav": {
       "account": "Konto",
-      "profile": "Profil"
+      "profile": "Profil",
+      "preferences": "Voreinstellungen"
     },
     "account": {
       "title": "Profil",
@@ -71,6 +72,68 @@
         "title": "Dein Profil konnte nicht geladen werden",
         "description": "Versuche es erneut. Melde es deiner Administration, wenn es weiter auftritt.",
         "retry": "Erneut versuchen"
+      }
+    },
+    "preferences": {
+      "title": "Voreinstellungen",
+      "status": {
+        "saving": "Speichern…",
+        "saved": "Alle Änderungen gespeichert"
+      },
+      "appearance": {
+        "title": "Darstellung",
+        "description": "Wie die App aussieht und wie Lesezeichenlisten sich öffnen."
+      },
+      "theme": {
+        "label": "Design",
+        "description": "System folgt der Einstellung deines Geräts.",
+        "option": {
+          "system": "System",
+          "dark": "Dunkel",
+          "light": "Hell"
+        }
+      },
+      "accent": {
+        "label": "Akzentfarbe",
+        "description": "Färbt Schaltflächen, Schalter und den Fokusrahmen.",
+        "option": {
+          "periwinkle": "Glockenblume",
+          "violet": "Violett",
+          "rose": "Rosé",
+          "amber": "Bernstein",
+          "green": "Grün",
+          "teal": "Petrol"
+        }
+      },
+      "view": {
+        "label": "Standardansicht für Lesezeichen",
+        "description": "Wie sich deine Lesezeichenlisten öffnen.",
+        "option": {
+          "grid": "Raster",
+          "table": "Tabelle"
+        }
+      },
+      "shortcuts": {
+        "title": "Tastatur",
+        "description": "Tastenkürzel mit Strg oder Cmd funktionieren immer.",
+        "single": {
+          "label": "Einzeltasten-Kürzel",
+          "description": "Mit einer Taste handeln, zum Beispiel C für ein neues Lesezeichen. Schalte sie aus, wenn Tasten versehentlich ausgelöst werden."
+        }
+      },
+      "ai": {
+        "title": "KI-Vorschläge",
+        "description": "Dieser Server kann Titel, Tags und Ordner für deine Lesezeichen vorschlagen.",
+        "optOut": {
+          "label": "KI-Vorschläge für mich nicht verwenden",
+          "description": "Keines deiner Lesezeichen wird an den KI-Dienst gesendet."
+        }
+      },
+      "error": {
+        "saveFailed": "Diese Änderung wurde nicht gespeichert."
+      },
+      "loadFailed": {
+        "title": "Deine Voreinstellungen konnten nicht geladen werden"
       }
     }
   },

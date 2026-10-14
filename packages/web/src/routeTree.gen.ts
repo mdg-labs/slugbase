@@ -17,6 +17,7 @@ import { Route as App403RouteImport } from "./routes/_app/403.tsx";
 import { Route as AppSettingsRouteImport } from "./routes/_app/settings.tsx";
 import { Route as AppSettingsIndexRouteImport } from "./routes/_app/settings/index.tsx";
 import { Route as AppSettingsAccountIndexRouteImport } from "./routes/_app/settings/account/index.tsx";
+import { Route as AppSettingsAccountPreferencesRouteImport } from "./routes/_app/settings/account/preferences.tsx";
 
 const AppRoute = AppRouteImport.update({
   id: "/_app",
@@ -57,6 +58,12 @@ const AppSettingsAccountIndexRoute = AppSettingsAccountIndexRouteImport.update({
   path: "/account/",
   getParentRoute: () => AppSettingsRoute,
 } as any);
+const AppSettingsAccountPreferencesRoute =
+  AppSettingsAccountPreferencesRouteImport.update({
+    id: "/account/preferences",
+    path: "/account/preferences",
+    getParentRoute: () => AppSettingsRoute,
+  } as any);
 
 export interface FileRoutesByFullPath {
   "/": typeof AppIndexRoute;
@@ -65,6 +72,7 @@ export interface FileRoutesByFullPath {
   "/403": typeof App403Route;
   "/settings": typeof AppSettingsRouteWithChildren;
   "/settings/": typeof AppSettingsIndexRoute;
+  "/settings/account/preferences": typeof AppSettingsAccountPreferencesRoute;
   "/settings/account/": typeof AppSettingsAccountIndexRoute;
 }
 export interface FileRoutesByTo {
@@ -73,6 +81,7 @@ export interface FileRoutesByTo {
   "/403": typeof App403Route;
   "/": typeof AppIndexRoute;
   "/settings": typeof AppSettingsIndexRoute;
+  "/settings/account/preferences": typeof AppSettingsAccountPreferencesRoute;
   "/settings/account": typeof AppSettingsAccountIndexRoute;
 }
 export interface FileRoutesById {
@@ -84,6 +93,7 @@ export interface FileRoutesById {
   "/_app/settings": typeof AppSettingsRouteWithChildren;
   "/_app/": typeof AppIndexRoute;
   "/_app/settings/": typeof AppSettingsIndexRoute;
+  "/_app/settings/account/preferences": typeof AppSettingsAccountPreferencesRoute;
   "/_app/settings/account/": typeof AppSettingsAccountIndexRoute;
 }
 export interface FileRouteTypes {
@@ -95,9 +105,17 @@ export interface FileRouteTypes {
     | "/403"
     | "/settings"
     | "/settings/"
+    | "/settings/account/preferences"
     | "/settings/account/";
   fileRoutesByTo: FileRoutesByTo;
-  to: "/login" | "/$" | "/403" | "/" | "/settings" | "/settings/account";
+  to:
+    | "/login"
+    | "/$"
+    | "/403"
+    | "/"
+    | "/settings"
+    | "/settings/account/preferences"
+    | "/settings/account";
   id:
     | "__root__"
     | "/_app"
@@ -107,6 +125,7 @@ export interface FileRouteTypes {
     | "/_app/settings"
     | "/_app/"
     | "/_app/settings/"
+    | "/_app/settings/account/preferences"
     | "/_app/settings/account/";
   fileRoutesById: FileRoutesById;
 }
@@ -173,16 +192,25 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AppSettingsAccountIndexRouteImport;
       parentRoute: typeof AppSettingsRoute;
     };
+    "/_app/settings/account/preferences": {
+      id: "/_app/settings/account/preferences";
+      path: "/account/preferences";
+      fullPath: "/settings/account/preferences";
+      preLoaderRoute: typeof AppSettingsAccountPreferencesRouteImport;
+      parentRoute: typeof AppSettingsRoute;
+    };
   }
 }
 
 interface AppSettingsRouteChildren {
   AppSettingsIndexRoute: typeof AppSettingsIndexRoute;
+  AppSettingsAccountPreferencesRoute: typeof AppSettingsAccountPreferencesRoute;
   AppSettingsAccountIndexRoute: typeof AppSettingsAccountIndexRoute;
 }
 
 const AppSettingsRouteChildren: AppSettingsRouteChildren = {
   AppSettingsIndexRoute: AppSettingsIndexRoute,
+  AppSettingsAccountPreferencesRoute: AppSettingsAccountPreferencesRoute,
   AppSettingsAccountIndexRoute: AppSettingsAccountIndexRoute,
 };
 

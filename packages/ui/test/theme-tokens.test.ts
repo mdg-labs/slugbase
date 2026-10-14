@@ -199,6 +199,59 @@ describe.each(THEME_NAMES)("WCAG AA contrast in the %s theme", (name) => {
   );
 });
 
+// The six accent presets of Q36 (`data-accent` on <html>): each overrides the brand colour and the focus ring.
+const ACCENT_PRESETS = ["periwinkle", "violet", "rose", "amber", "green", "teal"] as const;
+const ACCENT_TOKENS = ["--primary", "--primary-foreground", "--primary-text", "--ring"];
+
+function accentBlock(theme: ThemeName, preset: string): Map<string, string> {
+  const prelude = `.${theme}[data-accent="${preset}"], .${theme} [data-accent="${preset}"]`;
+  return declarations(findBlock(parseBlocks(css), prelude).body);
+}
+
+describe("the accent presets", () => {
+  it("restates the default accent as periwinkle, so a swatch shows it under another accent", () => {
+    for (const name of THEME_NAMES) {
+      const accent = accentBlock(name, "periwinkle");
+      for (const token of ACCENT_TOKENS) {
+        expect(parseColor(accent.get(token) ?? "")).toEqual(parseColor(themes[name].resolve(token)));
+      }
+    }
+  });
+
+  it.each(ACCENT_PRESETS)("%s overrides exactly the brand colour, its text colours and the focus ring in both themes", (preset) => {
+    for (const name of THEME_NAMES) {
+      expect([...accentBlock(name, preset).keys()].sort()).toEqual([...ACCENT_TOKENS].sort());
+    }
+  });
+
+  it("defines six distinct presets in each theme", () => {
+    for (const name of THEME_NAMES) {
+      const fills = ACCENT_PRESETS.map((preset) => accentBlock(name, preset).get("--primary"));
+      expect(new Set(fills).size).toBe(6);
+    }
+  });
+
+  describe.each(THEME_NAMES)("in the %s theme", (name) => {
+    describe.each(ACCENT_PRESETS)("%s", (preset) => {
+      const accent = accentBlock(name, preset);
+      const value = (token: string): string => accent.get(token) ?? "";
+
+      it("reads its label on its fill", () => {
+        expect(contrast(value("--primary-foreground"), value("--primary"))).toBeGreaterThanOrEqual(TEXT_MINIMUM);
+      });
+
+      it.each(SURFACES)("reads as text on %s", (surface) => {
+        expect(contrast(value("--primary-text"), themes[name].resolve(surface))).toBeGreaterThanOrEqual(TEXT_MINIMUM);
+      });
+
+      it.each(SURFACES)("shows its fill and focus ring as a graphic on %s", (surface) => {
+        expect(contrast(value("--ring"), themes[name].resolve(surface))).toBeGreaterThanOrEqual(GRAPHIC_MINIMUM);
+        expect(contrast(value("--primary"), themes[name].resolve(surface))).toBeGreaterThanOrEqual(GRAPHIC_MINIMUM);
+      });
+    });
+  });
+});
+
 describe("why the semantic text variants exist", () => {
   it("measures the light fills against white below the AA text minimum, as doc 03 states", () => {
     const fills = themes.light;

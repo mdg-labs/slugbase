@@ -58,9 +58,9 @@ RLS column: **T** = tenant policy (`workspace_id = app_workspace_id()`), **A** =
 | `password_changed_at` | timestamptz | Sessions older than this are invalid |
 | `locale` | text NOT NULL DEFAULT `'en'` | CHECK in (`en`,`de`) — extended by migration |
 | `theme` | text NOT NULL DEFAULT `'system'` | `light` / `dark` / `system` |
-| `accent` | text | Token name from the accent palette (doc 03), never a free hex |
+| `accent` | text | One of the six preset names `periwinkle`, `violet`, `rose`, `amber`, `green`, `teal` (doc 03, Q36), never a free hex; NULL = the default (periwinkle) |
 | `default_bookmark_view` | text NOT NULL DEFAULT `'grid'` | `grid` / `table` |
-| `single_key_shortcuts` | boolean NOT NULL DEFAULT true | Single-key shortcuts on (Q38); modifier shortcuts always work |
+| `single_key_shortcuts` | boolean NOT NULL DEFAULT true | Single-key shortcuts on (Q38); modifier shortcuts always work. The API field is `singleKeyShortcuts` |
 | `signin_alerts` | boolean NOT NULL DEFAULT true | Email the account on a sign-in from a new device (doc 02 §12). A sign-in is from a new device when no live session of the account shares both its user-agent family and its IP prefix; never sent for the account's first session or a `partial` session |
 | `ai_opt_out` | boolean NOT NULL DEFAULT false | |
 | `analytics_consent` | text NOT NULL DEFAULT `'unset'` | `unset` / `granted` / `denied`; `consent_at` timestamptz alongside |

@@ -407,7 +407,10 @@ describe("the account profile repository", () => {
       theme: "system",
       accent: "violet",
       defaultBookmarkView: "grid",
+      singleKeyShortcuts: true,
       aiOptOut: true,
+      analyticsConsent: "unset",
+      onboarding: { browserSetupDone: false, importDone: false, checklistDismissed: false },
       emailVerified: true,
       hasPassword: true,
     });

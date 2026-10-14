@@ -66,7 +66,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Change the signed-in account's display name and language */
+        /** Change the signed-in account's profile and preferences */
         patch: operations["updateMe"];
         trace?: never;
     };
@@ -212,10 +212,15 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         Account: {
-            /** @description The accent colour, a token name of the palette; null when none was chosen */
-            accent: string | null;
+            /** @description The accent colour, one of the six preset names; null when none was chosen, which shows the default */
+            accent: ("periwinkle" | "violet" | "rose" | "amber" | "green" | "teal") | null;
             /** @description Whether the account opted out of AI features */
             aiOptOut: boolean;
+            /**
+             * @description Whether the account agreed to product analytics; a choice is stored with the time it was made, and unset clears that time
+             * @enum {string}
+             */
+            analyticsConsent: "unset" | "granted" | "denied";
             /**
              * @description How bookmark lists are shown unless a list says otherwise
              * @enum {string}
@@ -239,8 +244,12 @@ export interface components {
              * @enum {string}
              */
             locale: "en" | "de";
+            /** @description The stored state of the Getting started checklist */
+            onboarding: components["schemas"]["Onboarding"];
+            /** @description Whether single-key shortcuts are on; modifier shortcuts always work */
+            singleKeyShortcuts: boolean;
             /**
-             * @description The colour scheme the account chose
+             * @description The colour scheme the account chose; system follows the operating system
              * @enum {string}
              */
             theme: "light" | "dark" | "system";
@@ -324,6 +333,23 @@ export interface components {
              * @description The workspace's identifier
              */
             workspaceId: string;
+        };
+        Onboarding: {
+            /** @description Whether the browser setup step of the Getting started checklist is done */
+            browserSetupDone: boolean;
+            /** @description Whether the Getting started checklist is dismissed */
+            checklistDismissed: boolean;
+            /** @description Whether the import step of the Getting started checklist is done */
+            importDone: boolean;
+        };
+        /** @description The checklist keys to change; a key left out keeps its value */
+        OnboardingChanges: {
+            /** @description Whether the browser setup step of the Getting started checklist is done */
+            browserSetupDone?: boolean;
+            /** @description Whether the Getting started checklist is dismissed */
+            checklistDismissed?: boolean;
+            /** @description Whether the import step of the Getting started checklist is done */
+            importDone?: boolean;
         };
         OpenApiDocument: {
             info: {
@@ -433,6 +459,23 @@ export interface components {
             setupRequired: boolean;
         };
         UpdateAccountRequest: {
+            /**
+             * @description The accent colour, one of the six preset names
+             * @enum {string}
+             */
+            accent?: "periwinkle" | "violet" | "rose" | "amber" | "green" | "teal";
+            /** @description Whether the account opted out of AI features */
+            aiOptOut?: boolean;
+            /**
+             * @description Whether the account agreed to product analytics; a choice is stored with the time it was made, and unset clears that time
+             * @enum {string}
+             */
+            analyticsConsent?: "unset" | "granted" | "denied";
+            /**
+             * @description How bookmark lists are shown unless a list says otherwise
+             * @enum {string}
+             */
+            defaultView?: "grid" | "table";
             /** @description The name shown to other members, 1 to 100 characters; surrounding whitespace is removed and a name that is blank after that is refused */
             displayName?: string;
             /**
@@ -440,6 +483,14 @@ export interface components {
              * @enum {string}
              */
             locale?: "en" | "de";
+            onboarding?: components["schemas"]["OnboardingChanges"];
+            /** @description Whether single-key shortcuts are on; modifier shortcuts always work */
+            singleKeyShortcuts?: boolean;
+            /**
+             * @description The colour scheme the account chose; system follows the operating system
+             * @enum {string}
+             */
+            theme?: "light" | "dark" | "system";
         };
         VersionInfo: {
             /** @description Build time, RFC 3339 UTC */
@@ -736,7 +787,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation: an unknown field, a name that is empty or longer than 100 characters, or a language other than en and de */
+            /** @description The body did not pass validation: an unknown field or onboarding key, a name that is empty or longer than 100 characters, or a value outside the one the field allows (a language other than en and de, an accent that is not a preset name) */
             422: {
                 headers: {
                     [name: string]: unknown;

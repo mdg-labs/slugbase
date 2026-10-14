@@ -30,6 +30,21 @@ describe("ThemeToggle", () => {
     await expectNoViolations(container);
   });
 
+  it("tells the app which theme it switched to", () => {
+    window.localStorage.setItem(THEME_STORAGE_KEY, "light");
+    const onToggle = vi.fn<(next: "light" | "dark") => void>();
+    render(
+      <ThemeProvider>
+        <ThemeToggle onToggle={onToggle} switchToDark="To dark" switchToLight="To light" />
+      </ThemeProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "To dark" }));
+    fireEvent.click(screen.getByRole("button", { name: "To light" }));
+
+    expect(onToggle.mock.calls).toEqual([["dark"], ["light"]]);
+  });
+
   it("shows the label in a tooltip when focused", async () => {
     window.localStorage.setItem(THEME_STORAGE_KEY, "light");
     render(<Toggle />);

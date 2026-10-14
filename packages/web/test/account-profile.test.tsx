@@ -22,7 +22,10 @@ const ACCOUNT: Account = {
   theme: "system",
   accent: null,
   defaultView: "grid",
+  singleKeyShortcuts: true,
   aiOptOut: false,
+  analyticsConsent: "unset",
+  onboarding: { browserSetupDone: false, importDone: false, checklistDismissed: false },
   emailVerified: true,
   hasPassword: true,
 };

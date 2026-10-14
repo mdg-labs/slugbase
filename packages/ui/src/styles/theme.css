@@ -398,6 +398,108 @@
   }
 }
 
+/*
+ * Accent presets (Q36): `data-accent` on <html> swaps the brand colour, --primary
+ * and the focus ring, in both themes; periwinkle is the default the blocks above
+ * declare. The descendant form lets a swatch preview its own preset anywhere in
+ * the document. Each pair is checked for contrast in test/theme-tokens.test.ts.
+ */
+.dark[data-accent="periwinkle"],
+.dark [data-accent="periwinkle"] {
+  --primary: #7782f7;
+  --primary-foreground: #0b0c14;
+  --primary-text: #7782f7;
+  --ring: #7782f7;
+}
+
+.light[data-accent="periwinkle"],
+.light [data-accent="periwinkle"] {
+  --primary: #5b66e8;
+  --primary-foreground: #ffffff;
+  --primary-text: #4a55d8;
+  --ring: #5b66e8;
+}
+
+.dark[data-accent="violet"],
+.dark [data-accent="violet"] {
+  --primary: #b178f7;
+  --primary-foreground: #0b0c14;
+  --primary-text: #b178f7;
+  --ring: #b178f7;
+}
+
+.light[data-accent="violet"],
+.light [data-accent="violet"] {
+  --primary: #7c3fd6;
+  --primary-foreground: #ffffff;
+  --primary-text: #7c3fd6;
+  --ring: #7c3fd6;
+}
+
+.dark[data-accent="rose"],
+.dark [data-accent="rose"] {
+  --primary: #f78fb0;
+  --primary-foreground: #0b0c14;
+  --primary-text: #f78fb0;
+  --ring: #f78fb0;
+}
+
+.light[data-accent="rose"],
+.light [data-accent="rose"] {
+  --primary: #bd2f67;
+  --primary-foreground: #ffffff;
+  --primary-text: #bd2f67;
+  --ring: #bd2f67;
+}
+
+.dark[data-accent="amber"],
+.dark [data-accent="amber"] {
+  --primary: #e6b24e;
+  --primary-foreground: #0b0c14;
+  --primary-text: #e6b24e;
+  --ring: #e6b24e;
+}
+
+.light[data-accent="amber"],
+.light [data-accent="amber"] {
+  --primary: #8f5f00;
+  --primary-foreground: #ffffff;
+  --primary-text: #8f5f00;
+  --ring: #8f5f00;
+}
+
+.dark[data-accent="green"],
+.dark [data-accent="green"] {
+  --primary: #45c98a;
+  --primary-foreground: #0b0c14;
+  --primary-text: #45c98a;
+  --ring: #45c98a;
+}
+
+.light[data-accent="green"],
+.light [data-accent="green"] {
+  --primary: #1a7a52;
+  --primary-foreground: #ffffff;
+  --primary-text: #1a7a52;
+  --ring: #1a7a52;
+}
+
+.dark[data-accent="teal"],
+.dark [data-accent="teal"] {
+  --primary: #3cc8bd;
+  --primary-foreground: #0b0c14;
+  --primary-text: #3cc8bd;
+  --ring: #3cc8bd;
+}
+
+.light[data-accent="teal"],
+.light [data-accent="teal"] {
+  --primary: #09756a;
+  --primary-foreground: #ffffff;
+  --primary-text: #09756a;
+  --ring: #09756a;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
