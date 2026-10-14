@@ -1,7 +1,8 @@
 name: E2E
 
 # The browser journeys of doc 08 section 5.1 against the image built from this
-# commit, started through compose.yml. Docker runs on the runner itself, as in the
+# commit, started through compose.yml, once on PostgreSQL 17 and once on 18 (doc 08
+# section 6.2, Q3). Docker runs on the runner itself, as in the
 # `build` job of ci.yml, and Playwright installs its browsers there. No job
 # references a secret, the workflow never runs on pull_request_target, and the
 # secrets of the stack are generated per run by scripts/smoke-image.sh and never
@@ -29,9 +30,15 @@ env:
 
 jobs:
   e2e:
-    name: e2e
+    name: e2e (PostgreSQL ${{ matrix.postgres }})
     runs-on: ubuntu-latest
     timeout-minutes: 40
+    # Each leg is a runner of its own with its own stack; a failing leg does not
+    # stop the other, so both majors report.
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ["17", "18"]
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
@@ -54,13 +61,15 @@ jobs:
       # e2e/playwright.config.ts.
       - name: Install the browsers
         run: pnpm --filter @slugbase/e2e exec playwright install --with-deps chromium firefox webkit
-      # with-stack.sh starts the stack, runs the command against it and removes the
-      # project, its volume and its temporary files however the command ends. The
-      # step fails when a test does.
+      # with-stack.sh starts the stack on the PostgreSQL major of the leg (it fails
+      # when the database reports another), runs the command against it and removes
+      # the project, its volume and its temporary files however the command ends.
+      # The step fails when a test does.
       - name: Run the journeys
         env:
           BUILD_COMMIT: ${{ github.sha }}
           SLUGBASE_IMAGE: slugbase:e2e
+          SMOKE_POSTGRES_MAJOR: ${{ matrix.postgres }}
         run: bash e2e/with-stack.sh pnpm test:e2e
       # A stack that the script could not remove (its process killed, say) is removed
       # here; a run that ended normally leaves nothing to find.
@@ -79,7 +88,7 @@ jobs:
         if: ${{ failure() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: e2e-artifacts
+          name: e2e-artifacts-postgres-${{ matrix.postgres }}
           path: |
             e2e/test-results/
             e2e/playwright-report/

@@ -15,6 +15,10 @@
 #   BUILD_COMMIT        The commit the image was built from. Given, /version must
 #                       report exactly it (and a build by this script is made with it).
 #   SMOKE_READY_SECONDS How long to wait for /ready (default 120).
+#   SMOKE_POSTGRES_MAJOR The PostgreSQL major the database runs: 18 (the default,
+#                       compose.yml as it is) or 17 (compose.pg17.yml merged over
+#                       it, doc 08 section 6.2). The script reads the version the
+#                       running database reports and fails when it is another major.
 #
 # Everything is per run: the compose project name (slugbase-smoke-<run id>), a free
 # host port on 127.0.0.1, and every secret, which is generated into a file in a
@@ -47,6 +51,8 @@ env_file=""
 image=""
 built_image=""
 port=""
+postgres_major=""
+compose_files=()
 secrets=()
 docker_env=()
 
@@ -98,7 +104,19 @@ pick_port() {
 # variables (a PORT or a SESSION_SECRET set there) would otherwise win over the file.
 compose() {
   env -i PATH="$PATH" HOME="${HOME:-/}" "${docker_env[@]}" \
-    docker compose --ansi never --project-name "$project" --env-file "$env_file" -f "$root/compose.yml" "$@"
+    docker compose --ansi never --project-name "$project" --env-file "$env_file" "${compose_files[@]}" "$@"
+}
+
+# Sets postgres_major and compose_files from SMOKE_POSTGRES_MAJOR: compose.yml alone
+# runs PostgreSQL 18, and compose.pg17.yml is merged over it for 17.
+select_postgres() {
+  postgres_major="${SMOKE_POSTGRES_MAJOR:-18}"
+  compose_files=(-f "$root/compose.yml")
+  case "$postgres_major" in
+    18) ;;
+    17) compose_files+=(-f "$root/compose.pg17.yml") ;;
+    *) fail "SMOKE_POSTGRES_MAJOR is '$postgres_major', expected 17 or 18" ;;
+  esac
 }
 
 # HTTP: sets status, and leaves the headers and the body of the answer in $work.
@@ -335,6 +353,16 @@ check_weak_secret_refused() {
   expect_lacks "the message" "$output" "$WEAK_SESSION_SECRET"
 }
 
+# The database answers with the major that was asked for, so that a selection which
+# the compose files ignore cannot pass as a run against that major.
+check_postgres_major() {
+  local reported
+  reported="$(compose exec -T postgres psql --username slugbase --dbname slugbase --no-psqlrc --tuples-only --no-align \
+    --command 'SHOW server_version_num' | tr -d '\r' || true)"
+  [[ "$reported" =~ ^[0-9]{6}$ ]] || fail "the version of the database could not be read"
+  expect_equal "the major of the database" "$((10#$reported / 10000))" "$postgres_major"
+}
+
 # Prepares the image, writes this run's secrets and starts the stack, and returns once
 # /ready answers 200. Sets the state the cleanup reads and installs the cleanup, so a
 # caller that sources this file (e2e/with-stack.sh) gets the same teardown on every
@@ -342,6 +370,7 @@ check_weak_secret_refused() {
 start_stack() {
   cd "$root"
   preflight
+  select_postgres
 
   run_id="$(random_hex 4)"
   project="slugbase-smoke-${run_id}"
@@ -373,6 +402,7 @@ start_stack() {
     }
 
   wait_ready
+  check_postgres_major
 }
 
 main() {

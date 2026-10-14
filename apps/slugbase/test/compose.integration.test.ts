@@ -1,8 +1,13 @@
-import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterAll, describe, expect, it } from "vitest";
 import {
   APP_PASSWORD,
   COMPOSE_FILE,
+  COMPOSE_PG17_FILE,
+  type ComposeConfig,
+  type ServiceConfig,
   exampleKeys,
   interpolate,
   loadCompose,
@@ -14,9 +19,10 @@ import {
 
 // The self-hosting stack (doc 01 section 2.1, doc 05 section 3.1, Q56) is what
 // holds the migrator credentials away from the worker and the database away from
-// the network. This file reads compose.yml with a YAML parser and needs no Docker
-// CLI, so it runs wherever the integration tests do. That Docker Compose accepts
-// the file and what it prints are checked in compose-cli.integration.test.ts.
+// the network. This file reads compose.yml, and compose.pg17.yml merged over it,
+// with a YAML parser and needs no Docker CLI, so it runs wherever the integration
+// tests do. That Docker Compose accepts the files and what it prints are checked
+// in compose-cli.integration.test.ts.
 
 describe("interpolation of compose.yml", () => {
   const env = new Map([["SET", "value"], ["EMPTY", ""]]);
@@ -36,8 +42,9 @@ describe("interpolation of compose.yml", () => {
     expect(() => interpolate(form, env)).toThrow(/unsupported interpolation/);
   });
 
-  it("finds no other form anywhere in compose.yml", () => {
+  it("finds no other form anywhere in compose.yml or compose.pg17.yml", () => {
     expect(() => loadCompose(operatorEnv())).not.toThrow();
+    expect(() => loadCompose(operatorEnv(), [COMPOSE_PG17_FILE])).not.toThrow();
   });
 });
 
@@ -167,5 +174,68 @@ describe("compose.yml", () => {
     const env = operatorEnv();
     env.delete(key);
     expect(() => loadCompose(env)).toThrow(new RegExp(`required ${key} is not set`));
+  });
+});
+
+const POSTGRES_18_DATA = "postgres-data:/var/lib/postgresql";
+const POSTGRES_17_DATA = "postgres-data:/var/lib/postgresql/data";
+const ROLES_MOUNT = "./packages/db/provision/roles.sql:/docker-entrypoint-initdb.d/10-roles.sql:ro";
+
+/** Throws unless the database of `config` is PostgreSQL 17 with its data volume at the path that image keeps its data in. */
+function assertPostgres17(config: ComposeConfig): void {
+  const { postgres } = config.services;
+  expect(postgres.image).toBe("postgres:17");
+  // Exactly these two mounts: the PostgreSQL 18 mount, kept beside the 17 one, would nest the volume in itself.
+  expect(postgres.volumes).toEqual([POSTGRES_17_DATA, ROLES_MOUNT]);
+}
+
+describe("compose.pg17.yml", () => {
+  const scratch = mkdtempSync(join(tmpdir(), "slugbase-compose-pg17-"));
+  afterAll(() => {
+    rmSync(scratch, { recursive: true, force: true });
+  });
+
+  /** A copy of compose.pg17.yml with `mutate` applied to its text. */
+  function mutated(name: string, mutate: (text: string) => string): string {
+    const original = readFileSync(COMPOSE_PG17_FILE, "utf8");
+    const changed = mutate(original);
+    expect(changed, `the mutation "${name}" changed nothing`).not.toBe(original);
+    const file = join(scratch, `${name}.yml`);
+    writeFileSync(file, changed);
+    return file;
+  }
+
+  it("runs the database on PostgreSQL 17 with its data volume at the path of that image", () => {
+    assertPostgres17(loadCompose(operatorEnv(), [COMPOSE_PG17_FILE]));
+  });
+
+  it("changes nothing but the image and the volumes of the database", () => {
+    const env = operatorEnv();
+    const base = loadCompose(env).services;
+    const over = loadCompose(env, [COMPOSE_PG17_FILE]).services;
+    const withoutImageAndVolumes = (service: ServiceConfig) => Object.fromEntries(Object.entries(service).filter(([key]) => key !== "image" && key !== "volumes"));
+    expect(withoutImageAndVolumes(over.postgres)).toEqual(withoutImageAndVolumes(base.postgres));
+    expect(over.slugbase).toEqual(base.slugbase);
+    expect(over["slugbase-worker"]).toEqual(base["slugbase-worker"]);
+  });
+
+  it("leaves compose.yml alone on PostgreSQL 18 with the data volume under /var/lib/postgresql", () => {
+    const { postgres } = loadCompose(operatorEnv()).services;
+    expect(postgres.image).toBe("postgres:18");
+    expect(postgres.volumes).toEqual([POSTGRES_18_DATA, ROLES_MOUNT]);
+  });
+
+  // The assertion above is only worth something if it fails for an override that does not do the job.
+  it.each([
+    ["an image that is not changed", (text: string) => text.replace("image: postgres:17", "image: postgres:18")],
+    ["an image that is dropped", (text: string) => text.replace("    image: postgres:17\n", "")],
+    ["a data path that is not changed", (text: string) => text.replace("postgres-data:/var/lib/postgresql/data", POSTGRES_18_DATA)],
+    ["volumes that are added to those of compose.yml", (text: string) => text.replace("volumes: !override", "volumes:")],
+    ["a role script that is dropped", (text: string) => text.replace(/\s+- \.\/packages\/db\/provision\/roles\.sql[^\n]*/, "")],
+  ])("is not accepted as the PostgreSQL 17 selection with %s", (name, mutate) => {
+    const file = mutated(name.replaceAll(" ", "-"), mutate);
+    expect(() => {
+      assertPostgres17(loadCompose(operatorEnv(), [file]));
+    }).toThrow();
   });
 });

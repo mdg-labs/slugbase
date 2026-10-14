@@ -6,10 +6,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   APP_PASSWORD,
   COMPOSE_FILE,
+  COMPOSE_PG17_FILE,
   hasDockerCompose,
   MIGRATOR_PASSWORD,
   OPERATOR_VALUES,
   operatorEnv,
+  ROOT,
   SUPERUSER_PASSWORD,
 } from "./compose-support.ts";
 
@@ -18,7 +20,9 @@ import {
 // when a required key is missing. They run wherever the docker CLI is present;
 // the CI build job, which has it, runs them. The structure of the stack, which
 // needs no CLI, is checked in compose.integration.test.ts. `compose config`
-// needs no daemon.
+// needs no daemon. The same goes for compose.pg17.yml, merged over compose.yml by
+// Compose itself: the database image and the mounts it resolves to are what the
+// e2e workflow runs.
 
 let directory: string;
 
@@ -28,8 +32,9 @@ function writeEnv(entries: ReadonlyMap<string, string>): string {
   return file;
 }
 
-function compose(file: string): { status: number | null; stdout: string; stderr: string } {
-  const result = spawnSync("docker", ["compose", "--project-name", "slugbase-compose-test", "--env-file", file, "-f", COMPOSE_FILE, "config", "--format", "json"], {
+function compose(file: string, overrides: readonly string[] = []): { status: number | null; stdout: string; stderr: string } {
+  const files = [COMPOSE_FILE, ...overrides].flatMap((path) => ["-f", path]);
+  const result = spawnSync("docker", ["compose", "--project-name", "slugbase-compose-test", "--env-file", file, ...files, "config", "--format", "json"], {
     encoding: "utf8",
     timeout: 60_000,
     env: { PATH: process.env["PATH"] ?? "", HOME: process.env["HOME"] ?? "" },
@@ -67,5 +72,43 @@ describe.skipIf(!hasDockerCompose)("compose.yml under Docker Compose (skipped: t
     for (const secret of [APP_PASSWORD, MIGRATOR_PASSWORD, SUPERUSER_PASSWORD]) {
       expect(result.stderr).not.toContain(secret);
     }
+  });
+
+  interface Mount {
+    type: string;
+    source: string;
+    target: string;
+  }
+
+  function postgresOf(overrides: readonly string[]): { image: string; volumes: Mount[] } {
+    const result = compose(writeEnv(operatorEnv()), overrides);
+    expect(result.status, result.stderr).toBe(0);
+    const config = JSON.parse(result.stdout) as { services: Record<string, { image: string; volumes: Mount[] }> };
+    const postgres = config.services["postgres"];
+    expect(postgres).toBeDefined();
+    return postgres as { image: string; volumes: Mount[] };
+  }
+
+  /** The data volume and the role script, as Compose resolves them (the source of a bind mount is an absolute path). */
+  function mounts(volumes: Mount[]): [string, string, string][] {
+    return volumes.map((mount) => [mount.type, mount.type === "bind" ? mount.source.replace(ROOT, "<root>") : mount.source, mount.target]);
+  }
+
+  it("runs PostgreSQL 18 with the data volume under /var/lib/postgresql when no override is given", () => {
+    const postgres = postgresOf([]);
+    expect(postgres.image).toBe("postgres:18");
+    expect(mounts(postgres.volumes)).toEqual([
+      ["volume", "postgres-data", "/var/lib/postgresql"],
+      ["bind", "<root>/packages/db/provision/roles.sql", "/docker-entrypoint-initdb.d/10-roles.sql"],
+    ]);
+  });
+
+  it("runs PostgreSQL 17 with the data volume at /var/lib/postgresql/data, and nothing at the PostgreSQL 18 path, under compose.pg17.yml", () => {
+    const postgres = postgresOf([COMPOSE_PG17_FILE]);
+    expect(postgres.image).toBe("postgres:17");
+    expect(mounts(postgres.volumes)).toEqual([
+      ["volume", "postgres-data", "/var/lib/postgresql/data"],
+      ["bind", "<root>/packages/db/provision/roles.sql", "/docker-entrypoint-initdb.d/10-roles.sql"],
+    ]);
   });
 });

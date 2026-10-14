@@ -1,16 +1,22 @@
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { parse } from "yaml";
+import { parse, type SchemaOptions, type YAMLSeq } from "yaml";
 
 // Shared by the compose tests. `loadCompose` reads compose.yml with a YAML parser
 // and resolves the interpolation forms the file uses, so the structure of the
 // stack is checked without the Docker CLI. It supports exactly `${NAME:-default}`
 // and `${NAME:?message}`, and rejects any other `$` in the file, so that it
 // cannot drift from what Docker Compose does with the file unnoticed.
+//
+// An override file (compose.pg17.yml) is merged the way Docker Compose merges
+// the `-f` files it is given, for the forms the overrides use: mappings merge
+// key by key, a list is appended to the list before it, any other value is
+// replaced, and a list tagged `!override` replaces the list before it.
 
 export const ROOT = resolve(import.meta.dirname, "../../..");
 export const COMPOSE_FILE = join(ROOT, "compose.yml");
+export const COMPOSE_PG17_FILE = join(ROOT, "compose.pg17.yml");
 
 export const APP_PASSWORD = "app-pw-0123456789abcdef";
 export const MIGRATOR_PASSWORD = "migrator-pw-0123456789abcdef";
@@ -104,9 +110,55 @@ export interface ComposeConfig {
   services: Record<"postgres" | "slugbase" | "slugbase-worker", ServiceConfig>;
 }
 
-/** compose.yml with anchors and merge keys expanded and `env` applied. Throws on a missing required key. */
-export function loadCompose(env: ReadonlyMap<string, string>): ComposeConfig {
-  const document: unknown = parse(readFileSync(COMPOSE_FILE, "utf8"), { merge: true });
+/** A list that replaces the list of the same key in the file before it (`!override`). */
+class Replacement {
+  constructor(readonly items: unknown[]) {}
+}
+
+// The `!override` tag of Docker Compose, on a list.
+const OVERRIDE_TAGS: SchemaOptions["customTags"] = [
+  {
+    tag: "!override",
+    // eslint-disable-next-line slugbase/no-forbidden-vocabulary -- the key is the yaml package's name for a tag on a list or mapping
+    collection: "seq",
+    resolve: (seq: YAMLSeq) => new Replacement(seq.toJSON()),
+  },
+];
+
+function isMapping(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value) && !(value instanceof Replacement);
+}
+
+function merge(base: unknown, over: unknown): unknown {
+  if (over instanceof Replacement) {
+    return over.items;
+  }
+  if (isMapping(base) && isMapping(over)) {
+    const merged: Record<string, unknown> = { ...base };
+    for (const [key, value] of Object.entries(over)) {
+      merged[key] = key in base ? merge(base[key], value) : value;
+    }
+    return merged;
+  }
+  if (Array.isArray(base) && Array.isArray(over)) {
+    return [...(base as unknown[]), ...(over as unknown[])];
+  }
+  return over;
+}
+
+function readYaml(file: string): unknown {
+  return parse(readFileSync(file, "utf8"), { merge: true, customTags: OVERRIDE_TAGS });
+}
+
+/**
+ * compose.yml with anchors and merge keys expanded, `overrides` merged over it in order, and `env` applied.
+ * Throws on a missing required key.
+ */
+export function loadCompose(env: ReadonlyMap<string, string>, overrides: readonly string[] = [], base: string = COMPOSE_FILE): ComposeConfig {
+  let document = readYaml(base);
+  for (const file of overrides) {
+    document = merge(document, readYaml(file));
+  }
   const config = resolveValue(document, env) as ComposeConfig;
   for (const service of Object.values(config.services)) {
     service.environment = Object.fromEntries(

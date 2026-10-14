@@ -13,9 +13,12 @@
 # root, and its exit status is the exit status of this script.
 #
 # Environment (read by smoke-image.sh):
-#   SLUGBASE_IMAGE  An image that is already present locally. Unset, the image is
-#                   built from this checkout.
-#   BUILD_COMMIT    The commit the image was built from.
+#   SLUGBASE_IMAGE        An image that is already present locally. Unset, the image
+#                         is built from this checkout.
+#   BUILD_COMMIT          The commit the image was built from.
+#   SMOKE_POSTGRES_MAJOR  17 or 18 (the default): the PostgreSQL major of the
+#                         stack's database; 17 merges compose.pg17.yml over
+#                         compose.yml.
 #
 # Without this script, start a stack yourself and set E2E_BASE_URL to its address.
 set -euo pipefail
