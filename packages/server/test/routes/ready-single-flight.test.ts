@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createServer } from "../../src/create-server.ts";
-import { READY_TIMEOUT_MS } from "../../src/routes/health.ts";
+import { READY_CACHE_TTL_MS, READY_TIMEOUT_MS } from "../../src/routes/health.ts";
 import { adapters, fakeDatabase, recordingLogger, serverConfig } from "../support.ts";
 
 // /ready is public and not rate-limited, and every migration-level read opens a
@@ -66,7 +66,8 @@ describe("GET /ready under load", () => {
     expect(migrationLevel).toHaveBeenCalledTimes(1);
   });
 
-  it("starts a fresh read once the shared one has settled", async () => {
+  it("starts a fresh read once the shared one has settled and its answer has expired", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
     const server = start();
     const first = ready(server);
     await vi.waitFor(() => {
@@ -74,6 +75,7 @@ describe("GET /ready under load", () => {
     });
     reads.pending[0]?.resolve(LEVEL);
     expect((await first).status).toBe(200);
+    vi.advanceTimersByTime(READY_CACHE_TTL_MS);
     const second = ready(server);
     await vi.waitFor(() => {
       expect(reads.pending).toHaveLength(2);
@@ -84,7 +86,7 @@ describe("GET /ready under load", () => {
   });
 
   it("opens no second read while a timed-out one is still running", async () => {
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
     const server = start();
     const first = ready(server);
     await vi.waitFor(() => {
@@ -92,6 +94,7 @@ describe("GET /ready under load", () => {
     });
     await vi.advanceTimersByTimeAsync(READY_TIMEOUT_MS);
     expect((await first).status).toBe(503);
+    await vi.advanceTimersByTimeAsync(READY_CACHE_TTL_MS);
     const second = ready(server);
     await vi.advanceTimersByTimeAsync(READY_TIMEOUT_MS);
     expect((await second).status).toBe(503);
