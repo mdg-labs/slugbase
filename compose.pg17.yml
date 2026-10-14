@@ -1,0 +1,22 @@
+# Runs the database of compose.yml on PostgreSQL 17 instead of 18, so that the
+# e2e journeys can run against both majors (doc 08 section 6.2, Q3). It is an
+# override file; compose.yml alone, which is what an operator runs, stays on
+# PostgreSQL 18.
+#
+#   docker compose -f compose.yml -f compose.pg17.yml up -d
+#
+# e2e/with-stack.sh selects it with SMOKE_POSTGRES_MAJOR=17. Do not point it at a
+# data volume that PostgreSQL 18 has initialised, or the other way round: the
+# two majors keep different on-disk formats.
+#
+# The data volume mounts at another path: the postgres:17 image keeps its data
+# in /var/lib/postgresql/data, the postgres:18 image in a versioned directory
+# under /var/lib/postgresql. `!override` replaces the volumes of compose.yml
+# instead of adding to them (Docker Compose 2.24 or later); the role script is
+# therefore listed again, exactly as in compose.yml.
+services:
+  postgres:
+    image: postgres:17
+    volumes: !override
+      - postgres-data:/var/lib/postgresql/data
+      - ./packages/db/provision/roles.sql:/docker-entrypoint-initdb.d/10-roles.sql:ro

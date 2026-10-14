@@ -11,7 +11,11 @@
     "helpAndDocs": "Hilfe & Doku",
     "switchToDark": "Zum dunklen Design wechseln",
     "switchToLight": "Zum hellen Design wechseln",
-    "loading": "Wird geladen"
+    "loading": "Wird geladen",
+    "offline": {
+      "title": "Du bist offline",
+      "description": "Änderungen können erst wieder gespeichert werden, wenn deine Verbindung zurück ist."
+    }
   },
   "home": {
     "empty": {
@@ -24,5 +28,39 @@
     "description": "Die Einstellungen dieses Servers konnten nicht gelesen werden. Lade die Seite neu und melde es deiner Administration, wenn es weiter auftritt.",
     "reload": "Neu laden",
     "requestId": "Anfrage-ID"
+  },
+  "errorPage": {
+    "goHome": "Zur Startseite",
+    "notFound": {
+      "title": "Diese Seite gibt es nicht",
+      "description": "Die Adresse ist möglicherweise falsch geschrieben, oder die Seite wurde verschoben."
+    },
+    "forbidden": {
+      "title": "Du hast keinen Zugriff",
+      "description": "Du bist kein Mitglied dieses Workspace, oder diese Seite ist nur für Administratoren."
+    },
+    "serverError": {
+      "title": "Etwas ist schiefgelaufen",
+      "description": "Diese Seite konnte nicht angezeigt werden. Lade sie neu und melde es deiner Administration, wenn es weiter auftritt.",
+      "reload": "Neu laden",
+      "requestId": "Anfrage-ID",
+      "copyRequestId": "Anfrage-ID kopieren",
+      "copied": "Kopiert"
+    }
+  },
+  "session": {
+    "expired": {
+      "title": "Deine Sitzung ist abgelaufen",
+      "description": "Melde dich erneut an, um fortzufahren."
+    }
+  },
+  "feedback": {
+    "regionLabel": "Mitteilungen",
+    "mutationFailed": {
+      "title": "Die Änderung wurde nicht gespeichert",
+      "description": "Versuche es erneut. Melde es deiner Administration, wenn es weiter auftritt.",
+      "offline": "Du bist offline. Prüfe deine Verbindung und versuche es erneut.",
+      "requestId": "Anfrage-ID: {requestId}"
+    }
   }
 }

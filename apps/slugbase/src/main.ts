@@ -119,13 +119,13 @@ async function runUntilSignal(
   stop();
 }
 
-// The image build writes the file next to src/ and dist/; a checkout without it is a development run.
-const BUILD_INFO_FILE = new URL("../build-info.json", import.meta.url);
-
-// The image build puts the built web app next to src/ and dist/ too. A checkout
-// without a web build serves the API only; a directory that is there but broken
-// refuses the start.
-const WEB_ROOT = fileURLToPath(new URL("../web", import.meta.url));
+// The build (scripts/build.ts) puts the server bundle, the web app and the
+// build-info file side by side in dist/, and the image copies that directory as
+// it is. A run from src/ has neither next to it: a missing build-info file is a
+// development run, and a missing web build serves the API only; a web directory
+// that is there but broken refuses the start.
+const BUILD_INFO_FILE = new URL("./build-info.json", import.meta.url);
+const WEB_ROOT = fileURLToPath(new URL("./web", import.meta.url));
 
 // CE composes the unconfigured defaults of every port and no extra modules or
 // migration sets; a configured adapter replaces its default here. The migration

@@ -46,4 +46,46 @@ describe("the API client", () => {
     const api = createApiClient({ fetch: () => Promise.reject(new TypeError("network down")) });
     await expect(api.GET("/api/config")).rejects.toThrow("network down");
   });
+
+  describe("onUnauthenticated", () => {
+    function clientAnswering(response: Response, path: "/api/config" | "/version") {
+      const onUnauthenticated = vi.fn<() => void>();
+      const api = createApiClient({ fetch: transport(() => response), onUnauthenticated });
+      const call = path === "/api/config" ? api.GET("/api/config") : api.GET("/version");
+      return { onUnauthenticated, call };
+    }
+
+    it("is called, and the error still thrown, for a 401 from any call but /api/config", async () => {
+      const { onUnauthenticated, call } = clientAnswering(problem(401, "unauthenticated", "req-1"), "/version");
+      await expect(call).rejects.toMatchObject({ status: 401, code: "unauthenticated" });
+      expect(onUnauthenticated).toHaveBeenCalledTimes(1);
+    });
+
+    it("is called for a 401 that is no problem document", async () => {
+      const { onUnauthenticated, call } = clientAnswering(new Response("unauthorized", { status: 401 }), "/version");
+      await call;
+      expect(onUnauthenticated).toHaveBeenCalledTimes(1);
+    });
+
+    it("is not called for a 401 from /api/config", async () => {
+      const { onUnauthenticated, call } = clientAnswering(problem(401, "unauthenticated", "req-1"), "/api/config");
+      await expect(call).rejects.toBeInstanceOf(ApiProblemError);
+      expect(onUnauthenticated).not.toHaveBeenCalled();
+    });
+
+    it("is not called for a request to re-authenticate on a live session", async () => {
+      const { onUnauthenticated, call } = clientAnswering(problem(401, "reauth_required", "req-1"), "/version");
+      await expect(call).rejects.toMatchObject({ code: "reauth_required" });
+      expect(onUnauthenticated).not.toHaveBeenCalled();
+    });
+
+    it("is not called for another failure or a success", async () => {
+      const failed = clientAnswering(problem(403, "forbidden", "req-1"), "/version");
+      await expect(failed.call).rejects.toBeInstanceOf(ApiProblemError);
+      const ok = clientAnswering(json({ version: "1" }), "/version");
+      await ok.call;
+      expect(failed.onUnauthenticated).not.toHaveBeenCalled();
+      expect(ok.onUnauthenticated).not.toHaveBeenCalled();
+    });
+  });
 });

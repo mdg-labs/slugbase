@@ -11,7 +11,11 @@
     "helpAndDocs": "Help & docs",
     "switchToDark": "Switch to dark theme",
     "switchToLight": "Switch to light theme",
-    "loading": "Loading"
+    "loading": "Loading",
+    "offline": {
+      "title": "You are offline",
+      "description": "Changes cannot be saved until your connection is back."
+    }
   },
   "home": {
     "empty": {
@@ -24,5 +28,39 @@
     "description": "The settings of this server could not be read. Reload the page, and tell your administrator if this continues.",
     "reload": "Reload",
     "requestId": "Request ID"
+  },
+  "errorPage": {
+    "goHome": "Go home",
+    "notFound": {
+      "title": "This page doesn't exist",
+      "description": "The address may be mistyped, or the page may have moved."
+    },
+    "forbidden": {
+      "title": "You don't have access",
+      "description": "You are not a member of this workspace, or this page is only for administrators."
+    },
+    "serverError": {
+      "title": "Something went wrong",
+      "description": "This page could not be shown. Reload it, and tell your administrator if this continues.",
+      "reload": "Reload",
+      "requestId": "Request ID",
+      "copyRequestId": "Copy request ID",
+      "copied": "Copied"
+    }
+  },
+  "session": {
+    "expired": {
+      "title": "Your session has ended",
+      "description": "Sign in again to continue."
+    }
+  },
+  "feedback": {
+    "regionLabel": "Notifications",
+    "mutationFailed": {
+      "title": "The change was not saved",
+      "description": "Try again. If this continues, tell your administrator.",
+      "offline": "You are offline. Check your connection and try again.",
+      "requestId": "Request ID: {requestId}"
+    }
   }
 }

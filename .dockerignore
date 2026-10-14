@@ -1,0 +1,35 @@
+# What the image build never needs, and what must never reach it (doc 01 section 1,
+# doc 10 T16). The workspace manifests, the lockfile and the sources of the
+# packages are what the build stage uses; the runtime stage copies only built output.
+
+# Version control and agent tooling
+.git
+.githooks
+.github
+.claude
+
+# Environment files and anything that looks like a secret
+.env
+.env.*
+**/.env
+**/.env.*
+*.pem
+*.key
+
+# Installed and generated output of the host
+**/node_modules
+**/dist
+**/.turbo
+**/coverage
+**/.vitest
+**/*.tsbuildinfo
+**/.tsbuildinfo
+
+# Tests, stories and logs
+**/test
+**/stories
+**/*.log
+
+# Documentation and local files
+docs
+.DS_Store

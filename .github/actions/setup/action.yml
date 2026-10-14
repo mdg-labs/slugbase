@@ -2,7 +2,8 @@ name: Set up the workspace
 description: >-
   Marks the checkout safe for git, installs pnpm from the packageManager field,
   restores the pnpm store and the Turborepo cache, and installs the workspace
-  from the lockfile. Run it after actions/checkout inside the node container.
+  from the lockfile. Run it after actions/checkout, inside the node
+  container or, in the build job, on the runner after actions/setup-node.
 
 inputs:
   turbo-cache-key:

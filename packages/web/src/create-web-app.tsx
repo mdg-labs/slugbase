@@ -10,6 +10,8 @@ import { ExtensionsProvider, type WebExtension } from "./extensions/index.ts";
 import { I18nProvider } from "./i18n/i18n-provider.tsx";
 import { createQueryClient } from "./query-client.ts";
 import { createAppRouter } from "./router.ts";
+import { AppFeedback } from "./shell/app-feedback.tsx";
+import { createSessionExpiry } from "./shell/session-expiry.tsx";
 import { ShellLoading } from "./shell/shell-loading.tsx";
 
 export interface CreateWebAppOptions {
@@ -24,7 +26,8 @@ export interface CreateWebAppOptions {
  * shows the failure view instead (doc 01 section 11). Throws on an invalid extension list.
  */
 export function createWebApp({ extensions }: CreateWebAppOptions): ComponentType {
-  const api = createApiClient();
+  const sessionExpiry = createSessionExpiry();
+  const api = createApiClient({ onUnauthenticated: sessionExpiry.notify });
   const queryClient = createQueryClient();
   // Validates the extension list: nothing is requested for one the app cannot start with.
   const router = createAppRouter({ queryClient, api }, extensions);
@@ -44,9 +47,11 @@ export function createWebApp({ extensions }: CreateWebAppOptions): ComponentType
       <ConfigProvider config={loaded.config}>
         <I18nProvider defaultLocale={loaded.config.defaultLocale}>
           <QueryClientProvider client={queryClient}>
-            <ExtensionsProvider extensions={extensions}>
-              <RouterProvider router={router} />
-            </ExtensionsProvider>
+            <AppFeedback expiry={sessionExpiry} router={router}>
+              <ExtensionsProvider extensions={extensions}>
+                <RouterProvider router={router} />
+              </ExtensionsProvider>
+            </AppFeedback>
           </QueryClientProvider>
         </I18nProvider>
       </ConfigProvider>

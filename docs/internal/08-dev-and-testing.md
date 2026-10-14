@@ -192,13 +192,13 @@ The same scheduled job applies pending migrations to the large seeded instance a
 | `mdg-labs/slugbase` (public) | GitHub-hosted `ubuntu-latest` | Free for public repos; nothing private to protect (`githubRunner`, doc 09 §5.2) |
 | Private repositories | Self-hosted CI runners | Described in the Cloud documentation |
 
-Workflows in this repository use a portable shape where it costs nothing: every job that needs a toolbox runs in a container (`container: node:24-bookworm`), installs pnpm with `pnpm/action-setup`, and reaches service containers **by name** (`postgres:5432`), never `localhost`; image builds use plain `docker build`/`docker push`. They can therefore move to ephemeral self-hosted CI runners unchanged.
+Workflows in this repository use a portable shape where it costs nothing: every `ci.yml` job except `build` runs in a container (`container: node:24-bookworm`), installs pnpm with `pnpm/action-setup`, and reaches service containers **by name** (`postgres:5432`), never `localhost`; image builds use plain `docker build`/`docker push`. `build` runs on the runner itself, because its image smoke test (`scripts/smoke-image.sh`) starts the image with Docker Compose and needs the runner's own Docker daemon and published ports; it takes Node from `actions/setup-node` at the major version of `.nvmrc` and uses the same `setup` action as the others. The other `ci.yml` jobs can therefore move to ephemeral self-hosted CI runners unchanged, and `build` can too on a runner that has the Docker CLI with the Compose plugin and a Docker daemon of its own.
 
 ### 6.2 Workflows — CE
 
 | Workflow | Trigger | Jobs |
 |---|---|---|
-| `ci.yml` | push to any branch, PRs | `lint` · `typecheck` · `unit` · `contracts` (T3) · `docs` (`pnpm docs:check` on a change under the docs roots, doc 09 §3.5) · `integration` (Postgres service, a matrix over PostgreSQL 17 and 18, Q3) · `build` (incl. `docker build` of the image, not pushed) · `audit` (`pnpm audit --audit-level=high` + OSV scan) — all parallel after a shared install with Turbo cache |
+| `ci.yml` | push to any branch, PRs | `lint` · `typecheck` · `unit` · `contracts` (T3) · `docs` (`pnpm docs:check` on a change under the docs roots, doc 09 §3.5) · `integration` (Postgres service, a matrix over PostgreSQL 17 and 18, Q3) · `build` (on the runner, §6.1: the workspace build, `apps/slugbase/test/compose-cli.integration.test.ts` and `scripts/smoke-image.test.sh`, then `docker build` of the image, not pushed, and `scripts/smoke-image.sh` against it; the compose CLI test runs with a skipped or failed case failing the step, because it skips wherever the Docker CLI is absent) · `audit` (`pnpm audit --audit-level=high` + OSV scan) — all parallel after a shared install with Turbo cache |
 | `e2e.yml` | push to `dev`, PRs to `main` | Build image → Playwright (CE journeys) against PostgreSQL 17 and 18 |
 | `codeql.yml` | push to `dev`/`main`, weekly | CodeQL JavaScript/TypeScript |
 | `forbidden-terms.yml` | push, PRs | `scripts/check-forbidden-terms.sh` against the generic patterns of `scripts/forbidden-terms.txt` (doc 09 §4), until the lint step takes it over |
