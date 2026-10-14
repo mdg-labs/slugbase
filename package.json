@@ -11,9 +11,10 @@
   "scripts": {
     "preinstall": "node scripts/check-node.mjs",
     "build": "turbo run build",
-    "lint": "turbo run lint && pnpm lint:forbidden-terms && pnpm lint:external-hosts",
+    "lint": "turbo run lint && pnpm lint:forbidden-terms && pnpm lint:external-hosts && pnpm lint:workflow-triggers",
     "lint:forbidden-terms": "bash scripts/check-forbidden-terms.test.sh && bash scripts/check-forbidden-terms.sh",
     "lint:external-hosts": "bash scripts/check-external-hosts.test.sh && bash scripts/check-external-hosts.sh",
+    "lint:workflow-triggers": "bash scripts/check-workflow-triggers.test.sh && bash scripts/check-workflow-triggers.sh",
     "typecheck": "turbo run typecheck",
     "test:unit": "turbo run test:unit",
     "test:integration": "turbo run test:integration",

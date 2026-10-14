@@ -239,6 +239,77 @@ describe("taking tokens", () => {
   });
 });
 
+const PURGE_FUNCTION = "public.sys_rate_limit_purge()";
+
+// Doc 05 section 6: a bucket idle for an hour is deleted. Every bucket refills
+// from empty within an hour at most, so a bucket idle for longer holds what a
+// bucket that does not exist yet holds, and deleting it changes no limit.
+describe("purging idle buckets", () => {
+  async function seed(key: string, idle: string): Promise<void> {
+    await root`
+      INSERT INTO public.rate_limit_buckets (key, tokens, updated_at)
+      VALUES (${key}, 0, now() - ${idle}::interval)`;
+  }
+
+  async function present(prefix: string): Promise<string[]> {
+    const rows = await root<{ key: string }[]>`
+      SELECT key FROM public.rate_limit_buckets WHERE key LIKE ${`${prefix}%`} ORDER BY key`;
+    return rows.map((row) => row.key);
+  }
+
+  it("deletes the buckets idle for more than an hour, keeps the others, and says how many it deleted", async () => {
+    const prefix = `purge-a:${String(++keyNumber)}:`;
+    await seed(`${prefix}old-2h`, "2 hours");
+    await seed(`${prefix}old-61m`, "61 minutes");
+    await seed(`${prefix}recent-59m`, "59 minutes");
+    await seed(`${prefix}recent-1s`, "1 second");
+    const before = (await root<{ count: number }[]>`SELECT count(*)::int AS count FROM public.rate_limit_buckets WHERE updated_at < now() - interval '1 hour'`)[0]?.count ?? 0;
+
+    const deleted = await store.purgeIdle();
+
+    expect(deleted).toBe(before);
+    expect(await present(prefix)).toEqual([`${prefix}recent-1s`, `${prefix}recent-59m`]);
+  });
+
+  it("leaves a bucket that was taken from after the purge started untouched, and deletes nothing when nothing is idle", async () => {
+    const prefix = `purge-b:${String(++keyNumber)}:`;
+    const key = `${prefix}active`;
+    await seed(key, "3 hours");
+    expect((await store.take({ key, capacity: 5, refillPerSecond: 5 / 3600, cost: 1 })).allowed).toBe(true);
+
+    expect(await store.purgeIdle()).toBe(0);
+    expect(await present(prefix)).toEqual([key]);
+  });
+
+  it("is a SECURITY DEFINER function of slugbase_system with a pinned search_path, in the registry", async () => {
+    const rows = await db.owner<{ definer: boolean; owner: string; config: string[]; language: string }[]>`
+      SELECT prosecdef AS definer, pg_get_userbyid(proowner) AS owner, proconfig AS config, l.lanname AS language
+      FROM pg_proc p JOIN pg_language l ON l.oid = p.prolang
+      WHERE p.oid = ${PURGE_FUNCTION}::regprocedure`;
+    expect([...rows]).toEqual([
+      { definer: true, owner: "slugbase_system", config: ["search_path=pg_catalog, public, pg_temp"], language: "plpgsql" },
+    ]);
+    expect(systemOperations).toContain("sys_rate_limit_purge");
+  });
+
+  it("lets slugbase_app run it and nobody else but the owner", async () => {
+    const rows = await db.owner<{ app: boolean; public: boolean }[]>`
+      SELECT has_function_privilege('slugbase_app', ${PURGE_FUNCTION}::regprocedure, 'EXECUTE') AS app,
+             EXISTS (SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                     WHERE p.oid = ${PURGE_FUNCTION}::regprocedure AND a.grantee = 0) AS public`;
+    expect([...rows]).toEqual([{ app: true, public: false }]);
+  });
+
+  it("gives slugbase_app no DELETE on the table: the purge is the only way it removes a bucket", async () => {
+    const rows = await db.owner<{ app: boolean; system: boolean }[]>`
+      SELECT has_table_privilege('slugbase_app', 'public.rate_limit_buckets', 'DELETE') AS app,
+             has_table_privilege('slugbase_system', 'public.rate_limit_buckets', 'DELETE') AS system`;
+    expect([...rows]).toEqual([{ app: false, system: true }]);
+    await expect(db.app.unsafe("DELETE FROM public.rate_limit_buckets")).rejects.toMatchObject({ code: "42501" });
+    await expect(db.app.unsafe("TRUNCATE public.rate_limit_buckets")).rejects.toMatchObject({ code: "42501" });
+  });
+});
+
 // T9: a limit that a burst can step around is no limit. 50 callers race for a
 // bucket of 10 tokens, and exactly 10 may win.
 describe("concurrent takes (T9)", () => {

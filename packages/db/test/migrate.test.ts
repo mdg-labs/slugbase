@@ -86,3 +86,23 @@ describe("chains that cannot be loaded", () => {
     expect(await messageOf(migrate({ url: URL_WITH_SECRET, chains: [second] }))).toContain("used by another chain");
   });
 });
+
+describe("loaded chains", () => {
+  const loadError = "cannot read meta/_journal.json";
+
+  it("are read once for migrationLevel, while migrate reads the folder on every call", async () => {
+    const chain = chainOf({ entries: [entry("a", 1)] }, { "a.sql": "SELECT 1;" });
+    // Past the load, the call fails at the connection the URL refuses.
+    expect(await messageOf(migrationLevel({ url: URL_WITH_SECRET, chains: [chain] }))).not.toContain(loadError);
+    rmSync(chain.folder, { recursive: true, force: true });
+    expect(await messageOf(migrationLevel({ url: URL_WITH_SECRET, chains: [chain] }))).not.toContain(loadError);
+    expect(await messageOf(migrate({ url: URL_WITH_SECRET, chains: [chain] }))).toContain(loadError);
+  });
+
+  it("are not kept when they fail to load", async () => {
+    const chain = chainOf("{");
+    expect(await messageOf(migrationLevel({ url: URL_WITH_SECRET, chains: [chain] }))).toContain(loadError);
+    writeFileSync(join(chain.folder, "meta", "_journal.json"), JSON.stringify({ entries: [] }));
+    expect(await messageOf(migrationLevel({ url: URL_WITH_SECRET, chains: [chain] }))).not.toContain(loadError);
+  });
+});

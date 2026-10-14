@@ -3,8 +3,12 @@ import type { z } from "zod";
 export const HTTP_METHODS = ["get", "post", "put", "patch", "delete"] as const;
 export type HttpMethod = (typeof HTTP_METHODS)[number];
 
-/** x-slugbase-auth: who may call the operation (doc 04 section 1.2). */
-export const AUTH_POLICIES = ["anonymous", "account", "member", "admin", "owner", "instanceAdmin", "machine"] as const;
+/**
+ * x-slugbase-auth: who may call the operation (doc 04 section 1.2). Every
+ * policy but `partial` needs a session whose second factor is complete (doc 04
+ * section 4.3); `partial` also admits a session still waiting for it.
+ */
+export const AUTH_POLICIES = ["anonymous", "partial", "account", "member", "admin", "owner", "instanceAdmin", "machine"] as const;
 export type AuthPolicy = (typeof AUTH_POLICIES)[number];
 
 /** x-slugbase-rate: the bucket of doc 04 section 7, or `none` for probes and machine routes. */
@@ -115,6 +119,12 @@ export interface OperationDefinition {
   readonly rate: RateBucket;
   readonly scope?: TokenScope;
   readonly entitlement?: string;
+  /**
+   * The operation needs a session re-authenticated within the last 10 minutes
+   * and is refused to an API token (doc 04 section 4.4, doc 10 T18). Published as
+   * x-slugbase-reauth when `true`; an absent or `false` declaration is the same.
+   */
+  readonly reauth?: boolean;
   readonly audience?: Audience;
   readonly request?: OperationRequest;
   /**

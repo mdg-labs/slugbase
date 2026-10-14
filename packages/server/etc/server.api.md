@@ -5,6 +5,7 @@
 ```ts
 
 import type { Adapters } from '@slugbase/core';
+import { AuthStore } from '@slugbase/db';
 import type { ClientErrorReportRequest } from '@slugbase/core';
 import type { Context } from 'hono';
 import { Database } from '@slugbase/db';
@@ -16,6 +17,7 @@ import { OperationDefinition } from '@slugbase/contracts';
 import { Problem } from '@slugbase/contracts';
 import { ProblemCode } from '@slugbase/contracts';
 import type { TenantPrincipal } from '@slugbase/core';
+import type { TenantResolver } from '@slugbase/core';
 import type { TenantTx } from '@slugbase/db';
 import { VersionInfoSchema } from '@slugbase/contracts';
 import type { WorkspaceRole } from '@slugbase/core';
@@ -62,6 +64,7 @@ export interface ChainEnv {
         principalType?: "anonymous" | "session" | "api-token";
         principal?: Principal;
         rateLimit?: RateLimitState;
+        takeEmailLimit?: TakeEmailLimit;
         workspaceId?: string;
         tenant?: RequestTenant;
         hooks?: HookDispatcher;
@@ -123,6 +126,9 @@ export interface CookieAuthenticator {
 }
 
 // @public
+export function createAccountOnlyTenantResolver(): TenantResolver;
+
+// @public
 export function createLogger(input: LoggerOptions): Logger;
 
 // @public (undocumented)
@@ -135,6 +141,7 @@ export function createServer(options: CreateServerOptions): Server;
 export interface CreateServerOptions {
     // (undocumented)
     readonly adapters: Adapters;
+    readonly authStore?: AuthStore;
     readonly buildInfo?: BuildInfo;
     // (undocumented)
     readonly config: ServerConfig;
@@ -763,6 +770,7 @@ export type RateScope = (typeof RATE_LIMIT_SCOPES)[number];
 export interface RefineContext {
     issue(key: string, message: string): void;
     readonly production: boolean;
+    warn(key: string, message: string): void;
 }
 
 // @public
@@ -1108,6 +1116,9 @@ export interface SessionPrincipal extends Extract<TenantPrincipal, {
     readonly kind: "session";
 }> {
     readonly instanceAdmin: boolean;
+    readonly mfaPending?: boolean;
+    readonly reauthAt?: Date;
+    readonly sessionId: string;
 }
 
 // @public (undocumented)
@@ -1138,6 +1149,9 @@ export interface StartOptions {
     readonly metricsPort?: number;
     readonly port?: number;
 }
+
+// @public
+export type TakeEmailLimit = (context: ChainContext, key: string) => Promise<void>;
 
 // @public
 export interface TakenLimit {

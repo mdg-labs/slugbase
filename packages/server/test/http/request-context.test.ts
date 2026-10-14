@@ -64,7 +64,7 @@ const whoami: ServerModule = {
         },
       },
       {
-        operation: operation("post", "/api/v1/login", "login"),
+        operation: operation("post", "/api/v1/login", "signIn"),
         handler: async (context) => {
           context.get("logger")?.info("Handler ran", {
             headers: {

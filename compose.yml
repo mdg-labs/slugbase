@@ -1,7 +1,10 @@
 # The self-hosting stack of SlugBase Community Edition (doc 01 section 2.1): the
 # server, the worker and the PostgreSQL 18 database they share. There is no TLS
 # and no reverse proxy here: bring your own and point it at the server's port
-# (APP_ORIGIN is the https origin your users see).
+# (APP_ORIGIN is the https origin your users see). Set TRUSTED_PROXY_HOPS to
+# the number of reverse proxies in front of the server (1 for one proxy): at its
+# default of 0 the server sees only the proxy's address, so the per-IP rate
+# limits are shared by every client.
 #
 #   cp .env.example .env     then set the keys listed under "Self-hosting with
 #                            compose.yml" in .env.example

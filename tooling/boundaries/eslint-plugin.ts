@@ -1,5 +1,14 @@
 import type { Rule, Scope } from "eslint";
-import { checkImport, inDbPackage, inEgressDir, locate, repoPath } from "./policy.ts";
+import {
+  checkImport,
+  DYNAMIC_LOADER,
+  inDbPackage,
+  inEgressDir,
+  locate,
+  networkAccessAllowed,
+  repoPath,
+  SOCKET_GLOBALS,
+} from "./policy.ts";
 
 export const IMPORT_RULE = "slugbase/import-boundaries";
 export const RAW_IO_RULE = "slugbase/no-raw-io";
@@ -22,24 +31,35 @@ function governedPath(filename: string): string | undefined {
   return rel !== undefined && locate(rel).area !== "other" ? rel : undefined;
 }
 
-// `/* eslint slugbase/no-unsafe-html: "off" */` switches the rule off for the
-// file before it runs, so no rule can see it; the suppression processor scans
-// the text instead. Every inline configuration of the rule needs an issue link
-// after " -- ", whatever severity it sets.
+// `/* eslint slugbase/no-raw-io: "off" */` switches a rule off for the file
+// before it runs, so no rule can see it; the suppression processor scans the
+// text instead. Every inline configuration of a rule in INLINE_GUARDED needs an
+// issue link after " -- ", whatever severity it sets.
 const CONFIG_COMMENT = /\/\*\s*eslint\s([\s\S]*?)\*\//g;
 
-export function unsafeHtmlConfigComments(text: string, filename: string): { line: number; column: number }[] {
+// The rules that no directive may switch off without an issue link: the
+// import boundaries and raw I/O (T1, T6) and unsanitised HTML (T14).
+export const ISSUE_LINK_RULES: readonly string[] = [IMPORT_RULE, RAW_IO_RULE, UNSAFE_HTML_RULE];
+
+export function guardedConfigComments(
+  text: string,
+  filename: string,
+): { rule: string; line: number; column: number }[] {
   if (governedPath(filename) === undefined) {
     return [];
   }
-  const found: { line: number; column: number }[] = [];
+  const found: { rule: string; line: number; column: number }[] = [];
   for (const match of text.matchAll(CONFIG_COMMENT)) {
     const [rules = "", ...description] = (match[1] ?? "").split(/\s--\s/);
-    if (!rules.includes(UNSAFE_HTML_RULE) || hasIssueLink(description.join(" -- "))) {
+    if (hasIssueLink(description.join(" -- "))) {
       continue;
     }
     const before = text.slice(0, match.index).split("\n");
-    found.push({ line: before.length, column: (before.at(-1)?.length ?? 0) + 1 });
+    for (const rule of ISSUE_LINK_RULES) {
+      if (rules.includes(rule)) {
+        found.push({ rule, line: before.length, column: (before.at(-1)?.length ?? 0) + 1 });
+      }
+    }
   }
   return found;
 }
@@ -170,38 +190,67 @@ const noRawIo: Rule.RuleModule = {
       "fetch is allowed only inside packages/adapters/src/egress/: every outbound request goes through the egress adapter (doc 01 section 10, T6).";
     const dbText =
       "A database handle is created only inside packages/db: tenant queries go through withTenant() (doc 01 section 5.3, T1).";
-    const checkFetch = !inEgressDir(rel);
     const checkDb = !inDbPackage(rel);
 
+    // The globals that open a connection, with the message for each. fetch is
+    // allowed only in the egress folder; the others also in test and
+    // development code.
+    const guarded = new Map<string, string>();
+    if (!inEgressDir(rel)) {
+      guarded.set("fetch", fetchText);
+    }
+    for (const name of SOCKET_GLOBALS) {
+      if (!networkAccessAllowed(rel, name)) {
+        guarded.set(name, `${name} opens a connection: connections are made only inside packages/adapters/src/egress/ (doc 01 section 10, T6).`);
+      }
+    }
+    const loaderText = `${DYNAMIC_LOADER} loads any built-in module by name, so the import rules cannot see it: it is not used outside packages/adapters/src/egress/ and test code (doc 01 section 10, T6).`;
+    const checkLoader = !networkAccessAllowed(rel, DYNAMIC_LOADER);
+
+    const reportGlobal = (node: Rule.Node, name: unknown): void => {
+      const text = typeof name === "string" ? guarded.get(name) : undefined;
+      if (text !== undefined) {
+        context.report({ node, messageId: "raw", data: { text } });
+      }
+    };
+
     const checkDestructuring = (pattern: { type: string }, source: { type: string }): void => {
-      if (!checkFetch || pattern.type !== "ObjectPattern" || globalObjectName(source) === undefined) {
+      if (guarded.size === 0 || pattern.type !== "ObjectPattern" || globalObjectName(source) === undefined) {
         return;
       }
       for (const property of (pattern as unknown as { properties: { type: string; computed?: boolean; key: { type: string; name?: string; value?: unknown } }[] }).properties) {
-        if (property.type === "Property" && propertyKeyName(property) === "fetch") {
-          context.report({ node: property as unknown as Rule.Node, messageId: "raw", data: { text: fetchText } });
+        if (property.type === "Property") {
+          reportGlobal(property as unknown as Rule.Node, propertyKeyName(property));
         }
+      }
+    };
+
+    const reportLoader = (node: Rule.Node): void => {
+      if (checkLoader) {
+        context.report({ node, messageId: "raw", data: { text: loaderText } });
       }
     };
 
     return {
       Program(program) {
-        if (!checkFetch) {
+        if (guarded.size === 0) {
           return;
         }
         const globalScope = context.sourceCode.getScope(program);
-        // The global `fetch` is either unresolved or an implicit lib variable.
-        const implicit: Scope.Variable | undefined = globalScope.set.get("fetch");
-        const references =
-          implicit !== undefined && implicit.defs.length > 0 ? [] : (implicit?.references ?? []);
-        for (const reference of [...globalScope.through, ...references]) {
-          if (reference.identifier.name === "fetch") {
-            context.report({ node: reference.identifier, messageId: "raw", data: { text: fetchText } });
+        for (const name of guarded.keys()) {
+          // The global is either unresolved or an implicit lib variable.
+          const implicit: Scope.Variable | undefined = globalScope.set.get(name);
+          const references =
+            implicit !== undefined && implicit.defs.length > 0 ? [] : (implicit?.references ?? []);
+          for (const reference of [...globalScope.through, ...references]) {
+            if (reference.identifier.name === name) {
+              reportGlobal(reference.identifier as Rule.Node, name);
+            }
           }
         }
       },
       MemberExpression(node) {
-        if (!checkFetch || globalObjectName(node.object) === undefined) {
+        if (guarded.size === 0 || globalObjectName(node.object) === undefined) {
           return;
         }
         const { property } = node;
@@ -212,11 +261,9 @@ const noRawIo: Rule.RuleModule = {
           : property.type === "Identifier"
             ? property.name
             : undefined;
-        if (name === "fetch") {
-          context.report({ node, messageId: "raw", data: { text: fetchText } });
-        }
+        reportGlobal(node, name);
       },
-      // `const { fetch } = globalThis` takes the global fetch without a member access.
+      // `const { fetch } = globalThis` takes the global without a member access.
       VariableDeclarator(node) {
         if (node.init != null) {
           checkDestructuring(node.id, node.init);
@@ -227,6 +274,23 @@ const noRawIo: Rule.RuleModule = {
       },
       AssignmentPattern(node) {
         checkDestructuring(node.left, node.right);
+      },
+      // The loader by any spelling: process.getBuiltinModule, a destructured
+      // name, process["getBuiltinModule"], process[`getBuiltinModule`].
+      Identifier(node) {
+        if (node.name === DYNAMIC_LOADER) {
+          reportLoader(node);
+        }
+      },
+      Literal(node) {
+        if (node.value === DYNAMIC_LOADER) {
+          reportLoader(node);
+        }
+      },
+      TemplateLiteral(node) {
+        if (staticSpecifier(node) === DYNAMIC_LOADER) {
+          reportLoader(node);
+        }
       },
       CallExpression(node) {
         if (checkDb && node.callee.type === "Identifier" && DB_FACTORIES.has(node.callee.name)) {

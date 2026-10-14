@@ -45,6 +45,7 @@ export function validateEnvironment<Shape extends z.ZodRawShape>(
 ): LoadedConfig<z.infer<z.ZodObject<Shape>>> {
   const production = env["NODE_ENV"] === "production";
   const issues: ConfigIssue[] = [];
+  const settingWarnings: string[] = [];
 
   const parsed = schema.object.safeParse(env);
   if (parsed.success) {
@@ -52,6 +53,9 @@ export function validateEnvironment<Shape extends z.ZodRawShape>(
       production,
       issue: (key, message) => {
         issues.push({ key, message });
+      },
+      warn: (key, message) => {
+        settingWarnings.push(`${key} ${message}`);
       },
     };
     for (const refine of schema.refinements) {
@@ -79,7 +83,10 @@ export function validateEnvironment<Shape extends z.ZodRawShape>(
     .sort();
   return {
     config: parsed.data,
-    warnings: unknown.length === 0 ? [] : [`Unknown ${SLUGBASE_PREFIX}* environment keys are ignored: ${unknown.join(", ")}`],
+    warnings: [
+      ...settingWarnings,
+      ...(unknown.length === 0 ? [] : [`Unknown ${SLUGBASE_PREFIX}* environment keys are ignored: ${unknown.join(", ")}`]),
+    ],
   };
 }
 

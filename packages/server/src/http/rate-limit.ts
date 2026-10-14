@@ -3,6 +3,7 @@ import type { Logger } from "../create-server.ts";
 import type { RateLimitRegistry, RateLimitWindow, ScopeLimit } from "../config/index.ts";
 import type { ChainContext, RequestStage } from "./chain.ts";
 import { ProblemError, describeError, problemDocument, requestIdOf } from "./problem.ts";
+import { rateLimitKeyOf } from "./trusted-proxy.ts";
 
 // Stages 3a and 6 of the chain (doc 01 section 4, doc 04 section 7, doc 10 T9):
 // token buckets keyed by the bucket the operation declares in
@@ -12,7 +13,8 @@ import { ProblemError, describeError, problemDocument, requestIdOf } from "./pro
 // authenticated it takes one from the buckets of its account and, for a bucket
 // that has one, its workspace (stage 6); whichever is empty first denies it. The
 // IP is the one the request-context stage derived across the trusted proxy
-// hops, never a header read here. An operation that declares `none`, a
+// hops, never a header read here; its bucket key is the IPv4 address, or the /64
+// of an IPv6 one (`rateLimitKeyOf`). An operation that declares `none`, a
 // `machine` route and a request that matches no operation are not limited by
 // these stages.
 //
@@ -40,6 +42,15 @@ export interface RateLimitState {
   /** Set when a bucket denied the request: the seconds until it holds a token again. */
   readonly retryAfterSeconds?: number;
 }
+
+/**
+ * Takes one token from the per-address limit of the operation's bucket under
+ * `key`: the operation that takes an email address counts attempts per address
+ * (doc 04 section 7), unknown addresses included, because the stage cannot know
+ * the address. Throws `429 rate_limited` when the limit is empty and `503
+ * unavailable` when the limiter cannot decide.
+ */
+export type TakeEmailLimit = (context: ChainContext, key: string) => Promise<void>;
 
 export interface RateLimiting {
   /** Stage 3a: the per-IP take, before authentication. */
@@ -94,7 +105,7 @@ export function createRateLimiting({ limiter, registry, logger, errors, recordRe
     const principal = context.get("principal");
     switch (limit.scope) {
       case "ip":
-        return context.get("clientIp") ?? UNKNOWN_CLIENT;
+        return rateLimitKeyOf(context.get("clientIp") ?? UNKNOWN_CLIENT);
       case "account":
         return principal?.accountId;
       case "workspace":
@@ -105,26 +116,17 @@ export function createRateLimiting({ limiter, registry, logger, errors, recordRe
     }
   };
 
-  // Takes one token from each of the bucket's limits that `include` selects, in
-  // the registry's order, and answers the refusal of the first one that is empty.
-  const take = async (context: ChainContext, include: (limit: ScopeLimit) => boolean): Promise<Response | undefined> => {
-    const operation = context.get("route")?.operation;
-    if (operation === undefined || operation.rate === "none" || operation.audience === "machine") {
-      return undefined;
-    }
-    const bucket = operation.rate;
-    const limits = registry.scopesOf(bucket);
-    if (limits === undefined) {
-      throw failure(context, bucket, new Error("the bucket is not in the registry"));
-    }
-
+  // Takes one token from each of the given limits, in order, under the key the caller
+  // chose for it. When a bucket is empty the request is denied: the refusal is kept on
+  // the context for the `RateLimit` headers and `denied` says so.
+  const consume = async (
+    context: ChainContext,
+    bucket: string,
+    entries: readonly { readonly limit: ScopeLimit; readonly key: string }[],
+  ): Promise<{ readonly denied: boolean }> => {
     const taken: TakenLimit[] = [...(context.get("rateLimit")?.taken ?? [])];
-    for (const limit of limits.filter(include)) {
-      const key = subjectOf(context, limit);
+    for (const { limit, key } of entries) {
       const window = registry.window(limit.name);
-      if (key === undefined) {
-        continue;
-      }
       if (window === undefined) {
         throw failure(context, bucket, new Error("the limit is not in the registry"));
       }
@@ -136,20 +138,66 @@ export function createRateLimiting({ limiter, registry, logger, errors, recordRe
       }
       taken.push({ name: limit.name, window, limit: decision.limit, remaining: decision.remaining });
       if (!decision.allowed) {
-        const state: RateLimitState = { taken, retryAfterSeconds: decision.retryAfterSeconds };
-        context.set("rateLimit", state);
+        context.set("rateLimit", { taken, retryAfterSeconds: decision.retryAfterSeconds });
         recordRejection?.(bucket);
-        const response = problemDocument(requestIdOf(context), { code: "rate_limited", detail: DENIED_DETAIL });
-        for (const [name, value] of Object.entries(headersOf(state))) {
-          response.headers.set(name, value);
-        }
-        return response;
+        return { denied: true };
       }
     }
     if (taken.length > 0) {
       context.set("rateLimit", { taken });
     }
-    return undefined;
+    return { denied: false };
+  };
+
+  const limitedOperation = (context: ChainContext): { bucket: string; limits: readonly ScopeLimit[] } | undefined => {
+    const operation = context.get("route")?.operation;
+    if (operation === undefined || operation.rate === "none" || operation.audience === "machine") {
+      return undefined;
+    }
+    const bucket = operation.rate;
+    const limits = registry.scopesOf(bucket);
+    if (limits === undefined) {
+      throw failure(context, bucket, new Error("the bucket is not in the registry"));
+    }
+    return { bucket, limits };
+  };
+
+  // Takes one token from each of the bucket's limits that `include` selects, in
+  // the registry's order, and answers the refusal of the first one that is empty.
+  const take = async (context: ChainContext, include: (limit: ScopeLimit) => boolean): Promise<Response | undefined> => {
+    const limited = limitedOperation(context);
+    if (limited === undefined) {
+      return undefined;
+    }
+    const entries = limited.limits
+      .filter(include)
+      .flatMap((limit) => {
+        const key = subjectOf(context, limit);
+        return key === undefined ? [] : [{ limit, key }];
+      });
+    const { denied } = await consume(context, limited.bucket, entries);
+    if (!denied) {
+      return undefined;
+    }
+    const response = problemDocument(requestIdOf(context), { code: "rate_limited", detail: DENIED_DETAIL });
+    const state = context.get("rateLimit");
+    for (const [name, value] of Object.entries(state === undefined ? {} : headersOf(state))) {
+      response.headers.set(name, value);
+    }
+    return response;
+  };
+
+  // The limit an operation counts per target address, which only its handler knows.
+  const takeEmail: TakeEmailLimit = async (context, key) => {
+    const limited = limitedOperation(context);
+    const limit = limited?.limits.find((candidate) => candidate.scope === "email");
+    if (limited === undefined || limit === undefined) {
+      throw failure(context, limited?.bucket ?? "none", new Error("the operation's bucket has no email limit"));
+    }
+    const { denied } = await consume(context, limited.bucket, [{ limit, key }]);
+    if (denied) {
+      throw new ProblemError("rate_limited", DENIED_DETAIL);
+    }
   };
 
   const ipStage: RequestStage = async (context, next) => {
@@ -159,7 +207,13 @@ export function createRateLimiting({ limiter, registry, logger, errors, recordRe
 
   const stage: RequestStage = async (context, next) => {
     const refusal = await take(context, (limit) => limit.scope !== "ip");
-    return refusal ?? next();
+    if (refusal !== undefined) {
+      return refusal;
+    }
+    if (limitedOperation(context) !== undefined) {
+      context.set("takeEmailLimit", takeEmail);
+    }
+    return next();
   };
 
   const apply = (context: ChainContext): void => {

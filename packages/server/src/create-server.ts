@@ -2,7 +2,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { createAdaptorServer, type ServerType } from "@hono/node-server";
 import { getHealth, getReady, getVersion } from "@slugbase/contracts";
 import type { Adapters } from "@slugbase/core";
-import { createDatabase, type Database, type MigrationChain } from "@slugbase/db";
+import { createAuthStore, createDatabase, type AuthStore, type Database, type MigrationChain } from "@slugbase/db";
 import { Hono } from "hono";
 import { DEVELOPMENT_BUILD_INFO, type BuildInfo } from "./build-info.ts";
 import { createRateLimitRegistry, type ServerConfig, type WorkerConfig } from "./config/index.ts";
@@ -24,6 +24,7 @@ import { createMetrics, startMetricsListener, type MetricsListener } from "./met
 import { assertApplicationRole, runMigrations } from "./migrate/index.ts";
 import { loadCommittedDocument } from "./routes/committed-document.ts";
 import { probeRoutes } from "./routes/health.ts";
+import { authContribution } from "./routes/auth/index.ts";
 import { apiConfigRoute } from "./routes/meta/config.ts";
 import { apiDocs } from "./routes/meta/docs.ts";
 import { isOpenApiDocument, openApiRoute } from "./routes/meta/openapi.ts";
@@ -32,7 +33,7 @@ import { WebRootError, serveWebRoot } from "./routes/static.ts";
 import type { JobDefinition, ScheduleDefinition } from "./worker/job.ts";
 
 export type { ChainContext, ChainEnv, MatchedRoute, RouteBinding, RouteHandler, StageName, ValidatedInput } from "./http/chain.ts";
-export type { RateLimitState, TakenLimit } from "./http/rate-limit.ts";
+export type { RateLimitState, TakeEmailLimit, TakenLimit } from "./http/rate-limit.ts";
 export type {
   ApiTokenPrincipal,
   Authenticator,
@@ -121,6 +122,11 @@ export interface CreateServerOptions {
    * a database passed in is connected by the caller, who answers for its role.
    */
   readonly database?: Database;
+  /**
+   * The system operations of sign-in and the session cookie; by default a pool on `DATABASE_URL`, opened on first use.
+   * The server closes it on shutdown, like the tenant database.
+   */
+  readonly authStore?: AuthStore;
   /** How long a shutdown lets in-flight requests finish before cutting them (doc 01 section 3 rule 2). */
   readonly shutdownTimeoutMs?: number;
 }
@@ -214,6 +220,8 @@ const REQUIRED_ADAPTERS = Object.keys(ADAPTER_PORTS) as (keyof Adapters)[];
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 25_000;
 
 const DEFAULT_SERVER_POOL_SIZE = 10;
+
+const DEFAULT_AUTH_POOL_SIZE = 4;
 
 export function assertAdapters(adapters: Adapters): void {
   const missing = REQUIRED_ADAPTERS.filter((port) => {
@@ -391,12 +399,19 @@ export function createServer(options: CreateServerOptions): Server {
   let migrationSets: readonly MigrationChain[] = options.migrations;
   const progress = { migrating: false };
   const buildInfo = options.buildInfo ?? DEVELOPMENT_BUILD_INFO;
-  const builtInRoutes = [
+  const builtInRoutes: RouteBinding[] = [
     ...probeRoutes({ buildInfo, databaseUrl: config.DATABASE_URL, chains: () => migrationSets, logger, migrating: () => progress.migrating }),
     apiConfigRoute({ config, buildInfo, adapters }),
     openApiRoute({ enabled: config.API_DOCS_ENABLED, document: options.openApiDocument }),
   ];
-  const builtIn: ServerModule = { name: "@slugbase/server", register: () => ({ routes: builtInRoutes }) };
+  // Password sign-in is part of the server, not a module: the session cookie is the one browser credential (doc 04 section 4.1).
+  const authStore = options.authStore ?? createAuthStore({ url: config.DATABASE_URL, poolSize: DEFAULT_AUTH_POOL_SIZE });
+  const auth = authContribution({ store: authStore, appOrigin: config.APP_ORIGIN, sessionSecret: config.SESSION_SECRET });
+  builtInRoutes.push(...(auth.routes ?? []));
+  const builtIn: ServerModule = {
+    name: "@slugbase/server",
+    register: () => ({ routes: builtInRoutes, authenticators: auth.authenticators ?? [] }),
+  };
   // Requests no operation matches: the paths served as files rather than as operations.
   const docs: readonly Unrouted[] = config.API_DOCS_ENABLED ? [apiDocs()] : [];
 
@@ -438,6 +453,7 @@ export function createServer(options: CreateServerOptions): Server {
     }
   } catch (error) {
     void database.close();
+    void authStore.close();
     throw error;
   }
 
@@ -513,13 +529,13 @@ export function createServer(options: CreateServerOptions): Server {
             logger,
           });
         } catch (error) {
-          await database.close();
+          await Promise.all([database.close(), authStore.close()]);
           throw error;
         }
       }
       const migrateUrl = config.MIGRATE_ON_START ? config.DATABASE_MIGRATE_URL : undefined;
       if (config.MIGRATE_ON_START && migrateUrl === undefined) {
-        await database.close();
+        await Promise.all([database.close(), authStore.close()]);
         throw new Error("DATABASE_MIGRATE_URL is required while MIGRATE_ON_START is true");
       }
       let draining = false;
@@ -575,7 +591,7 @@ export function createServer(options: CreateServerOptions): Server {
           listener.closeAllConnections();
           await closed;
         }
-        await database.close();
+        await Promise.all([database.close(), authStore.close()]);
       };
 
       if (metricsRequested !== undefined) {

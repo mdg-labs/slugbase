@@ -10,8 +10,20 @@ import { ProblemError } from "./problem.ts";
 
 /** A signed-in browser session. */
 export interface SessionPrincipal extends Extract<TenantPrincipal, { readonly kind: "session" }> {
+  /** The session row the cookie resolved to; the handle that ends it. */
+  readonly sessionId: string;
   /** The account is a CE instance admin (doc 04 section 10.10). */
   readonly instanceAdmin: boolean;
+  /**
+   * The password was verified and the second factor is still pending (a
+   * `partial` session, doc 04 section 4.3). Absent on a completed session.
+   */
+  readonly mfaPending?: boolean;
+  /**
+   * When the session last re-authenticated (doc 04 section 4.4). Absent when it
+   * never has, which the authorization stage treats as stale.
+   */
+  readonly reauthAt?: Date;
 }
 
 /** An API token, acting in the one workspace it is bound to (doc 04 section 4.2). */
@@ -53,10 +65,12 @@ export interface AuthenticationOptions {
  * Stage 4. Without a registered authenticator every request is anonymous. With
  * one, an `Authorization` header is resolved by the bearer authenticators only
  * and the request is `401 unauthenticated` when none accepts it (cookies are
- * never consulted then); otherwise the `Cookie` header goes to the cookie
- * authenticators, and a cookie none accepts is an anonymous request. A route
- * with an `audience` never derives a principal, and a request that matches no
- * operation resolves no credential.
+ * never consulted then); while no bearer authenticator is registered nothing
+ * can accept the header, so the request is anonymous, still without its
+ * cookies. Otherwise the `Cookie` header goes to the cookie authenticators, and
+ * a cookie none accepts is an anonymous request. A route with an `audience`
+ * never derives a principal, and a request that matches no operation resolves
+ * no credential.
  */
 export function createAuthentication({ authenticators }: AuthenticationOptions): RequestStage {
   const bearer = authenticators.filter((authenticator) => authenticator.credential === "bearer");
@@ -71,6 +85,9 @@ export function createAuthentication({ authenticators }: AuthenticationOptions):
     const headers = context.req.raw.headers;
     const authorization = headers.get("authorization");
     if (authorization !== null) {
+      if (bearer.length === 0) {
+        return next();
+      }
       for (const authenticator of bearer) {
         const principal = await authenticator.authenticate(authorization);
         if (principal !== undefined) {

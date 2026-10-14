@@ -56,6 +56,7 @@ export function createStubWorld(fixture: TenantFixture): StubWorld {
       const membership = memberships.get(accountId);
       return Promise.resolve({
         kind: "session",
+        sessionId: `stub-session-${accountId}`,
         accountId,
         activeWorkspaceId: membership?.workspaceId,
         instanceAdmin: accountId === INSTANCE_ADMIN_ACCOUNT,

@@ -125,6 +125,20 @@ describe("generated document", () => {
 });
 
 describe("declaration checks", () => {
+  it("publishes a re-authentication requirement as x-slugbase-reauth and leaves it out when absent or false", () => {
+    const entryOf = (op: OperationDefinition): Obj | undefined =>
+      (buildOpenApiDocument([op])["paths"] as Record<string, Record<string, Obj>>)["/api/v1/things"]?.["post"];
+    expect(entryOf({ ...base, reauth: true })?.["x-slugbase-reauth"]).toBe(true);
+    expect(entryOf({ ...base, reauth: false })).not.toHaveProperty("x-slugbase-reauth");
+    expect(entryOf(base)).not.toHaveProperty("x-slugbase-reauth");
+  });
+
+  it("refuses a reauth that is not a boolean", () => {
+    for (const value of ["yes", 1, null]) {
+      expect(problemsOf([{ ...base, reauth: value }]).join("\n")).toContain("x-slugbase-reauth (reauth) must be a boolean");
+    }
+  });
+
   it("accepts a positive integer maxBodyBytes and leaves it out of the document", () => {
     const built = buildOpenApiDocument([defineOperation({ ...base, maxBodyBytes: 5 * 1024 * 1024 })]);
     expect(JSON.stringify(built)).not.toContain("5242880");

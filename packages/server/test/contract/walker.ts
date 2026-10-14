@@ -298,7 +298,8 @@ export async function walkContract(options: WalkerOptions): Promise<WalkerReport
 
     await exercise("without credentials", undefined, fixture, { status: 401, code: "unauthenticated" });
 
-    if (operation.auth !== "account") {
+    // `account` and `partial` admit every signed-in session, so no principal is below them.
+    if (operation.auth !== "account" && operation.auth !== "partial") {
       const below = hooks.tooLowRole(operation);
       if (below === undefined) {
         fail("hook_missing", `the policy ${operation.auth} has a role below it and the hooks give no principal for it`);

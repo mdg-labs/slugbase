@@ -18,7 +18,10 @@ import type { MatrixFailure } from "./report.js";
 // workspace, so the runner names the workspace in every write itself: A in the
 // attempt that stays in A, B in the attempt that must not get through. A read
 // must return no row of B; a write must touch no row of B, and one that names B
-// may instead be refused by row-level security.
+// may instead be refused by row-level security. Every attempt rolls back, so the
+// checksum of B, read on another connection, sees only what a method commits
+// outside its transaction; what a write touched inside it is known only from the
+// rows it returns, and a write that returns none is reported as not exercised.
 //
 // What counts as a refusal is narrow. The attempt that stays in workspace A must
 // complete, so a method that never ran proves nothing. Of the attempts that name
@@ -159,7 +162,6 @@ export async function runRlsOnlyMatrix(options: RlsOnlyOptions): Promise<RlsOnly
     }
 
     for (const { label, input, mayBeRefused } of inputs) {
-      const namesB = mayBeRefused;
       attempts += 1;
       let outcome: Outcome;
       try {
@@ -176,9 +178,12 @@ export async function runRlsOnlyMatrix(options: RlsOnlyOptions): Promise<RlsOnly
         }
         continue;
       }
-      if (entry.method === "update" && namesB && outcome.rows.length === 0) {
-        // No row came into the statement, so row-level security never saw the move to B: nothing was proven.
-        failures.push(failure(subject, "write_not_exercised", `${label}: the update touched no row, so no row was checked against workspace B`));
+      if (entry.access === "write" && outcome.rows.length === 0) {
+        // Every attempt rolls back, so the checksum of B cannot see a write made inside it: the returned rows are the
+        // only evidence of what the statement touched. A write that returns none proves nothing about workspace B.
+        failures.push(
+          failure(subject, "write_not_exercised", `${label}: the ${entry.method} returned no row, so no row it touched was checked against workspace B`),
+        );
       }
       for (const row of outcome.rows) {
         const workspaceId = workspaceOf(row);

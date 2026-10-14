@@ -172,6 +172,39 @@ describe("process schemas", () => {
   });
 });
 
+describe("TRUSTED_PROXY_HOPS warning", () => {
+  function hopsWarnings(type: "server" | "worker", env: Record<string, string | undefined>): string[] {
+    return loadConfig(type, env).warnings.filter((warning) => warning.includes("TRUSTED_PROXY_HOPS"));
+  }
+
+  it("warns in production when it is unset, naming the key and no value", () => {
+    const warnings = hopsWarnings("server", productionEnv());
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toMatch(/^TRUSTED_PROXY_HOPS /);
+    expect(warnings[0]).toContain("per-IP rate limits");
+  });
+
+  it("warns in production when it is set to 0, as .env.example sets it", () => {
+    expect(hopsWarnings("server", productionEnv({ TRUSTED_PROXY_HOPS: "0" }))).toHaveLength(1);
+  });
+
+  it("does not warn in production once a proxy is trusted", () => {
+    expect(hopsWarnings("server", productionEnv({ TRUSTED_PROXY_HOPS: "1" }))).toEqual([]);
+  });
+
+  it("does not warn outside production", () => {
+    expect(hopsWarnings("server", development)).toEqual([]);
+  });
+
+  it("does not warn the worker, which has no public listener", () => {
+    expect(hopsWarnings("worker", productionEnv())).toEqual([]);
+  });
+
+  it("is a warning, not a refusal: the configuration loads", () => {
+    expect(loadConfig("server", productionEnv()).config.TRUSTED_PROXY_HOPS).toBe(0);
+  });
+});
+
 describe("unknown SLUGBASE_* keys", () => {
   it("warns once, listing key names only", () => {
     const { warnings } = loadConfig("server", {

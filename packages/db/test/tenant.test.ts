@@ -70,6 +70,7 @@ describe("the package entry point", () => {
         "MigrationError",
         "TenantContextError",
         "connectionRole",
+        "createAuthStore",
         "createDatabase",
         "createRateLimitStore",
         "defineScopedRepository",

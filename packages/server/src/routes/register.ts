@@ -167,10 +167,36 @@ function missingPolicy(operation: OperationDefinition): string | undefined {
   if (operation.audience !== undefined && !includes(AUDIENCES, operation.audience)) {
     return "audience";
   }
+  if (operation.reauth !== undefined && typeof operation.reauth !== "boolean") {
+    return "reauth";
+  }
   return undefined;
 }
 
-// Each declared field, and the extension of the document that carries it.
+/**
+ * Why an operation's declared re-authentication contradicts the rest of its policy, or
+ * `undefined`. Re-authentication is a property of a fully authenticated session (doc 04
+ * section 4.4, doc 10 T18): an operation that declares it cannot also be open to an
+ * anonymous caller, a machine, a session whose second factor is pending or an API token.
+ */
+function inconsistency(operation: OperationDefinition): string | undefined {
+  if (operation.reauth !== true) {
+    return undefined;
+  }
+  if (operation.auth === "anonymous" || operation.auth === "machine" || operation.auth === "partial") {
+    return `reauth cannot be declared on a ${operation.auth} operation`;
+  }
+  if (operation.scope !== undefined) {
+    return "an operation that needs re-authentication cannot be callable with an API token, so it declares no scope";
+  }
+  if (operation.audience !== undefined) {
+    return "an operation outside the browser session model cannot need re-authentication";
+  }
+  return undefined;
+}
+
+// Each declared field, and the extension of the document that carries it. `reauth`
+// is a flag: the document writes it only when true, so absent and false agree.
 const POLICY_FIELDS = [
   ["auth", "x-slugbase-auth"],
   ["rate", "x-slugbase-rate"],
@@ -178,6 +204,8 @@ const POLICY_FIELDS = [
   ["entitlement", "x-slugbase-entitlement"],
   ["audience", "x-slugbase-audience"],
 ] as const;
+
+const REAUTH_EXTENSION = "x-slugbase-reauth";
 
 function problemOf(operation: OperationDefinition, documented: ReadonlyMap<string, DocumentedOperation>): RegistrationProblem | undefined {
   // A binding can come from JavaScript, so the ID is checked before it names anything.
@@ -194,6 +222,10 @@ function problemOf(operation: OperationDefinition, documented: ReadonlyMap<strin
   if (missing !== undefined) {
     return refuse("missing_policy", `the operation declares no valid ${missing}; every route needs the policy of its contract`);
   }
+  const inconsistent = inconsistency(operation);
+  if (inconsistent !== undefined) {
+    return refuse("missing_policy", `the policy contradicts itself: ${inconsistent}`);
+  }
   const entry = documented.get(operationId);
   if (entry === undefined) {
     return refuse("undocumented_operation", "the operation is not in the committed OpenAPI document; run pnpm api:gen after declaring it");
@@ -208,6 +240,9 @@ function problemOf(operation: OperationDefinition, documented: ReadonlyMap<strin
     if (operation[field] !== entry.entry[extension]) {
       return refuse("policy_mismatch", `${field} differs from the document's ${extension}; a route takes its policy from the contract`);
     }
+  }
+  if ((operation.reauth === true) !== (entry.entry[REAUTH_EXTENSION] === true)) {
+    return refuse("policy_mismatch", `reauth differs from the document's ${REAUTH_EXTENSION}; a route takes its policy from the contract`);
   }
   return undefined;
 }

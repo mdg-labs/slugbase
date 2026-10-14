@@ -52,8 +52,9 @@ interface Target {
 // Headers the adapter sets itself; a caller's value would change the framing or the host the request names.
 const RESERVED_HEADERS = new Set(["host", "content-length", "transfer-encoding", "connection", "accept-encoding"]);
 
-// Credentials a caller attaches to one origin; they do not follow a redirect to another.
-const CREDENTIAL_HEADERS = new Set(["authorization", "cookie", "proxy-authorization"]);
+// The only caller headers that follow a redirect to another origin. Any other header may carry a
+// credential the adapter cannot recognise by name, so it stays with the origin it was sent to.
+const CROSS_ORIGIN_HEADERS = new Set(["accept", "accept-language", "user-agent"]);
 
 // The response to these statuses names where to ask next in `Location`.
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
@@ -193,6 +194,16 @@ function withoutHeaders(
   return Object.fromEntries(Object.entries(headers).filter(([name]) => !dropped.has(name.toLowerCase())));
 }
 
+function onlyHeaders(
+  headers: Readonly<Record<string, string>> | undefined,
+  kept: ReadonlySet<string>,
+): Readonly<Record<string, string>> | undefined {
+  if (headers === undefined) {
+    return undefined;
+  }
+  return Object.fromEntries(Object.entries(headers).filter(([name]) => kept.has(name.toLowerCase())));
+}
+
 // The decoders for a `Content-Encoding` header, in the order the body is decoded; undefined when the
 // adapter cannot undo an encoding, because a size cap on bytes it cannot decode would not be a cap on the body.
 function decodersFor(header: string | undefined): Readable[] | undefined {
@@ -222,7 +233,9 @@ function decodersFor(header: string | undefined): Readable[] | undefined {
  * it validated, with the host name kept for the `Host` header and the TLS server
  * name, so a second DNS answer cannot move the connection. Redirects are
  * followed by hand, a bounded number of times, and every hop is resolved,
- * validated and pinned afresh like the first request. One deadline covers every
+ * validated and pinned afresh like the first request. A redirect to another
+ * origin carries only a few named headers, and is refused when it would carry
+ * the request body. One deadline covers every
  * hop's resolving, connecting and reading, and the decoded body is cut off at
  * `maxBytes`. A response outside the caller's content-type allowlist is refused
  * once its headers arrive.
@@ -299,7 +312,11 @@ export class HttpEgress implements EgressPort {
           headers = withoutHeaders(headers, new Set(["content-type"]));
         }
         if (next.url.origin !== target.url.origin) {
-          headers = withoutHeaders(headers, CREDENTIAL_HEADERS);
+          // A 307 or 308 keeps the body, which another origin must not receive.
+          if (body !== undefined) {
+            throw new EgressError();
+          }
+          headers = onlyHeaders(headers, CROSS_ORIGIN_HEADERS);
         }
         target = next;
       }

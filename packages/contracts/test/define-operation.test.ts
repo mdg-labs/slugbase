@@ -1,6 +1,7 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { z } from "zod";
 import {
+  AUTH_POLICIES,
   defineOperation,
   emptyResponse,
   jsonResponse,
@@ -37,6 +38,18 @@ describe("defineOperation types", () => {
     expect(
       defineOperation({ ...complete, scope: "read", entitlement: "sharing.teams", audience: "machine" }).scope,
     ).toBe("read");
+  });
+
+  it("accepts the partial auth policy and a declared re-authentication, and keeps both literal", () => {
+    const declared = defineOperation({ ...complete, auth: "partial", reauth: false });
+    expectTypeOf(declared.auth).toEqualTypeOf<"partial">();
+    expect(defineOperation({ ...complete, reauth: true }).reauth).toBe(true);
+    expect(AUTH_POLICIES).toContain("partial");
+  });
+
+  it("rejects a re-authentication that is not a boolean at compile time", () => {
+    // @ts-expect-error #437 reauth is a boolean
+    defineOperation({ ...complete, reauth: "yes" });
   });
 
   it("rejects an operation without auth at compile time", () => {

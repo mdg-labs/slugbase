@@ -1,7 +1,7 @@
 import ts from "typescript";
+import { confinedModule, DYNAMIC_LOADER, isHttpModule, networkAccessAllowed, SOCKET_GLOBALS } from "./policy.ts";
 
 const GLOBAL_OBJECTS = new Set(["globalThis", "window", "self", "global"]);
-const HTTP_MODULES = new Set(["node:http", "node:https", "node:http2", "http", "https", "http2", "undici"]);
 
 /** Strips the wrappers that leave an expression's value unchanged: parentheses, assertions, `!`. */
 function unwrap(node: ts.Expression): ts.Expression {
@@ -18,11 +18,9 @@ function unwrap(node: ts.Expression): ts.Expression {
   return current;
 }
 
-function isGlobalFetch(callee: ts.Expression): boolean {
+/** The name of a global read through `globalThis`, `window`, `self` or `global`, such as `fetch` in `globalThis.fetch`. */
+function globalMember(callee: ts.Expression): string | undefined {
   const target = unwrap(callee);
-  if (ts.isIdentifier(target)) {
-    return target.text === "fetch";
-  }
   let object: ts.Expression;
   let member: string | undefined;
   if (ts.isPropertyAccessExpression(target)) {
@@ -32,10 +30,10 @@ function isGlobalFetch(callee: ts.Expression): boolean {
     object = target.expression;
     member = target.argumentExpression.text;
   } else {
-    return false;
+    return undefined;
   }
   const owner = unwrap(object);
-  return member === "fetch" && ts.isIdentifier(owner) && GLOBAL_OBJECTS.has(owner.text);
+  return ts.isIdentifier(owner) && GLOBAL_OBJECTS.has(owner.text) ? member : undefined;
 }
 
 /** Whether `node` sits where it is called: the callee of a call, through any value-preserving wrapper. */
@@ -69,8 +67,14 @@ function isValueReference(node: ts.Identifier): boolean {
   return !(ts.isTypeQueryNode(parent) || ts.isTypeReferenceNode(parent) || ts.isQualifiedName(parent));
 }
 
-function httpModule(node: ts.Node | undefined): string | undefined {
-  return node !== undefined && ts.isStringLiteralLike(node) && HTTP_MODULES.has(node.text) ? node.text : undefined;
+// A module specifier the sweep reports in this file: an HTTP client anywhere,
+// a socket, DNS or module-loader built-in unless the file may reach it.
+function confinedImport(node: ts.Node | undefined, fileName: string): string | undefined {
+  if (node === undefined || !ts.isStringLiteralLike(node)) {
+    return undefined;
+  }
+  const name = confinedModule(node.text);
+  return name !== undefined && (isHttpModule(name) || !networkAccessAllowed(fileName, name)) ? node.text : undefined;
 }
 
 /**
@@ -78,7 +82,11 @@ function httpModule(node: ts.Node | undefined): string | undefined {
  * hold (doc 01 section 6, T6): a call of the global `fetch` bare or through
  * `globalThis`, `window`, `self` or `global`, any other read of it (`const send =
  * fetch`, `{ fetch }` handed to a client), and any reach for a Node HTTP module or
- * undici (static import, re-export, `import()`, `require()`, `import x = require()`).
+ * an HTTP or socket client package (static import, re-export, `import()`,
+ * `require()`, `import x = require()`). Outside the egress folder, test and
+ * development code and the exemptions of policy.ts it also reports the socket and
+ * DNS built-ins, `node:module`, the dynamic loader `getBuiltinModule` and the
+ * browser socket globals (WebSocket, EventSource and the like).
  *
  * It reads the syntax tree, so `app.fetch(request)`, a `fetch(request: Request)`
  * method declaration, and the word in a comment or string are not matches. A local
@@ -90,34 +98,42 @@ export function findRawOutbound(source: string, fileName = "source.ts"): string[
   const found: string[] = [];
   const visit = (node: ts.Node): void => {
     const where = String(file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1);
-    const readsFetch =
-      ts.isIdentifier(node)
-        ? node.text === "fetch" && isValueReference(node)
-        : (ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)) && isGlobalFetch(node);
-    if (readsFetch) {
+    const read = ts.isIdentifier(node)
+      ? isValueReference(node)
+        ? node.text
+        : undefined
+      : ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)
+        ? globalMember(node)
+        : undefined;
+    if (read === "fetch" || (read !== undefined && (SOCKET_GLOBALS as readonly string[]).includes(read) && !networkAccessAllowed(fileName, read))) {
       const expression = node as ts.Expression;
-      found.push(`line ${where}: ${isCallee(expression) ? "call of" : "reference to"} the global fetch`);
+      found.push(`line ${where}: ${isCallee(expression) ? "call of" : "reference to"} the global ${read}`);
+    }
+    const namesLoader =
+      (ts.isIdentifier(node) && node.text === DYNAMIC_LOADER) || (ts.isStringLiteralLike(node) && node.text === DYNAMIC_LOADER);
+    if (namesLoader && !networkAccessAllowed(fileName, DYNAMIC_LOADER)) {
+      found.push(`line ${where}: names ${DYNAMIC_LOADER}`);
     }
     if (ts.isCallExpression(node)) {
       const isLoader =
         node.expression.kind === ts.SyntaxKind.ImportKeyword ||
         (ts.isIdentifier(node.expression) && node.expression.text === "require");
-      const loaded = isLoader ? httpModule(node.arguments[0]) : undefined;
+      const loaded = isLoader ? confinedImport(node.arguments[0], fileName) : undefined;
       if (loaded !== undefined) {
         found.push(`line ${where}: loads ${loaded}`);
       }
     } else if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
-      const imported = httpModule(node.moduleSpecifier);
+      const imported = confinedImport(node.moduleSpecifier, fileName);
       if (imported !== undefined) {
         found.push(`line ${where}: imports ${imported}`);
       }
     } else if (ts.isExternalModuleReference(node)) {
-      const imported = httpModule(node.expression);
+      const imported = confinedImport(node.expression, fileName);
       if (imported !== undefined) {
         found.push(`line ${where}: imports ${imported}`);
       }
     } else if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) {
-      const imported = httpModule(node.argument.literal);
+      const imported = confinedImport(node.argument.literal, fileName);
       if (imported !== undefined) {
         found.push(`line ${where}: imports ${imported}`);
       }

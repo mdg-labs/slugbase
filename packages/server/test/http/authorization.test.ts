@@ -49,8 +49,28 @@ const ROLES: Partial<Record<string, WorkspaceRole>> = {
   [ACCOUNTS.instanceAdmin]: "member",
 };
 
-function session(who: Who): SessionPrincipal {
-  return { kind: "session", accountId: ACCOUNTS[who], activeWorkspaceId: WORKSPACE, instanceAdmin: who === "instanceAdmin" };
+const MINUTE = 60_000;
+
+function session(who: Who, state: Pick<SessionPrincipal, "mfaPending" | "reauthAt"> = {}): SessionPrincipal {
+  return { kind: "session", sessionId: "stub-session", accountId: ACCOUNTS[who], activeWorkspaceId: WORKSPACE, instanceAdmin: who === "instanceAdmin", ...state };
+}
+
+// The session state a test cookie asks its authenticator to report: `sid=member; state=partial`.
+function sessionState(name: string | undefined): Pick<SessionPrincipal, "mfaPending" | "reauthAt"> {
+  switch (name) {
+    case "partial":
+      return { mfaPending: true, reauthAt: new Date(Date.now() - MINUTE) };
+    case "fresh":
+      return { reauthAt: new Date(Date.now() - 9 * MINUTE) };
+    case "stale":
+      return { reauthAt: new Date(Date.now() - 11 * MINUTE) };
+    case "future":
+      return { reauthAt: new Date(Date.now() + 5 * MINUTE) };
+    case "invalid":
+      return { reauthAt: new Date(Number.NaN) };
+    default:
+      return {};
+  }
 }
 
 function token(who: Who, scope: ApiTokenPrincipal["scope"], workspaceId = WORKSPACE): ApiTokenPrincipal {
@@ -63,6 +83,7 @@ interface OperationOptions {
   readonly entitlement?: string;
   readonly audience?: "machine" | "marketing-form";
   readonly body?: boolean;
+  readonly reauth?: boolean;
 }
 
 function operationOf(path: string, operationId: string, auth: OperationDefinition["auth"], options: OperationOptions = {}): OperationDefinition {
@@ -76,6 +97,7 @@ function operationOf(path: string, operationId: string, auth: OperationDefinitio
     ...(options.scope === undefined ? {} : { scope: options.scope }),
     ...(options.entitlement === undefined ? {} : { entitlement: options.entitlement }),
     ...(options.audience === undefined ? {} : { audience: options.audience }),
+    ...(options.reauth === undefined ? {} : { reauth: options.reauth }),
     ...(options.body === true ? { request: { body: z.strictObject({ title: z.string() }) } } : {}),
     responses: { 200: jsonResponse("ok", Echo), 422: problemResponse("invalid") },
   });
@@ -120,7 +142,8 @@ function setup(options: SetupOptions = {}) {
       authenticate: (cookie) => {
         cookieCalls.push(cookie);
         const name = /(?:^|;\s*)sid=([A-Za-z]+)/.exec(cookie)?.[1];
-        return Promise.resolve(name !== undefined && name in ACCOUNTS ? session(name as Who) : undefined);
+        const state = /(?:^|;\s*)state=([A-Za-z]+)/.exec(cookie)?.[1];
+        return Promise.resolve(name !== undefined && name in ACCOUNTS ? session(name as Who, sessionState(state)) : undefined);
       },
     },
   ];
@@ -159,6 +182,10 @@ function setup(options: SetupOptions = {}) {
     gated: operationOf("/api/v1/teams", "listTeams", "member", { scope: "read", entitlement: "teams.manage" }),
     machine: operationOf("/api/v1/events", "receiveEvent", "machine", { method: "post", audience: "machine" }),
     form: operationOf("/api/v1/contact", "sendContact", "anonymous", { method: "post", audience: "marketing-form" }),
+    partial: operationOf("/api/v1/auth/mfa/verify", "verifyMfa", "partial", { method: "post" }),
+    changePassword: operationOf("/api/v1/me/password", "changePassword", "account", { method: "post", reauth: true }),
+    deleteWorkspace: operationOf("/api/v1/workspace/delete", "deleteWorkspace", "owner", { method: "post", reauth: true }),
+    instanceReauth: operationOf("/api/v1/instance/accounts/delete", "deleteAccountAsAdmin", "instanceAdmin", { method: "post", reauth: true }),
   };
   const routes: RouteBinding[] = [
     ...Object.values(operations).map((operation): RouteBinding => ({
@@ -485,6 +512,160 @@ describe("stage 9: authorization", () => {
     expect(response.status).toBe(403);
     expect(await codeOf(response)).toBe("entitlement_required");
     expect(seen).toEqual([]);
+  });
+});
+
+describe("stage 9: declared re-authentication and completed second factor (T18)", () => {
+  const sensitive = [
+    ["changePassword", "/api/v1/me/password", "member"],
+    ["deleteWorkspace", "/api/v1/workspace/delete", "owner"],
+  ] as const;
+  const withState = (who: Who, state: string) => ({ cookie: `sid=${who}; state=${state}` });
+
+  describe.each(sensitive)("%s, an operation that declares reauth", (operationId, path, who) => {
+    it.each(["stale", "none", "future", "invalid"])("answers 401 reauth_required to a session whose re-authentication is %s, before the handler", async (state) => {
+      const { server, seen } = setup();
+      const response = await server.fetch(post(path, { ...BROWSER_MUTATION, ...withState(who, state) }));
+      expect(response.status).toBe(401);
+      expect(await codeOf(response)).toBe("reauth_required");
+      expect(seen).toEqual([]);
+    });
+
+    it("lets a session re-authenticated within the window through", async () => {
+      const { server, seen } = setup();
+      const response = await server.fetch(post(path, { ...BROWSER_MUTATION, ...withState(who, "fresh") }));
+      expect(response.status).toBe(200);
+      expect(seen.map((entry) => entry.operationId)).toEqual([operationId]);
+    });
+
+    it("answers 401 mfa_required to a session whose second factor is pending, even one that re-authenticated", async () => {
+      const { server, seen } = setup();
+      const response = await server.fetch(post(path, { ...BROWSER_MUTATION, ...withState(who, "partial") }));
+      expect(response.status).toBe(401);
+      expect(await codeOf(response)).toBe("mfa_required");
+      expect(seen).toEqual([]);
+    });
+
+    it("refuses an API token with 403 forbidden", async () => {
+      const { server, seen } = setup();
+      const response = await server.fetch(post(path, { ...BROWSER_MUTATION, authorization: "Bearer slb_owner_write" }));
+      expect(response.status).toBe(403);
+      expect(await codeOf(response)).toBe("forbidden");
+      expect(seen).toEqual([]);
+    });
+  });
+
+  it("refuses a role-less session with 403 forbidden rather than asking it to re-authenticate", async () => {
+    const { server, seen } = setup();
+    const response = await server.fetch(post("/api/v1/workspace/delete", { ...BROWSER_MUTATION, ...withState("member", "stale") }));
+    expect(response.status).toBe(403);
+    expect(await codeOf(response)).toBe("forbidden");
+    expect(seen).toEqual([]);
+  });
+
+  it("asks an instance admin to re-authenticate on an instanceAdmin operation that declares it, and refuses a stale non-admin as forbidden", async () => {
+    const { server, seen } = setup();
+    const stale = await server.fetch(post("/api/v1/instance/accounts/delete", { ...BROWSER_MUTATION, ...withState("instanceAdmin", "stale") }));
+    expect(stale.status).toBe(401);
+    expect(await codeOf(stale)).toBe("reauth_required");
+    const outsider = await server.fetch(post("/api/v1/instance/accounts/delete", { ...BROWSER_MUTATION, ...withState("owner", "stale") }));
+    expect(outsider.status).toBe(403);
+    const fresh = await server.fetch(post("/api/v1/instance/accounts/delete", { ...BROWSER_MUTATION, ...withState("instanceAdmin", "fresh") }));
+    expect(fresh.status).toBe(200);
+    expect(seen.map((entry) => entry.operationId)).toEqual(["deleteAccountAsAdmin"]);
+  });
+
+  it("does not ask for re-authentication on an operation that does not declare it", async () => {
+    const { server } = setup();
+    expect((await server.fetch(get("/api/v1/bookmarks", withState("member", "stale")))).status).toBe(200);
+    expect((await server.fetch(get("/api/v1/me", withState("member", "none")))).status).toBe(200);
+  });
+
+  describe("a session whose second factor is pending", () => {
+    it.each([
+      ["/api/v1/me", "member"],
+      ["/api/v1/bookmarks", "member"],
+      ["/api/v1/members", "admin"],
+      ["/api/v1/workspace", "owner"],
+      ["/api/v1/instance/accounts", "instanceAdmin"],
+      ["/api/v1/tokens", "member"],
+    ] as const)("answers 401 mfa_required on %s, before the handler", async (path, who) => {
+      const { server, seen } = setup();
+      const response = await server.fetch(get(path, withState(who, "partial")));
+      expect(response.status).toBe(401);
+      expect(await codeOf(response)).toBe("mfa_required");
+      expect(seen).toEqual([]);
+    });
+
+    it("is admitted by an operation that declares the partial policy, and so is a completed session", async () => {
+      const { server, seen } = setup();
+      expect((await server.fetch(post("/api/v1/auth/mfa/verify", { ...BROWSER_MUTATION, ...withState("member", "partial") }))).status).toBe(200);
+      expect((await server.fetch(post("/api/v1/auth/mfa/verify", { ...BROWSER_MUTATION, ...cookieOf("member") }))).status).toBe(200);
+      expect(seen.map((entry) => entry.operationId)).toEqual(["verifyMfa", "verifyMfa"]);
+    });
+
+    it("is refused the partial operation without a credential, and an API token is refused it", async () => {
+      const { server, seen } = setup();
+      expect((await server.fetch(post("/api/v1/auth/mfa/verify", BROWSER_MUTATION))).status).toBe(401);
+      const response = await server.fetch(post("/api/v1/auth/mfa/verify", { ...BROWSER_MUTATION, authorization: "Bearer slb_member_write" }));
+      expect(response.status).toBe(403);
+      expect(seen).toEqual([]);
+    });
+  });
+
+  describe("on the chain with a principal set directly", () => {
+    function chainWith(principal: SessionPrincipal | ApiTokenPrincipal, operation: OperationDefinition) {
+      const app = new Hono<ChainEnv>();
+      const handled: string[] = [];
+      installChain(
+        app,
+        {
+          logger: recordingLogger(),
+          routes: new RouteTable([{ operation, handler: () => (handled.push("handler"), Response.json({})) }]),
+          trustedProxyHops: 0,
+          appOrigin: APP_ORIGIN,
+          challenge: adapters().challenge,
+          errors: adapters().errors,
+          hooks: hookDispatcher(),
+          responseValidation: "throw",
+          ...tenantDependencies(),
+          ...rateLimitDependencies(),
+        },
+        {
+          authentication: async (context, next) => {
+            context.set("principal", principal);
+            await next();
+          },
+          "tenant-resolution": async (context, next) => {
+            context.set("tenant", {
+              accountId: ACCOUNTS.owner,
+              workspaceId: WORKSPACE,
+              memberId: MEMBER_ID,
+              role: "owner",
+              withTenant: (fn) => fn({ accountId: ACCOUNTS.owner, workspaceId: WORKSPACE, requestId: "r" }),
+            });
+            await next();
+          },
+        },
+      );
+      return { app, handled };
+    }
+
+    it("refuses an API token on an operation that declares reauth even when the operation also declares a scope", async () => {
+      const { app, handled } = chainWith(token("owner", "read-write"), operationOf("/api/v1/tokens/new", "createToken", "account", { scope: "write", reauth: true }));
+      const response = await app.request("http://localhost/api/v1/tokens/new");
+      expect(response.status).toBe(403);
+      expect(await codeOf(response)).toBe("forbidden");
+      expect(handled).toEqual([]);
+    });
+
+    it("treats a session principal that reports no re-authentication as never re-authenticated", async () => {
+      const { app, handled } = chainWith(session("owner"), operationOf("/api/v1/tokens/new", "createToken", "account", { reauth: true }));
+      const response = await app.request("http://localhost/api/v1/tokens/new");
+      expect(response.status).toBe(401);
+      expect(await codeOf(response)).toBe("reauth_required");
+      expect(handled).toEqual([]);
+    });
   });
 });
 

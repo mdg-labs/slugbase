@@ -35,7 +35,7 @@ export type Audience = (typeof AUDIENCES)[number];
 export const AUDIENCES: readonly ["machine", "marketing-form"];
 
 // @public
-export const AUTH_POLICIES: readonly ["anonymous", "account", "member", "admin", "owner", "instanceAdmin", "machine"];
+export const AUTH_POLICIES: readonly ["anonymous", "partial", "account", "member", "admin", "owner", "instanceAdmin", "machine"];
 
 // @public (undocumented)
 export type AuthPolicy = (typeof AUTH_POLICIES)[number];
@@ -72,6 +72,14 @@ export interface ComponentTypes {
         HealthStatus: {
             status: "ok";
         };
+        LoginRequest: {
+            email: string;
+            password: string;
+            remember: boolean;
+        };
+        LoginResult: {
+            next: "done";
+        };
         OpenApiDocument: {
             info: {
                 [key: string]: unknown;
@@ -104,6 +112,18 @@ export interface ComponentTypes {
                 applied: number | null;
                 expected: number;
             };
+        };
+        Session: {
+            createdAt: string;
+            current: boolean;
+            id: string;
+            ipPrefix: string | null;
+            lastSeenAt: string;
+            userAgentFamily: string | null;
+        };
+        SessionList: {
+            items: ComponentTypes["schemas"]["Session"][];
+            nextCursor: string | null;
         };
         VersionInfo: {
             builtAt: string;
@@ -285,6 +305,106 @@ export interface JsonResponseOptions<H extends ResponseHeaders = ResponseHeaders
     readonly headers?: H;
 }
 
+// @public (undocumented)
+export const listSessions: {
+    readonly method: "get";
+    readonly path: "/api/v1/me/sessions";
+    readonly operationId: "listSessions";
+    readonly tag: "me";
+    readonly summary: "List the account's sessions";
+    readonly auth: "account";
+    readonly rate: "read";
+    readonly request: {
+        readonly query: z.ZodObject<{
+            limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+            cursor: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        createdAt: z.ZodISODateTime;
+        lastSeenAt: z.ZodISODateTime;
+        userAgentFamily: z.ZodNullable<z.ZodString>;
+        ipPrefix: z.ZodNullable<z.ZodString>;
+        current: z.ZodBoolean;
+        }, z.core.$strict>>;
+        nextCursor: z.ZodNullable<z.ZodString>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: ProblemResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const login: {
+    readonly method: "post";
+    readonly path: "/api/v1/auth/login";
+    readonly operationId: "login";
+    readonly tag: "auth";
+    readonly summary: "Sign in with an email address and a password";
+    readonly auth: "anonymous";
+    readonly rate: "login";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            email: z.ZodString;
+            password: z.ZodString;
+            remember: z.ZodDefault<z.ZodBoolean>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        next: z.ZodLiteral<"done">;
+        }, z.core.$strict>, {
+        "Set-Cookie": {
+        description: string;
+        schema: z.ZodString;
+        };
+        }>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: ProblemResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const LoginRequestSchema: z.ZodObject<{
+    email: z.ZodString;
+    password: z.ZodString;
+    remember: z.ZodDefault<z.ZodBoolean>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const LoginResultSchema: z.ZodObject<{
+    next: z.ZodLiteral<"done">;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const logout: {
+    readonly method: "post";
+    readonly path: "/api/v1/auth/logout";
+    readonly operationId: "logout";
+    readonly tag: "auth";
+    readonly summary: "End the current session";
+    readonly auth: "partial";
+    readonly rate: "write";
+    readonly responses: {
+        readonly 204: EmptyResponse;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 429: ProblemResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
 // @public
 export const OpenApiDocumentSchema: z.ZodObject<{
     openapi: z.ZodString;
@@ -308,6 +428,7 @@ export interface OperationDefinition {
     readonly path: string;
     // (undocumented)
     readonly rate: RateBucket;
+    readonly reauth?: boolean;
     // (undocumented)
     readonly request?: OperationRequest;
     // (undocumented)
@@ -498,6 +619,344 @@ export interface OperationTypes {
             };
         };
     };
+    // (undocumented)
+    listSessions: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["SessionList"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["LoginResult"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    revokeSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    revokeSessions: {
+        parameters: {
+            query?: {
+                includeCurrent?: "true" | "false";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
 }
 
 // @public (undocumented)
@@ -517,6 +976,74 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/me/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["listSessions"];
+        put?: never;
+        post?: never;
+        delete: OperationTypes["revokeSessions"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/me/sessions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: OperationTypes["revokeSession"];
         options?: never;
         head?: never;
         patch?: never;
@@ -869,6 +1396,102 @@ export interface ResponseHeader {
 
 // @public (undocumented)
 export type ResponseHeaders = Readonly<Record<string, ResponseHeader>>;
+
+// @public (undocumented)
+export const revokeSession: {
+    readonly method: "delete";
+    readonly path: "/api/v1/me/sessions/{id}";
+    readonly operationId: "revokeSession";
+    readonly tag: "me";
+    readonly summary: "Revoke one of the account's sessions";
+    readonly auth: "account";
+    readonly rate: "write";
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 204: EmptyResponse;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: ProblemResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const revokeSessions: {
+    readonly method: "delete";
+    readonly path: "/api/v1/me/sessions";
+    readonly operationId: "revokeSessions";
+    readonly tag: "me";
+    readonly summary: "Revoke the account's other sessions";
+    readonly auth: "account";
+    readonly rate: "write";
+    readonly request: {
+        readonly query: z.ZodObject<{
+            includeCurrent: z.ZodDefault<z.ZodEnum<{
+                true: "true";
+                false: "false";
+            }>>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 204: EmptyResponse;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: ProblemResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const RevokeSessionsQuerySchema: z.ZodObject<{
+    includeCurrent: z.ZodDefault<z.ZodEnum<{
+        true: "true";
+        false: "false";
+    }>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const SessionIdParamsSchema: z.ZodObject<{
+    id: z.ZodUUID;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const SessionListQuerySchema: z.ZodObject<{
+    limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+    cursor: z.ZodOptional<z.ZodString>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const SessionListSchema: z.ZodObject<{
+    items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        createdAt: z.ZodISODateTime;
+        lastSeenAt: z.ZodISODateTime;
+        userAgentFamily: z.ZodNullable<z.ZodString>;
+        ipPrefix: z.ZodNullable<z.ZodString>;
+        current: z.ZodBoolean;
+    }, z.core.$strict>>;
+    nextCursor: z.ZodNullable<z.ZodString>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const SessionSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    createdAt: z.ZodISODateTime;
+    lastSeenAt: z.ZodISODateTime;
+    userAgentFamily: z.ZodNullable<z.ZodString>;
+    ipPrefix: z.ZodNullable<z.ZodString>;
+    current: z.ZodBoolean;
+}, z.core.$strict>;
 
 // @public
 export const TOKEN_SCOPES: readonly ["read", "write"];

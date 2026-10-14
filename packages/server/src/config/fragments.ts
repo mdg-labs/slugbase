@@ -138,6 +138,14 @@ export const httpFragment = envFragment({
     API_DOCS_ENABLED: envBoolean().default(true),
     DOCS_BASE_URL: baseUrl().default(DEFAULT_DOCS_BASE_URL),
   },
+  refine(values, context) {
+    if (context.production && values.TRUSTED_PROXY_HOPS === 0) {
+      context.warn(
+        "TRUSTED_PROXY_HOPS",
+        "trusts no proxy: behind a reverse proxy every client then shares the proxy's address and the per-IP rate limits become instance-wide; set it to the number of reverse proxies in front of the server, or leave it when clients connect to the server directly",
+      );
+    }
+  },
 });
 
 /**

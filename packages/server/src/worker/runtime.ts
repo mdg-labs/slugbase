@@ -1,5 +1,5 @@
 import type { Adapters } from "@slugbase/core";
-import { createDatabase, type Database } from "@slugbase/db";
+import { createDatabase, createRateLimitStore, type Database } from "@slugbase/db";
 import { PgBoss } from "pg-boss";
 import type { WorkerConfig } from "../config/index.ts";
 import {
@@ -13,6 +13,7 @@ import {
 import { assertApplicationRole } from "../migrate/role-guard.ts";
 import { createMetrics, startMetricsListener, type MetricsListener, type QueueSnapshot } from "../metrics/index.ts";
 import type { JobDefinition, JobPayload, ScheduleDefinition } from "./job.ts";
+import { createMaintenanceModule } from "./maintenance.ts";
 
 export const DEFAULT_WORKER_POOL_SIZE = 5;
 
@@ -26,6 +27,7 @@ const DEFAULT_SHUTDOWN_TIMEOUT_MS = 25_000;
 export const FINISHED_JOB_RETENTION_SECONDS = 30 * 24 * 60 * 60;
 const BOSS_SCHEMA = "pgboss";
 const APPLICATION_NAME = "slugbase-worker";
+const MAINTENANCE_POOL_SIZE = 1;
 
 export interface CreateWorkerOptions {
   readonly config: WorkerConfig;
@@ -96,6 +98,9 @@ export function createWorker(options: CreateWorkerOptions): Worker {
   if (options.database === undefined) {
     metrics.setPoolSize(poolSize);
   }
+  // The retention jobs the worker always runs reach their system operations on a pool of their own,
+  // as the role of DATABASE_URL; it connects on first use.
+  const maintenanceStore = createRateLimitStore({ url: config.DATABASE_URL, poolSize: MAINTENANCE_POOL_SIZE });
   const context: ModuleContext = Object.freeze({
     config,
     logger,
@@ -114,9 +119,10 @@ export function createWorker(options: CreateWorkerOptions): Worker {
 
   let composition: Composition;
   try {
-    composition = compose(options.modules, context, []);
+    composition = compose([createMaintenanceModule(maintenanceStore), ...options.modules], context, []);
   } catch (error) {
     void database.close();
+    void maintenanceStore.close();
     throw error;
   }
 
@@ -137,6 +143,7 @@ export function createWorker(options: CreateWorkerOptions): Worker {
           });
         } catch (error) {
           await database.close();
+          await maintenanceStore.close();
           throw error;
         }
       }
@@ -163,7 +170,11 @@ export function createWorker(options: CreateWorkerOptions): Worker {
           await metricsListener?.close();
           await boss.stop({ graceful: true, close: true, timeout: shutdownTimeoutMs });
         } finally {
-          await database.close();
+          try {
+            await database.close();
+          } finally {
+            await maintenanceStore.close();
+          }
         }
       };
       const shutdown = (): Promise<void> => (stopped ??= stop());

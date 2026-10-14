@@ -6,12 +6,14 @@ import { ProblemError } from "../../src/http/problem.ts";
 import { route } from "../../src/routes/register.ts";
 import { recordingLogger, serverConfig } from "../support.ts";
 import { buildDocument, type TestDocument } from "./build-document.ts";
-import { FIXTURES } from "./fixtures.ts";
+import { seedAccount } from "../auth/support.ts";
+import { FIXTURES, WALKER_ACCOUNT } from "./fixtures.ts";
 import { matrixRequest } from "./matrix.ts";
 import { getProbeAdminRow, getProbeRow, probeFixtures, probeModule, probeOperations } from "./probe-module.ts";
 import { createStubWorld, type StubWorld } from "./stubs.ts";
 import { appUrl, tenantDatabase } from "./support.ts";
-import { walkContract, type PolicyHooks } from "./walker.ts";
+import type { PolicyHooks } from "./walker.ts";
+import { walkContract } from "./walker.ts";
 
 // The contract tests of doc 04 section 1.3 and the cross-tenant matrix of doc 08
 // section 3.3 in API mode, both over an in-process server (doc 10 T1, T3). The
@@ -62,17 +64,55 @@ const origin = serverConfig({ NODE_ENV: "test" }).APP_ORIGIN;
 const committed = loadOpenApiDocument();
 
 describe("the walker over the committed document", () => {
+  // The committed document declares the sign-in operations, so the walker signs in as a real account and
+  // sends the session cookie it is given where a policy needs a principal. Each such operation gets an
+  // account of its own: the valid request of the sign-out ends the session it is made with, and that of
+  // "sign out everywhere" ends every other session of the account.
+  async function sessionHooks(server: Server): Promise<PolicyHooks> {
+    await seedAccount(database(), WALKER_ACCOUNT);
+    const cookies = new Map<string, string>();
+    for (const { operationId, kind } of classifyOperations(committed).operations) {
+      if (kind !== "account-level") {
+        continue;
+      }
+      const account = await seedAccount(database(), { email: `walker-${operationId}@example.test`.toLowerCase() });
+      const response = await server.fetch(
+        new Request(new URL("/api/v1/auth/login", origin), {
+          method: "POST",
+          headers: { origin, "content-type": "application/json" },
+          body: JSON.stringify({ email: account.email, password: account.password, remember: false }),
+        }),
+      );
+      const cookie = /^(__Host-slugbase_session=[A-Za-z0-9_-]{43});/.exec(response.headers.get("set-cookie") ?? "")?.[1];
+      if (response.status !== 200 || cookie === undefined) {
+        throw new Error(`the walker could not sign in: ${String(response.status)}`);
+      }
+      cookies.set(operationId, cookie);
+    }
+    return {
+      ...world.hooks,
+      authorized: ({ operationId }) => {
+        const cookie = cookies.get(operationId);
+        if (cookie === undefined) {
+          throw new Error(`the walker holds no session for ${operationId}`);
+        }
+        return { headers: { cookie } };
+      },
+    };
+  }
+
   it("calls every operation of openapi.json and finds it as declared", async () => {
     const operations = classifyOperations(committed).operations;
     expect(Object.keys(FIXTURES).sort()).toEqual(operations.map((operation) => operation.operationId).sort());
 
     const server = serve([]);
-    const report = await walkContract({ document: committed, send: (request) => server.fetch(request), origin, fixtures: FIXTURES, hooks: world.hooks });
+    const hooks = await sessionHooks(server);
+    const report = await walkContract({ document: committed, send: (request) => server.fetch(request), origin, fixtures: FIXTURES, hooks });
     expect(report.failures).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // Phase 1 declares only anonymous operations: one valid request each.
-    expect(report.calls).toBe(operations.length);
+    // One valid request for each anonymous operation and for the sign-in; each of the four operations that need a session also answers 401 without one.
+    expect(report.calls).toBe(operations.length + 4);
   });
 });
 

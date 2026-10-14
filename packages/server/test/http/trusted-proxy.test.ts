@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clientIpOf } from "../../src/http/trusted-proxy.ts";
+import { clientIpOf, networkPrefixOf, rateLimitKeyOf } from "../../src/http/trusted-proxy.ts";
 
 const SOCKET = "10.0.0.1";
 
@@ -44,5 +44,59 @@ describe("clientIpOf", () => {
   it.each(cases)("$name", ({ hops, forwardedFor, expected, ...rest }) => {
     const socketAddress = "socket" in rest ? rest.socket : SOCKET;
     expect(clientIpOf({ socketAddress, forwardedFor, trustedHops: hops })).toBe(expected);
+  });
+});
+
+describe("rateLimitKeyOf", () => {
+  const cases: readonly { name: string; address: string; same?: string; different?: string }[] = [
+    { name: "an IPv4 address is its own key", address: "198.51.100.7", same: "198.51.100.7", different: "198.51.100.8" },
+    { name: "an IPv4-mapped address in dotted form", address: "::ffff:198.51.100.7", same: "198.51.100.7" },
+    { name: "an IPv4-mapped address in hex form", address: "::FFFF:c633:6407", same: "198.51.100.7" },
+    { name: "an IPv4-mapped address in the long form", address: "0:0:0:0:0:ffff:c633:6407", same: "198.51.100.7" },
+    { name: "two addresses of one /64", address: "2001:db8:1:2::1", same: "2001:0DB8:0001:0002:ffff:ffff:ffff:ffff", different: "2001:db8:1:3::1" },
+    { name: "a compressed run inside the prefix", address: "2001:db8::5:1", same: "2001:db8:0:0:1:2:3:4", different: "2001:db8:0:1::1" },
+    { name: "the unspecified address", address: "::", same: "0:0:0:0:9::1", different: "::1:0:0:0:0" },
+    { name: "a zone identifier is not part of the key", address: "fe80::1%eth0", same: "fe80::2", different: "fe81::1" },
+    { name: "an address that is not an IP is left as it is", address: "unknown", same: "unknown", different: "unknown2" },
+  ];
+
+  it.each(cases)("$name", ({ address, same, different }) => {
+    if (same !== undefined) {
+      expect(rateLimitKeyOf(address)).toBe(rateLimitKeyOf(same));
+    }
+    if (different !== undefined) {
+      expect(rateLimitKeyOf(address)).not.toBe(rateLimitKeyOf(different));
+    }
+  });
+
+  it("never gives an IPv6 prefix the key of an IPv4 address", () => {
+    expect(rateLimitKeyOf("2001:db8:1:2::1")).toContain(":");
+    expect(rateLimitKeyOf("2001:db8:1:2::1")).not.toBe("2001:db8:1:2::1");
+  });
+});
+
+// doc 02 section 2.4: a session keeps a coarse network, never the address.
+describe("networkPrefixOf", () => {
+  const cases: readonly { address: string | undefined; expected: string | undefined }[] = [
+    { address: "203.0.113.57", expected: "203.0.0.0/16" },
+    { address: "198.51.100.7", expected: "198.51.0.0/16" },
+    { address: "2001:db8:abcd:12:3456:789a:bcde:f012", expected: "2001:db8:abcd::/48" },
+    { address: "2001:db8::1", expected: "2001:db8:0::/48" },
+    { address: "::1", expected: "0:0:0::/48" },
+    { address: "fe80::1%eth0", expected: "fe80:0:0::/48" },
+    { address: "::ffff:203.0.113.57", expected: "203.0.0.0/16" },
+    { address: "::ffff:cb00:7139", expected: "203.0.0.0/16" },
+    { address: "unknown", expected: undefined },
+    { address: "", expected: undefined },
+    { address: undefined, expected: undefined },
+  ];
+
+  it.each(cases)("$address is $expected", ({ address, expected }) => {
+    expect(networkPrefixOf(address)).toBe(expected);
+  });
+
+  it("keeps nothing of the host part of any address", () => {
+    expect(networkPrefixOf("203.0.113.57")).not.toContain("113");
+    expect(networkPrefixOf("2001:db8:abcd:12:3456:789a:bcde:f012")).not.toContain("3456");
   });
 });

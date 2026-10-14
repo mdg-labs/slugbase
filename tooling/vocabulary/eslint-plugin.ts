@@ -1,6 +1,11 @@
 import { basename } from "node:path";
 import type { AST, ESLint, Linter, Rule } from "eslint";
-import { boundaryRules, hasIssueLink, UNSAFE_HTML_RULE, unsafeHtmlConfigComments } from "../boundaries/eslint-plugin.ts";
+import {
+  boundaryRules,
+  guardedConfigComments,
+  hasIssueLink,
+  ISSUE_LINK_RULES,
+} from "../boundaries/eslint-plugin.ts";
 import { findTerm, loadTerms, type ForbiddenTerm } from "./terms.ts";
 
 export const FORBIDDEN_RULE = "slugbase/no-forbidden-vocabulary";
@@ -100,16 +105,19 @@ const requireDisableReason: Rule.RuleModule = {
 // justifications. A report of a guarded rule suppressed by a directive whose
 // justification does not satisfy the rule's condition is turned back into an
 // error, whatever rules the directive names. The vocabulary rules need a
-// reason; the unsafe-HTML rule needs an issue link.
+// reason; the import-boundary, raw-I/O and unsafe-HTML rules need an issue link.
 const GUARDED_SUPPRESSIONS: ReadonlyMap<string, { accepts: (justification: string) => boolean; hint: string }> =
   new Map([
     [FORBIDDEN_RULE, { accepts: (text) => text.trim() !== "", hint: "has no reason after \" -- \"" }],
     [REASON_RULE, { accepts: (text) => text.trim() !== "", hint: "" }],
-    [UNSAFE_HTML_RULE, { accepts: hasIssueLink, hint: "has no issue link (such as #123) after \" -- \"" }],
+    ...ISSUE_LINK_RULES.map((rule): [string, { accepts: (justification: string) => boolean; hint: string }] => [
+      rule,
+      { accepts: hasIssueLink, hint: "has no issue link (such as #123) after \" -- \"" },
+    ]),
   ]);
 
 // An inline configuration comment can turn a rule off before it runs, so the
-// processor reads the text itself for the unsafe-HTML rule and reports every
+// processor reads the text itself for the issue-link rules and reports every
 // such comment that lacks an issue link.
 const sources = new Map<string, string>();
 
@@ -123,13 +131,13 @@ const requireJustifiedSuppression: Linter.Processor = {
   postprocess: (messageLists, filename) => {
     const text = sources.get(filename);
     sources.delete(filename);
-    const inlineConfig = unsafeHtmlConfigComments(text ?? "", filename).map(
-      ({ line, column }): Linter.LintMessage => ({
-        ruleId: UNSAFE_HTML_RULE,
+    const inlineConfig = guardedConfigComments(text ?? "", filename).map(
+      ({ rule, line, column }): Linter.LintMessage => ({
+        ruleId: rule,
         severity: 2,
         line,
         column,
-        message: `Inline configuration of ${UNSAFE_HTML_RULE} is accepted only with an issue link (such as #123) after " -- ".`,
+        message: `Inline configuration of ${rule} is accepted only with an issue link (such as #123) after " -- ".`,
       }),
     );
     return [...inlineConfig, ...guardSuppressions(messageLists)];

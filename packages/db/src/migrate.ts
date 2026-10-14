@@ -233,7 +233,22 @@ function loadChain(chain: MigrationChain): LoadedChain {
   return { chain, migrations };
 }
 
-function loadChains(extra: readonly MigrationChain[] | undefined): LoadedChain[] {
+// The chains `migrationLevel` has loaded, by chain object. A build's migration
+// files do not change while its process runs, and readiness asks again on every
+// probe; `migrate` never reads from here, so it always applies what is on disk.
+const levelChains = new WeakMap<MigrationChain, { folder: string; loaded: LoadedChain }>();
+
+function loadChainForLevel(chain: MigrationChain): LoadedChain {
+  const known = levelChains.get(chain);
+  if (known?.folder === chain.folder) {
+    return known.loaded;
+  }
+  const loaded = loadChain(chain);
+  levelChains.set(chain, { folder: chain.folder, loaded });
+  return loaded;
+}
+
+function loadChains(extra: readonly MigrationChain[] | undefined, load: (chain: MigrationChain) => LoadedChain = loadChain): LoadedChain[] {
   const chains = [CE_CHAIN, ...(extra ?? [])];
   const names = new Set<string>();
   const tables = new Set<string>();
@@ -247,7 +262,7 @@ function loadChains(extra: readonly MigrationChain[] | undefined): LoadedChain[]
     names.add(chain.name);
     tables.add(chain.bookkeepingTable);
   }
-  return chains.map(loadChain);
+  return chains.map((chain) => load(chain));
 }
 
 function connect(connection: ConnectionSecrets, name: string): postgres.Sql {
@@ -292,7 +307,7 @@ export async function migrationLevel(options: MigrationLevelOptions): Promise<Mi
   const connection = parseConnection(options.url);
   let loaded: LoadedChain[];
   try {
-    loaded = loadChains(options.chains);
+    loaded = loadChains(options.chains, loadChainForLevel);
   } catch (error) {
     throw sanitize(error, connection);
   }

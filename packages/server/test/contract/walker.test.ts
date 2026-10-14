@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createServer, type ServerModule } from "../../src/create-server.ts";
 import { adapters, fakeDatabase, recordingLogger, serverConfig } from "../support.ts";
 import { buildDocument, type TestDocument } from "./build-document.ts";
+import { readOperations } from "./document.ts";
 import { componentResolver, validateSchema } from "./schema.ts";
 import { getProbeRow, probeOperations } from "./probe-module.ts";
 import { walkContract, type ContractFixtures, type PolicyHooks } from "./walker.ts";
@@ -265,6 +266,67 @@ describe("the walker against the server's chain", () => {
       routes: [{ operation: getThing, handler: () => thing({ id: "a" }, { status: 202 }) }],
     }));
     expect(kinds(await walk(document, send, thingFixtures))).toEqual(["undeclared_status", "unexpected_status"]);
+  });
+});
+
+describe("the re-authentication policy extension", () => {
+  const rotateThing = defineOperation({
+    method: "post",
+    path: "/api/v1/thing/rotate",
+    operationId: "rotateThing",
+    tag: "test",
+    auth: "member",
+    rate: "write",
+    reauth: true,
+    responses: { 200: jsonResponse("Rotated", z.strictObject({ id: z.string() })), 401: problemResponse("Not signed in") },
+  });
+  const plainThing = defineOperation({ ...rotateThing, operationId: "plainThing", path: "/api/v1/thing/plain", reauth: false });
+  const entryOf = (document: TestDocument, operation: { path: string; method: string }): Record<string, unknown> =>
+    (document.paths[operation.path] ?? {})[operation.method] as Record<string, unknown>;
+
+  it("is written for an operation that declares it and for no other", () => {
+    const document = buildDocument([rotateThing, plainThing, getThing], committed);
+    expect(entryOf(document, rotateThing)["x-slugbase-reauth"]).toBe(true);
+    expect("x-slugbase-reauth" in entryOf(document, plainThing)).toBe(false);
+    expect("x-slugbase-reauth" in entryOf(document, getThing)).toBe(false);
+  });
+
+  it("is read onward, and a value that is not a boolean is a missing policy", () => {
+    const document = buildDocument([rotateThing, plainThing], committed);
+    const read = readOperations(document);
+    expect(read.failures).toEqual([]);
+    expect(read.operations.map((operation) => [operation.operationId, operation.reauth])).toEqual([
+      ["rotateThing", true],
+      ["plainThing", undefined],
+    ]);
+    for (const value of ["yes", 1, null, {}]) {
+      const invalid: TestDocument = {
+        ...document,
+        paths: { [rotateThing.path]: { post: { ...entryOf(document, rotateThing), "x-slugbase-reauth": value } } },
+      };
+      const failures = readOperations(invalid).failures;
+      expect(failures.map((failure) => failure.kind)).toEqual(["policy_missing"]);
+      expect(failures[0]?.detail).toContain("x-slugbase-reauth");
+    }
+    const explicitFalse: TestDocument = {
+      ...document,
+      paths: { [rotateThing.path]: { post: { ...entryOf(document, rotateThing), "x-slugbase-reauth": false } } },
+    };
+    expect(readOperations(explicitFalse).failures).toEqual([]);
+  });
+
+  it("registers against a document built from the operation", () => {
+    expect(() =>
+      createServer({
+        config,
+        adapters: adapters(),
+        modules: [{ name: "reauth", register: () => ({ routes: [{ operation: rotateThing, handler: () => Response.json({ id: "a" }) }] }) }],
+        migrations: [],
+        logger: recordingLogger(),
+        database: fakeDatabase(),
+        openApiDocument: buildDocument([rotateThing], committed),
+      }),
+    ).not.toThrow();
   });
 });
 

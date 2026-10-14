@@ -16,6 +16,13 @@ import { route } from "./register.ts";
 /** How long `/ready` waits for the database before it answers that it is unreachable. */
 export const READY_TIMEOUT_MS = 5000;
 
+/**
+ * How long a finished readiness answer, ready or not, is reused. It bounds the
+ * migration-level reads per second however fast probes arrive, and it is the
+ * longest a change in the database goes unseen.
+ */
+export const READY_CACHE_TTL_MS = 1500;
+
 export interface ProbeOptions {
   readonly buildInfo: BuildInfo;
   /** `DATABASE_URL`: the level is read as `slugbase_app`, which `migrate` lets read the bookkeeping tables. */
@@ -27,8 +34,16 @@ export interface ProbeOptions {
   readonly migrating: () => boolean;
 }
 
+// The journals of a build do not change while its process runs.
+const journalLengths = new WeakMap<MigrationChain, { folder: string; length: number }>();
+
 function journalLength(chain: MigrationChain): number {
+  const known = journalLengths.get(chain);
+  if (known?.folder === chain.folder) {
+    return known.length;
+  }
   const journal = JSON.parse(readFileSync(join(chain.folder, "meta", "_journal.json"), "utf8")) as { entries: readonly unknown[] };
+  journalLengths.set(chain, { folder: chain.folder, length: journal.entries.length });
   return journal.entries.length;
 }
 
@@ -70,18 +85,46 @@ export function probeRoutes(options: ProbeOptions): readonly RouteBinding[] {
     return inFlight;
   };
 
+  // What a finished read found, reused for READY_CACHE_TTL_MS. A failed read is
+  // reused too, so an outage does not turn every probe into a connection attempt;
+  // it reads as not ready for the window and is retried after it.
+  type Outcome = { readonly level: Awaited<ReturnType<typeof migrationLevel>> } | { readonly failure: unknown };
+  let settled: { readonly outcome: Outcome; readonly at: number } | undefined;
+  let pending: Promise<Outcome> | undefined;
+  const fresh = (): Outcome | undefined => {
+    if (settled === undefined) {
+      return undefined;
+    }
+    const age = Date.now() - settled.at;
+    return age >= 0 && age < READY_CACHE_TTL_MS ? settled.outcome : undefined;
+  };
+  const outcome = (): Promise<Outcome> => {
+    const reused = fresh();
+    if (reused !== undefined) {
+      return Promise.resolve(reused);
+    }
+    pending ??= withinTimeout(readLevel(), READY_TIMEOUT_MS)
+      .then((level): Outcome => ({ level }))
+      .catch((failure: unknown): Outcome => ({ failure }))
+      .then((found) => {
+        settled = { outcome: found, at: Date.now() };
+        pending = undefined;
+        return found;
+      });
+    return pending;
+  };
+
   const ready = route(getReady).handle(async (_request, context) => {
     const requestLogger = context.get("logger") ?? logger;
-    let level: Awaited<ReturnType<typeof migrationLevel>>;
-    try {
-      level = await withinTimeout(readLevel(), READY_TIMEOUT_MS);
-    } catch (error) {
-      requestLogger.warn("The readiness check could not read the database", describeError(error));
+    const found = await outcome();
+    if ("failure" in found) {
+      requestLogger.warn("The readiness check could not read the database", describeError(found.failure));
       return {
         status: 503,
         body: { database: "unreachable", migrations: { expected: shippedMigrations(chains()), applied: null } },
       };
     }
+    const { level } = found;
     if (level.unknownApplied > 0) {
       requestLogger.warn("The database has migrations this build does not ship", { unknownApplied: level.unknownApplied });
     }
