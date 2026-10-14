@@ -11,6 +11,38 @@ import type { PgTable } from 'drizzle-orm/pg-core';
 import { SQL } from 'drizzle-orm';
 
 // @public (undocumented)
+export interface AccountProfile {
+    // (undocumented)
+    readonly accent: string | null;
+    // (undocumented)
+    readonly aiOptOut: boolean;
+    // (undocumented)
+    readonly defaultBookmarkView: "grid" | "table";
+    // (undocumented)
+    readonly displayName: string;
+    // (undocumented)
+    readonly email: string;
+    // (undocumented)
+    readonly emailVerified: boolean;
+    // (undocumented)
+    readonly hasPassword: boolean;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly locale: "en" | "de";
+    // (undocumented)
+    readonly theme: "light" | "dark" | "system";
+}
+
+// @public (undocumented)
+export interface AccountProfileRepository {
+    profile(): Promise<AccountProfile | undefined>;
+}
+
+// @public (undocumented)
+export function accountProfileRepository(tx: TenantTx): AccountProfileRepository;
+
+// @public (undocumented)
 export interface AuthStore {
     close(): Promise<void>;
     createSession(session: NewSession): Promise<boolean>;
@@ -94,6 +126,31 @@ export interface LoginCandidate {
     // (undocumented)
     readonly passwordHash: string | null;
 }
+
+// @public
+export type MemberRole = "owner" | "admin" | "member";
+
+// @public
+export interface Membership {
+    // (undocumented)
+    readonly joinedAt: Date;
+    readonly lastActiveAt: Date | null;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly role: MemberRole;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface MembershipRepository {
+    list(): Promise<readonly Membership[]>;
+    touch(): Promise<boolean>;
+}
+
+// @public (undocumented)
+export function membershipRepository(tx: TenantTx): MembershipRepository;
 
 // @public
 export function migrate(options: MigrateOptions): Promise<MigrateResult>;

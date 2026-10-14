@@ -570,6 +570,36 @@ describe("what stays rejected without the contract header and marker", () => {
       await added("CREATE OR REPLACE FUNCTION public.app_workspace_id() RETURNS uuid LANGUAGE sql STABLE AS $$ SELECT nullif(current_setting('app.workspace_id', true), '')::uuid $$;"),
     ).toEqual([]);
   });
+
+  describe("app_member_workspace_ids, the tenant context function that reads the memberships", () => {
+    const MEMBER_IDS = (body: string, language = "sql"): string =>
+      `CREATE OR REPLACE FUNCTION public.app_member_workspace_ids() RETURNS SETOF uuid LANGUAGE ${language} STABLE SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$ ${body} $$;`;
+    const READ = "SELECT m.workspace_id FROM public.workspace_members m JOIN public.workspaces w ON w.id = m.workspace_id WHERE m.account_id = public.app_account_id() AND w.deleting_at IS NULL";
+
+    it("is accepted as one SELECT over tables that calls the other tenant context functions, and a policy may name it", async () => {
+      expect(await added(MEMBER_IDS(READ))).toEqual([]);
+      expect(
+        await added(`${MEMBER_IDS(READ)}\nCREATE POLICY workspaces_tenant ON workspaces FOR SELECT USING (id = public.app_workspace_id() OR id IN (SELECT public.app_member_workspace_ids()));`),
+      ).toEqual([]);
+    });
+
+    it.each([
+      ["in plpgsql", MEMBER_IDS("BEGIN RETURN QUERY SELECT 1; END", "plpgsql")],
+      ["with a body that is not one SELECT", MEMBER_IDS("DELETE FROM public.workspace_members")],
+      ["with a body of two statements", MEMBER_IDS(`${READ}; ${READ}`)],
+      ["with a body that calls a function outside the safe list", MEMBER_IDS("SELECT pg_sleep(1)::text::uuid")],
+    ])("is not accepted %s", async (_name, sql) => {
+      const findings = await added(sql);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]?.message).toMatch(/cannot place/);
+    });
+
+    it("is not accepted from another schema", async () => {
+      const findings = await added(MEMBER_IDS(READ).replace("public.app_member_workspace_ids", "archive.app_member_workspace_ids"));
+      expect(findings).toHaveLength(1);
+      expect(findings[0]?.message).toMatch(/cannot place/);
+    });
+  });
 });
 
 describe("how the statement reader places the system-function forms", () => {

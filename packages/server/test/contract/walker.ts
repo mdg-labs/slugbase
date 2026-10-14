@@ -10,7 +10,8 @@ import { componentResolver, validateSchema, type ResolveReference } from "./sche
 //                  policy admits: the declared success, schema and headers
 //   unauthenticated  the same request without a credential: 401 unauthenticated
 //                  (any operation but anonymous and machine ones)
-//   too-low role   a principal just below the policy: 403 forbidden
+//   too-low role   a principal just below the policy: 403 forbidden; below `member`
+//                  that is an account with no workspace, which has nothing to name: 404 not_found
 //   read-only token  a read-only token on a write-scope operation: 403 token_scope
 //   no entitlement an operation that declares an entitlement: 403 entitlement_required
 //   workspace B    the identifiers of workspace B, as a principal of workspace A,
@@ -52,7 +53,10 @@ export interface Credentials {
 export interface PolicyHooks {
   /** Holds the role and the scope the operation needs, in workspace A. */
   authorized(operation: DocumentedOperation): Credentials;
-  /** The highest principal still below the policy: refused with 403 forbidden. Undefined where none is below it (`account`). */
+  /**
+   * The highest principal still below the policy: refused with 403 forbidden, or with 404 not_found when the
+   * policy is `member` and the principal has no workspace. Undefined where none is below it (`account`).
+   */
   tooLowRole(operation: DocumentedOperation): Credentials | undefined;
   /** A read-only API token that otherwise satisfies the policy. */
   readOnlyToken(operation: DocumentedOperation): Credentials;
@@ -304,7 +308,7 @@ export async function walkContract(options: WalkerOptions): Promise<WalkerReport
       if (below === undefined) {
         fail("hook_missing", `the policy ${operation.auth} has a role below it and the hooks give no principal for it`);
       } else {
-        await exercise("too-low role", below, fixture, { status: 403, code: "forbidden" });
+        await exercise("too-low role", below, fixture, operation.auth === "member" ? { status: 404, code: "not_found" } : { status: 403, code: "forbidden" });
       }
     }
     if (operation.scope === "write") {

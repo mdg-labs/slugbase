@@ -143,7 +143,7 @@ Every error is an RFC 9457 problem document:
 | 403 | `email_unverified` | Verification is required and the account is unverified (sign-in with a correct password creates no session; Cloud actions that need a verified email) |
 | 403 | `registration_closed` | Public registration is off |
 | 403 | `setup_completed` | `POST /setup` after setup, or with setup turned off |
-| 404 | `not_found` | Unknown, or not visible to the caller (§2.4) |
+| 404 | `not_found` | Unknown, or not visible to the caller (§2.4); also any operation that needs a workspace (`mem`, `adm`, `own`) from a principal that has none |
 | 404 | `slug_not_found` | `/go` and `POST /go/choose`: no accessible forwarding bookmark |
 | 409 | `slug_taken` | The caller already uses this slug in the workspace |
 | 409 | `name_taken` | Folder, tag, team or API-token name already exists for that owner/workspace |
@@ -411,7 +411,7 @@ Unauthenticated, `Content-Type: application/opensearchdescription+xml`, built on
 
 | Method | Path | Summary | Auth | Re | Rate |
 |---|---|---|---|---|---|
-| GET | `/me` | Account (email, display name, `emailVerified`, `hasPassword`, preferences), memberships (workspace, name, role), active workspace id, and, only for a session principal and only when a deployment registers a source (doc 01 §13), `clientErrorReportDsn`; never a hash or secret | acct† (read) | | |
+| GET | `/me` | `{ account, memberships, activeWorkspaceId, clientErrorReportDsn? }`: the account (`id`, `email`, `displayName`, `locale`, `theme`, `accent`, `defaultView`, `aiOptOut`, `emailVerified`, `hasPassword`), its memberships (`workspaceId`, `name`, `role`), the workspace the request acts in (`null` when none) and, only for a session principal and only when a deployment registers a source (doc 01 §13), `clientErrorReportDsn`; never a hash or secret | acct† (read) | | |
 | PATCH | `/me` | Display name, locale, theme, accent, default view, single-key shortcuts, sign-in alerts, AI opt-out, analytics consent, onboarding state (`browserSetupDone`, `importDone`, `checklistDismissed`) | acct | | |
 | POST | `/me/reauth` | `{ password }` or `{ code }` (TOTP) → refresh `reauthAt` | acct | | mfa |
 | POST | `/me/password` | `{ currentPassword, newPassword }` — change password; revokes other sessions and rotates this one. An account without a password omits `currentPassword` and needs a fresh re-authentication | acct | ✓ | |

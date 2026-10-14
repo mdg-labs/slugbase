@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { boolean, check, cidr, index, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { accounts } from "./accounts.ts";
 import { bytea } from "./types.ts";
+import { workspaces } from "./workspaces.ts";
 
 // `sessions` of doc 05 section 2.1: server-side sessions looked up by the
 // SHA-256 of the cookie's token before any account context exists. The table
@@ -18,8 +19,8 @@ export const sessions = pgTable(
       .notNull()
       .references(() => accounts.id, { onDelete: "cascade" }),
     level: text().notNull(),
-    /** Gains its reference to `workspaces` with the workspace tables. */
-    activeWorkspaceId: uuid(),
+    /** The workspace the session acts in; the workspace's deletion sets it to null, and the tenant resolver re-derives it. */
+    activeWorkspaceId: uuid().references(() => workspaces.id, { onDelete: "set null" }),
     reauthAt: timestamp({ withTimezone: true }),
     remember: boolean().notNull(),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),

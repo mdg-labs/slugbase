@@ -111,8 +111,8 @@ describe("the walker over the committed document", () => {
     expect(report.failures).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each anonymous operation and for the sign-in; each of the four operations that need a session also answers 401 without one.
-    expect(report.calls).toBe(operations.length + 4);
+    // One valid request for each anonymous operation and for the sign-in; each of the five operations that need a session also answers 401 without one.
+    expect(report.calls).toBe(operations.length + 5);
   });
 });
 

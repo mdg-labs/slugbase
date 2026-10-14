@@ -13,10 +13,16 @@ export interface TenantResolution {
   readonly role: WorkspaceRole;
 }
 
+/** What a resolution may need to know of the request besides its principal. */
+export interface TenantResolveRequest {
+  /** The request's identifier, for the tenant transaction a resolver opens to read memberships. */
+  readonly requestId: string;
+}
+
 /**
  * Turns an authenticated request into its workspace, member and role
  * (doc 01 section 5.2); undefined when the principal has no workspace to act in.
  */
 export interface TenantResolver extends Port {
-  resolve(principal: TenantPrincipal): Promise<TenantResolution | undefined>;
+  resolve(principal: TenantPrincipal, request: TenantResolveRequest): Promise<TenantResolution | undefined>;
 }

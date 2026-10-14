@@ -2,7 +2,8 @@
 -- 2.1, 3.1 and 3.3). The tables themselves are defined in src/schema/.
 --
 -- accounts: forced row-level security with the own-row policy. The policy
--- gains its co-member branch with the workspace tables. slugbase_app may read
+-- stays own-row only until the members list needs a co-member branch.
+-- slugbase_app may read
 -- every column but password_hash, which only the system operations return; it
 -- holds no INSERT, UPDATE or DELETE yet. slugbase_system gets the table
 -- privileges its functions need (it bypasses row-level security).

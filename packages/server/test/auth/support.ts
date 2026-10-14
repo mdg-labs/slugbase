@@ -23,6 +23,7 @@ export interface SeedOptions {
   readonly email?: string;
   readonly password?: string | null;
   readonly disabled?: boolean;
+  readonly emailVerified?: boolean;
 }
 
 export function storeFor(database: TestDatabase): AuthStore {
@@ -39,8 +40,9 @@ export async function seedAccount(database: TestDatabase, options: SeedOptions =
   await database.owner.begin(async (tx) => {
     await tx`SELECT set_config('app.account_id', ${id}, true)`;
     await tx`
-      INSERT INTO accounts (id, email, display_name, password_hash, disabled_at)
-      VALUES (${id}, ${email}, 'Test account', ${passwordHash}, ${options.disabled === true ? new Date() : null})`;
+      INSERT INTO accounts (id, email, display_name, password_hash, disabled_at, email_verified_at)
+      VALUES (${id}, ${email}, 'Test account', ${passwordHash}, ${options.disabled === true ? new Date() : null},
+              ${options.emailVerified === true ? new Date() : null})`;
   });
   return { id, email, password: password ?? "" };
 }
@@ -92,4 +94,79 @@ export async function changePassword(database: TestDatabase, accountId: string):
 
 export function sha256(value: Buffer): Buffer {
   return createHash("sha256").update(value).digest();
+}
+
+let workspaceNumber = 0;
+
+/** Creates a workspace as slugbase_system, which stands for the system operation that does: slugbase_app cannot insert one. */
+export async function seedWorkspace(database: TestDatabase, options: { readonly name?: string; readonly deleting?: boolean } = {}): Promise<string> {
+  workspaceNumber += 1;
+  const id = `0192f3a0-cccc-7000-8000-${workspaceNumber.toString(16).padStart(12, "0")}`;
+  await database.owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    await tx`
+      INSERT INTO workspaces (id, name, deleting_at)
+      VALUES (${id}, ${options.name ?? `Workspace ${String(workspaceNumber)}`}, ${options.deleting === true ? new Date() : null})`;
+  });
+  return id;
+}
+
+export async function seedMembership(
+  database: TestDatabase,
+  membership: { readonly workspaceId: string; readonly accountId: string; readonly role?: "owner" | "admin" | "member"; readonly lastActiveAt?: Date | null },
+): Promise<void> {
+  await database.owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    await tx`
+      INSERT INTO workspace_members (workspace_id, account_id, role, last_active_at)
+      VALUES (${membership.workspaceId}, ${membership.accountId}, ${membership.role ?? "member"}, ${membership.lastActiveAt ?? null})`;
+  });
+}
+
+export async function removeMembership(database: TestDatabase, workspaceId: string, accountId: string): Promise<void> {
+  await database.owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    await tx`DELETE FROM workspace_members WHERE workspace_id = ${workspaceId} AND account_id = ${accountId}`;
+  });
+}
+
+/** Sets the active workspace of a session whatever the account's memberships are, as a forged value would be. */
+export async function setActiveWorkspace(database: TestDatabase, sessionId: string, workspaceId: string | null): Promise<void> {
+  await database.owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    await tx`UPDATE sessions SET active_workspace_id = ${workspaceId} WHERE id = ${sessionId}`;
+  });
+}
+
+export async function lastActiveAt(database: TestDatabase, workspaceId: string, accountId: string): Promise<Date | null> {
+  const rows = await database.owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    return tx<{ last_active_at: Date | null }[]>`
+      SELECT last_active_at FROM workspace_members WHERE workspace_id = ${workspaceId} AND account_id = ${accountId}`;
+  });
+  return rows[0]?.last_active_at ?? null;
+}
+
+export async function setLastActiveAt(database: TestDatabase, workspaceId: string, accountId: string, at: Date | null): Promise<void> {
+  await database.owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    await tx`UPDATE workspace_members SET last_active_at = ${at} WHERE workspace_id = ${workspaceId} AND account_id = ${accountId}`;
+  });
+}
+
+/** A digest of the workspace's rows in both workspace tables, read as slugbase_system. */
+export async function workspaceChecksum(database: TestDatabase, workspaceId: string): Promise<string> {
+  const rows = await database.owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    return tx<{ digest: string }[]>`
+      SELECT md5(
+        coalesce((SELECT string_agg(w::text, '|' ORDER BY w.id) FROM workspaces w WHERE w.id = ${workspaceId}), '') ||
+        coalesce((SELECT string_agg(m::text, '|' ORDER BY m.account_id) FROM workspace_members m WHERE m.workspace_id = ${workspaceId}), '')
+      ) AS digest`;
+  });
+  const digest = rows[0]?.digest;
+  if (digest === undefined) {
+    throw new Error("the checksum query returned no row");
+  }
+  return digest;
 }

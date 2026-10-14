@@ -5,6 +5,46 @@ import { defineOperation, emptyResponse, jsonResponse, problemResponse } from ".
 // The session operations act on the caller's own sessions only; a session id of
 // another account is answered like one that does not exist.
 
+export const WORKSPACE_ROLES = ["owner", "admin", "member"] as const;
+
+export const MembershipSchema = z
+  .strictObject({
+    workspaceId: z.uuid().describe("The workspace's identifier"),
+    name: z.string().describe("The workspace's name"),
+    role: z.enum(WORKSPACE_ROLES).describe("The account's role in the workspace"),
+  })
+  .meta({ id: "Membership" });
+
+export const AccountSchema = z
+  .strictObject({
+    id: z.uuid().describe("The account's identifier"),
+    email: z.string().describe("The account's email address, as stored"),
+    displayName: z.string().describe("The name shown to other members"),
+    locale: z.enum(["en", "de"]).describe("The language of the account's emails and of the app unless the browser overrides it"),
+    theme: z.enum(["light", "dark", "system"]).describe("The colour scheme the account chose"),
+    accent: z.string().nullable().describe("The accent colour, a token name of the palette; null when none was chosen"),
+    defaultView: z.enum(["grid", "table"]).describe("How bookmark lists are shown unless a list says otherwise"),
+    aiOptOut: z.boolean().describe("Whether the account opted out of AI features"),
+    emailVerified: z.boolean().describe("Whether the email address was verified"),
+    hasPassword: z.boolean().describe("Whether the account can sign in with a password; false for an account that signs in through an identity provider only"),
+  })
+  .meta({ id: "Account" });
+
+export const MeSchema = z
+  .strictObject({
+    account: AccountSchema,
+    memberships: z.array(MembershipSchema).describe("The workspaces the account is a member of, without one being deleted"),
+    activeWorkspaceId: z
+      .uuid()
+      .nullable()
+      .describe("The workspace the request acts in: the session's active one, else the member's most recently active one, else null; an API token's is the workspace it is bound to"),
+    clientErrorReportDsn: z
+      .string()
+      .optional()
+      .describe("The public DSN a browser error reporter initialises with; present only for a session, and only when the deployment registers a source"),
+  })
+  .meta({ id: "Me" });
+
 export const SessionSchema = z
   .strictObject({
     id: z.uuid().describe("The session's identifier; it names the session to revoke and is not the cookie's value"),
@@ -100,6 +140,23 @@ export const revokeSessions = defineOperation({
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse("The request did not come from the application itself"),
     422: problemResponse("The query did not pass validation"),
+    429: problemResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const getMe = defineOperation({
+  method: "get",
+  path: "/api/v1/me",
+  operationId: "getMe",
+  tag: "me",
+  summary: "Read the signed-in account",
+  auth: "account",
+  rate: "read",
+  scope: "read",
+  responses: {
+    200: jsonResponse("The account with its memberships and active workspace; no hash and no secret", MeSchema),
+    401: problemResponse("There is no valid credential, or the session's second factor is not complete"),
     429: problemResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },

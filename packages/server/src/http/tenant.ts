@@ -24,11 +24,13 @@ export interface TenantResolutionOptions {
 }
 
 /**
- * Stage 7. A request without a principal has no tenant context. A session
- * whose resolver finds no workspace proceeds without one (account-level
- * operations need none). An API token acts in its bound workspace only: a
- * resolver that finds none means the token no longer grants access, and one
- * that answers another workspace is an error, never a context.
+ * Stage 7. A request without a principal has no tenant context, nor has a
+ * session whose second factor is pending. A session whose resolver finds no
+ * workspace proceeds without one (account-level operations need none; one that
+ * needs a workspace is answered `404` by the authorization stage). An API token
+ * acts in its bound workspace only: a resolver that finds none means the token
+ * no longer grants access, and one that answers another workspace is an error,
+ * never a context.
  */
 export function createTenantResolution({ resolver, withTenant }: TenantResolutionOptions): RequestStage {
   return async (context, next) => {
@@ -37,7 +39,13 @@ export function createTenantResolution({ resolver, withTenant }: TenantResolutio
       return next();
     }
 
-    const resolution: TenantResolution | undefined = await resolver.resolve(principal);
+    // A session still waiting for its second factor acts in no workspace, and its use writes no activity.
+    if (principal.kind === "session" && principal.mfaPending === true) {
+      return next();
+    }
+
+    const requestId = requestIdOf(context);
+    const resolution: TenantResolution | undefined = await resolver.resolve(principal, { requestId });
     if (principal.kind === "api-token") {
       if (resolution === undefined) {
         throw new ProblemError("unauthenticated", "The credential was not accepted.");
@@ -52,7 +60,6 @@ export function createTenantResolution({ resolver, withTenant }: TenantResolutio
 
     const { accountId } = principal;
     const { workspaceId, memberId, role } = resolution;
-    const requestId = requestIdOf(context);
     context.set("tenant", {
       accountId,
       workspaceId,

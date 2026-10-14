@@ -106,7 +106,7 @@ export const getProbePremium = defineOperation({
   rate: "read",
   scope: "read",
   entitlement: "probe.premium",
-  responses: { 200: jsonResponse("The feature", z.strictObject({ ok: z.literal(true) })), 401: unauthenticated, 403: forbidden },
+  responses: { 200: jsonResponse("The feature", z.strictObject({ ok: z.literal(true) })), 401: unauthenticated, 403: forbidden, 404: notFound },
 });
 
 export const getProbeMe = defineOperation({

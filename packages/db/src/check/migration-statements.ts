@@ -104,11 +104,12 @@ const SYNTAX_BEFORE_PAREN = new Set([
   "varying", "on", "only", "table", "union", "intersect", "except", "join", "limit", "by",
 ]);
 // Built-in functions and type names whose call or modifier a migration may carry. The
-// two `app_` functions are the tenant context functions of this package, whose
-// definitions this check itself restricts to a single SELECT of built-ins.
+// `app_` functions are the tenant context functions of this package, whose
+// definitions this check itself restricts to a single SELECT of built-ins and of
+// these functions.
 const SAFE_CALLS = new Set([
   "nullif", "coalesce", "current_setting", "lower", "upper", "length", "now", "to_tsvector", "setweight",
-  "app_workspace_id", "app_account_id",
+  "app_workspace_id", "app_account_id", "app_member_workspace_ids",
   "varchar", "char", "character", "numeric", "decimal", "bit", "varbit", "time", "timetz", "timestamp", "timestamptz", "interval",
 ]);
 const SAFE_SCHEMAS = new Set(["public", "pg_catalog"]);
@@ -790,8 +791,9 @@ function createIndex(cursor: Cursor): Operation[] {
 }
 
 // The tenant context functions are called by every policy and listed in SAFE_CALLS, so what they
-// compute is what the policies rely on: their definition stays one SELECT of built-ins.
-export const TENANT_FUNCTIONS = new Set(["app_workspace_id", "app_account_id"]);
+// compute is what the policies rely on: their definition stays one SELECT that calls only built-ins and
+// these functions.
+export const TENANT_FUNCTIONS = new Set(["app_workspace_id", "app_account_id", "app_member_workspace_ids"]);
 // Words after which the return type of CREATE FUNCTION ends.
 const AFTER_RETURN_TYPE = new Set([
   "language", "as", "immutable", "stable", "volatile", "strict", "called", "security", "leakproof", "not", "parallel", "cost",
