@@ -9,4 +9,4 @@
  * change (doc 10): the function it names ships in a migration of the same
  * change, under the rules of the `system-operations` rule.
  */
-export const systemOperations: readonly string[] = ["sys_rate_limit_take"];
+export const systemOperations: readonly string[] = ["sys_rate_limit_take", "sys_rate_limit_purge"];

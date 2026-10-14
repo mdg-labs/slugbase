@@ -25,6 +25,11 @@ export interface RateLimitTaken {
 export interface RateLimitStore {
   /** Takes tokens in one statement on the database clock. Rejects when the database cannot answer: a failure is never an allowed take. */
   take(request: RateLimitTake): Promise<RateLimitTaken>;
+  /**
+   * Deletes the buckets idle for more than an hour and returns how many it deleted. A bucket that
+   * long idle is full again, so no limit changes. Rejects when the database cannot answer.
+   */
+  purgeIdle(): Promise<number>;
   /** Ends the pool. */
   close(): Promise<void>;
 }
@@ -34,6 +39,10 @@ export interface RateLimitStoreOptions {
   url: string;
   /** Maximum number of connections in the pool. */
   poolSize?: number;
+}
+
+interface PurgeRow {
+  deleted: string;
 }
 
 interface TakeRow {
@@ -53,8 +62,16 @@ function positive(value: number, name: string): void {
 }
 
 /** Binds `take` to a connection pool that connects as the application role. */
-export function bindRateLimitStore(client: postgres.Sql): Pick<RateLimitStore, "take"> {
+export function bindRateLimitStore(client: postgres.Sql): Pick<RateLimitStore, "take" | "purgeIdle"> {
   return {
+    async purgeIdle() {
+      const rows = await client<PurgeRow[]>`SELECT sys_rate_limit_purge()::text AS deleted`;
+      const row = rows[0];
+      if (rows.length !== 1 || row === undefined) {
+        throw new Error("sys_rate_limit_purge did not return exactly one row");
+      }
+      return Number(row.deleted);
+    },
     async take(request) {
       if (request.key === "") {
         throw new RangeError("key must not be empty");
@@ -84,9 +101,10 @@ export function createRateLimitStore(options: RateLimitStoreOptions): RateLimitS
     max: options.poolSize ?? 5,
     onnotice: () => undefined,
   });
-  const { take } = bindRateLimitStore(client);
+  const { take, purgeIdle } = bindRateLimitStore(client);
   return {
     take,
+    purgeIdle,
     close: () => client.end({ timeout: 5 }),
   };
 }

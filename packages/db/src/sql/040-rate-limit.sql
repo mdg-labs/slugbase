@@ -5,7 +5,8 @@
 -- full, by design (doc 10 section 5). Row-level security is enabled and forced
 -- and the table has no policy, so no role that is subject to it sees a row;
 -- slugbase_system, which bypasses it, is the only role with privileges on it,
--- and it reaches the table only through sys_rate_limit_take.
+-- and it reaches the table only through sys_rate_limit_take and
+-- sys_rate_limit_purge (050-rate-limit-purge.sql).
 CREATE UNLOGGED TABLE IF NOT EXISTS public.rate_limit_buckets (
   key text PRIMARY KEY,
   tokens real NOT NULL,

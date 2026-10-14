@@ -114,6 +114,7 @@ export interface MigrationLevelOptions {
 // @public (undocumented)
 export interface RateLimitStore {
     close(): Promise<void>;
+    purgeIdle(): Promise<number>;
     take(request: RateLimitTake): Promise<RateLimitTaken>;
 }
 

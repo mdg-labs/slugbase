@@ -97,7 +97,7 @@ afterEach(async () => {
 
 describe("the shipped chain", () => {
   it("registers the shipped system operations and passes", async () => {
-    expect(systemOperations).toEqual(["sys_rate_limit_take"]);
+    expect(systemOperations).toEqual(["sys_rate_limit_take", "sys_rate_limit_purge"]);
     expect(checkRules).toContain(systemOperationsRule);
     const database = await scratch();
     expect(await systemOperationsRule.run({ packageDir: PACKAGE, sql: database.app, hashSqlFiles })).toEqual([]);
