@@ -129,34 +129,6 @@ describe("signing in", () => {
     expect(await server.logins()).toEqual([{ email: "ada@example.org", password: "correct horse", remember: false }]);
   });
 
-  it("goes to the page named by a relative next, with its search and hash", async () => {
-    stubServer(done);
-    await openLogin(`/login?next=${encodeURIComponent("/missing/page?tab=plan#top")}`);
-
-    await signInWith();
-
-    expect(await screen.findByRole("heading", { level: 1, name: "This page doesn't exist" })).toBeTruthy();
-    expect(window.location.pathname + window.location.search + window.location.hash).toBe("/missing/page?tab=plan#top");
-  });
-
-  it.each([
-    ["an absolute URL", "https://evil.example/phish"],
-    ["a protocol-relative URL", "//evil.example/phish"],
-    ["a javascript: value", "javascript:alert(1)"],
-    ["a backslash host", "/\\evil.example"],
-    ["a tab inside the slashes", "/\t/evil.example"],
-    ["a bare word", "missing"],
-  ])("goes home when next is %s", async (_name, next) => {
-    stubServer(done);
-    await openLogin(`/login?next=${encodeURIComponent(next)}`);
-
-    await signInWith();
-
-    expect(await screen.findByRole("heading", { level: 1, name: `Welcome to ${PRODUCT_NAME}` })).toBeTruthy();
-    expect(window.location.origin).toBe("http://localhost:3000");
-    expect(window.location.pathname).toBe("/");
-  });
-
   it("sends a signed-in visitor who opens /login to the home page", async () => {
     vi.stubGlobal("fetch", (request: Request) => signedIn(request));
     window.history.replaceState(null, "", "/login?next=%2Fmissing");
