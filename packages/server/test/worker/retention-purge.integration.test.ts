@@ -5,7 +5,7 @@ import { getConstructionPlans } from "pg-boss";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { loadConfig } from "../../src/config/index.ts";
 import { createWorker } from "../../src/worker/index.ts";
-import type { JobDefinition, RunningWorker } from "../../src/worker/index.ts";
+import type { JobDefinition, RunningWorker, Worker } from "../../src/worker/index.ts";
 import { productionEnv } from "../config/support.ts";
 import { adapters, fakeDatabase, recordingLogger } from "../support.ts";
 
@@ -149,11 +149,24 @@ async function databaseNow(): Promise<Date> {
   return rows[0]?.at ?? new Date(0);
 }
 
-// The schedule fires at the top of the hour, whenever the suite happens to run. A test that counts runs takes
-// the schedule out of play once its workers are up and enqueues every run itself; the next test's worker
-// registers it again.
-async function removeHourlySchedule(): Promise<void> {
-  await database().owner`DELETE FROM pgboss.schedule WHERE name = ${JOB}`;
+// The schedule fires at the top of the hour, whenever the suite happens to run, and a worker runs its first
+// cron pass as it starts: a pass in the minute after the hour sends a tick, from the row an earlier test left
+// or from the one this worker registers. A test that counts runs therefore holds pg-boss's cron claim while
+// its worker starts, so no pass runs until the claim's interval is over, takes the schedule out of play, and
+// gives the claim back. It enqueues every run itself; the next test's worker registers the schedule again.
+async function startWithoutHourlySchedule(created: Worker): Promise<RunningWorker> {
+  const owner = database().owner;
+  const [prior] = await owner<{ cronOn: Date | null }[]>`SELECT cron_on AS "cronOn" FROM pgboss.version`;
+  await owner`DELETE FROM pgboss.schedule WHERE name = ${JOB}`;
+  await owner`UPDATE pgboss.version SET cron_on = pgboss.job_now()`;
+  try {
+    const running = await created.start();
+    started.push(running);
+    await owner`DELETE FROM pgboss.schedule WHERE name = ${JOB}`;
+    return running;
+  } finally {
+    await owner`UPDATE pgboss.version SET cron_on = ${prior?.cronOn ?? null}`;
+  }
 }
 
 async function enqueueRun(running: RunningWorker, job: JobDefinition): Promise<string> {
@@ -164,7 +177,7 @@ async function enqueueRun(running: RunningWorker, job: JobDefinition): Promise<s
   return id;
 }
 
-// A tick that landed before the schedule was removed shows up here as a job nobody enqueued.
+// A tick a pass sent before the schedule was out of play would show up here as a job nobody enqueued.
 async function expectOnlyEnqueuedRuns(since: Date, enqueued: readonly string[]): Promise<void> {
   const rows = await database().owner<{ id: string }[]>`
     SELECT id FROM pgboss.job WHERE name = ${JOB} AND created_on >= ${since}`;
@@ -199,15 +212,12 @@ describe("the retention purge of a worker without modules", () => {
     const live = await seedSession(mine, 10 * DAY_MS, 100 * DAY_MS);
     const otherLive = await seedSession(other, HOUR_MS, 100 * DAY_MS);
     const { created, logger } = ceWorker();
-    const running = await created.start();
-    started.push(running);
+    const running = await startWithoutHourlySchedule(created);
     const job = created.jobs.find((candidate) => candidate.name === JOB);
     expect(job).toBeDefined();
     if (job === undefined) {
       return;
     }
-
-    await removeHourlySchedule();
 
     const run = await enqueueRun(running, job);
 
@@ -225,15 +235,12 @@ describe("the retention purge of a worker without modules", () => {
     const since = await databaseNow();
     await seedExpiredSessions(owner, BATCH + extra);
     const { created, logger } = ceWorker();
-    const running = await created.start();
-    started.push(running);
+    const running = await startWithoutHourlySchedule(created);
     const job = created.jobs.find((candidate) => candidate.name === JOB);
     expect(job).toBeDefined();
     if (job === undefined) {
       return;
     }
-
-    await removeHourlySchedule();
 
     const first = await enqueueRun(running, job);
     await until(() => purgeLogs(logger).length === 1, 15_000, "the first run");
