@@ -1,4 +1,4 @@
 {
-  "sha256": "bef0a1f4878267129c160cdcd2cb014c2be2d68e078faccd80c1b1d028519bef",
-  "migration": "20261014094238_add_accounts_and_sessions"
+  "sha256": "4f54f6ab94cd4b20080f9de46abe11a9bfba22ad4b1b66ff9bb5d84a3ec2661d",
+  "migration": "20261014105639_add_session_management"
 }

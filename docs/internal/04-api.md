@@ -423,9 +423,9 @@ Unauthenticated, `Content-Type: application/opensearchdescription+xml`, built on
 | POST | `/me/mfa/enrollment/confirm` | Confirm with a code → 10 backup codes, shown once; rotates the session | acct | | mfa |
 | DELETE | `/me/mfa` | Disable MFA (TOTP code or backup code, plus the password) | acct | ✓ | |
 | POST | `/me/mfa/backup-codes` | Regenerate backup codes with a current TOTP code (old ones invalid) | acct | ✓ | |
-| GET | `/me/sessions` | List sessions (device, coarse IP prefix, created, last seen, current); no location is derived | acct | | |
-| DELETE | `/me/sessions/{id}` | Revoke one session | acct | | |
-| DELETE | `/me/sessions` | Revoke all other sessions ("sign out everywhere"; `?includeCurrent=true` too) | acct | | |
+| GET | `/me/sessions` | List sessions (§6.1: `limit`, `cursor`; `{ items, nextCursor }` with no `total`), newest first; each item `{ id, createdAt, lastSeenAt, userAgentFamily, ipPrefix, current }`; the cursor is valid only for the account it was issued to; never a token hash or a full address, and no location is derived | acct | | |
+| DELETE | `/me/sessions/{id}` | Revoke one session (`204`; `404 not_found` for an id the account does not hold, another account's included); revoking the current session also clears the cookie | acct | | |
+| DELETE | `/me/sessions` | Revoke all other sessions ("sign out everywhere"; `?includeCurrent=true` too, which also clears the cookie; `204`) | acct | | |
 | GET | `/me/api-tokens` | List tokens across workspaces (name, workspace, scope, prefix, created, last used, expires) | acct | | |
 | POST | `/me/api-tokens` | Create a token `{ name, scope: read\|read-write, expiresInDays: 30\|90\|365\|null, workspaceId? }` (default 90, Q47; workspace defaults to the active one and must be one the account belongs to) → secret shown once; at most 10 active (`api_token_limit_reached`) | acct | ✓ | token_create |
 | DELETE | `/me/api-tokens/{id}` | Revoke | acct | | |

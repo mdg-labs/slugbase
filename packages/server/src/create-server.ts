@@ -406,7 +406,7 @@ export function createServer(options: CreateServerOptions): Server {
   ];
   // Password sign-in is part of the server, not a module: the session cookie is the one browser credential (doc 04 section 4.1).
   const authStore = options.authStore ?? createAuthStore({ url: config.DATABASE_URL, poolSize: DEFAULT_AUTH_POOL_SIZE });
-  const auth = authContribution({ store: authStore, appOrigin: config.APP_ORIGIN });
+  const auth = authContribution({ store: authStore, appOrigin: config.APP_ORIGIN, sessionSecret: config.SESSION_SECRET });
   builtInRoutes.push(...(auth.routes ?? []));
   const builtIn: ServerModule = {
     name: "@slugbase/server",

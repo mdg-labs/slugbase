@@ -39,6 +39,17 @@ export interface SessionRecord {
   readonly isInstanceAdmin: boolean;
 }
 
+/** A session of an account that is valid now, as the account sees it; never the token hash. */
+export interface SessionSummary {
+  readonly id: string;
+  readonly createdAt: Date;
+  readonly lastSeenAt: Date;
+  /** The coarse network the session was created from; null when it was unknown. */
+  readonly ipPrefix: string | null;
+  /** Truncated to 256 characters by the database. */
+  readonly userAgent: string | null;
+}
+
 export interface AuthStore {
   /**
    * The address folded the way the database compares emails: two addresses that name one account
@@ -61,6 +72,17 @@ export interface AuthStore {
   lookupSession(tokenHash: Buffer): Promise<SessionRecord | undefined>;
   /** Deletes one session of an account; false when there was none. */
   revokeSession(sessionId: string, accountId: string): Promise<boolean>;
+  /**
+   * One page of the sessions of an account that are valid now (full, unexpired, created no earlier
+   * than the account's password change), newest first by identifier. `afterId` is the last
+   * identifier of the previous page, null for the first; at most `limit` sessions come back.
+   */
+  listSessions(accountId: string, afterId: string | null, limit: number): Promise<readonly SessionSummary[]>;
+  /**
+   * Deletes every session of an account, partial ones and expired ones included, except
+   * `exceptSessionId` (null deletes them all), and returns how many it deleted.
+   */
+  revokeAllSessions(accountId: string, exceptSessionId: string | null): Promise<number>;
   /** Ends the pool. */
   close(): Promise<void>;
 }
@@ -97,6 +119,18 @@ interface CreatedRow {
 
 interface RevokedRow {
   revoked: boolean;
+}
+
+interface ListedSessionRow {
+  id: string;
+  created_at: Date;
+  last_seen_at: Date;
+  ip_prefix: string | null;
+  user_agent: string | null;
+}
+
+interface RevokedCountRow {
+  revoked: string | number | bigint;
 }
 
 const TOKEN_HASH_BYTES = 32;
@@ -188,6 +222,29 @@ export function bindAuthStore(client: postgres.Sql): Omit<AuthStore, "close"> {
         throw new Error("sys_session_revoke did not return exactly one row");
       }
       return row.revoked;
+    },
+
+    async listSessions(accountId, afterId, limit) {
+      const rows = await client<ListedSessionRow[]>`
+        SELECT id, created_at, last_seen_at, ip_prefix, user_agent
+        FROM sys_list_sessions(${accountId}::uuid, ${afterId}::uuid, ${limit}::integer)`;
+      return rows.map((row) => ({
+        id: row.id,
+        createdAt: row.created_at,
+        lastSeenAt: row.last_seen_at,
+        ipPrefix: row.ip_prefix,
+        userAgent: row.user_agent,
+      }));
+    },
+
+    async revokeAllSessions(accountId, exceptSessionId) {
+      const rows = await client<RevokedCountRow[]>`
+        SELECT sys_session_revoke_all(${accountId}::uuid, ${exceptSessionId}::uuid) AS revoked`;
+      const row = rows[0];
+      if (rows.length !== 1 || row === undefined) {
+        throw new Error("sys_session_revoke_all did not return exactly one row");
+      }
+      return Number(row.revoked);
     },
   };
 }

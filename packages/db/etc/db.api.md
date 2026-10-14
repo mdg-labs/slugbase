@@ -15,8 +15,10 @@ export interface AuthStore {
     close(): Promise<void>;
     createSession(session: NewSession): Promise<boolean>;
     emailKey(email: string): Promise<string>;
+    listSessions(accountId: string, afterId: string | null, limit: number): Promise<readonly SessionSummary[]>;
     loginLookup(email: string): Promise<LoginCandidate | undefined>;
     lookupSession(tokenHash: Buffer): Promise<SessionRecord | undefined>;
+    revokeAllSessions(accountId: string, exceptSessionId: string | null): Promise<number>;
     revokeSession(sessionId: string, accountId: string): Promise<boolean>;
 }
 
@@ -238,6 +240,18 @@ export interface SessionRecord {
     readonly reauthAt: Date | null;
     // (undocumented)
     readonly sessionId: string;
+}
+
+// @public
+export interface SessionSummary {
+    // (undocumented)
+    readonly createdAt: Date;
+    // (undocumented)
+    readonly id: string;
+    readonly ipPrefix: string | null;
+    // (undocumented)
+    readonly lastSeenAt: Date;
+    readonly userAgent: string | null;
 }
 
 // @public

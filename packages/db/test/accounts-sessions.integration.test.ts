@@ -189,7 +189,14 @@ describe("the sessions table", () => {
 });
 
 describe("the session system operations", () => {
-  const operations = ["sys_login_lookup", "sys_session_create", "sys_session_lookup", "sys_session_revoke"];
+  const operations = [
+    "sys_list_sessions",
+    "sys_login_lookup",
+    "sys_session_create",
+    "sys_session_lookup",
+    "sys_session_revoke",
+    "sys_session_revoke_all",
+  ];
 
   it("are SECURITY DEFINER functions of slugbase_system with a pinned search_path, callable by slugbase_app only, and in the registry", async () => {
     const rows = await db.owner<{ name: string; definer: boolean; owner: string; config: string[]; app: boolean; public: boolean }[]>`
@@ -436,6 +443,157 @@ describe("the session system operations", () => {
       expect(await store.revokeSession(mine.id, owner.id)).toBe(true);
       expect((await sessionRows(db, owner.id)).map((row) => row.id)).toEqual([other.id]);
       expect(await store.revokeSession(mine.id, owner.id)).toBe(false);
+    });
+  });
+  describe("sys_list_sessions", () => {
+    it("lists the account's own valid sessions with the coarse prefix and user agent, never another account's, and no token hash", async () => {
+      const mine = await account();
+      const stranger = await account();
+      const first = newSession(mine.id, { ipPrefix: "203.0.0.0/16", userAgent: "First agent" });
+      const second = newSession(mine.id, { ipPrefix: null, userAgent: null });
+      const theirs = newSession(stranger.id);
+      for (const session of [first, second, theirs]) {
+        expect(await store.createSession(session)).toBe(true);
+      }
+
+      const listed = await store.listSessions(mine.id, null, 100);
+      expect(listed.map((session) => session.id).sort()).toEqual([first.id, second.id].sort());
+      expect(listed.find((session) => session.id === first.id)).toMatchObject({ ipPrefix: "203.0.0.0/16", userAgent: "First agent" });
+      expect(listed.find((session) => session.id === second.id)).toMatchObject({ ipPrefix: null, userAgent: null });
+      for (const session of listed) {
+        expect(Object.keys(session).sort()).toEqual(["createdAt", "id", "ipPrefix", "lastSeenAt", "userAgent"]);
+        expect(session.createdAt).toBeInstanceOf(Date);
+      }
+      expect((await store.listSessions(stranger.id, null, 100)).map((session) => session.id)).toEqual([theirs.id]);
+      expect(await store.listSessions(freshId(), null, 100)).toEqual([]);
+    });
+
+    it("answers the column list of the function without a token hash", async () => {
+      const rows = await db.owner<{ name: string }[]>`
+        SELECT unnest(p.proargnames) AS name FROM pg_proc p WHERE p.proname = 'sys_list_sessions' ORDER BY 1`;
+      expect(rows.map((row) => row.name)).not.toContain("token_hash");
+    });
+
+    it("lists the newest session first, whatever its last activity", async () => {
+      const person = await account();
+      const older = newSession(person.id);
+      const newer = newSession(person.id);
+      expect(await store.createSession(older)).toBe(true);
+      expect(await store.createSession(newer)).toBe(true);
+      await asSystem(db, (tx) => tx`UPDATE sessions SET last_seen_at = now() + interval '1 hour' WHERE id = ${older.id}`);
+      expect((await store.listSessions(person.id, null, 100)).map((session) => session.id)).toEqual([newer.id, older.id]);
+    });
+
+    it("pages through the sessions, each exactly once, and never past the page size", async () => {
+      const person = await account();
+      const stranger = await account();
+      const created = Array.from({ length: 5 }, () => newSession(person.id));
+      for (const session of [...created, newSession(stranger.id)]) {
+        expect(await store.createSession(session)).toBe(true);
+      }
+      const newestFirst = created.map((session) => session.id).reverse();
+
+      const first = await store.listSessions(person.id, null, 2);
+      const second = await store.listSessions(person.id, first[1]?.id ?? null, 2);
+      const third = await store.listSessions(person.id, second[1]?.id ?? null, 2);
+      expect(first).toHaveLength(2);
+      expect(second).toHaveLength(2);
+      expect(third).toHaveLength(1);
+      expect([...first, ...second, ...third].map((session) => session.id)).toEqual(newestFirst);
+      expect(await store.listSessions(person.id, third[0]?.id ?? null, 2)).toEqual([]);
+    });
+
+    it("keeps the account filter when it is handed a position taken from another account", async () => {
+      const mine = await account();
+      const stranger = await account();
+      const theirs = [newSession(stranger.id), newSession(stranger.id)];
+      const own = newSession(mine.id);
+      for (const session of [...theirs, own]) {
+        expect(await store.createSession(session)).toBe(true);
+      }
+      const theirIds = theirs.map((session) => session.id);
+      expect((await store.listSessions(mine.id, null, 100)).map((session) => session.id)).toEqual([own.id]);
+      // A position that is another account's identifier selects nothing of theirs: only the caller's own sessions below it can follow.
+      expect((await store.listSessions(mine.id, theirIds[1] ?? null, 100)).map((session) => session.id)).toEqual([]);
+      expect((await store.listSessions(stranger.id, theirIds[1] ?? null, 100)).map((session) => session.id)).toEqual([theirIds[0]]);
+    });
+
+    it("refuses a page size below one", async () => {
+      const person = await account();
+      await expect(store.listSessions(person.id, null, 0)).rejects.toMatchObject({ code: "22023" });
+      await expect(store.listSessions(person.id, null, -3)).rejects.toMatchObject({ code: "22023" });
+    });
+
+    it("leaves out an expired session, a partial one, one from before the password change and every session of a disabled account", async () => {
+      const person = await account();
+      const live = newSession(person.id);
+      const slidingExpired = newSession(person.id);
+      const absoluteExpired = newSession(person.id);
+      const partial = newSession(person.id);
+      for (const session of [live, slidingExpired, absoluteExpired, partial]) {
+        expect(await store.createSession(session)).toBe(true);
+      }
+      await asSystem(db, async (tx) => {
+        await tx`UPDATE sessions SET expires_at = now() - interval '1 second' WHERE id = ${slidingExpired.id}`;
+        await tx`UPDATE sessions SET absolute_expires_at = now() - interval '1 second' WHERE id = ${absoluteExpired.id}`;
+        await tx`UPDATE sessions SET level = 'partial' WHERE id = ${partial.id}`;
+      });
+      expect((await store.listSessions(person.id, null, 100)).map((session) => session.id)).toEqual([live.id]);
+
+      await asSystem(db, (tx) => tx`UPDATE accounts SET password_changed_at = now() + interval '1 second' WHERE id = ${person.id}`);
+      expect(await store.listSessions(person.id, null, 100)).toEqual([]);
+      await asSystem(db, (tx) => tx`UPDATE accounts SET password_changed_at = NULL, disabled_at = now() WHERE id = ${person.id}`);
+      expect(await store.listSessions(person.id, null, 100)).toEqual([]);
+    });
+  });
+
+  describe("sys_session_revoke_all", () => {
+    it("deletes every session of the account except the one named, whatever its level or expiry, and answers how many", async () => {
+      const person = await account();
+      const stranger = await account();
+      const keep = newSession(person.id);
+      const others = [newSession(person.id), newSession(person.id), newSession(person.id)];
+      const theirs = newSession(stranger.id);
+      for (const session of [keep, ...others, theirs]) {
+        expect(await store.createSession(session)).toBe(true);
+      }
+      const [partial, expired] = others;
+      await asSystem(db, async (tx) => {
+        await tx`UPDATE sessions SET level = 'partial' WHERE id = ${partial?.id ?? ""}`;
+        await tx`UPDATE sessions SET expires_at = now() - interval '1 second' WHERE id = ${expired?.id ?? ""}`;
+      });
+
+      expect(await store.revokeAllSessions(person.id, keep.id)).toBe(3);
+      expect((await sessionRows(db, person.id)).map((row) => row.id)).toEqual([keep.id]);
+      expect((await sessionRows(db, stranger.id)).map((row) => row.id)).toEqual([theirs.id]);
+      expect(await store.lookupSession(keep.tokenHash)).toMatchObject({ sessionId: keep.id });
+      for (const session of others) {
+        expect(await store.lookupSession(session.tokenHash), "a revoked session is refused on its next lookup (T4)").toBeUndefined();
+      }
+      expect(await store.revokeAllSessions(person.id, keep.id)).toBe(0);
+    });
+
+    it("deletes them all when no session is excepted, and never touches another account's whatever id it is given", async () => {
+      const person = await account();
+      const stranger = await account();
+      const mine = [newSession(person.id), newSession(person.id)];
+      const theirs = newSession(stranger.id);
+      for (const session of [...mine, theirs]) {
+        expect(await store.createSession(session)).toBe(true);
+      }
+      expect(await store.revokeAllSessions(person.id, theirs.id)).toBe(2);
+      expect(await sessionRows(db, person.id)).toEqual([]);
+      expect((await sessionRows(db, stranger.id)).map((row) => row.id)).toEqual([theirs.id]);
+
+      const again = newSession(person.id);
+      expect(await store.createSession(again)).toBe(true);
+      expect(await store.revokeAllSessions(person.id, null)).toBe(1);
+      expect(await sessionRows(db, person.id)).toEqual([]);
+      expect(await sessionRows(db, stranger.id)).toHaveLength(1);
+    });
+
+    it("refuses a null account", async () => {
+      await expect(db.app`SELECT sys_session_revoke_all(NULL, NULL)`).rejects.toMatchObject({ code: "22023" });
     });
   });
 });

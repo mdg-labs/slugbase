@@ -16,4 +16,6 @@ export const systemOperations: readonly string[] = [
   "sys_session_create",
   "sys_session_lookup",
   "sys_session_revoke",
+  "sys_list_sessions",
+  "sys_session_revoke_all",
 ];

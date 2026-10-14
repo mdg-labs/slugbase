@@ -35,4 +35,5 @@ export type {
   LoginCandidate,
   NewSession,
   SessionRecord,
+  SessionSummary,
 } from "./system/auth.ts";

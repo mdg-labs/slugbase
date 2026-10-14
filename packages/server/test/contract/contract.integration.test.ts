@@ -65,21 +65,40 @@ const committed = loadOpenApiDocument();
 
 describe("the walker over the committed document", () => {
   // The committed document declares the sign-in operations, so the walker signs in as a real account and
-  // sends the session cookie it is given where a policy needs a principal.
+  // sends the session cookie it is given where a policy needs a principal. Each such operation gets an
+  // account of its own: the valid request of the sign-out ends the session it is made with, and that of
+  // "sign out everywhere" ends every other session of the account.
   async function sessionHooks(server: Server): Promise<PolicyHooks> {
     await seedAccount(database(), WALKER_ACCOUNT);
-    const response = await server.fetch(
-      new Request(new URL("/api/v1/auth/login", origin), {
-        method: "POST",
-        headers: { origin, "content-type": "application/json" },
-        body: JSON.stringify({ ...WALKER_ACCOUNT, remember: false }),
-      }),
-    );
-    const cookie = /^(__Host-slugbase_session=[A-Za-z0-9_-]{43});/.exec(response.headers.get("set-cookie") ?? "")?.[1];
-    if (response.status !== 200 || cookie === undefined) {
-      throw new Error(`the walker could not sign in: ${String(response.status)}`);
+    const cookies = new Map<string, string>();
+    for (const { operationId, kind } of classifyOperations(committed).operations) {
+      if (kind !== "account-level") {
+        continue;
+      }
+      const account = await seedAccount(database(), { email: `walker-${operationId}@example.test`.toLowerCase() });
+      const response = await server.fetch(
+        new Request(new URL("/api/v1/auth/login", origin), {
+          method: "POST",
+          headers: { origin, "content-type": "application/json" },
+          body: JSON.stringify({ email: account.email, password: account.password, remember: false }),
+        }),
+      );
+      const cookie = /^(__Host-slugbase_session=[A-Za-z0-9_-]{43});/.exec(response.headers.get("set-cookie") ?? "")?.[1];
+      if (response.status !== 200 || cookie === undefined) {
+        throw new Error(`the walker could not sign in: ${String(response.status)}`);
+      }
+      cookies.set(operationId, cookie);
     }
-    return { ...world.hooks, authorized: () => ({ headers: { cookie } }) };
+    return {
+      ...world.hooks,
+      authorized: ({ operationId }) => {
+        const cookie = cookies.get(operationId);
+        if (cookie === undefined) {
+          throw new Error(`the walker holds no session for ${operationId}`);
+        }
+        return { headers: { cookie } };
+      },
+    };
   }
 
   it("calls every operation of openapi.json and finds it as declared", async () => {
@@ -92,8 +111,8 @@ describe("the walker over the committed document", () => {
     expect(report.failures).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each anonymous operation and for the sign-in; the sign-out, which needs a session, also answers 401 without one.
-    expect(report.calls).toBe(operations.length + 1);
+    // One valid request for each anonymous operation and for the sign-in; each of the four operations that need a session also answers 401 without one.
+    expect(report.calls).toBe(operations.length + 4);
   });
 });
 
