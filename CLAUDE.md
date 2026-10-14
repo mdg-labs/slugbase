@@ -126,7 +126,7 @@ and `apps/slugbase` wires it.
 | `rest` — everything else | `packages/` `apps/` | 2.11 | T16 | no |
 
 Sweeps:
-- `sweep-raw-fetch` — files: `git grep -l -e 'fetch(' -e 'node:http' -e 'undici' -- 'packages/**/*.ts'` — any outbound call outside egress (T6).
+- `sweep-raw-fetch` — files: `git grep -l -e 'fetch(' -e 'node:http' -e 'undici' -- 'packages/**/*.ts'` — candidate list for an outbound call outside egress (T6). The authority is the syntax-based check in `tooling/test/boundaries.test.ts`; the grep is not exact. Besides `packages/adapters/src/egress/` and test files it lists `packages/server/src/create-server.ts`, which matches only the in-process `app.fetch(` call and makes no outbound request.
 - `sweep-raw-db` — files: `git grep -l -e 'drizzle(' -e 'postgres(' -- 'packages/**/*.ts'` — DB handles outside `packages/db` (T1).
 - `sweep-html` — files: `git grep -l -e 'dangerouslySetInnerHTML' -e 'innerHTML' -- 'packages/**/*.tsx'` — unsanitised rendering (T14).
 
