@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { savingTheme } from "../support/account-theme.ts";
+import { savingTheme } from "../support/account-preferences.ts";
 import { message, type Locale } from "../support/catalog.ts";
 import { productName } from "../support/product.ts";
 import { expect, test } from "../support/test.ts";
@@ -92,7 +92,10 @@ for (const { locale, browser, title } of LANGUAGES) {
   test.describe(`a signed-in member, ${title}`, () => {
     test.use({ locale: browser });
 
-    test("opens the shell on the home page", async ({ page, app }) => {
+    // The language of a member is the account's, not the browser's, so each journey sets it before the page
+    // loads and holds the account's preferences until it ends.
+    test("opens the shell on the home page", async ({ page, app, account }) => {
+      await account.set({ locale });
       const name = await productName(page);
       await app.visit("/", homeHeading(page, locale, name));
 
@@ -105,12 +108,12 @@ for (const { locale, browser, title } of LANGUAGES) {
       await expect(authenticationCard(page, locale)).toHaveCount(0);
     });
 
-    test("toggles the theme with the keyboard", async ({ page, app, accountTheme }) => {
+    test("toggles the theme with the keyboard", async ({ page, app, account }) => {
       // The test starts from a known theme: the account's light theme is saved before the page loads, so
       // neither what the browser remembers nor how an engine applies media emulation decides it. Each
       // toggle is saved to the account, and the test waits for the save so that the account's previous
       // theme, which comes back when the test ends, is the last thing written.
-      await accountTheme.set("light");
+      await account.set({ theme: "light", locale });
       const name = await productName(page);
       await app.visit("/", homeHeading(page, locale, name));
 
@@ -135,9 +138,9 @@ for (const { locale, browser, title } of LANGUAGES) {
       await app.scan();
     });
 
-    test("shows the 404 page inside the shell for a path that no page owns", async ({ page, app, accountTheme }) => {
+    test("shows the 404 page inside the shell for a path that no page owns", async ({ page, app, account }) => {
       // The toggle below offers the other theme, so the account's theme is the light one while the test runs.
-      await accountTheme.set("light");
+      await account.set({ theme: "light", locale });
       const name = await productName(page);
       await app.visit(MISSING_PATH, page.getByRole("heading", { level: 1, name: message(locale, "errorPage.notFound.title") }));
 

@@ -1,5 +1,5 @@
 import { expect, test as base, type Locator } from "@playwright/test";
-import { THEME_FIXTURE_TIMEOUT_MS, withAccountTheme, type ThemeOfAccount } from "./account-theme.ts";
+import { PREFERENCES_FIXTURE_TIMEOUT_MS, withAccountPreferences, type PreferencesOfAccount } from "./account-preferences.ts";
 import { findViolations, loadAllowlist } from "./axe.ts";
 
 export interface App {
@@ -12,11 +12,11 @@ export interface App {
 export interface Fixtures {
   app: App;
   /**
-   * The theme of the signed-in account, for a journey that depends on one (see account-theme.ts): the journey
-   * holds the account's theme until it ends, and the theme the account had comes back then. A journey of a
-   * visitor without a session has no account and does not use it.
+   * The theme and the locale of the signed-in account, for a journey that reads either (see account-preferences.ts):
+   * the journey holds the account's preferences until it ends, and the ones it set go back to what the account had
+   * then. A journey of a visitor without a session has no account and does not use it.
    */
-  accountTheme: ThemeOfAccount;
+  account: PreferencesOfAccount;
 }
 
 /**
@@ -26,11 +26,11 @@ export interface Fixtures {
  * ends on a page it never scanned (reached by a click, say) fails too.
  */
 export const test = base.extend<Fixtures>({
-  accountTheme: [
+  account: [
     async ({ request }, use) => {
-      await withAccountTheme(request, use);
+      await withAccountPreferences(request, use);
     },
-    { timeout: THEME_FIXTURE_TIMEOUT_MS },
+    { timeout: PREFERENCES_FIXTURE_TIMEOUT_MS },
   ],
   app: async ({ page }, use) => {
     const allowlist = loadAllowlist();

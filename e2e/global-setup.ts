@@ -2,7 +2,7 @@ import { chromium, expect } from "@playwright/test";
 import { randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { clearLock } from "./support/account-theme.ts";
+import { clearLock } from "./support/account-preferences.ts";
 import { message } from "./support/catalog.ts";
 import { appOrigin, STORAGE_STATE } from "./support/environment.ts";
 import { productName } from "./support/product.ts";
