@@ -98,6 +98,13 @@ import type { CheckRule, ContractMarker, Finding } from "./types.ts";
 //     a built-in this check lets a migration call, or like a word it reads as
 //     grammar before a "(", is not read, and a tenant context function stays one
 //     LANGUAGE sql SELECT of built-ins, since every policy relies on it,
+//   - CREATE [OR REPLACE] TRIGGER name BEFORE UPDATE ON table FOR EACH ROW EXECUTE
+//     FUNCTION f(), for an f that an earlier statement of the chain declares without
+//     arguments as RETURNS trigger. A trigger function runs when a row is written, not
+//     when the trigger is created, and a migration writes no row (a data change is
+//     rejected below), so the statement names f without calling it. Any other trigger
+//     (another timing or event, a column list, a WHEN condition, arguments, a
+//     constraint trigger, an event trigger) is not read,
 //   - ALTER FUNCTION f(args) OWNER TO slugbase_system, for a function the same
 //     file creates; any other action or owner is not read,
 //   - REVOKE ALL ON FUNCTION f(args) FROM PUBLIC, for a function the same file
@@ -217,6 +224,8 @@ class Released {
   private functionsKnown = true;
   // The lower-case names of the functions the chain declares, whose body runs when a statement calls one.
   private readonly functionNames = new Set<string>();
+  // The functions the chain declares without arguments as RETURNS trigger, by name and (empty) input argument types.
+  private readonly triggerFunctions = new Set<string>();
   // What the migration being read has done: the functions it declares, and the schemas it has granted CREATE on to
   // slugbase_system and not yet revoked.
   private declared = new Set<string>();
@@ -270,6 +279,11 @@ class Released {
   track(operation: Operation): void {
     if (operation.kind === "declares-function") {
       this.functions.set(functionKey(operation.fn), operation.returns);
+      if (operation.fn.args === "" && operation.returns === "trigger") {
+        this.triggerFunctions.add(functionKey(operation.fn));
+      } else {
+        this.triggerFunctions.delete(functionKey(operation.fn));
+      }
       const name = operation.fn.name.name.toLowerCase();
       if (!TENANT_FUNCTIONS.has(name)) {
         this.functionNames.add(identifierForm(operation.fn.name.name));
@@ -324,7 +338,7 @@ class Released {
    * names it without calling it, and one the reader cannot place is reported by the reader already.
    */
   callProblem(statement: AnalysedStatement): string[] {
-    const names = statement.operations.some((operation) => operation.kind === "declares-function" || operation.kind === "alters-function-owner" || operation.kind === "revokes-function-public" || operation.kind === "grants-function-execute" || operation.kind === "unknown")
+    const names = statement.operations.some((operation) => operation.kind === "declares-function" || operation.kind === "alters-function-owner" || operation.kind === "revokes-function-public" || operation.kind === "grants-function-execute" || operation.kind === "creates-trigger" || operation.kind === "unknown")
       ? new Set<string>()
       : this.functionNames;
     const mention = mentionOfAny(statement.text, names);
@@ -451,6 +465,10 @@ class Released {
         return this.declared.has(functionKey(operation.fn))
           ? []
           : [`revokes privileges on function ${functionLabel(operation.fn)} from PUBLIC, and this migration does not create it: a running replica may lose the access it uses`];
+      case "creates-trigger":
+        return this.triggerFunctions.has(functionKey(operation.fn))
+          ? []
+          : [`creates a trigger on ${describe(operation.table)} that executes ${functionLabel(operation.fn)}, which no earlier statement of the migration chain declares as a trigger function (a function without arguments that RETURNS trigger): only a trigger function the chain declares is run by a row write`];
       case "grants-schema-create":
         this.creatable.add(operation.schema);
         return [];

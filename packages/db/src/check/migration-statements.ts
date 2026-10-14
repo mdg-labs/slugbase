@@ -13,6 +13,8 @@
 // ALTER FUNCTION ... OWNER TO slugbase_system, REVOKE ALL ON FUNCTION ... FROM
 // PUBLIC, GRANT EXECUTE ON FUNCTION ... TO slugbase_app, and GRANT CREATE ON
 // SCHEMA ... TO slugbase_system with the REVOKE CREATE that takes it back.
+// CREATE [OR REPLACE] TRIGGER ... BEFORE UPDATE ... FOR EACH ROW EXECUTE FUNCTION f()
+// is read the same way, by its whole shape.
 
 export interface TableName {
   schema: string;
@@ -55,6 +57,9 @@ export type Operation =
   | { kind: "alters-function-owner"; fn: FunctionIdentity }
   | { kind: "grants-function-execute"; fn: FunctionIdentity }
   | { kind: "revokes-function-public"; fn: FunctionIdentity }
+  // CREATE TRIGGER name BEFORE UPDATE ON table FOR EACH ROW EXECUTE FUNCTION fn(): the one trigger form read, whose function is named
+  // without a call the migration could run. A trigger body runs on a row write, which a migration does not make (D25).
+  | { kind: "creates-trigger"; table: TableName; fn: FunctionIdentity }
   | { kind: "grants-schema-create"; schema: string }
   | { kind: "revokes-schema-create"; schema: string }
   | { kind: "data-change"; statement: string }
@@ -680,6 +685,9 @@ function create(cursor: Cursor): Operation[] {
   if (cursor.take("function")) {
     return createFunction(cursor, replace);
   }
+  if (cursor.take("trigger")) {
+    return createTrigger(cursor);
+  }
   if (replace) {
     return unknown("a CREATE OR REPLACE form this check does not read");
   }
@@ -735,6 +743,30 @@ function create(cursor: Cursor): Operation[] {
         ];
   }
   return unknown("a CREATE form this check does not read");
+}
+
+/**
+ * CREATE [OR REPLACE] TRIGGER name BEFORE UPDATE ON table FOR EACH ROW EXECUTE FUNCTION fn(), read by its
+ * whole shape. The function runs on a row write, never when the trigger is created, and the shape names it
+ * without arguments, a condition or a column list. The rule accepts it only for a trigger function the
+ * chain declares. A trigger of any other timing or event, a constraint trigger and an event trigger (which
+ * fires on DDL, so inside a migration) are not read.
+ */
+function createTrigger(cursor: Cursor): Operation[] {
+  const problem = unknown("CREATE TRIGGER other than `CREATE TRIGGER name BEFORE UPDATE ON table FOR EACH ROW EXECUTE FUNCTION function()`");
+  if (cursor.identifier() === undefined || !cursor.take("before", "update", "on")) {
+    return problem;
+  }
+  const table = cursor.tableName();
+  if (table === undefined || !cursor.take("for", "each", "row", "execute", "function")) {
+    return problem;
+  }
+  const name = cursor.tableName();
+  if (name === undefined || !cursor.isPunct("(") || !cursor.isPunct(")", 1)) {
+    return problem;
+  }
+  cursor.position += 2;
+  return cursor.done() ? [{ kind: "creates-trigger", table, fn: { name, args: "" } }] : problem;
 }
 
 function createIndex(cursor: Cursor): Operation[] {

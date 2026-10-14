@@ -124,6 +124,38 @@ describe("the accounts table", () => {
       FROM unnest(ARRAY['INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) AS p`;
     expect(writes.filter((row) => row.app)).toEqual([]);
   });
+
+  it("attaches the shared updated_at trigger function as a BEFORE UPDATE row trigger", async () => {
+    const triggers = await db.owner<{ name: string; fn: string; timing: string; events: string; row: boolean }[]>`
+      SELECT t.tgname AS name, t.tgfoid::regproc::text AS fn,
+             CASE WHEN t.tgtype & 2 = 2 THEN 'BEFORE' ELSE 'AFTER' END AS timing,
+             CASE WHEN t.tgtype & 16 = 16 THEN 'UPDATE' ELSE 'other' END AS events,
+             t.tgtype & 1 = 1 AS row
+      FROM pg_trigger t
+      WHERE t.tgrelid = 'public.accounts'::regclass AND NOT t.tgisinternal`;
+    expect([...triggers]).toEqual([{ name: "accounts_set_updated_at", fn: "set_updated_at", timing: "BEFORE", events: "UPDATE", row: true }]);
+  });
+
+  it("moves updated_at on an UPDATE, whatever value the statement writes to it", async () => {
+    const { id } = await account();
+    const [before] = await asSystem(db, async (tx) => tx<{ created_at: Date; updated_at: Date }[]>`SELECT created_at, updated_at FROM accounts WHERE id = ${id}`);
+    expect(before).toBeDefined();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const [after] = await asSystem(db, async (tx) => tx<{ created_at: Date; updated_at: Date }[]>`
+      UPDATE accounts SET display_name = 'Renamed', updated_at = '2000-01-01T00:00:00Z' WHERE id = ${id}
+      RETURNING created_at, updated_at`);
+    expect(after?.created_at).toEqual(before?.created_at);
+    expect(after?.updated_at.getTime()).toBeGreaterThan(before?.updated_at.getTime() ?? Number.POSITIVE_INFINITY);
+  });
+
+  it("leaves updated_at alone on a row the statement does not update", async () => {
+    const { id } = await account();
+    const other = await account();
+    const [before] = await asSystem(db, async (tx) => tx<{ updated_at: Date }[]>`SELECT updated_at FROM accounts WHERE id = ${other.id}`);
+    await asSystem(db, async (tx) => tx`UPDATE accounts SET display_name = 'Renamed' WHERE id = ${id}`);
+    const [after] = await asSystem(db, async (tx) => tx<{ updated_at: Date }[]>`SELECT updated_at FROM accounts WHERE id = ${other.id}`);
+    expect(after?.updated_at).toEqual(before?.updated_at);
+  });
 });
 
 describe("the sessions table", () => {
