@@ -2,7 +2,12 @@ import { createHash } from "node:crypto";
 import { createAuthStore, type AuthStore } from "@slugbase/db";
 import type { TestDatabase } from "@slugbase/testing/db";
 import { hashPassword } from "../../src/auth/password.ts";
-import { appUrl } from "../contract/support.ts";
+import { createAccountOnlyTenantResolver } from "../../src/auth/tenant-resolver.ts";
+import { createRateLimitRegistry } from "../../src/config/index.ts";
+import { createServer, type Server } from "../../src/create-server.ts";
+import { appUrl, tenantDatabase } from "../contract/support.ts";
+import { memoryRateLimiter, type MemoryRateLimiter } from "../http/rate-limit-support.ts";
+import { adapters, recordingLogger, serverConfig } from "../support.ts";
 
 // Fixtures for the sign-in tests, written the way the test database allows:
 // `accounts` has forced row-level security with the own-row policy, so the table
@@ -205,4 +210,132 @@ export async function medianLatencyRatio(
   }
   ratios.sort((a, b) => a - b);
   return ratios[Math.floor(ratios.length / 2)] ?? 0;
+}
+
+export const SESSION_COOKIE = "__Host-slugbase_session";
+export const LOGIN = "/api/v1/auth/login";
+
+export interface AuthWorld {
+  readonly server: Server;
+  readonly origin: string;
+  readonly logs: ReturnType<typeof recordingLogger>;
+  /** The limiter the server counts attempts in: its clock only moves when `advance` says so. */
+  readonly limiter: MemoryRateLimiter;
+}
+
+export interface ServeOptions {
+  readonly env?: Record<string, string>;
+  /** Raises the login limits so a test that is not about them signs in freely; the limit suites turn it off to run the shipped defaults. */
+  readonly openLimits?: boolean;
+}
+
+/** The whole chain over the migrated database, as the sign-in suites run it. */
+export function serveAuth(database: TestDatabase, store: AuthStore, { env = {}, openLimits = true }: ServeOptions = {}): AuthWorld {
+  const config = serverConfig({
+    NODE_ENV: "test",
+    DATABASE_URL: appUrl(database),
+    ...(openLimits ? { RATE_LIMIT_LOGIN_IP: "1000/min", RATE_LIMIT_LOGIN_EMAIL: "1000/hour", RATE_LIMIT_MFA_IP: "1000/min", RATE_LIMIT_MFA_ACCOUNT: "1000/hour" } : {}),
+    ...env,
+  });
+  const limiter = memoryRateLimiter(createRateLimitRegistry(config));
+  const logs = recordingLogger();
+  const server = createServer({
+    config,
+    adapters: { ...adapters(config), rateLimit: limiter, tenantResolver: createAccountOnlyTenantResolver() },
+    modules: [],
+    migrations: [],
+    logger: logs,
+    database: tenantDatabase(database),
+    authStore: store,
+  });
+  return { server, origin: config.APP_ORIGIN, logs, limiter };
+}
+
+export interface Attempt {
+  readonly email?: string;
+  readonly password?: string;
+  readonly remember?: boolean;
+  readonly body?: unknown;
+  readonly cookie?: string;
+  readonly forwardedFor?: string;
+  readonly userAgent?: string;
+}
+
+/** A same-origin JSON POST, as the SPA sends one. */
+export function postJson(origin: string, path: string, body: unknown, extra: Pick<Attempt, "cookie" | "forwardedFor" | "userAgent"> = {}): Request {
+  const headers = new Headers({ origin, "content-type": "application/json" });
+  for (const [name, value] of [["cookie", extra.cookie], ["x-forwarded-for", extra.forwardedFor], ["user-agent", extra.userAgent]] as const) {
+    if (value !== undefined) {
+      headers.set(name, value);
+    }
+  }
+  return new Request(new URL(path, origin), { method: "POST", headers, body: JSON.stringify(body) });
+}
+
+export function attemptLogin({ server, origin }: AuthWorld, attempt: Attempt): Promise<Response> {
+  const body = attempt.body ?? { email: attempt.email ?? "", password: attempt.password ?? "", remember: attempt.remember ?? false };
+  return server.fetch(postJson(origin, LOGIN, body, attempt));
+}
+
+export function signInAttempt(world: AuthWorld, account: SeededAccount, extra: Attempt = {}): Promise<Response> {
+  return attemptLogin(world, { email: account.email, password: account.password, ...extra });
+}
+
+/** The value of the session cookie a response sets, or undefined when it sets none. */
+export function issuedToken(response: Response, name = SESSION_COOKIE): string | undefined {
+  return new RegExp(`^${name}=([A-Za-z0-9_-]{43});`).exec(response.headers.get("set-cookie") ?? "")?.[1];
+}
+
+export interface SignedIn {
+  readonly token: string;
+  readonly sessionId: string;
+}
+
+export async function signInAs(world: AuthWorld, database: TestDatabase, account: SeededAccount, extra: Attempt = {}, name = SESSION_COOKIE): Promise<SignedIn> {
+  const response = await signInAttempt(world, account, extra);
+  const token = issuedToken(response, name);
+  if (response.status !== 200 || token === undefined) {
+    throw new Error(`could not sign in: ${String(response.status)}`);
+  }
+  const hash = sha256(Buffer.from(token, "base64url"));
+  const row = (await sessionRows(database, account.id)).find((candidate) => candidate.token_hash.equals(hash));
+  if (row === undefined) {
+    throw new Error("the session row is missing");
+  }
+  return { token, sessionId: row.id };
+}
+
+/** A GET of a route that needs a session, with the cookie of `token` under `name`. */
+export function getWith({ server, origin }: AuthWorld, path: string, token: string | null, name = SESSION_COOKIE): Promise<Response> {
+  return server.fetch(new Request(new URL(path, origin), { headers: token === null ? {} : { cookie: `${name}=${token}` } }));
+}
+
+/** Lets `days` days pass for one session: every instant it recorded moves back, so the database clock reads it that much later. */
+export async function ageSession(database: TestDatabase, sessionId: string, days: number): Promise<void> {
+  await database.owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    await tx`
+      UPDATE sessions
+      SET created_at = created_at - make_interval(days => ${days}),
+          last_seen_at = last_seen_at - make_interval(days => ${days}),
+          expires_at = expires_at - make_interval(days => ${days}),
+          absolute_expires_at = absolute_expires_at - make_interval(days => ${days})
+      WHERE id = ${sessionId}`;
+  });
+}
+
+export async function sessionRow(database: TestDatabase, accountId: string, sessionId: string): Promise<SessionRow> {
+  const row = (await sessionRows(database, accountId)).find((candidate) => candidate.id === sessionId);
+  if (row === undefined) {
+    throw new Error("the session row is missing");
+  }
+  return row;
+}
+
+/** Records a password change at this instant: a session created before it is refused, one created after it is not. */
+export async function markPasswordChangedNow(database: TestDatabase, accountId: string): Promise<void> {
+  await database.owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    await tx`UPDATE accounts SET password_changed_at = clock_timestamp() WHERE id = ${accountId}`;
+  });
 }
