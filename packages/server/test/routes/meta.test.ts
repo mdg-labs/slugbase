@@ -4,7 +4,8 @@ import type { Adapters } from "@slugbase/core";
 import { describe, expect, it } from "vitest";
 import type { BuildInfo } from "../../src/build-info.ts";
 import { createServer } from "../../src/create-server.ts";
-import { adapters, documentFor, fakeDatabase, operation, recordingLogger, serverConfig } from "../support.ts";
+import type { AuthStore } from "@slugbase/db";
+import { adapters, documentFor, fakeAuthStore, fakeDatabase, operation, recordingLogger, serverConfig } from "../support.ts";
 import { directivesOf, expectSecurityHeaders } from "../http/headers-support.ts";
 
 // /api/config, the OpenAPI document and the reference UI through the whole chain.
@@ -12,7 +13,10 @@ import { directivesOf, expectSecurityHeaders } from "../http/headers-support.ts"
 const BUILD: BuildInfo = { name: "SlugBase", version: "1.4.2", commit: "0123abc", builtAt: "2026-10-12T08:00:00Z" };
 const COMMITTED = new URL("../../../contracts/generated/openapi.json", import.meta.url);
 
-function start(env: Record<string, string | undefined> = {}, overrides: { adapters?: Adapters; openApiDocument?: ReturnType<typeof documentFor> } = {}) {
+function start(
+  env: Record<string, string | undefined> = {},
+  overrides: { adapters?: Adapters; openApiDocument?: ReturnType<typeof documentFor>; authStore?: AuthStore } = {},
+) {
   return createServer({
     config: serverConfig(env),
     adapters: overrides.adapters ?? adapters(),
@@ -21,6 +25,7 @@ function start(env: Record<string, string | undefined> = {}, overrides: { adapte
     migrations: [],
     logger: recordingLogger(),
     database: fakeDatabase(),
+    authStore: overrides.authStore ?? fakeAuthStore(),
     buildInfo: BUILD,
   });
 }
@@ -42,7 +47,24 @@ describe("GET /api/config", () => {
       defaultLocale: "en",
       docsBaseUrl: "https://docs.example.org/help",
       features: { mail: false, ai: false },
+      setupRequired: false,
     });
+  });
+
+  it("reports setupRequired as the setup status does: pending only while setup is on and the instance has no account", async () => {
+    const answer = async (env: Record<string, string>, pending: boolean) =>
+      ((await (await get(start(env, { authStore: fakeAuthStore({ setupPending: () => Promise.resolve(pending) }) }), "/api/config")).json()) as { setupRequired: boolean })
+        .setupRequired;
+    expect(await answer({}, true)).toBe(true);
+    expect(await answer({}, false)).toBe(false);
+    expect(await answer({ SETUP_ENABLED: "false" }, true)).toBe(false);
+  });
+
+  it("does not answer when the database cannot say whether setup is pending", async () => {
+    const down = fakeAuthStore({ setupPending: () => Promise.reject(new Error("database down")) });
+    const response = await get(start({}, { authStore: down }), "/api/config");
+    expect(response.status).toBe(500);
+    expect(response.headers.get("cache-control")).toBe("no-store");
   });
 
   it("reports whether a port is configured, per port", async () => {

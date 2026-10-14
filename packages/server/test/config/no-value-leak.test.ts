@@ -29,6 +29,8 @@ const REFUSED: readonly { key: string; value: string }[] = [
   { key: "LOG_LEVEL", value: "level-qx52" },
   { key: "API_DOCS_ENABLED", value: "maybe-qx53" },
   { key: "MIGRATE_ON_START", value: "maybe-qx54" },
+  { key: "SETUP_ENABLED", value: "maybe-qx90" },
+  { key: "SETUP_TOKEN_REQUIRED", value: "maybe-qx91" },
   { key: "SLUGBASE_ALLOW_OWNER_CONNECTION", value: "maybe-qx55" },
   { key: "DOCS_BASE_URL", value: "ftp://qx56.example.com/docs" },
   { key: "NODE_ENV", value: "prod-qx57" },

@@ -274,6 +274,18 @@ export interface MailPort extends Port {
 export function normalizeEmail(raw: string): string;
 
 // @public
+export const PASSWORD_MAX_LENGTH = 256;
+
+// @public
+export const PASSWORD_MIN_LENGTH = 12;
+
+// @public
+export type PasswordLengthProblem = "too_short" | "too_long";
+
+// @public
+export function passwordLengthProblem(password: string): PasswordLengthProblem | undefined;
+
+// @public
 export interface Port {
     readonly available: boolean;
 }

@@ -135,7 +135,7 @@ Every error is an RFC 9457 problem document:
 | 401 | `unauthenticated` | No valid session or token; also the one generic answer to sign-in with an unknown email, a wrong password or a disabled account, and to a revoked, expired or disabled-account token |
 | 401 | `mfa_required` | Session exists at `partial` level; complete `POST /auth/mfa/verify` |
 | 401 | `reauth_required` | Sensitive operation needs a fresh re-authentication (§4.4) |
-| 403 | `forbidden` | Authenticated, can see the resource, may not do this; also a bearer request to an operation that is not token-callable, and an instance-admin operation without MFA enrolled |
+| 403 | `forbidden` | Authenticated, can see the resource, may not do this; also a bearer request to an operation that is not token-callable, an instance-admin operation without MFA enrolled, and `POST /setup` with a missing or wrong setup token |
 | 403 | `registration_refused` | A deployment's registration policy refused this sign-up (doc 01 §13); the response is the same for every refusal reason |
 | 403 | `cross_site_request` | Origin / Fetch-Metadata / content-type check failed (§5) |
 | 403 | `token_scope` | API token has `read` scope on a write operation |
@@ -219,7 +219,7 @@ Destructive or credential-changing operations require `reauthAt` within the last
 | Password reset | `POST /auth/password/forgot` → generic `202` → link `/reset-password#token=…` → `POST /auth/password/reset` (revokes every session of the account and creates a fresh one, `partial` when the account has MFA) |
 | Email change | `POST /me/email` → link to the new address `…#token=…` → `POST /me/email/confirm`; the old address gets a notice whose "this wasn't me" link calls `POST /me/email/cancel` (cancels the change and revokes every session) |
 | Invitation | `POST /invitations/inspect` → `POST /invitations/accept`: as the signed-in invitee, with registration fields for a new account, or through a provider (`intent=invite`) |
-| First run (CE) | `GET /setup/status` → `POST /setup` (single-shot, advisory-locked, doc 05 §3.3; a one-time setup token printed to the server log when `SETUP_TOKEN_REQUIRED`) |
+| First run (CE) | `GET /setup/status` → `POST /setup` (single-shot, advisory-locked, doc 05 §3.3; a setup token printed to the server log at each start while there is no account, when `SETUP_TOKEN_REQUIRED`) |
 
 ---
 
@@ -341,7 +341,7 @@ Unauthenticated, cacheable for 60 s (`Cache-Control: public, max-age=60`; the pe
 }
 ```
 
-The document starts small and grows additively (§2.2): `apiVersion`, `origin`, `product`, `locales`, `defaultLocale`, `docsBaseUrl` (the configured documentation base URL, default `https://slugbase.app/docs`, from `DOCS_BASE_URL`; the help links of doc 03 are built on it) and `features.mail` / `features.ai` exist from the first server; `signIn`, `setupRequired`, `instance`, `legal`, `features.billing` and `features.analyticsConsentRequired` are added by the features that can populate them (doc 01 §11). `signIn.oidc` lists only enabled providers that answered discovery, never a secret or a provider URL. `instance.displayName` and `instance.signInNotice` are the instance settings of §10.10; the notice is plain text and the sign-in page renders it as text only.
+The document starts small and grows additively (§2.2): `apiVersion`, `origin`, `product`, `locales`, `defaultLocale`, `docsBaseUrl` (the configured documentation base URL, default `https://slugbase.app/docs`, from `DOCS_BASE_URL`; the help links of doc 03 are built on it) and `features.mail` / `features.ai` exist from the first server; `setupRequired` is the answer of `GET /setup/status` (the deployment has setup on and the instance has no account and never completed setup) and is present on every response of the Community server; `signIn`, `instance`, `legal`, `features.billing` and `features.analyticsConsentRequired` are added by the features that can populate them (doc 01 §11). `signIn.oidc` lists only enabled providers that answered discovery, never a secret or a provider URL. `instance.displayName` and `instance.signInNotice` are the instance settings of §10.10; the notice is plain text and the sign-in page renders it as text only.
 
 `features` reports **whether a port is configured**, never entitlements (those need a workspace — `GET /entitlements`). `billing: true` only means a non-no-op billing adapter is composed; the SPA uses it to decide whether to load the Cloud extension routes' data, not to branch product behaviour (D4).
 
@@ -405,7 +405,7 @@ Unauthenticated, `Content-Type: application/opensearchdescription+xml`, built on
 | GET | `/auth/oidc/{provider}/start` | Begin OIDC (302); `intent=login\|link\|reauth\|invite` (§4.5) | anon | login |
 | GET | `/auth/oidc/{provider}/callback` | Finish OIDC (302) | anon | login |
 | GET | `/setup/status` | `{ setupRequired }` — whether first-run setup is pending (CE) | anon | public |
-| POST | `/setup` | `{ setupToken?, displayName, email, password, workspaceName }` — create first account (instance admin + owner) and first workspace, sign in (`201`); `403 setup_completed` once any account exists, `403 forbidden` for a wrong setup token | anon | setup |
+| POST | `/setup` | `{ setupToken?, displayName, email, password, workspaceName }` — create first account (instance admin + owner) and first workspace, sign in (`201 { workspaceId }`, the new workspace active); `422 weak_password` outside 12–256 characters; `403 setup_completed` once any account exists or with `SETUP_ENABLED=false`, `403 forbidden` for a missing or wrong setup token | anon | setup |
 
 ### 10.3 me (account)
 

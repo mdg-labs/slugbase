@@ -45,6 +45,7 @@ export const ApiConfigSchema: z.ZodObject<{
         mail: z.ZodBoolean;
         ai: z.ZodBoolean;
     }, z.core.$strict>;
+    setupRequired: z.ZodOptional<z.ZodBoolean>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -63,6 +64,41 @@ export const AUTH_POLICIES: readonly ["anonymous", "partial", "account", "member
 
 // @public (undocumented)
 export type AuthPolicy = (typeof AUTH_POLICIES)[number];
+
+// @public (undocumented)
+export const completeSetup: {
+    readonly method: "post";
+    readonly path: "/api/v1/setup";
+    readonly operationId: "completeSetup";
+    readonly tag: "setup";
+    readonly summary: "Create the first account, instance admin and owner of the first workspace, and sign it in";
+    readonly auth: "anonymous";
+    readonly rate: "setup";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            setupToken: z.ZodOptional<z.ZodString>;
+            displayName: z.ZodString;
+            email: z.ZodEmail;
+            password: z.ZodString;
+            workspaceName: z.ZodString;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 201: JsonResponse<z.ZodObject<{
+        workspaceId: z.ZodUUID;
+        }, z.core.$strict>, {
+        "Set-Cookie": {
+        description: string;
+        schema: z.ZodString;
+        };
+        }>;
+        readonly 400: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: ProblemResponse;
+        readonly 503: ProblemResponse;
+    };
+};
 
 // @public (undocumented)
 export interface ComponentTypes {
@@ -104,6 +140,7 @@ export interface ComponentTypes {
                 name: string;
                 version: string;
             };
+            setupRequired?: boolean;
         };
         HealthStatus: {
             status: "ok";
@@ -172,6 +209,19 @@ export interface ComponentTypes {
             items: ComponentTypes["schemas"]["Session"][];
             nextCursor: string | null;
         };
+        SetupRequest: {
+            displayName: string;
+            email: string;
+            password: string;
+            setupToken?: string;
+            workspaceName: string;
+        };
+        SetupResult: {
+            workspaceId: string;
+        };
+        SetupStatus: {
+            setupRequired: boolean;
+        };
         VersionInfo: {
             builtAt: string;
             commit: string;
@@ -219,6 +269,7 @@ export const getApiConfig: {
         mail: z.ZodBoolean;
         ai: z.ZodBoolean;
         }, z.core.$strict>;
+        setupRequired: z.ZodOptional<z.ZodBoolean>;
         }, z.core.$strict>, {
         "Cache-Control": {
         description: string;
@@ -349,6 +400,25 @@ export const getReady: {
         applied: z.ZodNullable<z.ZodNumber>;
         }, z.core.$strict>;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+    };
+};
+
+// @public (undocumented)
+export const getSetupStatus: {
+    readonly method: "get";
+    readonly path: "/api/v1/setup/status";
+    readonly operationId: "getSetupStatus";
+    readonly tag: "setup";
+    readonly summary: "Whether first-run setup is pending";
+    readonly auth: "anonymous";
+    readonly rate: "public";
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        setupRequired: z.ZodBoolean;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 429: ProblemResponse;
+        readonly 503: ProblemResponse;
     };
 };
 
@@ -610,6 +680,71 @@ export const operations: readonly OperationDefinition[];
 // @public (undocumented)
 export interface OperationTypes {
     // (undocumented)
+    completeSetup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["SetupRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["SetupResult"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     getApiConfig: {
         parameters: {
             query?: never;
@@ -778,6 +913,50 @@ export interface OperationTypes {
                 };
                 content: {
                     "application/json": ComponentTypes["schemas"]["ReadyStatus"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    getSetupStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["SetupStatus"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
                 };
             };
         };
@@ -1275,6 +1454,40 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["completeSetup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/setup/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["getSetupStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/health": {
         parameters: {
             query?: never;
@@ -1699,6 +1912,25 @@ export const SessionSchema: z.ZodObject<{
     userAgentFamily: z.ZodNullable<z.ZodString>;
     ipPrefix: z.ZodNullable<z.ZodString>;
     current: z.ZodBoolean;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const SetupRequestSchema: z.ZodObject<{
+    setupToken: z.ZodOptional<z.ZodString>;
+    displayName: z.ZodString;
+    email: z.ZodEmail;
+    password: z.ZodString;
+    workspaceName: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const SetupResultSchema: z.ZodObject<{
+    workspaceId: z.ZodUUID;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const SetupStatusSchema: z.ZodObject<{
+    setupRequired: z.ZodBoolean;
 }, z.core.$strict>;
 
 // @public

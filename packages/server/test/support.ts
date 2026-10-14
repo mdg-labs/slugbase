@@ -1,5 +1,5 @@
 import { unconfigured, type Adapters } from "@slugbase/core";
-import type { Database } from "@slugbase/db";
+import type { AuthStore, Database } from "@slugbase/db";
 import { defineOperation, jsonResponse, problemResponse, type OperationDefinition } from "@slugbase/contracts";
 import { z } from "zod";
 import type { ChainDependencies } from "../src/http/chain.ts";
@@ -62,6 +62,28 @@ export function fakeDatabase(): FakeDatabase {
       closed.count += 1;
       return Promise.resolve();
     },
+  };
+}
+
+/**
+ * An auth store for a test with no database: every operation but the ones given rejects, and `setupPending`
+ * answers false (setup is done), which is all `GET /api/config` asks of it.
+ */
+export function fakeAuthStore(overrides: Partial<AuthStore> = {}): AuthStore {
+  const unexpected = (name: string) => () => Promise.reject(new Error(`the fake auth store was asked for ${name}`));
+  return {
+    emailKey: unexpected("emailKey"),
+    loginLookup: unexpected("loginLookup"),
+    createSession: unexpected("createSession"),
+    lookupSession: unexpected("lookupSession"),
+    revokeSession: unexpected("revokeSession"),
+    listSessions: unexpected("listSessions"),
+    revokeAllSessions: unexpected("revokeAllSessions"),
+    setupPending: () => Promise.resolve(false),
+    setSetupToken: unexpected("setSetupToken"),
+    completeSetup: unexpected("completeSetup"),
+    close: () => Promise.resolve(),
+    ...overrides,
   };
 }
 

@@ -1,4 +1,5 @@
 import postgres from "postgres";
+import { bindSetupStore, type SetupStore } from "./setup.ts";
 
 // The wrappers of the system operations behind sign-in and the session cookie
 // (doc 05 section 3.3): the one way product code reaches `sessions`, which
@@ -50,7 +51,7 @@ export interface SessionSummary {
   readonly userAgent: string | null;
 }
 
-export interface AuthStore {
+export interface AuthStore extends SetupStore {
   /**
    * The address folded the way the database compares emails: two addresses that name one account
    * (`loginLookup` finds the same row) fold to one string, and no two others do. For what counts
@@ -144,6 +145,8 @@ function assertTokenHash(hash: Buffer, name: string): void {
 /** Binds the auth store to a connection pool that connects as the application role. */
 export function bindAuthStore(client: postgres.Sql): Omit<AuthStore, "close"> {
   return {
+    ...bindSetupStore(client),
+
     async emailKey(email) {
       // The `email` column is citext, which compares lower(a) = lower(b) in the database's default
       // collation; this is that lower(), which JavaScript's toLowerCase() is not (U+0130).

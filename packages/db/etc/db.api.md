@@ -43,7 +43,7 @@ export interface AccountProfileRepository {
 export function accountProfileRepository(tx: TenantTx): AccountProfileRepository;
 
 // @public (undocumented)
-export interface AuthStore {
+export interface AuthStore extends SetupStore {
     close(): Promise<void>;
     createSession(session: NewSession): Promise<boolean>;
     emailKey(email: string): Promise<string>;
@@ -62,6 +62,28 @@ export interface AuthStoreOptions {
 
 // @public
 export const CE_CHAIN: MigrationChain;
+
+// @public (undocumented)
+export interface CompleteSetup {
+    readonly accountId: string;
+    // (undocumented)
+    readonly displayName: string;
+    readonly email: string;
+    readonly ipPrefix: string | null;
+    // (undocumented)
+    readonly locale: string;
+    readonly passwordHash: string;
+    // (undocumented)
+    readonly sessionId: string;
+    readonly sessionTokenHash: Buffer;
+    readonly tokenHash: Buffer | null;
+    readonly tokenRequired: boolean;
+    readonly userAgent: string | null;
+    // (undocumented)
+    readonly workspaceId: string;
+    // (undocumented)
+    readonly workspaceName: string;
+}
 
 // @public (undocumented)
 export interface ConnectionRole {
@@ -330,6 +352,22 @@ export interface SessionSummary {
     // (undocumented)
     readonly lastSeenAt: Date;
     readonly userAgent: string | null;
+}
+
+// @public
+export type SetupOutcome =
+/** The account, its workspace and its session were created. */
+"completed"
+/** The instance has an account or has completed setup; nothing was written. */
+| "setup_completed"
+/** A setup token was required and the one presented was not the stored one; nothing was written. */
+| "forbidden";
+
+// @public (undocumented)
+export interface SetupStore {
+    completeSetup(setup: CompleteSetup): Promise<SetupOutcome>;
+    setSetupToken(tokenHash: Buffer): Promise<boolean>;
+    setupPending(): Promise<boolean>;
 }
 
 // @public

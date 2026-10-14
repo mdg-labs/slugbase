@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { PortUnavailable, type RateLimitPort } from "@slugbase/core";
-import type { Database } from "@slugbase/db";
+import type { AuthStore, Database } from "@slugbase/db";
 import { createServer, createWorker, loadConfig, type Logger, type ServerModule } from "@slugbase/server";
 import { describe, expect, it } from "vitest";
 import { composeAdapters } from "../src/main.ts";
@@ -17,6 +17,22 @@ const logger: Logger = {
 
 const database: Database = {
   withTenant: (_context, fn) => fn({ accountId: "", workspaceId: undefined, requestId: "" }),
+  close: () => Promise.resolve(),
+};
+
+// GET /api/config asks the auth store whether first-run setup is pending; this test has no database, and setup is done.
+const unexpected = (): Promise<never> => Promise.reject(new Error("this test has no database"));
+const authStore: AuthStore = {
+  emailKey: unexpected,
+  loginLookup: unexpected,
+  createSession: unexpected,
+  lookupSession: unexpected,
+  revokeSession: unexpected,
+  listSessions: unexpected,
+  revokeAllSessions: unexpected,
+  setupPending: () => Promise.resolve(false),
+  setSetupToken: unexpected,
+  completeSetup: unexpected,
   close: () => Promise.resolve(),
 };
 
@@ -59,6 +75,7 @@ function serverWith(extra: Record<string, string>) {
     migrations: [],
     logger,
     database,
+    authStore,
     buildInfo: { name: "SlugBase", version: "1.0.0", commit: "0123abc", builtAt: "2026-10-12T08:00:00Z" },
   });
 }
@@ -129,7 +146,7 @@ describe("mail in the composition root", () => {
       },
     };
     const serverConfig = loadConfig("server", { ...environment, ...smtp }).config;
-    createServer({ config: serverConfig, adapters: composeAdapters(serverConfig, logger), modules: [probe], migrations: [], logger, database });
+    createServer({ config: serverConfig, adapters: composeAdapters(serverConfig, logger), modules: [probe], migrations: [], logger, database, authStore });
     const workerConfig = loadConfig("worker", environment).config;
     createWorker({ config: workerConfig, adapters: composeAdapters(workerConfig, logger), modules: [probe], logger });
     expect(seen).toEqual([true, false]);

@@ -23,4 +23,10 @@ export const FIXTURES: ContractFixtures = {
   // The walker has one session, which every call of the walk needs; a revocation that succeeds is covered by the session route tests.
   revokeSession: { path: { id: UNKNOWN_SESSION_ID }, status: 404 },
   revokeSessions: {},
+  getSetupStatus: {},
+  // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
+  completeSetup: {
+    body: { displayName: "Walker", email: "setup-walker@example.test", password: "a password for the setup walker", workspaceName: "Walker's workspace" },
+    status: 403,
+  },
 };

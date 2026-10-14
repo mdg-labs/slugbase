@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { unconfigured, type RateLimitPort } from "@slugbase/core";
-import type { Database } from "@slugbase/db";
+import type { AuthStore, Database } from "@slugbase/db";
 import { createServer, loadConfig, type Logger } from "@slugbase/server";
 
 export const PRODUCT_NAME = "SlugBase Test Build";
@@ -9,6 +9,22 @@ const logger: Logger = { info: () => undefined, warn: () => undefined, error: ()
 
 const database: Database = {
   withTenant: (_context, fn) => fn({ accountId: "", workspaceId: undefined, requestId: "" }),
+  close: () => Promise.resolve(),
+};
+
+// GET /api/config asks the auth store whether first-run setup is pending; this test has no database, and setup is done.
+const unexpected = (): Promise<never> => Promise.reject(new Error("this test has no database"));
+const authStore: AuthStore = {
+  emailKey: unexpected,
+  loginLookup: unexpected,
+  createSession: unexpected,
+  lookupSession: unexpected,
+  revokeSession: unexpected,
+  listSessions: unexpected,
+  revokeAllSessions: unexpected,
+  setupPending: () => Promise.resolve(false),
+  setSetupToken: unexpected,
+  completeSetup: unexpected,
   close: () => Promise.resolve(),
 };
 
@@ -40,6 +56,7 @@ export function composedServer(webRoot?: string) {
     migrations: [],
     logger,
     database,
+    authStore,
     buildInfo: { name: PRODUCT_NAME, version: "1.2.3", commit: "test", builtAt: "2026-01-01T00:00:00Z" },
     ...(webRoot === undefined ? {} : { webRoot }),
   });

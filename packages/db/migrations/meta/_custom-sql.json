@@ -1,4 +1,4 @@
 {
-  "sha256": "23f8961494cf160aeb0ca0adb6bd7e803437f55069907199a03a9ab5a1f96400",
-  "migration": "20261014134349_add_retention_purge"
+  "sha256": "e4b08eb251b67e0a3dbc9a6467ce68f61e450c7fe0adcf48225615947a222a72",
+  "migration": "20261014164223_add_first_run_setup"
 }

@@ -44,3 +44,4 @@ export type {
   SessionRecord,
   SessionSummary,
 } from "./system/auth.ts";
+export type { CompleteSetup, SetupOutcome, SetupStore } from "./system/setup.ts";

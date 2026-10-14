@@ -132,6 +132,8 @@ services:
       PORT:
       TRUSTED_PROXY_HOPS:
       API_DOCS_ENABLED:
+      SETUP_ENABLED:
+      SETUP_TOKEN_REQUIRED:
       DOCS_BASE_URL:
       MIGRATE_ON_START:
     # Published on the loopback address unless SLUGBASE_BIND says otherwise; the

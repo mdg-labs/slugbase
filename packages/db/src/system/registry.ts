@@ -21,4 +21,9 @@ export const systemOperations: readonly string[] = [
   "app_member_workspace_ids",
   "sys_account_has_password",
   "sys_retention_purge",
+  "sys_create_account",
+  "sys_create_workspace",
+  "sys_setup_status",
+  "sys_setup_token_set",
+  "sys_complete_setup",
 ];
