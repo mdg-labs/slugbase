@@ -170,3 +170,39 @@ export async function workspaceChecksum(database: TestDatabase, workspaceId: str
   }
   return digest;
 }
+
+/**
+ * How many times longer `probe` takes than `reference`, as the median over
+ * `rounds` of the per-round ratio. Each round times both back to back, and the
+ * order alternates, so a burst of load on a shared runner lands on both sides of
+ * a round and a single slow round moves one ratio of the many, not the median.
+ * Both run once first, unmeasured, to warm caches and lazily made state.
+ */
+export async function medianLatencyRatio(
+  reference: () => Promise<unknown>,
+  probe: () => Promise<unknown>,
+  rounds = 21,
+): Promise<number> {
+  const timed = async (run: () => Promise<unknown>): Promise<number> => {
+    const started = performance.now();
+    await run();
+    return performance.now() - started;
+  };
+  await reference();
+  await probe();
+  const ratios: number[] = [];
+  for (let round = 0; round < rounds; round += 1) {
+    let referenceTime: number;
+    let probeTime: number;
+    if (round % 2 === 0) {
+      referenceTime = await timed(reference);
+      probeTime = await timed(probe);
+    } else {
+      probeTime = await timed(probe);
+      referenceTime = await timed(reference);
+    }
+    ratios.push(probeTime / referenceTime);
+  }
+  ratios.sort((a, b) => a - b);
+  return ratios[Math.floor(ratios.length / 2)] ?? 0;
+}
