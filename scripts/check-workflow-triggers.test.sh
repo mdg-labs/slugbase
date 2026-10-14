@@ -198,6 +198,74 @@ put "$tree" .github/workflows/cla.yml \
 check "$tree"
 expect_hit "an action pinned to a tag fails" "cla.yml"
 
+tree="$(new_tree flow-pinned)"
+put "$tree" .github/workflows/cla.yml \
+  'on:' \
+  '  pull_request_target:' \
+  'jobs:' \
+  '  cla:' \
+  '    steps:' \
+  '      - { name: CLA, uses: contributor-assistant/github-action@ca4a40a7d1004f18d9960b404b97e5f30a505a08 }' \
+  '      - {"uses": "contributor-assistant/github-action@ca4a40a7d1004f18d9960b404b97e5f30a505a08", with: {}}'
+check "$tree"
+expect_pass "pinned actions in flow mappings, quoted or not, pass"
+
+tree="$(new_tree flow-unpinned)"
+put "$tree" .github/workflows/cla.yml \
+  'on:' \
+  '  pull_request_target:' \
+  'jobs:' \
+  '  cla:' \
+  '    steps:' \
+  '      - { uses: contributor-assistant/github-action@v2.6.1 }'
+check "$tree"
+expect_hit "an action pinned to a tag inside a flow mapping fails" "github-action@v2.6.1"
+
+tree="$(new_tree flow-quoted-key)"
+put "$tree" .github/workflows/cla.yml \
+  'on:' \
+  '  pull_request_target:' \
+  'jobs:' \
+  '  cla:' \
+  '    steps:' \
+  "      - \"uses\": 'contributor-assistant/github-action@v2.6.1'"
+check "$tree"
+expect_hit "an unpinned action under a quoted uses key fails" "github-action@v2.6.1"
+
+tree="$(new_tree flow-same-line)"
+put "$tree" .github/workflows/cla.yml \
+  'on:' \
+  '  pull_request_target:' \
+  'jobs:' \
+  '  cla:' \
+  '    steps: [{ uses: contributor-assistant/github-action@ca4a40a7d1004f18d9960b404b97e5f30a505a08 }, { uses: octo/action@v1 }]'
+check "$tree"
+expect_hit "an unpinned action beside a pinned one on the same line fails" "octo/action@v1"
+
+tree="$(new_tree uses-next-line)"
+put "$tree" .github/workflows/cla.yml \
+  'on:' \
+  '  pull_request_target:' \
+  'jobs:' \
+  '  cla:' \
+  '    steps:' \
+  '      - uses:' \
+  '          octo/action@v1'
+check "$tree"
+expect_hit "a uses value on the next line fails closed" "cla.yml"
+
+tree="$(new_tree flow-run)"
+put "$tree" .github/workflows/cla.yml \
+  'on:' \
+  '  pull_request_target:' \
+  'jobs:' \
+  '  cla:' \
+  '    steps:' \
+  "      - uses: $pinned" \
+  '      - { name: fetch, run: git fetch origin pull/1/head }'
+check "$tree"
+expect_hit "a run step inside a flow mapping fails" "run: step"
+
 tree="$(new_tree secret)"
 put "$tree" .github/workflows/cla.yml \
   'on:' \

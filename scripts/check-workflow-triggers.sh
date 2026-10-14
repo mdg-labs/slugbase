@@ -7,8 +7,10 @@
 #     have no `run:` step, must pin every `uses:` to a full commit SHA, and must
 #     read no secret other than the workflow token.
 # Full-line comments are skipped; any other mention of the event name, a trailing
-# comment included, counts as a use. Any error inside the check (a missing
-# folder, a grep failure) fails it as well.
+# comment included, counts as a use. A `run` or `uses` key counts in block and
+# flow form, quoted or not, and each `uses` value is checked on its own, so one
+# pinned action cannot vouch for another on the same line. Any error inside the
+# check (a missing folder, a grep failure) fails it as well.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -30,6 +32,11 @@ if ((${#files[@]} == 0)); then
 fi
 
 status=0
+
+# A key at the start of a line, after a list dash, or inside a flow mapping
+# (`- { uses: ... }`), optionally quoted.
+key_start='(^|[[:space:]{,])["'\'']?'
+key_end='["'\'']?[[:space:]]*:'
 
 problem() {
   printf 'workflow-triggers: %s: %s\n' "$1" "$2" >&2
@@ -79,14 +86,17 @@ for file in "${files[@]}"; do
   if has_line '(^|[^[:alnum:]_-])actions/checkout' <<<"$body"; then
     problem "$file" "uses pull_request_target and checks out code (actions/checkout); a pull_request_target workflow checks out nothing (doc 10 T16)"
   fi
-  if has_line '^[[:space:]]*(-[[:space:]]+)?run[[:space:]]*:' <<<"$body"; then
+  if has_line "${key_start}run${key_end}" <<<"$body"; then
     problem "$file" "uses pull_request_target and has a run: step, which could fetch or execute pull request code (doc 10 T16)"
   fi
-  while IFS= read -r line; do
-    if ! has_line '@[0-9a-f]{40}([[:space:]]|["'\'']|$)' <<<"$line"; then
-      problem "$file" "uses pull_request_target and its action is not pinned to a full commit SHA: ${line}"
+  # Each `uses` value up to a space, comma, brace or quote; a value on the next
+  # line, a block scalar or an alias reads as empty or unpinned and fails.
+  while IFS= read -r ref; do
+    ref="$(sed -E "s/^.*uses${key_end}[[:space:]]*[\"']?//" <<<"$ref")"
+    if [[ ! "$ref" =~ @[0-9a-f]{40}$ ]]; then
+      problem "$file" "uses pull_request_target and its action is not pinned to a full commit SHA: uses: ${ref}"
     fi
-  done < <(grep -E '^[[:space:]]*(-[[:space:]]+)?uses[[:space:]]*:' <<<"$body" || [[ $? -eq 1 ]])
+  done < <(grep -oE "${key_start}uses${key_end}[[:space:]]*[\"']?[^[:space:],}\"']*" <<<"$body" || [[ $? -eq 1 ]])
   if has_line "secrets[[:space:]]*:[[:space:]]*inherit" <<<"$body"; then
     problem "$file" "uses pull_request_target and passes every secret on (secrets: inherit)"
   fi
