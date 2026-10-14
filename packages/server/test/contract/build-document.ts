@@ -67,6 +67,7 @@ function entryOf(operation: OperationDefinition): Record<string, unknown> {
     ...(operation.scope === undefined ? {} : { "x-slugbase-scope": operation.scope }),
     ...(operation.entitlement === undefined ? {} : { "x-slugbase-entitlement": operation.entitlement }),
     ...(operation.audience === undefined ? {} : { "x-slugbase-audience": operation.audience }),
+    ...(operation.reauth === true ? { "x-slugbase-reauth": true } : {}),
     ...(parameters.length === 0 ? {} : { parameters }),
     ...(operation.request?.body === undefined
       ? {}

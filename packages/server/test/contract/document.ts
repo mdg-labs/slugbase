@@ -19,6 +19,8 @@ export interface DocumentedOperation {
   readonly auth: string;
   readonly scope?: string;
   readonly entitlement?: string;
+  /** Present, and true, when the operation declares that it needs re-authentication. */
+  readonly reauth?: true;
   /** The operation object of the document. */
   readonly entry: Readonly<Record<string, unknown>>;
 }
@@ -68,6 +70,7 @@ export function readOperations(document: unknown): { operations: DocumentedOpera
         scope: entry["x-slugbase-scope"],
         entitlement: entry["x-slugbase-entitlement"],
         audience: entry["x-slugbase-audience"],
+        reauth: entry["x-slugbase-reauth"],
       };
       const problems = [
         includes(AUTH_POLICIES, policy.auth) ? undefined : `x-slugbase-auth is absent or not one of ${AUTH_POLICIES.join(", ")}`,
@@ -77,6 +80,7 @@ export function readOperations(document: unknown): { operations: DocumentedOpera
           ? undefined
           : "x-slugbase-entitlement is not a non-empty string",
         policy.audience === undefined || includes(AUDIENCES, policy.audience) ? undefined : "x-slugbase-audience is not a known audience",
+        policy.reauth === undefined || typeof policy.reauth === "boolean" ? undefined : "x-slugbase-reauth is not a boolean",
       ].filter((problem) => problem !== undefined);
       if (problems.length > 0 || !includes(AUTH_POLICIES, policy.auth)) {
         failures.push({ subject: `${entry["operationId"]} (${subject})`, kind: "policy_missing", detail: problems.join("; ") });
@@ -89,6 +93,7 @@ export function readOperations(document: unknown): { operations: DocumentedOpera
         auth: policy.auth,
         ...(typeof policy.scope === "string" ? { scope: policy.scope } : {}),
         ...(typeof policy.entitlement === "string" ? { entitlement: policy.entitlement } : {}),
+        ...(policy.reauth === true ? { reauth: true as const } : {}),
         entry,
       });
     }
