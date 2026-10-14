@@ -1,5 +1,6 @@
 import { findViolations, parseAllowlist, type AllowlistEntry } from "../support/axe.ts";
-import { expect, test } from "@playwright/test";
+import { message } from "../support/catalog.ts";
+import { expect, test } from "../support/test.ts";
 
 // The accessibility check of the journeys (doc 08 section 5.2) must fail on a
 // violation and spare only what the reviewed allowlist names. These cases run on
@@ -37,6 +38,22 @@ test.describe("the axe check", () => {
     await page.setContent('<!doctype html><html lang="en"><head><title>Page</title></head><body><main><h1>Title</h1></main></body></html>');
     expect(await findViolations(page, [])).toEqual([]);
   });
+});
+
+// The journeys of a signed-in member (the shell in both themes, the theme toggle) need an account, which
+// the e2e stack cannot create before first-run setup (#84) exists; they follow in #450.
+test.describe("the sign-in page", () => {
+  for (const scheme of ["light", "dark"] as const) {
+    test(`has no accessibility violations in the ${scheme} theme`, async ({ page, app }) => {
+      // The theme is the member's stored choice (the key of ThemeProvider in packages/ui), set before the
+      // page loads; the system preference would leave the result to how each engine applies media emulation.
+      await page.addInitScript((theme) => {
+        window.localStorage.setItem("slugbase-theme", theme);
+      }, scheme);
+      await app.visit("/login", page.getByRole("region", { name: message("en", "login.title") }));
+      await expect(page.locator("html")).toHaveClass(new RegExp(`\\b${scheme}\\b`));
+    });
+  }
 });
 
 test.describe("the allowlist file", () => {
