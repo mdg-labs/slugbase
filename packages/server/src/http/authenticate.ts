@@ -12,6 +12,16 @@ import { ProblemError } from "./problem.ts";
 export interface SessionPrincipal extends Extract<TenantPrincipal, { readonly kind: "session" }> {
   /** The account is a CE instance admin (doc 04 section 10.10). */
   readonly instanceAdmin: boolean;
+  /**
+   * The password was verified and the second factor is still pending (a
+   * `partial` session, doc 04 section 4.3). Absent on a completed session.
+   */
+  readonly mfaPending?: boolean;
+  /**
+   * When the session last re-authenticated (doc 04 section 4.4). Absent when it
+   * never has, which the authorization stage treats as stale.
+   */
+  readonly reauthAt?: Date;
 }
 
 /** An API token, acting in the one workspace it is bound to (doc 04 section 4.2). */

@@ -35,7 +35,7 @@ export type Audience = (typeof AUDIENCES)[number];
 export const AUDIENCES: readonly ["machine", "marketing-form"];
 
 // @public
-export const AUTH_POLICIES: readonly ["anonymous", "account", "member", "admin", "owner", "instanceAdmin", "machine"];
+export const AUTH_POLICIES: readonly ["anonymous", "partial", "account", "member", "admin", "owner", "instanceAdmin", "machine"];
 
 // @public (undocumented)
 export type AuthPolicy = (typeof AUTH_POLICIES)[number];
@@ -308,6 +308,7 @@ export interface OperationDefinition {
     readonly path: string;
     // (undocumented)
     readonly rate: RateBucket;
+    readonly reauth?: boolean;
     // (undocumented)
     readonly request?: OperationRequest;
     // (undocumented)

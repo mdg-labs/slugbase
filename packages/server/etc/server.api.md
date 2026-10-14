@@ -1109,6 +1109,8 @@ export interface SessionPrincipal extends Extract<TenantPrincipal, {
     readonly kind: "session";
 }> {
     readonly instanceAdmin: boolean;
+    readonly mfaPending?: boolean;
+    readonly reauthAt?: Date;
 }
 
 // @public (undocumented)

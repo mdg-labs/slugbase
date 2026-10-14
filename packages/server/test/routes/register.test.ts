@@ -181,6 +181,80 @@ describe("the registration check", () => {
     }
   });
 
+  it("refuses a declaration of re-authentication that contradicts the rest of the policy, naming the operation", () => {
+    const unscoped = {
+      method: "post",
+      path: "/api/v1/notes/password",
+      operationId: "changeNotePassword",
+      tag: "notes",
+      auth: "account",
+      rate: "write",
+      reauth: true,
+      responses: { 204: emptyResponse("done"), 422: problemResponse("invalid") },
+    } as const satisfies OperationDefinition;
+    const base = { ...unscoped, scope: "write" } as const;
+    const variants: OperationDefinition[] = [
+      { ...unscoped, auth: "anonymous" },
+      { ...unscoped, auth: "machine" },
+      { ...unscoped, auth: "partial" },
+      base,
+      { ...unscoped, audience: "machine" },
+    ];
+    for (const operation of variants) {
+      const error = refusal(() => compose([moduleOf({ operation, ...raw })], documentFor([operation])));
+      expect(error.code).toBe("missing_policy");
+      expect(error.message).toContain("changeNotePassword");
+    }
+  });
+
+  it("refuses a binding whose re-authentication differs from the document's, in either direction", () => {
+    const sensitive = defineOperation({
+      method: "post",
+      path: "/api/v1/notes/password",
+      operationId: "changeNotePassword",
+      tag: "notes",
+      auth: "account",
+      rate: "write",
+      reauth: true,
+      responses: { 204: emptyResponse("done"), 422: problemResponse("invalid") },
+    });
+    const dropped: OperationDefinition = { ...sensitive, reauth: false };
+    const omitted = Object.fromEntries(Object.entries(sensitive).filter(([key]) => key !== "reauth")) as unknown as OperationDefinition;
+    for (const operation of [dropped, omitted]) {
+      const error = refusal(() => compose([moduleOf({ operation, ...raw })], documentFor([sensitive])));
+      expect(error.code).toBe("policy_mismatch");
+      expect(error.message).toContain("changeNotePassword");
+      expect(error.message).toContain("x-slugbase-reauth");
+    }
+    const added = refusal(() => compose([moduleOf({ operation: sensitive, ...raw })], documentFor([dropped])));
+    expect(added.code).toBe("policy_mismatch");
+    expect(added.message).toContain("x-slugbase-reauth");
+    expect(() => compose([moduleOf({ operation: omitted, ...raw })], documentFor([omitted]))).not.toThrow();
+  });
+
+  it("refuses a re-authentication declaration that is not a boolean", () => {
+    const operation = { ...createNote, reauth: "yes" } as unknown as OperationDefinition;
+    const error = refusal(() => compose([moduleOf({ operation, ...raw })], documentFor([createNote])));
+    expect(error.code).toBe("missing_policy");
+    expect(error.message).toContain("reauth");
+  });
+
+  it("registers an operation that declares re-authentication on a session-only policy, and the partial policy without it", () => {
+    const unscoped = {
+      method: "post",
+      path: "/api/v1/notes/password",
+      operationId: "changeNotePassword",
+      tag: "notes",
+      auth: "account",
+      rate: "write",
+      responses: { 204: emptyResponse("done"), 422: problemResponse("invalid") },
+    } as const satisfies OperationDefinition;
+    const sensitive = defineOperation({ ...unscoped, reauth: true });
+    const verify = defineOperation({ ...unscoped, operationId: "verifyNoteCode", path: "/api/v1/notes/verify", auth: "partial" });
+    const document = documentFor([sensitive, verify]);
+    expect(() => compose([moduleOf(route(sensitive).handle(() => ({ status: 204 })), route(verify).handle(() => ({ status: 204 })))], document)).not.toThrow();
+  });
+
   it("refuses a route that moves a documented operation to another path or method", () => {
     const document = documentFor([createNote]);
     const moved = refusal(() => compose([moduleOf({ operation: { ...createNote, path: "/api/v1/moved/{id}" }, ...raw })], document));
