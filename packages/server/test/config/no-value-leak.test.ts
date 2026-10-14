@@ -103,4 +103,11 @@ describe("configuration errors never contain a value (T7)", () => {
     expect(warnings.join("\n")).not.toContain("secret-qx62");
     expect(warnings.join("\n")).toContain("SLUGBASE_UNKNOWN");
   });
+
+  it("does not echo the value of TRUSTED_PROXY_HOPS in its warning", () => {
+    const { warnings } = loadConfig("server", productionEnv({ TRUSTED_PROXY_HOPS: "0" }));
+    const warning = warnings.find((candidate) => candidate.includes("TRUSTED_PROXY_HOPS"));
+    expect(warning).toBeDefined();
+    expect(warning).not.toMatch(/\d/);
+  });
 });

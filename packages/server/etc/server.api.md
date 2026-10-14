@@ -763,6 +763,7 @@ export type RateScope = (typeof RATE_LIMIT_SCOPES)[number];
 export interface RefineContext {
     issue(key: string, message: string): void;
     readonly production: boolean;
+    warn(key: string, message: string): void;
 }
 
 // @public

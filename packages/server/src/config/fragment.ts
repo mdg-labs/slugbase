@@ -12,6 +12,8 @@ export interface RefineContext {
   readonly production: boolean;
   /** Report a problem with a key. The message must not contain the key's value. */
   issue(key: string, message: string): void;
+  /** Report a setting that is allowed but probably unintended; it goes to the startup log. The message must not contain the key's value. */
+  warn(key: string, message: string): void;
 }
 
 /**
