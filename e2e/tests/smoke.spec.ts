@@ -105,15 +105,17 @@ for (const { locale, browser, title } of LANGUAGES) {
     });
 
     test("toggles the theme with the keyboard", async ({ page, app }) => {
+      // The test starts from a known theme: the light choice is stored before the page loads, so
+      // neither the saved signed-in state nor how an engine applies media emulation decides it.
+      await page.addInitScript(() => {
+        window.localStorage.setItem("slugbase-theme", "light");
+      });
       const name = await productName(page);
       await app.visit("/", homeHeading(page, locale, name));
 
       const root = page.locator("html");
       const toLight = page.getByRole("button", { name: message(locale, "shell.switchToLight") });
       const toDark = page.getByRole("button", { name: message(locale, "shell.switchToDark") });
-      // The test starts from a known theme: the choice is stored in the browser, and a fresh
-      // context holds none, so the system preference decides (light unless the browser says dark).
-      await page.emulateMedia({ colorScheme: "light" });
       await expect(root).toHaveClass(/\blight\b/);
 
       await toDark.focus();
