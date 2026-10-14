@@ -3,7 +3,11 @@ name: CLA
 # Asks outside contributors to sign CLA.md (CONTRIBUTING.md) and records the
 # signature on the unprotected `cla-signatures` branch. Runs on
 # pull_request_target in the base repository's context; it never checks out
-# or executes pull request code, so the write token stays safe.
+# or executes pull request code, so the write token stays safe. This is the one
+# pull_request_target workflow doc 10 records (section 2.11, T16); it keeps the
+# conditions listed there, and scripts/check-workflow-triggers.sh (pnpm lint)
+# fails when another workflow uses the event or this one gains a checkout, a
+# run step, an unpinned action or a secret.
 
 on:
   issue_comment:
