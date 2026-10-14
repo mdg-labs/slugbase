@@ -15,6 +15,13 @@ const BOOKMARKS = [{ name: "bookmarks", columns: ["id", "title", "legacy_title"]
 const NOT_ACCEPTED = "it is not accepted";
 const DECLARE = "CREATE OR REPLACE FUNCTION public.set_updated_at() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.updated_at := now(); RETURN NEW; END $$;";
 const TRIGGER = "CREATE TRIGGER bookmarks_set_updated_at BEFORE UPDATE ON public.bookmarks FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();";
+const REPLACE = TRIGGER.replace("CREATE", "CREATE OR REPLACE");
+const DECLARE_OTHER = DECLARE.replace("set_updated_at", "set_other");
+const REPLACE_OTHER = REPLACE.replace("set_updated_at()", "set_other()");
+const UNREADABLE = "DO $$ BEGIN NULL; END $$;";
+const REPLACES = "replaces trigger";
+const BOOKMARKS_TABLE = { schema: "public", name: "bookmarks" };
+const SET_UPDATED_AT = { name: { schema: "public", name: "set_updated_at" }, args: "" };
 
 const repositories: GitPackage[] = [];
 
@@ -52,14 +59,48 @@ function operationsOf(sql: string): Operation[] {
 describe("how the statement reader places CREATE TRIGGER", () => {
   it("reads a BEFORE UPDATE row trigger by its table and the function it executes", () => {
     expect(operationsOf(TRIGGER)).toEqual([
-      { kind: "creates-trigger", table: { schema: "public", name: "bookmarks" }, fn: { name: { schema: "public", name: "set_updated_at" }, args: "" } },
+      { kind: "creates-trigger", table: BOOKMARKS_TABLE, name: "bookmarks_set_updated_at", fn: SET_UPDATED_AT, replace: false },
     ]);
   });
 
   it("reads the same trigger written in lower case, quoted, unqualified and OR REPLACE", () => {
     expect(operationsOf('create or replace trigger "t" before update on "bookmarks" for each row execute function "set_updated_at"();')).toEqual([
-      { kind: "creates-trigger", table: { schema: "public", name: "bookmarks" }, fn: { name: { schema: "public", name: "set_updated_at" }, args: "" } },
+      { kind: "creates-trigger", table: BOOKMARKS_TABLE, name: "t", fn: SET_UPDATED_AT, replace: true },
     ]);
+  });
+
+  it.each([
+    ["an unquoted name is folded to lower case", "T", "t"],
+    ["an unquoted name is read as the quoted lower case name", "t", "t"],
+    ["a quoted name keeps its case", '"T"', "T"],
+    ["a doubled quote is one quote", '"a""b"', 'a"b'],
+    ["a name is cut to 63 bytes", "a".repeat(70), "a".repeat(63)],
+  ])("reads the name of a trigger as PostgreSQL does: %s", (_name, written, name) => {
+    const [operation] = operationsOf(`CREATE TRIGGER ${written} BEFORE UPDATE ON bookmarks FOR EACH ROW EXECUTE FUNCTION f();`);
+    expect(operation).toMatchObject({ kind: "creates-trigger", name });
+  });
+
+  it.each([
+    ["an unquoted schema and table", "S.T", { schema: "s", name: "t" }],
+    ["a quoted schema and table", '"S"."T"', { schema: "S", name: "T" }],
+    ["a table without a schema", "T", { schema: "public", name: "t" }],
+    ["a table name cut to 63 bytes", "a".repeat(64), { schema: "public", name: "a".repeat(63) }],
+    ["a schema and a table name cut to 63 bytes", `${"b".repeat(64)}.${"a".repeat(64)}`, { schema: "b".repeat(63), name: "a".repeat(63) }],
+  ])("reads the table of a trigger as PostgreSQL does: %s", (_name, written, table) => {
+    const [operation] = operationsOf(`CREATE TRIGGER t BEFORE UPDATE ON ${written} FOR EACH ROW EXECUTE FUNCTION f();`);
+    expect(operation).toMatchObject({ kind: "creates-trigger", table });
+  });
+
+  it.each([
+    ["a trigger name", 'CREATE OR REPLACE TRIGGER "t\u00e9" BEFORE UPDATE ON bookmarks FOR EACH ROW EXECUTE FUNCTION f();'],
+    ["a table name", 'CREATE OR REPLACE TRIGGER t BEFORE UPDATE ON "bookmarks\u212a" FOR EACH ROW EXECUTE FUNCTION f();'],
+    ["an unquoted table name", "CREATE OR REPLACE TRIGGER t BEFORE UPDATE ON bookmarks\u212a FOR EACH ROW EXECUTE FUNCTION f();"],
+  ])("does not read an OR REPLACE with a character outside printable ASCII in %s", (_name, sql) => {
+    expect(operationsOf(sql).map(({ kind }) => kind)).toEqual(["unknown"]);
+  });
+
+  it("reads a plain CREATE TRIGGER with a name outside printable ASCII", () => {
+    expect(operationsOf('CREATE TRIGGER "t\u00e9" BEFORE UPDATE ON bookmarks FOR EACH ROW EXECUTE FUNCTION f();').map(({ kind }) => kind)).toEqual(["creates-trigger"]);
   });
 
   it.each([
@@ -87,7 +128,7 @@ describe("how the statement reader places CREATE TRIGGER", () => {
 describe("what the expand/contract rule says about CREATE TRIGGER", () => {
   it.each([
     ["in the migration that declares the trigger function", `${DECLARE}\n${TRIGGER}`],
-    ["as OR REPLACE", `${DECLARE}\n${TRIGGER.replace("CREATE", "CREATE OR REPLACE")}`],
+    ["as OR REPLACE", `${DECLARE}\n${REPLACE}`],
     ["on a table in another schema", `${DECLARE}\n${TRIGGER.replace("public.bookmarks", "archive.bookmarks")}`],
     ["in lower case with a quoted function name", `${DECLARE}\n${TRIGGER.toLowerCase().replace("public.set_updated_at", 'public."set_updated_at"')}`],
   ])("accepts a trigger %s", async (_name, sql) => {
@@ -143,5 +184,95 @@ describe("what the expand/contract rule says about CREATE TRIGGER", () => {
     const findings = await addedAfter(`${DECLARE}\n${TRIGGER}`, "ALTER TABLE bookmarks ADD COLUMN x timestamptz DEFAULT set_updated_at();");
     expect(findings).toHaveLength(1);
     expect(findings[0]?.message).toMatch(/mentions set_updated_at, |calls set_updated_at\(\)/);
+  });
+});
+
+describe("what the expand/contract rule says about CREATE OR REPLACE TRIGGER", () => {
+  const after = (shipped: string, sql: string): Promise<readonly Finding[]> => {
+    const repository = new GitPackage();
+    repositories.push(repository);
+    repository.migration("20260101000000_add_function", shipped, BOOKMARKS);
+    repository.commit("release");
+    repository.tag("v1.0.0");
+    repository.migration(SECOND, sql);
+    return inspect(repository);
+  };
+
+  it.each([
+    ["in a later migration, as the migrations of this repository replay it", () => addedAfter(`${DECLARE}\n${TRIGGER}`, REPLACE)],
+    ["twice in one migration", () => added(`${DECLARE}\n${REPLACE}\n${REPLACE}`)],
+    ["over a trigger of the release that executes the same function", () => after(`${DECLARE}\n${TRIGGER}`, REPLACE)],
+    ["under a quoted name that is the unquoted name", () => addedAfter(`${DECLARE}\n${TRIGGER}`, REPLACE.replace("bookmarks_set_updated_at", '"bookmarks_set_updated_at"'))],
+    ["under an unquoted name in another letter case", () => addedAfter(`${DECLARE}\n${TRIGGER}`, REPLACE.replace("bookmarks_set_updated_at", "Bookmarks_Set_Updated_At"))],
+    ["under a quoted name in another letter case, which is another trigger", () => addedAfter(`${DECLARE}\n${DECLARE_OTHER}\n${TRIGGER}`, REPLACE_OTHER.replace("bookmarks_set_updated_at", '"Bookmarks_Set_Updated_At"'))],
+    ["under the name of a trigger of another table", () => addedAfter(`${DECLARE}\n${DECLARE_OTHER}\n${TRIGGER}`, REPLACE_OTHER.replace("public.bookmarks", "public.folders"))],
+    ["after a CREATE DOMAIN, which creates no trigger", () => addedAfter("CREATE DOMAIN slug AS text;", `${DECLARE}\n${REPLACE}`)],
+    ["after an ALTER TYPE, which creates no trigger", () => addedAfter("ALTER TYPE colour ADD VALUE 'red';", `${DECLARE}\n${REPLACE}`)],
+  ])("accepts the trigger %s", async (_name, run) => {
+    expect(await run()).toEqual([]);
+  });
+
+  it.each([
+    ["in the same migration", () => added(`${DECLARE}\n${DECLARE_OTHER}\n${TRIGGER}\n${REPLACE_OTHER}`)],
+    ["in a later migration", () => addedAfter(`${DECLARE}\n${DECLARE_OTHER}\n${TRIGGER}`, REPLACE_OTHER)],
+    ["of the release", () => after(`${DECLARE}\n${DECLARE_OTHER}\n${TRIGGER}`, REPLACE_OTHER)],
+    ["whose name is another spelling of the same unquoted name", () => addedAfter(`${DECLARE}\n${DECLARE_OTHER}\n${TRIGGER}`, REPLACE_OTHER.replace("bookmarks_set_updated_at", "BOOKMARKS_SET_UPDATED_AT"))],
+    ["whose name is the quoted lower case name", () => addedAfter(`${DECLARE}\n${DECLARE_OTHER}\n${TRIGGER}`, REPLACE_OTHER.replace("bookmarks_set_updated_at", '"bookmarks_set_updated_at"'))],
+    ["whose table is spelled another way", () => addedAfter(`${DECLARE}\n${DECLARE_OTHER}\n${TRIGGER}`, REPLACE_OTHER.replace("public.bookmarks", "BOOKMARKS"))],
+  ])("rejects a replacement that gives a trigger another function %s", async (_name, run) => {
+    const findings = await run();
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain(REPLACES);
+    expect(findings[0]?.message).toContain("replaces trigger bookmarks_set_updated_at on bookmarks, which executes set_updated_at() now, with one that executes set_other()");
+    expect(findings[0]?.message).toContain("the previous release still relies on the trigger");
+    expect(findings[0]?.message).toContain(NOT_ACCEPTED);
+  });
+
+  it.each([
+    ["a statement it cannot read", () => addedAfter(`${DECLARE}\n${UNREADABLE}`, REPLACE)],
+    ["a DROP TRIGGER", () => addedAfter(`${DECLARE}\n${TRIGGER}\nDROP TRIGGER bookmarks_set_updated_at ON bookmarks;`, REPLACE)],
+    ["a trigger of another shape", () => addedAfter(`${DECLARE}\n${TRIGGER.replace("BEFORE UPDATE", "BEFORE INSERT")}`, REPLACE)],
+    ["a rename of a table", () => addedAfter(`${DECLARE}\n${TRIGGER}\nALTER TABLE bookmarks RENAME TO links;`, REPLACE.replace("public.bookmarks", "links"))],
+    ["a move of a table to another schema", () => addedAfter(`${DECLARE}\n${TRIGGER}\nALTER TABLE bookmarks SET SCHEMA archive;`, REPLACE.replace("public.bookmarks", "archive.bookmarks"))],
+    ["a statement it cannot read in a migration of the release", () => after(`${DECLARE}\n${UNREADABLE}`, REPLACE)],
+    ["a migration of the release it cannot read", () => after(`${DECLARE}\n${TRIGGER}\nSELECT 'unclosed;`, REPLACE)],
+  ])("rejects a replacement of a trigger name after %s", async (_name, run) => {
+    const findings = (await run()).filter(({ message }) => message.includes(REPLACES));
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("this check cannot show is not a trigger of");
+    expect(findings[0]?.message).toContain(NOT_ACCEPTED);
+  });
+
+  const LONG = "a".repeat(64);
+  const CUT = "a".repeat(63);
+  const onTable = (sql: string, table: string): string => sql.replace("public.bookmarks", table);
+
+  it.each([
+    ["a table of 64 bytes, then of 63", `public.${LONG}`, `public.${CUT}`],
+    ["a table of 63 bytes, then of 64", `public.${CUT}`, `public.${LONG}`],
+    ["a schema of 64 bytes, then of 63", `${LONG}.bookmarks`, `${CUT}.bookmarks`],
+    ["a schema of 63 bytes, then of 64", `${CUT}.bookmarks`, `${LONG}.bookmarks`],
+  ])("rejects a replacement that gives a trigger another function on the same table written longer or shorter: %s", async (_name, first, second) => {
+    const findings = await addedAfter(`${DECLARE}\n${DECLARE_OTHER}\n${onTable(TRIGGER, first)}`, onTable(REPLACE_OTHER, second));
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("replaces trigger bookmarks_set_updated_at on ");
+    expect(findings[0]?.message).toContain("which executes set_updated_at() now, with one that executes set_other()");
+  });
+
+  it("accepts a replacement of a trigger of the same name on a table whose name differs within 63 bytes", async () => {
+    expect(await addedAfter(`${DECLARE}\n${DECLARE_OTHER}\n${onTable(TRIGGER, `public.${CUT}`)}`, onTable(REPLACE_OTHER, `public.${CUT.slice(1)}b`))).toEqual([]);
+  });
+
+  it("rejects a replacement that is not of a trigger function, whether or not the name is known", async () => {
+    const findings = await added(REPLACE);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("trigger function");
+  });
+
+  it("reports the trigger function and the replacement of a chain trigger apart", async () => {
+    const findings = await addedAfter(`${DECLARE}\n${TRIGGER}`, REPLACE_OTHER);
+    expect(findings).toHaveLength(2);
+    expect(findings.map(({ message }) => message).join("\n")).toContain("trigger function");
+    expect(findings.map(({ message }) => message).join("\n")).toContain(REPLACES);
   });
 });

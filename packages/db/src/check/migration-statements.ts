@@ -57,9 +57,11 @@ export type Operation =
   | { kind: "alters-function-owner"; fn: FunctionIdentity }
   | { kind: "grants-function-execute"; fn: FunctionIdentity }
   | { kind: "revokes-function-public"; fn: FunctionIdentity }
-  // CREATE TRIGGER name BEFORE UPDATE ON table FOR EACH ROW EXECUTE FUNCTION fn(): the one trigger form read, whose function is named
-  // without a call the migration could run. A trigger body runs on a row write, which a migration does not make (D25).
-  | { kind: "creates-trigger"; table: TableName; fn: FunctionIdentity }
+  // CREATE [OR REPLACE] TRIGGER name BEFORE UPDATE ON table FOR EACH ROW EXECUTE FUNCTION fn(): the one trigger form read, whose function is
+  // named without a call the migration could run. A trigger body runs on a row write, which a migration does not make (D25). name is the
+  // trigger's name as PostgreSQL compares it (see `triggerName`); with replace, the statement takes the place of a trigger of that name on
+  // that table, whatever shape it has.
+  | { kind: "creates-trigger"; table: TableName; name: string; fn: FunctionIdentity; replace: boolean }
   | { kind: "grants-schema-create"; schema: string }
   | { kind: "revokes-schema-create"; schema: string }
   | { kind: "data-change"; statement: string }
@@ -687,7 +689,7 @@ function create(cursor: Cursor): Operation[] {
     return createFunction(cursor, replace);
   }
   if (cursor.take("trigger")) {
-    return createTrigger(cursor);
+    return createTrigger(cursor, replace);
   }
   if (replace) {
     return unknown("a CREATE OR REPLACE form this check does not read");
@@ -747,27 +749,63 @@ function create(cursor: Cursor): Operation[] {
 }
 
 /**
+ * The name of a trigger as PostgreSQL compares it: an unquoted name has the letters A to Z folded to lower case,
+ * a quoted one keeps its case (`"T"` and `t` are two triggers, `T` and `t` one), and both are cut to 63 bytes.
+ */
+function triggerName(token: Token | undefined): string | undefined {
+  if (token?.kind === "word") {
+    return identifierForm(token.raw);
+  }
+  return token?.kind === "ident" ? clipIdentifier(token.text) : undefined;
+}
+
+/**
+ * The table of a trigger as PostgreSQL compares it, from the tokens of its name (`name` or `schema . name`, as
+ * `Cursor.tableName` reads them): each part is the form `triggerName` gives, an unquoted part folded on the text
+ * as written and a quoted one kept, both cut to 63 bytes. The tokenizer's own text lower-cases with JavaScript's
+ * mapping and is not cut, so it would keep apart two spellings of a table whose name is longer than 63 bytes.
+ */
+function triggerTable(tokens: readonly Token[]): TableName {
+  const name = triggerName(tokens.at(-1)) ?? "";
+  const schema = tokens.length === 3 ? triggerName(tokens[0]) : DEFAULT_SCHEMA;
+  return { schema: schema ?? DEFAULT_SCHEMA, name };
+}
+
+/**
  * CREATE [OR REPLACE] TRIGGER name BEFORE UPDATE ON table FOR EACH ROW EXECUTE FUNCTION fn(), read by its
  * whole shape. The function runs on a row write, never when the trigger is created, and the shape names it
  * without arguments, a condition or a column list. The rule accepts it only for a trigger function the
- * chain declares. A trigger of any other timing or event, a constraint trigger and an event trigger (which
- * fires on DDL, so inside a migration) are not read.
+ * chain declares, and OR REPLACE only over the trigger of that name and table that the chain created with
+ * the same function (the statement again), or where it has read every earlier statement and so can show
+ * there is no such trigger: PostgreSQL replaces a trigger of any timing, event, condition and function, so
+ * the operation carries the trigger's name and the flag. The trigger is identified by its name and table,
+ * the schema and the name of the table each compared as PostgreSQL compares a name (see `triggerName`). A trigger of any other timing or event, a
+ * constraint trigger and an event trigger (which fires on DDL, so inside a migration) are not read, and
+ * neither is an OR REPLACE whose trigger or table name has a character outside printable ASCII, since the
+ * names the rule compares are ASCII.
  */
-function createTrigger(cursor: Cursor): Operation[] {
+function createTrigger(cursor: Cursor, replace: boolean): Operation[] {
   const problem = unknown("CREATE TRIGGER other than `CREATE TRIGGER name BEFORE UPDATE ON table FOR EACH ROW EXECUTE FUNCTION function()`");
-  if (cursor.identifier() === undefined || !cursor.take("before", "update", "on")) {
+  const start = cursor.position;
+  const name = triggerName(cursor.peek());
+  if (name === undefined || cursor.identifier() === undefined || !cursor.take("before", "update", "on")) {
     return problem;
   }
-  const table = cursor.tableName();
-  if (table === undefined || !cursor.take("for", "each", "row", "execute", "function")) {
+  const tableStart = cursor.position;
+  if (cursor.tableName() === undefined || !cursor.take("for", "each", "row", "execute", "function")) {
     return problem;
   }
-  const name = cursor.tableName();
-  if (name === undefined || !cursor.isPunct("(") || !cursor.isPunct(")", 1)) {
+  const table = triggerTable(cursor.tokens.slice(tableStart, cursor.position - 5));
+  const written = cursor.tokens.slice(start, cursor.position).filter((token) => token.kind === "word" || token.kind === "ident");
+  if (replace && written.some((token) => !PRINTABLE_ASCII.test(token.kind === "word" ? token.raw : token.text))) {
+    return unknown("CREATE OR REPLACE TRIGGER named with a character outside printable ASCII, whose name PostgreSQL may spell differently from the way this check compares names");
+  }
+  const fn = cursor.tableName();
+  if (fn === undefined || !cursor.isPunct("(") || !cursor.isPunct(")", 1)) {
     return problem;
   }
   cursor.position += 2;
-  return cursor.done() ? [{ kind: "creates-trigger", table, fn: { name, args: "" } }] : problem;
+  return cursor.done() ? [{ kind: "creates-trigger", table, name, fn: { name: fn, args: "" }, replace }] : problem;
 }
 
 function createIndex(cursor: Cursor): Operation[] {

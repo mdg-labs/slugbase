@@ -104,7 +104,16 @@ import type { CheckRule, ContractMarker, Finding } from "./types.ts";
 //     when the trigger is created, and a migration writes no row (a data change is
 //     rejected below), so the statement names f without calling it. Any other trigger
 //     (another timing or event, a column list, a WHEN condition, arguments, a
-//     constraint trigger, an event trigger) is not read,
+//     constraint trigger, an event trigger) is not read. OR REPLACE replaces a trigger
+//     of that name on that table whatever its shape, so it is accepted only over the
+//     trigger the chain created with the same f (the statement again), or where this
+//     check has read every earlier statement, and so can show the name is no trigger of
+//     the release: after a migration or statement it cannot read, or a table move
+//     (RENAME TO, SET SCHEMA), it is rejected, as is a replacement that gives the
+//     trigger another f. The trigger is identified by its name and its table, and the
+//     name, the schema and the table name are each compared as PostgreSQL does (an
+//     unquoted name folded to lower case, a quoted one kept, each cut to 63 bytes), and
+//     an OR REPLACE with a trigger or table name outside printable ASCII is not read,
 //   - ALTER FUNCTION f(args) OWNER TO slugbase_system, for a function the same
 //     file creates; any other action or owner is not read,
 //   - REVOKE ALL ON FUNCTION f(args) FROM PUBLIC, for a function the same file
@@ -194,6 +203,9 @@ export function contractMarkerFromEnv(env: Readonly<Record<string, string | unde
 const key = (table: TableName): string => `${table.schema}.${table.name}`;
 const functionKey = ({ name, args }: FunctionIdentity): string => `${key(name)}(${args})`;
 const functionLabel = ({ name, args }: FunctionIdentity): string => `${describe(name)}(${args})`;
+// A trigger is identified by its table and its name, which the reader gives as PostgreSQL compares it. The two parts cannot run together:
+// a NUL does not occur in a name.
+const triggerKey = (table: TableName, name: string): string => `${key(table)}\0${name}`;
 
 // While a file holds CREATE on a schema for slugbase_system, only the statements that create a function and
 // hand it over run; a statement this check cannot place or a data change is reported on its own.
@@ -226,6 +238,12 @@ class Released {
   private readonly functionNames = new Set<string>();
   // The functions the chain declares without arguments as RETURNS trigger, by name and (empty) input argument types.
   private readonly triggerFunctions = new Set<string>();
+  // The function each trigger the chain creates executes, by its table and name, since the last point where the chain may have changed a
+  // trigger unseen. triggersKnown is false after a migration or statement this check cannot read, or one that moves a table, which may
+  // have created, renamed, replaced or moved a trigger: the triggers held are then dropped, since an unseen statement may have given
+  // one of them another shape or function.
+  private readonly triggers = new Map<string, FunctionIdentity>();
+  private triggersKnown = true;
   // What the migration being read has done: the functions it declares, and the schemas it has granted CREATE on to
   // slugbase_system and not yet revoked.
   private declared = new Set<string>();
@@ -253,15 +271,22 @@ class Released {
    * may have given any domain a constraint, renamed or moved a type, or replaced an enum with a domain:
    * no type declared before it stays one this check can show to be free of constraints. The type of the
    * extension this package installs is the exception, and a type a later migration declares is read as
-   * it is declared. The same holds for the functions: one may have been created or replaced.
+   * it is declared. The same holds for the functions: one may have been created or replaced, and for the
+   * triggers: one may have been created, renamed or dropped.
    */
   taint(): void {
     this.functionsKnown = false;
+    this.forgetTriggers();
     for (const name of this.types.keys()) {
       if (name !== CITEXT) {
         this.types.set(name, UNPROVEN);
       }
     }
+  }
+
+  private forgetTriggers(): void {
+    this.triggersKnown = false;
+    this.triggers.clear();
   }
 
   /** Starts reading a migration added since the release. */
@@ -288,6 +313,11 @@ class Released {
       if (!TENANT_FUNCTIONS.has(name)) {
         this.functionNames.add(identifierForm(operation.fn.name.name));
       }
+    } else if (operation.kind === "creates-trigger") {
+      this.triggers.set(triggerKey(operation.table, operation.name), operation.fn);
+    } else if (operation.kind === "rename-table" || operation.kind === "set-schema") {
+      // The triggers of the table go with it, under a key the model does not move them to.
+      this.forgetTriggers();
     } else if (operation.kind === "declares-type") {
       this.types.set(key(operation.name), {
         constraints: operation.ownConstraints || !this.constraintFree(operation.base),
@@ -303,6 +333,8 @@ class Released {
         this.types.set(key(name), UNPROVEN);
       }
     } else if (operation.kind === "unknown" && operation.keepsTypes !== true) {
+      // The statements marked keepsTypes (CREATE DOMAIN, ALTER DOMAIN and ALTER TYPE) name a type and no table, so they create,
+      // rename and drop no trigger; every other statement this check cannot place may, and taints the triggers as the types.
       this.taint();
     }
   }
@@ -348,15 +380,20 @@ class Released {
   apply(operation: Operation): string[] {
     const open = [...this.creatable];
     const before = operation.kind === "declares-function" ? this.functions.get(functionKey(operation.fn)) : undefined;
+    const trigger = operation.kind === "creates-trigger" ? this.triggers.get(triggerKey(operation.table, operation.name)) : undefined;
     this.track(operation);
-    const problems = this.place(operation, before);
+    const problems = this.place(operation, before, trigger);
     return open.length > 0 && !FUNCTION_STATEMENTS.has(operation.kind)
       ? [`runs a statement between GRANT CREATE ON SCHEMA ${open.join(", ")} and its REVOKE that is not a CREATE FUNCTION or an ALTER FUNCTION ... OWNER TO ${SYSTEM_ROLE}: while ${SYSTEM_ROLE} holds CREATE on the schema, a migration runs function statements only`, ...problems]
       : problems;
   }
 
-  /** The problems of one operation; `before` is the return type the chain declared for the function it declares. */
-  private place(operation: Operation, before: string | undefined): string[] {
+  /**
+   * The problems of one operation; `before` is the return type the chain declared for the function it declares,
+   * and `trigger` the function the chain had a trigger of the same table and name execute before the trigger
+   * it creates.
+   */
+  private place(operation: Operation, before: string | undefined, trigger: FunctionIdentity | undefined): string[] {
     const at = this.tag ?? "the latest release";
     switch (operation.kind) {
       case "drop-table": {
@@ -465,10 +502,22 @@ class Released {
         return this.declared.has(functionKey(operation.fn))
           ? []
           : [`revokes privileges on function ${functionLabel(operation.fn)} from PUBLIC, and this migration does not create it: a running replica may lose the access it uses`];
-      case "creates-trigger":
-        return this.triggerFunctions.has(functionKey(operation.fn))
+      case "creates-trigger": {
+        const problems = this.triggerFunctions.has(functionKey(operation.fn))
           ? []
           : [`creates a trigger on ${describe(operation.table)} that executes ${functionLabel(operation.fn)}, which no earlier statement of the migration chain declares as a trigger function (a function without arguments that RETURNS trigger): only a trigger function the chain declares is run by a row write`];
+        if (!operation.replace) {
+          return problems;
+        }
+        if (trigger !== undefined) {
+          if (functionKey(trigger) !== functionKey(operation.fn)) {
+            problems.push(`replaces trigger ${operation.name} on ${describe(operation.table)}, which executes ${functionLabel(trigger)} now, with one that executes ${functionLabel(operation.fn)}: the previous release still relies on the trigger as it is`);
+          }
+        } else if (!this.triggersKnown) {
+          problems.push(`replaces trigger ${operation.name} on ${describe(operation.table)}, which this check cannot show is not a trigger of ${at}: it could not read every earlier statement, so it cannot show the name is not a trigger of the release, which the replacement would change`);
+        }
+        return problems;
+      }
       case "grants-schema-create":
         this.creatable.add(operation.schema);
         return [];
