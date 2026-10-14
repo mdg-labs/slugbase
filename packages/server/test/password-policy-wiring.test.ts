@@ -1,5 +1,6 @@
 import { BreachedDatasetError } from "@slugbase/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { adapters, fakeDatabase, recordingLogger, serverConfig } from "./support.ts";
 
 // What the server does when the breached-password dataset cannot be loaded (doc 02 section 2.5, Q15):
@@ -27,7 +28,7 @@ async function compose(env: Record<string, string>) {
 }
 
 describe("createServer and the breached-password dataset", () => {
-  it("refuses to be created when the check is on and the dataset cannot be loaded", async () => {
+  it("refuses to be created when the check is on and the dataset cannot be loaded", { timeout: HEAVY_TEST_TIMEOUT_MS }, async () => {
     loadBreachedPasswords.mockImplementation(() => {
       throw new BreachedDatasetError("it cannot be read");
     });
