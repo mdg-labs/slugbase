@@ -7,6 +7,7 @@ import {
   emptyResponse,
   jsonResponse,
   problemResponse,
+  rateLimitedResponse,
   type OperationDefinition,
 } from "../src/operations/define.ts";
 import { operations } from "../src/operations/index.ts";
@@ -77,6 +78,27 @@ describe("generated document", () => {
         expect(problem.length).toBeGreaterThan(0);
       }
     }
+  });
+
+  it("declares Retry-After as a required positive integer on every 429, and on no other problem response", () => {
+    let limited = 0;
+    for (const methods of Object.values(paths)) {
+      for (const operation of Object.values(methods)) {
+        const responses = operation["responses"] as Record<string, { headers?: Record<string, Obj> }>;
+        for (const [status, response] of Object.entries(responses)) {
+          if (status === "429") {
+            limited += 1;
+            expect(response.headers?.["Retry-After"], String(operation["operationId"])).toMatchObject({
+              required: true,
+              schema: { type: "integer", minimum: 1 },
+            });
+          } else if (status.startsWith("4")) {
+            expect(response.headers, `${String(operation["operationId"])} ${status}`).toBeUndefined();
+          }
+        }
+      }
+    }
+    expect(limited).toBeGreaterThan(0);
   });
 
   it("limits the version response to name, version, commit and builtAt", () => {
@@ -168,6 +190,23 @@ describe("declaration checks", () => {
   it("rejects an operation without a 4xx problem response", () => {
     const problems = problemsOf([{ ...base, responses: { 201: jsonResponse("created", Pong) } }]);
     expect(problems).toEqual([expect.stringContaining("operation createThing: at least one 4xx")]);
+  });
+
+  it("rejects a 429 that does not declare Retry-After, whatever its spelling", () => {
+    const bare = { kind: "problem", description: "slow down" };
+    const problems = problemsOf([{ ...base, responses: { 201: jsonResponse("created", Pong), 429: bare } }]);
+    expect(problems.join("\n")).toContain("response 429 must declare the Retry-After header");
+    const lower = { ...bare, headers: { "retry-after": { description: "wait", schema: z.number().int() } } };
+    expect(() => buildOpenApiDocument([{ ...base, responses: { 201: jsonResponse("created", Pong), 429: lower } }])).not.toThrow();
+  });
+
+  it("emits the Retry-After header of a rateLimitedResponse", () => {
+    const document = buildOpenApiDocument([{ ...base, responses: { 201: jsonResponse("created", Pong), 429: rateLimitedResponse("slow down") } }]);
+    const responses = (document["paths"] as Record<string, Record<string, { responses: Obj }>>)["/api/v1/things"]?.["post"]?.responses;
+    expect(responses?.["429"]).toMatchObject({
+      content: { "application/problem+json": { schema: { $ref: "#/components/schemas/Problem" } } },
+      headers: { "Retry-After": { required: true, schema: { type: "integer", minimum: 1 } } },
+    });
   });
 
   it("rejects a 4xx response that is not a problem document", () => {

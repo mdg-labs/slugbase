@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { defineOperation, jsonResponse, problemResponse } from "./define.ts";
+import { defineOperation, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
 
 // The first-run operations of doc 04 section 10.2 (community edition, doc 02
 // section 2.2). Both are anonymous: setup runs before any account exists, so the
@@ -44,7 +44,7 @@ export const getSetupStatus = defineOperation({
   responses: {
     200: jsonResponse("Whether the instance still waits for its first account", SetupStatusSchema),
     400: problemResponse("The request was malformed"),
-    429: problemResponse("Too many requests from this address; Retry-After says when to try again"),
+    429: rateLimitedResponse("Too many requests from this address; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },
 });
@@ -72,7 +72,7 @@ export const completeSetup = defineOperation({
       "The request did not come from the application itself (cross_site_request); setup is already completed or turned off (setup_completed); or the setup token is missing or wrong (forbidden). Nothing is written",
     ),
     422: problemResponse("The body did not pass validation, or the password is outside 12 to 256 characters or is on the breached list (weak_password)"),
-    429: problemResponse("Too many setup attempts from this address; Retry-After says when to try again"),
+    429: rateLimitedResponse("Too many setup attempts from this address; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },
 });

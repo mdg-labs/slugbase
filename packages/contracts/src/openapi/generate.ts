@@ -4,8 +4,10 @@ import {
   AUTH_POLICIES,
   HTTP_METHODS,
   RATE_BUCKETS,
+  RETRY_AFTER_HEADER,
   TOKEN_SCOPES,
   type OperationDefinition,
+  type ResponseHeaders,
 } from "../operations/define.ts";
 import { ProblemSchema } from "../problem.ts";
 
@@ -287,8 +289,8 @@ function checkDeclaration(raw: unknown, index: number, seenIds: Set<string>, see
       }
       const headers = isRecord(response) ? response["headers"] : undefined;
       if (headers !== undefined) {
-        if (kind !== "json" || !isRecord(headers)) {
-          need(`response ${status} headers must be an object on a jsonResponse`);
+        if (kind === "empty" || !isRecord(headers)) {
+          need(`response ${status} headers must be an object on a jsonResponse or a problemResponse`);
         } else {
           for (const [name, header] of Object.entries(headers)) {
             if (!/^[A-Za-z0-9-]+$/.test(name)) {
@@ -298,6 +300,12 @@ function checkDeclaration(raw: unknown, index: number, seenIds: Set<string>, see
               need(`response ${status} header ${name} needs a description and a Zod schema`);
             }
           }
+        }
+      }
+      if (code === 429) {
+        const declared = isRecord(headers) ? Object.keys(headers) : [];
+        if (!declared.some((name) => name.toLowerCase() === RETRY_AFTER_HEADER.toLowerCase())) {
+          need(`response 429 must declare the ${RETRY_AFTER_HEADER} header; build it with rateLimitedResponse`);
         }
       }
       if (code < 400) {
@@ -319,6 +327,19 @@ function checkDeclaration(raw: unknown, index: number, seenIds: Set<string>, see
     }
   }
   return problems;
+}
+
+/** Headers are always sent, so each is required. */
+function buildHeaders(declared: ResponseHeaders, converter: Converter): JsonObject {
+  const headers: JsonObject = {};
+  for (const [name, header] of Object.entries(declared)) {
+    headers[name] = {
+      description: header.description,
+      required: true,
+      schema: converter.convert(header.schema, "output") ?? {},
+    };
+  }
+  return headers;
 }
 
 function buildOperation(op: OperationDefinition, converter: Converter): JsonObject {
@@ -377,22 +398,18 @@ function buildOperation(op: OperationDefinition, converter: Converter): JsonObje
         content: { "application/json": { schema: schema ?? {} } },
       };
       if (response.headers !== undefined) {
-        const headers: JsonObject = {};
-        for (const [name, header] of Object.entries(response.headers)) {
-          headers[name] = {
-            description: header.description,
-            required: true,
-            schema: converter.convert(header.schema, "output") ?? {},
-          };
-        }
-        built["headers"] = headers;
+        built["headers"] = buildHeaders(response.headers, converter);
       }
       responses[status] = built;
     } else if (response.kind === "problem") {
-      responses[status] = {
+      const built: JsonObject = {
         description: response.description,
         content: { "application/problem+json": { schema: { $ref: `${COMPONENT_PREFIX}Problem` } } },
       };
+      if (response.headers !== undefined) {
+        built["headers"] = buildHeaders(response.headers, converter);
+      }
+      responses[status] = built;
     } else {
       responses[status] = { description: response.description };
     }

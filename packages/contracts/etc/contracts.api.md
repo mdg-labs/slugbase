@@ -95,7 +95,7 @@ export const completeSetup: {
         readonly 400: ProblemResponse;
         readonly 403: ProblemResponse;
         readonly 422: ProblemResponse;
-        readonly 429: ProblemResponse;
+        readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
     };
 };
@@ -348,7 +348,7 @@ export const getMe: {
         clientErrorReportDsn: z.ZodOptional<z.ZodString>;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
         readonly 401: ProblemResponse;
-        readonly 429: ProblemResponse;
+        readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
     };
 };
@@ -421,7 +421,7 @@ export const getSetupStatus: {
         setupRequired: z.ZodBoolean;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
         readonly 400: ProblemResponse;
-        readonly 429: ProblemResponse;
+        readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
     };
 };
@@ -508,7 +508,7 @@ export const listSessions: {
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;
         readonly 422: ProblemResponse;
-        readonly 429: ProblemResponse;
+        readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
     };
 };
@@ -542,7 +542,7 @@ export const login: {
         readonly 401: ProblemResponse;
         readonly 403: ProblemResponse;
         readonly 422: ProblemResponse;
-        readonly 429: ProblemResponse;
+        readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
     };
 };
@@ -573,7 +573,7 @@ export const logout: {
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;
         readonly 403: ProblemResponse;
-        readonly 429: ProblemResponse;
+        readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
     };
 };
@@ -675,7 +675,7 @@ export interface OperationRequest {
 export type OperationResponses = {
     [S in OtherResponseStatus]?: JsonResponse | EmptyResponse | ProblemResponse;
 } & AtLeastOne<{
-    [S in ProblemResponseStatus]: ProblemResponse;
+    [S in ProblemResponseStatus]: S extends 429 ? RateLimitedResponse : ProblemResponse;
 }>;
 
 // @public
@@ -732,6 +732,7 @@ export interface OperationTypes {
             };
             429: {
                 headers: {
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -833,6 +834,7 @@ export interface OperationTypes {
             };
             429: {
                 headers: {
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -949,6 +951,7 @@ export interface OperationTypes {
             };
             429: {
                 headers: {
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -1040,6 +1043,7 @@ export interface OperationTypes {
             };
             429: {
                 headers: {
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -1113,6 +1117,7 @@ export interface OperationTypes {
             };
             429: {
                 headers: {
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -1171,6 +1176,7 @@ export interface OperationTypes {
             };
             429: {
                 headers: {
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -1247,6 +1253,7 @@ export interface OperationTypes {
             };
             429: {
                 headers: {
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -1315,6 +1322,7 @@ export interface OperationTypes {
             };
             429: {
                 headers: {
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -1387,6 +1395,7 @@ export interface OperationTypes {
             };
             429: {
                 headers: {
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -1796,6 +1805,8 @@ export interface ProblemResponse {
     // (undocumented)
     readonly description: string;
     // (undocumented)
+    readonly headers?: ResponseHeaders;
+    // (undocumented)
     readonly kind: "problem";
 }
 
@@ -1871,6 +1882,17 @@ export const RATE_BUCKETS: readonly ["login", "mfa", "register", "reset", "token
 // @public (undocumented)
 export type RateBucket = (typeof RATE_BUCKETS)[number];
 
+// @public
+export interface RateLimitedResponse extends ProblemResponse {
+    // (undocumented)
+    readonly headers: {
+        readonly [RETRY_AFTER_HEADER]: ResponseHeader;
+    } & ResponseHeaders;
+}
+
+// @public
+export function rateLimitedResponse(description: string): RateLimitedResponse;
+
 // @public (undocumented)
 export const ReadyStatusSchema: z.ZodObject<{
     database: z.ZodEnum<{
@@ -1894,6 +1916,12 @@ export interface ResponseHeader {
 // @public (undocumented)
 export type ResponseHeaders = Readonly<Record<string, ResponseHeader>>;
 
+// @public
+export const RETRY_AFTER_HEADER = "Retry-After";
+
+// @public
+export const RetryAfterSchema: z.ZodNumber;
+
 // @public (undocumented)
 export const revokeSession: {
     readonly method: "delete";
@@ -1915,7 +1943,7 @@ export const revokeSession: {
         readonly 403: ProblemResponse;
         readonly 404: ProblemResponse;
         readonly 422: ProblemResponse;
-        readonly 429: ProblemResponse;
+        readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
     };
 };
@@ -1943,7 +1971,7 @@ export const revokeSessions: {
         readonly 401: ProblemResponse;
         readonly 403: ProblemResponse;
         readonly 422: ProblemResponse;
-        readonly 429: ProblemResponse;
+        readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
     };
 };
@@ -2069,7 +2097,7 @@ export const updateMe: {
         readonly 401: ProblemResponse;
         readonly 403: ProblemResponse;
         readonly 422: ProblemResponse;
-        readonly 429: ProblemResponse;
+        readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
     };
 };

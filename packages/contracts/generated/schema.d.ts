@@ -554,6 +554,8 @@ export interface operations {
             /** @description Too many sign-in attempts from this address or for this email address; Retry-After says when to try again */
             429: {
                 headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -617,6 +619,8 @@ export interface operations {
             /** @description Too many requests; Retry-After says when to try again */
             429: {
                 headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -664,6 +668,8 @@ export interface operations {
             /** @description Too many requests; Retry-After says when to try again */
             429: {
                 headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -742,6 +748,8 @@ export interface operations {
             /** @description Too many requests; Retry-After says when to try again */
             429: {
                 headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -810,6 +818,8 @@ export interface operations {
             /** @description Too many requests; Retry-After says when to try again */
             429: {
                 headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -884,6 +894,8 @@ export interface operations {
             /** @description Too many requests; Retry-After says when to try again */
             429: {
                 headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -967,6 +979,8 @@ export interface operations {
             /** @description Too many requests; Retry-After says when to try again */
             429: {
                 headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -1076,6 +1090,8 @@ export interface operations {
             /** @description Too many setup attempts from this address; Retry-After says when to try again */
             429: {
                 headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -1123,6 +1139,8 @@ export interface operations {
             /** @description Too many requests from this address; Retry-After says when to try again */
             429: {
                 headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
