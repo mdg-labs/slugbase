@@ -408,7 +408,7 @@ describe("following redirects", () => {
     ]);
   });
 
-  it("keeps credentials on a redirect within the origin and drops them on one to another origin", async () => {
+  it("keeps caller headers on a redirect within the origin and forwards only a named few to another origin", async () => {
     const other = await serve(ok);
     const origin = await serve((request, socket) => {
       if (request.target === "/same") {
@@ -420,14 +420,86 @@ describe("following redirects", () => {
       }
     });
     const dns = scripted(["127.0.0.1"]);
-    const headers = { authorization: "Bearer <your API token>", cookie: "a=b", "x-extra": "1" };
+    const headers = {
+      authorization: "Bearer <your API token>",
+      cookie: "a=b",
+      "x-api-key": "<your API key>",
+      "x-extra": "1",
+      accept: "text/html",
+      "Accept-Language": "de",
+      "user-agent": "slugbase-test",
+    };
     await loopbackOnly(dns.resolve).request(get(`http://origin.example.test:${String(origin.port)}/same`, { headers }));
     await loopbackOnly(dns.resolve).request(get(`http://origin.example.test:${String(origin.port)}/cross`, { headers }));
     const landed = origin.requests.find((request) => request.target === "/landing");
     expect(landed?.headers["authorization"]).toBe("Bearer <your API token>");
-    expect(other.requests[0]?.headers["authorization"]).toBeUndefined();
-    expect(other.requests[0]?.headers["cookie"]).toBeUndefined();
-    expect(other.requests[0]?.headers["x-extra"]).toBe("1");
+    expect(landed?.headers["x-api-key"]).toBe("<your API key>");
+    expect(landed?.headers["x-extra"]).toBe("1");
+    const forwarded = other.requests[0]?.headers ?? {};
+    expect(forwarded["authorization"]).toBeUndefined();
+    expect(forwarded["cookie"]).toBeUndefined();
+    expect(forwarded["x-api-key"]).toBeUndefined();
+    expect(forwarded["x-extra"]).toBeUndefined();
+    expect(forwarded["accept"]).toBe("text/html");
+    expect(forwarded["accept-language"]).toBe("de");
+    expect(forwarded["user-agent"]).toBe("slugbase-test");
+  });
+
+  it.each([307, 308])("refuses a %i to another origin for a request that carries a body, and sends it nothing", async (status) => {
+    const other = await serve(ok);
+    const origin = await serve(redirect(`http://other.example.test:${String(other.port)}/landing`, status));
+    const error = await rejection(
+      loopbackOnly(scripted(["127.0.0.1"]).resolve),
+      {
+        url: `http://origin.example.test:${String(origin.port)}/`,
+        method: "POST",
+        headers: { "content-type": "application/json", "x-api-key": "<your API key>" },
+        body: new TextEncoder().encode('{"prompt":"private"}'),
+        timeoutMs: 2_000,
+        maxBytes: 100,
+      },
+    );
+    expect(error).toBeInstanceOf(EgressError);
+    expect(other.connections()).toBe(0);
+    expect(other.requests).toHaveLength(0);
+  });
+
+  it("keeps the body and the headers of a 307 within the origin", async () => {
+    const origin = await serve((request, socket) => {
+      if (request.target === "/start") {
+        respond(socket, 307, { location: "/landing" });
+      } else {
+        respond(socket, 200, {}, "");
+      }
+    });
+    await loopbackOnly(scripted(["127.0.0.1"]).resolve).request({
+      url: `http://origin.example.test:${String(origin.port)}/start`,
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": "<your API key>" },
+      body: new TextEncoder().encode("{}"),
+      timeoutMs: 2_000,
+      maxBytes: 100,
+    });
+    const landed = origin.requests.find((request) => request.target === "/landing");
+    expect(landed?.body.toString()).toBe("{}");
+    expect(landed?.headers["x-api-key"]).toBe("<your API key>");
+  });
+
+  it("delivers no body and no key header to another origin after a 303 turns a POST into a GET", async () => {
+    const other = await serve(ok);
+    const origin = await serve(redirect(`http://other.example.test:${String(other.port)}/landing`, 303));
+    await loopbackOnly(scripted(["127.0.0.1"]).resolve).request({
+      url: `http://origin.example.test:${String(origin.port)}/`,
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": "<your API key>" },
+      body: new TextEncoder().encode('{"prompt":"private"}'),
+      timeoutMs: 2_000,
+      maxBytes: 100,
+    });
+    expect(other.requests[0]?.method).toBe("GET");
+    expect(other.requests[0]?.body.toString()).toBe("");
+    expect(other.requests[0]?.headers["x-api-key"]).toBeUndefined();
+    expect(other.requests[0]?.headers["content-type"]).toBeUndefined();
   });
 
   it("spends one time budget across the hops", async () => {
