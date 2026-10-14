@@ -17,12 +17,61 @@
       "description": "Changes cannot be saved until your connection is back."
     },
     "account": "Account",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "settings": "Settings",
+    "accountSettings": "Account settings"
   },
   "home": {
     "empty": {
       "title": "Welcome to {name}",
       "description": "Bookmarks with short, private slugs."
+    }
+  },
+  "settings": {
+    "navigation": "Settings",
+    "nav": {
+      "account": "Account",
+      "profile": "Profile"
+    },
+    "account": {
+      "title": "Profile",
+      "section": {
+        "title": "Your profile",
+        "description": "How you appear to other members, and the language of the app."
+      },
+      "avatar": {
+        "caption": "Your avatar shows your initials."
+      },
+      "name": {
+        "label": "Name",
+        "error": {
+          "required": "Enter your name.",
+          "tooLong": "Use at most 100 characters.",
+          "invalid": "Check the name."
+        }
+      },
+      "email": {
+        "label": "Email",
+        "description": "The address you sign in with."
+      },
+      "language": {
+        "label": "Language",
+        "description": "The language of the app and of the emails we send you.",
+        "option": {
+          "en": "English",
+          "de": "Deutsch"
+        },
+        "error": {
+          "invalid": "Choose English or Deutsch."
+        }
+      },
+      "save": "Save",
+      "saved": "Profile saved",
+      "loadFailed": {
+        "title": "Your profile could not be loaded",
+        "description": "Try again. If this continues, tell your administrator.",
+        "retry": "Try again"
+      }
     }
   },
   "configFailure": {

@@ -71,6 +71,13 @@
       "when": 1791996143975,
       "tag": "20261014164223_add_first_run_setup",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1791998241022,
+      "tag": "20261014171721_add_account_profile_update",
+      "breakpoints": true
     }
   ]
 }

@@ -7,8 +7,8 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@slugbase/ui";
-import { AccountMenu, AppShell, HomeIcon, LifeBuoyIcon, LogOutIcon, ThemeToggle } from "@slugbase/ui/patterns";
-import { Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { AccountMenu, AppShell, HomeIcon, LifeBuoyIcon, LogOutIcon, SettingsIcon, ThemeToggle } from "@slugbase/ui/patterns";
+import { Link, Outlet, useRouter, useRouterState } from "@tanstack/react-router";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { useSignOut } from "../auth/sign-out.ts";
@@ -27,7 +27,19 @@ export function AppLayout(): ReactElement {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const extensions = useExtensions();
   const signOut = useSignOut();
-  const accountItems = [{ id: "sign-out", label: t("shell.signOut"), icon: <LogOutIcon aria-hidden="true" />, onSelect: signOut }];
+  const router = useRouter();
+  const inSettings = pathname === "/settings" || pathname.startsWith("/settings/");
+  const accountItems = [
+    {
+      id: "settings",
+      label: t("shell.accountSettings"),
+      icon: <SettingsIcon aria-hidden="true" />,
+      onSelect: () => {
+        void router.navigate({ to: "/settings/account" });
+      },
+    },
+    { id: "sign-out", label: t("shell.signOut"), icon: <LogOutIcon aria-hidden="true" />, onSelect: signOut },
+  ];
 
   return (
     <AppShell
@@ -44,7 +56,7 @@ export function AppLayout(): ReactElement {
         <Breadcrumb aria-label={t("shell.breadcrumb")}>
           <BreadcrumbList>
             <BreadcrumbItem>
-              <BreadcrumbPage>{t("shell.home")}</BreadcrumbPage>
+              <BreadcrumbPage>{inSettings ? t("shell.settings") : t("shell.home")}</BreadcrumbPage>
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>

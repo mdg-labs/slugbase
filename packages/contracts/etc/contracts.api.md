@@ -222,6 +222,10 @@ export interface ComponentTypes {
         SetupStatus: {
             setupRequired: boolean;
         };
+        UpdateAccountRequest: {
+            displayName?: string;
+            locale?: "en" | "de";
+        };
         VersionInfo: {
             builtAt: string;
             commit: string;
@@ -1327,6 +1331,78 @@ export interface OperationTypes {
             };
         };
     };
+    // (undocumented)
+    updateMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["UpdateAccountRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["Account"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
 }
 
 // @public (undocumented)
@@ -1399,7 +1475,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        patch: OperationTypes["updateMe"];
         trace?: never;
     };
     // (undocumented)
@@ -1938,6 +2014,65 @@ export const TOKEN_SCOPES: readonly ["read", "write"];
 
 // @public (undocumented)
 export type TokenScope = (typeof TOKEN_SCOPES)[number];
+
+// @public (undocumented)
+export const UpdateAccountRequestSchema: z.ZodObject<{
+    displayName: z.ZodOptional<z.ZodString>;
+    locale: z.ZodOptional<z.ZodEnum<{
+        en: "en";
+        de: "de";
+    }>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const updateMe: {
+    readonly method: "patch";
+    readonly path: "/api/v1/me";
+    readonly operationId: "updateMe";
+    readonly tag: "me";
+    readonly summary: "Change the signed-in account's display name and language";
+    readonly auth: "account";
+    readonly rate: "write";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            displayName: z.ZodOptional<z.ZodString>;
+            locale: z.ZodOptional<z.ZodEnum<{
+                en: "en";
+                de: "de";
+            }>>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        id: z.ZodUUID;
+        email: z.ZodString;
+        displayName: z.ZodString;
+        locale: z.ZodEnum<{
+        en: "en";
+        de: "de";
+        }>;
+        theme: z.ZodEnum<{
+        light: "light";
+        dark: "dark";
+        system: "system";
+        }>;
+        accent: z.ZodNullable<z.ZodString>;
+        defaultView: z.ZodEnum<{
+        grid: "grid";
+        table: "table";
+        }>;
+        aiOptOut: z.ZodBoolean;
+        emailVerified: z.ZodBoolean;
+        hasPassword: z.ZodBoolean;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: ProblemResponse;
+        readonly 503: ProblemResponse;
+    };
+};
 
 // @public (undocumented)
 export const VersionInfoSchema: z.ZodObject<{

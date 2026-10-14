@@ -66,7 +66,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Change the signed-in account's display name and language */
+        patch: operations["updateMe"];
         trace?: never;
     };
     "/api/v1/me/sessions": {
@@ -431,6 +432,15 @@ export interface components {
             /** @description Whether first-run setup is pending: the instance has no account, has not completed setup and has setup turned on */
             setupRequired: boolean;
         };
+        UpdateAccountRequest: {
+            /** @description The name shown to other members, 1 to 100 characters; surrounding whitespace is removed and a name that is blank after that is refused */
+            displayName?: string;
+            /**
+             * @description The language of the account's emails and of the app unless the browser overrides it
+             * @enum {string}
+             */
+            locale?: "en" | "de";
+        };
         VersionInfo: {
             /** @description Build time, RFC 3339 UTC */
             builtAt: string;
@@ -644,6 +654,84 @@ export interface operations {
             };
             /** @description There is no valid credential, or the session's second factor is not complete */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description The account after the change; a field the request leaves out keeps its value */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation: an unknown field, a name that is empty or longer than 100 characters, or a language other than en and de */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -4,8 +4,10 @@
 -- accounts: forced row-level security with the own-row policy. The policy
 -- stays own-row only until the members list needs a co-member branch.
 -- slugbase_app may read
--- every column but password_hash, which only the system operations return; it
--- holds no INSERT, UPDATE or DELETE yet. slugbase_system gets the table
+-- every column but password_hash, which only the system operations return. It
+-- may update display_name and locale, the columns of the profile operation, and
+-- only on its own row: the policy's WITH CHECK keeps the id, and no other
+-- column is granted. It holds no INSERT or DELETE. slugbase_system gets the table
 -- privileges its functions need (it bypasses row-level security).
 ALTER TABLE public.accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.accounts FORCE ROW LEVEL SECURITY;
@@ -19,6 +21,7 @@ GRANT SELECT (
   default_bookmark_view, single_key_shortcuts, signin_alerts, ai_opt_out, analytics_consent, consent_at,
   onboarding, is_instance_admin, disabled_at, last_sign_in_at, created_at, updated_at
 ) ON TABLE public.accounts TO slugbase_app;
+GRANT UPDATE (display_name, locale) ON TABLE public.accounts TO slugbase_app;
 GRANT SELECT, UPDATE ON TABLE public.accounts TO slugbase_system;
 
 -- sessions: looked up by token hash before any account is known, so the table

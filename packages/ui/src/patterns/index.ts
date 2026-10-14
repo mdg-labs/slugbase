@@ -1,3 +1,4 @@
+export { AccountAvatar, type AccountAvatarProps } from "./account-avatar.tsx";
 export { AccountMenu, type AccountMenuItem, type AccountMenuProps } from "./account-menu.tsx";
 export { AppShell, MAIN_CONTENT_ID, type AppShellLabels, type AppShellProps } from "./app-shell.tsx";
 export { AuthCard, type AuthCardProps } from "./auth-card.tsx";
@@ -9,6 +10,9 @@ export { FeedbackToastProvider, feedbackToast, type FeedbackToastProviderProps }
 export { FormField, type FormFieldProps } from "./form-field.tsx";
 export { Loading, type LoadingProps } from "./loading.tsx";
 export { SecretInput, type SecretInputProps } from "./secret-input.tsx";
+export { SelectField, type SelectFieldProps, type SelectOption } from "./select-field.tsx";
+export { SettingsNav, type SettingsNavGroup, type SettingsNavItem, type SettingsNavProps } from "./settings-nav.tsx";
+export { SettingsSection, type SettingsSectionProps } from "./settings-section.tsx";
 export { ThemeToggle, type ThemeToggleProps } from "./theme-toggle.tsx";
 // The icons the shell and the empty states of the app place; the app takes them from here so the icon library has one home.
-export { CompassIcon, HomeIcon, InboxIcon, LifeBuoyIcon, LockIcon, LogOutIcon, TriangleAlertIcon } from "lucide-react";
+export { CompassIcon, HomeIcon, InboxIcon, LifeBuoyIcon, LockIcon, LogOutIcon, SettingsIcon, TriangleAlertIcon } from "lucide-react";

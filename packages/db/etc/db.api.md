@@ -34,9 +34,18 @@ export interface AccountProfile {
     readonly theme: "light" | "dark" | "system";
 }
 
+// @public
+export interface AccountProfileChanges {
+    // (undocumented)
+    readonly displayName?: string;
+    // (undocumented)
+    readonly locale?: "en" | "de";
+}
+
 // @public (undocumented)
 export interface AccountProfileRepository {
     profile(): Promise<AccountProfile | undefined>;
+    updateProfile(changes: AccountProfileChanges): Promise<AccountProfile | undefined>;
 }
 
 // @public (undocumented)

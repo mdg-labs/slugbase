@@ -29,13 +29,25 @@ function oneOf<T extends string>(column: string, value: string, allowed: readonl
   return found;
 }
 
+/** The columns of the profile an account changes itself; a field left out keeps its value. */
+export interface AccountProfileChanges {
+  readonly displayName?: string;
+  readonly locale?: "en" | "de";
+}
+
 export interface AccountProfileRepository {
   /** The account of the transaction; undefined when no such row is visible. Works in an account-level transaction. */
   profile(): Promise<AccountProfile | undefined>;
+  /**
+   * Writes the changes to the account of the transaction and answers its profile afterwards; undefined when no
+   * such row is visible. The row is the one `app.account_id` names, never one the caller names, and the
+   * application role holds the update privilege on these two columns only. No change writes nothing.
+   */
+  updateProfile(changes: AccountProfileChanges): Promise<AccountProfile | undefined>;
 }
 
 export function accountProfileRepository(tx: TenantTx): AccountProfileRepository {
-  return {
+  const repository: AccountProfileRepository = {
     async profile() {
       const handle = tenantHandle(tx);
       const [row] = await handle
@@ -73,5 +85,22 @@ export function accountProfileRepository(tx: TenantTx): AccountProfileRepository
         hasPassword,
       };
     },
+    async updateProfile({ displayName, locale }) {
+      if (displayName !== undefined || locale !== undefined) {
+        const updated = await tenantHandle(tx)
+          .update(accounts)
+          .set({
+            ...(displayName === undefined ? {} : { displayName }),
+            ...(locale === undefined ? {} : { locale }),
+          })
+          .where(eq(accounts.id, tx.accountId))
+          .returning({ id: accounts.id });
+        if (updated.length === 0) {
+          return undefined;
+        }
+      }
+      return repository.profile();
+    },
   };
+  return repository;
 }

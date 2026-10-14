@@ -14,7 +14,20 @@ import { LogOutIcon } from 'lucide-react';
 import { ReactElement } from 'react';
 import { ReactNode } from 'react';
 import { Ref } from 'react';
+import { SettingsIcon } from 'lucide-react';
 import { TriangleAlertIcon } from 'lucide-react';
+
+// @public
+export function AccountAvatar(input: AccountAvatarProps): ReactElement;
+
+// @public (undocumented)
+export interface AccountAvatarProps {
+    // (undocumented)
+    className?: string;
+    name: string;
+    seed: string;
+    size?: "sm" | "lg";
+}
 
 // @public
 export function AccountMenu(input: AccountMenuProps): ReactElement;
@@ -227,6 +240,85 @@ export interface SecretInputProps {
     showLabel: string;
     // (undocumented)
     value?: string;
+}
+
+// @public
+export function SelectField(input: SelectFieldProps): ReactElement;
+
+// @public (undocumented)
+export interface SelectFieldProps {
+    // (undocumented)
+    className?: string;
+    description?: ReactNode;
+    // (undocumented)
+    disabled?: boolean;
+    error?: ReactNode;
+    // (undocumented)
+    label: ReactNode;
+    name?: string;
+    // (undocumented)
+    onValueChange: (value: string) => void;
+    // (undocumented)
+    options: readonly SelectOption[];
+    // (undocumented)
+    value: string;
+}
+
+// @public (undocumented)
+export interface SelectOption {
+    // (undocumented)
+    label: string;
+    // (undocumented)
+    value: string;
+}
+
+export { SettingsIcon }
+
+// @public
+export function SettingsNav(input: SettingsNavProps): ReactElement;
+
+// @public (undocumented)
+export interface SettingsNavGroup {
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    items: readonly SettingsNavItem[];
+    label: string;
+}
+
+// @public (undocumented)
+export interface SettingsNavItem {
+    current?: boolean;
+    id: string;
+    // (undocumented)
+    label: string;
+    link: ReactElement;
+}
+
+// @public (undocumented)
+export interface SettingsNavProps {
+    // (undocumented)
+    className?: string;
+    footer?: ReactNode;
+    // (undocumented)
+    groups: readonly SettingsNavGroup[];
+    label: string;
+    onNavigate: (id: string) => void;
+}
+
+// @public
+export function SettingsSection(input: SettingsSectionProps): ReactElement;
+
+// @public (undocumented)
+export interface SettingsSectionProps {
+    children: ReactNode;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    description?: ReactNode;
+    footer?: ReactNode;
+    // (undocumented)
+    title: ReactNode;
 }
 
 // @public
