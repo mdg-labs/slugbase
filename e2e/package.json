@@ -1,0 +1,17 @@
+{
+  "name": "@slugbase/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Playwright journeys against the built Community Edition image",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "lint": "eslint --max-warnings=0 .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:e2e": "node run-tests.ts"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.64.0"
+  }
+}

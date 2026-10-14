@@ -10,3 +10,7 @@ coverage/
 .tsbuildinfo/
 *.tsbuildinfo
 .vitest/
+
+# Playwright output (e2e/)
+e2e/test-results/
+e2e/playwright-report/

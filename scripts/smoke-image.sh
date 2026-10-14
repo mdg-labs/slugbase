@@ -335,7 +335,11 @@ check_weak_secret_refused() {
   expect_lacks "the message" "$output" "$WEAK_SESSION_SECRET"
 }
 
-main() {
+# Prepares the image, writes this run's secrets and starts the stack, and returns once
+# /ready answers 200. Sets the state the cleanup reads and installs the cleanup, so a
+# caller that sources this file (e2e/with-stack.sh) gets the same teardown on every
+# way out, and reaches the server at http://127.0.0.1:$port.
+start_stack() {
   cd "$root"
   preflight
 
@@ -369,6 +373,10 @@ main() {
     }
 
   wait_ready
+}
+
+main() {
+  start_stack
   check_probes_and_pages
   check_container_hardening
   check_restart

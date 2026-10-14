@@ -1,0 +1,87 @@
+name: E2E
+
+# The browser journeys of doc 08 section 5.1 against the image built from this
+# commit, started through compose.yml. Docker runs on the runner itself, as in the
+# `build` job of ci.yml, and Playwright installs its browsers there. No job
+# references a secret, the workflow never runs on pull_request_target, and the
+# secrets of the stack are generated per run by scripts/smoke-image.sh and never
+# printed (doc 10 T16).
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  TURBO_TELEMETRY_DISABLED: "1"
+
+jobs:
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: e2e
+      # Built here and not pushed; the commit is passed in so that /version reports
+      # the commit under test.
+      - name: Build the image
+        env:
+          BUILD_COMMIT: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          docker build -f apps/slugbase/Dockerfile --build-arg "BUILD_COMMIT=$BUILD_COMMIT" -t slugbase:e2e .
+      # The browsers and the system libraries they need, for the three projects of
+      # e2e/playwright.config.ts.
+      - name: Install the browsers
+        run: pnpm --filter @slugbase/e2e exec playwright install --with-deps chromium firefox webkit
+      # with-stack.sh starts the stack, runs the command against it and removes the
+      # project, its volume and its temporary files however the command ends. The
+      # step fails when a test does.
+      - name: Run the journeys
+        env:
+          BUILD_COMMIT: ${{ github.sha }}
+          SLUGBASE_IMAGE: slugbase:e2e
+        run: bash e2e/with-stack.sh pnpm test:e2e
+      # A stack that the script could not remove (its process killed, say) is removed
+      # here; a run that ended normally leaves nothing to find.
+      - name: Remove any stack left behind
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          docker ps --all --format '{{.ID}} {{.Label "com.docker.compose.project"}}' |
+            awk '$2 ~ /^slugbase-smoke-/ { print $1 }' |
+            xargs --no-run-if-empty docker rm --force --volumes
+          docker volume ls --quiet --filter 'label=com.docker.compose.project' --format '{{.Name}} {{.Label "com.docker.compose.project"}}' |
+            awk '$2 ~ /^slugbase-smoke-/ { print $1 }' |
+            xargs --no-run-if-empty docker volume rm --force
+      # Traces, videos and screenshots of the failed tests, and the HTML report.
+      - name: Upload the artifacts of a failed run
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: e2e-artifacts
+          path: |
+            e2e/test-results/
+            e2e/playwright-report/
+          if-no-files-found: ignore
+          retention-days: 14

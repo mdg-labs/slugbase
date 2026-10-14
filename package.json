@@ -20,6 +20,7 @@
     "contracts:check": "turbo run contracts:check --continue",
     "db:check": "turbo run db:check",
     "i18n:check": "turbo run i18n:check",
+    "test:e2e": "pnpm --filter @slugbase/e2e test:e2e",
     "audit": "pnpm audit --audit-level=high",
     "gate": "pnpm lint && turbo run typecheck test:unit build && pnpm contracts:check && pnpm db:check && pnpm test:integration && pnpm i18n:check && pnpm audit --audit-level=high",
     "db:generate": "pnpm --filter @slugbase/db db:generate",
