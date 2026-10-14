@@ -10,6 +10,22 @@ import type { PgColumn } from 'drizzle-orm/pg-core';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import { SQL } from 'drizzle-orm';
 
+// @public (undocumented)
+export interface AuthStore {
+    close(): Promise<void>;
+    createSession(session: NewSession): Promise<boolean>;
+    emailKey(email: string): Promise<string>;
+    loginLookup(email: string): Promise<LoginCandidate | undefined>;
+    lookupSession(tokenHash: Buffer): Promise<SessionRecord | undefined>;
+    revokeSession(sessionId: string, accountId: string): Promise<boolean>;
+}
+
+// @public (undocumented)
+export interface AuthStoreOptions {
+    poolSize?: number;
+    url: string;
+}
+
 // @public
 export const CE_CHAIN: MigrationChain;
 
@@ -34,6 +50,9 @@ export class ConnectionRoleError extends Error {
 export interface ConnectionRoleOptions {
     url: string;
 }
+
+// @public
+export function createAuthStore(options: AuthStoreOptions): AuthStore;
 
 // @public
 export function createDatabase(options: DatabaseOptions): Database;
@@ -63,6 +82,16 @@ export type InsertValues<T extends WorkspaceTable> = Omit<InferInsertModel<T>, "
 
 // @public
 export function listRepositoryMethods(): readonly RepositoryMethodEntry[];
+
+// @public
+export interface LoginCandidate {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly disabledAt: Date | null;
+    // (undocumented)
+    readonly passwordHash: string | null;
+}
 
 // @public
 export function migrate(options: MigrateOptions): Promise<MigrateResult>;
@@ -109,6 +138,18 @@ export function migrationLevel(options: MigrationLevelOptions): Promise<Migratio
 export interface MigrationLevelOptions {
     chains?: readonly MigrationChain[];
     url: string;
+}
+
+// @public (undocumented)
+export interface NewSession {
+    // (undocumented)
+    readonly accountId: string;
+    readonly id: string;
+    readonly ipPrefix: string | null;
+    readonly remember: boolean;
+    readonly replacedTokenHash: Buffer | null;
+    readonly tokenHash: Buffer;
+    readonly userAgent: string | null;
 }
 
 // @public (undocumented)
@@ -181,6 +222,22 @@ export interface ScopedRepositoryDefinition<T extends WorkspaceTable> {
     readonly name: string;
     // (undocumented)
     readonly table: T;
+}
+
+// @public
+export interface SessionRecord {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly activeWorkspaceId: string | null;
+    // (undocumented)
+    readonly isInstanceAdmin: boolean;
+    // (undocumented)
+    readonly level: "partial" | "full";
+    // (undocumented)
+    readonly reauthAt: Date | null;
+    // (undocumented)
+    readonly sessionId: string;
 }
 
 // @public

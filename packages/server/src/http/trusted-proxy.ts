@@ -88,3 +88,37 @@ export function rateLimitKeyOf(address: string): string {
   }
   return `${groups.slice(0, 4).map((group) => group.toString(16)).join(":")}::/64`;
 }
+
+const IPV4_PREFIX_OCTETS = 2;
+const IPV6_PREFIX_GROUPS = 3;
+
+/**
+ * The coarse network a session keeps instead of an address (doc 02 section 2.4):
+ * the first two octets of an IPv4 address as a /16, or the first three groups of
+ * an IPv6 address as a /48, in CIDR form with the host bits zero. An IPv4-mapped
+ * IPv6 address is the IPv4 address it maps. Undefined for a value that is not an
+ * IP address, such as the placeholder of a request without a socket: no prefix is
+ * better than a made-up one.
+ */
+export function networkPrefixOf(address: string | undefined): string | undefined {
+  if (address === undefined) {
+    return undefined;
+  }
+  const version = isIP(address);
+  if (version === 4) {
+    const octets = address.split(".").slice(0, IPV4_PREFIX_OCTETS);
+    return `${octets.join(".")}.0.0/16`;
+  }
+  if (version !== 6) {
+    return undefined;
+  }
+  const mapped = rateLimitKeyOf(address);
+  if (isIP(mapped) === 4) {
+    return networkPrefixOf(mapped);
+  }
+  const groups = ipv6GroupsOf(address);
+  if (groups === undefined) {
+    return undefined;
+  }
+  return `${groups.slice(0, IPV6_PREFIX_GROUPS).map((group) => group.toString(16)).join(":")}::/48`;
+}

@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { isNonTransactional, rewriteIndexesConcurrently, splitStatements } from "../scripts/migration-sql.ts";
@@ -9,6 +9,7 @@ import { isNonTransactional, rewriteIndexesConcurrently, splitStatements } from 
 // says (doc 05 section 5.3), and checks what the SQL files define.
 
 const MIGRATIONS = new URL("../migrations/", import.meta.url);
+const SQL_SOURCES = new URL("../src/sql/", import.meta.url);
 const server = new URL(
   process.env.SLUGBASE_TEST_PG_URL ?? "postgres://slugbase:slugbase@127.0.0.1:54329/slugbase_dev",
 );
@@ -111,8 +112,16 @@ describe("the committed migrations", () => {
     expect(after[0]).toEqual({ workspace: null });
   });
 
-  it("can be applied a second time: the SQL files are declarative", async () => {
-    await applyAll(db);
+  it("can have their SQL files applied a second time: the files are declarative", async () => {
+    // A migration that creates a table cannot run twice; the files of src/sql, which every
+    // migration that changes them carries whole, are what must.
+    for (const name of readdirSync(SQL_SOURCES).filter((file) => file.endsWith(".sql")).sort()) {
+      await db.begin(async (tx) => {
+        for (const statement of splitStatements(readFileSync(new URL(name, SQL_SOURCES), "utf8"))) {
+          await tx.unsafe(statement);
+        }
+      });
+    }
     const rows = await db`SELECT count(*)::int AS n FROM pg_extension WHERE extname IN ('citext', 'pg_trgm', 'btree_gin')`;
     expect(rows[0]).toEqual({ n: 3 });
   });

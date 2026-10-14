@@ -3,7 +3,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 // A copy of the package that `pnpm db:check` inspects, so a test can edit a
-// migration, the schema or src/sql without touching the real ones.
+// migration, the schema or src/sql without touching the real ones. Its schema is
+// the shipped one, which the migrations describe, plus the tables a test declares.
 
 export const PACKAGE = new URL("../..", import.meta.url).pathname.replace(/\/$/, "");
 
@@ -22,9 +23,15 @@ export class PackageCopy {
     this.schema("export {};\n");
   }
 
+  /** The shipped schema plus the tables `source` declares, which a test adds, changes or breaks. */
   schema(source: string): void {
-    mkdirSync(join(this.dir, "src", "schema"), { recursive: true });
-    writeFileSync(join(this.dir, "src", "schema", "index.ts"), source);
+    const dir = join(this.dir, "src", "schema");
+    cpSync(join(PACKAGE, "src", "schema"), dir, { recursive: true });
+    writeFileSync(join(dir, "extra.ts"), source);
+    writeFileSync(
+      join(dir, "index.ts"),
+      `${readFileSync(join(PACKAGE, "src", "schema", "index.ts"), "utf8")}export * from "./extra.ts";\n`,
+    );
   }
 
   path(...parts: string[]): string {

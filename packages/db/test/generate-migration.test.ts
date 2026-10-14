@@ -95,9 +95,12 @@ class Copy {
     this.schema(EMPTY_SCHEMA);
   }
 
+  /** The shipped schema, which the migrations describe, plus the tables `source` declares. */
   schema(source: string): void {
-    mkdirSync(join(this.dir, "src", "schema"), { recursive: true });
-    writeFileSync(join(this.dir, "src", "schema", "index.ts"), source);
+    const dir = join(this.dir, "src", "schema");
+    cpSync(join(PACKAGE, "src", "schema"), dir, { recursive: true });
+    writeFileSync(join(dir, "extra.ts"), source);
+    writeFileSync(join(dir, "index.ts"), `${readFileSync(join(PACKAGE, "src", "schema", "index.ts"), "utf8")}export * from "./extra.ts";\n`);
   }
 
   path(...parts: string[]): string {

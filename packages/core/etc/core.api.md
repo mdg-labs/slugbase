@@ -271,6 +271,9 @@ export interface MailPort extends Port {
 }
 
 // @public
+export function normalizeEmail(raw: string): string;
+
+// @public
 export interface Port {
     readonly available: boolean;
 }
@@ -336,6 +339,23 @@ export interface SecretBoxPort extends Port {
 }
 
 // @public
+export const SESSION_ABSOLUTE_DAYS = 180;
+
+// @public
+export const SESSION_TOKEN_BYTES = 32;
+
+// @public
+export interface SessionCookieSpec {
+    readonly maxAgeSeconds: number;
+    // (undocumented)
+    readonly name: string;
+    readonly secure: boolean;
+}
+
+// @public
+export function sessionCookieSpec(appOrigin: string): SessionCookieSpec;
+
+// @public
 export type TenantPrincipal = {
     readonly kind: "session";
     readonly accountId: string;
@@ -363,7 +383,13 @@ export interface TenantResolver extends Port {
 }
 
 // @public
+export function truncateUserAgent(userAgent: string | null | undefined): string | null;
+
+// @public
 export function unconfigured(): Adapters;
+
+// @public
+export const USER_AGENT_MAX_LENGTH = 256;
 
 // @public (undocumented)
 export type WorkspaceRole = "owner" | "admin" | "member";

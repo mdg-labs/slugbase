@@ -17,6 +17,7 @@ import {
   ConfigError,
   PROCESS_TYPES,
   RATE_LIMIT_BUCKETS,
+  createAccountOnlyTenantResolver,
   createLogger,
   createRateLimitRegistry,
   createServer,
@@ -157,6 +158,9 @@ function composeMail(config: ServerConfig | WorkerConfig, logger: Logger): MailP
 // Sentry-protocol adapter when the operator set `ERROR_REPORT_DSN`, and the
 // no-op default (errors are logged only) when not. Egress is always on (doc 01
 // section 6): the adapter that resolves, validates and pins every outbound request.
+// No account has a workspace until the workspace tables exist, so the tenant resolver puts every
+// request at account level; sign-in and the session cookie are served by `createServer` itself,
+// on `DATABASE_URL`.
 // The rate limiter keeps its tokens in Postgres through the system operation of
 // `@slugbase/db`, on a small pool of its own as the role of `DATABASE_URL`; the
 // pool connects on the first limited request, not at start-up. Its limits are the
@@ -184,7 +188,15 @@ export function composeAdapters(config: ServerConfig | WorkerConfig, logger: Log
   logger.info("Rate limiter ready", { buckets: RATE_LIMIT_BUCKETS.length });
   const mail = composeMail(config, logger);
   logger.info(mail.available ? "Mail ready" : "Mail is off; messages are only logged");
-  return { ...defaults, mail, secretBox, errors, egress: new HttpEgress({ nodeEnv: config.NODE_ENV }), rateLimit };
+  return {
+    ...defaults,
+    mail,
+    secretBox,
+    errors,
+    egress: new HttpEgress({ nodeEnv: config.NODE_ENV }),
+    rateLimit,
+    tenantResolver: createAccountOnlyTenantResolver(),
+  };
 }
 
 async function runServer(config: ServerConfig, trap: SignalTrap): Promise<void> {

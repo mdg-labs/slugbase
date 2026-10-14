@@ -83,7 +83,7 @@ function build(bindings: readonly RouteBinding[], options: Build = {}) {
       authentication: async (context, next) => {
         const accountId = context.req.header("x-account");
         if (accountId !== undefined) {
-          context.set("principal", { kind: "session", accountId, activeWorkspaceId: context.req.header("x-workspace"), instanceAdmin: false });
+          context.set("principal", { kind: "session", sessionId: "stub-session", accountId, activeWorkspaceId: context.req.header("x-workspace"), instanceAdmin: false });
         }
         return next();
       },
@@ -269,6 +269,85 @@ describe("the rate-limit stage", () => {
     ]);
   });
 
+  describe("the per-address limit an operation takes itself", () => {
+    // The stage cannot know the address a login names; its handler takes the limit through the context.
+    const attempt = (key: string): RouteBinding["handler"] => async (context) => {
+      const take = context.get("takeEmailLimit");
+      if (take === undefined) {
+        throw new Error("the stage did not offer the per-address limit");
+      }
+      await take(context, key);
+      return Response.json({ ok: true });
+    };
+    const login = (key = "address-1") => route(limited("/api/v1/login", "login", "login"), attempt(key));
+
+    it("takes the email limit of the bucket under the key the handler gives, after the IP limit", async () => {
+      const { get, memory } = build([login("address-1")]);
+      expect((await get("/api/v1/login")).status).toBe(200);
+      expect(memory.takes).toEqual([
+        { bucket: "login", key: "unknown" },
+        { bucket: "login:email", key: "address-1" },
+      ]);
+    });
+
+    it("answers 429 rate_limited with Retry-After and both policies once the address has used its limit", async () => {
+      const { get, rejections } = build([login()], { env: { RATE_LIMIT_LOGIN_EMAIL: "2/hour" } });
+      expect((await get("/api/v1/login")).status).toBe(200);
+      expect((await get("/api/v1/login")).status).toBe(200);
+      const denied = await get("/api/v1/login");
+      expect(denied.status).toBe(429);
+      expect(await denied.json()).toMatchObject({ code: "rate_limited", status: 429 });
+      expect(denied.headers.get("retry-after")).toBe("1800");
+      expect(denied.headers.get("ratelimit-policy")).toBe('"login";q=10;w=60, "login:email";q=2;w=3600');
+      expect(rejections).toEqual(["login"]);
+    });
+
+    it("counts each address on its own", async () => {
+      const { get } = build([route(limited("/api/v1/login", "login", "login"), async (context) => {
+        const take = context.get("takeEmailLimit");
+        await take?.(context, context.req.header("x-address") ?? "none");
+        return Response.json({ ok: true });
+      })], { env: { RATE_LIMIT_LOGIN_EMAIL: "1/hour" } });
+      expect((await get("/api/v1/login", { "x-address": "a" })).status).toBe(200);
+      expect((await get("/api/v1/login", { "x-address": "b" })).status).toBe(200);
+      expect((await get("/api/v1/login", { "x-address": "a" })).status).toBe(429);
+    });
+
+    it("answers 503 and does not run the rest of the handler when the limiter fails", async () => {
+      let past = 0;
+      const failing: RateLimitPort = { available: true, consume: (request) => (request.bucket === "login:email" ? Promise.reject(new Error("store down")) : Promise.resolve({ allowed: true, limit: 10, remaining: 9, retryAfterSeconds: 0 })) };
+      const { get } = build(
+        [route(limited("/api/v1/login", "login", "login"), async (context) => {
+          await context.get("takeEmailLimit")?.(context, "a");
+          past += 1;
+          return Response.json({ ok: true });
+        })],
+        { limiter: () => failing },
+      );
+      const response = await get("/api/v1/login");
+      expect(response.status).toBe(503);
+      expect(past).toBe(0);
+    });
+
+    it("is not offered on a route the stage did not limit", async () => {
+      let offered: unknown = "unset";
+      const { get } = build([route(limited("/api/v1/open", "open", "none"), (context) => {
+        offered = context.get("takeEmailLimit");
+        return Response.json({ ok: true });
+      })]);
+      await get("/api/v1/open");
+      expect(offered).toBeUndefined();
+    });
+
+    it("fails closed when the operation's bucket has no email limit", async () => {
+      const { get } = build([route(limited("/api/v1/open", "open", "public"), async (context) => {
+        await context.get("takeEmailLimit")?.(context, "a");
+        return Response.json({ ok: true });
+      })]);
+      expect((await get("/api/v1/open")).status).toBe(503);
+    });
+  });
+
   describe("before authentication (T9)", () => {
     function rejectingBearer(): { readonly authenticator: Authenticator; readonly lookups: () => number } {
       let lookups = 0;
@@ -344,7 +423,7 @@ describe("the rate-limit stage", () => {
         stages: {
           authentication: async (context, next) => {
             trace.push(`authentication after ${memory.takes.map((take) => take.bucket).join(",") || "nothing"}`);
-            context.set("principal", { kind: "session", accountId: "a", activeWorkspaceId: undefined, instanceAdmin: false });
+            context.set("principal", { kind: "session", sessionId: "stub-session", accountId: "a", activeWorkspaceId: undefined, instanceAdmin: false });
             return next();
           },
         },

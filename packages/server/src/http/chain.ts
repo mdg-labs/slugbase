@@ -12,7 +12,7 @@ import { bodyLimits } from "./body-limits.ts";
 import { createCrossSiteProtection } from "./cross-site.ts";
 import { createSecurityHeaders } from "./headers.ts";
 import { failRequest, notFoundProblem, responseStage, type ResponseValidation } from "./problem.ts";
-import { createRateLimiting, type RateLimitState } from "./rate-limit.ts";
+import { createRateLimiting, type RateLimitState, type TakeEmailLimit } from "./rate-limit.ts";
 import { createRequestContext } from "./request-context.ts";
 import { createTenantResolution, type RequestTenant } from "./tenant.ts";
 import { validation } from "./validation.ts";
@@ -86,6 +86,11 @@ export interface ChainEnv {
     principal?: Principal;
     /** Set by the rate-limiting stages for a request they limited: what they took, for the `RateLimit` headers. */
     rateLimit?: RateLimitState;
+    /**
+     * Set by the rate-limiting stage for an operation whose bucket has a per-address
+     * limit: the handler of such an operation takes it once it knows the address.
+     */
+    takeEmailLimit?: TakeEmailLimit;
     /** Set by the tenant-resolution stage: the active workspace's internal UUID. */
     workspaceId?: string;
     /** Set by the tenant-resolution stage when the resolver found a workspace for the principal. */

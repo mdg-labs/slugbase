@@ -396,7 +396,7 @@ Unauthenticated, `Content-Type: application/opensearchdescription+xml`, built on
 |---|---|---|---|---|
 | POST | `/auth/login` | `{ email, password, remember }` → done or MFA required; `401` for any bad credential, `403 email_unverified` when verification is required | anon | login |
 | POST | `/auth/mfa/verify` | `{ code }` or `{ backupCode }` completes a partial session | partial | mfa |
-| POST | `/auth/logout` | End this session | acct/partial | — |
+| POST | `/auth/logout` | End this session; `204` and the cookie cleared | acct/partial | write |
 | POST | `/auth/register` | `{ displayName, email, password }` — create account (when registration is open); generic `202`; `503 mail_unavailable` when verification is required and no mail is configured. Without a verification requirement the personal workspace is created at registration instead of at verification | anon | register |
 | POST | `/auth/verify-email` | `{ token }` — redeem signup verification token, create the personal workspace, sign in | anon | token_redeem |
 | POST | `/auth/verify-email/resend` | `{ email }` — resend verification; generic response | anon | reset |

@@ -72,6 +72,14 @@ export interface ComponentTypes {
         HealthStatus: {
             status: "ok";
         };
+        LoginRequest: {
+            email: string;
+            password: string;
+            remember: boolean;
+        };
+        LoginResult: {
+            next: "done";
+        };
         OpenApiDocument: {
             info: {
                 [key: string]: unknown;
@@ -284,6 +292,71 @@ export interface JsonResponseOptions<H extends ResponseHeaders = ResponseHeaders
     // (undocumented)
     readonly headers?: H;
 }
+
+// @public (undocumented)
+export const login: {
+    readonly method: "post";
+    readonly path: "/api/v1/auth/login";
+    readonly operationId: "login";
+    readonly tag: "auth";
+    readonly summary: "Sign in with an email address and a password";
+    readonly auth: "anonymous";
+    readonly rate: "login";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            email: z.ZodString;
+            password: z.ZodString;
+            remember: z.ZodDefault<z.ZodBoolean>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        next: z.ZodLiteral<"done">;
+        }, z.core.$strict>, {
+        "Set-Cookie": {
+        description: string;
+        schema: z.ZodString;
+        };
+        }>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: ProblemResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const LoginRequestSchema: z.ZodObject<{
+    email: z.ZodString;
+    password: z.ZodString;
+    remember: z.ZodDefault<z.ZodBoolean>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const LoginResultSchema: z.ZodObject<{
+    next: z.ZodLiteral<"done">;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const logout: {
+    readonly method: "post";
+    readonly path: "/api/v1/auth/logout";
+    readonly operationId: "logout";
+    readonly tag: "auth";
+    readonly summary: "End the current session";
+    readonly auth: "partial";
+    readonly rate: "write";
+    readonly responses: {
+        readonly 204: EmptyResponse;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 429: ProblemResponse;
+        readonly 503: ProblemResponse;
+    };
+};
 
 // @public
 export const OpenApiDocumentSchema: z.ZodObject<{
@@ -499,6 +572,137 @@ export interface OperationTypes {
             };
         };
     };
+    // (undocumented)
+    login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["LoginResult"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
 }
 
 // @public (undocumented)
@@ -517,6 +721,40 @@ export interface paths {
         get: OperationTypes["getApiConfig"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["logout"];
         delete?: never;
         options?: never;
         head?: never;

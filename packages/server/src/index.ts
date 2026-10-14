@@ -64,7 +64,9 @@ export type {
   SessionPrincipal,
   StageName,
   StartOptions,
+  TakeEmailLimit,
   TakenLimit,
   ValidatedInput,
 } from "./create-server.ts";
 export * from "./worker/index.ts";
+export { createAccountOnlyTenantResolver } from "./auth/tenant-resolver.ts";

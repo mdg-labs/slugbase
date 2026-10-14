@@ -55,7 +55,7 @@ function setup(challenge: { ok: boolean } = { ok: true }) {
     { operation: operationOf("patch", "/api/v1/things/{id}", "updateThing"), handler },
     { operation: operationOf("delete", "/api/v1/things/{id}", "deleteThing"), handler },
     { operation: operationOf("get", "/api/v1/things", "listThings"), handler },
-    { operation: operationOf("post", "/api/v1/auth/login", "login"), handler },
+    { operation: operationOf("post", "/api/v1/auth/sign-in", "signIn"), handler },
     { operation: operationOf("post", "/api/v1/import/netscape", "importNetscape"), handler, acceptsMultipart: true },
     { operation: operationOf("post", "/api/v1/events", "receiveEvent", { auth: "machine", audience: "machine" }), handler },
     {
@@ -236,10 +236,10 @@ describe("the content type", () => {
 describe("no path is exempt", () => {
   it("checks an anonymous mutation such as sign-in", async () => {
     const { server, seen } = setup();
-    const refused = await server.fetch(send("/api/v1/auth/login", { method: "POST", headers: { "content-type": "text/plain" }, body: "x" }));
+    const refused = await server.fetch(send("/api/v1/auth/sign-in", { method: "POST", headers: { "content-type": "text/plain" }, body: "x" }));
     expect(refused.status).toBe(403);
     expect(seen).toEqual([]);
-    const accepted = await server.fetch(send("/api/v1/auth/login", { method: "POST", headers: SAME_ORIGIN, body: "{}" }));
+    const accepted = await server.fetch(send("/api/v1/auth/sign-in", { method: "POST", headers: SAME_ORIGIN, body: "{}" }));
     expect(accepted.status).toBe(200);
   });
 

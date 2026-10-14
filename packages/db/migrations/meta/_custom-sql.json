@@ -1,4 +1,4 @@
 {
-  "sha256": "7813d59f055c478d187a8f0bc1e6c9052868e6113db75b72bef4d37647317c5d",
-  "migration": "20261014080811_add_rate_limit_purge"
+  "sha256": "bef0a1f4878267129c160cdcd2cb014c2be2d68e078faccd80c1b1d028519bef",
+  "migration": "20261014094238_add_accounts_and_sessions"
 }

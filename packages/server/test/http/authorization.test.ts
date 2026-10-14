@@ -52,7 +52,7 @@ const ROLES: Partial<Record<string, WorkspaceRole>> = {
 const MINUTE = 60_000;
 
 function session(who: Who, state: Pick<SessionPrincipal, "mfaPending" | "reauthAt"> = {}): SessionPrincipal {
-  return { kind: "session", accountId: ACCOUNTS[who], activeWorkspaceId: WORKSPACE, instanceAdmin: who === "instanceAdmin", ...state };
+  return { kind: "session", sessionId: "stub-session", accountId: ACCOUNTS[who], activeWorkspaceId: WORKSPACE, instanceAdmin: who === "instanceAdmin", ...state };
 }
 
 // The session state a test cookie asks its authenticator to report: `sid=member; state=partial`.

@@ -3,8 +3,8 @@ import { readFileSync } from "node:fs";
 
 // The operations of openapi.json, classified for the cross-tenant matrix. The
 // policy of an operation is the x-slugbase-auth extension (doc 04 section 1.2):
-// member, admin and owner operations act inside one workspace; account
-// operations act on the signed-in account; anonymous operations need no
+// member, admin and owner operations act inside one workspace; account and
+// partial operations act on the signed-in account; anonymous operations need no
 // session; instanceAdmin and machine operations belong to the process, not to
 // a workspace.
 
@@ -16,6 +16,8 @@ const KIND_OF_POLICY: Readonly<Record<string, OperationKind>> = {
   admin: "tenant-scoped",
   owner: "tenant-scoped",
   account: "account-level",
+  // A session whose second factor is pending is still the signed-in account.
+  partial: "account-level",
   anonymous: "anonymous",
   instanceAdmin: "process",
   machine: "process",

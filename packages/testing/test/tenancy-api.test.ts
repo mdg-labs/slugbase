@@ -54,6 +54,23 @@ describe("classifyOperations", () => {
     expect(result.operations.find((operation) => operation.operationId === "a")?.pathParameters).toEqual(["id"]);
   });
 
+  it("places a partial operation, which every signed-in session may call, with the account-level ones", () => {
+    const result = classifyOperations(
+      documentOf([
+        { operationId: "logout", path: "/api/v1/auth/logout", auth: "partial", method: "post" },
+        { operationId: "me", path: "/api/v1/me", auth: "account" },
+      ]),
+    );
+    expect(result.problems).toEqual([]);
+    expect(result.summary.byKind).toEqual({ "tenant-scoped": 0, "account-level": 2, anonymous: 0, process: 0 });
+    expect(result.operations.find((operation) => operation.operationId === "logout")).toMatchObject({
+      kind: "account-level",
+      policy: "partial",
+      pathParameters: [],
+      inputs: [],
+    });
+  });
+
   it("reports an operation with a missing or unknown policy, and counts it", () => {
     const result = classifyOperations(
       documentOf([
@@ -109,6 +126,7 @@ describe("API mode", () => {
     const report = await runApiMatrix({
       document: documentOf([
         { operationId: "me", path: "/api/v1/me", auth: "account" },
+        { operationId: "logout", path: "/api/v1/auth/logout", auth: "partial", method: "post" },
         { operationId: "health", path: "/health", auth: "anonymous" },
         { operationId: "admin", path: "/api/v1/instance", auth: "instanceAdmin" },
       ]),
@@ -121,7 +139,7 @@ describe("API mode", () => {
     expect(calls).toBe(0);
     expect(report.failures).toEqual([]);
     expect(report.classified.byKind["tenant-scoped"]).toBe(0);
-    expect(report.classified.total).toBe(3);
+    expect(report.classified.total).toBe(4);
   });
 
   it("fails an answer of 403, which discloses that the row exists", async () => {
