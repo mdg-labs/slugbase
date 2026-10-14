@@ -392,7 +392,7 @@ The complete list of operations that cross the tenant or account boundary. Each 
 | `sys_go_other_workspaces(slug)` | `/go` miss: which of the member's other workspaces resolve the slug | Up to 20 `{ id, name }` of workspaces the calling account (from `app_account_id()`, never an argument) belongs to and where it can access a forwarding, non-archived bookmark with that slug; runs only for results with no candidate |
 | `sys_favicon_get(host)` / `sys_favicon_put(...)` | Deployment-wide cache | |
 | `sys_rate_limit_take(key, capacity, refill, cost)` | Deployment-wide buckets | One `INSERT … ON CONFLICT DO UPDATE … RETURNING` with the database clock |
-| `sys_retention_purge()` | Scheduled, all workspaces | §6 table; returns per-table counts for logs |
+| `sys_retention_purge()` | Scheduled, all workspaces | §6 table, one statement per table, each epic adding the rule of the tables it creates; takes no argument, deletes at most 5 000 rows per table per call (rows another statement holds are skipped for the next call) and returns one `(table_name, deleted)` row per table for the job to log, counts only. It covers `sessions` so far |
 | `sys_instance_*` (`list_workspaces`, `create_workspace`, `list_accounts`, `set_admin`, `disable`, `reset_mfa`, `mark_verified`, `delete_workspace`, `delete_account`, `add_membership`, `update_settings`, `list_instance_audit`) | CE instance administration spans workspaces | Each re-checks `is_instance_admin` of `app_account_id()` **inside** the function and writes an instance audit event; `create_workspace` is the only writer of an owner invitation, `add_membership` also writes an event into the workspace's own audit log |
 | `sys_delete_account(account_id)` | Touches every workspace the account is in | §7.1 |
 | Cloud: system operations of the `cloud` chain | Inbound billing events and their reconciliation have no session | Defined in the `cloud` chain under the same rules as this table (Cloud doc 06); any change to billing state bumps `entitlement_version` in the same transaction |
@@ -492,7 +492,7 @@ Adding an enum value is expand-only; removing one is a contract migration after 
 
 ## 6. Retention and purge
 
-`retention.purge` runs hourly (doc 01 §8.1) through `sys_retention_purge()`, in batches of 5 000 rows per table per run.
+`retention.purge` runs hourly (doc 01 §8.1) through `sys_retention_purge()`, in batches of 5 000 rows per table per run. It is a pg-boss schedule, so one worker runs each tick whatever the number of workers; a backlog of more than one batch is finished by the next runs.
 
 | Data | Kept for | Then |
 |---|---|---|

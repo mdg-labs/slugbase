@@ -95,6 +95,9 @@ export function createDatabase(options: DatabaseOptions): Database;
 export function createRateLimitStore(options: RateLimitStoreOptions): RateLimitStore;
 
 // @public
+export function createRetentionStore(options: RetentionStoreOptions): RetentionStore;
+
+// @public
 export interface Database {
     close(): Promise<void>;
     withTenant<T>(context: TenantContext, fn: (tx: TenantTx) => Promise<T>): Promise<T>;
@@ -261,6 +264,24 @@ export interface RepositoryMethodEntry {
     readonly method: ScopedMethod;
     readonly repository: string;
     readonly table: string;
+}
+
+// @public
+export interface RetentionPurgeCount {
+    readonly deleted: number;
+    readonly table: string;
+}
+
+// @public (undocumented)
+export interface RetentionStore {
+    close(): Promise<void>;
+    purge(): Promise<readonly RetentionPurgeCount[]>;
+}
+
+// @public (undocumented)
+export interface RetentionStoreOptions {
+    poolSize?: number;
+    url: string;
 }
 
 // @public (undocumented)

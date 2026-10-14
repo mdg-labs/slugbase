@@ -33,6 +33,8 @@ export { listRepositoryMethods } from "./repositories/registry.ts";
 export type { RepositoryInput, RepositoryMethodEntry, ScopedMethod } from "./repositories/registry.ts";
 export { createRateLimitStore } from "./system/rate-limit.ts";
 export type { RateLimitStore, RateLimitStoreOptions, RateLimitTake, RateLimitTaken } from "./system/rate-limit.ts";
+export { createRetentionStore } from "./system/retention.ts";
+export type { RetentionPurgeCount, RetentionStore, RetentionStoreOptions } from "./system/retention.ts";
 export { createAuthStore } from "./system/auth.ts";
 export type {
   AuthStore,

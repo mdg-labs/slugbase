@@ -57,6 +57,13 @@
       "when": 1791984407380,
       "tag": "20261014132647_add_workspaces",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791985429431,
+      "tag": "20261014134349_add_retention_purge",
+      "breakpoints": true
     }
   ]
 }

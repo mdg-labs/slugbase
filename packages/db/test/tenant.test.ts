@@ -74,6 +74,7 @@ describe("the package entry point", () => {
         "createAuthStore",
         "createDatabase",
         "createRateLimitStore",
+        "createRetentionStore",
         "defineScopedRepository",
         "listRepositoryMethods",
         "membershipRepository",

@@ -108,6 +108,7 @@ describe("the shipped chain", () => {
       "sys_session_revoke_all",
       "app_member_workspace_ids",
       "sys_account_has_password",
+      "sys_retention_purge",
     ]);
     expect(checkRules).toContain(systemOperationsRule);
     const database = await scratch();
