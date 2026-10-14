@@ -171,6 +171,46 @@ describe("the rate-limit stage", () => {
     expect((await from("203.0.113.2")).status).toBe(200);
   });
 
+  describe("the key of an IP bucket", () => {
+    const spend = async (get: (path: string, headers?: Record<string, string>) => Promise<Response>, ip: string): Promise<number> =>
+      (await get("/api/v1/open", { "x-forwarded-for": ip })).status;
+
+    it("shares one bucket between the addresses of an IPv6 /64", async () => {
+      const { get, memory } = build([PUBLIC], { env: { RATE_LIMIT_PUBLIC_IP: "2/min" }, hops: 1 });
+      expect(await spend(get, "2001:db8:1:2::1")).toBe(200);
+      expect(await spend(get, "2001:db8:1:2:aaaa:bbbb:cccc:dddd")).toBe(200);
+      expect(await spend(get, "2001:0db8:0001:0002:ffff:ffff:ffff:ffff")).toBe(429);
+      expect(new Set(memory.takes.map((take) => take.key)).size).toBe(1);
+    });
+
+    it("keeps a separate bucket for another /64", async () => {
+      const { get } = build([PUBLIC], { env: { RATE_LIMIT_PUBLIC_IP: "1/min" }, hops: 1 });
+      expect(await spend(get, "2001:db8:1:2::1")).toBe(200);
+      expect(await spend(get, "2001:db8:1:2::2")).toBe(429);
+      expect(await spend(get, "2001:db8:1:3::1")).toBe(200);
+      expect(await spend(get, "2001:db8:2:2::1")).toBe(200);
+    });
+
+    it("shares one bucket between an IPv4-mapped IPv6 address and the IPv4 address", async () => {
+      const { get, memory } = build([PUBLIC], { env: { RATE_LIMIT_PUBLIC_IP: "1/min" }, hops: 1 });
+      expect(await spend(get, "198.51.100.7")).toBe(200);
+      expect(await spend(get, "::ffff:198.51.100.7")).toBe(429);
+      expect(await spend(get, "::ffff:c633:6407")).toBe(429);
+      expect(new Set(memory.takes.map((take) => take.key)).size).toBe(1);
+    });
+
+    it("keeps the full address on the request context for logs", async () => {
+      let seen: string | undefined;
+      const record = route(limited("/api/v1/open", "open", "public"), (context) => {
+        seen = context.get("clientIp");
+        return ok();
+      });
+      const { get } = build([record], { hops: 1 });
+      await get("/api/v1/open", { "x-forwarded-for": "2001:db8:1:2:aaaa:bbbb:cccc:dddd" });
+      expect(seen).toBe("2001:db8:1:2:aaaa:bbbb:cccc:dddd");
+    });
+  });
+
   it("keeps a bucket per account, and the account bucket empties first when it is the smaller", async () => {
     const { get, memory } = build([READ], { env: { RATE_LIMIT_READ_IP: "50/min", RATE_LIMIT_READ_ACCOUNT: "2/min" } });
     const as = (account: string) => get("/api/v1/items", { "x-account": account });

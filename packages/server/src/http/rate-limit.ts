@@ -3,6 +3,7 @@ import type { Logger } from "../create-server.ts";
 import type { RateLimitRegistry, RateLimitWindow, ScopeLimit } from "../config/index.ts";
 import type { ChainContext, RequestStage } from "./chain.ts";
 import { ProblemError, describeError, problemDocument, requestIdOf } from "./problem.ts";
+import { rateLimitKeyOf } from "./trusted-proxy.ts";
 
 // Stages 3a and 6 of the chain (doc 01 section 4, doc 04 section 7, doc 10 T9):
 // token buckets keyed by the bucket the operation declares in
@@ -12,7 +13,8 @@ import { ProblemError, describeError, problemDocument, requestIdOf } from "./pro
 // authenticated it takes one from the buckets of its account and, for a bucket
 // that has one, its workspace (stage 6); whichever is empty first denies it. The
 // IP is the one the request-context stage derived across the trusted proxy
-// hops, never a header read here. An operation that declares `none`, a
+// hops, never a header read here; its bucket key is the IPv4 address, or the /64
+// of an IPv6 one (`rateLimitKeyOf`). An operation that declares `none`, a
 // `machine` route and a request that matches no operation are not limited by
 // these stages.
 //
@@ -94,7 +96,7 @@ export function createRateLimiting({ limiter, registry, logger, errors, recordRe
     const principal = context.get("principal");
     switch (limit.scope) {
       case "ip":
-        return context.get("clientIp") ?? UNKNOWN_CLIENT;
+        return rateLimitKeyOf(context.get("clientIp") ?? UNKNOWN_CLIENT);
       case "account":
         return principal?.accountId;
       case "workspace":
