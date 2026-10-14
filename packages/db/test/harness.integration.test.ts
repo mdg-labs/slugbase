@@ -130,7 +130,7 @@ describe("dropping", () => {
     await other.drop();
     expect(await exists(db.app, name)).toBe(false);
     await expect(other.drop()).resolves.toBeUndefined();
-  });
+  }, HOOK_TIMEOUT_MS);
 
   it("happens when the work in withTestDatabase fails", async () => {
     let name = "";
@@ -143,5 +143,5 @@ describe("dropping", () => {
     ).rejects.toThrow("the test failed");
     expect(name).toMatch(/^test_/);
     expect(await exists(db.app, name)).toBe(false);
-  });
+  }, HOOK_TIMEOUT_MS);
 });

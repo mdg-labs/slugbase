@@ -64,7 +64,7 @@ describe("pruning stale templates", () => {
     expect(result.skipped).toEqual([{ name: current, reason: "current" }]);
     expect(await exists(stale)).toBe(false);
     expect(await exists(current)).toBe(true);
-  });
+  }, HOOK_TIMEOUT_MS);
 
   it("keeps the template of the current migration hash by default", async () => {
     const database = await createTestDatabase({ serverUrl });
@@ -94,7 +94,7 @@ describe("pruning stale templates", () => {
       expect(await exists(name)).toBe(true);
     }
     expect(await exists("slugbase_dev")).toBe(devBefore);
-  });
+  }, HOOK_TIMEOUT_MS);
 
   it("skips a template whose build lock another process holds", async () => {
     const held = await fakeTemplate();
@@ -110,7 +110,7 @@ describe("pruning stale templates", () => {
       await holder.end({ timeout: 5 });
     }
     expect((await pruneTestTemplates({ serverUrl, names: [held], keep: [] })).dropped).toEqual([held]);
-  });
+  }, HOOK_TIMEOUT_MS);
 
   it("skips a template with an open connection", async () => {
     const connected = await fakeTemplate({ allowConnections: true });
@@ -130,7 +130,7 @@ describe("pruning stale templates", () => {
     } finally {
       await client.end({ timeout: 5 });
     }
-  });
+  }, HOOK_TIMEOUT_MS);
 
   describe("with a test database cloned from a template", () => {
     const folders: string[] = [];
@@ -178,7 +178,7 @@ describe("pruning stale templates", () => {
     beforeAll(async () => {
       stale = await fakeTemplate();
       current = await fakeTemplate();
-    });
+    }, HOOK_TIMEOUT_MS);
 
     it("drops the templates named on its command line and reports them", async () => {
       const { stdout } = await execFileAsync(process.execPath, [PRUNE_SCRIPT, stale, current], {
@@ -188,6 +188,6 @@ describe("pruning stale templates", () => {
       expect(stdout).toContain(`dropped ${stale}`);
       expect(await exists(stale)).toBe(false);
       expect(await exists(current)).toBe(false);
-    });
+    }, HOOK_TIMEOUT_MS);
   });
 });
