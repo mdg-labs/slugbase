@@ -93,6 +93,39 @@ export type AuthPolicy = (typeof AUTH_POLICIES)[number];
 export const BOOKMARK_VIEWS: readonly ["grid", "table"];
 
 // @public (undocumented)
+export const changePassword: {
+    readonly method: "post";
+    readonly path: "/api/v1/me/password";
+    readonly operationId: "changePassword";
+    readonly tag: "me";
+    readonly summary: "Change the account's password";
+    readonly auth: "account";
+    readonly rate: "write";
+    readonly reauth: true;
+    readonly request: {
+        readonly body: z.ZodObject<{
+            currentPassword: z.ZodString;
+            newPassword: z.ZodString;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 204: EmptyResponse;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const ChangePasswordRequestSchema: z.ZodObject<{
+    currentPassword: z.ZodString;
+    newPassword: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
 export const completeSetup: {
     readonly method: "post";
     readonly path: "/api/v1/setup";
@@ -172,6 +205,10 @@ export interface ComponentTypes {
             };
             setupRequired?: boolean;
         };
+        ChangePasswordRequest: {
+            currentPassword: string;
+            newPassword: string;
+        };
         HealthStatus: {
             status: "ok";
         };
@@ -236,6 +273,9 @@ export interface ComponentTypes {
                 applied: number | null;
                 expected: number;
             };
+        };
+        ReauthRequest: {
+            password: string;
         };
         Session: {
             createdAt: string;
@@ -781,6 +821,77 @@ export const operations: readonly OperationDefinition[];
 // @public (undocumented)
 export interface OperationTypes {
     // (undocumented)
+    changePassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["ChangePasswordRequest"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     completeSetup: {
         parameters: {
             query?: never;
@@ -1291,6 +1402,77 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    reauthenticate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["ReauthRequest"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     revokeSession: {
         parameters: {
             query?: never;
@@ -1582,6 +1764,40 @@ export interface paths {
         options?: never;
         head?: never;
         patch: OperationTypes["updateMe"];
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["changePassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/me/reauth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["reauthenticate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     // (undocumented)
@@ -2000,6 +2216,36 @@ export const ReadyStatusSchema: z.ZodObject<{
         expected: z.ZodNumber;
         applied: z.ZodNullable<z.ZodNumber>;
     }, z.core.$strict>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const reauthenticate: {
+    readonly method: "post";
+    readonly path: "/api/v1/me/reauth";
+    readonly operationId: "reauthenticate";
+    readonly tag: "me";
+    readonly summary: "Re-authenticate the session with the account's password";
+    readonly auth: "account";
+    readonly rate: "mfa";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            password: z.ZodString;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 204: EmptyResponse;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const ReauthRequestSchema: z.ZodObject<{
+    password: z.ZodString;
 }, z.core.$strict>;
 
 // @public

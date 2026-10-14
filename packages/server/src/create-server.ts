@@ -131,6 +131,11 @@ export interface CreateServerOptions {
    * The server closes it on shutdown, like the tenant database.
    */
   readonly authStore?: AuthStore;
+  /**
+   * The instant, in milliseconds, the re-authentication window of doc 04 section 4.4 is measured against;
+   * by default the system clock. A test passes a clock it moves.
+   */
+  readonly now?: () => number;
   /** How long a shutdown lets in-flight requests finish before cutting them (doc 01 section 3 rule 2). */
   readonly shutdownTimeoutMs?: number;
 }
@@ -414,7 +419,7 @@ export function createServer(options: CreateServerOptions): Server {
     openApiRoute({ enabled: config.API_DOCS_ENABLED, document: options.openApiDocument }),
   ];
   // Password sign-in is part of the server, not a module: the session cookie is the one browser credential (doc 04 section 4.1).
-  const auth = authContribution({ store: authStore, appOrigin: config.APP_ORIGIN, sessionSecret: config.SESSION_SECRET });
+  const auth = authContribution({ store: authStore, appOrigin: config.APP_ORIGIN, sessionSecret: config.SESSION_SECRET, passwordPolicy });
   builtInRoutes.push(...(auth.routes ?? []));
   // So is first-run setup: it signs the first account in, on the same pool.
   builtInRoutes.push(...setupRoutes({ config, store: authStore, passwordPolicy }));
@@ -523,6 +528,7 @@ export function createServer(options: CreateServerOptions): Server {
       ? createMembershipTenantResolver({ withTenant: context.withTenant })
       : adapters.tenantResolver,
     withTenant: context.withTenant,
+    ...(options.now === undefined ? {} : { now: options.now }),
     responseValidation,
     metrics,
   }, chainStages);

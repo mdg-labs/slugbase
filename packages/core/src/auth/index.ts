@@ -1,6 +1,7 @@
 export { BreachedDatasetError, createBreachedPasswords, loadBreachedPasswords } from "./breached/index.ts";
 export type { BreachedPasswords } from "./breached/index.ts";
 export { normalizeEmail } from "./email.ts";
+export { REAUTH_WINDOW_MS, reauthenticatedRecently } from "./reauth.ts";
 export { PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, createPasswordPolicy } from "./password-policy.ts";
 export type { PasswordPolicy, PasswordPolicyOptions, PasswordProblem } from "./password-policy.ts";
 export {

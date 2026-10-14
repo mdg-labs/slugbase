@@ -21,6 +21,9 @@ export const FIXTURES: ContractFixtures = {
   getMe: {},
   // An account-level operation: no workspace or other account's identifier is part of it, and the account it changes is the walker's own.
   updateMe: { body: { displayName: "Walker", locale: "en", theme: "system", accent: "periwinkle", defaultView: "grid", singleKeyShortcuts: true } },
+  // The walker signs each session in with this password; the valid change is made by a session that has just re-authenticated with it.
+  reauthenticate: { body: { password: WALKER_ACCOUNT.password } },
+  changePassword: { body: { currentPassword: WALKER_ACCOUNT.password, newPassword: "a new password for the walker" } },
   listSessions: {},
   // The walker has one session, which every call of the walk needs; a revocation that succeeds is covered by the session route tests.
   revokeSession: { path: { id: UNKNOWN_SESSION_ID }, status: 404 },

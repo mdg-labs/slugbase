@@ -41,6 +41,7 @@ export type {
   AuthStoreOptions,
   LoginCandidate,
   NewSession,
+  PasswordChange,
   SessionRecord,
   SessionSummary,
 } from "./system/auth.ts";

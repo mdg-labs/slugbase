@@ -228,3 +228,57 @@ export const updateMe = defineOperation({
     503: problemResponse("The service is temporarily unavailable"),
   },
 });
+
+export const ReauthRequestSchema = z
+  .strictObject({
+    password: z.string().min(1).max(256).describe("The account's current password"),
+  })
+  .meta({ id: "ReauthRequest" });
+
+export const ChangePasswordRequestSchema = z
+  .strictObject({
+    currentPassword: z.string().min(1).max(256).describe("The account's current password"),
+    newPassword: z.string().describe("The new password, 12 to 256 characters and not on the breached list"),
+  })
+  .meta({ id: "ChangePasswordRequest" });
+
+export const reauthenticate = defineOperation({
+  method: "post",
+  path: "/api/v1/me/reauth",
+  operationId: "reauthenticate",
+  tag: "me",
+  summary: "Re-authenticate the session with the account's password",
+  auth: "account",
+  rate: "mfa",
+  request: { body: ReauthRequestSchema },
+  responses: {
+    204: emptyResponse("The password is right; the session counts as re-authenticated for the next ten minutes"),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, or its second factor is not complete; or the password is wrong or the account has none, answered as reauth_required with the field in errors[] and the session unchanged"),
+    403: problemResponse("The request did not come from the application itself"),
+    422: problemResponse("The body did not pass validation"),
+    429: rateLimitedResponse("Too many attempts; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const changePassword = defineOperation({
+  method: "post",
+  path: "/api/v1/me/password",
+  operationId: "changePassword",
+  tag: "me",
+  summary: "Change the account's password",
+  auth: "account",
+  rate: "write",
+  reauth: true,
+  request: { body: ChangePasswordRequestSchema },
+  responses: {
+    204: emptyResponse("The password is changed and every other session of the account is deleted; the response carries the Set-Cookie header of the session's new token"),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"),
+    403: problemResponse("The request did not come from the application itself, or the credential is an API token"),
+    422: problemResponse("The body did not pass validation; the new password is refused by the policy (weak_password); or the current password is wrong or the account has none, answered alike as validation_failed with the field in errors[] and nothing changed"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});

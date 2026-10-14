@@ -102,6 +102,8 @@ export function createStubWorld(fixture: TenantFixture): StubWorld {
     credentialsOf: (principal) => sessionCredentials(principal.accountId),
     hooks: {
       authorized: (operation) => authorized(operation.auth),
+      // The stub sessions carry no re-authentication, so every one of them is a session that has none.
+      withoutReauth: (operation) => authorized(operation.auth),
       tooLowRole: (operation) => {
         // The account just below the policy: a role below it, no workspace at all below `member` (answered 404), a non-admin below `instanceAdmin`.
         const account = Object.hasOwn(justBelow, operation.auth) ? justBelow[operation.auth] : undefined;

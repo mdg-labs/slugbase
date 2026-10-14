@@ -58,6 +58,7 @@ const thingDocument = buildDocument([getThing], committed);
 const thingFixtures: ContractFixtures = { getThing: {} };
 const noHooks: PolicyHooks = {
   authorized: () => none,
+  withoutReauth: () => none,
   tooLowRole: () => none,
   readOnlyToken: () => none,
   withoutEntitlement: () => none,
@@ -313,6 +314,70 @@ describe("the re-authentication policy extension", () => {
       paths: { [rotateThing.path]: { post: { ...entryOf(document, rotateThing), "x-slugbase-reauth": false } } },
     };
     expect(readOperations(explicitFalse).failures).toEqual([]);
+  });
+
+  describe("walked", () => {
+    const fresh: Credentials = { headers: { cookie: "state=fresh" } };
+    const stale: Credentials = { headers: { cookie: "state=stale" } };
+    const outsider: Credentials = { headers: { cookie: "state=outsider" } };
+    const hooks: PolicyHooks = { ...noHooks, authorized: () => fresh, withoutReauth: () => stale, tooLowRole: () => outsider };
+    const walked = defineOperation({
+      ...rotateThing,
+      operationId: "walkedThing",
+      path: "/api/v1/thing/walked",
+      responses: { ...rotateThing.responses, 404: problemResponse("No workspace") },
+    });
+    const document = buildDocument([walked], committed);
+    const fixtures: ContractFixtures = { walkedThing: {} };
+
+    const refusal = (status: number, code: string): Response =>
+      Response.json({ type: "t", title: "t", status, code, detail: "d", requestId: "r" }, { status, headers: { "content-type": "application/problem+json" } });
+
+    /** A server that holds to the declaration: only the "fresh" session gets through, and a stale one is asked to re-authenticate. */
+    const conforming = (request: Request): Response => {
+      const state = /state=(\w+)/.exec(request.headers.get("cookie") ?? "")?.[1];
+      switch (state) {
+        case "fresh":
+          return Response.json({ id: "a" });
+        case "stale":
+          return refusal(401, "reauth_required");
+        case "outsider":
+          return refusal(404, "not_found");
+        default:
+          return refusal(401, "unauthenticated");
+      }
+    };
+
+    it("asks the hooks for a session without re-authentication, only for an operation that declares it, and passes a server that refuses it", async () => {
+      const asked: string[] = [];
+      const counting: PolicyHooks = { ...hooks, withoutReauth: (operation) => (asked.push(operation.operationId), stale) };
+      const report = await walk(document, answering(conforming), fixtures, counting);
+      expect(report.failures).toEqual([]);
+      // the valid request, the one without credentials, the one without re-authentication and the one below the role
+      expect(report.calls).toBe(4);
+      expect(asked).toEqual(["walkedThing"]);
+
+      const plain = buildDocument([plainThing], committed);
+      const plainAsked: string[] = [];
+      const plainReport = await walk(plain, answering(conforming), { plainThing: {} }, { ...hooks, withoutReauth: (operation) => (plainAsked.push(operation.operationId), stale) });
+      expect(plainAsked).toEqual([]);
+      expect(plainReport.calls).toBe(3);
+    });
+
+    it("fails a server that lets a session without re-authentication through", async () => {
+      const lax = (request: Request): Response => (request.headers.get("cookie")?.includes("stale") === true ? Response.json({ id: "a" }) : conforming(request));
+      const report = await walk(document, answering(lax), fixtures, hooks);
+      expect(report.failures.map((failure) => [failure.subject, failure.kind])).toEqual([
+        ["walkedThing (POST /api/v1/thing/walked), without re-authentication", "unexpected_status"],
+        ["walkedThing (POST /api/v1/thing/walked), without re-authentication", "wrong_code"],
+      ]);
+    });
+
+    it("fails a server that refuses it for another reason than the missing re-authentication", async () => {
+      const wrongCode = (request: Request): Response => (request.headers.get("cookie")?.includes("stale") === true ? refusal(401, "unauthenticated") : conforming(request));
+      const report = await walk(document, answering(wrongCode), fixtures, hooks);
+      expect(report.failures.map((failure) => failure.kind)).toEqual(["wrong_code"]);
+    });
   });
 
   it("registers against a document built from the operation", () => {

@@ -174,6 +174,7 @@ Field codes inside `errors[]` of a `422 validation_failed` or a `403 forbidden`:
 |---|---|---|
 | `api_token_limit_reached` | `POST /me/api-tokens` | The account already has 10 active tokens |
 | `invitation_email_mismatch` | `POST /invitations/accept` | The signed-in account's verified email is not the invited address (`403 forbidden`) |
+| `invalid_password` | `POST /me/reauth` (`401 reauth_required`), `POST /me/password` on `currentPassword` (`422 validation_failed`) | The password is wrong, or the account has none; one answer for both, so the response does not tell them apart |
 | `last_sign_in_method` | `DELETE /me/identities/{id}` | Would leave the account with no way to sign in |
 | `last_instance_admin` | `PATCH` / `DELETE /instance/accounts/{id}` | Would leave the instance without an admin |
 
@@ -413,8 +414,8 @@ Unauthenticated, `Content-Type: application/opensearchdescription+xml`, built on
 |---|---|---|---|---|---|
 | GET | `/me` | `{ account, memberships, activeWorkspaceId, clientErrorReportDsn? }`: the account (`id`, `email`, `displayName`, `locale`, `theme`, `accent`, `defaultView`, `singleKeyShortcuts`, `aiOptOut`, `analyticsConsent`, `onboarding`, `emailVerified`, `hasPassword`), its memberships (`workspaceId`, `name`, `role`), the workspace the request acts in (`null` when none) and, only for a session principal and only when a deployment registers a source (doc 01 §13), `clientErrorReportDsn`; never a hash or secret | acct† (read) | | |
 | PATCH | `/me` | A closed object of optional fields, merged into the account: `displayName`, `locale`, `theme` (`system`, `dark`, `light`), `accent` (one of the six preset names `periwinkle`, `violet`, `rose`, `amber`, `green`, `teal`; never a colour value), `defaultView` (`grid`, `table`), `singleKeyShortcuts`, `aiOptOut`, `analyticsConsent` (`unset`, `granted`, `denied`; a choice is stored with its time, `unset` clears it) and `onboarding` (the keys `browserSetupDone`, `importDone`, `checklistDismissed` to change, no other key); `signinAlerts` joins the list with the security page (doc 03 §11.3). Answers the account | acct | | |
-| POST | `/me/reauth` | `{ password }` or `{ code }` (TOTP) → refresh `reauthAt` | acct | | mfa |
-| POST | `/me/password` | `{ currentPassword, newPassword }` — change password; revokes other sessions and rotates this one. An account without a password omits `currentPassword` and needs a fresh re-authentication | acct | ✓ | |
+| POST | `/me/reauth` | `{ password }` or `{ code }` (TOTP) → refresh `reauthAt`; `204`, and a wrong password is `401 reauth_required` with the field in `errors[]` that changes nothing (the TOTP variant arrives with MFA) | acct | | mfa |
+| POST | `/me/password` | `{ currentPassword, newPassword }` — change password; `204` with the `Set-Cookie` of this session's new token, and every other session of the account is deleted in the same transaction. A wrong current password (or an account without a password) is `422 validation_failed` naming `currentPassword`; a refused new password is `422 weak_password`. Setting a first password on an account without one (which then omits `currentPassword` and needs a fresh re-authentication) arrives with OIDC | acct | ✓ | |
 | POST | `/me/email` | Request email change → verification to new address, notice to the old one | acct | ✓ | reset |
 | POST | `/me/email/confirm` | `{ token }` — redeem email-change token | anon | | token_redeem |
 | POST | `/me/email/cancel` | `{ token }` — the "this wasn't me" link: cancel the pending change, revoke every session | anon | | token_redeem |

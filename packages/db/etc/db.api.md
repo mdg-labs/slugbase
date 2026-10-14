@@ -82,12 +82,15 @@ export type AnalyticsConsent = "unset" | "granted" | "denied";
 
 // @public (undocumented)
 export interface AuthStore extends SetupStore {
+    changePassword(change: PasswordChange): Promise<boolean>;
     close(): Promise<void>;
     createSession(session: NewSession): Promise<boolean>;
     emailKey(email: string): Promise<string>;
     listSessions(accountId: string, afterId: string | null, limit: number): Promise<readonly SessionSummary[]>;
     loginLookup(email: string): Promise<LoginCandidate | undefined>;
     lookupSession(tokenHash: Buffer): Promise<SessionRecord | undefined>;
+    markReauthenticated(sessionId: string, accountId: string): Promise<boolean>;
+    passwordHashOf(accountId: string): Promise<string | null>;
     revokeAllSessions(accountId: string, exceptSessionId: string | null): Promise<number>;
     revokeSession(sessionId: string, accountId: string): Promise<boolean>;
 }
@@ -282,6 +285,15 @@ export interface Onboarding {
     readonly checklistDismissed: boolean;
     // (undocumented)
     readonly importDone: boolean;
+}
+
+// @public
+export interface PasswordChange {
+    // (undocumented)
+    readonly accountId: string;
+    readonly newTokenHash: Buffer;
+    readonly passwordHash: string;
+    readonly sessionId: string;
 }
 
 // @public (undocumented)

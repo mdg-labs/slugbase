@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildOpenApiDocument, serializeOpenApiDocument } from "../src/openapi/generate.ts";
-import { ACCENT_PRESETS, AccountSchema, MembershipSchema, MeSchema, RevokeSessionsQuerySchema, SessionIdParamsSchema, SessionListQuerySchema, SessionListSchema, SessionSchema, UpdateAccountRequestSchema } from "../src/operations/me.ts";
+import { ACCENT_PRESETS, AccountSchema, ChangePasswordRequestSchema, ReauthRequestSchema, MembershipSchema, MeSchema, RevokeSessionsQuerySchema, SessionIdParamsSchema, SessionListQuerySchema, SessionListSchema, SessionSchema, UpdateAccountRequestSchema } from "../src/operations/me.ts";
 import { operations } from "../src/operations/index.ts";
 
 type Obj = Record<string, unknown>;
@@ -246,5 +246,58 @@ describe("the profile and preferences operation", () => {
     [{ consentAt: "2026-01-01T00:00:00Z" }, false],
   ])("%j is accepted: %s", (body, accepted) => {
     expect(UpdateAccountRequestSchema.safeParse(body).success).toBe(accepted);
+  });
+});
+
+describe("the re-authentication and password operations", () => {
+  const reauth = paths["/api/v1/me/reauth"]?.["post"];
+  const password = paths["/api/v1/me/password"]?.["post"];
+
+  it("declares reauthenticate: an account operation in the mfa bucket, not token-callable, that needs no earlier re-authentication", () => {
+    expect(reauth?.["operationId"]).toBe("reauthenticate");
+    expect(reauth?.["x-slugbase-auth"]).toBe("account");
+    expect(reauth?.["x-slugbase-rate"]).toBe("mfa");
+    expect(reauth?.["x-slugbase-scope"]).toBeUndefined();
+    expect(reauth?.["x-slugbase-reauth"]).toBeUndefined();
+    expect(Object.keys(responsesOf(reauth))).toContain("204");
+    expect(responsesOf(reauth)["204"]?.content).toBeUndefined();
+  });
+
+  it("declares changePassword: an account operation in the write bucket that requires re-authentication and is not token-callable", () => {
+    expect(password?.["operationId"]).toBe("changePassword");
+    expect(password?.["x-slugbase-auth"]).toBe("account");
+    expect(password?.["x-slugbase-rate"]).toBe("write");
+    expect(password?.["x-slugbase-scope"]).toBeUndefined();
+    expect(password?.["x-slugbase-reauth"]).toBe(true);
+    expect(responsesOf(password)["204"]?.content).toBeUndefined();
+  });
+
+  it("declares application/problem+json for every client error, 401, 403, 422 and 429 among them", () => {
+    for (const operation of [reauth, password]) {
+      const responses = responsesOf(operation);
+      const clientErrors = Object.keys(responses).filter((status) => status.startsWith("4"));
+      expect(clientErrors).toEqual(expect.arrayContaining(["401", "403", "422", "429"]));
+      for (const status of clientErrors) {
+        expect(Object.keys(responses[status]?.content ?? {}), status).toEqual(["application/problem+json"]);
+      }
+    }
+  });
+
+  it("takes closed bodies that name the passwords and no account, session or hash", () => {
+    for (const [name, fields] of [
+      ["ReauthRequest", ["password"]],
+      ["ChangePasswordRequest", ["currentPassword", "newPassword"]],
+    ] as const) {
+      const schema = schemas[name] as { additionalProperties: unknown; properties: Obj; required: string[] };
+      expect(schema.additionalProperties, name).toBe(false);
+      expect(Object.keys(schema.properties).sort(), name).toEqual([...fields].sort());
+      expect([...schema.required].sort(), name).toEqual([...fields].sort());
+    }
+    expect(ReauthRequestSchema.safeParse({ password: "x" }).success).toBe(true);
+    expect(ReauthRequestSchema.safeParse({ password: "" }).success).toBe(false);
+    expect(ReauthRequestSchema.safeParse({ password: "x", sessionId: "y" }).success).toBe(false);
+    expect(ChangePasswordRequestSchema.safeParse({ currentPassword: "old", newPassword: "a new long password" }).success).toBe(true);
+    expect(ChangePasswordRequestSchema.safeParse({ currentPassword: "old" }).success).toBe(false);
+    expect(ChangePasswordRequestSchema.safeParse({ currentPassword: "old", newPassword: "a new long password", accountId: "x" }).success).toBe(false);
   });
 });

@@ -28,6 +28,7 @@ interface Operation {
   tags?: string[];
   "x-slugbase-auth"?: string;
   "x-slugbase-rate"?: string;
+  "x-slugbase-reauth"?: unknown;
   responses: Record<string, Response>;
 }
 
@@ -112,6 +113,7 @@ describe("the SlugBase Spectral ruleset", () => {
       "slugbase-operation-auth",
       "slugbase-operation-id",
       "slugbase-operation-rate",
+      "slugbase-operation-reauth",
       "slugbase-operation-tag",
       "slugbase-problem-response",
     ]);
@@ -153,6 +155,18 @@ describe("the SlugBase Spectral ruleset", () => {
     expect(rulesIn(await lintOpenApi(variant((d) => (getOf(d).operationId = ""))))).toEqual(["slugbase-operation-id"]);
     expect(rulesIn(await lintOpenApi(variant((d) => (getOf(d).tags = []))))).toEqual(["slugbase-operation-tag"]);
     expect(rulesIn(await lintOpenApi(variant((d) => (getOf(d)["x-slugbase-auth"] = ""))))).toEqual(["slugbase-operation-auth"]);
+  });
+
+  it("accepts x-slugbase-reauth when it is true and when it is absent", async () => {
+    expect(await lintOpenApi(variant((d) => (getOf(d)["x-slugbase-reauth"] = true)))).toEqual([]);
+    expect(await lintOpenApi(fixture("valid"))).toEqual([]);
+  });
+
+  it.each([false, "true", 1, null, {}, []])("refuses x-slugbase-reauth set to %j", async (value) => {
+    const findings = await lintOpenApi(variant((d) => (getOf(d)["x-slugbase-reauth"] = value)));
+    expect(rulesIn(findings)).toEqual(["slugbase-operation-reauth"]);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]).toContain("x-slugbase-reauth must be true when present");
   });
 
   it("holds every method of a path item to the rules", async () => {
