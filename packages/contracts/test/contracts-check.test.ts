@@ -95,18 +95,23 @@ describe("pnpm contracts:check", () => {
     }
   });
 
-  it("fails after a schema changes without regenerating, and passes once regenerated", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
+  it("fails after a schema changes without regenerating", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
     const generated = scratch();
     generate(before, generated);
-    expect(runCheck(before, generated).status).toBe(0);
 
     const drifted = runCheck(after, generated);
     expect(drifted.status).not.toBe(0);
     expect(drifted.stderr).toContain("openapi.json");
     expect(drifted.stderr).toContain("schema.d.ts");
     expect(drifted.stderr).toContain("pnpm api:gen");
+  });
 
+  it("passes once the generated files are regenerated after a schema changes", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
+    const generated = scratch();
+    generate(before, generated);
+    const stale = snapshot(generated);
     generate(after, generated);
+    expect(snapshot(generated)).not.toEqual(stale);
     expect(runCheck(after, generated).status).toBe(0);
   });
 
