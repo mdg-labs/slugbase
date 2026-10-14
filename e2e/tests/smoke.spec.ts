@@ -1,29 +1,22 @@
 import type { Page } from "@playwright/test";
 import { message, type Locale } from "../support/catalog.ts";
+import { productName } from "../support/product.ts";
 import { expect, test } from "../support/test.ts";
 
-// The smoke journey of the built image (doc 08 section 5.1) as a visitor without a
-// session: every page of the app sends them to the sign-in page, which names the
-// page they asked for in `next`. The sign-in page and the redirect are checked in
-// English and in the language of the browser. Every text is read from the catalogs
-// of packages/web; the product name is the one the server reports in /api/config.
+// The smoke journeys of the built image (doc 08 section 5.1), in English and in the
+// language of the browser. Every text is read from the catalogs of packages/web; the
+// product name is the one the server reports in /api/config.
 //
-// The journeys of a signed-in member (the home heading, the 404 page inside the
-// shell, the theme toggle of the top bar) need an account, which the e2e stack
-// cannot create before first-run setup (#84) exists. They follow in #450.
+// As a member, from the session the global setup signed in (e2e/global-setup.ts): the
+// home heading, the 404 page inside the shell for a path that no page owns, and the
+// theme toggle of the top bar from the keyboard.
+//
+// As a visitor without a session: every page of the app sends them to the sign-in
+// page, which names the page they asked for in `next`.
 
 const MISSING_PATH = "/this-page-does-not-exist";
 
-async function productName(page: Page): Promise<string> {
-  const response = await page.request.get("/api/config");
-  expect(response.ok(), "GET /api/config").toBe(true);
-  const config = (await response.json()) as { product?: { name?: unknown } };
-  const name = config.product?.name;
-  if (typeof name !== "string" || name === "") {
-    throw new Error("GET /api/config has no product name");
-  }
-  return name;
-}
+const NO_SESSION = { cookies: [], origins: [] };
 
 function authenticationCard(page: Page, locale: Locale) {
   return page.getByRole("region", { name: message(locale, "login.title") });
@@ -48,7 +41,9 @@ function signInTarget(page: Page): { pathname: string; next: string | null } {
   return { pathname: url.pathname, next: url.searchParams.get("next") };
 }
 
-test.describe("in English", () => {
+test.describe("a visitor without a session, in English", () => {
+  test.use({ storageState: NO_SESSION });
+
   test("sends the home page to sign in and shows the sign-in page", async ({ page, app }) => {
     const name = await productName(page);
     await app.visit("/", authenticationCard(page, "en"));
@@ -70,8 +65,8 @@ test.describe("in English", () => {
   });
 });
 
-test.describe("in German", () => {
-  test.use({ locale: "de-DE" });
+test.describe("a visitor without a session, in German", () => {
+  test.use({ locale: "de-DE", storageState: NO_SESSION });
 
   test("shows the sign-in page in the language of the browser", async ({ page, app }) => {
     const name = await productName(page);
@@ -82,3 +77,76 @@ test.describe("in German", () => {
     await expect(authenticationCard(page, "en")).toHaveCount(0);
   });
 });
+
+function homeHeading(page: Page, locale: Locale, name: string) {
+  return page.getByRole("heading", { level: 1, name: message(locale, "home.empty.title", { name }) });
+}
+
+const LANGUAGES: readonly { readonly locale: Locale; readonly browser: string; readonly title: string }[] = [
+  { locale: "en", browser: "en-US", title: "in English" },
+  { locale: "de", browser: "de-DE", title: "in German" },
+];
+
+for (const { locale, browser, title } of LANGUAGES) {
+  test.describe(`a signed-in member, ${title}`, () => {
+    test.use({ locale: browser });
+
+    test("opens the shell on the home page", async ({ page, app }) => {
+      const name = await productName(page);
+      await app.visit("/", homeHeading(page, locale, name));
+
+      await expect(page).toHaveURL(/\/$/);
+      await expect(page.locator("html")).toHaveAttribute("lang", locale);
+      await expect(page.getByText(message(locale, "home.empty.description"))).toBeVisible();
+      await expect(page.getByRole("link", { name: message(locale, "shell.home") })).toBeVisible();
+      await expect(page.getByRole("link", { name: message(locale, "shell.skipToContent") })).toBeAttached();
+      // The member is not sent to sign in.
+      await expect(authenticationCard(page, locale)).toHaveCount(0);
+    });
+
+    test("toggles the theme with the keyboard", async ({ page, app }) => {
+      const name = await productName(page);
+      await app.visit("/", homeHeading(page, locale, name));
+
+      const root = page.locator("html");
+      const toLight = page.getByRole("button", { name: message(locale, "shell.switchToLight") });
+      const toDark = page.getByRole("button", { name: message(locale, "shell.switchToDark") });
+      // The test starts from a known theme: the choice is stored in the browser, and a fresh
+      // context holds none, so the system preference decides (light unless the browser says dark).
+      await page.emulateMedia({ colorScheme: "light" });
+      await expect(root).toHaveClass(/\blight\b/);
+
+      await toDark.focus();
+      await expect(toDark).toBeFocused();
+      await page.keyboard.press("Enter");
+      await expect(root).toHaveClass(/\bdark\b/);
+      await expect(root).not.toHaveClass(/\blight\b/);
+      await expect(toLight).toBeVisible();
+      await app.scan();
+
+      await toLight.focus();
+      await page.keyboard.press("Space");
+      await expect(root).toHaveClass(/\blight\b/);
+      await expect(root).not.toHaveClass(/\bdark\b/);
+      await expect(toDark).toBeVisible();
+      await app.scan();
+    });
+
+    test("shows the 404 page inside the shell for a path that no page owns", async ({ page, app }) => {
+      const name = await productName(page);
+      await app.visit(MISSING_PATH, page.getByRole("heading", { level: 1, name: message(locale, "errorPage.notFound.title") }));
+
+      // The home page must not be what the path rendered, and the shell is around the page.
+      await expect(homeHeading(page, locale, name)).toHaveCount(0);
+      await expect(page.getByText(message(locale, "errorPage.notFound.description"))).toBeVisible();
+      await expect(page).toHaveURL(new RegExp(`${MISSING_PATH}$`));
+      await expect(page.getByRole("link", { name: message(locale, "shell.home"), exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: message(locale, "shell.switchToDark") })).toBeVisible();
+
+      // Go home leads back to the home page, which the check covers as well.
+      await page.getByRole("link", { name: message(locale, "errorPage.goHome") }).click();
+      await expect(homeHeading(page, locale, name)).toBeVisible();
+      await app.scan();
+    });
+  });
+}

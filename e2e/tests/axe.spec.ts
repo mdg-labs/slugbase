@@ -1,5 +1,7 @@
+import type { Page } from "@playwright/test";
 import { findViolations, parseAllowlist, type AllowlistEntry } from "../support/axe.ts";
 import { message } from "../support/catalog.ts";
+import { productName } from "../support/product.ts";
 import { expect, test } from "../support/test.ts";
 
 // The accessibility check of the journeys (doc 08 section 5.2) must fail on a
@@ -40,21 +42,38 @@ test.describe("the axe check", () => {
   });
 });
 
-// The journeys of a signed-in member (the shell in both themes, the theme toggle) need an account, which
-// the e2e stack cannot create before first-run setup (#84) exists; they follow in #450.
-test.describe("the sign-in page", () => {
-  for (const scheme of ["light", "dark"] as const) {
-    test(`has no accessibility violations in the ${scheme} theme`, async ({ page, app }) => {
-      // The theme is the member's stored choice (the key of ThemeProvider in packages/ui), set before the
-      // page loads; the system preference would leave the result to how each engine applies media emulation.
-      await page.addInitScript((theme) => {
-        window.localStorage.setItem("slugbase-theme", theme);
-      }, scheme);
+// The theme is the member's stored choice (the key of ThemeProvider in packages/ui), set before the
+// page loads; the system preference would leave the result to how each engine applies media emulation.
+for (const scheme of ["light", "dark"] as const) {
+  const stored = async ({ page }: { page: Page }): Promise<void> => {
+    await page.addInitScript((theme) => {
+      window.localStorage.setItem("slugbase-theme", theme);
+    }, scheme);
+  };
+  const themed = new RegExp(`\\b${scheme}\\b`);
+
+  test.describe(`the sign-in page of a visitor without a session in the ${scheme} theme`, () => {
+    test.use({ storageState: { cookies: [], origins: [] } });
+    test.beforeEach(stored);
+
+    test("has no accessibility violations", async ({ page, app }) => {
       await app.visit("/login", page.getByRole("region", { name: message("en", "login.title") }));
-      await expect(page.locator("html")).toHaveClass(new RegExp(`\\b${scheme}\\b`));
+      await expect(page.locator("html")).toHaveClass(themed);
     });
-  }
-});
+  });
+
+  test.describe(`the shell of a signed-in member in the ${scheme} theme`, () => {
+    test.beforeEach(stored);
+
+    test("has no accessibility violations", async ({ page, app }) => {
+      const name = await productName(page);
+      await app.visit("/", page.getByRole("heading", { level: 1, name: message("en", "home.empty.title", { name }) }));
+      await expect(page.locator("html")).toHaveClass(themed);
+      // The toggle offers the other theme, so the shell that was scanned is the one in this theme.
+      await expect(page.getByRole("button", { name: message("en", scheme === "light" ? "shell.switchToDark" : "shell.switchToLight") })).toBeVisible();
+    });
+  });
+}
 
 test.describe("the allowlist file", () => {
   test("is a list of entries that each carry a rule, a target and a reason", () => {

@@ -6,5 +6,5 @@
     "types": ["node"],
     "allowImportingTsExtensions": true
   },
-  "include": ["playwright.config.ts", "run-tests.ts", "support", "tests"]
+  "include": ["playwright.config.ts", "global-setup.ts", "run-tests.ts", "support", "tests"]
 }
