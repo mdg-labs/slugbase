@@ -1,7 +1,7 @@
-import { AuthCard } from "@slugbase/ui/patterns";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
+import { AuthPage } from "../auth/auth-page.tsx";
 import { LoginForm } from "../auth/login-form.tsx";
 import { sessionQuery } from "../auth/session.ts";
 import { useConfig } from "../config/config-context.tsx";
@@ -11,9 +11,9 @@ function LoginPage(): ReactElement {
   const { product } = useConfig();
   const { next } = Route.useSearch();
   return (
-    <AuthCard description={t("login.description", { name: product.name })} productName={product.name} title={t("login.title")}>
+    <AuthPage description={t("login.description", { name: product.name })} productName={product.name} title={t("login.title")}>
       <LoginForm next={next} />
-    </AuthCard>
+    </AuthPage>
   );
 }
 

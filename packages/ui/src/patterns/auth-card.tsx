@@ -31,7 +31,7 @@ export function AuthCard({ productName, title, description, children, footer }: 
           </CardHeader>
           <CardPanel>{children}</CardPanel>
         </Card>
-        {footer === undefined ? null : <div className="flex justify-center text-sm text-muted-foreground">{footer}</div>}
+        {footer === undefined ? null : <div className="flex justify-center text-sm text-muted-foreground" data-slot="auth-card-footer">{footer}</div>}
       </div>
     </main>
   );

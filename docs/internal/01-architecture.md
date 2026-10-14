@@ -263,7 +263,7 @@ Billing data does not live in SlugBase's database; it stays in the billing servi
 
 ### 7.4 Contracts
 
-What Cloud may depend on, and therefore what CE must keep stable or version: the `createServer`/`createWebApp` signatures, the port interfaces, the module interface including the hooks of §13, the domain event catalog, the web slot names, the exported repositories and authorization helpers, and the `public` schema. Each lives in an explicitly exported entry point; anything not exported is not a contract.
+What Cloud may depend on, and therefore what CE must keep stable or version: the `createServer`/`createWebApp` signatures, the port interfaces, the module interface including the hooks of §13, the domain event catalog, the web slot names (for example `auth.footer`), the exported repositories and authorization helpers, and the `public` schema. Each lives in an explicitly exported entry point; anything not exported is not a contract.
 
 ### 7.5 The entitlement catalog
 

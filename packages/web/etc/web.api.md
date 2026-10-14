@@ -51,7 +51,7 @@ export interface CreateWebAppOptions {
 }
 
 // @public
-export const SLOT_NAMES: readonly ["sidebar.workspacePlan", "sidebar.footer", "banner.entitlement", "entitlement.upgradeAction", "accountMenu.items", "settings.workspace.nav", "settings.workspace.members.seats", "dashboard.top", "auth.register.footer"];
+export const SLOT_NAMES: readonly ["sidebar.workspacePlan", "sidebar.footer", "banner.entitlement", "entitlement.upgradeAction", "accountMenu.items", "settings.workspace.nav", "settings.workspace.members.seats", "dashboard.top", "auth.footer", "auth.register.footer"];
 
 // @public
 export type SlotName = (typeof SLOT_NAMES)[number];

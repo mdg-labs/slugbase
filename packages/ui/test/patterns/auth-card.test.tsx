@@ -24,6 +24,16 @@ describe("AuthCard", () => {
     expect(screen.getByText("Footer text")).toBeTruthy();
   });
 
+  it("has no footer element when it is given none", () => {
+    const { container } = render(
+      <AuthCard productName="SlugBase" title="Sign in">
+        <p>Card content</p>
+      </AuthCard>,
+    );
+
+    expect(container.querySelector("[data-slot='auth-card-footer']")).toBeNull();
+  });
+
   it("is free of accessibility violations in both themes", async () => {
     for (const dark of [false, true]) {
       document.documentElement.classList.toggle("dark", dark);
