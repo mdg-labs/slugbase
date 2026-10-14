@@ -1,4 +1,5 @@
 import { expect, test as base, type Locator } from "@playwright/test";
+import { THEME_FIXTURE_TIMEOUT_MS, withAccountTheme, type ThemeOfAccount } from "./account-theme.ts";
 import { findViolations, loadAllowlist } from "./axe.ts";
 
 export interface App {
@@ -8,13 +9,29 @@ export interface App {
   scan: () => Promise<void>;
 }
 
+export interface Fixtures {
+  app: App;
+  /**
+   * The theme of the signed-in account, for a journey that depends on one (see account-theme.ts): the journey
+   * holds the account's theme until it ends, and the theme the account had comes back then. A journey of a
+   * visitor without a session has no account and does not use it.
+   */
+  accountTheme: ThemeOfAccount;
+}
+
 /**
  * `test` with an `app` fixture that makes the accessibility check part of
  * visiting a page (doc 08 section 5.2): `visit` and `scan` fail the test on a
  * WCAG 2.2 AA violation that axe-allowlist.json does not name, and a test that
  * ends on a page it never scanned (reached by a click, say) fails too.
  */
-export const test = base.extend<{ app: App }>({
+export const test = base.extend<Fixtures>({
+  accountTheme: [
+    async ({ request }, use) => {
+      await withAccountTheme(request, use);
+    },
+    { timeout: THEME_FIXTURE_TIMEOUT_MS },
+  ],
   app: async ({ page }, use) => {
     const allowlist = loadAllowlist();
     const visited = new Set<string>();

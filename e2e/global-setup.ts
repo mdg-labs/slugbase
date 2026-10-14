@@ -2,6 +2,7 @@ import { chromium, expect } from "@playwright/test";
 import { randomBytes } from "node:crypto";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { clearLock } from "./support/account-theme.ts";
 import { message } from "./support/catalog.ts";
 import { appOrigin, STORAGE_STATE } from "./support/environment.ts";
 import { productName } from "./support/product.ts";
@@ -92,6 +93,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
           certFile: required("E2E_TLS_CERT_FILE"),
         });
   try {
+    clearLock();
     const password = randomBytes(24).toString("base64url");
     await claimInstance(upstream, origin, password);
     await signIn(origin, password);
