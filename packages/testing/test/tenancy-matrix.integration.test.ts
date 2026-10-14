@@ -158,7 +158,11 @@ describe("RLS-only mode", () => {
   });
 
   it("fails an update naming B that touches no row: row-level security was not exercised", async () => {
-    const entry: RepositoryMethodEntry = { ...methodOf(scoped, "update"), invokeRlsOnly: () => Promise.resolve([]) };
+    const entry: RepositoryMethodEntry = {
+      ...methodOf(scoped, "update"),
+      invokeRlsOnly: (tx, input) =>
+        input?.set?.["workspaceId"] === PROBE_WORKSPACE_B ? Promise.resolve([]) : methodOf(scoped, "update").invokeRlsOnly(tx, input),
+    };
     const report = await runRlsOnlyMatrix({
       tenant: database().tenant,
       fixture: scoped.fixture,
@@ -166,7 +170,32 @@ describe("RLS-only mode", () => {
       samples: { [scoped.repository]: scoped.sample },
     });
     expect(report.failures.map((failure) => failure.kind)).toEqual(["write_not_exercised"]);
+    expect(report.failures[0]?.detail).toMatch(/^naming workspace B/);
   });
+
+  it.each(["insert", "delete"] as const)(
+    "fails a %s that changes the rows of B inside its transaction but returns no row: the rolled-back write is invisible to the checksum",
+    async (name) => {
+      const real = methodOf(permissive, name);
+      const entry: RepositoryMethodEntry = {
+        ...real,
+        invokeRlsOnly: async (tx, input) => {
+          await real.invokeRlsOnly(tx, input);
+          return [];
+        },
+      };
+      const report = await runRlsOnlyMatrix({
+        tenant: database().tenant,
+        fixture: permissive.fixture,
+        methods: [entry],
+        samples: { [permissive.repository]: permissive.sample },
+      });
+      expect(report.failures.map((failure) => failure.kind)).toEqual(Array(name === "delete" ? 1 : 2).fill("write_not_exercised"));
+      expect(() => {
+        assertMatrixPassed(report);
+      }).toThrow(/write_not_exercised/);
+    },
+  );
 
   /** A real row-level-security refusal (SQLSTATE 42501): a row of B written under the transaction of A. */
   async function rowLevelSecurityRefusal(probe: Probe): Promise<Error> {
@@ -324,7 +353,7 @@ describe("RLS-only mode", () => {
           await tx`SELECT set_config('app.workspace_id', ${PROBE_WORKSPACE_B}, true)`;
           await tx.unsafe(`UPDATE ${victim.table} SET label = 'tampered' WHERE workspace_id = $1`, [PROBE_WORKSPACE_B]);
         });
-        return [];
+        return [{ workspaceId: PROBE_WORKSPACE_A }];
       },
     };
     const report = await runRlsOnlyMatrix({ tenant: database().tenant, fixture: victim.fixture, methods: [sneaky] });
