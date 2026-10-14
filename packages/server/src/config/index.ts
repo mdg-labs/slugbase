@@ -14,6 +14,7 @@ export {
   metricsFragment,
   migrateFragment,
   originFragment,
+  passwordPolicyFragment,
   runtimeFragment,
   secretsFragment,
   serverMigrationFragment,

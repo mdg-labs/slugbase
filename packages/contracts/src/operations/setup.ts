@@ -71,7 +71,7 @@ export const completeSetup = defineOperation({
     403: problemResponse(
       "The request did not come from the application itself (cross_site_request); setup is already completed or turned off (setup_completed); or the setup token is missing or wrong (forbidden). Nothing is written",
     ),
-    422: problemResponse("The body did not pass validation, or the password is shorter than 12 or longer than 256 characters (weak_password)"),
+    422: problemResponse("The body did not pass validation, or the password is outside 12 to 256 characters or is on the breached list (weak_password)"),
     429: problemResponse("Too many setup attempts from this address; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },

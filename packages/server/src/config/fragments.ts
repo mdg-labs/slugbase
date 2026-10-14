@@ -162,6 +162,16 @@ export const setupFragment = envFragment({
 });
 
 /**
+ * The password policy (doc 02 section 2.5, Q15), for the server. `BREACHED_PASSWORD_CHECK=false` turns off
+ * the check against the breached-password dataset shipped with the image; the length rules always apply.
+ */
+export const passwordPolicyFragment = envFragment({
+  shape: {
+    BREACHED_PASSWORD_CHECK: envBoolean().default(true),
+  },
+});
+
+/**
  * The internal listener for `/metrics` (doc 01 section 12), for the server and
  * the worker. Unset means there is none: nothing exposes metrics by default (D27).
  */

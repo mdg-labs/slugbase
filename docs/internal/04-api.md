@@ -405,7 +405,7 @@ Unauthenticated, `Content-Type: application/opensearchdescription+xml`, built on
 | GET | `/auth/oidc/{provider}/start` | Begin OIDC (302); `intent=login\|link\|reauth\|invite` (§4.5) | anon | login |
 | GET | `/auth/oidc/{provider}/callback` | Finish OIDC (302) | anon | login |
 | GET | `/setup/status` | `{ setupRequired }` — whether first-run setup is pending (CE) | anon | public |
-| POST | `/setup` | `{ setupToken?, displayName, email, password, workspaceName }` — create first account (instance admin + owner) and first workspace, sign in (`201 { workspaceId }`, the new workspace active); `422 weak_password` outside 12–256 characters; `403 setup_completed` once any account exists or with `SETUP_ENABLED=false`, `403 forbidden` for a missing or wrong setup token | anon | setup |
+| POST | `/setup` | `{ setupToken?, displayName, email, password, workspaceName }` — create first account (instance admin + owner) and first workspace, sign in (`201 { workspaceId }`, the new workspace active); `422 weak_password` outside 12–256 characters or for a breached password (Q15); `403 setup_completed` once any account exists or with `SETUP_ENABLED=false`, `403 forbidden` for a missing or wrong setup token | anon | setup |
 
 ### 10.3 me (account)
 

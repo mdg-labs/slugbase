@@ -1,5 +1,5 @@
 import { completeSetup, type SetupRequestSchema } from "@slugbase/contracts";
-import { normalizeEmail, passwordLengthProblem, truncateUserAgent, type SessionCookieSpec } from "@slugbase/core";
+import { normalizeEmail, truncateUserAgent, type PasswordPolicy, type SessionCookieSpec } from "@slugbase/core";
 import type { SetupStore } from "@slugbase/db";
 import type { z } from "zod";
 import { setSessionCookie } from "../../auth/cookie.ts";
@@ -31,12 +31,17 @@ export interface CompleteSetupRouteOptions {
   /** Hashes the password into an argon2id PHC string. */
   readonly hashPassword: (password: string) => Promise<string>;
   readonly cookie: SessionCookieSpec;
+  /** The password policy every password-setting flow goes through. */
+  readonly passwordPolicy: PasswordPolicy;
 }
 
 type SetupRequest = z.output<typeof SetupRequestSchema>;
 
-/** The field errors of a request the schema accepted but that cannot be written: a blank name, or a password outside its length. */
-function refusals(body: SetupRequest, displayName: string, workspaceName: string): ProblemFieldError[] {
+const LENGTH_DETAIL = "The password must be 12 to 256 characters long.";
+const BREACHED_DETAIL = "The password appears in a list of breached passwords. Choose a different one.";
+
+/** The field errors of a request the schema accepted but that cannot be written: a blank name, or a password the policy refuses. */
+function refusals(body: SetupRequest, displayName: string, workspaceName: string, policy: PasswordPolicy): ProblemFieldError[] {
   const errors: ProblemFieldError[] = [];
   if (displayName === "") {
     errors.push({ path: "displayName", code: "too_small" });
@@ -44,14 +49,13 @@ function refusals(body: SetupRequest, displayName: string, workspaceName: string
   if (workspaceName === "") {
     errors.push({ path: "workspaceName", code: "too_small" });
   }
-  const password = passwordLengthProblem(body.password);
-  if (password !== undefined) {
-    errors.push({ path: "password", code: password });
+  for (const code of policy.check(body.password)) {
+    errors.push({ path: "password", code });
   }
   return errors;
 }
 
-export function completeSetupRoute({ config, store, hashPassword, cookie }: CompleteSetupRouteOptions): RouteBinding {
+export function completeSetupRoute({ config, store, hashPassword, cookie, passwordPolicy }: CompleteSetupRouteOptions): RouteBinding {
   return route(completeSetup).handle(async ({ body }, context) => {
     if (!(await setupRequired({ config, store }))) {
       throw new ProblemError("setup_completed", CLOSED);
@@ -59,11 +63,12 @@ export function completeSetupRoute({ config, store, hashPassword, cookie }: Comp
 
     const displayName = body.displayName.trim();
     const workspaceName = body.workspaceName.trim();
-    const errors = refusals(body, displayName, workspaceName);
+    const errors = refusals(body, displayName, workspaceName, passwordPolicy);
     if (errors.length > 0) {
       const weak = errors.every((error) => error.path === "password");
+      const detail = errors.some((error) => error.code === "breached") ? BREACHED_DETAIL : LENGTH_DETAIL;
       throw weak
-        ? new ProblemError("weak_password", "The password must be 12 to 256 characters long.", { errors })
+        ? new ProblemError("weak_password", detail, { errors })
         : new ProblemError("validation_failed", "The request did not pass validation.", { errors });
     }
 

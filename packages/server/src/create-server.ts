@@ -1,7 +1,7 @@
 import { setTimeout as sleep } from "node:timers/promises";
 import { createAdaptorServer, type ServerType } from "@hono/node-server";
 import { getHealth, getReady, getVersion } from "@slugbase/contracts";
-import type { Adapters } from "@slugbase/core";
+import { createPasswordPolicy, loadBreachedPasswords, type Adapters } from "@slugbase/core";
 import { createAuthStore, createDatabase, type AuthStore, type Database, type MigrationChain } from "@slugbase/db";
 import { Hono } from "hono";
 import { DEVELOPMENT_BUILD_INFO, type BuildInfo } from "./build-info.ts";
@@ -404,6 +404,9 @@ export function createServer(options: CreateServerOptions): Server {
   let migrationSets: readonly MigrationChain[] = options.migrations;
   const progress = { migrating: false };
   const buildInfo = options.buildInfo ?? DEVELOPMENT_BUILD_INFO;
+  // With the breached-password check on, a dataset that cannot be read refuses the start (BreachedDatasetError):
+  // starting without it would accept every listed password while the check reads as on.
+  const passwordPolicy = createPasswordPolicy({ breached: config.BREACHED_PASSWORD_CHECK ? loadBreachedPasswords() : undefined });
   const authStore = options.authStore ?? createAuthStore({ url: config.DATABASE_URL, poolSize: DEFAULT_AUTH_POOL_SIZE });
   const builtInRoutes: RouteBinding[] = [
     ...probeRoutes({ buildInfo, databaseUrl: config.DATABASE_URL, chains: () => migrationSets, logger, migrating: () => progress.migrating }),
@@ -414,7 +417,7 @@ export function createServer(options: CreateServerOptions): Server {
   const auth = authContribution({ store: authStore, appOrigin: config.APP_ORIGIN, sessionSecret: config.SESSION_SECRET });
   builtInRoutes.push(...(auth.routes ?? []));
   // So is first-run setup: it signs the first account in, on the same pool.
-  builtInRoutes.push(...setupRoutes({ config, store: authStore }));
+  builtInRoutes.push(...setupRoutes({ config, store: authStore, passwordPolicy }));
   const builtIn: ServerModule = {
     name: "@slugbase/server",
     register: () => ({ routes: builtInRoutes, authenticators: auth.authenticators ?? [] }),

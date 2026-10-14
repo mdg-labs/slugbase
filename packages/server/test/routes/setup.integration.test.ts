@@ -23,6 +23,8 @@ const ME = "/api/v1/me";
 const LOGIN = "/api/v1/auth/login";
 const SESSION_COOKIE = "__Host-slugbase_session";
 const PARALLEL_CALLS = 6;
+// In the shipped breached-password dataset (12 characters or more, so the length rule does not refuse it first).
+const BREACHED_PASSWORD = "123qweasdzxc";
 const HOOK_TIMEOUT_MS = 300_000;
 
 const database = useTestDatabase();
@@ -337,9 +339,28 @@ describe("POST /api/v1/setup", () => {
       expect(await counts()).toEqual(NOTHING);
     });
 
+    it("is refused with 422 weak_password and no account when it is on the breached list", async () => {
+      const served = serve({ SETUP_TOKEN_REQUIRED: "false" });
+      const response = await setup(served, { body: { ...BODY, password: BREACHED_PASSWORD } });
+      expect(response.status).toBe(422);
+      expect(response.headers.get("set-cookie")).toBeNull();
+      expect(await problem(response)).toMatchObject({ code: "weak_password", errors: [{ path: "password", code: "breached" }] });
+      expect(await counts()).toEqual(NOTHING);
+      expect(await statusOf(served)).toBe(true);
+    });
+
+    it("is accepted when it is on the breached list and the operator turned the check off, and the length rules still apply", async () => {
+      const served = serve({ SETUP_TOKEN_REQUIRED: "false", BREACHED_PASSWORD_CHECK: "false" });
+      const short = await setup(served, { body: { ...BODY, password: "a".repeat(11) } });
+      expect(short.status).toBe(422);
+      expect(await problem(short)).toMatchObject({ code: "weak_password", errors: [{ path: "password", code: "too_short" }] });
+      expect(await counts()).toEqual(NOTHING);
+      expect((await setup(served, { body: { ...BODY, password: BREACHED_PASSWORD } })).status).toBe(201);
+    });
+
     it.each([12, 256])("is accepted at %i characters", async (length) => {
       const served = serve({ SETUP_TOKEN_REQUIRED: "false" });
-      expect((await setup(served, { body: { ...BODY, password: "a".repeat(length) } })).status).toBe(201);
+      expect((await setup(served, { body: { ...BODY, password: `Kq7-${"z".repeat(length - 4)}` } })).status).toBe(201);
     });
   });
 

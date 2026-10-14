@@ -61,6 +61,7 @@ describe(".env.example", () => {
       MIGRATE_ON_START: example.get("MIGRATE_ON_START") === "true",
       SETUP_ENABLED: example.get("SETUP_ENABLED") === "true",
       SETUP_TOKEN_REQUIRED: example.get("SETUP_TOKEN_REQUIRED") === "true",
+      BREACHED_PASSWORD_CHECK: example.get("BREACHED_PASSWORD_CHECK") === "true",
       SLUGBASE_ALLOW_OWNER_CONNECTION: example.get("SLUGBASE_ALLOW_OWNER_CONNECTION") === "true",
       LOG_LEVEL: example.get("LOG_LEVEL"),
     });

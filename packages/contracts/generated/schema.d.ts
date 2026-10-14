@@ -1064,7 +1064,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation, or the password is shorter than 12 or longer than 256 characters (weak_password) */
+            /** @description The body did not pass validation, or the password is outside 12 to 256 characters or is on the breached list (weak_password) */
             422: {
                 headers: {
                     [name: string]: unknown;
