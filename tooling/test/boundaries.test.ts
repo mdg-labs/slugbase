@@ -138,6 +138,94 @@ describe("egress ban (T6)", () => {
   });
 });
 
+describe("socket and DNS confinement (T6)", () => {
+  const SERVER = "packages/server/src/fixture.ts";
+  const EGRESS = "packages/adapters/src/egress/fixture.ts";
+  const TEST_DIR = "packages/server/test/fixture.ts";
+  const TEST_FILE = "packages/server/src/fixture.test.ts";
+
+  it.each(["net", "tls", "dns", "dgram", "dns/promises"])("fails %s with and without the node: prefix", async (spec) => {
+    await failsWith(SERVER, `import * as lib from "node:${spec}";\nvoid lib;\n`, IMPORT);
+    await failsWith(SERVER, `import * as lib from "${spec}";\nvoid lib;\n`, IMPORT);
+  });
+
+  it.each([
+    ["require", 'const lib = require("node:net");\nvoid lib;\n'],
+    ["dynamic import", 'const lib = await import("node:tls");\nvoid lib;\n'],
+    ["re-export", 'export * from "node:dgram";\n'],
+    ["import equals", 'import lib = require("node:dns");\nvoid lib;\n'],
+    ["type import", 'export type Socket = import("node:net").Socket;\n'],
+  ])("fails a socket module reached by %s", async (_name, code) => {
+    await failsWith(SERVER, code, IMPORT);
+  });
+
+  it("fails the module loader builtin, the gateway to createRequire", async () => {
+    await failsWith(SERVER, 'import { createRequire } from "node:module";\nvoid createRequire;\n', IMPORT);
+    await failsWith("packages/web/src/fixture.ts", 'import { createRequire } from "module";\nvoid createRequire;\n', IMPORT);
+  });
+
+  it.each(["axios", "node-fetch", "got", "ky", "superagent", "ws", "socket.io-client", "eventsource", "@hapi/wreck"])(
+    "fails the third-party client %s outside egress",
+    async (spec) => {
+      await failsWith(SERVER, `import lib from "${spec}";\nvoid lib;\n`, IMPORT);
+    },
+  );
+
+  it.each([
+    ["getBuiltinModule", 'const net = process.getBuiltinModule("node:net");\nvoid net;\n'],
+    ["a string key", 'const load = process["getBuiltinModule"];\nvoid load;\n'],
+    ["a static template key", "const load = process[`getBuiltinModule`];\nvoid load;\n"],
+    ["destructuring", "const { getBuiltinModule } = process;\nvoid getBuiltinModule;\n"],
+    ["globalThis.process", 'void globalThis.process.getBuiltinModule("node:tls");\n'],
+  ])("fails a dynamic builtin load by %s", async (_name, code) => {
+    await failsWith(SERVER, code, RAW_IO);
+  });
+
+  it.each(["WebSocket", "EventSource", "WebTransport", "WebSocketStream"])("fails the %s global", async (name) => {
+    await failsWith(SERVER, `const socket = new ${name}("wss://example.com");\nvoid socket;\n`, RAW_IO);
+    await failsWith(SERVER, `const socket = new globalThis.${name}("wss://example.com");\nvoid socket;\n`, RAW_IO);
+    await failsWith(SERVER, `const { ${name}: Socket } = globalThis;\nvoid Socket;\n`, RAW_IO);
+    await failsWith("packages/web/src/fixture.ts", `const socket = new ${name}("/stream");\nvoid socket;\n`, RAW_IO);
+  });
+
+  it("does not flag a member or a local binding of the same name", async () => {
+    await passes(SERVER, "declare const sockets: { WebSocket: number };\nvoid sockets.WebSocket;\nexport function run(EventSource: () => void) {\n  EventSource();\n}\n");
+  });
+
+  it("passes the same fixtures under the egress folder", async () => {
+    await passes(EGRESS, 'import * as net from "node:net";\nimport * as dns from "node:dns/promises";\nvoid net;\nvoid dns;\n');
+    await passes(EGRESS, 'import { createRequire } from "node:module";\nvoid createRequire;\n');
+    await passes(EGRESS, 'void process.getBuiltinModule("node:net");\nvoid new WebSocket("wss://example.com");\n');
+  });
+
+  it.each([TEST_DIR, TEST_FILE, "apps/slugbase/test/fixture.ts", "apps/slugbase/scripts/fixture.ts"])(
+    "passes the same fixtures in test and development code: %s",
+    async (file) => {
+      await passes(file, 'import { connect } from "node:net";\nimport { createRequire } from "node:module";\nvoid connect;\nvoid createRequire;\n');
+      await passes(file, 'void process.getBuiltinModule("node:net");\nvoid new WebSocket("wss://example.com");\n');
+    },
+  );
+
+  it("exempts the trusted-proxy module for node:net and the pg-boss migrate step for node:module only", async () => {
+    await passes("packages/server/src/http/trusted-proxy.ts", 'import { isIP, isIPv6 } from "node:net";\nvoid isIP;\nvoid isIPv6;\n');
+    await failsWith("packages/server/src/http/trusted-proxy.ts", 'import "node:dns";\n', IMPORT);
+    await failsWith("packages/server/src/http/trusted-proxy.ts", 'import "node:module";\n', IMPORT);
+    await failsWith("packages/server/src/http/other.ts", 'import { isIP } from "node:net";\nvoid isIP;\n', IMPORT);
+    await passes("packages/server/src/migrate/pgboss.ts", 'import { createRequire } from "node:module";\nvoid createRequire;\n');
+    await failsWith("packages/server/src/migrate/pgboss.ts", 'import "node:net";\n', IMPORT);
+    await failsWith("packages/server/src/migrate/pgboss.ts", 'void process.getBuiltinModule("node:net");\n', RAW_IO);
+  });
+
+  it("still bans the HTTP builtins in test code", async () => {
+    await failsWith(TEST_DIR, 'import "node:http";\n', IMPORT);
+  });
+
+  it("applies through eslint.config.js as `pnpm lint` runs it", { timeout: SUBPROCESS_TIMEOUT_MS }, async () => {
+    expect(await ruleIds("packages/server/src/index.ts", 'import "node:net";\nexport {};\n', repoEslint)).toContain(IMPORT);
+    expect(await ruleIds("packages/server/src/index.ts", 'void process.getBuiltinModule("node:net");\nexport {};\n', repoEslint)).toContain(RAW_IO);
+  });
+});
+
 describe("database ban (T1)", () => {
   it("fails postgres under packages/core/src", async () => {
     await failsWith("packages/core/src/fixture.ts", 'import postgres from "postgres";\nvoid postgres;\n', IMPORT);
@@ -501,6 +589,41 @@ describe("raw outbound matcher (T6)", () => {
     ]),
   ])("flags %s", (_name, code) => {
     expect(findRawOutbound(code)).not.toEqual([]);
+  });
+
+  it.each([
+    ["a socket import", 'import { connect } from "node:net";\nvoid connect;\n'],
+    ["a bare socket import", 'import { lookup } from "dns";\nvoid lookup;\n'],
+    ["a tls require", 'const lib = require("node:tls");\nvoid lib;\n'],
+    ["a dgram dynamic import", 'const lib = await import("node:dgram");\nvoid lib;\n'],
+    ["a module import", 'import { createRequire } from "node:module";\nvoid createRequire;\n'],
+    ["getBuiltinModule", 'void process.getBuiltinModule("node:net");\n'],
+    ["getBuiltinModule by string key", 'void process["getBuiltinModule"];\n'],
+    ["a destructured getBuiltinModule", "const { getBuiltinModule } = process;\nvoid getBuiltinModule;\n"],
+    ["a WebSocket", 'void new WebSocket("wss://example.com");\n'],
+    ["a WebSocket through globalThis", 'void new globalThis.WebSocket("wss://example.com");\n'],
+    ["an EventSource alias", "const Source = EventSource;\nvoid Source;\n"],
+    ["a third-party client", 'import axios from "axios";\nvoid axios;\n'],
+  ])("flags %s", (_name, code) => {
+    expect(findRawOutbound(code, "packages/server/src/fixture.ts")).not.toEqual([]);
+  });
+
+  it.each([
+    ["the egress folder", "packages/adapters/src/egress/fixture.ts"],
+    ["a test folder", "packages/server/test/fixture.ts"],
+    ["a test file", "packages/server/src/fixture.test.ts"],
+    ["an app script", "apps/slugbase/scripts/fixture.ts"],
+  ])("allows socket forms in %s", (_name, file) => {
+    expect(
+      findRawOutbound('import { connect } from "node:net";\nvoid connect;\nvoid process.getBuiltinModule("node:net");\nvoid new WebSocket("x");\n', file),
+    ).toEqual([]);
+  });
+
+  it("allows the listed exemptions only for their module", () => {
+    expect(findRawOutbound('import { isIP } from "node:net";\nvoid isIP;\n', "packages/server/src/http/trusted-proxy.ts")).toEqual([]);
+    expect(findRawOutbound('import "node:dns";\n', "packages/server/src/http/trusted-proxy.ts")).not.toEqual([]);
+    expect(findRawOutbound('import { createRequire } from "node:module";\nvoid createRequire;\n', "packages/server/src/migrate/pgboss.ts")).toEqual([]);
+    expect(findRawOutbound('import "node:net";\n', "packages/server/src/migrate/pgboss.ts")).not.toEqual([]);
   });
 
   it.each([
