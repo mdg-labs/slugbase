@@ -31,24 +31,35 @@ function governedPath(filename: string): string | undefined {
   return rel !== undefined && locate(rel).area !== "other" ? rel : undefined;
 }
 
-// `/* eslint slugbase/no-unsafe-html: "off" */` switches the rule off for the
-// file before it runs, so no rule can see it; the suppression processor scans
-// the text instead. Every inline configuration of the rule needs an issue link
-// after " -- ", whatever severity it sets.
+// `/* eslint slugbase/no-raw-io: "off" */` switches a rule off for the file
+// before it runs, so no rule can see it; the suppression processor scans the
+// text instead. Every inline configuration of a rule in INLINE_GUARDED needs an
+// issue link after " -- ", whatever severity it sets.
 const CONFIG_COMMENT = /\/\*\s*eslint\s([\s\S]*?)\*\//g;
 
-export function unsafeHtmlConfigComments(text: string, filename: string): { line: number; column: number }[] {
+// The rules that no directive may switch off without an issue link: the
+// import boundaries and raw I/O (T1, T6) and unsanitised HTML (T14).
+export const ISSUE_LINK_RULES: readonly string[] = [IMPORT_RULE, RAW_IO_RULE, UNSAFE_HTML_RULE];
+
+export function guardedConfigComments(
+  text: string,
+  filename: string,
+): { rule: string; line: number; column: number }[] {
   if (governedPath(filename) === undefined) {
     return [];
   }
-  const found: { line: number; column: number }[] = [];
+  const found: { rule: string; line: number; column: number }[] = [];
   for (const match of text.matchAll(CONFIG_COMMENT)) {
     const [rules = "", ...description] = (match[1] ?? "").split(/\s--\s/);
-    if (!rules.includes(UNSAFE_HTML_RULE) || hasIssueLink(description.join(" -- "))) {
+    if (hasIssueLink(description.join(" -- "))) {
       continue;
     }
     const before = text.slice(0, match.index).split("\n");
-    found.push({ line: before.length, column: (before.at(-1)?.length ?? 0) + 1 });
+    for (const rule of ISSUE_LINK_RULES) {
+      if (rules.includes(rule)) {
+        found.push({ rule, line: before.length, column: (before.at(-1)?.length ?? 0) + 1 });
+      }
+    }
   }
   return found;
 }

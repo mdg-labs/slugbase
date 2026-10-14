@@ -11,11 +11,15 @@ const JS_FILES = ["**/*.{js,mjs,cjs}"];
 // issue reference: "#123" or a link ending in "/issues/123".
 const ISSUE_LINK = String.raw`^:?\s.*(#\d+|/issues/\d+)`;
 
+// Build and coverage output sits at the root of the repository or of a
+// workspace (packages/*, apps/*, e2e, tooling), never deeper: a source folder
+// named dist or coverage is linted like any other.
+const OUTPUT_ROOTS = ["", "packages/*/", "apps/*/", "e2e/", "tooling/"];
+
 export const ignores = {
   ignores: [
     "**/node_modules/**",
-    "**/dist/**",
-    "**/coverage/**",
+    ...OUTPUT_ROOTS.flatMap((root) => [`${root}dist/**`, `${root}coverage/**`]),
     "**/.turbo/**",
     "**/*.d.ts",
     "packages/contracts/generated/**",
@@ -24,6 +28,14 @@ export const ignores = {
     // with this same config and assert the expected failures.
     "tooling/fixtures/**",
   ],
+};
+
+// A disable directive that suppresses nothing is an error, so a directive left
+// behind after the code it covered changed cannot sit unnoticed or hide a later
+// report. The generated route tree is not linted (packages/web/eslint.config.js
+// ignores it), so its blanket disable header is never evaluated.
+export const linterOptions = {
+  linterOptions: { reportUnusedDisableDirectives: "error" },
 };
 
 export const typescriptRules = [
@@ -239,7 +251,8 @@ export const componentLibraryRules = {
 // and 10): which package may import which, the I/O and database-driver bans,
 // the testing-package restriction and unsanitised HTML. The rules decide by the
 // path of the linted file, so one block serves the whole repository. A disable
-// comment for no-unsafe-html is accepted only with an issue link; the
+// directive or inline configuration comment for any of the three is accepted
+// only with an issue link ("-- #123"), blanket directives included; the
 // suppression processor of the vocabulary block enforces that.
 export const boundaryRules = {
   files: [...TS_FILES, ...JS_FILES],
@@ -262,6 +275,7 @@ export const i18nRules = literalStringConfig([
 
 export default [
   ignores,
+  linterOptions,
   ...javascriptRules,
   ...typescriptRules,
   projectRules,

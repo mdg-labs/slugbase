@@ -494,6 +494,109 @@ describe("unsanitised HTML (T14)", () => {
   });
 });
 
+describe("suppressing the import-boundary and raw-I/O rules (T1, T6)", () => {
+  const FETCH = 'void fetch("https://example.com");\n';
+  const IMPORT_UNDICI = 'import { request } from "undici";\nvoid request;\n';
+  const DB = 'import { drizzle } from "drizzle-orm/postgres-js";\nexport const db = drizzle({} as never);\n';
+  const FILE = "packages/server/src/fixture.ts";
+
+  it.each([
+    ["a bare next-line directive", "// eslint-disable-next-line\n"],
+    ["a next-line directive naming the rule", `// eslint-disable-next-line ${RAW_IO}\n`],
+    ["a directive with a reason but no issue link", `// eslint-disable-next-line ${RAW_IO} -- it is fine\n`],
+    ["a directive with only a reason", "// eslint-disable-next-line -- it is fine\n"],
+    ["a blanket block directive", "/* eslint-disable */\n"],
+    ["a block directive naming the rule", `/* eslint-disable ${RAW_IO} */\n`],
+    ["a block directive with a reason", `/* eslint-disable ${RAW_IO} -- trusted */\n`],
+    ["a block enable pair", `/* eslint-disable ${RAW_IO} */\n${FETCH}/* eslint-enable ${RAW_IO} */\n`],
+    ["inline configuration switching the rule off", `/* eslint ${RAW_IO}: "off" */\n`],
+    ["inline configuration with a reason", `/* eslint ${RAW_IO}: 0 -- trusted */\n`],
+    ["inline configuration among other rules", `/*eslint\n  no-console: "off",\n  ${RAW_IO}: "off"\n*/\n`],
+  ])("reports the global fetch under %s", async (_name, directive) => {
+    await failsWith(FILE, `${directive}${FETCH}`, RAW_IO);
+  });
+
+  it("reports the global fetch under a same-line directive", async () => {
+    await failsWith(FILE, `${FETCH.trimEnd()} // eslint-disable-line ${RAW_IO}\n`, RAW_IO);
+    await failsWith(FILE, `${FETCH.trimEnd()} // eslint-disable-line\n`, RAW_IO);
+  });
+
+  it.each([
+    ["a bare next-line directive", "// eslint-disable-next-line\n"],
+    ["a next-line directive naming the rule", `// eslint-disable-next-line ${IMPORT} -- it is fine\n`],
+    ["a blanket block directive", "/* eslint-disable */\n"],
+    ["inline configuration switching the rule off", `/* eslint ${IMPORT}: "off" */\n`],
+  ])("reports an HTTP client import under %s", async (_name, directive) => {
+    await failsWith(FILE, `${directive}${IMPORT_UNDICI}`, IMPORT);
+  });
+
+  it("reports a database handle outside packages/db under a directive without an issue link", async () => {
+    await failsWith(FILE, `// eslint-disable-next-line ${RAW_IO} -- it is fine\n${DB}`, RAW_IO);
+  });
+
+  it.each([
+    ["next-line", `// eslint-disable-next-line ${RAW_IO} -- sanitised upstream, see #123\n${FETCH}`],
+    ["next-line with an issue URL", `// eslint-disable-next-line ${RAW_IO} -- https://github.com/mdg-labs/slugbase/issues/123\n${FETCH}`],
+    ["same-line", `${FETCH.trimEnd()} // eslint-disable-line ${RAW_IO} -- see #123\n`],
+    ["file-wide", `/* eslint-disable ${RAW_IO} -- see #123 */\n${FETCH}`],
+    ["blanket", `/* eslint-disable -- see #123 */\n${FETCH}`],
+    ["inline configuration", `/* eslint ${RAW_IO}: "off" -- see #123 */\n${FETCH}`],
+  ])("accepts a %s directive that carries an issue link", async (_name, code) => {
+    await passes(FILE, code);
+  });
+
+  it("accepts an HTTP client import under a directive with an issue link", async () => {
+    await passes(FILE, `// eslint-disable-next-line ${IMPORT} -- see #123\n${IMPORT_UNDICI}`);
+    await passes(FILE, `/* eslint ${IMPORT}: "off" -- see #123 */\n${IMPORT_UNDICI}`);
+  });
+
+  it("leaves directives for other rules, and files outside packages and apps, alone", async () => {
+    await passes(FILE, `// eslint-disable-next-line no-console -- see ${RAW_IO}\nexport {};\n`);
+    await passes(FILE, '/* eslint no-console: "off" */\nexport {};\n');
+    await passes("tooling/fixture.ts", `/* eslint ${RAW_IO}: "off" */\n${FETCH}`);
+  });
+
+  it("applies through eslint.config.js as `pnpm lint` runs it", { timeout: SUBPROCESS_TIMEOUT_MS }, async () => {
+    expect(await ruleIds("packages/server/src/index.ts", `// eslint-disable-next-line ${RAW_IO}\n${FETCH}`, repoEslint)).toContain(RAW_IO);
+    expect(await ruleIds("packages/server/src/index.ts", `/* eslint ${IMPORT}: "off" */\n${IMPORT_UNDICI}`, repoEslint)).toContain(IMPORT);
+    expect(await ruleIds("packages/server/src/index.ts", `// eslint-disable-next-line ${RAW_IO} -- see #123\n${FETCH}`, repoEslint)).toEqual([]);
+  });
+});
+
+describe("the repository lint ignores", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
+  const ignored = (file: string): Promise<boolean> => repoEslint.isPathIgnored(resolve(ROOT, file));
+
+  it.each([
+    "packages/server/dist/index.js",
+    "packages/web/dist/assets/app.js",
+    "apps/slugbase/dist/main.js",
+    "packages/core/coverage/lcov-report/index.js",
+    "tooling/coverage/index.js",
+    "e2e/dist/index.js",
+    "dist/index.js",
+    "coverage/index.js",
+  ])("ignores build and coverage output at a package root: %s", async (file) => {
+    expect(await ignored(file)).toBe(true);
+  });
+
+  it.each([
+    "packages/server/src/dist/fixture.ts",
+    "packages/server/src/coverage/fixture.ts",
+    "packages/web/src/routes/dist/fixture.tsx",
+    "apps/slugbase/src/dist/fixture.ts",
+    "packages/server/test/coverage/fixture.ts",
+  ])("lints a source folder named dist or coverage: %s", async (file) => {
+    expect(await ignored(file)).toBe(false);
+  });
+
+  it("reports unused disable directives as errors", async () => {
+    const config = (await repoEslint.calculateConfigForFile(resolve(ROOT, "packages/server/src/index.ts"))) as {
+      linterOptions?: { reportUnusedDisableDirectives?: unknown };
+    };
+    expect(config.linterOptions?.reportUnusedDisableDirectives).toBe(2);
+  });
+});
+
 describe("the repository config", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
   it("applies the rules through eslint.config.js", async () => {
     const real = (file: string, code: string): Promise<string[]> => ruleIds(file, code, repoEslint);
