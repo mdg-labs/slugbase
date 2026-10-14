@@ -7,9 +7,11 @@ import {
   metricsFragment,
   migrateFragment,
   originFragment,
+  passwordPolicyFragment,
   runtimeFragment,
   secretsFragment,
   serverMigrationFragment,
+  setupFragment,
   smtpFragment,
 } from "./fragments.ts";
 import { rateLimitFragment } from "./rate-limits.ts";
@@ -30,6 +32,8 @@ export const serverFragments = [
   databaseFragment,
   serverMigrationFragment,
   httpFragment,
+  setupFragment,
+  passwordPolicyFragment,
   rateLimitFragment,
   metricsFragment,
   errorReportFragment,

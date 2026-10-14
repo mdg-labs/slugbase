@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { defineOperation, jsonResponse, problemResponse } from "@slugbase/contracts";
-import type { Adapters } from "@slugbase/core";
+import type { Adapters, ClientErrorReportPort } from "@slugbase/core";
 import type { AuthStore } from "@slugbase/db";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -81,15 +81,18 @@ const bearer: Authenticator = {
 
 interface ServeOptions {
   readonly clientErrorReport?: boolean;
+  /** A source of its own in place of the one that answers the fixture DSN. */
+  readonly dsn?: ClientErrorReportPort["dsn"];
+  readonly logger?: ReturnType<typeof recordingLogger>;
 }
 
-function serve({ clientErrorReport = false }: ServeOptions = {}): Server {
+function serve({ clientErrorReport = false, dsn, logger = recordingLogger() }: ServeOptions = {}): Server {
   const config = serverConfig({ NODE_ENV: "test", DATABASE_URL: appUrl(database()) });
   const withSource: Adapters = {
     ...adapters(config),
     // The composition root of the Community Edition passes this resolver; the server resolves memberships in its place.
     tenantResolver: createAccountOnlyTenantResolver(),
-    ...(clientErrorReport ? { clientErrorReport: { available: true, dsn: () => Promise.resolve(DSN) } } : {}),
+    ...(clientErrorReport || dsn !== undefined ? { clientErrorReport: { available: true, dsn: dsn ?? (() => Promise.resolve(DSN)) } } : {}),
   };
   return createServer({
     config,
@@ -114,7 +117,7 @@ function serve({ clientErrorReport = false }: ServeOptions = {}): Server {
     ],
     openApiDocument: documentFor([workspaceProbe, adminProbe]),
     migrations: [],
-    logger: recordingLogger(),
+    logger,
     database: tenantDatabase(database()),
     authStore: store,
   });
@@ -306,6 +309,37 @@ describe("GET /api/v1/me", () => {
     const browser = await signIn(ada);
     expect((await me(serve({ clientErrorReport: true }), browser)).clientErrorReportDsn).toBe(DSN);
     expect(Object.keys(await me(serve(), browser))).not.toContain("clientErrorReportDsn");
+  });
+
+  it("answers a session with the account and no DSN when the source throws, rejects or answers nothing usable, and logs the failure", async () => {
+    const ada = await seedAccount(database());
+    const browser = await signIn(ada);
+    const sources: ClientErrorReportPort["dsn"][] = [
+      () => {
+        throw new Error("source down");
+      },
+      () => Promise.reject(new Error("source down")),
+      () => Promise.resolve(""),
+    ];
+    for (const dsn of sources) {
+      const logger = recordingLogger();
+      const body = await me(serve({ dsn, logger }), browser);
+      expect(body.account["id"]).toBe(ada.id);
+      expect(Object.keys(body)).not.toContain("clientErrorReportDsn");
+      expect(JSON.stringify(logger.entries)).not.toContain(DSN);
+    }
+    const failing = recordingLogger();
+    await me(serve({ dsn: () => Promise.reject(new Error("source down")), logger: failing }), browser);
+    expect(failing.entries.some((entry) => entry.level === "warn")).toBe(true);
+  });
+
+  it("never puts the DSN in the anonymous /api/config document, whatever source is registered", async () => {
+    const server = serve({ clientErrorReport: true });
+    const response = await call(server, "/api/config", null);
+    expect(response.status).toBe(200);
+    const text = await response.text();
+    expect(text).not.toContain(DSN);
+    expect(Object.keys(JSON.parse(text) as object)).not.toContain("clientErrorReportDsn");
   });
 
   it("answers an API token with the workspace it is bound to and never with the error-report DSN", async () => {

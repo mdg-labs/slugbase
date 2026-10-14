@@ -14,6 +14,9 @@ import { Route as LoginRouteImport } from "./routes/login.tsx";
 import { Route as AppIndexRouteImport } from "./routes/_app/index.tsx";
 import { Route as AppSplatRouteImport } from "./routes/_app/$.tsx";
 import { Route as App403RouteImport } from "./routes/_app/403.tsx";
+import { Route as AppSettingsRouteImport } from "./routes/_app/settings.tsx";
+import { Route as AppSettingsIndexRouteImport } from "./routes/_app/settings/index.tsx";
+import { Route as AppSettingsAccountIndexRouteImport } from "./routes/_app/settings/account/index.tsx";
 
 const AppRoute = AppRouteImport.update({
   id: "/_app",
@@ -39,18 +42,38 @@ const App403Route = App403RouteImport.update({
   path: "/403",
   getParentRoute: () => AppRoute,
 } as any);
+const AppSettingsRoute = AppSettingsRouteImport.update({
+  id: "/settings",
+  path: "/settings",
+  getParentRoute: () => AppRoute,
+} as any);
+const AppSettingsIndexRoute = AppSettingsIndexRouteImport.update({
+  id: "/",
+  path: "/",
+  getParentRoute: () => AppSettingsRoute,
+} as any);
+const AppSettingsAccountIndexRoute = AppSettingsAccountIndexRouteImport.update({
+  id: "/account/",
+  path: "/account/",
+  getParentRoute: () => AppSettingsRoute,
+} as any);
 
 export interface FileRoutesByFullPath {
   "/": typeof AppIndexRoute;
   "/login": typeof LoginRoute;
   "/$": typeof AppSplatRoute;
   "/403": typeof App403Route;
+  "/settings": typeof AppSettingsRouteWithChildren;
+  "/settings/": typeof AppSettingsIndexRoute;
+  "/settings/account/": typeof AppSettingsAccountIndexRoute;
 }
 export interface FileRoutesByTo {
   "/login": typeof LoginRoute;
   "/$": typeof AppSplatRoute;
   "/403": typeof App403Route;
   "/": typeof AppIndexRoute;
+  "/settings": typeof AppSettingsIndexRoute;
+  "/settings/account": typeof AppSettingsAccountIndexRoute;
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport;
@@ -58,14 +81,33 @@ export interface FileRoutesById {
   "/login": typeof LoginRoute;
   "/_app/$": typeof AppSplatRoute;
   "/_app/403": typeof App403Route;
+  "/_app/settings": typeof AppSettingsRouteWithChildren;
   "/_app/": typeof AppIndexRoute;
+  "/_app/settings/": typeof AppSettingsIndexRoute;
+  "/_app/settings/account/": typeof AppSettingsAccountIndexRoute;
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
-  fullPaths: "/" | "/login" | "/$" | "/403";
+  fullPaths:
+    | "/"
+    | "/login"
+    | "/$"
+    | "/403"
+    | "/settings"
+    | "/settings/"
+    | "/settings/account/";
   fileRoutesByTo: FileRoutesByTo;
-  to: "/login" | "/$" | "/403" | "/";
-  id: "__root__" | "/_app" | "/login" | "/_app/$" | "/_app/403" | "/_app/";
+  to: "/login" | "/$" | "/403" | "/" | "/settings" | "/settings/account";
+  id:
+    | "__root__"
+    | "/_app"
+    | "/login"
+    | "/_app/$"
+    | "/_app/403"
+    | "/_app/settings"
+    | "/_app/"
+    | "/_app/settings/"
+    | "/_app/settings/account/";
   fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
@@ -110,18 +152,55 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof App403RouteImport;
       parentRoute: typeof AppRoute;
     };
+    "/_app/settings": {
+      id: "/_app/settings";
+      path: "/settings";
+      fullPath: "/settings";
+      preLoaderRoute: typeof AppSettingsRouteImport;
+      parentRoute: typeof AppRoute;
+    };
+    "/_app/settings/": {
+      id: "/_app/settings/";
+      path: "/";
+      fullPath: "/settings/";
+      preLoaderRoute: typeof AppSettingsIndexRouteImport;
+      parentRoute: typeof AppSettingsRoute;
+    };
+    "/_app/settings/account/": {
+      id: "/_app/settings/account/";
+      path: "/account";
+      fullPath: "/settings/account/";
+      preLoaderRoute: typeof AppSettingsAccountIndexRouteImport;
+      parentRoute: typeof AppSettingsRoute;
+    };
   }
 }
+
+interface AppSettingsRouteChildren {
+  AppSettingsIndexRoute: typeof AppSettingsIndexRoute;
+  AppSettingsAccountIndexRoute: typeof AppSettingsAccountIndexRoute;
+}
+
+const AppSettingsRouteChildren: AppSettingsRouteChildren = {
+  AppSettingsIndexRoute: AppSettingsIndexRoute,
+  AppSettingsAccountIndexRoute: AppSettingsAccountIndexRoute,
+};
+
+const AppSettingsRouteWithChildren = AppSettingsRoute._addFileChildren(
+  AppSettingsRouteChildren,
+);
 
 interface AppRouteChildren {
   AppSplatRoute: typeof AppSplatRoute;
   App403Route: typeof App403Route;
+  AppSettingsRoute: typeof AppSettingsRouteWithChildren;
   AppIndexRoute: typeof AppIndexRoute;
 }
 
 const AppRouteChildren: AppRouteChildren = {
   AppSplatRoute: AppSplatRoute,
   App403Route: App403Route,
+  AppSettingsRoute: AppSettingsRouteWithChildren,
   AppIndexRoute: AppIndexRoute,
 };
 

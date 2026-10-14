@@ -18,14 +18,15 @@ export interface MaintenanceStores {
 }
 
 /**
- * Two jobs, each through a system operation of `@slugbase/db`. Both are
- * idempotent: a second run finds nothing more to delete than what has become
- * due since.
+ * Two jobs, each through a system operation of `@slugbase/db`.
  *
  * `rateLimit.purgeIdle` deletes the rate-limit buckets idle for more than an
- * hour. `retention.purge` deletes, per table, one batch of the rows past their
- * retention (doc 05 section 6) and logs how many it deleted per table, never a
- * row; a table with more due rows than a batch is finished by the next runs.
+ * hour; it is idempotent: a second run finds nothing more to delete than what
+ * has become idle since. `retention.purge` deletes, per table, at most one
+ * batch (5 000) of the rows past their retention (doc 05 section 6) and logs
+ * how many it deleted per table, never a row; a second run can still find rows
+ * that were already due when the first ran, and a table with more due rows
+ * than a batch is finished by the next runs.
  * Its schedule is a pg-boss schedule, which runs once per tick across all
  * workers.
  */

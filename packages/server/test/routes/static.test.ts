@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { CompositionError, createServer } from "../../src/create-server.ts";
-import { adapters, fakeDatabase, recordingLogger, serverConfig } from "../support.ts";
+import { adapters, fakeAuthStore, fakeDatabase, recordingLogger, serverConfig } from "../support.ts";
 import { expectSecurityHeaders } from "../http/headers-support.ts";
 
 // The SPA assets of doc 01 section 7.1 and doc 04 section 2.1, through the whole
@@ -50,6 +50,7 @@ function start(options: { webRoot?: string; env?: Record<string, string | undefi
     migrations: [],
     logger: recordingLogger(),
     database: fakeDatabase(),
+    authStore: fakeAuthStore(),
     ...(options.webRoot === undefined ? {} : { webRoot: options.webRoot }),
   });
 }

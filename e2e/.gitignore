@@ -1,0 +1,2 @@
+# The signed-in session that global-setup.ts writes.
+.auth/

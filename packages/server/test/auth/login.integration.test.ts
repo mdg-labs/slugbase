@@ -3,12 +3,14 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createAccountOnlyTenantResolver } from "../../src/auth/tenant-resolver.ts";
 import { createServer, type Server } from "../../src/create-server.ts";
 import type { AuthStore } from "@slugbase/db";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../../vitest.shared.ts";
 import { adapters, recordingLogger, serverConfig } from "../support.ts";
 import { appUrl, tenantDatabase } from "../contract/support.ts";
 import {
   changePassword,
   disableAccount,
   expireSessions,
+  medianLatencyRatio,
   seedAccount,
   sessionRows,
   sha256,
@@ -239,25 +241,19 @@ describe("POST /api/v1/auth/login", () => {
       }
     });
 
-    it("falls in one latency class: an unknown email costs a password verification too", async () => {
-      const { world } = await failures();
-      const known = await seedAccount(database());
-      const median = async (attempt: Attempt): Promise<number> => {
-        const durations: number[] = [];
-        for (let round = 0; round < 7; round += 1) {
-          const started = performance.now();
-          await world.server.fetch(post(world.origin, LOGIN, attempt));
-          durations.push(performance.now() - started);
-        }
-        return durations.sort((a, b) => a - b)[3] ?? 0;
-      };
-      await median({ email: known.email, password: "warm up" });
-      const wrong = await median({ email: known.email, password: "not the password" });
-      const unknown = await median({ email: "nobody@example.test", password: "not the password" });
-      // Without the dummy verification the unknown email would answer in a small fraction of the time.
-      expect(unknown).toBeGreaterThan(wrong * 0.5);
-      expect(unknown).toBeLessThan(wrong * 2);
-    });
+    it(
+      "falls in one latency class: an unknown email costs a password verification too",
+      { timeout: HEAVY_TEST_TIMEOUT_MS },
+      async () => {
+        const { world } = await failures();
+        const known = await seedAccount(database());
+        const attempt = (email: string) => () => world.server.fetch(post(world.origin, LOGIN, { email, password: "not the password" }));
+        const ratio = await medianLatencyRatio(attempt(known.email), attempt("nobody@example.test"));
+        // Without the dummy verification the unknown email would answer in a small fraction of the time.
+        expect(ratio).toBeGreaterThan(0.5);
+        expect(ratio).toBeLessThan(2);
+      },
+    );
 
     it("creates no session and sets no sign-in time for any of them", async () => {
       const { world, attempts } = await failures();

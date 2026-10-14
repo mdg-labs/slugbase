@@ -66,7 +66,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Change the signed-in account's display name and language */
+        patch: operations["updateMe"];
         trace?: never;
     };
     "/api/v1/me/sessions": {
@@ -113,6 +114,40 @@ export interface paths {
         };
         /** The OpenAPI document of this API */
         get: operations["getOpenApiDocument"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create the first account, instance admin and owner of the first workspace, and sign it in */
+        post: operations["completeSetup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/setup/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether first-run setup is pending */
+        get: operations["getSetupStatus"];
         put?: never;
         post?: never;
         delete?: never;
@@ -242,6 +277,8 @@ export interface components {
                 /** @description Release version */
                 version: string;
             };
+            /** @description Whether first-run setup is pending; the same answer as GET /api/v1/setup/status. This server always sends it */
+            setupRequired?: boolean;
         };
         HealthStatus: {
             /** @constant */
@@ -369,6 +406,41 @@ export interface components {
             /** @description Passed as `cursor` to get the next page; null on the last page */
             nextCursor: string | null;
         };
+        SetupRequest: {
+            /** @description The first account's display name */
+            displayName: string;
+            /**
+             * Format: email
+             * @description The first account's email address
+             */
+            email: string;
+            /** @description The first account's password, 12 to 256 characters */
+            password: string;
+            /** @description The setup token printed to the server log at the latest server start (an earlier one stops working); required when the deployment requires one */
+            setupToken?: string;
+            /** @description The name of the first workspace */
+            workspaceName: string;
+        };
+        SetupResult: {
+            /**
+             * Format: uuid
+             * @description The first workspace, which is the active one of the new session
+             */
+            workspaceId: string;
+        };
+        SetupStatus: {
+            /** @description Whether first-run setup is pending: the instance has no account, has not completed setup and has setup turned on */
+            setupRequired: boolean;
+        };
+        UpdateAccountRequest: {
+            /** @description The name shown to other members, 1 to 100 characters; surrounding whitespace is removed and a name that is blank after that is refused */
+            displayName?: string;
+            /**
+             * @description The language of the account's emails and of the app unless the browser overrides it
+             * @enum {string}
+             */
+            locale?: "en" | "de";
+        };
         VersionInfo: {
             /** @description Build time, RFC 3339 UTC */
             builtAt: string;
@@ -482,6 +554,8 @@ export interface operations {
             /** @description Too many sign-in attempts from this address or for this email address; Retry-After says when to try again */
             429: {
                 headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -545,6 +619,8 @@ export interface operations {
             /** @description Too many requests; Retry-After says when to try again */
             429: {
                 headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -592,6 +668,88 @@ export interface operations {
             /** @description Too many requests; Retry-After says when to try again */
             429: {
                 headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description The account after the change; a field the request leaves out keeps its value */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Account"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation: an unknown field, a name that is empty or longer than 100 characters, or a language other than en and de */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -660,6 +818,8 @@ export interface operations {
             /** @description Too many requests; Retry-After says when to try again */
             429: {
                 headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -734,6 +894,8 @@ export interface operations {
             /** @description Too many requests; Retry-After says when to try again */
             429: {
                 headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -817,6 +979,8 @@ export interface operations {
             /** @description Too many requests; Retry-After says when to try again */
             429: {
                 headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -863,6 +1027,128 @@ export interface operations {
             };
             /** @description The reference documents are disabled on this server */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    completeSetup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetupRequest"];
+            };
+        };
+        responses: {
+            /** @description The first account and workspace exist and the new session cookie is set */
+            201: {
+                headers: {
+                    /** @description The session cookie: HttpOnly, SameSite=Lax, Path=/, Secure and __Host- prefixed when the deployment is served over https */
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupResult"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request); setup is already completed or turned off (setup_completed); or the setup token is missing or wrong (forbidden). Nothing is written */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation, or the password is outside 12 to 256 characters or is on the breached list (weak_password) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many setup attempts from this address; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getSetupStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Whether the instance still waits for its first account */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupStatus"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests from this address; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { defineOperation, emptyResponse, jsonResponse, problemResponse } from "./define.ts";
+import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
 
 // The auth tag of doc 04 section 10.2. The sign-in operations are anonymous (the
 // credential is the request) and are called from the SPA, so they carry the
@@ -41,7 +41,7 @@ export const login = defineOperation({
     401: problemResponse("The email address or the password is wrong, or the account cannot sign in; all of them answer alike"),
     403: problemResponse("The request did not come from the application itself"),
     422: problemResponse("The body did not pass validation"),
-    429: problemResponse("Too many sign-in attempts from this address or for this email address; Retry-After says when to try again"),
+    429: rateLimitedResponse("Too many sign-in attempts from this address or for this email address; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },
 });
@@ -59,7 +59,7 @@ export const logout = defineOperation({
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session to end"),
     403: problemResponse("The request did not come from the application itself"),
-    429: problemResponse("Too many requests; Retry-After says when to try again"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },
 });

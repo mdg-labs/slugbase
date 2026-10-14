@@ -45,6 +45,7 @@ export const ApiConfigSchema: z.ZodObject<{
         mail: z.ZodBoolean;
         ai: z.ZodBoolean;
     }, z.core.$strict>;
+    setupRequired: z.ZodOptional<z.ZodBoolean>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -63,6 +64,41 @@ export const AUTH_POLICIES: readonly ["anonymous", "partial", "account", "member
 
 // @public (undocumented)
 export type AuthPolicy = (typeof AUTH_POLICIES)[number];
+
+// @public (undocumented)
+export const completeSetup: {
+    readonly method: "post";
+    readonly path: "/api/v1/setup";
+    readonly operationId: "completeSetup";
+    readonly tag: "setup";
+    readonly summary: "Create the first account, instance admin and owner of the first workspace, and sign it in";
+    readonly auth: "anonymous";
+    readonly rate: "setup";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            setupToken: z.ZodOptional<z.ZodString>;
+            displayName: z.ZodString;
+            email: z.ZodEmail;
+            password: z.ZodString;
+            workspaceName: z.ZodString;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 201: JsonResponse<z.ZodObject<{
+        workspaceId: z.ZodUUID;
+        }, z.core.$strict>, {
+        "Set-Cookie": {
+        description: string;
+        schema: z.ZodString;
+        };
+        }>;
+        readonly 400: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
 
 // @public (undocumented)
 export interface ComponentTypes {
@@ -104,6 +140,7 @@ export interface ComponentTypes {
                 name: string;
                 version: string;
             };
+            setupRequired?: boolean;
         };
         HealthStatus: {
             status: "ok";
@@ -172,6 +209,23 @@ export interface ComponentTypes {
             items: ComponentTypes["schemas"]["Session"][];
             nextCursor: string | null;
         };
+        SetupRequest: {
+            displayName: string;
+            email: string;
+            password: string;
+            setupToken?: string;
+            workspaceName: string;
+        };
+        SetupResult: {
+            workspaceId: string;
+        };
+        SetupStatus: {
+            setupRequired: boolean;
+        };
+        UpdateAccountRequest: {
+            displayName?: string;
+            locale?: "en" | "de";
+        };
         VersionInfo: {
             builtAt: string;
             commit: string;
@@ -219,6 +273,7 @@ export const getApiConfig: {
         mail: z.ZodBoolean;
         ai: z.ZodBoolean;
         }, z.core.$strict>;
+        setupRequired: z.ZodOptional<z.ZodBoolean>;
         }, z.core.$strict>, {
         "Cache-Control": {
         description: string;
@@ -293,7 +348,7 @@ export const getMe: {
         clientErrorReportDsn: z.ZodOptional<z.ZodString>;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
         readonly 401: ProblemResponse;
-        readonly 429: ProblemResponse;
+        readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
     };
 };
@@ -349,6 +404,25 @@ export const getReady: {
         applied: z.ZodNullable<z.ZodNumber>;
         }, z.core.$strict>;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+    };
+};
+
+// @public (undocumented)
+export const getSetupStatus: {
+    readonly method: "get";
+    readonly path: "/api/v1/setup/status";
+    readonly operationId: "getSetupStatus";
+    readonly tag: "setup";
+    readonly summary: "Whether first-run setup is pending";
+    readonly auth: "anonymous";
+    readonly rate: "public";
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        setupRequired: z.ZodBoolean;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
     };
 };
 
@@ -434,7 +508,7 @@ export const listSessions: {
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;
         readonly 422: ProblemResponse;
-        readonly 429: ProblemResponse;
+        readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
     };
 };
@@ -468,7 +542,7 @@ export const login: {
         readonly 401: ProblemResponse;
         readonly 403: ProblemResponse;
         readonly 422: ProblemResponse;
-        readonly 429: ProblemResponse;
+        readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
     };
 };
@@ -499,7 +573,7 @@ export const logout: {
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;
         readonly 403: ProblemResponse;
-        readonly 429: ProblemResponse;
+        readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
     };
 };
@@ -601,7 +675,7 @@ export interface OperationRequest {
 export type OperationResponses = {
     [S in OtherResponseStatus]?: JsonResponse | EmptyResponse | ProblemResponse;
 } & AtLeastOne<{
-    [S in ProblemResponseStatus]: ProblemResponse;
+    [S in ProblemResponseStatus]: S extends 429 ? RateLimitedResponse : ProblemResponse;
 }>;
 
 // @public
@@ -609,6 +683,72 @@ export const operations: readonly OperationDefinition[];
 
 // @public (undocumented)
 export interface OperationTypes {
+    // (undocumented)
+    completeSetup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["SetupRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["SetupResult"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     // (undocumented)
     getApiConfig: {
         parameters: {
@@ -694,6 +834,7 @@ export interface OperationTypes {
             };
             429: {
                 headers: {
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -783,6 +924,51 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    getSetupStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["SetupStatus"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     getVersion: {
         parameters: {
             query?: never;
@@ -857,6 +1043,7 @@ export interface OperationTypes {
             };
             429: {
                 headers: {
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -930,6 +1117,7 @@ export interface OperationTypes {
             };
             429: {
                 headers: {
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -988,6 +1176,7 @@ export interface OperationTypes {
             };
             429: {
                 headers: {
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -1064,6 +1253,7 @@ export interface OperationTypes {
             };
             429: {
                 headers: {
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -1132,6 +1322,80 @@ export interface OperationTypes {
             };
             429: {
                 headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    updateMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["UpdateAccountRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["Account"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -1220,7 +1484,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        patch: OperationTypes["updateMe"];
         trace?: never;
     };
     // (undocumented)
@@ -1266,6 +1530,40 @@ export interface paths {
             cookie?: never;
         };
         get: OperationTypes["getOpenApiDocument"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["completeSetup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/setup/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["getSetupStatus"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1507,6 +1805,8 @@ export interface ProblemResponse {
     // (undocumented)
     readonly description: string;
     // (undocumented)
+    readonly headers?: ResponseHeaders;
+    // (undocumented)
     readonly kind: "problem";
 }
 
@@ -1582,6 +1882,17 @@ export const RATE_BUCKETS: readonly ["login", "mfa", "register", "reset", "token
 // @public (undocumented)
 export type RateBucket = (typeof RATE_BUCKETS)[number];
 
+// @public
+export interface RateLimitedResponse extends ProblemResponse {
+    // (undocumented)
+    readonly headers: {
+        readonly [RETRY_AFTER_HEADER]: ResponseHeader;
+    } & ResponseHeaders;
+}
+
+// @public
+export function rateLimitedResponse(description: string): RateLimitedResponse;
+
 // @public (undocumented)
 export const ReadyStatusSchema: z.ZodObject<{
     database: z.ZodEnum<{
@@ -1605,6 +1916,12 @@ export interface ResponseHeader {
 // @public (undocumented)
 export type ResponseHeaders = Readonly<Record<string, ResponseHeader>>;
 
+// @public
+export const RETRY_AFTER_HEADER = "Retry-After";
+
+// @public
+export const RetryAfterSchema: z.ZodNumber;
+
 // @public (undocumented)
 export const revokeSession: {
     readonly method: "delete";
@@ -1626,7 +1943,7 @@ export const revokeSession: {
         readonly 403: ProblemResponse;
         readonly 404: ProblemResponse;
         readonly 422: ProblemResponse;
-        readonly 429: ProblemResponse;
+        readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
     };
 };
@@ -1654,7 +1971,7 @@ export const revokeSessions: {
         readonly 401: ProblemResponse;
         readonly 403: ProblemResponse;
         readonly 422: ProblemResponse;
-        readonly 429: ProblemResponse;
+        readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
     };
 };
@@ -1701,11 +2018,89 @@ export const SessionSchema: z.ZodObject<{
     current: z.ZodBoolean;
 }, z.core.$strict>;
 
+// @public (undocumented)
+export const SetupRequestSchema: z.ZodObject<{
+    setupToken: z.ZodOptional<z.ZodString>;
+    displayName: z.ZodString;
+    email: z.ZodEmail;
+    password: z.ZodString;
+    workspaceName: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const SetupResultSchema: z.ZodObject<{
+    workspaceId: z.ZodUUID;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const SetupStatusSchema: z.ZodObject<{
+    setupRequired: z.ZodBoolean;
+}, z.core.$strict>;
+
 // @public
 export const TOKEN_SCOPES: readonly ["read", "write"];
 
 // @public (undocumented)
 export type TokenScope = (typeof TOKEN_SCOPES)[number];
+
+// @public (undocumented)
+export const UpdateAccountRequestSchema: z.ZodObject<{
+    displayName: z.ZodOptional<z.ZodString>;
+    locale: z.ZodOptional<z.ZodEnum<{
+        en: "en";
+        de: "de";
+    }>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const updateMe: {
+    readonly method: "patch";
+    readonly path: "/api/v1/me";
+    readonly operationId: "updateMe";
+    readonly tag: "me";
+    readonly summary: "Change the signed-in account's display name and language";
+    readonly auth: "account";
+    readonly rate: "write";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            displayName: z.ZodOptional<z.ZodString>;
+            locale: z.ZodOptional<z.ZodEnum<{
+                en: "en";
+                de: "de";
+            }>>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        id: z.ZodUUID;
+        email: z.ZodString;
+        displayName: z.ZodString;
+        locale: z.ZodEnum<{
+        en: "en";
+        de: "de";
+        }>;
+        theme: z.ZodEnum<{
+        light: "light";
+        dark: "dark";
+        system: "system";
+        }>;
+        accent: z.ZodNullable<z.ZodString>;
+        defaultView: z.ZodEnum<{
+        grid: "grid";
+        table: "table";
+        }>;
+        aiOptOut: z.ZodBoolean;
+        emailVerified: z.ZodBoolean;
+        hasPassword: z.ZodBoolean;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
 
 // @public (undocumented)
 export const VersionInfoSchema: z.ZodObject<{

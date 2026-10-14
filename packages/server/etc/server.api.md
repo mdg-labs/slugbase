@@ -4,7 +4,7 @@
 
 ```ts
 
-import type { Adapters } from '@slugbase/core';
+import { Adapters } from '@slugbase/core';
 import { AuthStore } from '@slugbase/db';
 import type { ClientErrorReportRequest } from '@slugbase/core';
 import type { Context } from 'hono';
@@ -299,6 +299,11 @@ export const envSchemas: {
     TRUSTED_PROXY_HOPS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
     API_DOCS_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
     DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>;
+    } & {
+    SETUP_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+    SETUP_TOKEN_REQUIRED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+    } & {
+    BREACHED_PASSWORD_CHECK: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
     } & {
     METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
     } & {
@@ -619,6 +624,11 @@ export class NotIdempotentError extends Error {
 // @public
 export const originFragment: EnvFragment<    {
 APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
+}>;
+
+// @public
+export const passwordPolicyFragment: EnvFragment<    {
+BREACHED_PASSWORD_CHECK: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 }>;
 
 // @public (undocumented)
@@ -1029,6 +1039,11 @@ TRUSTED_PROXY_HOPS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, s
 API_DOCS_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>;
 } & {
+SETUP_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+SETUP_TOKEN_REQUIRED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+} & {
+BREACHED_PASSWORD_CHECK: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+} & {
 METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 } & {
 ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
@@ -1079,6 +1094,11 @@ PORT: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
 TRUSTED_PROXY_HOPS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
 API_DOCS_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>;
+}>, EnvFragment<    {
+SETUP_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+SETUP_TOKEN_REQUIRED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+}>, EnvFragment<    {
+BREACHED_PASSWORD_CHECK: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 }>, EnvFragment<Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>, EnvFragment<    {
 METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 }>, EnvFragment<    {
@@ -1129,6 +1149,12 @@ export interface SessionPrincipal extends Extract<TenantPrincipal, {
     readonly reauthAt?: Date;
     readonly sessionId: string;
 }
+
+// @public
+export const setupFragment: EnvFragment<    {
+SETUP_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+SETUP_TOKEN_REQUIRED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+}>;
 
 // @public (undocumented)
 export const SMTP_KEYS: readonly ["SMTP_HOST", "SMTP_PORT", "SMTP_SECURITY", "SMTP_USER", "SMTP_PASS", "SMTP_FROM"];

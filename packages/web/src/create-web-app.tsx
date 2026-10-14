@@ -7,6 +7,7 @@ import { fetchConfig, type ConfigResult } from "./config/bootstrap.ts";
 import { ConfigFailure } from "./config/config-failure.tsx";
 import { ConfigProvider } from "./config/config-context.tsx";
 import { ExtensionsProvider, type WebExtension } from "./extensions/index.ts";
+import { AccountI18nProvider } from "./i18n/account-i18n-provider.tsx";
 import { I18nProvider } from "./i18n/i18n-provider.tsx";
 import { createQueryClient } from "./query-client.ts";
 import { createAppRouter } from "./router.ts";
@@ -51,15 +52,15 @@ export function createWebApp({ extensions }: CreateWebAppOptions): ComponentType
     }
     return (
       <ConfigProvider config={loaded.config}>
-        <I18nProvider defaultLocale={loaded.config.defaultLocale}>
-          <QueryClientProvider client={queryClient}>
+        <QueryClientProvider client={queryClient}>
+          <AccountI18nProvider defaultLocale={loaded.config.defaultLocale}>
             <AppFeedback expiry={sessionExpiry} router={router}>
               <ExtensionsProvider extensions={extensions}>
                 <RouterProvider router={router} />
               </ExtensionsProvider>
             </AppFeedback>
-          </QueryClientProvider>
-        </I18nProvider>
+          </AccountI18nProvider>
+        </QueryClientProvider>
       </ConfigProvider>
     );
   }

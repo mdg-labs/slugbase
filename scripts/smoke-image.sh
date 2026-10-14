@@ -15,6 +15,12 @@
 #   BUILD_COMMIT        The commit the image was built from. Given, /version must
 #                       report exactly it (and a build by this script is made with it).
 #   SMOKE_READY_SECONDS How long to wait for /ready (default 120).
+#   SMOKE_APP_ORIGIN    The https origin the stack is configured with as APP_ORIGIN
+#                       (default https://smoke.example.test). e2e/with-stack.sh sets
+#                       it to the origin its TLS proxy serves, which a browser needs
+#                       to sign in: the session cookie is Secure and a mutation must
+#                       come from exactly this origin.
+#   SMOKE_AVOID_PORT    A port the free port picked for the server must not be.
 #   SMOKE_POSTGRES_MAJOR The PostgreSQL major the database runs: 18 (the default,
 #                       compose.yml as it is) or 17 (compose.pg17.yml merged over
 #                       it, doc 08 section 6.2). The script reads the version the
@@ -92,7 +98,7 @@ pick_port() {
   local candidate
   for _ in $(seq 1 50); do
     candidate=$((20000 + (RANDOM * 32768 + RANDOM) % 20000))
-    if ! port_in_use "$candidate"; then
+    if [[ "$candidate" != "${SMOKE_AVOID_PORT:-}" ]] && ! port_in_use "$candidate"; then
       printf '%s' "$candidate"
       return 0
     fi
@@ -260,7 +266,7 @@ write_env_file() {
   # The passwords sit in database URLs, hence hex; APP_ORIGIN is https because
   # production requires it (curl reaches the published port over http).
   {
-    printf 'APP_ORIGIN=%s\n' "https://smoke.example.test"
+    printf 'APP_ORIGIN=%s\n' "${SMOKE_APP_ORIGIN:-https://smoke.example.test}"
     printf 'SESSION_SECRET=%s\n' "$session_secret"
     printf 'ENCRYPTION_KEY=%s\n' "$encryption_key"
     printf 'ENCRYPTION_KEY_ID=%s\n' "smoke-1"

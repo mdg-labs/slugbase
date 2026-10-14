@@ -14,9 +14,11 @@ export {
   metricsFragment,
   migrateFragment,
   originFragment,
+  passwordPolicyFragment,
   runtimeFragment,
   secretsFragment,
   serverMigrationFragment,
+  setupFragment,
   smtpFragment,
 } from "./fragments.ts";
 export type { PreviousKey } from "./fields.ts";

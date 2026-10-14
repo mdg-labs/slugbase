@@ -144,6 +144,17 @@ describe("the generated handlers", () => {
     expect(problems).toBeGreaterThan(0);
   });
 
+  it("send a numeric Retry-After with every generated 429", async () => {
+    let limited = 0;
+    for (const operation of operations.filter((candidate) => candidate.statuses.includes(429))) {
+      limited += 1;
+      const response = await answer(operation, { name: "limited", statuses: { [operation.operationId]: 429 } });
+      expect(response.status, operation.operationId).toBe(429);
+      expect(response.headers.get("retry-after"), operation.operationId).toMatch(/^[1-9][0-9]*$/);
+    }
+    expect(limited).toBeGreaterThan(0);
+  });
+
   it("refuse a scenario that forces a status the operation does not declare", () => {
     const [first] = operations;
     const scenario: Scenario = { name: "wrong", statuses: { [first?.operationId ?? ""]: 418 } };

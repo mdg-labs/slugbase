@@ -1,4 +1,4 @@
-import type { z } from "zod";
+import { z } from "zod";
 
 export const HTTP_METHODS = ["get", "post", "put", "patch", "delete"] as const;
 export type HttpMethod = (typeof HTTP_METHODS)[number];
@@ -65,6 +65,21 @@ export interface JsonResponseOptions<H extends ResponseHeaders = ResponseHeaders
 export interface ProblemResponse {
   readonly kind: "problem";
   readonly description: string;
+  readonly headers?: ResponseHeaders;
+}
+
+/** The name of the header a `429` carries, so the generator and the checks spell it once. */
+export const RETRY_AFTER_HEADER = "Retry-After";
+
+/**
+ * Retry-After on a rate-limit refusal: whole seconds to wait, at least one because a
+ * refusal always has a wait left (doc 04 section 7). The server never sends the HTTP-date form.
+ */
+export const RetryAfterSchema = z.number().int().min(1);
+
+/** A `429` problem response; it always declares `Retry-After`. */
+export interface RateLimitedResponse extends ProblemResponse {
+  readonly headers: { readonly [RETRY_AFTER_HEADER]: ResponseHeader } & ResponseHeaders;
 }
 
 export interface EmptyResponse {
@@ -86,6 +101,19 @@ export function problemResponse(description: string): ProblemResponse {
   return { kind: "problem", description };
 }
 
+/**
+ * The `429 rate_limited` problem response (doc 04 section 3.2). Every operation's
+ * `429` is built here, so each one declares `Retry-After` in integer seconds and the
+ * generated client and mocks carry it (doc 04 section 7).
+ */
+export function rateLimitedResponse(description: string): RateLimitedResponse {
+  return {
+    kind: "problem",
+    description,
+    headers: { [RETRY_AFTER_HEADER]: { description: "Whole seconds to wait before the request can succeed", schema: RetryAfterSchema } },
+  };
+}
+
 /** A response without a body. */
 export function emptyResponse(description: string): EmptyResponse {
   return { kind: "empty", description };
@@ -98,7 +126,7 @@ export type AtLeastOne<T> = { [K in keyof T]-?: Required<Pick<T, K>> & Partial<O
  * Other statuses carry any response kind.
  */
 export type OperationResponses = { [S in OtherResponseStatus]?: JsonResponse | EmptyResponse | ProblemResponse } & AtLeastOne<{
-  [S in ProblemResponseStatus]: ProblemResponse;
+  [S in ProblemResponseStatus]: S extends 429 ? RateLimitedResponse : ProblemResponse;
 }>;
 
 export interface OperationRequest {

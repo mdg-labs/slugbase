@@ -149,6 +149,29 @@ export const httpFragment = envFragment({
 });
 
 /**
+ * First-run setup (doc 02 section 2.2, Q44), for the server. `SETUP_ENABLED=false` closes `POST /setup`
+ * for the deployment, as a composition that must never have an instance admin does; with
+ * `SETUP_TOKEN_REQUIRED` (the default) the first account also needs the one-time token the server
+ * prints to its log at each start while there is no account.
+ */
+export const setupFragment = envFragment({
+  shape: {
+    SETUP_ENABLED: envBoolean().default(true),
+    SETUP_TOKEN_REQUIRED: envBoolean().default(true),
+  },
+});
+
+/**
+ * The password policy (doc 02 section 2.5, Q15), for the server. `BREACHED_PASSWORD_CHECK=false` turns off
+ * the check against the breached-password dataset shipped with the image; the length rules always apply.
+ */
+export const passwordPolicyFragment = envFragment({
+  shape: {
+    BREACHED_PASSWORD_CHECK: envBoolean().default(true),
+  },
+});
+
+/**
  * The internal listener for `/metrics` (doc 01 section 12), for the server and
  * the worker. Unset means there is none: nothing exposes metrics by default (D27).
  */

@@ -50,11 +50,12 @@ describe("getApiConfig", () => {
     expect(api.properties["features"]?.["additionalProperties"]).toBe(false);
   });
 
-  it("carries exactly the fields a server without accounts can answer", () => {
+  it("carries exactly the fields a server without accounts can answer, and setupRequired besides", () => {
     const api = schemas["ApiConfig"] as { properties: Obj; required: string[] };
     const names = ["apiVersion", "defaultLocale", "docsBaseUrl", "features", "locales", "origin", "product"];
-    expect(Object.keys(api.properties).sort()).toEqual(names);
+    expect(Object.keys(api.properties).sort()).toEqual([...names, "setupRequired"].sort());
     expect([...api.required].sort()).toEqual(names);
+    expect(api.properties["setupRequired"]).toMatchObject({ type: "boolean" });
     const features = api.properties["features"] as { properties: Obj; required: string[] };
     expect(Object.keys(features.properties).sort()).toEqual(["ai", "mail"]);
     expect([...features.required].sort()).toEqual(["ai", "mail"]);
@@ -68,9 +69,13 @@ describe("ApiConfigSchema", () => {
 
   it("rejects fields that need accounts or an entitlement", () => {
     expect(ApiConfigSchema.safeParse({ ...config, signIn: { password: true } }).success).toBe(false);
-    expect(ApiConfigSchema.safeParse({ ...config, setupRequired: false }).success).toBe(false);
     expect(ApiConfigSchema.safeParse({ ...config, features: { ...config.features, billing: true } }).success).toBe(false);
     expect(ApiConfigSchema.safeParse({ ...config, product: { ...config.product, commit: "abc" } }).success).toBe(false);
+  });
+
+  it("accepts setupRequired as a boolean, and leaves it out of a document that does not state it", () => {
+    expect(ApiConfigSchema.parse({ ...config, setupRequired: true })).toEqual({ ...config, setupRequired: true });
+    expect(ApiConfigSchema.safeParse({ ...config, setupRequired: "yes" }).success).toBe(false);
   });
 
   it("rejects an API version other than v1 and non-boolean features", () => {

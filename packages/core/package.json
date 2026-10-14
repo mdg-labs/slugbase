@@ -18,7 +18,7 @@
     "lint": "eslint --max-warnings=0 .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test:unit": "vitest run --project unit",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node --input-type=module -e \"import{cpSync}from'node:fs';cpSync('src/auth/breached/breached-sha1.bin','dist/auth/breached/breached-sha1.bin')\"",
     "contracts:check": "node ../../tooling/api-report/api-report.ts check --package ."
   },
   "dependencies": {

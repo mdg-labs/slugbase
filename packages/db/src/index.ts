@@ -25,7 +25,7 @@ export type {
   WorkspaceTable,
 } from "./repositories/scoped.ts";
 export { accountProfileRepository } from "./repositories/account-profile.ts";
-export type { AccountProfile, AccountProfileRepository } from "./repositories/account-profile.ts";
+export type { AccountProfile, AccountProfileChanges, AccountProfileRepository } from "./repositories/account-profile.ts";
 export { membershipRepository } from "./repositories/memberships.ts";
 export type { Membership, MembershipRepository } from "./repositories/memberships.ts";
 export type { MemberRole } from "./schema/workspaces.ts";
@@ -44,3 +44,4 @@ export type {
   SessionRecord,
   SessionSummary,
 } from "./system/auth.ts";
+export type { CompleteSetup, SetupOutcome, SetupStore } from "./system/setup.ts";

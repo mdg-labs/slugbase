@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { defineOperation, jsonResponse, problemResponse, type RateBucket } from "@slugbase/contracts";
 import { z } from "zod";
 import { createServer, type RunningServer, type ServerModule } from "../../src/create-server.ts";
-import { adapters, documentOf, fakeDatabase, recordingLogger, serverConfig } from "../support.ts";
+import { adapters, documentOf, fakeAuthStore, fakeDatabase, recordingLogger, serverConfig } from "../support.ts";
 
 // Stages 3a and 6 over a real socket (doc 10 T9): GET /api/config, bucket `public`, is
 // refused after the configured burst, and the client address the bucket is
@@ -53,6 +53,7 @@ async function listen(hops: number, burst: number, modules: readonly ServerModul
     migrations: [],
     logger: recordingLogger(),
     database: fakeDatabase(),
+    authStore: fakeAuthStore(),
   });
   const started = await server.start({ port: 0 });
   running.push(started);

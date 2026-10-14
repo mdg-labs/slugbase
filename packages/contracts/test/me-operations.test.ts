@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildOpenApiDocument, serializeOpenApiDocument } from "../src/openapi/generate.ts";
-import { AccountSchema, MembershipSchema, MeSchema, RevokeSessionsQuerySchema, SessionIdParamsSchema, SessionListQuerySchema, SessionListSchema, SessionSchema } from "../src/operations/me.ts";
+import { AccountSchema, MembershipSchema, MeSchema, RevokeSessionsQuerySchema, SessionIdParamsSchema, SessionListQuerySchema, SessionListSchema, SessionSchema, UpdateAccountRequestSchema } from "../src/operations/me.ts";
 import { operations } from "../src/operations/index.ts";
 
 type Obj = Record<string, unknown>;
@@ -151,5 +151,58 @@ describe("the account operation", () => {
     expect(AccountSchema.safeParse({ ...account, locale: "fr" }).success).toBe(false);
     expect(MembershipSchema.safeParse({ ...membership, role: "guest" }).success).toBe(false);
     expect(MembershipSchema.safeParse({ ...membership, joinedAt: "2026-01-01T00:00:00Z" }).success).toBe(false);
+  });
+});
+
+describe("the profile operation", () => {
+  const operation = paths["/api/v1/me"]?.["patch"];
+
+  it("is updateMe: an account operation in the write bucket that no API token may call", () => {
+    expect(operation?.["operationId"]).toBe("updateMe");
+    expect(operation?.["x-slugbase-auth"]).toBe("account");
+    expect(operation?.["x-slugbase-rate"]).toBe("write");
+    expect(operation?.["x-slugbase-scope"]).toBeUndefined();
+    expect(operation?.["x-slugbase-reauth"]).toBeUndefined();
+    expect(operation?.["parameters"]).toBeUndefined();
+    expect(operation?.["requestBody"]).toEqual({
+      content: { "application/json": { schema: { $ref: "#/components/schemas/UpdateAccountRequest" } } },
+      required: true,
+    });
+  });
+
+  it("answers the account and declares application/problem+json for every client error, among them 401, 403 and 422", () => {
+    const responses = responsesOf(operation);
+    expect(responses["200"]?.content).toEqual({ "application/json": { schema: { $ref: "#/components/schemas/Account" } } });
+    const clientErrors = Object.keys(responses).filter((status) => status.startsWith("4"));
+    expect(clientErrors).toEqual(expect.arrayContaining(["401", "403", "422"]));
+    for (const status of clientErrors) {
+      expect(Object.keys(responses[status]?.content ?? {}), status).toEqual(["application/problem+json"]);
+    }
+  });
+
+  it("takes a closed object of two optional fields: a name of 1 to 100 characters and a locale of en or de", () => {
+    const request = schemas["UpdateAccountRequest"] as { additionalProperties: unknown; properties: Record<string, Obj>; required?: string[] };
+    expect(request.additionalProperties).toBe(false);
+    expect(Object.keys(request.properties).sort()).toEqual(["displayName", "locale"]);
+    expect(request.required).toBeUndefined();
+    expect(request.properties["displayName"]).toMatchObject({ type: "string", minLength: 1, maxLength: 100 });
+    expect(request.properties["locale"]).toMatchObject({ enum: ["en", "de"] });
+  });
+
+  it.each([
+    [{}, true],
+    [{ displayName: "A" }, true],
+    [{ displayName: "x".repeat(100), locale: "de" }, true],
+    [{ displayName: "" }, false],
+    [{ displayName: "x".repeat(101) }, false],
+    [{ displayName: null }, false],
+    [{ locale: "fr" }, false],
+    [{ locale: null }, false],
+    [{ email: "other@example.test" }, false],
+    [{ isInstanceAdmin: true }, false],
+    [{ id: "0192f3a0-0000-7000-8000-0000000000a1" }, false],
+    [{ theme: "dark" }, false],
+  ])("%j is accepted: %s", (body, accepted) => {
+    expect(UpdateAccountRequestSchema.safeParse(body).success).toBe(accepted);
   });
 });

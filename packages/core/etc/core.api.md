@@ -79,6 +79,17 @@ export interface AnalyticsPort extends Port {
 }
 
 // @public
+export class BreachedDatasetError extends Error {
+    constructor(reason: string);
+}
+
+// @public (undocumented)
+export interface BreachedPasswords {
+    has(password: string): boolean;
+    range(prefix: string): readonly string[];
+}
+
+// @public
 export interface ChallengePort extends Port {
     // (undocumented)
     verify(solution: string | undefined): Promise<ChallengeVerdict>;
@@ -102,6 +113,12 @@ export interface ClientErrorReportRequest {
     readonly accountId: string;
     readonly workspaceId: string | undefined;
 }
+
+// @public
+export function createBreachedPasswords(records: Uint8Array): BreachedPasswords;
+
+// @public (undocumented)
+export function createPasswordPolicy(input?: PasswordPolicyOptions): PasswordPolicy;
 
 // @public
 export const EGRESS_MAX_REQUEST_BODY_BYTES = 1048576;
@@ -253,6 +270,9 @@ export interface IdentityProviderInfo {
 }
 
 // @public
+export function loadBreachedPasswords(): BreachedPasswords;
+
+// @public
 export interface MailMessage {
     // (undocumented)
     readonly data: Readonly<Record<string, string | number | boolean>>;
@@ -272,6 +292,25 @@ export interface MailPort extends Port {
 
 // @public
 export function normalizeEmail(raw: string): string;
+
+// @public
+export const PASSWORD_MAX_LENGTH = 256;
+
+// @public
+export const PASSWORD_MIN_LENGTH = 12;
+
+// @public (undocumented)
+export interface PasswordPolicy {
+    check(password: string): readonly PasswordProblem[];
+}
+
+// @public (undocumented)
+export interface PasswordPolicyOptions {
+    readonly breached?: BreachedPasswords | undefined;
+}
+
+// @public
+export type PasswordProblem = "too_short" | "too_long" | "breached";
 
 // @public
 export interface Port {

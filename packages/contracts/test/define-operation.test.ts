@@ -6,6 +6,7 @@ import {
   emptyResponse,
   jsonResponse,
   problemResponse,
+  rateLimitedResponse,
   type OperationDefinition,
 } from "../src/operations/define.ts";
 import { omit } from "./omit.ts";
@@ -21,6 +22,22 @@ const complete = {
   rate: "read",
   responses: { 200: jsonResponse("ok", Pong), 404: problemResponse("missing") },
 } satisfies OperationDefinition;
+
+describe("rateLimitedResponse", () => {
+  it("builds a problem response that declares Retry-After in integer seconds", () => {
+    const limited = rateLimitedResponse("slow down");
+    expect(limited.kind).toBe("problem");
+    expect(limited.headers["Retry-After"].schema.safeParse(30).success).toBe(true);
+    expect(limited.headers["Retry-After"].schema.safeParse(1.5).success).toBe(false);
+    expect(limited.headers["Retry-After"].schema.safeParse(0).success).toBe(false);
+  });
+
+  it("is the only 429 an operation accepts at compile time", () => {
+    expect(defineOperation({ ...complete, responses: { 200: jsonResponse("ok", Pong), 429: rateLimitedResponse("slow down") } }).responses[429].kind).toBe("problem");
+    // @ts-expect-error #447 a 429 declares Retry-After, so it is built with rateLimitedResponse
+    defineOperation({ ...complete, responses: { 200: jsonResponse("ok", Pong), 429: problemResponse("slow down") } });
+  });
+});
 
 describe("defineOperation types", () => {
   it("accepts a declaration with its whole policy and returns it unchanged", () => {

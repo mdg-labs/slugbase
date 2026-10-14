@@ -17,12 +17,61 @@
       "description": "Änderungen können erst wieder gespeichert werden, wenn deine Verbindung zurück ist."
     },
     "account": "Konto",
-    "signOut": "Abmelden"
+    "signOut": "Abmelden",
+    "settings": "Einstellungen",
+    "accountSettings": "Kontoeinstellungen"
   },
   "home": {
     "empty": {
       "title": "Willkommen bei {name}",
       "description": "Lesezeichen mit kurzen, privaten Slugs."
+    }
+  },
+  "settings": {
+    "navigation": "Einstellungen",
+    "nav": {
+      "account": "Konto",
+      "profile": "Profil"
+    },
+    "account": {
+      "title": "Profil",
+      "section": {
+        "title": "Dein Profil",
+        "description": "Wie du anderen Mitgliedern angezeigt wirst, und die Sprache der App."
+      },
+      "avatar": {
+        "caption": "Dein Avatar zeigt deine Initialen."
+      },
+      "name": {
+        "label": "Name",
+        "error": {
+          "required": "Gib deinen Namen ein.",
+          "tooLong": "Verwende höchstens 100 Zeichen.",
+          "invalid": "Prüfe den Namen."
+        }
+      },
+      "email": {
+        "label": "E-Mail",
+        "description": "Die Adresse, mit der du dich anmeldest."
+      },
+      "language": {
+        "label": "Sprache",
+        "description": "Die Sprache der App und der E-Mails, die wir dir schicken.",
+        "option": {
+          "en": "English",
+          "de": "Deutsch"
+        },
+        "error": {
+          "invalid": "Wähle English oder Deutsch."
+        }
+      },
+      "save": "Speichern",
+      "saved": "Profil gespeichert",
+      "loadFailed": {
+        "title": "Dein Profil konnte nicht geladen werden",
+        "description": "Versuche es erneut. Melde es deiner Administration, wenn es weiter auftritt.",
+        "retry": "Erneut versuchen"
+      }
     }
   },
   "configFailure": {

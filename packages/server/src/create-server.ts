@@ -1,10 +1,11 @@
 import { setTimeout as sleep } from "node:timers/promises";
 import { createAdaptorServer, type ServerType } from "@hono/node-server";
 import { getHealth, getReady, getVersion } from "@slugbase/contracts";
-import type { Adapters } from "@slugbase/core";
+import { createPasswordPolicy, loadBreachedPasswords, type Adapters } from "@slugbase/core";
 import { createAuthStore, createDatabase, type AuthStore, type Database, type MigrationChain } from "@slugbase/db";
 import { Hono } from "hono";
 import { DEVELOPMENT_BUILD_INFO, type BuildInfo } from "./build-info.ts";
+import { ensureSetupToken } from "./auth/setup-token.ts";
 import { createMembershipTenantResolver, defersToMembershipResolver } from "./auth/tenant-resolver.ts";
 import { createRateLimitRegistry, type ServerConfig, type WorkerConfig } from "./config/index.ts";
 import type { Authenticator } from "./http/authenticate.ts";
@@ -30,6 +31,7 @@ import { profileRoutes } from "./routes/me/profile.ts";
 import { apiConfigRoute } from "./routes/meta/config.ts";
 import { apiDocs } from "./routes/meta/docs.ts";
 import { isOpenApiDocument, openApiRoute } from "./routes/meta/openapi.ts";
+import { setupRoutes } from "./routes/setup/index.ts";
 import { checkRegistrations, type ContractDocument } from "./routes/register.ts";
 import { WebRootError, serveWebRoot } from "./routes/static.ts";
 import type { JobDefinition, ScheduleDefinition } from "./worker/job.ts";
@@ -169,7 +171,8 @@ export interface Server {
    * In production it first refuses a `DATABASE_URL` role that is a superuser or owns the database
    * (Q56). With `MIGRATE_ON_START` it then migrates as `DATABASE_MIGRATE_URL` and resolves when that
    * is done; meanwhile the probes answer, `/ready` is `503` and every other route is `503 unavailable`.
-   * A failed migration stops the listeners and rejects.
+   * A failed migration stops the listeners and rejects. Once the database is migrated, a deployment that requires a setup
+   * token while the instance has no account generates a new one, replacing the stored one, and prints it to the log.
    */
   start(options?: StartOptions): Promise<RunningServer>;
 }
@@ -401,15 +404,20 @@ export function createServer(options: CreateServerOptions): Server {
   let migrationSets: readonly MigrationChain[] = options.migrations;
   const progress = { migrating: false };
   const buildInfo = options.buildInfo ?? DEVELOPMENT_BUILD_INFO;
+  // With the breached-password check on, a dataset that cannot be read refuses the start (BreachedDatasetError):
+  // starting without it would accept every listed password while the check reads as on.
+  const passwordPolicy = createPasswordPolicy({ breached: config.BREACHED_PASSWORD_CHECK ? loadBreachedPasswords() : undefined });
+  const authStore = options.authStore ?? createAuthStore({ url: config.DATABASE_URL, poolSize: DEFAULT_AUTH_POOL_SIZE });
   const builtInRoutes: RouteBinding[] = [
     ...probeRoutes({ buildInfo, databaseUrl: config.DATABASE_URL, chains: () => migrationSets, logger, migrating: () => progress.migrating }),
-    apiConfigRoute({ config, buildInfo, adapters }),
+    apiConfigRoute({ config, store: authStore, buildInfo, adapters }),
     openApiRoute({ enabled: config.API_DOCS_ENABLED, document: options.openApiDocument }),
   ];
   // Password sign-in is part of the server, not a module: the session cookie is the one browser credential (doc 04 section 4.1).
-  const authStore = options.authStore ?? createAuthStore({ url: config.DATABASE_URL, poolSize: DEFAULT_AUTH_POOL_SIZE });
   const auth = authContribution({ store: authStore, appOrigin: config.APP_ORIGIN, sessionSecret: config.SESSION_SECRET });
   builtInRoutes.push(...(auth.routes ?? []));
+  // So is first-run setup: it signs the first account in, on the same pool.
+  builtInRoutes.push(...setupRoutes({ config, store: authStore, passwordPolicy }));
   const builtIn: ServerModule = {
     name: "@slugbase/server",
     register: () => ({ routes: builtInRoutes, authenticators: auth.authenticators ?? [] }),
@@ -622,6 +630,12 @@ export function createServer(options: CreateServerOptions): Server {
           throw error;
         }
         progress.migrating = false;
+      }
+
+      // The database now has the schema this build runs with; a first start while the instance has no
+      // account prints the setup token (doc 02 section 2.2).
+      if (config.SETUP_ENABLED && config.SETUP_TOKEN_REQUIRED) {
+        await ensureSetupToken({ store: authStore, logger });
       }
 
       return {

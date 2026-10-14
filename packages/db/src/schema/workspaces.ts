@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, pgEnum, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, index, integer, pgEnum, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { accounts } from "./accounts.ts";
 
 // `workspaces` and `workspace_members` of doc 05 section 2.2. Row-level
@@ -54,3 +54,15 @@ export const workspaceMembers = pgTable(
     index("workspace_members_account_id_idx").on(table.accountId),
   ],
 );
+
+// `workspace_settings` of doc 05 section 2.2: one row per workspace with typed
+// columns, written in the transaction that creates the workspace. Its policy,
+// privileges and updated_at trigger live in src/sql/120-setup.sql.
+export const workspaceSettings = pgTable("workspace_settings", {
+  workspaceId: uuid()
+    .primaryKey()
+    .references(() => workspaces.id, { onDelete: "cascade" }),
+  aiEnabled: boolean().notNull().default(true),
+  updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  updatedBy: uuid().references(() => accounts.id, { onDelete: "set null" }),
+});

@@ -1,4 +1,4 @@
-import type { OperationDefinition } from "@slugbase/contracts";
+import type { OperationDefinition, ResponseHeaders } from "@slugbase/contracts";
 import { z } from "zod";
 import { isRecord } from "./document.ts";
 
@@ -27,6 +27,16 @@ function parametersOf(schema: z.ZodObject, location: "path" | "query"): Record<s
   }));
 }
 
+function headersOf(declared: ResponseHeaders | undefined): { headers?: Record<string, unknown> } {
+  return declared === undefined
+    ? {}
+    : {
+        headers: Object.fromEntries(
+          Object.entries(declared).map(([name, header]) => [name, { description: header.description, required: true, schema: schemaOf(header.schema, "output") }]),
+        ),
+      };
+}
+
 function entryOf(operation: OperationDefinition): Record<string, unknown> {
   const parameters = [
     ...(operation.request?.params === undefined ? [] : parametersOf(operation.request.params, "path")),
@@ -40,21 +50,19 @@ function entryOf(operation: OperationDefinition): Record<string, unknown> {
           {
             description: response.description,
             content: { "application/json": { schema: schemaOf(response.schema, "output") } },
-            ...(response.headers === undefined
-              ? {}
-              : {
-                  headers: Object.fromEntries(
-                    Object.entries(response.headers).map(([name, header]) => [
-                      name,
-                      { description: header.description, required: true, schema: schemaOf(header.schema, "output") },
-                    ]),
-                  ),
-                }),
+            ...headersOf(response.headers),
           },
         ];
       }
       if (response.kind === "problem") {
-        return [status, { description: response.description, content: { "application/problem+json": { schema: { $ref: "#/components/schemas/Problem" } } } }];
+        return [
+          status,
+          {
+            description: response.description,
+            content: { "application/problem+json": { schema: { $ref: "#/components/schemas/Problem" } } },
+            ...headersOf(response.headers),
+          },
+        ];
       }
       return [status, { description: response.description }];
     }),

@@ -37,6 +37,10 @@ export const ApiConfigSchema = z
       mail: z.boolean().describe("Whether a mail port is configured"),
       ai: z.boolean().describe("Whether an AI port is configured"),
     }),
+    setupRequired: z
+      .boolean()
+      .optional()
+      .describe("Whether first-run setup is pending; the same answer as GET /api/v1/setup/status. This server always sends it"),
   })
   .meta({ id: "ApiConfig" });
 

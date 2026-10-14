@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { defineOperation, emptyResponse, jsonResponse, problemResponse } from "./define.ts";
+import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
 
 // The me tag of doc 04 section 10.3: what the signed-in account does to itself.
 // The session operations act on the caller's own sessions only; a session id of
@@ -29,6 +29,13 @@ export const AccountSchema = z
     hasPassword: z.boolean().describe("Whether the account can sign in with a password; false for an account that signs in through an identity provider only"),
   })
   .meta({ id: "Account" });
+
+export const UpdateAccountRequestSchema = z
+  .strictObject({
+    displayName: z.string().min(1).max(100).optional().describe("The name shown to other members, 1 to 100 characters; surrounding whitespace is removed and a name that is blank after that is refused"),
+    locale: z.enum(["en", "de"]).optional().describe("The language of the account's emails and of the app unless the browser overrides it"),
+  })
+  .meta({ id: "UpdateAccountRequest" });
 
 export const MeSchema = z
   .strictObject({
@@ -99,7 +106,7 @@ export const listSessions = defineOperation({
     400: problemResponse("The request was malformed, or the cursor is not one this account was issued"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     422: problemResponse("The query did not pass validation"),
-    429: problemResponse("Too many requests; Retry-After says when to try again"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },
 });
@@ -120,7 +127,7 @@ export const revokeSession = defineOperation({
     403: problemResponse("The request did not come from the application itself"),
     404: problemResponse("The account has no session with this identifier"),
     422: problemResponse("The identifier did not pass validation"),
-    429: problemResponse("Too many requests; Retry-After says when to try again"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },
 });
@@ -140,7 +147,7 @@ export const revokeSessions = defineOperation({
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse("The request did not come from the application itself"),
     422: problemResponse("The query did not pass validation"),
-    429: problemResponse("Too many requests; Retry-After says when to try again"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },
 });
@@ -157,7 +164,27 @@ export const getMe = defineOperation({
   responses: {
     200: jsonResponse("The account with its memberships and active workspace; no hash and no secret", MeSchema),
     401: problemResponse("There is no valid credential, or the session's second factor is not complete"),
-    429: problemResponse("Too many requests; Retry-After says when to try again"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const updateMe = defineOperation({
+  method: "patch",
+  path: "/api/v1/me",
+  operationId: "updateMe",
+  tag: "me",
+  summary: "Change the signed-in account's display name and language",
+  auth: "account",
+  rate: "write",
+  request: { body: UpdateAccountRequestSchema },
+  responses: {
+    200: jsonResponse("The account after the change; a field the request leaves out keeps its value", AccountSchema),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    403: problemResponse("The request did not come from the application itself"),
+    422: problemResponse("The body did not pass validation: an unknown field, a name that is empty or longer than 100 characters, or a language other than en and de"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },
 });

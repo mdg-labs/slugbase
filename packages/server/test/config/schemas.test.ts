@@ -41,6 +41,9 @@ describe("process schemas", () => {
       TRUSTED_PROXY_HOPS: 0,
       API_DOCS_ENABLED: true,
       DOCS_BASE_URL: "https://slugbase.app/docs",
+      SETUP_ENABLED: true,
+      SETUP_TOKEN_REQUIRED: true,
+      BREACHED_PASSWORD_CHECK: true,
     });
   });
 
@@ -53,8 +56,14 @@ describe("process schemas", () => {
       SLUGBASE_ALLOW_OWNER_CONNECTION: "true",
       TRUSTED_PROXY_HOPS: "2",
       API_DOCS_ENABLED: "false",
+      SETUP_ENABLED: "0",
+      SETUP_TOKEN_REQUIRED: "false",
+      BREACHED_PASSWORD_CHECK: "0",
     });
     expect(config).toMatchObject({
+      SETUP_ENABLED: false,
+      SETUP_TOKEN_REQUIRED: false,
+      BREACHED_PASSWORD_CHECK: false,
       PORT: 8080,
       LOG_LEVEL: "debug",
       MIGRATE_ON_START: false,
@@ -153,6 +162,9 @@ describe("process schemas", () => {
     ["APP_ORIGIN", "bookmarks.example.com"],
     ["DATABASE_URL", "mysql://slugbase@localhost/slugbase"],
     ["API_DOCS_ENABLED", "yes"],
+    ["SETUP_ENABLED", "yes"],
+    ["SETUP_TOKEN_REQUIRED", ""],
+    ["BREACHED_PASSWORD_CHECK", "nope"],
   ])("names %s for the malformed value %j", (key, value) => {
     expect(failure(() => loadConfig("server", { ...development, [key]: value })).issues.map((issue) => issue.key)).toContain(key);
   });

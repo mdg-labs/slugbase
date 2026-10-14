@@ -142,6 +142,10 @@
               "version"
             ],
             "type": "object"
+          },
+          "setupRequired": {
+            "description": "Whether first-run setup is pending; the same answer as GET /api/v1/setup/status. This server always sends it",
+            "type": "boolean"
           }
         },
         "required": [
@@ -530,6 +534,94 @@
         ],
         "type": "object"
       },
+      "SetupRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "displayName": {
+            "description": "The first account's display name",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "email": {
+            "description": "The first account's email address",
+            "format": "email",
+            "maxLength": 320,
+            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$",
+            "type": "string"
+          },
+          "password": {
+            "description": "The first account's password, 12 to 256 characters",
+            "type": "string"
+          },
+          "setupToken": {
+            "description": "The setup token printed to the server log at the latest server start (an earlier one stops working); required when the deployment requires one",
+            "maxLength": 256,
+            "type": "string"
+          },
+          "workspaceName": {
+            "description": "The name of the first workspace",
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "displayName",
+          "email",
+          "password",
+          "workspaceName"
+        ],
+        "type": "object"
+      },
+      "SetupResult": {
+        "additionalProperties": false,
+        "properties": {
+          "workspaceId": {
+            "description": "The first workspace, which is the active one of the new session",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspaceId"
+        ],
+        "type": "object"
+      },
+      "SetupStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "setupRequired": {
+            "description": "Whether first-run setup is pending: the instance has no account, has not completed setup and has setup turned on",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "setupRequired"
+        ],
+        "type": "object"
+      },
+      "UpdateAccountRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "displayName": {
+            "description": "The name shown to other members, 1 to 100 characters; surrounding whitespace is removed and a name that is blank after that is refused",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "locale": {
+            "description": "The language of the account's emails and of the app unless the browser overrides it",
+            "enum": [
+              "en",
+              "de"
+            ],
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "VersionInfo": {
         "additionalProperties": false,
         "properties": {
@@ -694,7 +786,18 @@
                 }
               }
             },
-            "description": "Too many sign-in attempts from this address or for this email address; Retry-After says when to try again"
+            "description": "Too many sign-in attempts from this address or for this email address; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           },
           "503": {
             "content": {
@@ -760,7 +863,18 @@
                 }
               }
             },
-            "description": "Too many requests; Retry-After says when to try again"
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           },
           "503": {
             "content": {
@@ -813,7 +927,18 @@
                 }
               }
             },
-            "description": "Too many requests; Retry-After says when to try again"
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           },
           "503": {
             "content": {
@@ -833,6 +958,108 @@
         "x-slugbase-auth": "account",
         "x-slugbase-rate": "read",
         "x-slugbase-scope": "read"
+      },
+      "patch": {
+        "operationId": "updateMe",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAccountRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Account"
+                }
+              }
+            },
+            "description": "The account after the change; a field the request leaves out keeps its value"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body did not pass validation: an unknown field, a name that is empty or longer than 100 characters, or a language other than en and de"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Change the signed-in account's display name and language",
+        "tags": [
+          "me"
+        ],
+        "x-slugbase-auth": "account",
+        "x-slugbase-rate": "write"
       }
     },
     "/api/v1/me/sessions": {
@@ -906,7 +1133,18 @@
                 }
               }
             },
-            "description": "Too many requests; Retry-After says when to try again"
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           },
           "503": {
             "content": {
@@ -1002,7 +1240,18 @@
                 }
               }
             },
-            "description": "Too many requests; Retry-After says when to try again"
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           },
           "503": {
             "content": {
@@ -1101,7 +1350,18 @@
                 }
               }
             },
-            "description": "Too many requests; Retry-After says when to try again"
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
           },
           "503": {
             "content": {
@@ -1160,6 +1420,173 @@
         "summary": "The OpenAPI document of this API",
         "tags": [
           "meta"
+        ],
+        "x-slugbase-auth": "anonymous",
+        "x-slugbase-rate": "public"
+      }
+    },
+    "/api/v1/setup": {
+      "post": {
+        "operationId": "completeSetup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupResult"
+                }
+              }
+            },
+            "description": "The first account and workspace exist and the new session cookie is set",
+            "headers": {
+              "Set-Cookie": {
+                "description": "The session cookie: HttpOnly, SameSite=Lax, Path=/, Secure and __Host- prefixed when the deployment is served over https",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request); setup is already completed or turned off (setup_completed); or the setup token is missing or wrong (forbidden). Nothing is written"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body did not pass validation, or the password is outside 12 to 256 characters or is on the breached list (weak_password)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many setup attempts from this address; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Create the first account, instance admin and owner of the first workspace, and sign it in",
+        "tags": [
+          "setup"
+        ],
+        "x-slugbase-auth": "anonymous",
+        "x-slugbase-rate": "setup"
+      }
+    },
+    "/api/v1/setup/status": {
+      "get": {
+        "operationId": "getSetupStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SetupStatus"
+                }
+              }
+            },
+            "description": "Whether the instance still waits for its first account"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests from this address; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Whether first-run setup is pending",
+        "tags": [
+          "setup"
         ],
         "x-slugbase-auth": "anonymous",
         "x-slugbase-rate": "public"
@@ -1284,6 +1711,9 @@
     },
     {
       "name": "meta"
+    },
+    {
+      "name": "setup"
     }
   ]
 }

@@ -154,7 +154,7 @@ describe("compose.yml", () => {
     // Set by compose.yml itself: it runs in production, builds both URLs from the role passwords, and its
     // roles are the two of doc 05 section 3.1, so the owner-connection override of Q56 has no use in it.
     const fixed = new Set(["NODE_ENV", "DATABASE_URL", "DATABASE_MIGRATE_URL", "SLUGBASE_ALLOW_OWNER_CONNECTION"]);
-    const serverOnly = new Set(["PORT", "TRUSTED_PROXY_HOPS", "API_DOCS_ENABLED", "DOCS_BASE_URL", "MIGRATE_ON_START"]);
+    const serverOnly = new Set(["PORT", "TRUSTED_PROXY_HOPS", "API_DOCS_ENABLED", "DOCS_BASE_URL", "MIGRATE_ON_START", "SETUP_ENABLED", "SETUP_TOKEN_REQUIRED", "BREACHED_PASSWORD_CHECK"]);
     for (const key of exampleKeys().keys()) {
       if (fixed.has(key)) {
         continue;
