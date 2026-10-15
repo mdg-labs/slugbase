@@ -17,6 +17,8 @@ const TOKENS_PATH = "/api/v1/me/api-tokens";
 const OTHER_WORKSPACE = "0192f3a0-dddd-7000-8000-000000000002";
 const ACTIVE_WORKSPACE = "0192f3a0-dddd-7000-8000-000000000001";
 const FAKE_SECRET = "slb_test-only-secret";
+// These three tests measured 3.9 to 5.9s on a CI runner, close to or past vitest's 5s default.
+const SLOW_TOKENS_TEST_TIMEOUT_MS = 30_000;
 
 const DEPLOY: ApiToken = {
   id: "0192f3a0-eeee-7000-8000-000000000001",
@@ -233,7 +235,7 @@ describe("the tokens page", () => {
     expect(within(screen.getByRole("navigation", { name: "Settings" })).getByRole("link", { name: "API tokens" }).getAttribute("aria-current")).toBe(
       "page",
     );
-  });
+  }, SLOW_TOKENS_TEST_TIMEOUT_MS);
 
   it("lists name, workspace, scope, prefix, created, last used and expiry, with Never and No expiry for the empty dates", async () => {
     stubServer();
@@ -299,7 +301,7 @@ describe("the tokens page", () => {
       expect(tokenRows()).toHaveLength(1);
     });
     expect(screen.queryByText("Your API tokens could not be loaded")).toBeNull();
-  });
+  }, SLOW_TOKENS_TEST_TIMEOUT_MS);
 });
 
 describe("creating a token", () => {
@@ -324,7 +326,7 @@ describe("creating a token", () => {
       { name: "CI", scope: "read-write", expiresInDays: null, workspaceId: ACTIVE_WORKSPACE },
     ]);
     expect(server.to("POST", TOKENS_PATH)[0]?.contentType).toBe("application/json");
-  });
+  }, SLOW_TOKENS_TEST_TIMEOUT_MS);
 
   it("sends the defaults when nothing else is chosen", async () => {
     const server = stubServer();
