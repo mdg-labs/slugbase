@@ -20,6 +20,8 @@ existing line by adding its PR number.
 - **replace read as create** — a fail-closed lint reads a `CREATE OR REPLACE` form like the plain `CREATE` and drops the flag and the object's identity, so a statement that replaces an existing object of another shape (in effect a drop the lint rejects when written out) passes — PR 456
 - **label-gated check** — a CI step reads a pull request's labels, but the workflow trigger omits the `labeled`/`unlabeled` events, so adding or removing the label never re-runs it — PR 381
 - **regex guard** — a line-based check of a structured file (YAML) matches a key only in its block form, or judges a line as a whole, so the same key in flow or quoted form, or a bad value beside a good one on the line, passes — PR 444
+- **deny list by spelling** — a command deny list names one spelling of a forbidden form (`git add .`, `HEAD:main`) and misses an equivalent one (`git add ./`, a `+`-prefixed force refspec), so the forbidden command passes — PR 462
+- **two clocks** — a freshness check compares an instant stamped by one host's clock (the database) with one read from another (the application) and allows no difference, so a session stamped a moment ago reads as in the future and is refused — PR 462
 - **floating image** — a rig meant for repeatable measurement pulls a floating tag (`latest`), so a re-run can measure a different build than the recorded baseline — PR 381
 
 - **uniqueness by raw string** — a duplicate check compares raw strings that the consumer normalises (a router path with and without a trailing slash), so two entries the consumer treats as one pass and one shadows the other — PR 422
