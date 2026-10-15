@@ -19,7 +19,8 @@
     "account": "Konto",
     "signOut": "Abmelden",
     "settings": "Einstellungen",
-    "accountSettings": "Kontoeinstellungen"
+    "accountSettings": "Kontoeinstellungen",
+    "security": "Sicherheit"
   },
   "home": {
     "empty": {
@@ -32,7 +33,8 @@
     "nav": {
       "account": "Konto",
       "profile": "Profil",
-      "preferences": "Voreinstellungen"
+      "preferences": "Voreinstellungen",
+      "security": "Sicherheit"
     },
     "account": {
       "title": "Profil",
@@ -135,6 +137,86 @@
       "loadFailed": {
         "title": "Deine Voreinstellungen konnten nicht geladen werden"
       }
+    },
+    "security": {
+      "title": "Sicherheit",
+      "loadFailed": {
+        "title": "Deine Sicherheitseinstellungen konnten nicht geladen werden"
+      },
+      "password": {
+        "title": "Passwort",
+        "description": "Ändere das Passwort, mit dem du dich anmeldest. Deine anderen Sitzungen werden dabei abgemeldet.",
+        "current": {
+          "label": "Aktuelles Passwort"
+        },
+        "new": {
+          "label": "Neues Passwort",
+          "description": "Verwende mindestens 12 Zeichen. Ein langer Satz eignet sich gut."
+        },
+        "show": "Passwort anzeigen",
+        "hide": "Passwort verbergen",
+        "submit": "Passwort ändern",
+        "changed": "Dein Passwort wurde geändert. Deine anderen Sitzungen wurden abgemeldet.",
+        "strength": {
+          "label": "Passwortstärke",
+          "score": {
+            "0": "Sehr schwach",
+            "1": "Schwach",
+            "2": "Mittel",
+            "3": "Gut",
+            "4": "Stark"
+          }
+        },
+        "error": {
+          "currentRequired": "Gib dein aktuelles Passwort ein.",
+          "newRequired": "Gib ein neues Passwort ein.",
+          "currentWrong": "Das aktuelle Passwort stimmt nicht.",
+          "tooShort": "Verwende mindestens 12 Zeichen.",
+          "tooLong": "Verwende höchstens 256 Zeichen.",
+          "breached": "Dieses Passwort ist in einem bekannten Datenleck aufgetaucht. Wähle ein anderes.",
+          "weak": "Wähle ein stärkeres Passwort."
+        },
+        "none": {
+          "title": "Dieses Konto hat kein Passwort",
+          "description": "Du meldest dich über einen Identitätsanbieter an. Ein Passwort hinzuzufügen ist noch nicht möglich."
+        }
+      },
+      "sessions": {
+        "title": "Sitzungen",
+        "description": "Die Geräte, auf denen du angemeldet bist. Widerrufe eine Sitzung, die du nicht kennst.",
+        "column": {
+          "device": "Gerät",
+          "network": "Netzwerk",
+          "created": "Angemeldet",
+          "lastSeen": "Zuletzt aktiv",
+          "actions": "Aktionen"
+        },
+        "thisDevice": "Dieses Gerät",
+        "unknownDevice": "Unbekanntes Gerät",
+        "unknownNetwork": "Unbekannt",
+        "revoke": "Widerrufen",
+        "revokeNamed": "Sitzung auf {device} widerrufen",
+        "revoked": "Sitzung widerrufen",
+        "signOutOthers": "Überall sonst abmelden",
+        "signedOutOthers": "Überall sonst abgemeldet",
+        "loadMore": "Mehr anzeigen",
+        "loadFailed": {
+          "title": "Deine Sitzungen konnten nicht geladen werden"
+        },
+        "confirm": {
+          "cancel": "Abbrechen",
+          "current": {
+            "title": "Von diesem Gerät abmelden?",
+            "description": "Die Sitzung, die du gerade nutzt, wird beendet. Du musst dich danach neu anmelden.",
+            "action": "Abmelden"
+          },
+          "others": {
+            "title": "Überall sonst abmelden?",
+            "description": "Alle anderen Sitzungen deines Kontos werden abgemeldet. Dieses Gerät bleibt angemeldet.",
+            "action": "Überall sonst abmelden"
+          }
+        }
+      }
     }
   },
   "configFailure": {
@@ -215,6 +297,28 @@
     "failed": {
       "title": "Du bist weiterhin angemeldet",
       "description": "Das Abmelden hat nicht geklappt. Versuche es erneut."
+    }
+  },
+  "reauth": {
+    "title": "Bestätige, dass du es bist",
+    "description": "Für diese Änderung brauchen wir noch einmal dein Passwort.",
+    "password": {
+      "label": "Passwort",
+      "show": "Passwort anzeigen",
+      "hide": "Passwort verbergen"
+    },
+    "submit": "Bestätigen",
+    "cancel": "Abbrechen",
+    "close": "Schließen",
+    "error": {
+      "required": "Gib dein Passwort ein.",
+      "wrongPassword": "Das Passwort stimmt nicht.",
+      "unavailable": "Das Passwort konnte gerade nicht geprüft werden. Versuche es gleich noch einmal.",
+      "rateLimited": {
+        "unknown": "Zu viele Versuche. Versuche es später noch einmal.",
+        "seconds": "Zu viele Versuche. Versuche es in {count, plural, one {# Sekunde} other {# Sekunden}} noch einmal.",
+        "minutes": "Zu viele Versuche. Versuche es in {count, plural, one {# Minute} other {# Minuten}} noch einmal."
+      }
     }
   }
 }

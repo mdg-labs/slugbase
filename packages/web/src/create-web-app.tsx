@@ -3,6 +3,8 @@ import { RouterProvider } from "@tanstack/react-router";
 import { ThemeProvider } from "@slugbase/ui";
 import { Suspense, use, type ComponentType, type ReactElement } from "react";
 import { createApiClient } from "./api/client.ts";
+import { ReauthPrompt } from "./auth/reauth-prompt.tsx";
+import { createReauth, reauthMiddleware } from "./auth/reauth.ts";
 import { fetchConfig, type ConfigResult } from "./config/bootstrap.ts";
 import { ConfigFailure } from "./config/config-failure.tsx";
 import { ConfigProvider } from "./config/config-context.tsx";
@@ -29,6 +31,7 @@ export interface CreateWebAppOptions {
 export function createWebApp({ extensions }: CreateWebAppOptions): ComponentType {
   const sessionExpiry = createSessionExpiry();
   const queryClient = createQueryClient();
+  const reauth = createReauth();
   const api = createApiClient({
     onUnauthenticated: () => {
       // Nothing cached belongs to a session that has ended, and the session check must ask again.
@@ -39,6 +42,9 @@ export function createWebApp({ extensions }: CreateWebAppOptions): ComponentType
   // Validates the extension list: nothing is requested for one the app cannot start with.
   const router = createAppRouter({ queryClient, api }, extensions);
   const configResult = fetchConfig(api);
+  // The configuration request is a GET that never needs re-authentication, and it starts in this turn, before
+  // the middleware (which a request waits for) is registered.
+  api.use(reauthMiddleware(reauth));
 
   function Product({ result }: { result: Promise<ConfigResult> }): ReactElement {
     const loaded = use(result);
@@ -58,6 +64,7 @@ export function createWebApp({ extensions }: CreateWebAppOptions): ComponentType
               <ExtensionsProvider extensions={extensions}>
                 <RouterProvider router={router} />
               </ExtensionsProvider>
+              <ReauthPrompt api={api} reauth={reauth} />
             </AppFeedback>
           </AccountI18nProvider>
         </QueryClientProvider>

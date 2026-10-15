@@ -19,7 +19,8 @@
     "account": "Account",
     "signOut": "Sign out",
     "settings": "Settings",
-    "accountSettings": "Account settings"
+    "accountSettings": "Account settings",
+    "security": "Security"
   },
   "home": {
     "empty": {
@@ -32,7 +33,8 @@
     "nav": {
       "account": "Account",
       "profile": "Profile",
-      "preferences": "Preferences"
+      "preferences": "Preferences",
+      "security": "Security"
     },
     "account": {
       "title": "Profile",
@@ -135,6 +137,86 @@
       "loadFailed": {
         "title": "Your preferences could not be loaded"
       }
+    },
+    "security": {
+      "title": "Security",
+      "loadFailed": {
+        "title": "Your security settings could not be loaded"
+      },
+      "password": {
+        "title": "Password",
+        "description": "Change the password you sign in with. Your other sessions are signed out when you do.",
+        "current": {
+          "label": "Current password"
+        },
+        "new": {
+          "label": "New password",
+          "description": "Use at least 12 characters. A long phrase works well."
+        },
+        "show": "Show password",
+        "hide": "Hide password",
+        "submit": "Change password",
+        "changed": "Your password was changed. Your other sessions were signed out.",
+        "strength": {
+          "label": "Password strength",
+          "score": {
+            "0": "Very weak",
+            "1": "Weak",
+            "2": "Fair",
+            "3": "Good",
+            "4": "Strong"
+          }
+        },
+        "error": {
+          "currentRequired": "Enter your current password.",
+          "newRequired": "Enter a new password.",
+          "currentWrong": "The current password is not right.",
+          "tooShort": "Use at least 12 characters.",
+          "tooLong": "Use at most 256 characters.",
+          "breached": "This password appeared in a known data breach. Choose another one.",
+          "weak": "Choose a stronger password."
+        },
+        "none": {
+          "title": "This account has no password",
+          "description": "You sign in through an identity provider. Adding a password is not available yet."
+        }
+      },
+      "sessions": {
+        "title": "Sessions",
+        "description": "The devices you are signed in on. Revoke a session you do not recognise.",
+        "column": {
+          "device": "Device",
+          "network": "Network",
+          "created": "Signed in",
+          "lastSeen": "Last active",
+          "actions": "Actions"
+        },
+        "thisDevice": "This device",
+        "unknownDevice": "Unknown device",
+        "unknownNetwork": "Unknown",
+        "revoke": "Revoke",
+        "revokeNamed": "Revoke the session on {device}",
+        "revoked": "Session revoked",
+        "signOutOthers": "Sign out everywhere else",
+        "signedOutOthers": "Signed out everywhere else",
+        "loadMore": "Show more",
+        "loadFailed": {
+          "title": "Your sessions could not be loaded"
+        },
+        "confirm": {
+          "cancel": "Cancel",
+          "current": {
+            "title": "Sign out of this device?",
+            "description": "This ends the session you are using now. You will need to sign in again.",
+            "action": "Sign out"
+          },
+          "others": {
+            "title": "Sign out everywhere else?",
+            "description": "Every other session of your account is signed out. This device stays signed in.",
+            "action": "Sign out everywhere else"
+          }
+        }
+      }
     }
   },
   "configFailure": {
@@ -215,6 +297,28 @@
     "failed": {
       "title": "You are still signed in",
       "description": "Signing out did not work. Try again."
+    }
+  },
+  "reauth": {
+    "title": "Confirm it is you",
+    "description": "This change needs your password again.",
+    "password": {
+      "label": "Password",
+      "show": "Show password",
+      "hide": "Hide password"
+    },
+    "submit": "Confirm",
+    "cancel": "Cancel",
+    "close": "Close",
+    "error": {
+      "required": "Enter your password.",
+      "wrongPassword": "The password is not right.",
+      "unavailable": "The password could not be checked right now. Try again in a moment.",
+      "rateLimited": {
+        "unknown": "Too many attempts. Try again later.",
+        "seconds": "Too many attempts. Try again in {count, plural, one {# second} other {# seconds}}.",
+        "minutes": "Too many attempts. Try again in {count, plural, one {# minute} other {# minutes}}."
+      }
     }
   }
 }

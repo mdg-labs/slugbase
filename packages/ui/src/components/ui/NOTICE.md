@@ -11,6 +11,8 @@ These changes are made after a copy:
   under NodeNext;
 - a variants helper, constant or type that a public signature names is exported, so API Extractor can report
   it from the package entry point;
+- `drawer.tsx`: a file-level ESLint disable of `@typescript-eslint/no-unsafe-assignment`, as other vendored files carry
+  for the rules their upstream source does not meet;
 - `button.tsx`: the `destructive` variant takes its fill, border, shadow and label from `destructive-button` and
   `destructive-button-foreground` (`theme.css`) in place of `destructive` and `text-white`, so the label meets
   WCAG AA 4.5 : 1 in both themes (doc 03 "Theme tokens").

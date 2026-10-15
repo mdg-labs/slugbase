@@ -154,6 +154,26 @@ export interface CheckboxFieldProps {
 export { CompassIcon }
 
 // @public
+export function Confirm(input: ConfirmProps): ReactElement;
+
+// @public (undocumented)
+export interface ConfirmProps {
+    // (undocumented)
+    cancelLabel: ReactNode;
+    // (undocumented)
+    confirmLabel: ReactNode;
+    description: ReactNode;
+    destructive?: boolean;
+    loading?: boolean;
+    onConfirm: () => void;
+    onOpenChange: (open: boolean) => void;
+    // (undocumented)
+    open: boolean;
+    // (undocumented)
+    title: ReactNode;
+}
+
+// @public
 export function CopyValue(input: CopyValueProps): ReactElement;
 
 // @public (undocumented)
@@ -165,6 +185,33 @@ export interface CopyValueProps {
     label: string;
     // (undocumented)
     value: string;
+}
+
+// @public
+export function DataTable<Row extends object>(input: DataTableProps<Row>): ReactElement;
+
+// @public (undocumented)
+export interface DataTableColumn<Row extends object> {
+    // (undocumented)
+    cell: (row: Row) => ReactNode;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    header: ReactNode;
+    hideHeader?: boolean;
+    id: string;
+}
+
+// @public (undocumented)
+export interface DataTableProps<Row extends object> {
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    columns: readonly DataTableColumn<Row>[];
+    label: string;
+    rowKey: (row: Row) => string;
+    // (undocumented)
+    rows: readonly Row[];
 }
 
 // @public
@@ -213,6 +260,23 @@ export interface FormFieldProps {
     name?: string;
 }
 
+// @public
+export function FormOverlay(input: FormOverlayProps): ReactElement;
+
+// @public (undocumented)
+export interface FormOverlayProps {
+    children: ReactNode;
+    closeLabel: string;
+    // (undocumented)
+    description?: ReactNode;
+    // (undocumented)
+    onOpenChange: (open: boolean) => void;
+    // (undocumented)
+    open: boolean;
+    // (undocumented)
+    title: ReactNode;
+}
+
 export { HomeIcon }
 
 export { InboxIcon }
@@ -236,6 +300,22 @@ export { LogOutIcon }
 
 // @public (undocumented)
 export const MAIN_CONTENT_ID = "main-content";
+
+// @public
+export type PasswordScore = 0 | 1 | 2 | 3 | 4;
+
+// @public
+export function PasswordStrength(input: PasswordStrengthProps): ReactElement;
+
+// @public (undocumented)
+export interface PasswordStrengthProps {
+    // (undocumented)
+    className?: string;
+    label: string;
+    // (undocumented)
+    score: PasswordScore;
+    scoreLabel: string;
+}
 
 // @public (undocumented)
 export type ResolvedTheme = "light" | "dark";
@@ -397,6 +477,21 @@ export interface SettingSwitchProps {
     // (undocumented)
     onCheckedChange: (checked: boolean) => void;
 }
+
+// @public
+export function StatusBadge(input: StatusBadgeProps): ReactElement;
+
+// @public (undocumented)
+export interface StatusBadgeProps {
+    // (undocumented)
+    children: ReactNode;
+    // (undocumented)
+    className?: string;
+    variant?: StatusBadgeVariant;
+}
+
+// @public (undocumented)
+export type StatusBadgeVariant = "info" | "neutral" | "success" | "warning" | "error";
 
 // @public
 export function ThemeToggle(input: ThemeToggleProps): ReactElement;

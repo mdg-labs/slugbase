@@ -5,17 +5,22 @@ export { AppShell, MAIN_CONTENT_ID, type AppShellLabels, type AppShellProps } fr
 export { AuthCard, type AuthCardProps } from "./auth-card.tsx";
 export { Banner, type BannerProps, type BannerVariant } from "./banner.tsx";
 export { CheckboxField, type CheckboxFieldProps } from "./checkbox-field.tsx";
+export { Confirm, type ConfirmProps } from "./confirm.tsx";
 export { CopyValue, type CopyValueProps } from "./copy-value.tsx";
+export { DataTable, type DataTableColumn, type DataTableProps } from "./data-table.tsx";
 export { EmptyState, type EmptyStateProps } from "./empty-state.tsx";
 export { FeedbackToastProvider, feedbackToast, type FeedbackToastProviderProps } from "./feedback-toast.tsx";
 export { FormField, type FormFieldProps } from "./form-field.tsx";
+export { FormOverlay, type FormOverlayProps } from "./form-overlay.tsx";
 export { Loading, type LoadingProps } from "./loading.tsx";
+export { PasswordStrength, type PasswordScore, type PasswordStrengthProps } from "./password-strength.tsx";
 export { SecretInput, type SecretInputProps } from "./secret-input.tsx";
 export { SegmentedChoice, type SegmentedChoiceOption, type SegmentedChoiceProps } from "./segmented-choice.tsx";
 export { SelectField, type SelectFieldProps, type SelectOption } from "./select-field.tsx";
 export { SettingSwitch, type SettingSwitchProps } from "./setting-switch.tsx";
 export { SettingsNav, type SettingsNavGroup, type SettingsNavItem, type SettingsNavProps } from "./settings-nav.tsx";
 export { SettingsSection, type SettingsSectionProps } from "./settings-section.tsx";
+export { StatusBadge, type StatusBadgeProps, type StatusBadgeVariant } from "./status-badge.tsx";
 export type { Accent, ResolvedTheme } from "../theme/theme-provider.tsx";
 export { ThemeToggle, type ThemeToggleProps } from "./theme-toggle.tsx";
 // The icons the shell and the empty states of the app place; the app takes them from here so the icon library has one home.

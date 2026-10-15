@@ -7,7 +7,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@slugbase/ui";
-import { AccountMenu, AppShell, HomeIcon, LifeBuoyIcon, LogOutIcon, SettingsIcon, ThemeToggle } from "@slugbase/ui/patterns";
+import { AccountMenu, AppShell, HomeIcon, LifeBuoyIcon, LockIcon, LogOutIcon, SettingsIcon, ThemeToggle } from "@slugbase/ui/patterns";
 import { Link, Outlet, useRouter, useRouterState } from "@tanstack/react-router";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
@@ -35,6 +35,14 @@ function AppLayoutShell(): ReactElement {
       icon: <SettingsIcon aria-hidden="true" />,
       onSelect: () => {
         void router.navigate({ to: "/settings/account" });
+      },
+    },
+    {
+      id: "security",
+      label: t("shell.security"),
+      icon: <LockIcon aria-hidden="true" />,
+      onSelect: () => {
+        void router.navigate({ to: "/settings/account/security" });
       },
     },
     { id: "sign-out", label: t("shell.signOut"), icon: <LogOutIcon aria-hidden="true" />, onSelect: signOut },
