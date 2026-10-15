@@ -126,6 +126,12 @@ describe("compose.yml", () => {
     expect(JSON.stringify(worker.environment)).not.toContain(MIGRATOR_PASSWORD);
   });
 
+  it("reads an optional .env.oidc for the server alone, so that OIDC_<SLUG>_* keys of the operator's own slug reach it", () => {
+    const { slugbase, "slugbase-worker": worker } = services();
+    expect(slugbase.env_file).toEqual([{ path: ".env.oidc", required: false }]);
+    expect(worker.env_file).toBeUndefined();
+  });
+
   it("gives neither service the database superuser's password, nor any key of its own", () => {
     for (const name of ["slugbase", "slugbase-worker"] as const) {
       const environment = services()[name].environment;

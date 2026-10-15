@@ -23,6 +23,13 @@
 # set in the file or the shell is not passed on and the process default applies),
 # so nothing else in .env, the database passwords included, reaches the server or
 # the worker.
+#
+# OIDC providers (OIDC_<SLUG>_*, where <SLUG> is yours, so the keys cannot be
+# listed below) go in a file named .env.oidc next to this one; only the server
+# reads it. The file is optional: without it the stack starts as it is, with no
+# provider. It is not .env, which would hand the database passwords to the
+# container, and it needs Docker Compose 2.24 or later (`required: false`).
+# Keep to OIDC_<SLUG>_* keys in it: it is passed on as it is.
 
 x-slugbase-image: &slugbase-image
   image: ${SLUGBASE_IMAGE:-ghcr.io/mdg-labs/slugbase:latest}
@@ -126,6 +133,9 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    env_file:
+      - path: .env.oidc
+        required: false
     environment:
       <<: *slugbase-environment
       DATABASE_MIGRATE_URL: postgres://slugbase_migrator:${MIGRATOR_DB_PASSWORD:?MIGRATOR_DB_PASSWORD is required}@postgres:5432/slugbase
