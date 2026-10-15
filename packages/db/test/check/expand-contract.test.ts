@@ -272,6 +272,8 @@ describe("what is accepted without a contract", () => {
     ["default privileges granted to a role", "ALTER DEFAULT PRIVILEGES FOR ROLE slugbase_owner IN SCHEMA pgboss GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO slugbase_app;"],
     ["revoking privileges on a table the release does not hold", "REVOKE ALL ON notes FROM PUBLIC;"],
     ["comments on a table, a column and a policy", "COMMENT ON TABLE bookmarks IS 'x';\nCOMMENT ON COLUMN bookmarks.title IS NULL;\nCOMMENT ON POLICY p ON bookmarks IS 'x';"],
+    ["a column-level grant of INSERT", "GRANT INSERT (id, title) ON TABLE bookmarks TO slugbase_app;"],
+    ["a table-level revoke and a column-level grant of INSERT on a table the release does not hold", "REVOKE ALL ON TABLE notes FROM PUBLIC, slugbase_app;\nGRANT INSERT (id, body) ON TABLE notes TO slugbase_app;"],
     ["policies and grants", 'ALTER TABLE "bookmarks" ENABLE ROW LEVEL SECURITY;\nCREATE POLICY p ON bookmarks USING (true);\nGRANT SELECT ON bookmarks TO slugbase_app;'],
   ])("accepts %s", async (_name, sql) => {
     expect(await added(sql)).toEqual([]);

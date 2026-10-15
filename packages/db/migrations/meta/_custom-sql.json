@@ -1,4 +1,4 @@
 {
-  "sha256": "4e9e55957c024b9dfa0b1b4ca1494d4e5b09f4741cc071eaed79c61053cca339",
-  "migration": "20261015142909_add_api_token_lookup"
+  "sha256": "1c87add852b09c8d55df3ab5bcc02e7335e69d0df0cb5f43eefbde2a5137cda3",
+  "migration": "20261015155224_add_api_token_insert_columns"
 }

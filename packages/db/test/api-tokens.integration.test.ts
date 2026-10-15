@@ -164,7 +164,7 @@ describe("the api_tokens table", () => {
     expect([...rows]).toEqual([{ enabled: true, forced: true, policies: ["api_tokens_account"] }]);
   });
 
-  it("gives slugbase_app no read of token_hash, an INSERT, no DELETE, and an UPDATE of revoked_at alone", async () => {
+  it("gives slugbase_app no read of token_hash, an INSERT of the columns a creation sets, no DELETE, and an UPDATE of revoked_at alone", async () => {
     const columns = await db.owner<{ column: string; privilege: string }[]>`
       SELECT a.attname AS column, p AS privilege
       FROM pg_attribute a, unnest(ARRAY['SELECT', 'INSERT', 'UPDATE']) AS p
@@ -174,12 +174,63 @@ describe("the api_tokens table", () => {
     const of = (privilege: string) => columns.filter((row) => row.privilege === privilege).map((row) => row.column);
     expect(of("SELECT")).not.toContain("token_hash");
     expect(of("SELECT")).toEqual(["id", "account_id", "workspace_id", "name", "token_prefix", "scope", "expires_at", "last_used_at", "revoked_at", "created_at"]);
-    expect(of("INSERT")).toContain("token_hash");
+    expect(of("INSERT")).toEqual(["id", "account_id", "workspace_id", "name", "token_hash", "token_prefix", "scope", "expires_at"]);
     expect(of("UPDATE")).toEqual(["revoked_at"]);
     const table = await db.owner<{ privilege: string }[]>`
-      SELECT p AS privilege FROM unnest(ARRAY['DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) AS p
+      SELECT p AS privilege FROM unnest(ARRAY['INSERT', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) AS p
       WHERE has_table_privilege('slugbase_app', 'public.api_tokens', p)`;
     expect([...table]).toEqual([]);
+  });
+});
+
+describe("what the application role can write on creation", () => {
+  const COLUMNS: readonly [column: string, value: string][] = [
+    ["revoked_at", "now()"],
+    ["last_used_at", "now()"],
+    ["last_used_ip_prefix", "'203.0.113.0/24'::cidr"],
+    ["created_at", "now()"],
+  ];
+
+  it.each(COLUMNS)("refuses an insert that sets %s, with a privilege error, and stores no row", async (column, value) => {
+    const { accountId, workspaceId } = await member();
+    const id = freshId();
+    await expect(
+      asApp(
+        accountId,
+        (tx) =>
+          tx.unsafe(
+            `INSERT INTO api_tokens (id, account_id, workspace_id, name, token_hash, token_prefix, scope, ${column})
+             VALUES ($1, $2, $3, 'planted', $4, 'AbCdEf', 'read', ${value})`,
+            [id, accountId, workspaceId, randomBytes(32)],
+          ),
+      ),
+    ).rejects.toMatchObject({ code: "42501" });
+    expect((await storedRows(accountId)).map((row) => row.id)).not.toContain(id);
+  });
+
+  it("refuses an insert that leaves the column list to the table, which names every column", async () => {
+    const { accountId, workspaceId } = await member();
+    await expect(
+      asApp(
+        accountId,
+        (tx) => tx`
+          INSERT INTO api_tokens
+          VALUES (${freshId()}, ${accountId}, ${workspaceId}, 'planted', ${randomBytes(32)}, 'AbCdEf', 'read', null, null, null, null, now())`,
+      ),
+    ).rejects.toMatchObject({ code: "42501" });
+  });
+
+  it("holds no table-level INSERT, which a column-level grant applied over it would leave in place", async () => {
+    const rows = await db.owner<{ table_level: boolean }[]>`SELECT has_table_privilege('slugbase_app', 'public.api_tokens', 'INSERT') AS table_level`;
+    expect([...rows]).toEqual([{ table_level: false }]);
+  });
+
+  it("still stores a token through the repository, which sets only the granted columns", async () => {
+    const { accountId, workspaceId } = await member();
+    const token = newToken(workspaceId);
+    await created(accountId, token);
+    const [row] = await storedRows(accountId);
+    expect(row).toMatchObject({ id: token.id, revoked_at: null, last_used_at: null });
   });
 });
 

@@ -134,6 +134,13 @@
       "when": 1792074549469,
       "tag": "20261015142909_add_api_token_lookup",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792079544959,
+      "tag": "20261015155224_add_api_token_insert_columns",
+      "breakpoints": true
     }
   ]
 }

@@ -160,16 +160,13 @@ export function apiTokenRepository(tx: TenantTx): ApiTokenRepository {
         return { kind: "limit_reached" };
       }
 
-      await handle.insert(apiTokens).values({
-        id: token.id,
-        accountId: tx.accountId,
-        workspaceId: token.workspaceId,
-        name: token.name,
-        tokenHash: token.tokenHash,
-        tokenPrefix: token.tokenPrefix,
-        scope: token.scope,
-        expiresAt: token.expiresInDays === null ? null : sql`now() + make_interval(days => ${token.expiresInDays})`,
-      });
+      // A statement of its own, not `handle.insert(apiTokens)`: Drizzle names every column of the table in
+      // the column list and gives the ones it has no value for DEFAULT, and `slugbase_app` may insert only the
+      // columns named here (src/sql/150-api-tokens.sql), so a column list naming `revoked_at` would be refused.
+      const expiresAt = token.expiresInDays === null ? sql`NULL` : sql`now() + make_interval(days => ${token.expiresInDays})`;
+      await handle.execute(sql`
+        INSERT INTO api_tokens (id, account_id, workspace_id, name, token_hash, token_prefix, scope, expires_at)
+        VALUES (${token.id}, ${tx.accountId}, ${token.workspaceId}, ${token.name}, ${token.tokenHash}, ${token.tokenPrefix}, ${token.scope}, ${expiresAt})`);
       const [stored] = await handle
         .select(shown)
         .from(apiTokens)
