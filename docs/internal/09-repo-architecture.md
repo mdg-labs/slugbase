@@ -64,7 +64,7 @@ slugbase/
 │   ├── adapters/                 @slugbase/adapters — CE adapters: smtp, log-mail, openai-compatible AI, OIDC,
 │   │                             Altcha, sentry-protocol errors, egress, secret box, pg rate limit,
 │   │                             no-op billing, full entitlements
-│   ├── email/                    @slugbase/email — React Email templates, EN/DE
+│   ├── email/                    @slugbase/email — plain TypeScript template functions (string builders, no runtime dependency), EN/DE
 │   ├── ui/                       @slugbase/ui — coss ui components vendored with the shadcn CLI (D13) into
 │   │                             src/components/ui/, SlugBase tokens and particles; components.json with the @coss registry
 │   ├── web/                      @slugbase/web — the SPA as a library: createWebApp({ extensions }),
