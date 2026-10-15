@@ -34,7 +34,8 @@
       "account": "Konto",
       "profile": "Profil",
       "preferences": "Voreinstellungen",
-      "security": "Sicherheit"
+      "security": "Sicherheit",
+      "tokens": "API-Tokens"
     },
     "account": {
       "title": "Profil",
@@ -302,6 +303,87 @@
           "reauthRequired": "Bestätige, dass du es bist, um fortzufahren.",
           "unavailable": "Das hat nicht geklappt. Versuche es gleich noch einmal."
         }
+      }
+    },
+    "tokens": {
+      "title": "API-Tokens",
+      "description": "Mit einem Token handeln Skripte und Integrationen in deinem Namen in einem Workspace, ohne dein Passwort.",
+      "new": "Neues Token",
+      "close": "Schließen",
+      "cancel": "Abbrechen",
+      "done": "Fertig",
+      "copied": "Kopiert",
+      "never": "Nie",
+      "noExpiry": "Läuft nicht ab",
+      "loadMore": "Mehr anzeigen",
+      "loadFailed": {
+        "title": "Deine API-Tokens konnten nicht geladen werden"
+      },
+      "empty": {
+        "title": "Noch keine Tokens",
+        "description": "Erstelle eines, um Skripte oder Integrationen zu authentifizieren."
+      },
+      "column": {
+        "name": "Name",
+        "workspace": "Workspace",
+        "scope": "Berechtigung",
+        "prefix": "Token",
+        "created": "Erstellt",
+        "lastUsed": "Zuletzt verwendet",
+        "expires": "Läuft ab",
+        "actions": "Aktionen"
+      },
+      "revoke": "Widerrufen",
+      "revokeNamed": "Das Token {name} widerrufen",
+      "revoked": "Token widerrufen",
+      "confirm": {
+        "title": "{name} widerrufen?",
+        "description": "Alles, was das Token {name} verwendet, funktioniert sofort nicht mehr. Das lässt sich nicht rückgängig machen.",
+        "action": "Widerrufen",
+        "cancel": "Abbrechen"
+      },
+      "create": {
+        "title": "Neues API-Token",
+        "description": "Ein Token handelt in einem Workspace, mit der Berechtigung, die du wählst.",
+        "submit": "Token erstellen"
+      },
+      "name": {
+        "label": "Name",
+        "description": "Etwas, woran du es erkennst, zum Beispiel das Skript, das es verwendet.",
+        "required": "Gib einen Namen ein."
+      },
+      "workspace": {
+        "label": "Workspace"
+      },
+      "scope": {
+        "label": "Berechtigung",
+        "description": "Lesen kann nur ansehen. Lesen und Schreiben kann auch ändern.",
+        "read": "Lesen",
+        "readWrite": "Lesen und Schreiben"
+      },
+      "expiry": {
+        "label": "Läuft ab",
+        "days": "{count, plural, one {# Tag} other {# Tage}}",
+        "none": "Nie"
+      },
+      "result": {
+        "title": "Kopiere dein Token",
+        "description": "Nur jetzt wird das Token angezeigt.",
+        "note": "Bewahre es sicher auf, zum Beispiel in einem Passwortmanager. Es wird nicht noch einmal angezeigt.",
+        "label": "API-Token",
+        "copy": "Das API-Token kopieren",
+        "acknowledge": "Ich habe dieses Token gespeichert",
+        "example": {
+          "title": "Ausprobieren",
+          "label": "Beispielanfrage",
+          "copy": "Die Beispielanfrage kopieren"
+        }
+      },
+      "error": {
+        "limitReached": "Du hast das Limit von 10 Tokens erreicht. Widerrufe ein Token, das du nicht mehr brauchst, um ein neues zu erstellen.",
+        "nameTaken": "Du hast bereits ein Token mit diesem Namen. Wähle einen anderen Namen.",
+        "reauthRequired": "Bestätige, dass du es bist, um fortzufahren.",
+        "unavailable": "Das hat nicht geklappt. Versuche es gleich noch einmal."
       }
     }
   },

@@ -21,6 +21,7 @@ import { Route as AppSettingsIndexRouteImport } from "./routes/_app/settings/ind
 import { Route as AppSettingsAccountIndexRouteImport } from "./routes/_app/settings/account/index.tsx";
 import { Route as AppSettingsAccountPreferencesRouteImport } from "./routes/_app/settings/account/preferences.tsx";
 import { Route as AppSettingsAccountSecurityRouteImport } from "./routes/_app/settings/account/security.tsx";
+import { Route as AppSettingsAccountTokensRouteImport } from "./routes/_app/settings/account/tokens.tsx";
 
 const AppRoute = AppRouteImport.update({
   id: "/_app",
@@ -83,6 +84,12 @@ const AppSettingsAccountSecurityRoute =
     path: "/account/security",
     getParentRoute: () => AppSettingsRoute,
   } as any);
+const AppSettingsAccountTokensRoute =
+  AppSettingsAccountTokensRouteImport.update({
+    id: "/account/tokens",
+    path: "/account/tokens",
+    getParentRoute: () => AppSettingsRoute,
+  } as any);
 
 export interface FileRoutesByFullPath {
   "/": typeof AppIndexRoute;
@@ -95,6 +102,7 @@ export interface FileRoutesByFullPath {
   "/settings/": typeof AppSettingsIndexRoute;
   "/settings/account/preferences": typeof AppSettingsAccountPreferencesRoute;
   "/settings/account/security": typeof AppSettingsAccountSecurityRoute;
+  "/settings/account/tokens": typeof AppSettingsAccountTokensRoute;
   "/settings/account/": typeof AppSettingsAccountIndexRoute;
 }
 export interface FileRoutesByTo {
@@ -107,6 +115,7 @@ export interface FileRoutesByTo {
   "/settings": typeof AppSettingsIndexRoute;
   "/settings/account/preferences": typeof AppSettingsAccountPreferencesRoute;
   "/settings/account/security": typeof AppSettingsAccountSecurityRoute;
+  "/settings/account/tokens": typeof AppSettingsAccountTokensRoute;
   "/settings/account": typeof AppSettingsAccountIndexRoute;
 }
 export interface FileRoutesById {
@@ -122,6 +131,7 @@ export interface FileRoutesById {
   "/_app/settings/": typeof AppSettingsIndexRoute;
   "/_app/settings/account/preferences": typeof AppSettingsAccountPreferencesRoute;
   "/_app/settings/account/security": typeof AppSettingsAccountSecurityRoute;
+  "/_app/settings/account/tokens": typeof AppSettingsAccountTokensRoute;
   "/_app/settings/account/": typeof AppSettingsAccountIndexRoute;
 }
 export interface FileRouteTypes {
@@ -137,6 +147,7 @@ export interface FileRouteTypes {
     | "/settings/"
     | "/settings/account/preferences"
     | "/settings/account/security"
+    | "/settings/account/tokens"
     | "/settings/account/";
   fileRoutesByTo: FileRoutesByTo;
   to:
@@ -149,6 +160,7 @@ export interface FileRouteTypes {
     | "/settings"
     | "/settings/account/preferences"
     | "/settings/account/security"
+    | "/settings/account/tokens"
     | "/settings/account";
   id:
     | "__root__"
@@ -163,6 +175,7 @@ export interface FileRouteTypes {
     | "/_app/settings/"
     | "/_app/settings/account/preferences"
     | "/_app/settings/account/security"
+    | "/_app/settings/account/tokens"
     | "/_app/settings/account/";
   fileRoutesById: FileRoutesById;
 }
@@ -259,6 +272,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AppSettingsAccountSecurityRouteImport;
       parentRoute: typeof AppSettingsRoute;
     };
+    "/_app/settings/account/tokens": {
+      id: "/_app/settings/account/tokens";
+      path: "/account/tokens";
+      fullPath: "/settings/account/tokens";
+      preLoaderRoute: typeof AppSettingsAccountTokensRouteImport;
+      parentRoute: typeof AppSettingsRoute;
+    };
   }
 }
 
@@ -266,6 +286,7 @@ interface AppSettingsRouteChildren {
   AppSettingsIndexRoute: typeof AppSettingsIndexRoute;
   AppSettingsAccountPreferencesRoute: typeof AppSettingsAccountPreferencesRoute;
   AppSettingsAccountSecurityRoute: typeof AppSettingsAccountSecurityRoute;
+  AppSettingsAccountTokensRoute: typeof AppSettingsAccountTokensRoute;
   AppSettingsAccountIndexRoute: typeof AppSettingsAccountIndexRoute;
 }
 
@@ -273,6 +294,7 @@ const AppSettingsRouteChildren: AppSettingsRouteChildren = {
   AppSettingsIndexRoute: AppSettingsIndexRoute,
   AppSettingsAccountPreferencesRoute: AppSettingsAccountPreferencesRoute,
   AppSettingsAccountSecurityRoute: AppSettingsAccountSecurityRoute,
+  AppSettingsAccountTokensRoute: AppSettingsAccountTokensRoute,
   AppSettingsAccountIndexRoute: AppSettingsAccountIndexRoute,
 };
 

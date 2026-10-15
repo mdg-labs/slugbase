@@ -34,7 +34,8 @@
       "account": "Account",
       "profile": "Profile",
       "preferences": "Preferences",
-      "security": "Security"
+      "security": "Security",
+      "tokens": "API tokens"
     },
     "account": {
       "title": "Profile",
@@ -302,6 +303,87 @@
           "reauthRequired": "Confirm it is you to continue.",
           "unavailable": "That did not work. Try again in a moment."
         }
+      }
+    },
+    "tokens": {
+      "title": "API tokens",
+      "description": "Tokens let scripts and integrations act as you in one workspace, without your password.",
+      "new": "New token",
+      "close": "Close",
+      "cancel": "Cancel",
+      "done": "Done",
+      "copied": "Copied",
+      "never": "Never",
+      "noExpiry": "No expiry",
+      "loadMore": "Show more",
+      "loadFailed": {
+        "title": "Your API tokens could not be loaded"
+      },
+      "empty": {
+        "title": "No tokens yet",
+        "description": "Create one to authenticate scripts or integrations."
+      },
+      "column": {
+        "name": "Name",
+        "workspace": "Workspace",
+        "scope": "Scope",
+        "prefix": "Token",
+        "created": "Created",
+        "lastUsed": "Last used",
+        "expires": "Expires",
+        "actions": "Actions"
+      },
+      "revoke": "Revoke",
+      "revokeNamed": "Revoke the token {name}",
+      "revoked": "Token revoked",
+      "confirm": {
+        "title": "Revoke {name}?",
+        "description": "Anything that uses the token {name} stops working at once. This cannot be undone.",
+        "action": "Revoke",
+        "cancel": "Cancel"
+      },
+      "create": {
+        "title": "New API token",
+        "description": "A token acts in one workspace, with the scope you choose.",
+        "submit": "Create token"
+      },
+      "name": {
+        "label": "Name",
+        "description": "Something to recognise it by, such as the script that uses it.",
+        "required": "Enter a name."
+      },
+      "workspace": {
+        "label": "Workspace"
+      },
+      "scope": {
+        "label": "Scope",
+        "description": "Read can only look at things. Read and write can change them too.",
+        "read": "Read",
+        "readWrite": "Read and write"
+      },
+      "expiry": {
+        "label": "Expires",
+        "days": "{count, plural, one {# day} other {# days}}",
+        "none": "Never"
+      },
+      "result": {
+        "title": "Copy your token",
+        "description": "This is the only time the token is shown.",
+        "note": "Keep it somewhere safe, like a password manager. It is not shown again.",
+        "label": "API token",
+        "copy": "Copy the API token",
+        "acknowledge": "I have saved this token",
+        "example": {
+          "title": "Try it",
+          "label": "Example request",
+          "copy": "Copy the example request"
+        }
+      },
+      "error": {
+        "limitReached": "You have reached the limit of 10 tokens. Revoke one you no longer use to create another.",
+        "nameTaken": "You already have a token with this name. Choose another name.",
+        "reauthRequired": "Confirm it is you to continue.",
+        "unavailable": "That did not work. Try again in a moment."
       }
     }
   },

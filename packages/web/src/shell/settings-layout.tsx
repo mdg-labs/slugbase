@@ -7,6 +7,7 @@ import { Slot } from "../extensions/index.ts";
 const PROFILE_PATH = "/settings/account";
 const PREFERENCES_PATH = "/settings/account/preferences";
 const SECURITY_PATH = "/settings/account/security";
+const TOKENS_PATH = "/settings/account/tokens";
 
 /**
  * The layout of the settings pages (doc 03 section 11): the settings navigation beside the page, a
@@ -29,6 +30,7 @@ export function SettingsLayout(): ReactElement {
           current: pathname === PREFERENCES_PATH,
         },
         { id: "security", label: t("settings.nav.security"), link: <Link to={SECURITY_PATH} />, current: pathname === SECURITY_PATH },
+        { id: "tokens", label: t("settings.nav.tokens"), link: <Link to={TOKENS_PATH} />, current: pathname === TOKENS_PATH },
       ],
     },
   ];
@@ -46,6 +48,8 @@ export function SettingsLayout(): ReactElement {
             void router.navigate({ to: PREFERENCES_PATH });
           } else if (id === "security") {
             void router.navigate({ to: SECURITY_PATH });
+          } else if (id === "tokens") {
+            void router.navigate({ to: TOKENS_PATH });
           }
         }}
       />
