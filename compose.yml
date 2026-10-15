@@ -135,6 +135,7 @@ services:
       SETUP_ENABLED:
       SETUP_TOKEN_REQUIRED:
       BREACHED_PASSWORD_CHECK:
+      TOTP_ISSUER:
       DOCS_BASE_URL:
       MIGRATE_ON_START:
     # Published on the loopback address unless SLUGBASE_BIND says otherwise; the

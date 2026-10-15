@@ -421,8 +421,8 @@ Unauthenticated, `Content-Type: application/opensearchdescription+xml`, built on
 | POST | `/me/email/confirm` | `{ token }` — redeem email-change token | anon | | token_redeem |
 | POST | `/me/email/cancel` | `{ token }` — the "this wasn't me" link: cancel the pending change, revoke every session | anon | | token_redeem |
 | DELETE | `/me/email/pending` | Cancel pending change | acct | | |
-| POST | `/me/mfa/enrollment` | Start: secret + `otpauth://` URI + QR (SVG); replaces an unconfirmed secret | acct | ✓ | |
-| POST | `/me/mfa/enrollment/confirm` | Confirm with a code → 10 backup codes, shown once; rotates the session | acct | | mfa |
+| POST | `/me/mfa/enrollment` | Start: `200 { secret, otpauthUri, qrSvg }` — the text key, the `otpauth://` URI and the QR code as an SVG document; replaces an unconfirmed secret and leaves sign-in unchanged; `422 validation_failed` on an account whose MFA is on. The secret is never returned again | acct | ✓ | |
+| POST | `/me/mfa/enrollment/confirm` | `{ code }` — confirm with a code of the pending secret → `200 { backupCodes }`, exactly 10, shown once, with the `Set-Cookie` of the rotated session; a wrong, expired or replayed code is `422 invalid_code` naming `code`, and every attempt counts against the `mfa` bucket; `422 validation_failed` when no enrolment is pending | acct | | mfa |
 | DELETE | `/me/mfa` | Disable MFA (TOTP code or backup code, plus the password) | acct | ✓ | |
 | POST | `/me/mfa/backup-codes` | Regenerate backup codes with a current TOTP code (old ones invalid) | acct | ✓ | |
 | GET | `/me/sessions` | List sessions (§6.1: `limit`, `cursor`; `{ items, nextCursor }` with no `total`), newest first; each item `{ id, createdAt, lastSeenAt, userAgentFamily, ipPrefix, current }`; the cursor is valid only for the account it was issued to; never a token hash or a full address, and no location is derived | acct | | |

@@ -4,7 +4,8 @@
 -- accounts: forced row-level security with the own-row policy. The policy
 -- stays own-row only until the members list needs a co-member branch.
 -- slugbase_app may read
--- every column but password_hash, which only the system operations return. It
+-- every column but password_hash and the mfa_* columns, which only the system
+-- operations return (140-mfa.sql). It
 -- may update display_name, locale and the preference columns of the profile
 -- operation (theme, accent, default_bookmark_view, single_key_shortcuts,
 -- ai_opt_out, analytics_consent, consent_at, onboarding), and

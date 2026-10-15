@@ -81,7 +81,7 @@ export function accountProfileRepository(tx: TenantTx): AccountProfileRepository
 export type AnalyticsConsent = "unset" | "granted" | "denied";
 
 // @public (undocumented)
-export interface AuthStore extends SetupStore {
+export interface AuthStore extends SetupStore, MfaStore {
     changePassword(change: PasswordChange): Promise<boolean>;
     close(): Promise<void>;
     createSession(session: NewSession): Promise<boolean>;
@@ -99,6 +99,13 @@ export interface AuthStore extends SetupStore {
 export interface AuthStoreOptions {
     poolSize?: number;
     url: string;
+}
+
+// @public
+export interface BackupCodeRecord {
+    // (undocumented)
+    readonly hash: string;
+    readonly id: string;
 }
 
 // @public
@@ -217,6 +224,45 @@ export interface MembershipRepository {
 
 // @public (undocumented)
 export function membershipRepository(tx: TenantTx): MembershipRepository;
+
+// @public
+export interface MfaActivation {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly backupCodes: readonly BackupCodeRecord[];
+    readonly newTokenHash: Buffer;
+    readonly secret: Uint8Array;
+    readonly sessionId: string;
+    readonly step: number;
+}
+
+// @public (undocumented)
+export type MfaActivationOutcome =
+/** MFA is enabled, the backup codes are stored and the session has its new token. */
+"activated"
+/** The time step was already accepted (a replay or an older code); nothing was written. */
+| "replayed"
+/** The pending secret was replaced, MFA is already on or the account is gone; nothing was written. */
+| "changed"
+/** The account has no full session with that id; nothing was written. */
+| "no_session";
+
+// @public
+export interface MfaState {
+    readonly enabledAt: Date | null;
+    readonly lastStep: number | null;
+    // (undocumented)
+    readonly secret: SealedMfaSecret;
+}
+
+// @public (undocumented)
+export interface MfaStore {
+    activateMfa(activation: MfaActivation): Promise<MfaActivationOutcome>;
+    mfaStateOf(accountId: string): Promise<MfaState | undefined>;
+    resealMfaSecret(accountId: string, expected: Uint8Array, secret: SealedMfaSecret): Promise<boolean>;
+    startMfaEnrollment(accountId: string, secret: SealedMfaSecret): Promise<boolean>;
+}
 
 // @public
 export function migrate(options: MigrateOptions): Promise<MigrateResult>;
@@ -396,6 +442,14 @@ export interface ScopedRepositoryDefinition<T extends WorkspaceTable> {
     readonly name: string;
     // (undocumented)
     readonly table: T;
+}
+
+// @public
+export interface SealedMfaSecret {
+    // (undocumented)
+    readonly ciphertext: Uint8Array;
+    // (undocumented)
+    readonly keyId: string;
 }
 
 // @public

@@ -88,6 +88,18 @@ export interface AnalyticsPort extends Port {
 }
 
 // @public
+export const BACKUP_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+// @public (undocumented)
+export const BACKUP_CODE_COUNT = 10;
+
+// @public (undocumented)
+export const BACKUP_CODE_LENGTH = 10;
+
+// @public
+export function base32Encode(bytes: Uint8Array): string;
+
+// @public
 export class BreachedDatasetError extends Error {
     constructor(reason: string);
 }
@@ -216,6 +228,12 @@ export interface ErrorReportPort extends Port {
     capture(error: unknown, context?: ErrorReportContext): Promise<void>;
 }
 
+// @public
+export function generateBackupCodes(count?: number): string[];
+
+// @public
+export function generateTotpSecret(): Uint8Array;
+
 // @public (undocumented)
 export interface IdentityBeginRequest {
     // (undocumented)
@@ -310,6 +328,16 @@ export interface NotificationRecipient {
     readonly email: string;
     readonly locale: string;
 }
+
+// @public (undocumented)
+export interface OtpauthOptions {
+    readonly account: string;
+    readonly issuer: string;
+    readonly secret: string;
+}
+
+// @public
+export function otpauthUri(input: OtpauthOptions): string;
 
 // @public
 export const PASSWORD_MAX_LENGTH = 256;
@@ -450,6 +478,24 @@ export interface TenantResolveRequest {
     readonly requestId: string;
 }
 
+// @public (undocumented)
+export const TOTP_DIGITS = 6;
+
+// @public (undocumented)
+export const TOTP_PERIOD_SECONDS = 30;
+
+// @public
+export const TOTP_SECRET_BYTES = 20;
+
+// @public
+export const TOTP_SKEW_STEPS = 1;
+
+// @public
+export function totpCode(secret: Uint8Array, step: number): string;
+
+// @public
+export function totpStep(nowMs: number): number;
+
 // @public
 export function truncateUserAgent(userAgent: string | null | undefined): string | null;
 
@@ -458,6 +504,9 @@ export function unconfigured(): Adapters;
 
 // @public
 export const USER_AGENT_MAX_LENGTH = 256;
+
+// @public
+export function verifyTotp(secret: Uint8Array, code: string, nowMs: number): number | undefined;
 
 // @public (undocumented)
 export type WorkspaceRole = "owner" | "admin" | "member";

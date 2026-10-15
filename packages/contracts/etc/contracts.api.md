@@ -211,6 +211,9 @@ export interface ComponentTypes {
             currentPassword: string;
             newPassword: string;
         };
+        ConfirmMfaEnrollmentRequest: {
+            code: string;
+        };
         HealthStatus: {
             status: "ok";
         };
@@ -232,6 +235,14 @@ export interface ComponentTypes {
             name: string;
             role: "owner" | "admin" | "member";
             workspaceId: string;
+        };
+        MfaBackupCodes: {
+            backupCodes: string[];
+        };
+        MfaEnrollment: {
+            otpauthUri: string;
+            qrSvg: string;
+            secret: string;
         };
         Onboarding: {
             browserSetupDone: boolean;
@@ -324,6 +335,43 @@ export interface ComponentTypes {
         };
     };
 }
+
+// @public (undocumented)
+export const confirmMfaEnrollment: {
+    readonly method: "post";
+    readonly path: "/api/v1/me/mfa/enrollment/confirm";
+    readonly operationId: "confirmMfaEnrollment";
+    readonly tag: "me";
+    readonly summary: "Confirm the authenticator app with a code and turn the second factor on";
+    readonly auth: "account";
+    readonly rate: "mfa";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            code: z.ZodString;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        backupCodes: z.ZodArray<z.ZodString>;
+        }, z.core.$strict>, {
+        "Set-Cookie": {
+        description: string;
+        schema: z.ZodString;
+        };
+        }>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const ConfirmMfaEnrollmentRequestSchema: z.ZodObject<{
+    code: z.ZodString;
+}, z.core.$strict>;
 
 // @public
 export function defineOperation<const D extends OperationDefinition>(definition: D): D;
@@ -758,6 +806,18 @@ export const MeSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
+export const MfaBackupCodesSchema: z.ZodObject<{
+    backupCodes: z.ZodArray<z.ZodString>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const MfaEnrollmentSchema: z.ZodObject<{
+    secret: z.ZodString;
+    otpauthUri: z.ZodString;
+    qrSvg: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
 export const OnboardingChangesSchema: z.ZodObject<{
     browserSetupDone: z.ZodOptional<z.ZodBoolean>;
     importDone: z.ZodOptional<z.ZodBoolean>;
@@ -923,6 +983,80 @@ export interface OperationTypes {
                 };
             };
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    confirmMfaEnrollment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["ConfirmMfaEnrollmentRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["MfaBackupCodes"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1627,6 +1761,75 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    startMfaEnrollment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["MfaEnrollment"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     updateMe: {
         parameters: {
             query?: never;
@@ -1772,6 +1975,40 @@ export interface paths {
         options?: never;
         head?: never;
         patch: OperationTypes["updateMe"];
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/me/mfa/enrollment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["startMfaEnrollment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/me/mfa/enrollment/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["confirmMfaEnrollment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     // (undocumented)
@@ -2388,6 +2625,31 @@ export const SetupStatusSchema: z.ZodObject<{
     setupRequired: z.ZodBoolean;
     setupTokenRequired: z.ZodBoolean;
 }, z.core.$strict>;
+
+// @public (undocumented)
+export const startMfaEnrollment: {
+    readonly method: "post";
+    readonly path: "/api/v1/me/mfa/enrollment";
+    readonly operationId: "startMfaEnrollment";
+    readonly tag: "me";
+    readonly summary: "Start enrolling an authenticator app";
+    readonly auth: "account";
+    readonly rate: "write";
+    readonly reauth: true;
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        secret: z.ZodString;
+        otpauthUri: z.ZodString;
+        qrSvg: z.ZodString;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
 
 // @public (undocumented)
 export const THEMES: readonly ["light", "dark", "system"];

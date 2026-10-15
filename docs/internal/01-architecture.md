@@ -391,6 +391,7 @@ Doc 10 is the threat model; this is the shape that implements it.
   | `API_DOCS_ENABLED` | Serve `/api/docs` and the OpenAPI document | `true` |
   | `DOCS_BASE_URL` | Base URL the app's help links point to; links are `<base>/<route>` with the stable `/docs/<route>` routes of doc 09 §3.5 | `https://slugbase.app/docs` |
   | `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | The SMTP adapter; all six unset selects the log-only adapter. `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY` and `SMTP_FROM` are required together; `SMTP_USER` and `SMTP_PASS` are an optional pair (both or neither, for a relay without authentication) and are set only with the other four. A violation refuses to start and names the missing keys | unset |
+  | `TOTP_ISSUER` | The name an authenticator app lists the account under (1 to 64 characters, no colon); server only | "SlugBase (" + the host name of `APP_ORIGIN`, without its port, + ")" |
   | `ERROR_REPORT_DSN` | Sentry-protocol error reporting; unset selects the no-op adapter | unset |
   | `METRICS_PORT` | Internal listener for `/metrics` (§12) | unset |
   | `RATE_LIMIT_<BUCKET>_*` | Override a bucket's defaults (doc 02 §16) | see doc 02 §16 |

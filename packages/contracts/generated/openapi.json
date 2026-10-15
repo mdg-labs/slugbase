@@ -216,6 +216,21 @@
         ],
         "type": "object"
       },
+      "ConfirmMfaEnrollmentRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "code": {
+            "description": "The current six-digit code of the authenticator app; spaces between the digits are ignored",
+            "maxLength": 16,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "type": "object"
+      },
       "HealthStatus": {
         "additionalProperties": false,
         "properties": {
@@ -335,6 +350,47 @@
           "workspaceId",
           "name",
           "role"
+        ],
+        "type": "object"
+      },
+      "MfaBackupCodes": {
+        "additionalProperties": false,
+        "properties": {
+          "backupCodes": {
+            "description": "Ten single-use backup codes of ten characters each, shown only in this response",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "minItems": 10,
+            "type": "array"
+          }
+        },
+        "required": [
+          "backupCodes"
+        ],
+        "type": "object"
+      },
+      "MfaEnrollment": {
+        "additionalProperties": false,
+        "properties": {
+          "otpauthUri": {
+            "description": "The otpauth:// URI the QR code holds; it names the issuer, the account's email and the secret",
+            "type": "string"
+          },
+          "qrSvg": {
+            "description": "The QR code of the URI as an SVG document, to be shown as an image and never inserted into the page as markup",
+            "type": "string"
+          },
+          "secret": {
+            "description": "The text key an authenticator app takes when it cannot scan the code: the secret in base32, shown only in this response",
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret",
+          "otpauthUri",
+          "qrSvg"
         ],
         "type": "object"
       },
@@ -1228,6 +1284,214 @@
         ],
         "x-slugbase-auth": "account",
         "x-slugbase-rate": "write"
+      }
+    },
+    "/api/v1/me/mfa/enrollment": {
+      "post": {
+        "operationId": "startMfaEnrollment",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaEnrollment"
+                }
+              }
+            },
+            "description": "A new pending secret as a text key, an otpauth:// URI and a QR code; an earlier unconfirmed secret is replaced and sign-in is unchanged until a code is confirmed"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself, or the credential is an API token"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The account's second factor is already on, answered as validation_failed"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Start enrolling an authenticator app",
+        "tags": [
+          "me"
+        ],
+        "x-slugbase-auth": "account",
+        "x-slugbase-rate": "write",
+        "x-slugbase-reauth": true
+      }
+    },
+    "/api/v1/me/mfa/enrollment/confirm": {
+      "post": {
+        "operationId": "confirmMfaEnrollment",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmMfaEnrollmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaBackupCodes"
+                }
+              }
+            },
+            "description": "The second factor is on; the backup codes are returned once and never again",
+            "headers": {
+              "Set-Cookie": {
+                "description": "The session cookie of the session's new token, with the attributes of the sign-in cookie; the old token is refused from now on",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself, or the credential is an API token"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The code is wrong, outside the accepted window or already used (invalid_code, counted against the mfa limit); the body did not pass validation; or no enrolment is pending (validation_failed)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many attempts; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Confirm the authenticator app with a code and turn the second factor on",
+        "tags": [
+          "me"
+        ],
+        "x-slugbase-auth": "account",
+        "x-slugbase-rate": "mfa"
       }
     },
     "/api/v1/me/password": {

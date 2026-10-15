@@ -62,7 +62,7 @@ function newSession(accountId: string, overrides: Partial<NewSession> = {}): New
 }
 
 describe("the accounts table", () => {
-  it("has the columns of doc 05 section 2.1 other than the multi-factor ones", async () => {
+  it("has the columns of doc 05 section 2.1", async () => {
     const columns = await db.owner<{ name: string; type: string; nullable: boolean }[]>`
       SELECT a.attname AS name, format_type(a.atttypid, a.atttypmod) AS type, NOT a.attnotnull AS nullable
       FROM pg_attribute a
@@ -72,13 +72,15 @@ describe("the accounts table", () => {
       "id", "email", "email_verified_at", "pending_email", "display_name", "password_hash", "password_changed_at",
       "locale", "theme", "accent", "default_bookmark_view", "single_key_shortcuts", "signin_alerts", "ai_opt_out",
       "analytics_consent", "consent_at", "onboarding", "is_instance_admin", "disabled_at", "last_sign_in_at",
-      "created_at", "updated_at",
+      "created_at", "updated_at", "mfa_enabled_at", "mfa_secret", "mfa_secret_key_id", "mfa_last_step",
     ]);
     const types = Object.fromEntries(columns.map((column) => [column.name, column.type]));
     expect(types["email"]).toBe("citext");
     expect(types["pending_email"]).toBe("citext");
     expect(types["password_hash"]).toBe("text");
     expect(types["id"]).toBe("uuid");
+    expect(types["mfa_secret"]).toBe("bytea");
+    expect(types["mfa_last_step"]).toBe("bigint");
   });
 
   it("compares the email case-insensitively and refuses a second account for the same address", async () => {
@@ -110,13 +112,13 @@ describe("the accounts table", () => {
     expect([...outside]).toEqual([]);
   });
 
-  it("gives slugbase_app no way to read password_hash, with SELECT * included", async () => {
+  it("gives slugbase_app no way to read password_hash or the mfa columns, with SELECT * included", async () => {
     const rows = await db.owner<{ column: string; app: boolean }[]>`
       SELECT a.attname AS column, has_column_privilege('slugbase_app', 'public.accounts', a.attname, 'SELECT') AS app
       FROM pg_attribute a
       WHERE a.attrelid = 'public.accounts'::regclass AND a.attnum > 0 AND NOT a.attisdropped
       ORDER BY a.attnum`;
-    expect(rows.filter((row) => !row.app).map((row) => row.column)).toEqual(["password_hash"]);
+    expect(rows.filter((row) => !row.app).map((row) => row.column)).toEqual(["password_hash", "mfa_enabled_at", "mfa_secret", "mfa_secret_key_id", "mfa_last_step"]);
     await expect(db.app.unsafe("SELECT password_hash FROM public.accounts")).rejects.toMatchObject({ code: "42501" });
     await expect(db.app.unsafe("SELECT * FROM public.accounts")).rejects.toMatchObject({ code: "42501" });
     const writes = await db.owner<{ privilege: string; app: boolean }[]>`

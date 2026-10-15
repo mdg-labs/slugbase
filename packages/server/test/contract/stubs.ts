@@ -1,6 +1,7 @@
 import type { Adapters, TenantResolution, TenantResolver } from "@slugbase/core";
 import type { FixturePrincipal, TenantFixture } from "@slugbase/testing/tenancy";
-import type { ApiTokenPrincipal, Authenticator, SessionPrincipal } from "../../src/create-server.ts";
+import type { ApiTokenPrincipal, Authenticator, ModuleContext, SessionPrincipal } from "../../src/create-server.ts";
+import { testKey, testSecretBox } from "../secret-box.ts";
 import { adapters } from "../support.ts";
 import type { Credentials, PolicyHooks } from "./walker.ts";
 
@@ -24,7 +25,7 @@ export interface StubWorld {
   /** The authenticators a test module registers (`ModuleContribution.authenticators`). */
   readonly authenticators: readonly Authenticator[];
   /** The adapters of the server under test: unconfigured ports, the in-memory rate limiter and the stub tenant resolver. */
-  adapters(): Adapters;
+  adapters(config?: ModuleContext["config"]): Adapters;
   readonly hooks: PolicyHooks;
   /** What a fixture principal sends: its session cookie. */
   credentialsOf(principal: FixturePrincipal): Credentials;
@@ -98,7 +99,7 @@ export function createStubWorld(fixture: TenantFixture): StubWorld {
 
   return {
     authenticators: [cookie, bearer],
-    adapters: () => ({ ...adapters(), tenantResolver: resolver }),
+    adapters: (config) => ({ ...adapters(config), tenantResolver: resolver, secretBox: testSecretBox(testKey("walker-1")) }),
     credentialsOf: (principal) => sessionCredentials(principal.accountId),
     hooks: {
       authorized: (operation) => authorized(operation.auth),

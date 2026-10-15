@@ -24,6 +24,11 @@ export const FIXTURES: ContractFixtures = {
   // The walker signs each session in with this password; the valid change is made by a session that has just re-authenticated with it.
   reauthenticate: { body: { password: WALKER_ACCOUNT.password } },
   changePassword: { body: { currentPassword: WALKER_ACCOUNT.password, newPassword: "a new password for the walker" } },
+  // Account-level operations: no workspace or other account's identifier is part of them, and the account they act on is the walker's own.
+  // The walker's session has just re-authenticated, so the start is valid; it stores a pending secret of the walker's own account.
+  startMfaEnrollment: {},
+  // The walker cannot know the code of the secret the start gave it: the valid request is the declared 422.
+  confirmMfaEnrollment: { body: { code: "000000" }, status: 422 },
   listSessions: {},
   // The walker has one session, which every call of the walk needs; a revocation that succeeds is covered by the session route tests.
   revokeSession: { path: { id: UNKNOWN_SESSION_ID }, status: 404 },

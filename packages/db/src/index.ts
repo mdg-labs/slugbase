@@ -47,3 +47,11 @@ export type {
   SessionSummary,
 } from "./system/auth.ts";
 export type { CompleteSetup, SetupOutcome, SetupStore } from "./system/setup.ts";
+export type {
+  BackupCodeRecord,
+  MfaActivation,
+  MfaActivationOutcome,
+  MfaState,
+  MfaStore,
+  SealedMfaSecret,
+} from "./system/mfa.ts";

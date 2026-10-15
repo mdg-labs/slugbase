@@ -294,3 +294,72 @@ export const changePassword = defineOperation({
     503: problemResponse("The service is temporarily unavailable"),
   },
 });
+
+export const MfaEnrollmentSchema = z
+  .strictObject({
+    secret: z.string().describe("The text key an authenticator app takes when it cannot scan the code: the secret in base32, shown only in this response"),
+    otpauthUri: z.string().describe("The otpauth:// URI the QR code holds; it names the issuer, the account's email and the secret"),
+    qrSvg: z.string().describe("The QR code of the URI as an SVG document, to be shown as an image and never inserted into the page as markup"),
+  })
+  .meta({ id: "MfaEnrollment" });
+
+export const ConfirmMfaEnrollmentRequestSchema = z
+  .strictObject({
+    code: z.string().min(1).max(16).describe("The current six-digit code of the authenticator app; spaces between the digits are ignored"),
+  })
+  .meta({ id: "ConfirmMfaEnrollmentRequest" });
+
+export const MfaBackupCodesSchema = z
+  .strictObject({
+    backupCodes: z.array(z.string()).length(10).describe("Ten single-use backup codes of ten characters each, shown only in this response"),
+  })
+  .meta({ id: "MfaBackupCodes" });
+
+export const startMfaEnrollment = defineOperation({
+  method: "post",
+  path: "/api/v1/me/mfa/enrollment",
+  operationId: "startMfaEnrollment",
+  tag: "me",
+  summary: "Start enrolling an authenticator app",
+  auth: "account",
+  rate: "write",
+  reauth: true,
+  responses: {
+    200: jsonResponse("A new pending secret as a text key, an otpauth:// URI and a QR code; an earlier unconfirmed secret is replaced and sign-in is unchanged until a code is confirmed", MfaEnrollmentSchema),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"),
+    403: problemResponse("The request did not come from the application itself, or the credential is an API token"),
+    422: problemResponse("The account's second factor is already on, answered as validation_failed"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const confirmMfaEnrollment = defineOperation({
+  method: "post",
+  path: "/api/v1/me/mfa/enrollment/confirm",
+  operationId: "confirmMfaEnrollment",
+  tag: "me",
+  summary: "Confirm the authenticator app with a code and turn the second factor on",
+  auth: "account",
+  rate: "mfa",
+  request: { body: ConfirmMfaEnrollmentRequestSchema },
+  responses: {
+    200: jsonResponse("The second factor is on; the backup codes are returned once and never again", MfaBackupCodesSchema, {
+      headers: {
+        "Set-Cookie": {
+          description: "The session cookie of the session's new token, with the attributes of the sign-in cookie; the old token is refused from now on",
+          schema: z.string(),
+        },
+      },
+    }),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    403: problemResponse("The request did not come from the application itself, or the credential is an API token"),
+    422: problemResponse(
+      "The code is wrong, outside the accepted window or already used (invalid_code, counted against the mfa limit); the body did not pass validation; or no enrolment is pending (validation_failed)",
+    ),
+    429: rateLimitedResponse("Too many attempts; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});

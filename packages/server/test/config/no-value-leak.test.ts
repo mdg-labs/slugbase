@@ -32,6 +32,7 @@ const REFUSED: readonly { key: string; value: string }[] = [
   { key: "SETUP_ENABLED", value: "maybe-qx90" },
   { key: "SETUP_TOKEN_REQUIRED", value: "maybe-qx91" },
   { key: "BREACHED_PASSWORD_CHECK", value: "maybe-qx92" },
+  { key: "TOTP_ISSUER", value: "qx93:issuer" },
   { key: "SLUGBASE_ALLOW_OWNER_CONNECTION", value: "maybe-qx55" },
   { key: "DOCS_BASE_URL", value: "ftp://qx56.example.com/docs" },
   { key: "NODE_ENV", value: "prod-qx57" },

@@ -12,6 +12,7 @@ export {
   errorReportFragment,
   httpFragment,
   metricsFragment,
+  mfaFragment,
   migrateFragment,
   originFragment,
   passwordPolicyFragment,

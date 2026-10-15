@@ -169,6 +169,20 @@ describe("process schemas", () => {
     expect(failure(() => loadConfig("server", { ...development, [key]: value })).issues.map((issue) => issue.key)).toContain(key);
   });
 
+  it("leaves TOTP_ISSUER unset by default and when empty, and trims a value", () => {
+    expect(loadConfig("server", development).config.TOTP_ISSUER).toBeUndefined();
+    expect(loadConfig("server", { ...development, TOTP_ISSUER: "" }).config.TOTP_ISSUER).toBeUndefined();
+    expect(loadConfig("server", { ...development, TOTP_ISSUER: "  Acme Links " }).config.TOTP_ISSUER).toBe("Acme Links");
+  });
+
+  it.each([["a:b"], ["x".repeat(65)], ["line\nbreak"], ["   "]])("names TOTP_ISSUER for the value %j", (value) => {
+    expect(failure(() => loadConfig("server", { ...development, TOTP_ISSUER: value })).issues.map((issue) => issue.key)).toContain("TOTP_ISSUER");
+  });
+
+  it("does not give TOTP_ISSUER to the worker", () => {
+    expect(loadConfig("worker", { ...development, TOTP_ISSUER: "ignored" }).config).not.toHaveProperty("TOTP_ISSUER");
+  });
+
   it("removes a trailing slash from DOCS_BASE_URL so links join it without doubling", () => {
     const docsBase = (value: string) => loadConfig("server", { ...development, DOCS_BASE_URL: value }).config.DOCS_BASE_URL;
     expect(docsBase("https://docs.example.com/docs/")).toBe("https://docs.example.com/docs");

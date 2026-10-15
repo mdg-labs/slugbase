@@ -33,6 +33,7 @@
     "hono": "^4.13.13",
     "pg-boss": "^12.37.1",
     "pino": "^10.4.0",
+    "qrcode-generator": "2.0.4",
     "zod": "^4.6.5"
   },
   "devDependencies": {

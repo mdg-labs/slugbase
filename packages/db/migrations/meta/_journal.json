@@ -92,6 +92,13 @@
       "when": 1792017018303,
       "tag": "20261014223018_add_password_change",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792057020091,
+      "tag": "20261015093700_add_mfa",
+      "breakpoints": true
     }
   ]
 }

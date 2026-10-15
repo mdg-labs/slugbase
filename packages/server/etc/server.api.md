@@ -306,6 +306,8 @@ export const envSchemas: {
     } & {
     BREACHED_PASSWORD_CHECK: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
     } & {
+    TOTP_ISSUER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    } & {
     METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
     } & {
     ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
@@ -536,6 +538,11 @@ export type MergedShape<Fragments extends readonly EnvFragment[]> = IntersectUni
 // @public
 export const metricsFragment: EnvFragment<    {
 METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
+}>;
+
+// @public
+export const mfaFragment: EnvFragment<    {
+TOTP_ISSUER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 }>;
 
 // @public (undocumented)
@@ -1046,6 +1053,8 @@ SETUP_TOKEN_REQUIRED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean
 } & {
 BREACHED_PASSWORD_CHECK: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 } & {
+TOTP_ISSUER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+} & {
 METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 } & {
 ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
@@ -1101,6 +1110,8 @@ SETUP_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, strin
 SETUP_TOKEN_REQUIRED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 }>, EnvFragment<    {
 BREACHED_PASSWORD_CHECK: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+}>, EnvFragment<    {
+TOTP_ISSUER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 }>, EnvFragment<Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>, EnvFragment<    {
 METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 }>, EnvFragment<    {

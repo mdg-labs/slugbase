@@ -21,6 +21,7 @@ import {
   previousKeys,
   relayHost,
   sentryDsn,
+  totpIssuer,
 } from "./fields.ts";
 import { envFragment, requireAllOrNone, type RefineContext } from "./fragment.ts";
 
@@ -168,6 +169,16 @@ export const setupFragment = envFragment({
 export const passwordPolicyFragment = envFragment({
   shape: {
     BREACHED_PASSWORD_CHECK: envBoolean().default(true),
+  },
+});
+
+/**
+ * The second factor (doc 02 section 2.7), for the server. `TOTP_ISSUER` is the name an authenticator app
+ * lists the account under; unset, it is "SlugBase" followed by the deployment host name, without its port.
+ */
+export const mfaFragment = envFragment({
+  shape: {
+    TOTP_ISSUER: optional(totpIssuer()),
   },
 });
 

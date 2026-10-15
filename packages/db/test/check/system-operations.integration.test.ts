@@ -118,6 +118,11 @@ describe("the shipped chain", () => {
       "sys_session_reauth",
       "sys_password_set",
       "sys_session_rotate",
+      "sys_mfa_get_secret",
+      "sys_mfa_set",
+      "sys_mfa_accept_step",
+      "sys_backup_codes_replace",
+      "sys_backup_code_consume",
     ]);
     expect(checkRules).toContain(systemOperationsRule);
     const database = await scratch();

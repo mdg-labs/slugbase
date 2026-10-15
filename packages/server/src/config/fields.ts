@@ -165,3 +165,16 @@ export function previousKeys(bytes: number) {
       .default([]),
   );
 }
+
+/**
+ * The name an authenticator app lists an account under: 1 to 64 characters after trimming, with no
+ * control character and no colon (the colon separates the issuer from the account in the otpauth label).
+ */
+export function totpIssuer() {
+  return z
+    .string()
+    .trim()
+    .refine((value) => /^[^\p{Cc}:]{1,64}$/u.test(value), {
+      error: "must be 1 to 64 characters with no control character and no colon",
+    });
+}

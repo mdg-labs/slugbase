@@ -1,10 +1,12 @@
 import { setTimeout as sleep } from "node:timers/promises";
 import { createAdaptorServer, type ServerType } from "@hono/node-server";
 import { getHealth, getReady, getVersion } from "@slugbase/contracts";
-import { createPasswordPolicy, loadBreachedPasswords, type Adapters } from "@slugbase/core";
+import { createPasswordPolicy, loadBreachedPasswords, sessionCookieSpec, type Adapters } from "@slugbase/core";
 import { createAuthStore, createDatabase, type AuthStore, type Database, type MigrationChain } from "@slugbase/db";
 import { Hono } from "hono";
 import { DEVELOPMENT_BUILD_INFO, type BuildInfo } from "./build-info.ts";
+import { renderQrSvg } from "./auth/qr.ts";
+import { hashPassword } from "./auth/password.ts";
 import { ensureSetupToken } from "./auth/setup-token.ts";
 import { createMembershipTenantResolver, defersToMembershipResolver } from "./auth/tenant-resolver.ts";
 import { createRateLimitRegistry, type ServerConfig, type WorkerConfig } from "./config/index.ts";
@@ -27,6 +29,7 @@ import { assertApplicationRole, runMigrations } from "./migrate/index.ts";
 import { loadCommittedDocument } from "./routes/committed-document.ts";
 import { probeRoutes } from "./routes/health.ts";
 import { authContribution } from "./routes/auth/index.ts";
+import { mfaRoutes } from "./routes/me/mfa.ts";
 import { profileRoutes } from "./routes/me/profile.ts";
 import { apiConfigRoute } from "./routes/meta/config.ts";
 import { apiDocs } from "./routes/meta/docs.ts";
@@ -261,6 +264,12 @@ function shapeOf(binding: RouteBinding): string {
   return `${binding.operation.method.toUpperCase()} ${path}`;
 }
 
+// The host without its port: the colon separates the issuer from the account in the otpauth label.
+function defaultTotpIssuer(origin: string): string {
+  const host = new URL(origin).hostname.replace(/^\[|\]$/g, "").replaceAll(":", "-");
+  return `SlugBase (${host})`;
+}
+
 function isOrigin(value: string): boolean {
   try {
     const url = new URL(value);
@@ -443,6 +452,19 @@ export function createServer(options: CreateServerOptions): Server {
   });
   // The signed-in account is part of the server like its sign-in: it reads the account's own rows and memberships.
   builtInRoutes.push(...profileRoutes({ withTenant: context.withTenant }));
+  // So is the second factor's enrolment: it reads the account's email for the authenticator entry and writes the sealed secret.
+  builtInRoutes.push(
+    ...mfaRoutes({
+      store: authStore,
+      secretBox: adapters.secretBox,
+      withTenant: context.withTenant,
+      cookie: sessionCookieSpec(config.APP_ORIGIN),
+      hashCode: hashPassword,
+      now: options.now ?? Date.now,
+      issuer: config.TOTP_ISSUER ?? defaultTotpIssuer(config.APP_ORIGIN),
+      renderQr: renderQrSvg,
+    }),
+  );
 
   let composition: Composition;
   let webFiles: Unrouted | undefined;
