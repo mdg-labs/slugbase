@@ -316,7 +316,24 @@ export interface IdentityPort extends Port {
     listProviders(): Promise<readonly IdentityProviderInfo[]>;
 }
 
-// @public (undocumented)
+// @public
+export interface IdentityProviderConfig {
+    readonly allowedDomains: readonly string[];
+    // (undocumented)
+    readonly autoCreate: boolean;
+    // (undocumented)
+    readonly clientId: string;
+    // (undocumented)
+    readonly clientSecret: string;
+    readonly issuerUrl: string;
+    readonly name: string;
+    // (undocumented)
+    readonly scopes: readonly string[];
+    // (undocumented)
+    readonly slug: string;
+}
+
+// @public
 export interface IdentityProviderInfo {
     // (undocumented)
     readonly displayName: string;

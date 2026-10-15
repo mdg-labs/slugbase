@@ -1,8 +1,8 @@
 import type { z } from "zod";
-import type { ConfigIssue, EnvSchema, RefineContext } from "./fragment.ts";
+import type { ConfigIssue, EnvSchema, EnvironmentVariables, RefineContext } from "./fragment.ts";
 import { declaredKeys, envSchemas, type ConfigByProcess, type ProcessType } from "./schemas.ts";
 
-export type EnvironmentVariables = Readonly<Record<string, string | undefined>>;
+export type { EnvironmentVariables };
 
 /**
  * The environment is invalid. The message and `issues` name keys and what is
@@ -38,32 +38,33 @@ function describe(issue: z.core.$ZodIssue, env: EnvironmentVariables): ConfigIss
   return { key, message: env[key] === undefined ? "is required" : issue.message };
 }
 
-export function validateEnvironment<Shape extends z.ZodRawShape>(
-  schema: EnvSchema<Shape>,
+export function validateEnvironment<Shape extends z.ZodRawShape, Collected extends object>(
+  schema: EnvSchema<Shape, Collected>,
   env: EnvironmentVariables,
   options: LoadOptions = {},
-): LoadedConfig<z.infer<z.ZodObject<Shape>>> {
+): LoadedConfig<z.infer<z.ZodObject<Shape>> & Collected> {
   const production = env["NODE_ENV"] === "production";
   const issues: ConfigIssue[] = [];
   const settingWarnings: string[] = [];
 
+  const context: RefineContext = {
+    production,
+    issue: (key, message) => {
+      issues.push({ key, message });
+    },
+    warn: (key, message) => {
+      settingWarnings.push(`${key} ${message}`);
+    },
+  };
   const parsed = schema.object.safeParse(env);
   if (parsed.success) {
-    const context: RefineContext = {
-      production,
-      issue: (key, message) => {
-        issues.push({ key, message });
-      },
-      warn: (key, message) => {
-        settingWarnings.push(`${key} ${message}`);
-      },
-    };
     for (const refine of schema.refinements) {
       refine(parsed.data, context);
     }
   } else {
     issues.push(...parsed.error.issues.map((issue) => describe(issue, env)));
   }
+  const collected = Object.assign({}, ...schema.collectors.map((collect) => collect(env, context))) as Collected;
 
   if (production) {
     for (const [key, developmentValue] of Object.entries(schema.developmentDefaults)) {
@@ -82,7 +83,7 @@ export function validateEnvironment<Shape extends z.ZodRawShape>(
     .filter((key) => key.startsWith(SLUGBASE_PREFIX) && !known.has(key))
     .sort();
   return {
-    config: parsed.data,
+    config: { ...parsed.data, ...collected },
     warnings: [
       ...settingWarnings,
       ...(unknown.length === 0 ? [] : [`Unknown ${SLUGBASE_PREFIX}* environment keys are ignored: ${unknown.join(", ")}`]),

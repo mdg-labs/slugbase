@@ -3,7 +3,15 @@ import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } 
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { ConfigError, PROCESS_TYPES, declaredKeys, envSchemas, loadConfig } from "../../src/config/index.ts";
+import {
+  ConfigError,
+  OIDC_OPTIONAL_FIELDS,
+  OIDC_REQUIRED_FIELDS,
+  PROCESS_TYPES,
+  declaredKeys,
+  envSchemas,
+  loadConfig,
+} from "../../src/config/index.ts";
 import {
   DEVELOPMENT_APP_ORIGIN,
   DEVELOPMENT_DATABASE_MIGRATE_URL,
@@ -15,11 +23,19 @@ import {
 import { parseEnvFile } from "./support.ts";
 
 const ROOT = resolve(import.meta.dirname, "../../../..");
-const example = parseEnvFile(readFileSync(join(ROOT, ".env.example"), "utf8"));
+const exampleText = readFileSync(join(ROOT, ".env.example"), "utf8");
+const example = parseEnvFile(exampleText);
 
 describe(".env.example", () => {
   it("lists exactly the keys the schemas declare", () => {
     expect([...example.keys()].sort()).toEqual([...declaredKeys()]);
+  });
+
+  it("names the OIDC_<SLUG>_* keys of a provider, as names only", () => {
+    for (const field of [...OIDC_REQUIRED_FIELDS, ...OIDC_OPTIONAL_FIELDS]) {
+      expect(exampleText, field).toMatch(new RegExp(`^# +OIDC_<SLUG>_${field}\\b`, "m"));
+    }
+    expect([...example.keys()].filter((key) => key.startsWith("OIDC_"))).toEqual([]);
   });
 
   it("carries the development defaults the schema refuses in production", () => {

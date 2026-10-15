@@ -10,6 +10,7 @@ import type { ClientErrorReportRequest } from '@slugbase/core';
 import type { Context } from 'hono';
 import { Database } from '@slugbase/db';
 import { EmptyResponse } from '@slugbase/contracts';
+import { IdentityProviderConfig } from '@slugbase/core';
 import { JsonResponse } from '@slugbase/contracts';
 import { MigrateResult } from '@slugbase/db';
 import { MigrationChain } from '@slugbase/db';
@@ -76,7 +77,10 @@ export interface ChainEnv {
 }
 
 // @public
-export function composeEnvSchema<const Fragments extends readonly EnvFragment[]>(fragments: Fragments): EnvSchema<MergedShape<Fragments>>;
+export type CollectedOf<Fragments extends readonly EnvFragment[]> = IntersectUnion<Fragments[number] extends infer Fragment ? Fragment extends EnvFragment<z.ZodRawShape, infer Collected> ? Collected : never : never> extends infer Both extends object ? Both : object;
+
+// @public
+export function composeEnvSchema<const Fragments extends readonly EnvFragment[]>(fragments: Fragments): EnvSchema<MergedShape<Fragments>, CollectedOf<Fragments>>;
 
 // @public
 export class CompositionError extends Error {
@@ -112,6 +116,9 @@ export interface ConfigIssue {
     // (undocumented)
     readonly message: string;
 }
+
+// @public
+export type ConfigOf<Schema extends EnvSchema> = Schema extends EnvSchema<infer Shape, infer Collected> ? z.infer<z.ZodObject<Shape>> & Collected : never;
 
 // @public
 export interface ContractDocument {
@@ -186,7 +193,7 @@ export interface CreateWorkerOptions {
 export const databaseFragment: EnvFragment<    {
 DATABASE_URL: z.ZodString;
 SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
-}>;
+}, object>;
 
 // @public
 export function declaredKeys(): readonly string[];
@@ -196,6 +203,9 @@ export const DEFAULT_DOCS_BASE_URL = "https://slugbase.app/docs";
 
 // @public (undocumented)
 export const DEFAULT_HOOK_TIMEOUT_MS = 2000;
+
+// @public (undocumented)
+export const DEFAULT_OIDC_SCOPES: readonly string[];
 
 // @public (undocumented)
 export const DEFAULT_RETRY_POLICY: ResolvedRetryPolicy;
@@ -243,7 +253,8 @@ export const DEVELOPMENT_BUILD_INFO: BuildInfo;
 export function envBoolean(): z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>;
 
 // @public
-export interface EnvFragment<Shape extends z.ZodRawShape = z.ZodRawShape> {
+export interface EnvFragment<Shape extends z.ZodRawShape = z.ZodRawShape, Collected extends object = object> {
+    collect?(env: EnvironmentVariables, context: RefineContext): Collected;
     readonly developmentDefaults?: Readonly<Record<string, string>>;
     refine?(values: z.infer<z.ZodObject<Shape>>, context: RefineContext): void;
     // (undocumented)
@@ -251,13 +262,16 @@ export interface EnvFragment<Shape extends z.ZodRawShape = z.ZodRawShape> {
 }
 
 // @public (undocumented)
-export function envFragment<Shape extends z.ZodRawShape>(fragment: EnvFragment<Shape>): EnvFragment<Shape>;
+export function envFragment<Shape extends z.ZodRawShape, Collected extends object = object>(fragment: EnvFragment<Shape, Collected>): EnvFragment<Shape, Collected>;
 
-// @public (undocumented)
+// @public
 export type EnvironmentVariables = Readonly<Record<string, string | undefined>>;
 
 // @public (undocumented)
-export interface EnvSchema<Shape extends z.ZodRawShape = z.ZodRawShape> {
+export interface EnvSchema<Shape extends z.ZodRawShape = z.ZodRawShape, Collected extends object = object> {
+    readonly collected?: Collected;
+    // (undocumented)
+    readonly collectors: readonly ((env: EnvironmentVariables, context: RefineContext) => object)[];
     // (undocumented)
     readonly developmentDefaults: Readonly<Record<string, string>>;
     readonly keys: readonly string[];
@@ -269,127 +283,129 @@ export interface EnvSchema<Shape extends z.ZodRawShape = z.ZodRawShape> {
 
 // @public (undocumented)
 export const envSchemas: {
-    readonly server: EnvSchema<    {
-    NODE_ENV: z.ZodEnum<{
-    development: "development";
-    test: "test";
-    production: "production";
+    readonly server: EnvSchema<{
+        NODE_ENV: z.ZodEnum<{
+            development: "development";
+            test: "test";
+            production: "production";
+        }>;
+        LOG_LEVEL: z.ZodDefault<z.ZodEnum<{
+            error: "error";
+            fatal: "fatal";
+            warn: "warn";
+            info: "info";
+            debug: "debug";
+            trace: "trace";
+            silent: "silent";
+        }>>;
+    } & {
+        APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
+    } & {
+        SESSION_SECRET: z.ZodString;
+        ENCRYPTION_KEY: z.ZodString;
+        ENCRYPTION_KEY_ID: z.ZodString;
+        ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<readonly PreviousKey[], string>>>, unknown>;
+    } & {
+        DATABASE_URL: z.ZodString;
+        SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+    } & {
+        MIGRATE_ON_START: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+        DATABASE_MIGRATE_URL: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    } & {
+        PORT: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
+        TRUSTED_PROXY_HOPS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
+        API_DOCS_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+        DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>;
+    } & {
+        SETUP_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+        SETUP_TOKEN_REQUIRED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+    } & {
+        BREACHED_PASSWORD_CHECK: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+    } & {
+        TOTP_ISSUER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    } & {
+        METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
+    } & {
+        ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    } & {
+        SMTP_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+        SMTP_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
+        SMTP_SECURITY: z.ZodPreprocess<z.ZodOptional<z.ZodEnum<{
+            tls: "tls";
+            starttls: "starttls";
+            none: "none";
+        }>>, unknown>;
+        SMTP_USER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+        SMTP_PASS: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+        SMTP_FROM: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    } & Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>, object & {
+        readonly OIDC_PROVIDERS: readonly IdentityProviderConfig[];
     }>;
-    LOG_LEVEL: z.ZodDefault<z.ZodEnum<{
-    error: "error";
-    fatal: "fatal";
-    warn: "warn";
-    info: "info";
-    debug: "debug";
-    trace: "trace";
-    silent: "silent";
-    }>>;
+    readonly worker: EnvSchema<{
+        NODE_ENV: z.ZodEnum<{
+            development: "development";
+            test: "test";
+            production: "production";
+        }>;
+        LOG_LEVEL: z.ZodDefault<z.ZodEnum<{
+            error: "error";
+            fatal: "fatal";
+            warn: "warn";
+            info: "info";
+            debug: "debug";
+            trace: "trace";
+            silent: "silent";
+        }>>;
     } & {
-    APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
+        APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
     } & {
-    SESSION_SECRET: z.ZodString;
-    ENCRYPTION_KEY: z.ZodString;
-    ENCRYPTION_KEY_ID: z.ZodString;
-    ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<readonly PreviousKey[], string>>>, unknown>;
+        SESSION_SECRET: z.ZodString;
+        ENCRYPTION_KEY: z.ZodString;
+        ENCRYPTION_KEY_ID: z.ZodString;
+        ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<readonly PreviousKey[], string>>>, unknown>;
     } & {
-    DATABASE_URL: z.ZodString;
-    SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+        DATABASE_URL: z.ZodString;
+        SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
     } & {
-    MIGRATE_ON_START: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
-    DATABASE_MIGRATE_URL: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+        METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
     } & {
-    PORT: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
-    TRUSTED_PROXY_HOPS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
-    API_DOCS_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
-    DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>;
+        ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
     } & {
-    SETUP_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
-    SETUP_TOKEN_REQUIRED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+        SMTP_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+        SMTP_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
+        SMTP_SECURITY: z.ZodPreprocess<z.ZodOptional<z.ZodEnum<{
+            tls: "tls";
+            starttls: "starttls";
+            none: "none";
+        }>>, unknown>;
+        SMTP_USER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+        SMTP_PASS: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+        SMTP_FROM: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    } & Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>, object>;
+    readonly migrate: EnvSchema<{
+        NODE_ENV: z.ZodEnum<{
+            development: "development";
+            test: "test";
+            production: "production";
+        }>;
+        LOG_LEVEL: z.ZodDefault<z.ZodEnum<{
+            error: "error";
+            fatal: "fatal";
+            warn: "warn";
+            info: "info";
+            debug: "debug";
+            trace: "trace";
+            silent: "silent";
+        }>>;
     } & {
-    BREACHED_PASSWORD_CHECK: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
-    } & {
-    TOTP_ISSUER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-    } & {
-    METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
-    } & {
-    ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-    } & {
-    SMTP_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-    SMTP_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
-    SMTP_SECURITY: z.ZodPreprocess<z.ZodOptional<z.ZodEnum<{
-    tls: "tls";
-    starttls: "starttls";
-    none: "none";
-    }>>, unknown>;
-    SMTP_USER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-    SMTP_PASS: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-    SMTP_FROM: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-    } & Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>;
-    readonly worker: EnvSchema<    {
-    NODE_ENV: z.ZodEnum<{
-    development: "development";
-    test: "test";
-    production: "production";
-    }>;
-    LOG_LEVEL: z.ZodDefault<z.ZodEnum<{
-    error: "error";
-    fatal: "fatal";
-    warn: "warn";
-    info: "info";
-    debug: "debug";
-    trace: "trace";
-    silent: "silent";
-    }>>;
-    } & {
-    APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
-    } & {
-    SESSION_SECRET: z.ZodString;
-    ENCRYPTION_KEY: z.ZodString;
-    ENCRYPTION_KEY_ID: z.ZodString;
-    ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<readonly PreviousKey[], string>>>, unknown>;
-    } & {
-    DATABASE_URL: z.ZodString;
-    SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
-    } & {
-    METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
-    } & {
-    ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-    } & {
-    SMTP_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-    SMTP_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
-    SMTP_SECURITY: z.ZodPreprocess<z.ZodOptional<z.ZodEnum<{
-    tls: "tls";
-    starttls: "starttls";
-    none: "none";
-    }>>, unknown>;
-    SMTP_USER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-    SMTP_PASS: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-    SMTP_FROM: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-    } & Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>;
-    readonly migrate: EnvSchema<    {
-    NODE_ENV: z.ZodEnum<{
-    development: "development";
-    test: "test";
-    production: "production";
-    }>;
-    LOG_LEVEL: z.ZodDefault<z.ZodEnum<{
-    error: "error";
-    fatal: "fatal";
-    warn: "warn";
-    info: "info";
-    debug: "debug";
-    trace: "trace";
-    silent: "silent";
-    }>>;
-    } & {
-    DATABASE_MIGRATE_URL: z.ZodString;
-    }>;
+        DATABASE_MIGRATE_URL: z.ZodString;
+    }, object>;
 };
 
 // @public
 export const errorReportFragment: EnvFragment<    {
 ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-}>;
+}, object>;
 
 // @public (undocumented)
 export const HOOK_NAMES: readonly ["seatCheck", "deletionGuard", "registrationPolicy"];
@@ -431,7 +447,7 @@ PORT: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
 TRUSTED_PROXY_HOPS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
 API_DOCS_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>;
-}>;
+}, object>;
 
 // @public (undocumented)
 export interface IdempotencyCheck<Payload extends JobPayload> {
@@ -540,40 +556,40 @@ export type MergedShape<Fragments extends readonly EnvFragment[]> = IntersectUni
 // @public
 export const metricsFragment: EnvFragment<    {
 METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
-}>;
+}, object>;
 
 // @public
 export const mfaFragment: EnvFragment<    {
 TOTP_ISSUER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-}>;
+}, object>;
 
 // @public (undocumented)
-export type MigrateConfig = z.infer<typeof migrateEnvSchema.object>;
+export type MigrateConfig = ConfigOf<typeof migrateEnvSchema>;
 
 // @public (undocumented)
-export const migrateEnvSchema: EnvSchema<    {
-NODE_ENV: z.ZodEnum<{
-development: "development";
-test: "test";
-production: "production";
-}>;
-LOG_LEVEL: z.ZodDefault<z.ZodEnum<{
-error: "error";
-fatal: "fatal";
-warn: "warn";
-info: "info";
-debug: "debug";
-trace: "trace";
-silent: "silent";
-}>>;
+export const migrateEnvSchema: EnvSchema<{
+    NODE_ENV: z.ZodEnum<{
+        development: "development";
+        test: "test";
+        production: "production";
+    }>;
+    LOG_LEVEL: z.ZodDefault<z.ZodEnum<{
+        error: "error";
+        fatal: "fatal";
+        warn: "warn";
+        info: "info";
+        debug: "debug";
+        trace: "trace";
+        silent: "silent";
+    }>>;
 } & {
-DATABASE_MIGRATE_URL: z.ZodString;
-}>;
+    DATABASE_MIGRATE_URL: z.ZodString;
+}, object>;
 
 // @public
 export const migrateFragment: EnvFragment<    {
 DATABASE_MIGRATE_URL: z.ZodString;
-}>;
+}, object>;
 
 // @public (undocumented)
 export const migrateFragments: readonly [EnvFragment<    {
@@ -591,9 +607,9 @@ debug: "debug";
 trace: "trace";
 silent: "silent";
 }>>;
-}>, EnvFragment<    {
+}, object>, EnvFragment<    {
 DATABASE_MIGRATE_URL: z.ZodString;
-}>];
+}, object>];
 
 // @public (undocumented)
 export interface MigrationRunOptions {
@@ -632,15 +648,29 @@ export class NotIdempotentError extends Error {
     constructor(job: string);
 }
 
+// @public (undocumented)
+export const OIDC_OPTIONAL_FIELDS: readonly ["NAME", "SCOPES", "ENABLED", "AUTO_CREATE", "ALLOWED_DOMAINS"];
+
+// @public (undocumented)
+export const OIDC_REQUIRED_FIELDS: readonly ["CLIENT_ID", "CLIENT_SECRET", "ISSUER_URL"];
+
+// @public
+export const oidcFragment: EnvFragment<    {}, {
+readonly OIDC_PROVIDERS: readonly IdentityProviderConfig[];
+}>;
+
 // @public
 export const originFragment: EnvFragment<    {
 APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
-}>;
+}, object>;
+
+// @public
+export function parseOidcProviders(env: EnvironmentVariables, context: RefineContext): readonly IdentityProviderConfig[];
 
 // @public
 export const passwordPolicyFragment: EnvFragment<    {
 BREACHED_PASSWORD_CHECK: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
-}>;
+}, object>;
 
 // @public (undocumented)
 export interface PreviousKey {
@@ -752,7 +782,7 @@ export type RateLimitConfig = {
 export type RateLimitDefaults = typeof RATE_LIMIT_DEFAULTS;
 
 // @public
-export const rateLimitFragment: EnvFragment<Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>;
+export const rateLimitFragment: EnvFragment<Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>, object>;
 
 // @public
 export type RateLimitKey = {
@@ -954,7 +984,7 @@ debug: "debug";
 trace: "trace";
 silent: "silent";
 }>>;
-}>;
+}, object>;
 
 // @public
 export interface ScheduleDefinition {
@@ -998,7 +1028,7 @@ SESSION_SECRET: z.ZodString;
 ENCRYPTION_KEY: z.ZodString;
 ENCRYPTION_KEY_ID: z.ZodString;
 ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<readonly PreviousKey[], string>>>, unknown>;
-}>;
+}, object>;
 
 // @public (undocumented)
 export interface Server {
@@ -1013,65 +1043,67 @@ export interface Server {
 }
 
 // @public (undocumented)
-export type ServerConfig = z.infer<typeof serverEnvSchema.object>;
+export type ServerConfig = ConfigOf<typeof serverEnvSchema>;
 
 // @public (undocumented)
-export const serverEnvSchema: EnvSchema<    {
-NODE_ENV: z.ZodEnum<{
-development: "development";
-test: "test";
-production: "production";
+export const serverEnvSchema: EnvSchema<{
+    NODE_ENV: z.ZodEnum<{
+        development: "development";
+        test: "test";
+        production: "production";
+    }>;
+    LOG_LEVEL: z.ZodDefault<z.ZodEnum<{
+        error: "error";
+        fatal: "fatal";
+        warn: "warn";
+        info: "info";
+        debug: "debug";
+        trace: "trace";
+        silent: "silent";
+    }>>;
+} & {
+    APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
+} & {
+    SESSION_SECRET: z.ZodString;
+    ENCRYPTION_KEY: z.ZodString;
+    ENCRYPTION_KEY_ID: z.ZodString;
+    ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<readonly PreviousKey[], string>>>, unknown>;
+} & {
+    DATABASE_URL: z.ZodString;
+    SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+} & {
+    MIGRATE_ON_START: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+    DATABASE_MIGRATE_URL: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+} & {
+    PORT: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
+    TRUSTED_PROXY_HOPS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
+    API_DOCS_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+    DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>;
+} & {
+    SETUP_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+    SETUP_TOKEN_REQUIRED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+} & {
+    BREACHED_PASSWORD_CHECK: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+} & {
+    TOTP_ISSUER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+} & {
+    METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
+} & {
+    ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+} & {
+    SMTP_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    SMTP_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
+    SMTP_SECURITY: z.ZodPreprocess<z.ZodOptional<z.ZodEnum<{
+        tls: "tls";
+        starttls: "starttls";
+        none: "none";
+    }>>, unknown>;
+    SMTP_USER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    SMTP_PASS: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    SMTP_FROM: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+} & Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>, object & {
+    readonly OIDC_PROVIDERS: readonly IdentityProviderConfig[];
 }>;
-LOG_LEVEL: z.ZodDefault<z.ZodEnum<{
-error: "error";
-fatal: "fatal";
-warn: "warn";
-info: "info";
-debug: "debug";
-trace: "trace";
-silent: "silent";
-}>>;
-} & {
-APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
-} & {
-SESSION_SECRET: z.ZodString;
-ENCRYPTION_KEY: z.ZodString;
-ENCRYPTION_KEY_ID: z.ZodString;
-ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<readonly PreviousKey[], string>>>, unknown>;
-} & {
-DATABASE_URL: z.ZodString;
-SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
-} & {
-MIGRATE_ON_START: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
-DATABASE_MIGRATE_URL: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-} & {
-PORT: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
-TRUSTED_PROXY_HOPS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
-API_DOCS_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
-DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>;
-} & {
-SETUP_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
-SETUP_TOKEN_REQUIRED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
-} & {
-BREACHED_PASSWORD_CHECK: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
-} & {
-TOTP_ISSUER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-} & {
-METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
-} & {
-ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-} & {
-SMTP_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-SMTP_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
-SMTP_SECURITY: z.ZodPreprocess<z.ZodOptional<z.ZodEnum<{
-tls: "tls";
-starttls: "starttls";
-none: "none";
-}>>, unknown>;
-SMTP_USER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-SMTP_PASS: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-SMTP_FROM: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-} & Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>;
 
 // @public
 export const serverFragments: readonly [EnvFragment<    {
@@ -1089,36 +1121,36 @@ debug: "debug";
 trace: "trace";
 silent: "silent";
 }>>;
-}>, EnvFragment<    {
+}, object>, EnvFragment<    {
 APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
-}>, EnvFragment<    {
+}, object>, EnvFragment<    {
 SESSION_SECRET: z.ZodString;
 ENCRYPTION_KEY: z.ZodString;
 ENCRYPTION_KEY_ID: z.ZodString;
 ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<readonly PreviousKey[], string>>>, unknown>;
-}>, EnvFragment<    {
+}, object>, EnvFragment<    {
 DATABASE_URL: z.ZodString;
 SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
-}>, EnvFragment<    {
+}, object>, EnvFragment<    {
 MIGRATE_ON_START: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 DATABASE_MIGRATE_URL: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-}>, EnvFragment<    {
+}, object>, EnvFragment<    {
 PORT: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
 TRUSTED_PROXY_HOPS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
 API_DOCS_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>>;
-}>, EnvFragment<    {
+}, object>, EnvFragment<    {
 SETUP_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 SETUP_TOKEN_REQUIRED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
-}>, EnvFragment<    {
+}, object>, EnvFragment<    {
 BREACHED_PASSWORD_CHECK: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
-}>, EnvFragment<    {
+}, object>, EnvFragment<    {
 TOTP_ISSUER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-}>, EnvFragment<Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>, EnvFragment<    {
+}, object>, EnvFragment<Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>, object>, EnvFragment<    {
 METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
-}>, EnvFragment<    {
+}, object>, EnvFragment<    {
 ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-}>, EnvFragment<    {
+}, object>, EnvFragment<    {
 SMTP_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 SMTP_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 SMTP_SECURITY: z.ZodPreprocess<z.ZodOptional<z.ZodEnum<{
@@ -1129,6 +1161,8 @@ none: "none";
 SMTP_USER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 SMTP_PASS: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 SMTP_FROM: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+}, object>, EnvFragment<    {}, {
+readonly OIDC_PROVIDERS: readonly IdentityProviderConfig[];
 }>];
 
 // @public
@@ -1142,7 +1176,7 @@ export interface ServerHooks {
 export const serverMigrationFragment: EnvFragment<    {
 MIGRATE_ON_START: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 DATABASE_MIGRATE_URL: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-}>;
+}, object>;
 
 // @public
 export interface ServerModule {
@@ -1169,7 +1203,7 @@ export interface SessionPrincipal extends Extract<TenantPrincipal, {
 export const setupFragment: EnvFragment<    {
 SETUP_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 SETUP_TOKEN_REQUIRED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
-}>;
+}, object>;
 
 // @public (undocumented)
 export const SMTP_KEYS: readonly ["SMTP_HOST", "SMTP_PORT", "SMTP_SECURITY", "SMTP_USER", "SMTP_PASS", "SMTP_FROM"];
@@ -1189,7 +1223,7 @@ none: "none";
 SMTP_USER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 SMTP_PASS: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 SMTP_FROM: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-}>;
+}, object>;
 
 // @public (undocumented)
 export type StageName = (typeof CHAIN_STAGES)[number];
@@ -1226,7 +1260,7 @@ export interface ValidatedInput {
 }
 
 // @public (undocumented)
-export function validateEnvironment<Shape extends z.ZodRawShape>(schema: EnvSchema<Shape>, env: EnvironmentVariables, options?: LoadOptions): LoadedConfig<z.infer<z.ZodObject<Shape>>>;
+export function validateEnvironment<Shape extends z.ZodRawShape, Collected extends object>(schema: EnvSchema<Shape, Collected>, env: EnvironmentVariables, options?: LoadOptions): LoadedConfig<z.infer<z.ZodObject<Shape>> & Collected>;
 
 // @public (undocumented)
 export interface Worker {
@@ -1238,50 +1272,50 @@ export interface Worker {
 }
 
 // @public (undocumented)
-export type WorkerConfig = z.infer<typeof workerEnvSchema.object>;
+export type WorkerConfig = ConfigOf<typeof workerEnvSchema>;
 
 // @public (undocumented)
-export const workerEnvSchema: EnvSchema<    {
-NODE_ENV: z.ZodEnum<{
-development: "development";
-test: "test";
-production: "production";
-}>;
-LOG_LEVEL: z.ZodDefault<z.ZodEnum<{
-error: "error";
-fatal: "fatal";
-warn: "warn";
-info: "info";
-debug: "debug";
-trace: "trace";
-silent: "silent";
-}>>;
+export const workerEnvSchema: EnvSchema<{
+    NODE_ENV: z.ZodEnum<{
+        development: "development";
+        test: "test";
+        production: "production";
+    }>;
+    LOG_LEVEL: z.ZodDefault<z.ZodEnum<{
+        error: "error";
+        fatal: "fatal";
+        warn: "warn";
+        info: "info";
+        debug: "debug";
+        trace: "trace";
+        silent: "silent";
+    }>>;
 } & {
-APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
+    APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
 } & {
-SESSION_SECRET: z.ZodString;
-ENCRYPTION_KEY: z.ZodString;
-ENCRYPTION_KEY_ID: z.ZodString;
-ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<readonly PreviousKey[], string>>>, unknown>;
+    SESSION_SECRET: z.ZodString;
+    ENCRYPTION_KEY: z.ZodString;
+    ENCRYPTION_KEY_ID: z.ZodString;
+    ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<readonly PreviousKey[], string>>>, unknown>;
 } & {
-DATABASE_URL: z.ZodString;
-SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+    DATABASE_URL: z.ZodString;
+    SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 } & {
-METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
+    METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 } & {
-ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 } & {
-SMTP_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-SMTP_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
-SMTP_SECURITY: z.ZodPreprocess<z.ZodOptional<z.ZodEnum<{
-tls: "tls";
-starttls: "starttls";
-none: "none";
-}>>, unknown>;
-SMTP_USER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-SMTP_PASS: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-SMTP_FROM: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-} & Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>;
+    SMTP_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    SMTP_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
+    SMTP_SECURITY: z.ZodPreprocess<z.ZodOptional<z.ZodEnum<{
+        tls: "tls";
+        starttls: "starttls";
+        none: "none";
+    }>>, unknown>;
+    SMTP_USER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    SMTP_PASS: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+    SMTP_FROM: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+} & Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>, object>;
 
 // @public
 export const workerFragments: readonly [EnvFragment<    {
@@ -1299,21 +1333,21 @@ debug: "debug";
 trace: "trace";
 silent: "silent";
 }>>;
-}>, EnvFragment<    {
+}, object>, EnvFragment<    {
 APP_ORIGIN: z.ZodPipe<z.ZodString, z.ZodTransform<string, string>>;
-}>, EnvFragment<    {
+}, object>, EnvFragment<    {
 SESSION_SECRET: z.ZodString;
 ENCRYPTION_KEY: z.ZodString;
 ENCRYPTION_KEY_ID: z.ZodString;
 ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<readonly PreviousKey[], string>>>, unknown>;
-}>, EnvFragment<    {
+}, object>, EnvFragment<    {
 DATABASE_URL: z.ZodString;
 SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
-}>, EnvFragment<Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>>, EnvFragment<    {
+}, object>, EnvFragment<Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>, object>, EnvFragment<    {
 METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
-}>, EnvFragment<    {
+}, object>, EnvFragment<    {
 ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-}>, EnvFragment<    {
+}, object>, EnvFragment<    {
 SMTP_HOST: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 SMTP_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 SMTP_SECURITY: z.ZodPreprocess<z.ZodOptional<z.ZodEnum<{
@@ -1324,7 +1358,7 @@ none: "none";
 SMTP_USER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 SMTP_PASS: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 SMTP_FROM: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
-}>];
+}, object>];
 
 // @public (undocumented)
 export interface WorkerStartOptions {

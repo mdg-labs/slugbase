@@ -425,7 +425,7 @@ export function createServer(options: CreateServerOptions): Server {
   const authStore = options.authStore ?? createAuthStore({ url: config.DATABASE_URL, poolSize: DEFAULT_AUTH_POOL_SIZE });
   const builtInRoutes: RouteBinding[] = [
     ...probeRoutes({ buildInfo, databaseUrl: config.DATABASE_URL, chains: () => migrationSets, logger, migrating: () => progress.migrating }),
-    apiConfigRoute({ config, store: authStore, buildInfo, adapters }),
+    apiConfigRoute({ config, store: authStore, buildInfo, adapters, logger }),
     openApiRoute({ enabled: config.API_DOCS_ENABLED, document: options.openApiDocument }),
   ];
   // One verifier serves sign-in, re-authentication and the second factor's password check, so its dummy hash is made once.

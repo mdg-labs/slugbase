@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import {
   HttpEgress,
   createLogOnlyMail,
+  createOidcIdentity,
   createRateLimiter,
   createSecretBox,
   createSentryErrorReport,
@@ -10,7 +11,14 @@ import {
   type MailTemplates,
 } from "@slugbase/adapters";
 import "@slugbase/contracts";
-import { ACCOUNT_NOTIFICATIONS, unconfigured, type Adapters, type MailPort } from "@slugbase/core";
+import {
+  ACCOUNT_NOTIFICATIONS,
+  unconfigured,
+  type Adapters,
+  type EgressPort,
+  type IdentityPort,
+  type MailPort,
+} from "@slugbase/core";
 import { createRateLimitStore, type MigrationChain } from "@slugbase/db";
 import { createMailTemplates } from "@slugbase/email";
 import {
@@ -160,6 +168,19 @@ function composeMail(config: ServerConfig | WorkerConfig, logger: Logger): MailP
   return createSmtpMail({ host, port, security, ...(auth === undefined ? {} : { auth }), from, templates: mailTemplates(config) });
 }
 
+// Identity is the OIDC adapter when the operator configured a provider, and the unconfigured default when not.
+// Only the server serves sign-in, so only its configuration has providers. The adapter reaches the providers
+// through the egress port and discovers them when they are first listed, so a provider that is down at start-up
+// is logged then and never stops the process.
+function composeIdentity(config: ServerConfig | WorkerConfig, egress: EgressPort, logger: Logger): IdentityPort {
+  const providers = "OIDC_PROVIDERS" in config ? config.OIDC_PROVIDERS : [];
+  if (providers.length === 0) {
+    return unconfigured().identity;
+  }
+  logger.info("OIDC sign-in configured", { providers: providers.map((provider) => provider.slug) });
+  return createOidcIdentity({ providers, egress, logger });
+}
+
 // The secret box is built from the environment by the server and the worker
 // alike: `ENCRYPTION_KEY` seals, the previous keys only open. A key the box
 // refuses stops the process before it serves or works. Error reporting is the
@@ -196,12 +217,14 @@ export function composeAdapters(config: ServerConfig | WorkerConfig, logger: Log
   logger.info("Rate limiter ready", { buckets: RATE_LIMIT_BUCKETS.length });
   const mail = composeMail(config, logger);
   logger.info(mail.available ? "Mail ready" : "Mail is off; messages are only logged");
+  const egress = new HttpEgress({ nodeEnv: config.NODE_ENV });
   return {
     ...defaults,
     mail,
     secretBox,
     errors,
-    egress: new HttpEgress({ nodeEnv: config.NODE_ENV }),
+    egress,
+    identity: composeIdentity(config, egress, logger),
     rateLimit,
     tenantResolver: createAccountOnlyTenantResolver(),
   };

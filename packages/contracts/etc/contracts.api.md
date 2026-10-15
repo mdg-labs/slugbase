@@ -76,6 +76,12 @@ export const ApiConfigSchema: z.ZodObject<{
         mail: z.ZodBoolean;
         ai: z.ZodBoolean;
     }, z.core.$strict>;
+    signIn: z.ZodOptional<z.ZodObject<{
+        oidc: z.ZodArray<z.ZodObject<{
+            slug: z.ZodString;
+            name: z.ZodString;
+        }, z.core.$strict>>;
+    }, z.core.$strict>>;
     setupRequired: z.ZodOptional<z.ZodBoolean>;
     setupTokenRequired: z.ZodOptional<z.ZodBoolean>;
 }, z.core.$strict>;
@@ -260,6 +266,12 @@ export interface ComponentTypes {
             };
             setupRequired?: boolean;
             setupTokenRequired?: boolean;
+            signIn?: {
+                oidc: {
+                    name: string;
+                    slug: string;
+                }[];
+            };
         };
         ApiToken: {
             createdAt: string;
@@ -636,6 +648,12 @@ export const getApiConfig: {
         mail: z.ZodBoolean;
         ai: z.ZodBoolean;
         }, z.core.$strict>;
+        signIn: z.ZodOptional<z.ZodObject<{
+        oidc: z.ZodArray<z.ZodObject<{
+        slug: z.ZodString;
+        name: z.ZodString;
+        }, z.core.$strict>>;
+        }, z.core.$strict>>;
         setupRequired: z.ZodOptional<z.ZodBoolean>;
         setupTokenRequired: z.ZodOptional<z.ZodBoolean>;
         }, z.core.$strict>, {

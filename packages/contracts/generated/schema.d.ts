@@ -446,6 +446,16 @@ export interface components {
             setupRequired?: boolean;
             /** @description Whether the first account needs the one-time setup token; the same answer as GET /api/v1/setup/status, true only while setup is pending. A flag only, never the token. This server always sends it */
             setupTokenRequired?: boolean;
+            /** @description The sign-in methods beyond the password. This server always sends it */
+            signIn?: {
+                /** @description The OIDC providers the operator enabled that answered discovery, in the order of their slugs; never a secret or a provider URL */
+                oidc: {
+                    /** @description The name shown on the provider's button; the slug when the operator gave none */
+                    name: string;
+                    /** @description The provider's slug, which names it in the sign-in routes */
+                    slug: string;
+                }[];
+            };
         };
         ApiToken: {
             /**

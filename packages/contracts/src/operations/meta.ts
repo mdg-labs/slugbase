@@ -37,6 +37,19 @@ export const ApiConfigSchema = z
       mail: z.boolean().describe("Whether a mail port is configured"),
       ai: z.boolean().describe("Whether an AI port is configured"),
     }),
+    signIn: z
+      .strictObject({
+        oidc: z
+          .array(
+            z.strictObject({
+              slug: z.string().describe("The provider's slug, which names it in the sign-in routes"),
+              name: z.string().describe("The name shown on the provider's button; the slug when the operator gave none"),
+            }),
+          )
+          .describe("The OIDC providers the operator enabled that answered discovery, in the order of their slugs; never a secret or a provider URL"),
+      })
+      .optional()
+      .describe("The sign-in methods beyond the password. This server always sends it"),
     setupRequired: z
       .boolean()
       .optional()

@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { composeEnvSchema } from "./fragment.ts";
+import { composeEnvSchema, type EnvSchema } from "./fragment.ts";
 import {
   databaseFragment,
   errorReportFragment,
@@ -15,6 +15,7 @@ import {
   setupFragment,
   smtpFragment,
 } from "./fragments.ts";
+import { oidcFragment } from "./oidc.ts";
 import { rateLimitFragment } from "./rate-limits.ts";
 
 export const PROCESS_TYPES = ["server", "worker", "migrate"] as const;
@@ -40,6 +41,7 @@ export const serverFragments = [
   metricsFragment,
   errorReportFragment,
   smtpFragment,
+  oidcFragment,
 ] as const;
 
 /** The worker never receives the migrator URL (doc 01 section 2.1). */
@@ -60,9 +62,13 @@ export const serverEnvSchema = composeEnvSchema(serverFragments);
 export const workerEnvSchema = composeEnvSchema(workerFragments);
 export const migrateEnvSchema = composeEnvSchema(migrateFragments);
 
-export type ServerConfig = z.infer<typeof serverEnvSchema.object>;
-export type WorkerConfig = z.infer<typeof workerEnvSchema.object>;
-export type MigrateConfig = z.infer<typeof migrateEnvSchema.object>;
+/** The configuration a process schema yields: its parsed keys and the members its fragments collect. */
+export type ConfigOf<Schema extends EnvSchema> =
+  Schema extends EnvSchema<infer Shape, infer Collected> ? z.infer<z.ZodObject<Shape>> & Collected : never;
+
+export type ServerConfig = ConfigOf<typeof serverEnvSchema>;
+export type WorkerConfig = ConfigOf<typeof workerEnvSchema>;
+export type MigrateConfig = ConfigOf<typeof migrateEnvSchema>;
 
 export interface ConfigByProcess {
   server: ServerConfig;

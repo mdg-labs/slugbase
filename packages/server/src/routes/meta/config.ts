@@ -1,8 +1,9 @@
 import { getApiConfig } from "@slugbase/contracts";
-import type { Adapters } from "@slugbase/core";
+import type { Adapters, IdentityPort } from "@slugbase/core";
 import type { SetupStore } from "@slugbase/db";
 import type { BuildInfo } from "../../build-info.ts";
 import type { ServerConfig } from "../../config/index.ts";
+import type { Logger } from "../../create-server.ts";
 import type { RouteBinding } from "../../http/chain.ts";
 import { route } from "../register.ts";
 import { setupStatus } from "../setup/status.ts";
@@ -23,10 +24,26 @@ export interface ApiConfigOptions {
   readonly store: Pick<SetupStore, "setupPending">;
   readonly buildInfo: BuildInfo;
   /** `features` reports whether a port is configured, never an entitlement. */
-  readonly adapters: Pick<Adapters, "mail" | "ai">;
+  readonly adapters: Pick<Adapters, "mail" | "ai" | "identity">;
+  readonly logger: Pick<Logger, "warn">;
 }
 
-export function apiConfigRoute({ config, store, buildInfo, adapters }: ApiConfigOptions): RouteBinding {
+// The providers the operator enabled that are available now, as the sign-in page needs them. Nothing of a
+// provider but its slug and name is read, so no secret or URL can reach the answer. A port that cannot
+// list them leaves the list empty and the rest of the document intact (D22).
+async function oidcProviders(identity: IdentityPort, logger: Pick<Logger, "warn">): Promise<{ slug: string; name: string }[]> {
+  if (!identity.available) {
+    return [];
+  }
+  try {
+    return (await identity.listProviders()).map(({ id, displayName }) => ({ slug: id, name: displayName }));
+  } catch (error) {
+    logger.warn("The OIDC providers could not be listed", { error: error instanceof Error ? error.name : typeof error });
+    return [];
+  }
+}
+
+export function apiConfigRoute({ config, store, buildInfo, adapters, logger }: ApiConfigOptions): RouteBinding {
   return route(getApiConfig).handle(async () => ({
     status: 200,
     headers: { "Cache-Control": CACHE_CONTROL },
@@ -38,6 +55,7 @@ export function apiConfigRoute({ config, store, buildInfo, adapters }: ApiConfig
       defaultLocale: LOCALES[0],
       docsBaseUrl: config.DOCS_BASE_URL,
       features: { mail: adapters.mail.available, ai: adapters.ai.available },
+      signIn: { oidc: await oidcProviders(adapters.identity, logger) },
       ...(await setupStatus({ config, store })),
     },
   }));
