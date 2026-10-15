@@ -33,6 +33,8 @@ const ME = "/api/v1/me";
 const SESSION_COOKIE = "__Host-slugbase_session";
 const STEP_MS = 30_000;
 const KEY = testKey("key-1");
+// Matching every backup code against every stored argon2id hash is 100 verifications, past vitest's 5s default on a CI runner.
+const ARGON2_TEST_TIMEOUT_MS = 60_000;
 
 const database = useTestDatabase();
 let store: AuthStore;
@@ -232,7 +234,7 @@ describe("POST /api/v1/me/mfa/backup-codes", () => {
     }
     const accepted = await signInWith(world, account, { backupCode: backupCodes[3] ?? "" });
     expect(accepted.status).toBe(200);
-  });
+  }, ARGON2_TEST_TIMEOUT_MS);
 
   it("is refused to a stolen full session with no second factor, and the old backup codes keep working", async () => {
     const world = serve();
@@ -367,7 +369,7 @@ describe("POST /api/v1/me/mfa/backup-codes", () => {
     );
     expect(standing.filter((count) => count === 10)).toHaveLength(1);
     expect(standing.filter((count) => count !== 10 && count !== 0)).toEqual([]);
-  });
+  }, ARGON2_TEST_TIMEOUT_MS);
 
   it("neither deadlocks nor leaves a half-written set when a regeneration and a backup-code sign-in run at once", async () => {
     const world = serve();
