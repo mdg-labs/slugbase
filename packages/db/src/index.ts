@@ -50,6 +50,7 @@ export type {
   SessionSummary,
 } from "./system/auth.ts";
 export type { CompleteSetup, SetupOutcome, SetupStore } from "./system/setup.ts";
+export type { IdentitySignIn, NewOidcLoginState, OidcLoginState, OidcStore, SealedVerifier } from "./system/oidc.ts";
 export type {
   BackupCodeRecord,
   BackupCodesRegeneration,

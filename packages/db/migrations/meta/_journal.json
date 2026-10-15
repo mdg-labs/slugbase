@@ -148,6 +148,13 @@
       "when": 1792080948458,
       "tag": "20261015161548_add_api_token_purge",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792092289238,
+      "tag": "20261015192449_add_oidc_sign_in",
+      "breakpoints": true
     }
   ]
 }

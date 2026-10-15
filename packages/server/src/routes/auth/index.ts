@@ -1,4 +1,4 @@
-import { sessionCookieSpec, type MailPort, type PasswordPolicy, type SecretBoxPort } from "@slugbase/core";
+import { sessionCookieSpec, type IdentityPort, type MailPort, type PasswordPolicy, type SecretBoxPort } from "@slugbase/core";
 import type { AuthStore } from "@slugbase/db";
 import { createApiTokenAuthenticator } from "../../auth/api-tokens.ts";
 import { createSessionAuthenticator } from "../../auth/authenticator.ts";
@@ -8,6 +8,7 @@ import { securityRoutes } from "../me/security.ts";
 import { sessionRoutes } from "../me/sessions.ts";
 import { loginRoute } from "./login.ts";
 import { logoutRoute } from "./logout.ts";
+import { oidcRoutes } from "./oidc.ts";
 import { verifyMfaRoute } from "./mfa.ts";
 
 export interface AuthRoutesOptions {
@@ -24,15 +25,17 @@ export interface AuthRoutesOptions {
   readonly passwords?: PasswordVerifier;
   /** Defaults to argon2id hashing. */
   readonly hashPassword?: (password: string) => Promise<string>;
-  /** Opens the sealed TOTP secret a code is checked against. */
-  readonly secretBox: Pick<SecretBoxPort, "open" | "needsRotation" | "reseal">;
+  /** Seals the PKCE verifier of an OIDC handshake and opens the sealed TOTP secret a code is checked against. */
+  readonly secretBox: Pick<SecretBoxPort, "seal" | "open" | "needsRotation" | "reseal">;
+  /** The OIDC providers of the operator: the sign-in routes answer a failed handshake alike when there are none. */
+  readonly identity: Pick<IdentityPort, "begin" | "complete">;
   /** The instant a code is checked at, in milliseconds; defaults to the system clock. */
   readonly now?: () => number;
 }
 
 /**
- * What password sign-in contributes (doc 04 sections 10.2 and 10.3): the login
- * and logout routes, the routes that list and revoke the account's sessions,
+ * What sign-in contributes (doc 04 sections 10.2 and 10.3): the login
+ * and logout routes, the start and callback of OIDC sign-in, the routes that list and revoke the account's sessions,
  * the routes that re-authenticate and change the password, and the authenticators
  * that turn the session cookie and the bearer API token into a principal at stage
  * 4 of the chain.
@@ -46,11 +49,12 @@ export function authContribution({
   passwords = createPasswordVerifier(),
   hashPassword = hashArgon2id,
   secretBox,
+  identity,
   now = Date.now,
 }: AuthRoutesOptions): ModuleContribution {
   const cookie = sessionCookieSpec(appOrigin);
   return {
-    routes: [loginRoute({ store, passwords, cookie }), verifyMfaRoute({ store, secretBox, verifyCode: verifyHash, now, cookie }), logoutRoute({ store, cookie }), ...sessionRoutes({ store, cookie, cursorSecret: sessionSecret }),
+    routes: [loginRoute({ store, passwords, cookie }), ...oidcRoutes({ store, identity, secretBox, appOrigin, sessionSecret, sessionCookie: cookie }), verifyMfaRoute({ store, secretBox, verifyCode: verifyHash, now, cookie }), logoutRoute({ store, cookie }), ...sessionRoutes({ store, cookie, cursorSecret: sessionSecret }),
       ...securityRoutes({ store, passwords, passwordPolicy, hashPassword, cookie, mail, secretBox, verifyCode: verifyHash, now }),
     ],
     authenticators: [createSessionAuthenticator({ store, cookie }), createApiTokenAuthenticator({ store })],

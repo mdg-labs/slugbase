@@ -209,6 +209,17 @@ describe("declaration checks", () => {
     });
   });
 
+  it("emits the headers of an empty response, as a redirect documents its Location", () => {
+    const redirect = emptyResponse("sent on", { headers: { Location: { description: "where", schema: z.string() } } });
+    const document = buildOpenApiDocument([{ ...base, responses: { 302: redirect, 422: problemResponse("invalid") } }]);
+    const responses = (document["paths"] as Record<string, Record<string, { responses: Obj }>>)["/api/v1/things"]?.["post"]?.responses;
+    expect(responses?.["302"]).toEqual({
+      description: "sent on",
+      headers: { Location: { description: "where", required: true, schema: { type: "string" } } },
+    });
+    expect(emptyResponse("none")).toEqual({ kind: "empty", description: "none" });
+  });
+
   it("rejects a 4xx response that is not a problem document", () => {
     const problems = problemsOf([
       { ...base, responses: { 201: jsonResponse("created", Pong), 422: emptyResponse("no body") } },

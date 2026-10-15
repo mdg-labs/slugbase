@@ -12,6 +12,18 @@ export type { ApiToken } from "./api-tokens.ts";
 export { BreachedDatasetError, createBreachedPasswords, loadBreachedPasswords } from "./breached/index.ts";
 export type { BreachedPasswords } from "./breached/index.ts";
 export { normalizeEmail } from "./email.ts";
+export {
+  OIDC_FAILURE_CODE,
+  OIDC_HANDSHAKE_SECONDS,
+  bindOidcState,
+  hashOidcState,
+  newOidcHandshake,
+  oidcCodeVerifierOptions,
+  oidcPreAuthCookieSpec,
+  oidcStateIsBound,
+  safeReturnTo,
+} from "./federated.ts";
+export type { OidcHandshake, OidcPreAuthCookieSpec } from "./federated.ts";
 export { ACCOUNT_NOTIFICATIONS, accountNotification } from "./notifications.ts";
 export type { AccountNotification, NotificationRecipient } from "./notifications.ts";
 export {

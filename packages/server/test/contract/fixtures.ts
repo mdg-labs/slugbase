@@ -27,6 +27,11 @@ export const FIXTURES: ContractFixtures = {
   // session is a complete one, which has no second factor to give, so the valid request is the declared 422; the pending session is walked by the sign-in tests.
   verifyMfa: { body: { code: "000000" }, status: 422 },
   logout: {},
+  // Anonymous operations: the provider's slug is the only identifier, it names a deployment-wide setting and no workspace or account, and there is
+  // nothing of another account's to name. The walker's server has no provider, so both answer the declared 302 to /login with the failure code;
+  // the handshake itself is walked by the OIDC sign-in tests.
+  startOidcSignIn: { path: { provider: "idp" }, status: 302 },
+  completeOidcSignIn: { path: { provider: "idp" }, status: 302 },
   getMe: {},
   // An account-level operation: no workspace or other account's identifier is part of it, and the account it changes is the walker's own.
   updateMe: { body: { displayName: "Walker", locale: "en", theme: "system", accent: "periwinkle", defaultView: "grid", singleKeyShortcuts: true } },

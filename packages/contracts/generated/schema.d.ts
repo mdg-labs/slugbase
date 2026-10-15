@@ -69,6 +69,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/oidc/{provider}/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Finish signing in with an OIDC provider */
+        get: operations["completeOidcSignIn"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/oidc/{provider}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Start signing in with an OIDC provider */
+        get: operations["startOidcSignIn"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -1069,6 +1103,132 @@ export interface operations {
                 };
             };
             /** @description Too many attempts; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    completeOidcSignIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The handshake is over and the browser is sent on. When the identity is linked to an account that can sign in, a new full session cookie is set and the browser goes to the returnTo of the start, a path of this application. For every other outcome (a missing, reused, expired or foreign state, a refusal by the provider, a token that fails validation, an identity nobody linked, a disabled account) no session is created and the browser goes to /login?error=oidc_failed, one answer that does not say which. The pre-auth cookie is cleared either way */
+            302: {
+                headers: {
+                    /** @description A path of this application: the returnTo of the start, or /login?error=oidc_failed */
+                    Location: string;
+                    /** @description The session cookie of a successful sign-in, with the attributes of the password sign-in cookie, and the cleared pre-auth cookie; on a failure only the cleared pre-auth cookie */
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The path did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many sign-in attempts from this address; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    startOidcSignIn: {
+        parameters: {
+            query?: {
+                returnTo?: string;
+            };
+            header?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The browser is sent to the provider with a PKCE challenge (S256), a state and a nonce, and receives the pre-auth cookie. When the provider is unknown or unavailable the browser is sent to /login?error=oidc_failed instead, the same answer a failed callback gives */
+            302: {
+                headers: {
+                    /** @description Where the browser goes next: the provider's authorization endpoint, or /login?error=oidc_failed when the handshake cannot start */
+                    Location: string;
+                    /** @description The pre-auth cookie that binds the handshake to this browser: HttpOnly, SameSite=Lax, Path=/, valid for 10 minutes, Secure and __Host- prefixed when the deployment is served over https; cleared when no handshake started */
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The path or the query did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many sign-in attempts from this address; Retry-After says when to try again */
             429: {
                 headers: {
                     /** @description Whole seconds to wait before the request can succeed */

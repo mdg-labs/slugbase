@@ -11,7 +11,7 @@ import { createMockServer, readOpenApiDocument } from "../src/msw/node.ts";
 
 const document = readOpenApiDocument();
 const raw = document as unknown as {
-  paths: Record<string, Record<string, { operationId?: string; responses: Record<string, { headers?: Record<string, unknown> }> }>>;
+  paths: Record<string, Record<string, { operationId?: string; responses: Record<string, { headers?: Record<string, unknown>; content?: Record<string, unknown> }> }>>;
 };
 
 interface WithCookie {
@@ -20,13 +20,15 @@ interface WithCookie {
   readonly operationId: string;
 }
 
-// The operations whose success response declares a `Set-Cookie`, found without the code under test.
-function declaringSetCookie(): WithCookie[] {
+// The operations whose success response declares a `Set-Cookie`, with a JSON body or as a redirect without one,
+// found without the code under test.
+function declaringSetCookie(redirects: boolean): WithCookie[] {
   const found: WithCookie[] = [];
   for (const [path, item] of Object.entries(raw.paths)) {
     for (const [method, operation] of Object.entries(item)) {
       const success = Object.entries(operation.responses).find(([status]) => Number(status) < 400);
-      if (success !== undefined && Object.keys(success[1].headers ?? {}).some((name) => name.toLowerCase() === "set-cookie")) {
+      const bodiless = success?.[1].content === undefined;
+      if (success !== undefined && bodiless === redirects && Object.keys(success[1].headers ?? {}).some((name) => name.toLowerCase() === "set-cookie")) {
         found.push({ method: method.toUpperCase(), path, operationId: String(operation.operationId) });
       }
     }
@@ -71,7 +73,7 @@ afterAll(() => {
 });
 
 describe("the generated handlers that declare a Set-Cookie, under the MSW node server in jsdom", () => {
-  const operations = declaringSetCookie();
+  const operations = declaringSetCookie(false);
 
   it("include the sign-in operation", () => {
     expect(operations.map((operation) => operation.operationId)).toContain("login");
@@ -98,5 +100,24 @@ describe("the generated handlers that declare a Set-Cookie, under the MSW node s
     // name=value, then attributes: a name without "=" is what the cookie store refuses.
     expect(cookies[0]).toMatch(/^[^\s=;]+=[^;]*(; [A-Za-z-]+(=[^;]*)?)*$/);
     expect(response?.headers.get("content-type")).toBe("application/json");
+  });
+});
+
+describe("the generated handlers of a redirect that declares a Set-Cookie", () => {
+  const redirects = declaringSetCookie(true);
+
+  it("include the OIDC sign-in redirects", () => {
+    expect(redirects.map((operation) => operation.operationId)).toEqual(expect.arrayContaining(["startOidcSignIn", "completeOidcSignIn"]));
+  });
+
+  it.each(redirects)("answer $operationId with its status, an address to follow, one cookie that parses and no body", async (operation) => {
+    const handlers = createHandlers(document, { baseUrl: window.location.origin });
+    const response = await getResponse(handlers, new Request(`${window.location.origin}${operation.path.replace("{provider}", "idp")}`, { method: operation.method }));
+    expect(response?.status).toBe(302);
+    expect(response?.headers.get("location")).toBe("/");
+    const cookies = response?.headers.getSetCookie() ?? [];
+    expect(cookies).toHaveLength(1);
+    expect(cookies[0]).toMatch(/^[^\s=;]+=[^;]*(; [A-Za-z-]+(=[^;]*)?)*$/);
+    expect(await response?.text()).toBe("");
   });
 });

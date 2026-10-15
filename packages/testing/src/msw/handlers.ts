@@ -19,8 +19,19 @@ const PROBLEM_MEDIA_TYPE = "application/problem+json";
 // only an https origin accepts.
 const MOCK_SET_COOKIE = "slugbase_session=mock-session; Path=/; HttpOnly; SameSite=Lax";
 
+// A redirect declares its `Location`, and a schema of type string would give it the value `string`, which is no
+// address a client can follow; the mock sends the application root.
+const MOCK_LOCATION = "/";
+
 function headerValue(document: OpenApiDocument, name: string, schema: unknown): string {
-  return name.toLowerCase() === "set-cookie" ? MOCK_SET_COOKIE : String(fixtureFor(document, schema));
+  switch (name.toLowerCase()) {
+    case "set-cookie":
+      return MOCK_SET_COOKIE;
+    case "location":
+      return MOCK_LOCATION;
+    default:
+      return String(fixtureFor(document, schema));
+  }
 }
 
 // The stable code a problem document carries for each status the contract

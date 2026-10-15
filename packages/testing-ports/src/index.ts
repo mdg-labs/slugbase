@@ -6,5 +6,15 @@ export type {
   FakeEgressResponse,
   FakeEgressRoute,
 } from "./egress.ts";
+export { FakeIdentity, FakeIdentityError } from "./identity.ts";
+export type {
+  FakeIdentityBeginRequest,
+  FakeIdentityClaims,
+  FakeIdentityCompleteRequest,
+  FakeIdentityFailureReason,
+  FakeIdentityGrant,
+  FakeIdentityOptions,
+  FakeIdentityProvider,
+} from "./identity.ts";
 export { InMemoryMail } from "./mail.ts";
 export type { InMemoryMailMessage } from "./mail.ts";

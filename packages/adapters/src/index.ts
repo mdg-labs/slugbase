@@ -23,5 +23,6 @@ export type {
   OidcIdentity,
   OidcIdentityLogger,
   OidcProviderMetadata,
+  OidcTokenAuthMethod,
   OidcUnavailableReason,
 } from "./identity/index.ts";

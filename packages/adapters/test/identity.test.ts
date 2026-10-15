@@ -3,7 +3,6 @@ import {
   EgressError,
   EgressTimeout,
   EgressTooLarge,
-  PortUnavailable,
   type EgressPort,
   type EgressRequest,
   type EgressResponse,
@@ -164,6 +163,7 @@ describe("the OIDC identity adapter", () => {
       authorizationEndpoint: `${ISSUER}/authorize`,
       tokenEndpoint: `${ISSUER}/token`,
       jwksUri: `${ISSUER}/keys`,
+      tokenAuthMethod: "client_secret_basic",
       keys: KEYS.keys,
     });
     expect(await identity.metadata("unknown")).toBeUndefined();
@@ -377,14 +377,17 @@ describe("the OIDC identity adapter", () => {
     expect(logger.lines[0]?.fields).toEqual({ provider: "idp", reason: "discovery_failed", error: "TypeError" });
   });
 
-  it("refuses the handshake, which it does not implement, instead of pretending", async () => {
-    const identity = createOidcIdentity({ providers: [provider()], egress: healthy(), logger: recordingLogger() });
-    await expect(
-      identity.begin({ providerId: "idp", redirectUri: "https://x.example.test/cb", state: "s", nonce: "n", codeChallenge: "c" }),
-    ).rejects.toBeInstanceOf(PortUnavailable);
-    await expect(
-      identity.complete({ providerId: "idp", redirectUri: "https://x.example.test/cb", code: "c", nonce: "n", codeVerifier: "v" }),
-    ).rejects.toBeInstanceOf(PortUnavailable);
+  it("refuses to begin or complete a handshake with a provider it does not know or cannot use", async () => {
+    const egress = healthy();
+    egress.script(`${ISSUER}/keys`, new EgressError());
+    const identity = createOidcIdentity({ providers: [provider()], egress, logger: recordingLogger() });
+    const begin = { redirectUri: "https://x.example.test/cb", state: "s", nonce: "n", codeChallenge: "c" };
+    const complete = { redirectUri: "https://x.example.test/cb", code: "c", nonce: "n", codeVerifier: "v" };
+    for (const providerId of ["idp", "unknown"]) {
+      await expect(identity.begin({ providerId, ...begin })).rejects.toMatchObject({ name: "IdentityError", reason: "provider_unavailable" });
+      await expect(identity.complete({ providerId, ...complete })).rejects.toMatchObject({ name: "IdentityError", reason: "provider_unavailable" });
+    }
+    expect(egress.requests.filter((request) => request.method === "POST")).toEqual([]);
   });
 
   it("is available only with a provider configured", () => {

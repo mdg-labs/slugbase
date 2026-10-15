@@ -82,9 +82,11 @@ export interface RateLimitedResponse extends ProblemResponse {
   readonly headers: { readonly [RETRY_AFTER_HEADER]: ResponseHeader } & ResponseHeaders;
 }
 
-export interface EmptyResponse {
+/** A response without a body; it may still document headers, as a redirect documents its `Location`. */
+export interface EmptyResponse<H extends ResponseHeaders = ResponseHeaders> {
   readonly kind: "empty";
   readonly description: string;
+  readonly headers?: H;
 }
 
 /** A response with a JSON body described by a Zod schema, and optionally the headers it documents. */
@@ -114,9 +116,12 @@ export function rateLimitedResponse(description: string): RateLimitedResponse {
   };
 }
 
-/** A response without a body. */
-export function emptyResponse(description: string): EmptyResponse {
-  return { kind: "empty", description };
+/** A response without a body, and optionally the headers it documents. */
+export function emptyResponse<H extends ResponseHeaders = ResponseHeaders>(
+  description: string,
+  options: JsonResponseOptions<H> = {},
+): EmptyResponse<H> {
+  return options.headers === undefined ? { kind: "empty", description } : { kind: "empty", description, headers: options.headers };
 }
 
 export type AtLeastOne<T> = { [K in keyof T]-?: Required<Pick<T, K>> & Partial<Omit<T, K>> }[keyof T];

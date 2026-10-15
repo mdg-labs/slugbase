@@ -140,7 +140,7 @@ export function apiTokenRepository(tx: TenantTx): ApiTokenRepository;
 export type ApiTokenScope = "read" | "read-write";
 
 // @public (undocumented)
-export interface AuthStore extends SetupStore, MfaStore {
+export interface AuthStore extends SetupStore, MfaStore, OidcStore {
     changePassword(change: PasswordChange): Promise<boolean>;
     close(): Promise<void>;
     createSession(session: NewSession): Promise<boolean>;
@@ -275,6 +275,17 @@ export interface DatabaseOptions {
 
 // @public
 export function defineScopedRepository<T extends WorkspaceTable>(name: string, table: T): ScopedRepositoryDefinition<T>;
+
+// @public
+export interface IdentitySignIn {
+    readonly ipPrefix: string | null;
+    readonly provider: string;
+    readonly replacedTokenHash: Buffer | null;
+    readonly sessionId: string;
+    readonly subject: string;
+    readonly tokenHash: Buffer;
+    readonly userAgent: string | null;
+}
 
 // @public (undocumented)
 export type InsertValues<T extends WorkspaceTable> = Omit<InferInsertModel<T>, "workspaceId"> & {
@@ -448,6 +459,20 @@ export interface NewApiToken {
     readonly workspaceId: string;
 }
 
+// @public
+export interface NewOidcLoginState {
+    // (undocumented)
+    readonly codeVerifier: SealedVerifier;
+    // (undocumented)
+    readonly intent: "login" | "link" | "reauth";
+    readonly linkAccountId: string | null;
+    // (undocumented)
+    readonly nonce: string;
+    readonly provider: string;
+    readonly returnTo: string;
+    readonly stateHash: Buffer;
+}
+
 // @public (undocumented)
 export interface NewSession {
     // (undocumented)
@@ -459,6 +484,27 @@ export interface NewSession {
     readonly replacedTokenHash: Buffer | null;
     readonly tokenHash: Buffer;
     readonly userAgent: string | null;
+}
+
+// @public
+export interface OidcLoginState {
+    // (undocumented)
+    readonly codeVerifier: SealedVerifier;
+    // (undocumented)
+    readonly intent: "login" | "link" | "reauth" | "invite";
+    // (undocumented)
+    readonly linkAccountId: string | null;
+    // (undocumented)
+    readonly nonce: string;
+    // (undocumented)
+    readonly returnTo: string;
+}
+
+// @public (undocumented)
+export interface OidcStore {
+    consumeOidcLoginState(stateHash: Buffer, provider: string): Promise<OidcLoginState | undefined>;
+    createOidcLoginState(state: NewOidcLoginState): Promise<void>;
+    signInWithIdentity(signIn: IdentitySignIn): Promise<boolean>;
 }
 
 // @public
@@ -584,6 +630,14 @@ export interface ScopedRepositoryDefinition<T extends WorkspaceTable> {
 
 // @public
 export interface SealedMfaSecret {
+    // (undocumented)
+    readonly ciphertext: Uint8Array;
+    // (undocumented)
+    readonly keyId: string;
+}
+
+// @public
+export interface SealedVerifier {
     // (undocumented)
     readonly ciphertext: Uint8Array;
     // (undocumented)

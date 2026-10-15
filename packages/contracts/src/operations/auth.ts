@@ -107,3 +107,84 @@ export const logout = defineOperation({
     503: problemResponse("The service is temporarily unavailable"),
   },
 });
+
+export const OidcProviderParamsSchema = z.strictObject({
+  provider: z
+    .string()
+    .min(1)
+    .max(64)
+    .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+    .describe("The slug of the provider, as GET /api/config lists it under signIn.oidc"),
+});
+
+export const OidcStartQuerySchema = z.strictObject({
+  returnTo: z
+    .string()
+    .max(2048)
+    .optional()
+    .describe("Where the browser goes once signed in: a path of this application, such as /go/docs. Anything else is ignored and the browser goes to /"),
+});
+
+const OIDC_REDIRECT_HEADERS = {
+  Location: {
+    description: "Where the browser goes next: the provider's authorization endpoint, or /login?error=oidc_failed when the handshake cannot start",
+    schema: z.string(),
+  },
+  "Set-Cookie": {
+    description: "The pre-auth cookie that binds the handshake to this browser: HttpOnly, SameSite=Lax, Path=/, valid for 10 minutes, Secure and __Host- prefixed when the deployment is served over https; cleared when no handshake started",
+    schema: z.string(),
+  },
+} as const;
+
+export const startOidcSignIn = defineOperation({
+  method: "get",
+  path: "/api/v1/auth/oidc/{provider}/start",
+  operationId: "startOidcSignIn",
+  tag: "auth",
+  summary: "Start signing in with an OIDC provider",
+  auth: "anonymous",
+  rate: "login",
+  request: { params: OidcProviderParamsSchema, query: OidcStartQuerySchema },
+  responses: {
+    302: emptyResponse(
+      "The browser is sent to the provider with a PKCE challenge (S256), a state and a nonce, and receives the pre-auth cookie. When the provider is unknown or unavailable the browser is sent to /login?error=oidc_failed instead, the same answer a failed callback gives",
+      { headers: OIDC_REDIRECT_HEADERS },
+    ),
+    400: problemResponse("The request was malformed"),
+    422: problemResponse("The path or the query did not pass validation"),
+    429: rateLimitedResponse("Too many sign-in attempts from this address; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const completeOidcSignIn = defineOperation({
+  method: "get",
+  path: "/api/v1/auth/oidc/{provider}/callback",
+  operationId: "completeOidcSignIn",
+  tag: "auth",
+  summary: "Finish signing in with an OIDC provider",
+  auth: "anonymous",
+  rate: "login",
+  // The query is the provider's: `code` and `state`, or `error`, and whatever else the provider appends (`iss`, `scope`,
+  // `session_state`). The handler reads the two it needs and ignores the rest, because a callback is a redirect the
+  // browser follows, never a request this application's own schema can close.
+  request: { params: OidcProviderParamsSchema },
+  responses: {
+    302: emptyResponse(
+      "The handshake is over and the browser is sent on. When the identity is linked to an account that can sign in, a new full session cookie is set and the browser goes to the returnTo of the start, a path of this application. For every other outcome (a missing, reused, expired or foreign state, a refusal by the provider, a token that fails validation, an identity nobody linked, a disabled account) no session is created and the browser goes to /login?error=oidc_failed, one answer that does not say which. The pre-auth cookie is cleared either way",
+      {
+        headers: {
+          Location: { description: "A path of this application: the returnTo of the start, or /login?error=oidc_failed", schema: z.string() },
+          "Set-Cookie": {
+            description: "The session cookie of a successful sign-in, with the attributes of the password sign-in cookie, and the cleared pre-auth cookie; on a failure only the cleared pre-auth cookie",
+            schema: z.string(),
+          },
+        },
+      },
+    ),
+    400: problemResponse("The request was malformed"),
+    422: problemResponse("The path did not pass validation"),
+    429: rateLimitedResponse("Too many sign-in attempts from this address; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});

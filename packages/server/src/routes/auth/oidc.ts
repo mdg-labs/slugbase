@@ -1,0 +1,210 @@
+import { completeOidcSignIn, startOidcSignIn } from "@slugbase/contracts";
+import {
+  OIDC_FAILURE_CODE,
+  bindOidcState,
+  hashOidcState,
+  newOidcHandshake,
+  oidcCodeVerifierOptions,
+  oidcPreAuthCookieSpec,
+  oidcStateIsBound,
+  safeReturnTo,
+  truncateUserAgent,
+  PortUnavailable,
+  type IdentityPort,
+  type OidcPreAuthCookieSpec,
+  type SecretBoxPort,
+  type SessionCookieSpec,
+} from "@slugbase/core";
+import type { AuthStore } from "@slugbase/db";
+import { hkdfSync } from "node:crypto";
+import { readCookie, setSessionCookie } from "../../auth/cookie.ts";
+import { hashSessionToken, newSessionToken } from "../../auth/session-token.ts";
+import { uuidv7 } from "../../auth/uuidv7.ts";
+import type { ChainContext, RouteBinding } from "../../http/chain.ts";
+import { networkPrefixOf } from "../../http/trusted-proxy.ts";
+import { route } from "../register.ts";
+
+// GET /api/v1/auth/oidc/{provider}/start and /callback (doc 04 sections 4.5 and 10.2, doc 02 section 2.8, doc 10
+// T4, T12 and T20): the authorization-code flow with PKCE, a state and a nonce, signing in the account an
+// identity is already linked to. The start stores the handshake server side and binds it to the browser with a
+// short-lived pre-auth cookie; the callback consumes the record once and signs in only when the identity
+// port has verified the provider's ID token. Everything that can go wrong ends on `/login` with the same
+// failure code and nothing in the answer says which step refused, so the answer reveals neither whether an
+// account exists nor why a handshake failed; the reason goes to the log as a fixed word.
+
+const SUBKEY_BYTES = 32;
+const FAILURE_LOCATION = `/login?error=${OIDC_FAILURE_CODE}`;
+const MAX_CODE_LENGTH = 2048;
+
+export interface OidcRoutesOptions {
+  readonly store: Pick<AuthStore, "createOidcLoginState" | "consumeOidcLoginState" | "signInWithIdentity">;
+  readonly identity: Pick<IdentityPort, "begin" | "complete">;
+  /** Seals the PKCE verifier while the handshake is in flight, and opens it at the callback. */
+  readonly secretBox: Pick<SecretBoxPort, "seal" | "open">;
+  /** `APP_ORIGIN`: the callback address registered with the providers, and the scheme of the cookies. */
+  readonly appOrigin: string;
+  /** `SESSION_SECRET`: the pre-auth cookie is a keyed hash made with a key derived from it. */
+  readonly sessionSecret: string;
+  readonly sessionCookie: SessionCookieSpec;
+}
+
+/** The fixed words of the log line that says why a handshake did not end in a session. */
+type Refusal =
+  | "provider_unavailable"
+  | "provider_error"
+  | "malformed_callback"
+  | "foreign_browser"
+  | "unknown_state"
+  | "unsupported_intent"
+  | "exchange_failed"
+  | "invalid_token"
+  | "unknown_identity";
+
+function preAuthAttributes(spec: OidcPreAuthCookieSpec, maxAge: number): string {
+  return `Max-Age=${String(maxAge)}; Path=/; HttpOnly; SameSite=Lax${spec.secure ? "; Secure" : ""}`;
+}
+
+function setPreAuthCookie(spec: OidcPreAuthCookieSpec, binding: string): string {
+  return `${spec.name}=${binding}; ${preAuthAttributes(spec, spec.maxAgeSeconds)}`;
+}
+
+function clearPreAuthCookie(spec: OidcPreAuthCookieSpec): string {
+  return `${spec.name}=; ${preAuthAttributes(spec, 0)}; Expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+}
+
+// The reason an identity port gave for refusing, when it gave one; a port that is not configured is an unavailable
+// provider. Never a message.
+function describeFailure(error: unknown): Refusal {
+  const reason = typeof error === "object" && error !== null && "reason" in error ? error.reason : undefined;
+  if (reason === "provider_unavailable" || reason === "invalid_token") {
+    return reason;
+  }
+  return error instanceof PortUnavailable ? "provider_unavailable" : "exchange_failed";
+}
+
+function refused(context: ChainContext, provider: string, reason: Refusal): void {
+  context.get("logger")?.warn("An OIDC sign-in ended without a session", { provider, reason });
+}
+
+export function oidcRoutes({ store, identity, secretBox, appOrigin, sessionSecret, sessionCookie }: OidcRoutesOptions): RouteBinding[] {
+  const preAuth = oidcPreAuthCookieSpec(appOrigin);
+  const origin = new URL(appOrigin).origin;
+  const bindingKey = Buffer.from(hkdfSync("sha256", sessionSecret, "", "slugbase:oidc:pre-auth", SUBKEY_BYTES));
+  const redirectUriOf = (provider: string): string => `${origin}/api/v1/auth/oidc/${provider}/callback`;
+  const failure = { status: 302, headers: { Location: FAILURE_LOCATION, "Set-Cookie": clearPreAuthCookie(preAuth) } } as const;
+
+  const start = route(startOidcSignIn).handle(async ({ params, query }, context) => {
+    const handshake = newOidcHandshake();
+    let authorizationUrl: string;
+    try {
+      ({ authorizationUrl } = await identity.begin({
+        providerId: params.provider,
+        redirectUri: redirectUriOf(params.provider),
+        state: handshake.state,
+        nonce: handshake.nonce,
+        codeChallenge: handshake.codeChallenge,
+      }));
+    } catch (error) {
+      refused(context, params.provider, describeFailure(error));
+      return failure;
+    }
+    const sealed = await secretBox.seal(new TextEncoder().encode(handshake.codeVerifier), oidcCodeVerifierOptions(handshake.stateHash));
+    await store.createOidcLoginState({
+      stateHash: handshake.stateHash,
+      provider: params.provider,
+      intent: "login",
+      nonce: handshake.nonce,
+      codeVerifier: sealed,
+      returnTo: safeReturnTo(query.returnTo),
+      linkAccountId: null,
+    });
+    return {
+      status: 302,
+      headers: { Location: authorizationUrl, "Set-Cookie": setPreAuthCookie(preAuth, bindOidcState(bindingKey, handshake.state)) },
+    };
+  });
+
+  const callback = route(completeOidcSignIn).handle(async ({ params }, context) => {
+    const fail = (reason: Refusal) => {
+      refused(context, params.provider, reason);
+      return failure;
+    };
+    // The provider's own parameters: the ones RFC 6749 names are read, whatever else it appends is ignored.
+    const query = new URL(context.req.url).searchParams;
+    const [state, ...otherStates] = query.getAll("state");
+    const codes = query.getAll("code");
+    const cookieHeader = context.req.raw.headers.get("cookie");
+    const binding = cookieHeader === null ? undefined : readCookie(cookieHeader, preAuth.name);
+    const stateHash = state === undefined || otherStates.length > 0 ? undefined : hashOidcState(state);
+    if (state === undefined || stateHash === undefined) {
+      return fail("malformed_callback");
+    }
+    // The browser that started the handshake is the only one that holds the cookie. A callback without it is refused
+    // before the record is touched, so a state seen by someone else cannot be used up from another browser.
+    if (binding === undefined || !oidcStateIsBound(bindingKey, state, binding)) {
+      return fail("foreign_browser");
+    }
+    const record = await store.consumeOidcLoginState(stateHash, params.provider);
+    if (record === undefined) {
+      return fail("unknown_state");
+    }
+    // The only intent that can start today is the sign-in; the others arrive with their own operations.
+    if (record.intent !== "login") {
+      return fail("unsupported_intent");
+    }
+    const code = codes[0];
+    if (query.has("error") || codes.length !== 1 || code === undefined || code === "" || code.length > MAX_CODE_LENGTH) {
+      return fail(query.has("error") ? "provider_error" : "malformed_callback");
+    }
+
+    const verifier = await secretBox.open(record.codeVerifier, oidcCodeVerifierOptions(stateHash));
+    let claims;
+    try {
+      claims = await identity.complete({
+        providerId: params.provider,
+        redirectUri: redirectUriOf(params.provider),
+        code,
+        nonce: record.nonce,
+        codeVerifier: new TextDecoder().decode(verifier),
+      });
+    } catch (error) {
+      return fail(describeFailure(error));
+    } finally {
+      verifier.fill(0);
+    }
+    if (claims.providerId !== params.provider) {
+      return fail("invalid_token");
+    }
+
+    const token = newSessionToken();
+    const carried = cookieHeader === null ? undefined : readCookie(cookieHeader, sessionCookie.name);
+    const signedIn = await store.signInWithIdentity({
+      provider: params.provider,
+      subject: claims.subject,
+      sessionId: uuidv7(),
+      ipPrefix: networkPrefixOf(context.get("clientIp")) ?? null,
+      userAgent: truncateUserAgent(context.req.raw.headers.get("user-agent")),
+      tokenHash: token.hash,
+      replacedTokenHash: carried === undefined ? null : (hashSessionToken(carried) ?? null),
+    });
+    if (!signedIn) {
+      return fail("unknown_identity");
+    }
+    return { status: 302, headers: { Location: safeReturnTo(record.returnTo), "Set-Cookie": setSessionCookie(sessionCookie, token.value) } };
+  });
+
+  // A handler answers with one Set-Cookie. A sign-in sets the session cookie, and the pre-auth cookie ends with the
+  // handshake whatever the outcome, so the second header is added to the response here.
+  const cleared = clearPreAuthCookie(preAuth);
+  const completing: RouteBinding = {
+    ...callback,
+    handler: async (context, matched) => {
+      const response = await callback.handler(context, matched);
+      if (!response.headers.getSetCookie().includes(cleared)) {
+        response.headers.append("Set-Cookie", cleared);
+      }
+      return response;
+    },
+  };
+  return [start, completing];
+}

@@ -169,7 +169,7 @@ export const changePassword: {
         }, z.core.$strict>;
     };
     readonly responses: {
-        readonly 204: EmptyResponse;
+        readonly 204: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;
         readonly 403: ProblemResponse;
@@ -184,6 +184,38 @@ export const ChangePasswordRequestSchema: z.ZodObject<{
     currentPassword: z.ZodString;
     newPassword: z.ZodString;
 }, z.core.$strict>;
+
+// @public (undocumented)
+export const completeOidcSignIn: {
+    readonly method: "get";
+    readonly path: "/api/v1/auth/oidc/{provider}/callback";
+    readonly operationId: "completeOidcSignIn";
+    readonly tag: "auth";
+    readonly summary: "Finish signing in with an OIDC provider";
+    readonly auth: "anonymous";
+    readonly rate: "login";
+    readonly request: {
+        readonly params: z.ZodObject<{
+            provider: z.ZodString;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 302: EmptyResponse<    {
+        Location: {
+        description: string;
+        schema: z.ZodString;
+        };
+        "Set-Cookie": {
+        description: string;
+        schema: z.ZodString;
+        };
+        }>;
+        readonly 400: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
 
 // @public (undocumented)
 export const completeSetup: {
@@ -591,7 +623,7 @@ export const disableMfa: {
         }, z.core.$strict>]>;
     };
     readonly responses: {
-        readonly 204: EmptyResponse;
+        readonly 204: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;
         readonly 403: ProblemResponse;
@@ -613,16 +645,18 @@ export const DisableMfaRequestSchema: z.ZodUnion<readonly [z.ZodObject<{
 // @public
 export const DisplayNameSchema: z.ZodString;
 
-// @public (undocumented)
-export interface EmptyResponse {
+// @public
+export interface EmptyResponse<H extends ResponseHeaders = ResponseHeaders> {
     // (undocumented)
     readonly description: string;
+    // (undocumented)
+    readonly headers?: H;
     // (undocumented)
     readonly kind: "empty";
 }
 
 // @public
-export function emptyResponse(description: string): EmptyResponse;
+export function emptyResponse<H extends ResponseHeaders = ResponseHeaders>(description: string, options?: JsonResponseOptions<H>): EmptyResponse<H>;
 
 // @public (undocumented)
 export const getApiConfig: {
@@ -1019,7 +1053,7 @@ export const logout: {
     readonly auth: "partial";
     readonly rate: "write";
     readonly responses: {
-        readonly 204: EmptyResponse;
+        readonly 204: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;
         readonly 403: ProblemResponse;
@@ -1105,6 +1139,16 @@ export const MfaEnrollmentSchema: z.ZodObject<{
     secret: z.ZodString;
     otpauthUri: z.ZodString;
     qrSvg: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const OidcProviderParamsSchema: z.ZodObject<{
+    provider: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const OidcStartQuerySchema: z.ZodObject<{
+    returnTo: z.ZodOptional<z.ZodString>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -1215,6 +1259,61 @@ export interface OperationTypes {
                 };
             };
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    completeOidcSignIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            302: {
+                headers: {
+                    Location: string;
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2502,6 +2601,63 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    startOidcSignIn: {
+        parameters: {
+            query?: {
+                returnTo?: string;
+            };
+            header?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            302: {
+                headers: {
+                    Location: string;
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     updateMe: {
         parameters: {
             query?: never;
@@ -2717,6 +2873,40 @@ export interface paths {
         get?: never;
         put?: never;
         post: OperationTypes["verifyMfa"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/auth/oidc/{provider}/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["completeOidcSignIn"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/auth/oidc/{provider}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["startOidcSignIn"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3311,7 +3501,7 @@ export const reauthenticate: {
         }, z.core.$strict>]>;
     };
     readonly responses: {
-        readonly 204: EmptyResponse;
+        readonly 204: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;
         readonly 403: ProblemResponse;
@@ -3393,7 +3583,7 @@ export const revokeApiToken: {
         }, z.core.$strict>;
     };
     readonly responses: {
-        readonly 204: EmptyResponse;
+        readonly 204: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;
         readonly 403: ProblemResponse;
@@ -3419,7 +3609,7 @@ export const revokeSession: {
         }, z.core.$strict>;
     };
     readonly responses: {
-        readonly 204: EmptyResponse;
+        readonly 204: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;
         readonly 403: ProblemResponse;
@@ -3448,7 +3638,7 @@ export const revokeSessions: {
         }, z.core.$strict>;
     };
     readonly responses: {
-        readonly 204: EmptyResponse;
+        readonly 204: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;
         readonly 403: ProblemResponse;
@@ -3539,6 +3729,41 @@ export const startMfaEnrollment: {
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;
         readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const startOidcSignIn: {
+    readonly method: "get";
+    readonly path: "/api/v1/auth/oidc/{provider}/start";
+    readonly operationId: "startOidcSignIn";
+    readonly tag: "auth";
+    readonly summary: "Start signing in with an OIDC provider";
+    readonly auth: "anonymous";
+    readonly rate: "login";
+    readonly request: {
+        readonly params: z.ZodObject<{
+            provider: z.ZodString;
+        }, z.core.$strict>;
+        readonly query: z.ZodObject<{
+            returnTo: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 302: EmptyResponse<    {
+        readonly Location: {
+        readonly description: "Where the browser goes next: the provider's authorization endpoint, or /login?error=oidc_failed when the handshake cannot start";
+        readonly schema: z.ZodString;
+        };
+        readonly "Set-Cookie": {
+        readonly description: "The pre-auth cookie that binds the handshake to this browser: HttpOnly, SameSite=Lax, Path=/, valid for 10 minutes, Secure and __Host- prefixed when the deployment is served over https; cleared when no handshake started";
+        readonly schema: z.ZodString;
+        };
+        }>;
+        readonly 400: ProblemResponse;
         readonly 422: ProblemResponse;
         readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;

@@ -27,6 +27,7 @@ export interface IdentityProviderConfig {
 
 export interface IdentityBeginRequest {
   readonly providerId: string;
+  /** The callback address registered with the provider; the authorization code is exchanged against the same one. */
   readonly redirectUri: string;
   readonly state: string;
   readonly nonce: string;
@@ -41,7 +42,10 @@ export interface IdentityCompleteRequest {
   readonly codeVerifier: string;
 }
 
-/** The claims of a verified sign-in, mapped from the provider's. */
+/**
+ * The claims of a verified sign-in, mapped from the provider's. `email` is empty and `emailVerified` false
+ * when the provider asserted no address.
+ */
 export interface IdentityClaims {
   readonly providerId: string;
   readonly subject: string;
@@ -50,10 +54,30 @@ export interface IdentityClaims {
   readonly displayName?: string;
 }
 
+/** Why a handshake did not complete; the fixed words of the log line. */
+export type IdentityFailureReason = "provider_unavailable" | "exchange_failed" | "invalid_token";
+
+/**
+ * Thrown by `complete` when the handshake cannot be trusted: the provider is unknown or unavailable, the code
+ * was refused, or the ID token failed validation. The message is fixed text: it never carries a token, a
+ * claim, a code or an address of the provider. Callers answer every reason alike.
+ */
+export class IdentityError extends Error {
+  readonly reason: IdentityFailureReason;
+
+  constructor(reason: IdentityFailureReason) {
+    super("The sign-in with the identity provider failed");
+    this.name = "IdentityError";
+    this.reason = reason;
+  }
+}
+
 /**
  * Lists the OIDC providers, runs the handshake and maps the claims (doc 01 section 6). `listProviders` answers
  * the enabled providers that are available right now and never rejects: a provider that cannot be reached is
- * left out and the others are listed (D22).
+ * left out and the others are listed (D22). `complete` exchanges the code, validates the ID token (signature,
+ * issuer, audience, expiry and the nonce `begin` was given) and returns its claims; it rejects with an
+ * `IdentityError` for anything it cannot trust, and a claim is never returned before every check has passed.
  */
 export interface IdentityPort extends Port {
   listProviders(): Promise<readonly IdentityProviderInfo[]>;

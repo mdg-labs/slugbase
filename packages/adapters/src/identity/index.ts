@@ -4,5 +4,6 @@ export type {
   OidcIdentity,
   OidcIdentityLogger,
   OidcProviderMetadata,
+  OidcTokenAuthMethod,
   OidcUnavailableReason,
 } from "./oidc.ts";

@@ -122,6 +122,9 @@ export function base32Encode(bytes: Uint8Array): string;
 export function bearerApiToken(authorization: string): string | undefined;
 
 // @public
+export function bindOidcState(key: Uint8Array, state: string): string;
+
+// @public
 export class BreachedDatasetError extends Error {
     constructor(reason: string);
 }
@@ -262,6 +265,9 @@ export function generateTotpSecret(): Uint8Array;
 // @public
 export function hashApiToken(value: string): Buffer;
 
+// @public
+export function hashOidcState(state: string): Buffer | undefined;
+
 // @public (undocumented)
 export interface IdentityBeginRequest {
     // (undocumented)
@@ -270,7 +276,6 @@ export interface IdentityBeginRequest {
     readonly nonce: string;
     // (undocumented)
     readonly providerId: string;
-    // (undocumented)
     readonly redirectUri: string;
     // (undocumented)
     readonly state: string;
@@ -303,6 +308,16 @@ export interface IdentityCompleteRequest {
     // (undocumented)
     readonly redirectUri: string;
 }
+
+// @public
+export class IdentityError extends Error {
+    constructor(reason: IdentityFailureReason);
+    // (undocumented)
+    readonly reason: IdentityFailureReason;
+}
+
+// @public
+export type IdentityFailureReason = "provider_unavailable" | "exchange_failed" | "invalid_token";
 
 // @public
 export interface IdentityPort extends Port {
@@ -366,6 +381,9 @@ export interface MailPort extends Port {
 export const MAX_API_TOKENS_PER_USER = 10;
 
 // @public
+export function newOidcHandshake(): OidcHandshake;
+
+// @public
 export function normalizeEmail(raw: string): string;
 
 // @public
@@ -376,6 +394,39 @@ export interface NotificationRecipient {
     readonly email: string;
     readonly locale: string;
 }
+
+// @public
+export const OIDC_FAILURE_CODE = "oidc_failed";
+
+// @public
+export const OIDC_HANDSHAKE_SECONDS = 600;
+
+// @public
+export function oidcCodeVerifierOptions(stateHash: Buffer): SecretBoxOptions;
+
+// @public
+export interface OidcHandshake {
+    readonly codeChallenge: string;
+    readonly codeVerifier: string;
+    readonly nonce: string;
+    readonly state: string;
+    readonly stateHash: Buffer;
+}
+
+// @public
+export interface OidcPreAuthCookieSpec {
+    // (undocumented)
+    readonly maxAgeSeconds: number;
+    // (undocumented)
+    readonly name: string;
+    readonly secure: boolean;
+}
+
+// @public
+export function oidcPreAuthCookieSpec(appOrigin: string): OidcPreAuthCookieSpec;
+
+// @public
+export function oidcStateIsBound(key: Uint8Array, state: string, binding: string): boolean;
 
 // @public (undocumented)
 export interface OtpauthOptions {
@@ -454,6 +505,9 @@ export const REAUTH_WINDOW_MS: number;
 
 // @public
 export function reauthenticatedRecently(reauthAt: Date | undefined, nowMs: number): boolean;
+
+// @public
+export function safeReturnTo(value: string | undefined): string;
 
 // @public (undocumented)
 export interface SealedSecret {

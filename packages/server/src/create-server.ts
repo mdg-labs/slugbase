@@ -439,6 +439,7 @@ export function createServer(options: CreateServerOptions): Server {
     passwordPolicy,
     mail: adapters.mail,
     secretBox: adapters.secretBox,
+    identity: adapters.identity,
     now: options.now ?? Date.now,
   });
   builtInRoutes.push(...(auth.routes ?? []));

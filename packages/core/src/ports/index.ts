@@ -20,10 +20,12 @@ export type {
   EgressResponse,
 } from "./egress.ts";
 export type { ErrorReportContext, ErrorReportPort } from "./error-report.ts";
+export { IdentityError } from "./identity.ts";
 export type {
   IdentityBeginRequest,
   IdentityClaims,
   IdentityCompleteRequest,
+  IdentityFailureReason,
   IdentityPort,
   IdentityProviderConfig,
   IdentityProviderInfo,
