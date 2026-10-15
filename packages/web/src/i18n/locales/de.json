@@ -141,6 +141,10 @@
     },
     "security": {
       "title": "Sicherheit",
+      "providerFailed": {
+        "title": "Das Verknüpfen oder Bestätigen mit diesem Anbieter hat nicht funktioniert. Versuche es erneut.",
+        "dismiss": "Schließen"
+      },
       "loadFailed": {
         "title": "Deine Sicherheitseinstellungen konnten nicht geladen werden"
       },

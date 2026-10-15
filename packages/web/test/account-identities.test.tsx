@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
 import { navigateTo } from "../src/auth/navigate.ts";
 import { createWebApp } from "../src/index.ts";
-import { ACCOUNT_BODY, CONFIG_BODY, ME_PATH, SESSION_PATH, json, meBody, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
+import { CONFIG_BODY, ME_PATH, SESSION_PATH, json, meBody, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
 vi.mock("../src/auth/navigate.ts", () => ({ navigateTo: vi.fn() }));
 
@@ -79,7 +79,7 @@ function stubServer({
       return json({ ...CONFIG_BODY, signIn: { oidc: providers } });
     }
     if (pathname === ME_PATH) {
-      return json({ ...(meBody() as { account: object }), account: { ...ACCOUNT_BODY, hasPassword: passwordSet } });
+      return json({ ...(meBody() as { account: object }), account: { ...(meBody() as { account: object }).account, hasPassword: passwordSet } });
     }
     if (pathname === SESSION_PATH) {
       return json({ items: [], nextCursor: null });
@@ -137,8 +137,8 @@ function lastSignInMethod(): Response {
   );
 }
 
-async function openSecurity(): Promise<void> {
-  window.history.replaceState(null, "", "/settings/account/security");
+async function openSecurity(path = "/settings/account/security"): Promise<void> {
+  window.history.replaceState(null, "", path);
   const App = createWebApp({ extensions: [] });
   await renderApp(<App />);
   await screen.findByRole("heading", { level: 1, name: "Security" });
@@ -498,5 +498,78 @@ describe("adding a password", () => {
     await click("Add a password", document.body);
 
     expect(await screen.findByText("This account already has a password. Reload the page to change it.")).toBeTruthy();
+  });
+});
+
+describe("the failure of a provider link or re-authentication", () => {
+  const FAILED = "Linking or confirming with that provider did not work. Try again.";
+
+  it("sends a signed-in visitor of /login?error=oidc_failed to the Security page, which says it once, generically", async () => {
+    stubServer();
+    window.history.replaceState(null, "", "/login?error=oidc_failed");
+    const App = createWebApp({ extensions: [] });
+    await renderApp(<App />);
+    await screen.findByRole("heading", { level: 1, name: "Security" });
+
+    expect(window.location.pathname).toBe("/settings/account/security");
+    const alert = screen.getByText(FAILED).closest('[role="alert"]');
+    expect(alert).not.toBeNull();
+    expect(alert?.textContent).not.toMatch(/state|nonce|token|account|exist/i);
+  });
+
+  it("is shown in the language of the page", async () => {
+    vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["de-DE", "de"]);
+    stubServer();
+    window.history.replaceState(null, "", "/settings/account/security?error=oidc_failed");
+    const App = createWebApp({ extensions: [] });
+    await renderApp(<App />);
+
+    expect(
+      await screen.findByText("Das Verknüpfen oder Bestätigen mit diesem Anbieter hat nicht funktioniert. Versuche es erneut."),
+    ).toBeTruthy();
+  });
+
+  it("is dismissed, and the code leaves the address so a reload does not show it again", async () => {
+    stubServer();
+    await openSecurity("/settings/account/security?error=oidc_failed");
+    expect(screen.getByText(FAILED).closest('[role="alert"]')).not.toBeNull();
+
+    await click("Dismiss");
+
+    await waitFor(() => {
+      expect(screen.queryByText(FAILED)).toBeNull();
+    });
+    expect(window.location.search).toBe("");
+  });
+
+  it.each(["/login?error=something_else", "/login"])("sends a signed-in visitor of %s home without a message", async (path) => {
+    stubServer();
+    window.history.replaceState(null, "", path);
+    const App = createWebApp({ extensions: [] });
+    await renderApp(<App />);
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/");
+    });
+    expect(window.location.search).toBe("");
+    expect(screen.queryByText(FAILED)).toBeNull();
+  });
+
+  it("ignores any other error value on the Security page", async () => {
+    stubServer();
+    await openSecurity("/settings/account/security?error=%3Cb%3Eaccount%20does%20not%20exist%3C%2Fb%3E");
+
+    expect(screen.queryByText(FAILED)).toBeNull();
+    expect(screen.queryByText(/does not exist/)).toBeNull();
+  });
+
+  it("does not carry the failure along as the page to come back to after confirming through the provider", async () => {
+    stubServer({ hasPassword: false, identities: [ACME], start: () => reauthRequired() });
+    await openSecurity("/settings/account/security?error=oidc_failed");
+    await click("Link Town Hall", await card());
+    const prompt = await screen.findByRole("dialog", { name: "Confirm it is you" });
+    await click("Confirm with Acme SSO", prompt);
+
+    expect(navigateTo).toHaveBeenCalledExactlyOnceWith("/api/v1/auth/oidc/acme/start?intent=reauth&returnTo=%2Fsettings%2Faccount%2Fsecurity");
   });
 });

@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import { AuthPage } from "../auth/auth-page.tsx";
 import { LoginForm } from "../auth/login-form.tsx";
 import { safeNextPath } from "../auth/next-path.ts";
-import { LOGIN_INTENT, oidcProvidersOf } from "../auth/oidc.ts";
+import { LOGIN_INTENT, OIDC_FAILED, oidcProvidersOf } from "../auth/oidc.ts";
 import { ProviderButtons } from "../auth/provider-buttons.tsx";
 import { sessionQuery } from "../auth/session.ts";
 import { useConfig } from "../config/config-context.tsx";
@@ -21,7 +21,7 @@ function LoginPage(): ReactElement {
   return (
     <AuthPage description={t("login.description", { name: product.name })} productName={product.name} title={t("login.title")}>
       <div className="flex flex-col gap-4">
-        {error === "oidc_failed" ? <Banner title={t("login.error.oidcFailed")} variant="error" /> : null}
+        {error === OIDC_FAILED ? <Banner title={t("login.error.oidcFailed")} variant="error" /> : null}
         <LoginForm next={next} />
         {providers.length === 0 ? null : (
           <>
@@ -53,7 +53,7 @@ export const Route = createFileRoute("/login")({
   // whatever the page last knew may be a session that has since ended. A check that cannot be
   // answered leaves the form in place; signing in reports what is wrong.
   // While the instance has no account there is nobody to sign in: the visitor is sent to set it up.
-  beforeLoad: async ({ context }) => {
+  beforeLoad: async ({ context, search }) => {
     if (isSetupRequired(context.queryClient)) {
       // eslint-disable-next-line @typescript-eslint/only-throw-error -- the router takes a thrown redirect (#82)
       throw redirect({ to: "/setup", replace: true });
@@ -63,8 +63,13 @@ export const Route = createFileRoute("/login")({
       () => false,
     );
     if (signedIn) {
+      // A failed link or re-authentication started from the Security page comes back here with the same
+      // error code; the signed-in member is taken to the page that can tell them.
+      const failed = search.error === OIDC_FAILED;
       // eslint-disable-next-line @typescript-eslint/only-throw-error -- the router takes a thrown redirect (#82)
-      throw redirect({ to: "/", replace: true });
+      throw redirect(
+        failed ? { to: "/settings/account/security", search: { error: OIDC_FAILED }, replace: true } : { to: "/", replace: true },
+      );
     }
   },
   component: LoginPage,

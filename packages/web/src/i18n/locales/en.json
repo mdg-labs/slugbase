@@ -141,6 +141,10 @@
     },
     "security": {
       "title": "Security",
+      "providerFailed": {
+        "title": "Linking or confirming with that provider did not work. Try again.",
+        "dismiss": "Dismiss"
+      },
       "loadFailed": {
         "title": "Your security settings could not be loaded"
       },
