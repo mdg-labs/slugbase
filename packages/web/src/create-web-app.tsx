@@ -8,6 +8,7 @@ import { createReauth, reauthMiddleware } from "./auth/reauth.ts";
 import { fetchConfig, type ConfigResult } from "./config/bootstrap.ts";
 import { ConfigFailure } from "./config/config-failure.tsx";
 import { ConfigProvider } from "./config/config-context.tsx";
+import { rememberSetupRequired } from "./config/setup-state.ts";
 import { ExtensionsProvider, type WebExtension } from "./extensions/index.ts";
 import { AccountI18nProvider } from "./i18n/account-i18n-provider.tsx";
 import { I18nProvider } from "./i18n/i18n-provider.tsx";
@@ -41,7 +42,14 @@ export function createWebApp({ extensions }: CreateWebAppOptions): ComponentType
   });
   // Validates the extension list: nothing is requested for one the app cannot start with.
   const router = createAppRouter({ queryClient, api }, extensions);
-  const configResult = fetchConfig(api);
+  // The routes decide where a signed-out visitor goes from what the configuration says about setup, and
+  // they only run once it is in, so it is recorded here before the product renders.
+  const configResult = fetchConfig(api).then((result) => {
+    if (result.status === "ready") {
+      rememberSetupRequired(queryClient, result.config.setupRequired === true);
+    }
+    return result;
+  });
   // The configuration request is a GET that never needs re-authentication, and it starts in this turn, before
   // the middleware (which a request waits for) is registered.
   api.use(reauthMiddleware(reauth));

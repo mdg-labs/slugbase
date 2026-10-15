@@ -320,5 +320,88 @@
         "minutes": "Too many attempts. Try again in {count, plural, one {# minute} other {# minutes}}."
       }
     }
+  },
+  "setup": {
+    "title": "Set up {name}",
+    "description": "Create the first account and workspace of this server.",
+    "step": "Step {step} of {count}",
+    "back": "Back",
+    "next": "Next",
+    "finish": "Create account",
+    "token": {
+      "title": "Setup token",
+      "description": "Proves that you run this server.",
+      "note": "The server printed the setup token to its log when it started. Copy the latest one from there.",
+      "label": "Setup token",
+      "required": "Enter the setup token.",
+      "wrong": "The setup token is missing or wrong. Copy the latest one from the server log."
+    },
+    "account": {
+      "title": "Your account",
+      "description": "This account becomes the administrator of the server.",
+      "name": {
+        "label": "Name",
+        "required": "Enter your name.",
+        "invalid": "Check your name."
+      },
+      "email": {
+        "label": "Email",
+        "required": "Enter your email address.",
+        "invalid": "Check the email address."
+      },
+      "password": {
+        "label": "Password",
+        "description": "Use at least 12 characters. A long phrase works well.",
+        "show": "Show password",
+        "hide": "Hide password",
+        "required": "Enter a password.",
+        "tooShort": "Use at least 12 characters.",
+        "tooLong": "Use at most 256 characters.",
+        "breached": "This password appears in a list of breached passwords. Choose a different one.",
+        "weak": "Choose a stronger password.",
+        "strength": {
+          "label": "Password strength",
+          "score": {
+            "0": "Very weak",
+            "1": "Weak",
+            "2": "Fair",
+            "3": "Good",
+            "4": "Strong"
+          }
+        }
+      }
+    },
+    "workspace": {
+      "title": "Your first workspace",
+      "description": "A workspace holds your bookmarks. You can add more later.",
+      "name": {
+        "label": "Workspace name",
+        "description": "For example your name or your team.",
+        "required": "Enter a name for the workspace.",
+        "invalid": "Check the workspace name."
+      }
+    },
+    "error": {
+      "completed": "Setup was already completed on this server. Sign in with your account instead.",
+      "signIn": "Go to sign in",
+      "invalid": "Check your entries and try again.",
+      "unavailable": "Setup is not possible right now. Try again in a moment.",
+      "rateLimited": {
+        "unknown": "Too many setup attempts. Try again later.",
+        "seconds": "Too many setup attempts. Try again in {count, plural, one {# second} other {# seconds}}.",
+        "minutes": "Too many setup attempts. Try again in {count, plural, one {# minute} other {# minutes}}."
+      }
+    },
+    "done": {
+      "title": "You are all set",
+      "description": "Your account and your first workspace are ready, and you are signed in.",
+      "step": "Setup complete",
+      "home": "Go to Home",
+      "mfa": {
+        "title": "Protect your account with two-factor authentication",
+        "description": "This account administers the server. Turn on two-factor authentication in the security settings.",
+        "action": "Open security settings"
+      }
+    }
   }
 }

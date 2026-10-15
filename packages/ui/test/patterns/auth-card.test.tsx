@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { AuthCard } from "../../src/patterns/index.ts";
+import { AuthCard, AuthLayout } from "../../src/patterns/index.ts";
 import { expectNoViolations } from "../support.tsx";
 
 function Card(): React.ReactElement {
@@ -41,5 +41,29 @@ describe("AuthCard", () => {
       await expectNoViolations(container);
       unmount();
     }
+  });
+});
+
+describe("AuthLayout", () => {
+  it("holds its content under the product name in the main region, and widens for a wizard", () => {
+    const { container, rerender } = render(
+      <AuthLayout footer="Footer text" productName="SlugBase">
+        <p>Content</p>
+      </AuthLayout>,
+    );
+
+    expect(screen.getByRole("main").textContent).toContain("SlugBase");
+    expect(screen.getByText("Content")).toBeTruthy();
+    expect(screen.getByText("Footer text")).toBeTruthy();
+    expect(container.querySelector(".max-w-sm")).not.toBeNull();
+
+    rerender(
+      <AuthLayout productName="SlugBase" size="md">
+        <p>Content</p>
+      </AuthLayout>,
+    );
+
+    expect(container.querySelector(".max-w-lg")).not.toBeNull();
+    expect(container.querySelector(".max-w-sm")).toBeNull();
   });
 });

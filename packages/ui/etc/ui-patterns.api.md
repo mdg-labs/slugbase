@@ -114,6 +114,17 @@ export interface AuthCardProps {
 }
 
 // @public
+export function AuthLayout(input: AuthLayoutProps): ReactElement;
+
+// @public (undocumented)
+export interface AuthLayoutProps {
+    children: ReactNode;
+    footer?: ReactNode;
+    productName: string;
+    size?: "sm" | "md";
+}
+
+// @public
 export function Banner(input: BannerProps): ReactElement;
 
 // @public (undocumented)
@@ -280,6 +291,17 @@ export interface FormOverlayProps {
 export { HomeIcon }
 
 export { InboxIcon }
+
+// @public
+export function InlineNote(input: InlineNoteProps): ReactElement;
+
+// @public (undocumented)
+export interface InlineNoteProps {
+    children: ReactNode;
+    // (undocumented)
+    className?: string;
+    title?: ReactNode;
+}
 
 export { LifeBuoyIcon }
 
@@ -504,6 +526,31 @@ export interface ThemeToggleProps {
 }
 
 export { TriangleAlertIcon }
+
+// @public
+export function Wizard(input: WizardProps): ReactElement;
+
+// @public (undocumented)
+export interface WizardProps {
+    backLabel: string;
+    children: ReactNode;
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    description?: ReactNode;
+    nextLabel: string;
+    onBack?: () => void;
+    onNext: () => void;
+    pending?: boolean;
+    step: number;
+    // (undocumented)
+    stepCount: number;
+    // (undocumented)
+    stepDescription?: ReactNode;
+    stepLabel: string;
+    stepTitle: ReactNode;
+    title: ReactNode;
+}
 
 // (No @packageDocumentation comment for this package)
 

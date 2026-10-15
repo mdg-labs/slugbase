@@ -320,5 +320,88 @@
         "minutes": "Zu viele Versuche. Versuche es in {count, plural, one {# Minute} other {# Minuten}} noch einmal."
       }
     }
+  },
+  "setup": {
+    "title": "{name} einrichten",
+    "description": "Lege das erste Konto und den ersten Workspace dieses Servers an.",
+    "step": "Schritt {step} von {count}",
+    "back": "Zurück",
+    "next": "Weiter",
+    "finish": "Konto erstellen",
+    "token": {
+      "title": "Einrichtungs-Token",
+      "description": "Belegt, dass du diesen Server betreibst.",
+      "note": "Der Server hat das Einrichtungs-Token beim Start in sein Log geschrieben. Kopiere das neueste von dort.",
+      "label": "Einrichtungs-Token",
+      "required": "Gib das Einrichtungs-Token ein.",
+      "wrong": "Das Einrichtungs-Token fehlt oder ist falsch. Kopiere das neueste aus dem Server-Log."
+    },
+    "account": {
+      "title": "Dein Konto",
+      "description": "Dieses Konto wird zur Administration des Servers.",
+      "name": {
+        "label": "Name",
+        "required": "Gib deinen Namen ein.",
+        "invalid": "Prüfe deinen Namen."
+      },
+      "email": {
+        "label": "E-Mail",
+        "required": "Gib deine E-Mail-Adresse ein.",
+        "invalid": "Prüfe die E-Mail-Adresse."
+      },
+      "password": {
+        "label": "Passwort",
+        "description": "Verwende mindestens 12 Zeichen. Ein langer Satz eignet sich gut.",
+        "show": "Passwort anzeigen",
+        "hide": "Passwort verbergen",
+        "required": "Gib ein Passwort ein.",
+        "tooShort": "Verwende mindestens 12 Zeichen.",
+        "tooLong": "Verwende höchstens 256 Zeichen.",
+        "breached": "Dieses Passwort steht auf einer Liste gestohlener Passwörter. Wähle ein anderes.",
+        "weak": "Wähle ein stärkeres Passwort.",
+        "strength": {
+          "label": "Passwortstärke",
+          "score": {
+            "0": "Sehr schwach",
+            "1": "Schwach",
+            "2": "Mittel",
+            "3": "Gut",
+            "4": "Stark"
+          }
+        }
+      }
+    },
+    "workspace": {
+      "title": "Dein erster Workspace",
+      "description": "Ein Workspace enthält deine Lesezeichen. Weitere kannst du später anlegen.",
+      "name": {
+        "label": "Name des Workspace",
+        "description": "Zum Beispiel dein Name oder dein Team.",
+        "required": "Gib einen Namen für den Workspace ein.",
+        "invalid": "Prüfe den Namen des Workspace."
+      }
+    },
+    "error": {
+      "completed": "Die Einrichtung ist auf diesem Server bereits abgeschlossen. Melde dich stattdessen mit deinem Konto an.",
+      "signIn": "Zur Anmeldung",
+      "invalid": "Prüfe deine Eingaben und versuche es erneut.",
+      "unavailable": "Die Einrichtung ist gerade nicht möglich. Versuche es gleich noch einmal.",
+      "rateLimited": {
+        "unknown": "Zu viele Einrichtungsversuche. Versuche es später erneut.",
+        "seconds": "Zu viele Einrichtungsversuche. Versuche es in {count, plural, one {# Sekunde} other {# Sekunden}} erneut.",
+        "minutes": "Zu viele Einrichtungsversuche. Versuche es in {count, plural, one {# Minute} other {# Minuten}} erneut."
+      }
+    },
+    "done": {
+      "title": "Alles bereit",
+      "description": "Dein Konto und dein erster Workspace sind angelegt, und du bist angemeldet.",
+      "step": "Einrichtung abgeschlossen",
+      "home": "Zur Startseite",
+      "mfa": {
+        "title": "Schütze dein Konto mit Zwei-Faktor-Authentifizierung",
+        "description": "Dieses Konto administriert den Server. Aktiviere die Zwei-Faktor-Authentifizierung in den Sicherheitseinstellungen.",
+        "action": "Sicherheitseinstellungen öffnen"
+      }
+    }
   }
 }

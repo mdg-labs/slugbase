@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from "./routes/__root.tsx";
 import { Route as AppRouteImport } from "./routes/_app.tsx";
 import { Route as LoginRouteImport } from "./routes/login.tsx";
+import { Route as SetupRouteImport } from "./routes/setup.tsx";
 import { Route as AppIndexRouteImport } from "./routes/_app/index.tsx";
 import { Route as AppSplatRouteImport } from "./routes/_app/$.tsx";
 import { Route as App403RouteImport } from "./routes/_app/403.tsx";
@@ -27,6 +28,11 @@ const AppRoute = AppRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: "/login",
   path: "/login",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const SetupRoute = SetupRouteImport.update({
+  id: "/setup",
+  path: "/setup",
   getParentRoute: () => rootRouteImport,
 } as any);
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -75,6 +81,7 @@ const AppSettingsAccountSecurityRoute =
 export interface FileRoutesByFullPath {
   "/": typeof AppIndexRoute;
   "/login": typeof LoginRoute;
+  "/setup": typeof SetupRoute;
   "/$": typeof AppSplatRoute;
   "/403": typeof App403Route;
   "/settings": typeof AppSettingsRouteWithChildren;
@@ -85,6 +92,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   "/login": typeof LoginRoute;
+  "/setup": typeof SetupRoute;
   "/$": typeof AppSplatRoute;
   "/403": typeof App403Route;
   "/": typeof AppIndexRoute;
@@ -97,6 +105,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport;
   "/_app": typeof AppRouteWithChildren;
   "/login": typeof LoginRoute;
+  "/setup": typeof SetupRoute;
   "/_app/$": typeof AppSplatRoute;
   "/_app/403": typeof App403Route;
   "/_app/settings": typeof AppSettingsRouteWithChildren;
@@ -111,6 +120,7 @@ export interface FileRouteTypes {
   fullPaths:
     | "/"
     | "/login"
+    | "/setup"
     | "/$"
     | "/403"
     | "/settings"
@@ -121,6 +131,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo;
   to:
     | "/login"
+    | "/setup"
     | "/$"
     | "/403"
     | "/"
@@ -132,6 +143,7 @@ export interface FileRouteTypes {
     | "__root__"
     | "/_app"
     | "/login"
+    | "/setup"
     | "/_app/$"
     | "/_app/403"
     | "/_app/settings"
@@ -145,6 +157,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren;
   LoginRoute: typeof LoginRoute;
+  SetupRoute: typeof SetupRoute;
 }
 
 declare module "@tanstack/react-router" {
@@ -161,6 +174,13 @@ declare module "@tanstack/react-router" {
       path: "/login";
       fullPath: "/login";
       preLoaderRoute: typeof LoginRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/setup": {
+      id: "/setup";
+      path: "/setup";
+      fullPath: "/setup";
+      preLoaderRoute: typeof SetupRouteImport;
       parentRoute: typeof rootRouteImport;
     };
     "/_app/": {
@@ -259,6 +279,7 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren);
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
+  SetupRoute: SetupRoute,
 };
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
