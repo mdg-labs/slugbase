@@ -20,6 +20,8 @@ const QR_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><rect 
 const SECRETS = ["JBSWY3DPEHPK3PXP", "KRSXG5CTMVRXEZLU"] as const;
 const BACKUP_CODES = ["ABCDEFGH23", "JKLMNPQR45", "STUVWXYZ67", "BCDFGHJK89", "MNPQRSTU23", "VWXYZABC45", "DEFGHJKL67", "NPQRSTUV89", "WXYZABCD23", "EFGHJKLM45"];
 const NEW_CODES = BACKUP_CODES.map((code) => code.split("").reverse().join(""));
+// The wizard flow plus three full-body axe scans runs past vitest's 5s default on a CI runner.
+const AXE_WIZARD_TEST_TIMEOUT_MS = 30_000;
 
 interface Call {
   readonly method: string;
@@ -613,7 +615,7 @@ describe("accessibility", () => {
     await typeCode("123456");
     await screen.findByRole("heading", { level: 2, name: "Save your backup codes" });
     expect(await violations()).toEqual([]);
-  });
+  }, AXE_WIZARD_TEST_TIMEOUT_MS);
 
   it("has no axe violations with the turn-off dialogs open", async () => {
     stubServer(true);
