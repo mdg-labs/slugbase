@@ -11,6 +11,7 @@
     { "action": "tool.use", "resource": "shell:git add -A*", "effect": "deny" },
     { "action": "tool.use", "resource": "shell:git add --all*", "effect": "deny" },
     { "action": "tool.use", "resource": "shell:git add .", "effect": "deny" },
+    { "action": "tool.use", "resource": "shell:git add ./ *", "effect": "deny" },
     // The production branch moves only through a merged pull request (.claude/rules/mdg-git.md).
     { "action": "tool.use", "resource": "shell:git push origin main*", "effect": "deny" },
     { "action": "tool.use", "resource": "shell:git push * HEAD:main*", "effect": "deny" },
