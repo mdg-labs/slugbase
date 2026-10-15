@@ -470,7 +470,7 @@ Starting values. **Config** values are environment or instance settings (doc 07 
 | Idempotency key retention | 24 h | fixed | doc 04 §6.3 |
 | List total shown exactly up to | 10 000 | fixed | §5.7 |
 | MFA backup codes | 10, single-use | fixed | §2.7 |
-| API tokens per account | 10 | config | §2.9 |
+| API tokens per account | 10 | fixed | §2.9 |
 | API token prefix | `slb_` | fixed | §2.9 |
 | AI suggestion timeout / max tags | 5 s / 5 | config | §14 |
 | Dashboard quick access / pinned / tags | 8 / 12 / 12 | config | §9.3 |

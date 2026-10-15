@@ -193,7 +193,7 @@ New codes are additive (§2.2); a client must treat an unknown `code` by its `st
 | **Machine** | Route-specific: a module's inbound event endpoint (in Cloud, the billing service's events; no session; sender signature verified, idempotent), internal metrics port | nothing | Not applied | — |
 | **Anonymous** | none | — | Required on unsafe methods (login, register, setup, password reset, invitation accept) | — |
 
-When an `Authorization` header is present, cookies are **ignored** for that request — a request is either a token request or a browser request, never both. A bearer header that no resolver accepts is `401 unauthenticated` without falling back to a cookie.
+When an `Authorization` header is present, cookies are **ignored** for that request — a request is either a token request or a browser request, never both. A bearer header that no resolver accepts is `401 unauthenticated` without falling back to a cookie. An operation that declares an `audience` (`machine`, `marketing-form`) resolves no principal from the `Authorization` header or the cookies, so that `401` applies to operations without an `audience`.
 
 ### 4.2 API tokens and workspaces
 
