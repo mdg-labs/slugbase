@@ -13,19 +13,13 @@ import {
 import { assertApplicationRole } from "../migrate/role-guard.ts";
 import { createMetrics, startMetricsListener, type MetricsListener, type QueueSnapshot } from "../metrics/index.ts";
 import type { JobDefinition, JobPayload, ScheduleDefinition } from "./job.ts";
-import { createMailModule } from "./jobs/mail-send.ts";
-import { createMaintenanceModule } from "./maintenance.ts";
+import { createBuiltInModules } from "./built-in.ts";
+import { queueSettings } from "./queues.ts";
 
 export const DEFAULT_WORKER_POOL_SIZE = 5;
 
 const DEFAULT_SHUTDOWN_TIMEOUT_MS = 25_000;
 
-/**
- * How long pg-boss keeps a finished job, completed or failed, before its
- * maintenance deletes it (doc 05 section 6). It is one setting per queue, so a
- * failed job is kept as long as a completed one.
- */
-export const FINISHED_JOB_RETENTION_SECONDS = 30 * 24 * 60 * 60;
 const BOSS_SCHEMA = "pgboss";
 const APPLICATION_NAME = "slugbase-worker";
 const MAINTENANCE_POOL_SIZE = 1;
@@ -131,7 +125,7 @@ export function createWorker(options: CreateWorkerOptions): Worker {
 
   let composition: Composition;
   try {
-    composition = compose([createMaintenanceModule(maintenanceStores), createMailModule(), ...options.modules], context, []);
+    composition = compose([...createBuiltInModules(maintenanceStores), ...options.modules], context, []);
   } catch (error) {
     void database.close();
     void closeMaintenanceStores();
@@ -194,15 +188,10 @@ export function createWorker(options: CreateWorkerOptions): Worker {
       try {
         await boss.start();
         for (const job of composition.jobs) {
-          const queue = {
-            retryLimit: job.retry.limit,
-            retryDelay: job.retry.delaySeconds,
-            retryBackoff: job.retry.backoff,
-            deleteAfterSeconds: FINISHED_JOB_RETENTION_SECONDS,
-            ...(job.retry.maxDelaySeconds === undefined ? {} : { retryDelayMax: job.retry.maxDelaySeconds }),
-          };
+          const queue = queueSettings(job);
+          // `migrate` already created the queues of the built-in and the modules' jobs. createQueue leaves an
+          // existing queue alone, so a changed policy is applied by updateQueue.
           await boss.createQueue(job.name, queue);
-          // createQueue leaves an existing queue alone, so a changed policy is applied here.
           await boss.updateQueue(job.name, queue);
           await boss.work<JobPayload>(
             job.name,

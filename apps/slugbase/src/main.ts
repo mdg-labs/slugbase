@@ -225,9 +225,11 @@ async function runServer(config: ServerConfig, trap: SignalTrap): Promise<void> 
   await runUntilSignal(trap, () => server.start(), logger);
 }
 
-// `migrate` applies the CE chain, installs the pg-boss schema and applies the
-// migration sets, as the migrator role (doc 05 section 5.3). Nothing to do is a
-// success. A failure names neither the connection string nor the password.
+// `migrate` applies the CE chain, installs the pg-boss schema with the queues of
+// the worker's built-in jobs and applies the migration sets, as the migrator role
+// (doc 05 section 5.3). CE composes no module, so no module job is passed. Nothing
+// to do is a success. A failure names neither the connection string nor the
+// password.
 async function runMigrate(config: MigrateConfig): Promise<void> {
   const logger = createLogger({ level: config.LOG_LEVEL });
   const { applied } = await runMigrations({ url: config.DATABASE_MIGRATE_URL, chains: MIGRATIONS });

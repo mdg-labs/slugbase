@@ -3,16 +3,17 @@ import { InMemoryMail } from "@slugbase/testing";
 import { useTestDatabase } from "@slugbase/testing/db";
 import type { MailMessage, MailPort } from "@slugbase/core";
 import type { AuthStore } from "@slugbase/db";
-import { getConstructionPlans } from "pg-boss";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createAccountOnlyTenantResolver } from "../../src/auth/tenant-resolver.ts";
 import { loadConfig } from "../../src/config/index.ts";
 import { createServer, type Server } from "../../src/create-server.ts";
+import { runMigrations } from "../../src/migrate/index.ts";
 import { createWorker } from "../../src/worker/index.ts";
 import { mailSendJob } from "../../src/worker/jobs/mail-send.ts";
 import type { RunningWorker } from "../../src/worker/index.ts";
 import { appUrl, tenantDatabase } from "../contract/support.ts";
 import { productionEnv } from "../config/support.ts";
+import { urlOf } from "../migrate/support.ts";
 import { adapters, recordingLogger, serverConfig } from "../support.ts";
 import { seedAccount, storeFor, type SeededAccount } from "./support.ts";
 
@@ -37,14 +38,8 @@ let store: AuthStore;
 
 beforeAll(async () => {
   store = storeFor(database());
-  const owner = database().owner;
-  // The plans carry their own BEGIN and COMMIT, which need one session.
-  const session = await owner.reserve();
-  try {
-    await session.unsafe(getConstructionPlans("pgboss", { createSchema: false }));
-  } finally {
-    session.release();
-  }
+  // What the image entrypoint runs before the server starts; no worker has run on this database.
+  await runMigrations({ url: urlOf(database().owner) });
 }, 120_000);
 
 let worker: RunningWorker | undefined;
@@ -197,22 +192,28 @@ async function passwordHashOf(accountId: string): Promise<string | null> {
 }
 
 describe("POST /api/v1/me/password with mail that can send", { timeout: TEST_TIMEOUT_MS }, () => {
-  it("fails and changes nothing while no worker has created the queue, so no change is committed without its message and no message exists without its change", async () => {
+  let waiting: SeededAccount | undefined;
+
+  it("changes the password and leaves the message queued for the worker on a database where no worker has ever started", async () => {
     const world = serve(mail.port);
     const account = await seedAccount(database());
+    waiting = account;
     const before = await passwordHashOf(account.id);
 
     const response = await changePassword(world, account);
 
-    expect(response.status).toBe(500);
-    expect(await passwordHashOf(account.id)).toBe(before);
-    expect(await mailJobs()).toEqual([]);
-    // The old password still signs in, and no session was rotated or revoked by the failed change.
-    expect((await signIn(world, account)).token).toHaveLength(43);
+    expect(response.status).toBe(204);
+    expect(await passwordHashOf(account.id)).not.toBe(before);
+    const jobs = (await mailJobs()).filter((job) => job.data["accountId"] === account.id);
+    expect(jobs.map((job) => job.state)).toEqual(["created"]);
+    expect(jobs[0]?.data).toEqual({ template: "passwordChanged", accountId: account.id });
+    expect(mail.attempts).toBe(0);
   });
 
   it("queues the message in the change's transaction and the worker sends it to the account's address in its language", async () => {
     await startWorker();
+    // The message that waited for the worker is sent once it starts.
+    await until(() => mail.inbox.sent.some((message) => message.to === waiting?.email), "the waiting message to reach the mail port");
     const world = serve(mail.port);
     const account = await seedAccount(database());
     await setLocale(account.id, "de");

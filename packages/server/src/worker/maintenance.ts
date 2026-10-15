@@ -1,6 +1,6 @@
 import type { RateLimitStore, RetentionStore } from "@slugbase/db";
 import { z } from "zod";
-import type { ServerModule } from "../create-server.ts";
+import type { ModuleContribution } from "../create-server.ts";
 import { defineJob, defineSchedule } from "./job.ts";
 
 // The retention the worker applies on its own, whatever modules it composes
@@ -18,7 +18,7 @@ export interface MaintenanceStores {
 }
 
 /**
- * Two jobs, each through a system operation of `@slugbase/db`.
+ * The two jobs, each through a system operation of `@slugbase/db`.
  *
  * `rateLimit.purgeIdle` deletes the rate-limit buckets idle for more than an
  * hour; it is idempotent: a second run finds nothing more to delete than what
@@ -30,7 +30,7 @@ export interface MaintenanceStores {
  * Its schedule is a pg-boss schedule, which runs once per tick across all
  * workers.
  */
-export function createMaintenanceModule(stores: MaintenanceStores): ServerModule {
+export function maintenanceContribution(stores: MaintenanceStores): ModuleContribution {
   const purgeIdleBuckets = defineJob({
     name: "rateLimit.purgeIdle",
     payload: z.object({}),
@@ -59,8 +59,5 @@ export function createMaintenanceModule(stores: MaintenanceStores): ServerModule
     cron: RETENTION_PURGE_CRON,
     job: retentionPurge.name,
   });
-  return {
-    name: "@slugbase/server/maintenance",
-    register: () => ({ jobs: [purgeIdleBuckets, retentionPurge], schedules: [schedule, retentionSchedule] }),
-  };
+  return { jobs: [purgeIdleBuckets, retentionPurge], schedules: [schedule, retentionSchedule] };
 }

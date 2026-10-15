@@ -589,6 +589,7 @@ DATABASE_MIGRATE_URL: z.ZodString;
 // @public (undocumented)
 export interface MigrationRunOptions {
     readonly chains?: readonly MigrationChain[];
+    readonly jobs?: readonly JobDefinition[];
     readonly url: string;
 }
 

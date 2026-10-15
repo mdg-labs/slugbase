@@ -1,7 +1,7 @@
 import { ACCOUNT_NOTIFICATIONS, accountNotification } from "@slugbase/core";
 import { accountProfileRepository, type QueuedJob } from "@slugbase/db";
 import { z } from "zod";
-import type { ServerModule } from "../../create-server.ts";
+import type { JobDefinition } from "../job.ts";
 import { defineJob } from "../job.ts";
 
 // `mail.send` (doc 01 section 8.1): one transactional email to an account. The job
@@ -39,9 +39,4 @@ export function queueMailSend(id: string, template: (typeof ACCOUNT_NOTIFICATION
 }
 
 /** The mail job the worker always runs, whatever modules it composes. */
-export function createMailModule(): ServerModule {
-  return {
-    name: "@slugbase/server/mail",
-    register: () => ({ jobs: [mailSendJob] }),
-  };
-}
+export const mailJobs: readonly JobDefinition[] = [mailSendJob];
