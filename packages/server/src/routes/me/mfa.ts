@@ -4,12 +4,14 @@ import {
   regenerateMfaBackupCodes as regenerateMfaBackupCodesOperation,
   startMfaEnrollment as startMfaEnrollmentOperation,
 } from "@slugbase/contracts";
-import type { SessionCookieSpec } from "@slugbase/core";
+import type { MailPort, SessionCookieSpec } from "@slugbase/core";
 import { accountProfileRepository, type Database } from "@slugbase/db";
 import { setSessionCookie } from "../../auth/cookie.ts";
 import { confirmEnrollment, disableMfa, regenerateBackupCodes, startEnrollment, type ManagementDependencies, type MfaDependencies } from "../../auth/mfa.ts";
+import { uuidv7 } from "../../auth/uuidv7.ts";
 import type { ChainContext, RouteBinding } from "../../http/chain.ts";
 import { ProblemError, requestIdOf } from "../../http/problem.ts";
+import { queueMailSend } from "../../worker/jobs/mail-send.ts";
 import { route } from "../register.ts";
 
 // POST /api/v1/me/mfa/enrollment, POST /api/v1/me/mfa/enrollment/confirm,
@@ -23,7 +25,9 @@ import { route } from "../register.ts";
 // included. The account is always the session's, never a value of the request.
 // Only the start response carries the secret and only the confirm and
 // regenerate responses carry backup codes; none is logged, and a problem
-// document is built from fixed text.
+// document is built from fixed text. Enabling and disabling the factor also
+// queue the "MFA enabled" and "MFA disabled" emails in the transaction that
+// writes the change, when the composition's mail can send (doc 02 section 12).
 
 const UNAUTHENTICATED = "Authentication is required.";
 const ALREADY_ENABLED = "Two-factor authentication is already on.";
@@ -32,10 +36,14 @@ const INVALID_CODE = "The code is wrong or has expired.";
 const NOT_ENABLED = "Two-factor authentication is not on.";
 const WRONG_PASSWORD = "The password is wrong.";
 
-export interface MfaRoutesOptions extends Omit<MfaDependencies, "store">, Omit<ManagementDependencies, "store" | "secretBox"> {
+export interface MfaRoutesOptions
+  extends Omit<MfaDependencies, "store" | "jobsOnEnable">,
+    Omit<ManagementDependencies, "store" | "secretBox" | "jobsOnDisable"> {
   readonly store: MfaDependencies["store"] & ManagementDependencies["store"];
   readonly withTenant: Database["withTenant"];
   readonly cookie: SessionCookieSpec;
+  /** The mail port of the composition; a message is queued only when it can send. */
+  readonly mail: Pick<MailPort, "available">;
 }
 
 function sessionOf(context: ChainContext): { readonly sessionId: string; readonly accountId: string } {
@@ -46,7 +54,13 @@ function sessionOf(context: ChainContext): { readonly sessionId: string; readonl
   return principal;
 }
 
-export function mfaRoutes({ withTenant, cookie, ...dependencies }: MfaRoutesOptions): RouteBinding[] {
+export function mfaRoutes({ withTenant, cookie, mail, ...options }: MfaRoutesOptions): RouteBinding[] {
+  // Turning the factor on or off queues its email in the transaction that writes the change; mail that cannot send queues nothing.
+  const dependencies = {
+    ...options,
+    jobsOnEnable: (accountId: string) => (mail.available ? [queueMailSend(uuidv7(), "mfaEnabled", accountId)] : []),
+    jobsOnDisable: (accountId: string) => (mail.available ? [queueMailSend(uuidv7(), "mfaDisabled", accountId)] : []),
+  };
   return [
     route(startMfaEnrollmentOperation).handle(async (_request, context) => {
       const { accountId } = sessionOf(context);

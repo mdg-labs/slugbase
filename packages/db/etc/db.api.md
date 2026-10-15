@@ -267,6 +267,7 @@ export interface MfaActivation {
     readonly accountId: string;
     // (undocumented)
     readonly backupCodes: readonly BackupCodeRecord[];
+    readonly jobs?: readonly QueuedJob[];
     readonly newTokenHash: Buffer;
     readonly secret: Uint8Array;
     readonly sessionId: string;
@@ -289,6 +290,7 @@ export interface MfaDisabling {
     // (undocumented)
     readonly accountId: string;
     readonly factor: SecondFactor;
+    readonly jobs?: readonly QueuedJob[];
     readonly newTokenHash: Buffer;
     readonly sessionId: string;
 }

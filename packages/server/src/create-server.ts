@@ -471,6 +471,7 @@ export function createServer(options: CreateServerOptions): Server {
       secretBox: adapters.secretBox,
       withTenant: context.withTenant,
       cookie: sessionCookieSpec(config.APP_ORIGIN),
+      mail: adapters.mail,
       hashCode: hashPassword,
       verifyCode: verifyHash,
       passwords,

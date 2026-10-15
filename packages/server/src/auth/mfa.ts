@@ -7,7 +7,7 @@ import {
   type SecretBoxOptions,
   type SecretBoxPort,
 } from "@slugbase/core";
-import type { AuthStore, SecondFactor } from "@slugbase/db";
+import type { AuthStore, QueuedJob, SecondFactor } from "@slugbase/db";
 import { passwordMatches } from "./reauth.ts";
 import type { PasswordVerifier } from "./password.ts";
 import { newSessionToken } from "./session-token.ts";
@@ -33,6 +33,11 @@ export interface MfaDependencies {
   readonly issuer: string;
   /** The QR code of a text as an SVG document. */
   readonly renderQr: (text: string) => string;
+  /**
+   * The jobs turning the factor on puts on their queues, in the transaction that writes it (the email that
+   * tells the account about it). None when it returns an empty list.
+   */
+  readonly jobsOnEnable?: (accountId: string) => readonly QueuedJob[];
 }
 
 /**
@@ -102,8 +107,8 @@ export type EnrollmentConfirmOutcome =
  * anything is hashed or written. A secret still sealed under a retired key is sealed again under the
  * current one in the same pass, and only the secret that was verified can be activated. The accepted
  * time step, the activation, the ten backup codes (stored as argon2id hashes) and the session's new
- * token are then written by one store call in one transaction, so a failure leaves no half-enabled
- * factor, no codes and the old token.
+ * token are then written by one store call in one transaction, with the jobs of the change, so a failure
+ * leaves no half-enabled factor, no codes, the old token and nothing queued.
  */
 export async function confirmEnrollment(dependencies: MfaDependencies, request: EnrollmentConfirmation): Promise<EnrollmentConfirmOutcome> {
   const { store, secretBox } = dependencies;
@@ -142,6 +147,7 @@ export async function confirmEnrollment(dependencies: MfaDependencies, request: 
     secret: stored,
     backupCodes: records,
     newTokenHash: token.hash,
+    jobs: dependencies.jobsOnEnable?.(request.accountId) ?? [],
   });
   switch (outcome) {
     case "activated":
@@ -272,6 +278,11 @@ export interface ManagementDependencies extends FactorCheckDependencies {
   readonly hashCode: (code: string) => Promise<string>;
   /** Checks the account's password; the verifier sign-in and re-authentication use. */
   readonly passwords: PasswordVerifier;
+  /**
+   * The jobs turning the factor off puts on their queues, in the transaction that writes it (the email that
+   * tells the account about it). None when it returns an empty list.
+   */
+  readonly jobsOnDisable?: (accountId: string) => readonly QueuedJob[];
 }
 
 export type BackupCodesRegenerationResult =
@@ -339,8 +350,8 @@ export type MfaDisablingResult =
  * unused backup code (doc 02 section 2.7, doc 10 T17). The password and then the code are verified
  * before anything is written, so a wrong password never spends a code or a time step. The accepted
  * step or consumed backup code, the cleared secret and activation time, the deleted backup codes and
- * the session's new token are then written by one store call in one transaction, so a failure leaves
- * the factor on, every code in place and the old token.
+ * the session's new token are then written by one store call in one transaction, with the jobs of the
+ * change, so a failure leaves the factor on, every code in place, the old token and nothing queued.
  */
 export async function disableMfa(dependencies: ManagementDependencies, request: MfaDisabling): Promise<MfaDisablingResult> {
   const { store } = dependencies;
@@ -356,7 +367,14 @@ export async function disableMfa(dependencies: ManagementDependencies, request: 
     return { kind: "invalid_code" };
   }
   const token = newSessionToken();
-  switch (await store.disableMfa({ accountId: request.accountId, sessionId: request.sessionId, factor, newTokenHash: token.hash })) {
+  const outcome = await store.disableMfa({
+    accountId: request.accountId,
+    sessionId: request.sessionId,
+    factor,
+    newTokenHash: token.hash,
+    jobs: dependencies.jobsOnDisable?.(request.accountId) ?? [],
+  });
+  switch (outcome) {
     case "disabled":
       return { kind: "disabled", token: token.value };
     case "replayed":

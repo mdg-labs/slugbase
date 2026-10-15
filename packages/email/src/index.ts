@@ -1,3 +1,4 @@
+import { MFA_DISABLED_TEMPLATE, MFA_ENABLED_TEMPLATE, mfaDisabled, mfaEnabled } from "./templates/mfa.ts";
 import { PASSWORD_CHANGED_TEMPLATE, passwordChanged } from "./templates/password-changed.ts";
 import type { MailTemplates } from "./types.ts";
 
@@ -21,5 +22,10 @@ export function createMailTemplates({ appOrigin }: MailTemplateOptions): MailTem
   if (protocol !== "https:" && protocol !== "http:") {
     throw new RangeError("the application origin of the mail templates must be an http or https origin");
   }
-  return { [PASSWORD_CHANGED_TEMPLATE]: passwordChanged({ appName: APP_NAME, origin }) };
+  const options = { appName: APP_NAME, origin };
+  return {
+    [PASSWORD_CHANGED_TEMPLATE]: passwordChanged(options),
+    [MFA_ENABLED_TEMPLATE]: mfaEnabled(options),
+    [MFA_DISABLED_TEMPLATE]: mfaDisabled(options),
+  };
 }

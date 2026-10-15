@@ -7,7 +7,7 @@
 import type { ProblemCode } from '@slugbase/contracts';
 
 // @public
-export const ACCOUNT_NOTIFICATIONS: readonly ["passwordChanged"];
+export const ACCOUNT_NOTIFICATIONS: readonly ["passwordChanged", "mfaEnabled", "mfaDisabled"];
 
 // @public (undocumented)
 export type AccountNotification = (typeof ACCOUNT_NOTIFICATIONS)[number];

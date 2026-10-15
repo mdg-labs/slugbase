@@ -1,4 +1,5 @@
 import type postgres from "postgres";
+import { enqueueInTransaction, type QueuedJob } from "./queue.ts";
 
 // The wrappers of the system operations behind the second factor (doc 05
 // section 3.3, doc 02 section 2.7): the one way product code reaches the
@@ -41,6 +42,8 @@ export interface MfaActivation {
   readonly backupCodes: readonly BackupCodeRecord[];
   /** SHA-256 of the 32-byte token the session continues with. */
   readonly newTokenHash: Buffer;
+  /** Jobs put on their queues in the same transaction: they exist exactly when the activation is committed. */
+  readonly jobs?: readonly QueuedJob[];
 }
 
 export type MfaActivationOutcome =
@@ -110,6 +113,8 @@ export interface MfaDisabling {
   readonly factor: SecondFactor;
   /** SHA-256 of the 32-byte token the session continues with. */
   readonly newTokenHash: Buffer;
+  /** Jobs put on their queues in the same transaction: they exist exactly when the disabling is committed. */
+  readonly jobs?: readonly QueuedJob[];
 }
 
 export type MfaDisablingOutcome =
@@ -157,7 +162,9 @@ export interface MfaStore {
   resealMfaSecret(accountId: string, expected: Uint8Array, secret: SealedMfaSecret): Promise<boolean>;
   /**
    * Accepts the time step, enables MFA, stores exactly these backup codes (deleting any other) and gives
-   * the session a new token, in one transaction: all of it happens or none of it does.
+   * the session a new token, in one transaction: all of it happens or none of it does. The jobs of
+   * the activation, if any, are queued in that transaction too, and a job that cannot be queued
+   * undoes the activation and rejects.
    */
   activateMfa(activation: MfaActivation): Promise<MfaActivationOutcome>;
   /**
@@ -187,7 +194,9 @@ export interface MfaStore {
   /**
    * Accepts the factor, clears the secret, `mfa_enabled_at` and the accepted step, deletes every
    * backup code and gives the session a new token, in one transaction: all of it happens or none of
-   * it does. Locks are taken in the order of sys_mfa_lock, then the session row.
+   * it does. Locks are taken in the order of sys_mfa_lock, then the session row. The jobs of the
+   * disabling, if any, are queued in that transaction too, and a job that cannot be queued undoes
+   * the disabling and rejects.
    */
   disableMfa(disabling: MfaDisabling): Promise<MfaDisablingOutcome>;
   /**
@@ -303,7 +312,7 @@ export function bindMfaStore(client: postgres.Sql): MfaStore {
       );
     },
 
-    async activateMfa({ accountId, sessionId, step, secret, backupCodes, newTokenHash }) {
+    async activateMfa({ accountId, sessionId, step, secret, backupCodes, newTokenHash, jobs = [] }) {
       if (newTokenHash.length !== TOKEN_HASH_BYTES) {
         throw new RangeError(`newTokenHash must be a ${String(TOKEN_HASH_BYTES)}-byte SHA-256 digest`);
       }
@@ -337,6 +346,9 @@ export function bindMfaStore(client: postgres.Sql): MfaStore {
             ))
           ) {
             throw new RolledBack("no_session");
+          }
+          for (const job of jobs) {
+            await enqueueInTransaction(tx, job);
           }
         });
       } catch (error) {
@@ -422,7 +434,7 @@ export function bindMfaStore(client: postgres.Sql): MfaStore {
       return "regenerated";
     },
 
-    async disableMfa({ accountId, sessionId, factor, newTokenHash }) {
+    async disableMfa({ accountId, sessionId, factor, newTokenHash, jobs = [] }) {
       if (newTokenHash.length !== TOKEN_HASH_BYTES) {
         throw new RangeError(`newTokenHash must be a ${String(TOKEN_HASH_BYTES)}-byte SHA-256 digest`);
       }
@@ -449,6 +461,9 @@ export function bindMfaStore(client: postgres.Sql): MfaStore {
             ))
           ) {
             throw new Stopped<"no_session">("no_session");
+          }
+          for (const job of jobs) {
+            await enqueueInTransaction(tx, job);
           }
         });
       } catch (error) {

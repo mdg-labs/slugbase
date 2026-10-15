@@ -9,5 +9,21 @@
     "body": "The password of your {appName} account was changed. Every other device was signed out.",
     "notYou": "If you did not make this change, contact the administrator of this {appName} instance right away.",
     "action": "Review your account security"
+  },
+  "mfaEnabled": {
+    "subject": "Two-factor authentication was turned on for your {appName} account",
+    "greeting": "Hi {name},",
+    "greetingAnonymous": "Hi,",
+    "body": "Two-factor authentication was turned on for your {appName} account. From now on, signing in asks for a code from your authenticator app, or for a backup code.",
+    "notYou": "If you did not do this, contact the administrator of this {appName} instance right away.",
+    "action": "Review your account security"
+  },
+  "mfaDisabled": {
+    "subject": "Two-factor authentication was turned off for your {appName} account",
+    "greeting": "Hi {name},",
+    "greetingAnonymous": "Hi,",
+    "body": "Two-factor authentication was turned off for your {appName} account. Signing in now asks for your password only, and your backup codes no longer work.",
+    "notYou": "If you did not make this change, contact the administrator of this {appName} instance right away.",
+    "action": "Review your account security"
   }
 }

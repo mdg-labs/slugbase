@@ -7,7 +7,7 @@ import type { MailMessage } from "../ports/mail.ts";
 // the one the message goes to (doc 05 section 2.10).
 
 /** The templates an account notification can name; each one is also a template of `@slugbase/email`. */
-export const ACCOUNT_NOTIFICATIONS = ["passwordChanged"] as const;
+export const ACCOUNT_NOTIFICATIONS = ["passwordChanged", "mfaEnabled", "mfaDisabled"] as const;
 
 export type AccountNotification = (typeof ACCOUNT_NOTIFICATIONS)[number];
 

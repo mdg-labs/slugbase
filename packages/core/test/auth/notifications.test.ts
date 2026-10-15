@@ -11,6 +11,10 @@ describe("accountNotification", () => {
     });
   });
 
+  it("names the password and the second-factor notifications", () => {
+    expect(ACCOUNT_NOTIFICATIONS).toEqual(["passwordChanged", "mfaEnabled", "mfaDisabled"]);
+  });
+
   it("names every notification by the template of the same name", () => {
     for (const notification of ACCOUNT_NOTIFICATIONS) {
       expect(accountNotification(notification, { email: "a@example.test", locale: "en", displayName: "A" }).template).toBe(notification);

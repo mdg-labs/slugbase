@@ -1143,3 +1143,128 @@ describe("sys_account_mfa_enabled", () => {
     expect(row).toEqual({ args: 0, returns: "boolean" });
   });
 });
+
+describe("the jobs of activateMfa and disableMfa", () => {
+  const QUEUE = "probe.send";
+
+  interface JobRow {
+    id: string;
+    name: string;
+    data: Record<string, unknown>;
+  }
+
+  // The queue and job tables `migrate` creates through pg-boss, reduced to the columns the enqueue writes and reads.
+  beforeAll(async () => {
+    await db.owner.unsafe(`
+      CREATE TABLE pgboss.queue (
+        name text PRIMARY KEY, retention_seconds int NOT NULL, expire_seconds int NOT NULL, deletion_seconds int NOT NULL,
+        retry_limit int NOT NULL, retry_delay int NOT NULL, retry_backoff boolean NOT NULL, retry_delay_max int,
+        policy text NOT NULL, dead_letter text, heartbeat_seconds int);
+      CREATE TABLE pgboss.job (
+        id uuid PRIMARY KEY, name text NOT NULL, data jsonb, keep_until timestamptz NOT NULL, expire_seconds int NOT NULL,
+        deletion_seconds int NOT NULL, retry_limit int NOT NULL, retry_delay int NOT NULL, retry_backoff boolean NOT NULL,
+        retry_delay_max int, policy text NOT NULL, dead_letter text, heartbeat_seconds int);
+      INSERT INTO pgboss.queue VALUES ('${QUEUE}', 3600, 900, 3600, 3, 5, true, NULL, 'standard', NULL, NULL);`);
+  }, HOOK_TIMEOUT_MS);
+
+  function job(queue = QUEUE) {
+    return { id: freshId(), queue, data: { template: "probe" } };
+  }
+
+  async function queued(ids: readonly string[]): Promise<JobRow[]> {
+    return db.app<JobRow[]>`SELECT id, name, data FROM pgboss.job WHERE id IN ${db.app(ids)} ORDER BY id`;
+  }
+
+  it("queues the jobs of an activation in its transaction, with the data they carry", async () => {
+    const { accountId, session, secret } = await pending();
+    const jobs = [job(), job()];
+
+    expect(
+      await store.activateMfa({ accountId, sessionId: session.id, step: 3000, secret: secret.ciphertext, backupCodes: codes(), newTokenHash: freshToken().hash, jobs }),
+    ).toBe("activated");
+
+    expect(await queued(jobs.map(({ id }) => id))).toEqual(jobs.map(({ id }) => ({ id, name: QUEUE, data: { template: "probe" } })).sort((a, b) => a.id.localeCompare(b.id)));
+  });
+
+  it("rolls the activation back when a job cannot be queued, and rejects", async () => {
+    const { accountId, session, secret } = await pending();
+    const next = freshToken();
+    const good = job();
+
+    await expect(
+      store.activateMfa({
+        accountId,
+        sessionId: session.id,
+        step: 3010,
+        secret: secret.ciphertext,
+        backupCodes: codes(),
+        newTokenHash: next.hash,
+        jobs: [good, job("probe.missing")],
+      }),
+    ).rejects.toThrow("probe.missing");
+
+    expect(await mfaRow(accountId)).toMatchObject({ enabled_at: null, last_step: null });
+    expect(await backupCodeRows(accountId)).toEqual([]);
+    expect(await store.lookupSession(next.hash)).toBeUndefined();
+    expect((await store.lookupSession(session.hash))?.sessionId).toBe(session.id);
+    expect(await queued([good.id])).toEqual([]);
+  });
+
+  it("queues nothing for an activation that was not made", async () => {
+    const { accountId, secret } = await pending();
+    const queuedJob = job();
+
+    expect(
+      await store.activateMfa({ accountId, sessionId: freshId(), step: 3020, secret: secret.ciphertext, backupCodes: codes(), newTokenHash: freshToken().hash, jobs: [queuedJob] }),
+    ).toBe("no_session");
+
+    expect(await queued([queuedJob.id])).toEqual([]);
+  });
+
+  it("queues the jobs of a disabling in its transaction", async () => {
+    const { accountId, session } = await enrolled(3100);
+    const queuedJob = job();
+
+    expect(
+      await store.disableMfa({ accountId, sessionId: session.id, factor: { kind: "totp", step: 3101 }, newTokenHash: freshToken().hash, jobs: [queuedJob] }),
+    ).toBe("disabled");
+
+    expect(await queued([queuedJob.id])).toEqual([{ id: queuedJob.id, name: QUEUE, data: { template: "probe" } }]);
+  });
+
+  it("rolls the disabling back when a job cannot be queued, and rejects", async () => {
+    const { accountId, issued, session } = await enrolled(3110);
+    const before = await mfaRow(accountId);
+    const next = freshToken();
+    const good = job();
+
+    await expect(
+      store.disableMfa({
+        accountId,
+        sessionId: session.id,
+        factor: { kind: "backup", codeId: issued[0]?.id ?? "" },
+        newTokenHash: next.hash,
+        jobs: [good, job("probe.missing")],
+      }),
+    ).rejects.toThrow("probe.missing");
+
+    expect(await mfaRow(accountId)).toEqual(before);
+    expect(await backupCodeRows(accountId)).toHaveLength(10);
+    expect((await backupCodeRows(accountId)).every((code) => code.used_at === null)).toBe(true);
+    expect(await store.lookupSession(next.hash)).toBeUndefined();
+    expect((await store.lookupSession(session.hash))?.sessionId).toBe(session.id);
+    expect(await queued([good.id])).toEqual([]);
+  });
+
+  it("queues nothing for a disabling that was not made", async () => {
+    const { accountId, step, session } = await enrolled(3120);
+    const replayed = job();
+    const noSession = job();
+
+    expect(await store.disableMfa({ accountId, sessionId: session.id, factor: { kind: "totp", step }, newTokenHash: freshToken().hash, jobs: [replayed] })).toBe("replayed");
+    expect(await store.disableMfa({ accountId, sessionId: freshId(), factor: { kind: "totp", step: step + 1 }, newTokenHash: freshToken().hash, jobs: [noSession] })).toBe("no_session");
+
+    expect(await queued([replayed.id, noSession.id])).toEqual([]);
+    expect((await mfaRow(accountId)).enabled_at).toBeInstanceOf(Date);
+  });
+});

@@ -9,5 +9,21 @@
     "body": "Das Passwort deines {appName}-Kontos wurde geändert. Alle anderen Geräte wurden abgemeldet.",
     "notYou": "Falls du diese Änderung nicht vorgenommen hast, wende dich sofort an die Administration dieser {appName}-Instanz.",
     "action": "Kontosicherheit prüfen"
+  },
+  "mfaEnabled": {
+    "subject": "Die Zwei-Faktor-Authentifizierung wurde für dein {appName}-Konto eingeschaltet",
+    "greeting": "Hallo {name},",
+    "greetingAnonymous": "Hallo,",
+    "body": "Die Zwei-Faktor-Authentifizierung wurde für dein {appName}-Konto eingeschaltet. Ab jetzt fragt die Anmeldung nach einem Code aus deiner Authenticator-App oder nach einem Backup-Code.",
+    "notYou": "Falls du das nicht selbst getan hast, wende dich sofort an die Administration dieser {appName}-Instanz.",
+    "action": "Kontosicherheit prüfen"
+  },
+  "mfaDisabled": {
+    "subject": "Die Zwei-Faktor-Authentifizierung wurde für dein {appName}-Konto ausgeschaltet",
+    "greeting": "Hallo {name},",
+    "greetingAnonymous": "Hallo,",
+    "body": "Die Zwei-Faktor-Authentifizierung wurde für dein {appName}-Konto ausgeschaltet. Die Anmeldung fragt jetzt nur noch nach deinem Passwort, und deine Backup-Codes funktionieren nicht mehr.",
+    "notYou": "Falls du diese Änderung nicht vorgenommen hast, wende dich sofort an die Administration dieser {appName}-Instanz.",
+    "action": "Kontosicherheit prüfen"
   }
 }
