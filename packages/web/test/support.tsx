@@ -63,6 +63,7 @@ export const ACCOUNT_BODY = {
   onboarding: { browserSetupDone: false, importDone: false, checklistDismissed: false },
   emailVerified: true,
   hasPassword: true,
+  mfaEnabled: false,
 } as const;
 
 /** The signed-in account of a test server. It chose the language of the browser, so a test that opens the app in German sees German. */

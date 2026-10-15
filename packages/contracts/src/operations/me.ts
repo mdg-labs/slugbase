@@ -72,6 +72,7 @@ export const AccountSchema = z
     onboarding: OnboardingSchema.describe("The stored state of the Getting started checklist"),
     emailVerified: z.boolean().describe("Whether the email address was verified"),
     hasPassword: z.boolean().describe("Whether the account can sign in with a password; false for an account that signs in through an identity provider only"),
+    mfaEnabled: z.boolean().describe("Whether a second factor is on; false when it is off or an enrolment is only pending"),
   })
   .meta({ id: "Account" });
 

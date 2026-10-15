@@ -413,11 +413,22 @@ describe("the account profile repository", () => {
       onboarding: { browserSetupDone: false, importDone: false, checklistDismissed: false },
       emailVerified: true,
       hasPassword: true,
+      mfaEnabled: false,
     });
     expect(JSON.stringify(profile)).not.toContain("argon2");
 
     const bare = await tenant(withoutPassword, undefined, (tx) => accountProfileRepository(tx).profile());
     expect(bare).toMatchObject({ emailVerified: false, hasPassword: false, accent: null });
+  });
+
+  it("reports the second factor as on only for an account whose MFA is confirmed, and for no other", async () => {
+    const confirmed = await account();
+    const pendingOnly = await account();
+    await asSystem(db, (tx) => tx`UPDATE accounts SET mfa_secret = '\\x01', mfa_secret_key_id = 'key-1', mfa_enabled_at = now() WHERE id = ${confirmed}`);
+    await asSystem(db, (tx) => tx`UPDATE accounts SET mfa_secret = '\\x01', mfa_secret_key_id = 'key-1' WHERE id = ${pendingOnly}`);
+
+    expect(await tenant(confirmed, undefined, (tx) => accountProfileRepository(tx).profile())).toMatchObject({ mfaEnabled: true });
+    expect(await tenant(pendingOnly, undefined, (tx) => accountProfileRepository(tx).profile())).toMatchObject({ mfaEnabled: false });
   });
 
   it("answers nothing for an account whose row is not visible", async () => {

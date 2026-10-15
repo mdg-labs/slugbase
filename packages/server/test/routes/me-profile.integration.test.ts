@@ -153,6 +153,7 @@ describe("PATCH /api/v1/me", () => {
       onboarding: { browserSetupDone: false, importDone: false, checklistDismissed: false },
       emailVerified: true,
       hasPassword: true,
+      mfaEnabled: false,
     });
     expect(text).not.toMatch(/argon2|password_hash|passwordHash|token_hash/i);
     expect((await me(world, browser)).account).toMatchObject({ displayName: "Ada Lovelace", locale: "de" });

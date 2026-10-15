@@ -1,6 +1,6 @@
 -- The system operations behind the second factor (doc 05 sections 2.1, 3.1 and
 -- 3.3, doc 02 sections 2.3 and 2.7, doc 10 T7 and T17). The columns and the
--- table are defined in src/schema/. All ten functions are entered in
+-- table are defined in src/schema/. All eleven functions are entered in
 -- src/system/registry.ts. slugbase_owner creates each function and hands it to
 -- slugbase_system, which needs CREATE on the schema for the length of those
 -- statements.
@@ -336,6 +336,18 @@ BEGIN
 END
 $$;
 
+-- sys_account_mfa_enabled(): whether the calling account (from app_account_id(),
+-- never an argument) has the second factor on, which is all the profile may say
+-- of the mfa_* columns: slugbase_app has no privilege on them. True exactly when
+-- mfa_enabled_at is set, so an enrolment that is only pending reads as off. It
+-- returns no secret, key id or step. NULL when no account is set.
+CREATE OR REPLACE FUNCTION public.sys_account_mfa_enabled() RETURNS boolean
+  LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path = pg_catalog, public, pg_temp
+  AS $$
+    SELECT a.mfa_enabled_at IS NOT NULL FROM public.accounts a WHERE a.id = public.app_account_id()
+  $$;
+
 ALTER FUNCTION public.sys_mfa_get_secret(uuid) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_mfa_set(uuid, text, bytea, text, bytea) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_mfa_accept_step(uuid, bigint) OWNER TO slugbase_system;
@@ -346,6 +358,7 @@ ALTER FUNCTION public.sys_session_promote(uuid, uuid, bytea) OWNER TO slugbase_s
 ALTER FUNCTION public.sys_session_mfa_failure(uuid, uuid) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_mfa_lock(uuid) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_mfa_disable(uuid) OWNER TO slugbase_system;
+ALTER FUNCTION public.sys_account_mfa_enabled() OWNER TO slugbase_system;
 REVOKE CREATE ON SCHEMA public FROM slugbase_system;
 
 REVOKE ALL ON FUNCTION public.sys_mfa_get_secret(uuid) FROM PUBLIC;
@@ -358,6 +371,7 @@ REVOKE ALL ON FUNCTION public.sys_session_promote(uuid, uuid, bytea) FROM PUBLIC
 REVOKE ALL ON FUNCTION public.sys_session_mfa_failure(uuid, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sys_mfa_lock(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sys_mfa_disable(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.sys_account_mfa_enabled() FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.sys_mfa_get_secret(uuid) TO slugbase_app;
 GRANT EXECUTE ON FUNCTION public.sys_mfa_set(uuid, text, bytea, text, bytea) TO slugbase_app;
 GRANT EXECUTE ON FUNCTION public.sys_mfa_accept_step(uuid, bigint) TO slugbase_app;
@@ -368,6 +382,7 @@ GRANT EXECUTE ON FUNCTION public.sys_session_promote(uuid, uuid, bytea) TO slugb
 GRANT EXECUTE ON FUNCTION public.sys_session_mfa_failure(uuid, uuid) TO slugbase_app;
 GRANT EXECUTE ON FUNCTION public.sys_mfa_lock(uuid) TO slugbase_app;
 GRANT EXECUTE ON FUNCTION public.sys_mfa_disable(uuid) TO slugbase_app;
+GRANT EXECUTE ON FUNCTION public.sys_account_mfa_enabled() TO slugbase_app;
 
 -- mfa_backup_codes: no app access and no policy, so no role that is subject to
 -- row-level security sees a row; slugbase_system, which bypasses it, reaches the

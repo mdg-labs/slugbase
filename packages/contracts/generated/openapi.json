@@ -75,6 +75,10 @@
             ],
             "type": "string"
           },
+          "mfaEnabled": {
+            "description": "Whether a second factor is on; false when it is off or an enrolment is only pending",
+            "type": "boolean"
+          },
           "onboarding": {
             "$ref": "#/components/schemas/Onboarding",
             "description": "The stored state of the Getting started checklist"
@@ -106,7 +110,8 @@
           "analyticsConsent",
           "onboarding",
           "emailVerified",
-          "hasPassword"
+          "hasPassword",
+          "mfaEnabled"
         ],
         "type": "object"
       },

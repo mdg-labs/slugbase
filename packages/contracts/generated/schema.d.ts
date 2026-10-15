@@ -363,6 +363,8 @@ export interface components {
              * @enum {string}
              */
             locale: "en" | "de";
+            /** @description Whether a second factor is on; false when it is off or an enrolment is only pending */
+            mfaEnabled: boolean;
             /** @description The stored state of the Getting started checklist */
             onboarding: components["schemas"]["Onboarding"];
             /** @description Whether single-key shortcuts are on; modifier shortcuts always work */

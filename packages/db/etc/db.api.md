@@ -39,6 +39,8 @@ export interface AccountProfile {
     // (undocumented)
     readonly locale: "en" | "de";
     // (undocumented)
+    readonly mfaEnabled: boolean;
+    // (undocumented)
     readonly onboarding: Onboarding;
     // (undocumented)
     readonly singleKeyShortcuts: boolean;

@@ -108,6 +108,7 @@ async function pending() {
 
 describe("the second-factor system operations", () => {
   const operations = [
+    "sys_account_mfa_enabled",
     "sys_backup_code_consume",
     "sys_backup_codes_replace",
     "sys_backup_codes_unused",
@@ -1099,5 +1100,46 @@ describe("reauthenticateWithStep", () => {
     }
     expect((await mfaRow(accountId)).last_step).toBe(String(step));
     expect((await store.lookupSession(partial.hash))?.reauthAt).toBeNull();
+  });
+});
+
+describe("sys_account_mfa_enabled", () => {
+  async function enabledFor(accountId: string | null): Promise<boolean | null | undefined> {
+    return db.app.begin(async (tx) => {
+      if (accountId !== null) {
+        await tx`SELECT set_config('app.account_id', ${accountId}, true)`;
+      }
+      const rows = await tx<{ enabled: boolean | null }[]>`SELECT sys_account_mfa_enabled() AS enabled`;
+      return rows[0]?.enabled;
+    });
+  }
+
+  it("answers false while no enrolment exists and while one is only pending, true once it is confirmed, and false after MFA is turned off", async () => {
+    const bare = await account();
+    expect(await enabledFor(bare)).toBe(false);
+
+    const { accountId, session } = await enrolled(2100);
+    expect(await enabledFor(accountId)).toBe(true);
+
+    const second = await pending();
+    expect(await enabledFor(second.accountId)).toBe(false);
+
+    expect(await store.disableMfa({ accountId, sessionId: session.id, factor: { kind: "totp", step: 2101 }, newTokenHash: freshToken().hash })).toBe("disabled");
+    expect(await enabledFor(accountId)).toBe(false);
+  });
+
+  it("answers for the account the transaction names only, and NULL when none is set", async () => {
+    const { accountId } = await enrolled(2200);
+    const other = await account();
+    expect(await enabledFor(other)).toBe(false);
+    expect(await enabledFor(accountId)).toBe(true);
+    expect(await enabledFor(null)).toBeNull();
+  });
+
+  it("takes no argument and returns a single boolean, so no secret, key id or step can leave through it", async () => {
+    const [row] = await db.owner<{ args: number; returns: string }[]>`
+      SELECT p.pronargs::int AS args, p.prorettype::regtype::text AS returns
+      FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace AND p.proname = 'sys_account_mfa_enabled'`;
+    expect(row).toEqual({ args: 0, returns: "boolean" });
   });
 });

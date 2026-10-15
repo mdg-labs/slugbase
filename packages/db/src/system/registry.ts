@@ -40,4 +40,5 @@ export const systemOperations: readonly string[] = [
   "sys_session_mfa_failure",
   "sys_mfa_lock",
   "sys_mfa_disable",
+  "sys_account_mfa_enabled",
 ];

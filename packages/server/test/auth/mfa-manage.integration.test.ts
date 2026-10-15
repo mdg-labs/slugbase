@@ -690,3 +690,43 @@ describe("POST /api/v1/me/reauth with a code", () => {
     expect(await problem(pending)).toMatchObject({ code: "mfa_required" });
   });
 });
+
+describe("GET /api/v1/me account.mfaEnabled", () => {
+  async function account(world: World, token: string): Promise<Record<string, unknown>> {
+    const response = await getMe(world, token);
+    expect(response.status).toBe(200);
+    const text = await response.text();
+    expect(text).not.toMatch(/mfa_|mfaSecret|backupCode|keyId|key_id|lastStep/i);
+    return ((JSON.parse(text) as { account: Record<string, unknown> }).account);
+  }
+
+  it("is false while an enrolment is pending, true once it is confirmed, and false again after DELETE /me/mfa", async () => {
+    const world = serve();
+    const seeded = await seedAccount(database());
+    const signedIn = await post(world, LOGIN, null, { email: seeded.email, password: seeded.password, remember: false });
+    const first = tokenOf(signedIn) ?? "";
+    expect((await account(world, first)).mfaEnabled).toBe(false);
+
+    expect((await post(world, REAUTH, first, { password: seeded.password })).status).toBe(204);
+    expect((await post(world, START, first)).status).toBe(200);
+    expect((await account(world, first)).mfaEnabled).toBe(false);
+
+    const confirmed = await post(world, CONFIRM, first, { code: await codeAt(world, seeded.id) });
+    expect(confirmed.status).toBe(200);
+    const token = tokenOf(confirmed) ?? "";
+    expect((await account(world, token)).mfaEnabled).toBe(true);
+    world.clock.advance(STEP_MS);
+
+    const disabled = await del(world, MFA, token, { password: seeded.password, code: await codeAt(world, seeded.id) });
+    expect(disabled.status).toBe(204);
+    expect((await account(world, tokenOf(disabled) ?? "")).mfaEnabled).toBe(false);
+  });
+
+  it("never reports another account's state", async () => {
+    const world = serve();
+    await enrol(world);
+    const bystander = await seedAccount(database());
+    const signedIn = await post(world, LOGIN, null, { email: bystander.email, password: bystander.password, remember: false });
+    expect((await account(world, tokenOf(signedIn) ?? "")).mfaEnabled).toBe(false);
+  });
+});

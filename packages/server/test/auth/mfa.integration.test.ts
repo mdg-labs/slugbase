@@ -599,7 +599,8 @@ describe("what leaves the server", () => {
 
     const profile = await (await getMe(world, browser)).text();
     expect(profile).not.toContain(enrolment.secret);
-    expect(profile.toLowerCase()).not.toContain("mfa");
+    expect(JSON.parse(profile)).toMatchObject({ account: { mfaEnabled: false } });
+    expect(profile.replace('"mfaEnabled":false', "").toLowerCase()).not.toContain("mfa");
     expect(profile).not.toContain("otpauth");
 
     const second = await start(world, browser);

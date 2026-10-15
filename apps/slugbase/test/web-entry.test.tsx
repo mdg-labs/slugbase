@@ -36,6 +36,7 @@ it("mounts the app on #root and shows the product name that /api/config answers 
       onboarding: { browserSetupDone: false, importDone: false, checklistDismissed: false },
       emailVerified: true,
       hasPassword: true,
+      mfaEnabled: false,
     },
     memberships: [],
     activeWorkspaceId: null,

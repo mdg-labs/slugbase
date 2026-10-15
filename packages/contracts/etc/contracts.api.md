@@ -49,6 +49,7 @@ export const AccountSchema: z.ZodObject<{
     }, z.core.$strict>;
     emailVerified: z.ZodBoolean;
     hasPassword: z.ZodBoolean;
+    mfaEnabled: z.ZodBoolean;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -186,6 +187,7 @@ export interface ComponentTypes {
             hasPassword: boolean;
             id: string;
             locale: "en" | "de";
+            mfaEnabled: boolean;
             onboarding: ComponentTypes["schemas"]["Onboarding"];
             singleKeyShortcuts: boolean;
             theme: "light" | "dark" | "system";
@@ -553,6 +555,7 @@ export const getMe: {
         }, z.core.$strict>;
         emailVerified: z.ZodBoolean;
         hasPassword: z.ZodBoolean;
+        mfaEnabled: z.ZodBoolean;
         }, z.core.$strict>;
         memberships: z.ZodArray<z.ZodObject<{
         workspaceId: z.ZodUUID;
@@ -856,6 +859,7 @@ export const MeSchema: z.ZodObject<{
         }, z.core.$strict>;
         emailVerified: z.ZodBoolean;
         hasPassword: z.ZodBoolean;
+        mfaEnabled: z.ZodBoolean;
     }, z.core.$strict>;
     memberships: z.ZodArray<z.ZodObject<{
         workspaceId: z.ZodUUID;
@@ -3156,6 +3160,7 @@ export const updateMe: {
         }, z.core.$strict>;
         emailVerified: z.ZodBoolean;
         hasPassword: z.ZodBoolean;
+        mfaEnabled: z.ZodBoolean;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;

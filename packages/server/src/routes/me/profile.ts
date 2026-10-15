@@ -36,6 +36,7 @@ function accountBody(profile: AccountProfile) {
     onboarding: profile.onboarding,
     emailVerified: profile.emailVerified,
     hasPassword: profile.hasPassword,
+    mfaEnabled: profile.mfaEnabled,
   };
 }
 

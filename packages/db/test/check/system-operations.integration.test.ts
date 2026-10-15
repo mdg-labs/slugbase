@@ -128,6 +128,7 @@ describe("the shipped chain", () => {
       "sys_session_mfa_failure",
       "sys_mfa_lock",
       "sys_mfa_disable",
+      "sys_account_mfa_enabled",
     ]);
     expect(checkRules).toContain(systemOperationsRule);
     const database = await scratch();

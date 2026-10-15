@@ -113,6 +113,13 @@
       "when": 1792062138044,
       "tag": "20261015110218_add_mfa_management",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1792064262569,
+      "tag": "20261015113742_add_mfa_enabled_read",
+      "breakpoints": true
     }
   ]
 }

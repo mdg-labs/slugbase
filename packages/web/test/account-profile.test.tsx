@@ -28,6 +28,7 @@ const ACCOUNT: Account = {
   onboarding: { browserSetupDone: false, importDone: false, checklistDismissed: false },
   emailVerified: true,
   hasPassword: true,
+  mfaEnabled: false,
 };
 
 function me(account: Account): ComponentTypes["schemas"]["Me"] {

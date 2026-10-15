@@ -197,6 +197,7 @@ describe("GET /api/v1/me", () => {
         onboarding: { browserSetupDone: false, importDone: false, checklistDismissed: false },
         emailVerified: true,
         hasPassword: true,
+        mfaEnabled: false,
       },
       memberships: [],
       activeWorkspaceId: null,
