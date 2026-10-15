@@ -55,7 +55,7 @@ async function signIn(accountId: string) {
   const { hash } = freshToken();
   const id = freshId();
   expect(
-    await store.createSession({ id, accountId, remember: false, ipPrefix: null, userAgent: null, tokenHash: hash, replacedTokenHash: null }),
+    await store.createSession({ id, accountId, level: "full", remember: false, ipPrefix: null, userAgent: null, tokenHash: hash, replacedTokenHash: null }),
   ).toBe(true);
   return { id, hash };
 }

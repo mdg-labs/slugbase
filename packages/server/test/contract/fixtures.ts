@@ -17,6 +17,9 @@ export const FIXTURES: ContractFixtures = {
   getApiConfig: {},
   getOpenApiDocument: {},
   login: { body: { ...WALKER_ACCOUNT, remember: false } },
+  // An account-level operation: no workspace or other account's identifier is part of it, and it acts on the session's own account. The walker's
+  // session is a complete one, which has no second factor to give, so the valid request is the declared 422; the pending session is walked by the sign-in tests.
+  verifyMfa: { body: { code: "000000" }, status: 422 },
   logout: {},
   getMe: {},
   // An account-level operation: no workspace or other account's identifier is part of it, and the account it changes is the walker's own.

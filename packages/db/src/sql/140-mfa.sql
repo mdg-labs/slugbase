@@ -1,6 +1,6 @@
 -- The system operations behind the second factor (doc 05 sections 2.1, 3.1 and
--- 3.3, doc 02 section 2.7, doc 10 T7 and T17). The columns and the table are
--- defined in src/schema/. All five functions are entered in
+-- 3.3, doc 02 sections 2.3 and 2.7, doc 10 T7 and T17). The columns and the
+-- table are defined in src/schema/. All eight functions are entered in
 -- src/system/registry.ts. slugbase_owner creates each function and hands it to
 -- slugbase_system, which needs CREATE on the schema for the length of those
 -- statements.
@@ -185,11 +185,110 @@ BEGIN
 END
 $$;
 
+-- sys_backup_codes_unused(account_id): the account's backup codes that are not
+-- used yet, as the application checks a typed code against them: argon2id
+-- hashes are salted, so the database cannot verify a code itself. It lists the
+-- code's id and its hash (the argon2id PHC string, as bytes), oldest first, and
+-- nothing for an unknown or disabled account and for one whose MFA is not on.
+-- The application then consumes the matching code by id
+-- (sys_backup_code_consume).
+CREATE OR REPLACE FUNCTION public.sys_backup_codes_unused(p_account_id uuid)
+  RETURNS TABLE (id uuid, code_hash bytea)
+  LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path = pg_catalog, public, pg_temp
+  AS $$
+    SELECT c.id, c.code_hash
+    FROM public.mfa_backup_codes c
+    JOIN public.accounts a ON a.id = c.account_id
+    WHERE c.account_id = p_account_id AND c.used_at IS NULL
+      AND a.disabled_at IS NULL AND a.mfa_enabled_at IS NOT NULL
+    ORDER BY c.id
+  $$;
+
+-- sys_session_promote(id, account_id, new_token_hash): completes the sign-in of
+-- a partial session. The session becomes a full one under the new token, counted
+-- as created now, with the sliding window its remember flag chose and the 180-day
+-- absolute cap from now, and its failure count is cleared; the old token is
+-- refused from then on, and the account's last sign-in time is set. It answers
+-- false, and changes nothing, when the account has no such partial session: one
+-- that is full, expired, created before the account's password change, of
+-- another account, or whose account is disabled or has no MFA. The account row
+-- is locked first, as every other function that touches both rows does.
+CREATE OR REPLACE FUNCTION public.sys_session_promote(p_id uuid, p_account_id uuid, p_new_token_hash bytea) RETURNS boolean
+  LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+  SET search_path = pg_catalog, public, pg_temp
+  AS $$
+DECLARE
+  v_now timestamptz := clock_timestamp();
+  v_changed_at timestamptz;
+BEGIN
+  IF p_id IS NULL OR p_account_id IS NULL OR p_new_token_hash IS NULL OR octet_length(p_new_token_hash) <> 32 THEN
+    RAISE EXCEPTION 'sys_session_promote needs a session, an account and a 32-byte token hash'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  SELECT a.password_changed_at INTO v_changed_at
+  FROM public.accounts a
+  WHERE a.id = p_account_id AND a.disabled_at IS NULL AND a.mfa_enabled_at IS NOT NULL
+  FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN false;
+  END IF;
+  UPDATE public.sessions s
+  SET level = 'full', token_hash = p_new_token_hash, created_at = v_now, last_seen_at = v_now,
+      expires_at = v_now + CASE WHEN s.remember THEN interval '90 days' ELSE interval '30 days' END,
+      absolute_expires_at = v_now + interval '180 days', mfa_failures = 0
+  WHERE s.id = p_id AND s.account_id = p_account_id AND s.level = 'partial'
+    AND s.expires_at > v_now AND s.absolute_expires_at > v_now
+    AND (v_changed_at IS NULL OR s.created_at >= v_changed_at);
+  IF NOT FOUND THEN
+    RETURN false;
+  END IF;
+  UPDATE public.accounts SET last_sign_in_at = v_now WHERE id = p_account_id;
+  RETURN true;
+END
+$$;
+
+-- sys_session_mfa_failure(id, account_id): counts one refused code against a
+-- partial session and deletes the session at the fifth (doc 02 section 2.3, doc
+-- 04 section 4.3). It answers whether the session is over: true when it was
+-- deleted by this failure, false while it still stands. A session that is gone,
+-- full or of another account answers true and changes nothing. The count and
+-- the deletion are one call on the locked row, so failures made at once are all
+-- counted.
+CREATE OR REPLACE FUNCTION public.sys_session_mfa_failure(p_id uuid, p_account_id uuid) RETURNS boolean
+  LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+  SET search_path = pg_catalog, public, pg_temp
+  AS $$
+DECLARE
+  c_max_failures CONSTANT smallint := 5;
+  v_failures smallint;
+BEGIN
+  IF p_id IS NULL OR p_account_id IS NULL THEN
+    RAISE EXCEPTION 'sys_session_mfa_failure needs a session and an account'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  UPDATE public.sessions SET mfa_failures = mfa_failures + 1
+  WHERE id = p_id AND account_id = p_account_id AND level = 'partial'
+  RETURNING mfa_failures INTO v_failures;
+  IF NOT FOUND THEN
+    RETURN true;
+  END IF;
+  IF v_failures >= c_max_failures THEN
+    DELETE FROM public.sessions WHERE id = p_id;
+    RETURN true;
+  END IF;
+  RETURN false;
+END
+$$;
+
 ALTER FUNCTION public.sys_mfa_get_secret(uuid) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_mfa_set(uuid, text, bytea, text, bytea) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_mfa_accept_step(uuid, bigint) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_backup_codes_replace(uuid, uuid[], bytea[]) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_backup_code_consume(uuid, uuid) OWNER TO slugbase_system;
+ALTER FUNCTION public.sys_backup_codes_unused(uuid) OWNER TO slugbase_system;
+ALTER FUNCTION public.sys_session_promote(uuid, uuid, bytea) OWNER TO slugbase_system;
+ALTER FUNCTION public.sys_session_mfa_failure(uuid, uuid) OWNER TO slugbase_system;
 REVOKE CREATE ON SCHEMA public FROM slugbase_system;
 
 REVOKE ALL ON FUNCTION public.sys_mfa_get_secret(uuid) FROM PUBLIC;
@@ -197,11 +296,17 @@ REVOKE ALL ON FUNCTION public.sys_mfa_set(uuid, text, bytea, text, bytea) FROM P
 REVOKE ALL ON FUNCTION public.sys_mfa_accept_step(uuid, bigint) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sys_backup_codes_replace(uuid, uuid[], bytea[]) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sys_backup_code_consume(uuid, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.sys_backup_codes_unused(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.sys_session_promote(uuid, uuid, bytea) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.sys_session_mfa_failure(uuid, uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.sys_mfa_get_secret(uuid) TO slugbase_app;
 GRANT EXECUTE ON FUNCTION public.sys_mfa_set(uuid, text, bytea, text, bytea) TO slugbase_app;
 GRANT EXECUTE ON FUNCTION public.sys_mfa_accept_step(uuid, bigint) TO slugbase_app;
 GRANT EXECUTE ON FUNCTION public.sys_backup_codes_replace(uuid, uuid[], bytea[]) TO slugbase_app;
 GRANT EXECUTE ON FUNCTION public.sys_backup_code_consume(uuid, uuid) TO slugbase_app;
+GRANT EXECUTE ON FUNCTION public.sys_backup_codes_unused(uuid) TO slugbase_app;
+GRANT EXECUTE ON FUNCTION public.sys_session_promote(uuid, uuid, bytea) TO slugbase_app;
+GRANT EXECUTE ON FUNCTION public.sys_session_mfa_failure(uuid, uuid) TO slugbase_app;
 
 -- mfa_backup_codes: no app access and no policy, so no role that is subject to
 -- row-level security sees a row; slugbase_system, which bypasses it, reaches the

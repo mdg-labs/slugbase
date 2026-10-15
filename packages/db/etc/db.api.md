@@ -259,9 +259,12 @@ export interface MfaState {
 // @public (undocumented)
 export interface MfaStore {
     activateMfa(activation: MfaActivation): Promise<MfaActivationOutcome>;
+    completeMfaSignIn(completion: SignInCompletion): Promise<SignInCompletionOutcome>;
     mfaStateOf(accountId: string): Promise<MfaState | undefined>;
+    recordMfaFailure(sessionId: string, accountId: string): Promise<boolean>;
     resealMfaSecret(accountId: string, expected: Uint8Array, secret: SealedMfaSecret): Promise<boolean>;
     startMfaEnrollment(accountId: string, secret: SealedMfaSecret): Promise<boolean>;
+    unusedBackupCodes(accountId: string): Promise<readonly UnusedBackupCode[]>;
 }
 
 // @public
@@ -317,6 +320,7 @@ export interface NewSession {
     readonly accountId: string;
     readonly id: string;
     readonly ipPrefix: string | null;
+    readonly level: "partial" | "full";
     readonly remember: boolean;
     readonly replacedTokenHash: Buffer | null;
     readonly tokenHash: Buffer;
@@ -453,6 +457,19 @@ export interface SealedMfaSecret {
 }
 
 // @public
+export type SecondFactor =
+/** A TOTP code of this time step. */
+    {
+    readonly kind: "totp";
+    readonly step: number;
+}
+/** The unused backup code with this id, whose hash the typed code matched. */
+| {
+    readonly kind: "backup";
+    readonly codeId: string;
+};
+
+// @public
 export interface SessionRecord {
     // (undocumented)
     readonly accountId: string;
@@ -496,6 +513,25 @@ export interface SetupStore {
     setupPending(): Promise<boolean>;
 }
 
+// @public (undocumented)
+export interface SignInCompletion {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly factor: SecondFactor;
+    readonly newTokenHash: Buffer;
+    readonly sessionId: string;
+}
+
+// @public (undocumented)
+export type SignInCompletionOutcome =
+/** The factor was accepted and the session is full under the new token. */
+"completed"
+/** The time step or the backup code was already used (a replay, an older code, a parallel use); nothing was written. */
+| "replayed"
+/** The account has no such partial session, or its MFA is no longer on; nothing was written. */
+| "no_session";
+
 // @public
 export interface TenantContext {
     accountId: string;
@@ -520,6 +556,13 @@ export interface TenantTx {
     // (undocumented)
     readonly requestId: string;
     readonly workspaceId: string | undefined;
+}
+
+// @public
+export interface UnusedBackupCode {
+    readonly hash: string;
+    // (undocumented)
+    readonly id: string;
 }
 
 // @public (undocumented)

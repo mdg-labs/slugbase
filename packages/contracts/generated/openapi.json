@@ -275,8 +275,11 @@
         "additionalProperties": false,
         "properties": {
           "next": {
-            "const": "done",
-            "description": "The sign-in is complete and the session cookie is set",
+            "description": "`done`: the sign-in is complete. `mfa`: the password is right and the account's second factor is still to be given (POST /auth/mfa/verify); the session cookie is set either way, and a pending one expires after 5 minutes",
+            "enum": [
+              "done",
+              "mfa"
+            ],
             "type": "string"
           }
         },
@@ -846,6 +849,54 @@
         },
         "type": "object"
       },
+      "VerifyMfaRequest": {
+        "anyOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "description": "A code of the authenticator app: six digits, which may be grouped by a space",
+                "maxLength": 16,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "code"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "backupCode": {
+                "description": "One of the account's unused backup codes, which may be written in lower case and grouped by spaces or hyphens",
+                "maxLength": 32,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "backupCode"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "VerifyMfaResult": {
+        "additionalProperties": false,
+        "properties": {
+          "next": {
+            "const": "done",
+            "description": "The sign-in is complete and the session cookie holds the new token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "next"
+        ],
+        "type": "object"
+      },
       "VersionInfo": {
         "additionalProperties": false,
         "properties": {
@@ -951,7 +1002,7 @@
                 }
               }
             },
-            "description": "Signed in; a new session cookie replaces any the request carried",
+            "description": "The password is right; a new session cookie replaces any the request carried. The session is full when `next` is `done` and a partial one, good for POST /auth/mfa/verify, POST /auth/logout and GET /api/config only, when it is `mfa`",
             "headers": {
               "Set-Cookie": {
                 "description": "The session cookie: HttpOnly, SameSite=Lax, Path=/, Secure and __Host- prefixed when the deployment is served over https",
@@ -1117,6 +1168,119 @@
         ],
         "x-slugbase-auth": "partial",
         "x-slugbase-rate": "write"
+      }
+    },
+    "/api/v1/auth/mfa/verify": {
+      "post": {
+        "operationId": "verifyMfa",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyMfaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyMfaResult"
+                }
+              }
+            },
+            "description": "The code is right: the partial session is now a full one under a new token, which the cookie carries; the old token is refused from now on",
+            "headers": {
+              "Set-Cookie": {
+                "description": "The session cookie of the new token, with the attributes of the sign-in cookie; the choice to stay signed in is kept",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or it ended: it expired after 5 minutes or was revoked by its fifth refused code"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself, or the credential is an API token"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The code is wrong, outside the accepted window or already used, or the backup code is wrong or used (invalid_code, one answer for all of them and counted against the mfa limit; the fifth refusal ends the pending session); the body did not pass validation; or the session is not waiting for a second factor (validation_failed)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many attempts; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Complete a sign-in with a code of the authenticator app or a backup code",
+        "tags": [
+          "auth"
+        ],
+        "x-slugbase-auth": "partial",
+        "x-slugbase-rate": "mfa"
       }
     },
     "/api/v1/me": {

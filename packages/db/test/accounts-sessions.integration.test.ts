@@ -51,6 +51,7 @@ function newSession(accountId: string, overrides: Partial<NewSession> = {}): New
   return {
     id: freshId(),
     accountId,
+    level: "full",
     remember: false,
     ipPrefix: "203.0.0.0/16",
     userAgent: "Vitest",
@@ -181,6 +182,7 @@ describe("the sessions table", () => {
       absolute_expires_at: "timestamp with time zone",
       ip_prefix: "cidr",
       user_agent: "text",
+      mfa_failures: "smallint",
     });
     const indexes = await db.owner<{ name: string }[]>`
       SELECT indexname AS name FROM pg_indexes WHERE tablename = 'sessions' ORDER BY indexname`;
@@ -356,7 +358,7 @@ describe("the session system operations", () => {
       const person = await account();
       await expect(store.createSession(newSession(person.id, { tokenHash: Buffer.alloc(31) }))).rejects.toThrow(RangeError);
       await expect(store.createSession(newSession(person.id, { replacedTokenHash: Buffer.alloc(5) }))).rejects.toThrow(RangeError);
-      await expect(db.app`SELECT sys_session_create(${freshId()}::uuid, ${person.id}::uuid, 'partial', false, NULL, NULL, ${Buffer.alloc(32)}::bytea, NULL)`).rejects.toMatchObject({ code: "22023" });
+      await expect(db.app`SELECT sys_session_create(${freshId()}::uuid, ${person.id}::uuid, 'pending', false, NULL, NULL, ${Buffer.alloc(32)}::bytea, NULL)`).rejects.toMatchObject({ code: "22023" });
     });
   });
 

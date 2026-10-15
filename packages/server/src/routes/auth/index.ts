@@ -1,12 +1,13 @@
-import { sessionCookieSpec, type MailPort, type PasswordPolicy } from "@slugbase/core";
+import { sessionCookieSpec, type MailPort, type PasswordPolicy, type SecretBoxPort } from "@slugbase/core";
 import type { AuthStore } from "@slugbase/db";
 import { createSessionAuthenticator } from "../../auth/authenticator.ts";
-import { createPasswordVerifier, hashPassword as hashArgon2id, type PasswordVerifier } from "../../auth/password.ts";
+import { createPasswordVerifier, hashPassword as hashArgon2id, verifyHash, type PasswordVerifier } from "../../auth/password.ts";
 import type { ModuleContribution } from "../../create-server.ts";
 import { securityRoutes } from "../me/security.ts";
 import { sessionRoutes } from "../me/sessions.ts";
 import { loginRoute } from "./login.ts";
 import { logoutRoute } from "./logout.ts";
+import { verifyMfaRoute } from "./mfa.ts";
 
 export interface AuthRoutesOptions {
   readonly store: AuthStore;
@@ -22,6 +23,10 @@ export interface AuthRoutesOptions {
   readonly passwords?: PasswordVerifier;
   /** Defaults to argon2id hashing. */
   readonly hashPassword?: (password: string) => Promise<string>;
+  /** Opens the sealed TOTP secret a code is checked against. */
+  readonly secretBox: Pick<SecretBoxPort, "open" | "needsRotation" | "reseal">;
+  /** The instant a code is checked at, in milliseconds; defaults to the system clock. */
+  readonly now?: () => number;
 }
 
 /**
@@ -38,10 +43,12 @@ export function authContribution({
   mail,
   passwords = createPasswordVerifier(),
   hashPassword = hashArgon2id,
+  secretBox,
+  now = Date.now,
 }: AuthRoutesOptions): ModuleContribution {
   const cookie = sessionCookieSpec(appOrigin);
   return {
-    routes: [loginRoute({ store, passwords, cookie }), logoutRoute({ store, cookie }), ...sessionRoutes({ store, cookie, cursorSecret: sessionSecret }),
+    routes: [loginRoute({ store, passwords, cookie }), verifyMfaRoute({ store, secretBox, verifyCode: verifyHash, now, cookie }), logoutRoute({ store, cookie }), ...sessionRoutes({ store, cookie, cursorSecret: sessionSecret }),
       ...securityRoutes({ store, passwords, passwordPolicy, hashPassword, cookie, mail }),
     ],
     authenticators: [createSessionAuthenticator({ store, cookie })],

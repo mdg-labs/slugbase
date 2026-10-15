@@ -52,6 +52,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/mfa/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete a sign-in with a code of the authenticator app or a backup code */
+        post: operations["verifyMfa"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -386,10 +403,10 @@ export interface components {
         };
         LoginResult: {
             /**
-             * @description The sign-in is complete and the session cookie is set
-             * @constant
+             * @description `done`: the sign-in is complete. `mfa`: the password is right and the account's second factor is still to be given (POST /auth/mfa/verify); the session cookie is set either way, and a pending one expires after 5 minutes
+             * @enum {string}
              */
-            next: "done";
+            next: "done" | "mfa";
         };
         Me: {
             account: components["schemas"]["Account"];
@@ -590,6 +607,20 @@ export interface components {
              */
             theme?: "light" | "dark" | "system";
         };
+        VerifyMfaRequest: {
+            /** @description A code of the authenticator app: six digits, which may be grouped by a space */
+            code: string;
+        } | {
+            /** @description One of the account's unused backup codes, which may be written in lower case and grouped by spaces or hyphens */
+            backupCode: string;
+        };
+        VerifyMfaResult: {
+            /**
+             * @description The sign-in is complete and the session cookie holds the new token
+             * @constant
+             */
+            next: "done";
+        };
         VersionInfo: {
             /** @description Build time, RFC 3339 UTC */
             builtAt: string;
@@ -653,7 +684,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Signed in; a new session cookie replaces any the request carried */
+            /** @description The password is right; a new session cookie replaces any the request carried. The session is full when `next` is `done` and a partial one, good for POST /auth/mfa/verify, POST /auth/logout and GET /api/config only, when it is `mfa` */
             200: {
                 headers: {
                     /** @description The session cookie: HttpOnly, SameSite=Lax, Path=/, Secure and __Host- prefixed when the deployment is served over https */
@@ -766,6 +797,88 @@ export interface operations {
                 };
             };
             /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    verifyMfa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyMfaRequest"];
+            };
+        };
+        responses: {
+            /** @description The code is right: the partial session is now a full one under a new token, which the cookie carries; the old token is refused from now on */
+            200: {
+                headers: {
+                    /** @description The session cookie of the new token, with the attributes of the sign-in cookie; the choice to stay signed in is kept */
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerifyMfaResult"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or it ended: it expired after 5 minutes or was revoked by its fifth refused code */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself, or the credential is an API token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The code is wrong, outside the accepted window or already used, or the backup code is wrong or used (invalid_code, one answer for all of them and counted against the mfa limit; the fifth refusal ends the pending session); the body did not pass validation; or the session is not waiting for a second factor (validation_failed) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many attempts; Retry-After says when to try again */
             429: {
                 headers: {
                     /** @description Whole seconds to wait before the request can succeed */

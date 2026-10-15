@@ -99,6 +99,13 @@
       "when": 1792057020091,
       "tag": "20261015093700_add_mfa",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792059781483,
+      "tag": "20261015102301_add_mfa_sign_in",
+      "breakpoints": true
     }
   ]
 }

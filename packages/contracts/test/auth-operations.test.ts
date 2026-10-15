@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildOpenApiDocument, serializeOpenApiDocument } from "../src/openapi/generate.ts";
-import { LoginRequestSchema, LoginResultSchema, login, logout } from "../src/operations/auth.ts";
+import { LoginRequestSchema, LoginResultSchema, VerifyMfaRequestSchema, VerifyMfaResultSchema, login, logout, verifyMfa } from "../src/operations/auth.ts";
 import { operations } from "../src/operations/index.ts";
 
 type Obj = Record<string, unknown>;
@@ -40,12 +40,52 @@ describe("login", () => {
     expect(LoginRequestSchema.safeParse({ email: "a@example.test", password: "" }).success).toBe(false);
   });
 
-  it("answers 200 { next: 'done' } with a Set-Cookie header, and problem+json for every client error", () => {
+  it("answers 200 { next: 'done' | 'mfa' } with a Set-Cookie header, and problem+json for every client error", () => {
     const responses = responsesOf(operation);
     expect(responses["200"]?.content).toEqual({ "application/json": { schema: { $ref: "#/components/schemas/LoginResult" } } });
     expect(responses["200"]?.headers).toMatchObject({ "Set-Cookie": { required: true } });
     expect(LoginResultSchema.parse({ next: "done" })).toEqual({ next: "done" });
-    expect(LoginResultSchema.safeParse({ next: "mfa" }).success).toBe(false);
+    expect(LoginResultSchema.parse({ next: "mfa" })).toEqual({ next: "mfa" });
+    expect(LoginResultSchema.safeParse({ next: "later" }).success).toBe(false);
+    for (const status of ["400", "401", "403", "422", "429"]) {
+      expect(Object.keys(responses[status]?.content ?? {}), status).toEqual(["application/problem+json"]);
+    }
+  });
+});
+
+describe("verifyMfa", () => {
+  const operation = paths["/api/v1/auth/mfa/verify"]?.["post"];
+
+  it("admits a partial session, sits in the mfa bucket and is not token-callable", () => {
+    expect(verifyMfa.path).toBe("/api/v1/auth/mfa/verify");
+    expect(operation?.["operationId"]).toBe("verifyMfa");
+    expect(operation?.["x-slugbase-auth"]).toBe("partial");
+    expect(operation?.["x-slugbase-rate"]).toBe("mfa");
+    expect(operation?.["x-slugbase-scope"]).toBeUndefined();
+    expect(operation?.["x-slugbase-reauth"]).toBeUndefined();
+  });
+
+  it("takes a code or a backup code, never both and nothing else", () => {
+    expect(operation?.["requestBody"]).toMatchObject({
+      required: true,
+      content: { "application/json": { schema: { $ref: "#/components/schemas/VerifyMfaRequest" } } },
+    });
+    expect(VerifyMfaRequestSchema.safeParse({ code: "123456" }).success).toBe(true);
+    expect(VerifyMfaRequestSchema.safeParse({ backupCode: "ABCDE23456" }).success).toBe(true);
+    expect(VerifyMfaRequestSchema.safeParse({}).success).toBe(false);
+    expect(VerifyMfaRequestSchema.safeParse({ code: "123456", backupCode: "ABCDE23456" }).success).toBe(false);
+    expect(VerifyMfaRequestSchema.safeParse({ code: "123456", extra: 1 }).success).toBe(false);
+    expect(VerifyMfaRequestSchema.safeParse({ code: "" }).success).toBe(false);
+    expect(VerifyMfaRequestSchema.safeParse({ code: "1".repeat(17) }).success).toBe(false);
+    expect(VerifyMfaRequestSchema.safeParse({ backupCode: "A".repeat(33) }).success).toBe(false);
+  });
+
+  it("answers 200 { next: 'done' } with a Set-Cookie header, and problem+json for every client error", () => {
+    const responses = responsesOf(operation);
+    expect(responses["200"]?.content).toEqual({ "application/json": { schema: { $ref: "#/components/schemas/VerifyMfaResult" } } });
+    expect(responses["200"]?.headers).toMatchObject({ "Set-Cookie": { required: true } });
+    expect(VerifyMfaResultSchema.parse({ next: "done" })).toEqual({ next: "done" });
+    expect(VerifyMfaResultSchema.safeParse({ next: "mfa" }).success).toBe(false);
     for (const status of ["400", "401", "403", "422", "429"]) {
       expect(Object.keys(responses[status]?.content ?? {}), status).toEqual(["application/problem+json"]);
     }

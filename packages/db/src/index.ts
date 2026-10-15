@@ -54,4 +54,8 @@ export type {
   MfaState,
   MfaStore,
   SealedMfaSecret,
+  SecondFactor,
+  SignInCompletion,
+  SignInCompletionOutcome,
+  UnusedBackupCode,
 } from "./system/mfa.ts";

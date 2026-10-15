@@ -54,7 +54,7 @@ async function signIn(accountId: string) {
   const { hash } = freshToken();
   const id = freshId();
   expect(
-    await store.createSession({ id, accountId, remember: false, ipPrefix: null, userAgent: null, tokenHash: hash, replacedTokenHash: null }),
+    await store.createSession({ id, accountId, level: "full", remember: false, ipPrefix: null, userAgent: null, tokenHash: hash, replacedTokenHash: null }),
   ).toBe(true);
   return { id, hash };
 }
@@ -106,7 +106,16 @@ async function pending() {
 }
 
 describe("the second-factor system operations", () => {
-  const operations = ["sys_backup_code_consume", "sys_backup_codes_replace", "sys_mfa_accept_step", "sys_mfa_get_secret", "sys_mfa_set"];
+  const operations = [
+    "sys_backup_code_consume",
+    "sys_backup_codes_replace",
+    "sys_backup_codes_unused",
+    "sys_mfa_accept_step",
+    "sys_mfa_get_secret",
+    "sys_mfa_set",
+    "sys_session_mfa_failure",
+    "sys_session_promote",
+  ];
 
   it("are SECURITY DEFINER functions of slugbase_system with a pinned search_path, callable by slugbase_app only, and in the registry", async () => {
     const rows = await db.owner<{ name: string; definer: boolean; owner: string; config: string[]; app: boolean; public: boolean }[]>`
@@ -338,9 +347,9 @@ describe("activateMfa", () => {
 
   it("answers changed for an account whose MFA is already enabled and keeps its codes", async () => {
     const { accountId, session, secret } = await pending();
+    const again = await signIn(accountId);
     const issued = codes();
     await store.activateMfa({ accountId, sessionId: session.id, step: 10, secret: secret.ciphertext, backupCodes: issued, newTokenHash: freshToken().hash });
-    const again = await signIn(accountId);
     expect(
       await store.activateMfa({ accountId, sessionId: again.id, step: 11, secret: secret.ciphertext, backupCodes: codes(), newTokenHash: freshToken().hash }),
     ).toBe("changed");
@@ -558,5 +567,261 @@ describe("deleting an account", () => {
     });
     expect(await backupCodeRows(accountId)).toEqual([]);
     expect(await sessionRows(db, accountId)).toEqual([]);
+  });
+});
+
+/** An account whose MFA is on, with its ten backup codes, the way an enrolment leaves it. */
+async function enrolled(step = 100) {
+  const { accountId, session, secret } = await pending();
+  const issued = codes();
+  expect(
+    await store.activateMfa({ accountId, sessionId: session.id, step, secret: secret.ciphertext, backupCodes: issued, newTokenHash: freshToken().hash }),
+  ).toBe("activated");
+  return { accountId, issued, step };
+}
+
+async function partialSignIn(accountId: string, overrides: { remember?: boolean; replacedTokenHash?: Buffer | null } = {}) {
+  const { hash } = freshToken();
+  const id = freshId();
+  expect(
+    await store.createSession({
+      id,
+      accountId,
+      level: "partial",
+      remember: overrides.remember ?? false,
+      ipPrefix: null,
+      userAgent: null,
+      tokenHash: hash,
+      replacedTokenHash: overrides.replacedTokenHash ?? null,
+    }),
+  ).toBe(true);
+  return { id, hash };
+}
+
+async function sessionById(accountId: string, sessionId: string) {
+  const row = (await sessionRows(db, accountId)).find((candidate) => candidate.id === sessionId);
+  if (row === undefined) {
+    return undefined;
+  }
+  const [failures] = await asSystem(db, (tx) => tx<{ failures: number }[]>`SELECT mfa_failures AS failures FROM sessions WHERE id = ${sessionId}`);
+  return { ...row, failures: failures?.failures ?? -1 };
+}
+
+describe("a partial session", () => {
+  it("is created for an account whose MFA is on, expires after five minutes, sets no sign-in time and replaces the carried session", async () => {
+    const { accountId } = await enrolled();
+    const lastSignInOf = async () => (await asSystem(db, (tx) => tx<{ at: Date | null }[]>`SELECT last_sign_in_at AS at FROM accounts WHERE id = ${accountId}`))[0]?.at;
+    const signedInBefore = await lastSignInOf();
+    const carried = await account();
+    const carriedSession = await signIn(carried);
+    const { id, hash } = await partialSignIn(accountId, { replacedTokenHash: carriedSession.hash });
+    const row = await sessionById(accountId, id);
+    expect(row?.level).toBe("partial");
+    expect(row?.failures).toBe(0);
+    expect(row?.expires_at.getTime()).toBe((row?.created_at.getTime() ?? 0) + 5 * 60_000);
+    expect(row?.absolute_expires_at.getTime()).toBe((row?.created_at.getTime() ?? 0) + 5 * 60_000);
+    expect(await store.lookupSession(carriedSession.hash)).toBeUndefined();
+    expect((await store.lookupSession(hash))?.level).toBe("partial");
+    expect(await lastSignInOf()).toEqual(signedInBefore);
+  });
+
+  it("is refused for an account whose MFA is off, and a full session is refused for one whose MFA is on, deleting nothing", async () => {
+    const { accountId } = await enrolled();
+    const before = (await sessionRows(db, accountId)).length;
+    const plain = await account();
+    const carried = await signIn(plain);
+    expect(
+      await store.createSession({ id: freshId(), accountId: plain, level: "partial", remember: false, ipPrefix: null, userAgent: null, tokenHash: freshToken().hash, replacedTokenHash: carried.hash }),
+    ).toBe(false);
+    expect(
+      await store.createSession({ id: freshId(), accountId, level: "full", remember: false, ipPrefix: null, userAgent: null, tokenHash: freshToken().hash, replacedTokenHash: carried.hash }),
+    ).toBe(false);
+    expect(await sessionRows(db, accountId)).toHaveLength(before);
+    expect((await store.lookupSession(carried.hash))?.sessionId).toBe(carried.id);
+  });
+
+  it("is not moved forward by a request, and is refused once its five minutes are over", async () => {
+    const { accountId } = await enrolled();
+    const { id, hash } = await partialSignIn(accountId);
+    await asSystem(db, (tx) => tx`UPDATE sessions SET created_at = created_at - interval '2 minutes', last_seen_at = last_seen_at - interval '2 minutes', expires_at = expires_at - interval '2 minutes', absolute_expires_at = absolute_expires_at - interval '2 minutes' WHERE id = ${id}`);
+    const before = await sessionById(accountId, id);
+    expect((await store.lookupSession(hash))?.level).toBe("partial");
+    expect((await sessionById(accountId, id))?.expires_at).toEqual(before?.expires_at);
+    await asSystem(db, (tx) => tx`UPDATE sessions SET expires_at = now() - interval '1 second' WHERE id = ${id}`);
+    expect(await store.lookupSession(hash)).toBeUndefined();
+  });
+});
+
+describe("completeMfaSignIn", () => {
+  it("accepts the step and makes the partial session a full one under the new token, keeping the remember choice", async () => {
+    const { accountId, step } = await enrolled();
+    const { id, hash } = await partialSignIn(accountId, { remember: true });
+    await store.recordMfaFailure(id, accountId);
+    const next = freshToken();
+    expect(await store.completeMfaSignIn({ accountId, sessionId: id, factor: { kind: "totp", step: step + 1 }, newTokenHash: next.hash })).toBe("completed");
+
+    expect(await store.lookupSession(hash)).toBeUndefined();
+    expect(await store.lookupSession(next.hash)).toMatchObject({ sessionId: id, accountId, level: "full" });
+    const row = await sessionById(accountId, id);
+    expect(row?.remember).toBe(true);
+    expect(row?.failures).toBe(0);
+    expect(Math.round(((row?.expires_at.getTime() ?? 0) - (row?.created_at.getTime() ?? 0)) / 86_400_000)).toBe(90);
+    expect(Math.round(((row?.absolute_expires_at.getTime() ?? 0) - (row?.created_at.getTime() ?? 0)) / 86_400_000)).toBe(180);
+    expect((await mfaRow(accountId)).last_step).toBe(String(step + 1));
+    const [signedIn] = await asSystem(db, (tx) => tx<{ at: Date | null }[]>`SELECT last_sign_in_at AS at FROM accounts WHERE id = ${accountId}`);
+    expect(signedIn?.at).not.toBeNull();
+  });
+
+  it("answers replayed for a step that was already accepted or is older, and leaves the session partial under its token", async () => {
+    const { accountId, step } = await enrolled(500);
+    const { id, hash } = await partialSignIn(accountId);
+    expect(await store.completeMfaSignIn({ accountId, sessionId: id, factor: { kind: "totp", step }, newTokenHash: freshToken().hash })).toBe("replayed");
+    expect(await store.completeMfaSignIn({ accountId, sessionId: id, factor: { kind: "totp", step: step - 1 }, newTokenHash: freshToken().hash })).toBe("replayed");
+    expect((await store.lookupSession(hash))?.level).toBe("partial");
+    expect((await mfaRow(accountId)).last_step).toBe("500");
+  });
+
+  it("completes one of two sign-ins made at once with the same step", async () => {
+    const { accountId, step } = await enrolled(600);
+    const first = await partialSignIn(accountId);
+    const second = await partialSignIn(accountId);
+    const results = await Promise.all(
+      [first, second].map((session) =>
+        store.completeMfaSignIn({ accountId, sessionId: session.id, factor: { kind: "totp", step: step + 1 }, newTokenHash: freshToken().hash }),
+      ),
+    );
+    expect([...results].sort()).toEqual(["completed", "replayed"]);
+  });
+
+  it("answers no_session and rolls the accepted step back when there is no live partial session of the account", async () => {
+    const { accountId, step } = await enrolled(700);
+    const expired = await partialSignIn(accountId);
+    await asSystem(db, (tx) => tx`UPDATE sessions SET expires_at = now() - interval '1 second' WHERE id = ${expired.id}`);
+    const outcomes = [
+      await store.completeMfaSignIn({ accountId, sessionId: expired.id, factor: { kind: "totp", step: step + 1 }, newTokenHash: freshToken().hash }),
+      await store.completeMfaSignIn({ accountId, sessionId: freshId(), factor: { kind: "totp", step: step + 2 }, newTokenHash: freshToken().hash }),
+    ];
+    expect(outcomes).toEqual(["no_session", "no_session"]);
+    expect((await mfaRow(accountId)).last_step).toBe("700");
+  });
+
+  it("does not complete the partial session of another account, a full session or the session of a disabled account", async () => {
+    const mine = await enrolled(800);
+    const theirs = await enrolled(800);
+    const strangers = await partialSignIn(theirs.accountId);
+    expect(
+      await store.completeMfaSignIn({ accountId: mine.accountId, sessionId: strangers.id, factor: { kind: "totp", step: 801 }, newTokenHash: freshToken().hash }),
+    ).toBe("no_session");
+    expect((await store.lookupSession(strangers.hash))?.level).toBe("partial");
+
+    const full = await partialSignIn(mine.accountId);
+    expect(await store.completeMfaSignIn({ accountId: mine.accountId, sessionId: full.id, factor: { kind: "totp", step: 802 }, newTokenHash: freshToken().hash })).toBe("completed");
+    expect(await store.completeMfaSignIn({ accountId: mine.accountId, sessionId: full.id, factor: { kind: "totp", step: 803 }, newTokenHash: freshToken().hash })).toBe("no_session");
+
+    const pendingSession = await partialSignIn(theirs.accountId);
+    await asSystem(db, (tx) => tx`UPDATE accounts SET disabled_at = now() WHERE id = ${theirs.accountId}`);
+    expect(
+      await store.completeMfaSignIn({ accountId: theirs.accountId, sessionId: pendingSession.id, factor: { kind: "totp", step: 804 }, newTokenHash: freshToken().hash }),
+    ).not.toBe("completed");
+    expect((await sessionById(theirs.accountId, pendingSession.id))?.level).toBe("partial");
+  });
+
+  it("refuses a session created before the account's password change", async () => {
+    const { accountId, step } = await enrolled(900);
+    const { id } = await partialSignIn(accountId);
+    await asSystem(db, (tx) => tx`UPDATE accounts SET password_changed_at = clock_timestamp() + interval '1 second' WHERE id = ${accountId}`);
+    expect(await store.completeMfaSignIn({ accountId, sessionId: id, factor: { kind: "totp", step: step + 1 }, newTokenHash: freshToken().hash })).toBe("no_session");
+    expect((await mfaRow(accountId)).last_step).toBe("900");
+  });
+
+  it("consumes the backup code with the session and refuses it afterwards, whichever session presents it", async () => {
+    const { accountId, issued } = await enrolled();
+    const first = await partialSignIn(accountId);
+    const second = await partialSignIn(accountId);
+    const code = issued[0]?.id ?? "";
+    expect(await store.completeMfaSignIn({ accountId, sessionId: first.id, factor: { kind: "backup", codeId: code }, newTokenHash: freshToken().hash })).toBe("completed");
+    expect(await store.completeMfaSignIn({ accountId, sessionId: second.id, factor: { kind: "backup", codeId: code }, newTokenHash: freshToken().hash })).toBe("replayed");
+    expect((await store.lookupSession(second.hash))?.level).toBe("partial");
+    expect((await backupCodeRows(accountId)).filter((row) => row.used_at !== null).map((row) => row.id)).toEqual([code]);
+  });
+
+  it("completes one of two sign-ins made at once with the same backup code", async () => {
+    const { accountId, issued } = await enrolled();
+    const first = await partialSignIn(accountId);
+    const second = await partialSignIn(accountId);
+    const code = issued[1]?.id ?? "";
+    const results = await Promise.all(
+      [first, second].map((session) =>
+        store.completeMfaSignIn({ accountId, sessionId: session.id, factor: { kind: "backup", codeId: code }, newTokenHash: freshToken().hash }),
+      ),
+    );
+    expect([...results].sort()).toEqual(["completed", "replayed"]);
+  });
+
+  it("leaves the backup code unused when the session is gone", async () => {
+    const { accountId, issued } = await enrolled();
+    const code = issued[2]?.id ?? "";
+    expect(await store.completeMfaSignIn({ accountId, sessionId: freshId(), factor: { kind: "backup", codeId: code }, newTokenHash: freshToken().hash })).toBe("no_session");
+    expect((await backupCodeRows(accountId)).every((row) => row.used_at === null)).toBe(true);
+  });
+
+  it("refuses a token hash of the wrong length before sending anything", async () => {
+    const { accountId } = await enrolled();
+    const { id } = await partialSignIn(accountId);
+    await expect(store.completeMfaSignIn({ accountId, sessionId: id, factor: { kind: "totp", step: 5000 }, newTokenHash: Buffer.alloc(31) })).rejects.toThrow(RangeError);
+  });
+});
+
+describe("unusedBackupCodes", () => {
+  it("lists the ids and hashes of the codes that are not used, oldest first, and no used one", async () => {
+    const { accountId, issued } = await enrolled();
+    const used = issued[3]?.id ?? "";
+    await db.app`SELECT sys_backup_code_consume(${accountId}::uuid, ${used}::uuid)`;
+    const listed = await store.unusedBackupCodes(accountId);
+    expect(listed.map((code) => code.id)).toEqual(issued.map((code) => code.id).filter((id) => id !== used).sort());
+    expect(listed.every((code) => code.hash === CODE_HASH)).toBe(true);
+  });
+
+  it("lists nothing for an account whose MFA is off, a disabled one and one that does not exist", async () => {
+    const { accountId } = await enrolled();
+    expect(await store.unusedBackupCodes(await account())).toEqual([]);
+    expect(await store.unusedBackupCodes(freshId())).toEqual([]);
+    await asSystem(db, (tx) => tx`UPDATE accounts SET disabled_at = now() WHERE id = ${accountId}`);
+    expect(await store.unusedBackupCodes(accountId)).toEqual([]);
+  });
+});
+
+describe("recordMfaFailure", () => {
+  it("counts the failures of a partial session and deletes it at the fifth", async () => {
+    const { accountId } = await enrolled();
+    const { id, hash } = await partialSignIn(accountId);
+    for (let failure = 1; failure <= 4; failure += 1) {
+      expect(await store.recordMfaFailure(id, accountId)).toBe(false);
+      expect((await sessionById(accountId, id))?.failures).toBe(failure);
+    }
+    expect((await store.lookupSession(hash))?.level).toBe("partial");
+    expect(await store.recordMfaFailure(id, accountId)).toBe(true);
+    expect(await sessionById(accountId, id)).toBeUndefined();
+    expect(await store.lookupSession(hash)).toBeUndefined();
+  });
+
+  it("counts failures made at once, so five parallel ones end the session", async () => {
+    const { accountId } = await enrolled();
+    const { id } = await partialSignIn(accountId);
+    const results = await Promise.all(Array.from({ length: 5 }, () => store.recordMfaFailure(id, accountId)));
+    expect(results.filter(Boolean)).toHaveLength(1);
+    expect(await sessionById(accountId, id)).toBeUndefined();
+  });
+
+  it("changes nothing for a full session, the session of another account and one that does not exist, and answers that it is over", async () => {
+    const { accountId } = await enrolled();
+    const other = await account();
+    const full = await signIn(other);
+    expect(await store.recordMfaFailure(full.id, other)).toBe(true);
+    expect((await sessionById(other, full.id))?.failures).toBe(0);
+    const partial = await partialSignIn(accountId);
+    expect(await store.recordMfaFailure(partial.id, other)).toBe(true);
+    expect((await sessionById(accountId, partial.id))?.failures).toBe(0);
+    expect(await store.recordMfaFailure(freshId(), accountId)).toBe(true);
   });
 });

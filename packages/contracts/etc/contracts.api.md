@@ -223,7 +223,7 @@ export interface ComponentTypes {
             remember: boolean;
         };
         LoginResult: {
-            next: "done";
+            next: "done" | "mfa";
         };
         Me: {
             account: ComponentTypes["schemas"]["Account"];
@@ -326,6 +326,14 @@ export interface ComponentTypes {
             onboarding?: ComponentTypes["schemas"]["OnboardingChanges"];
             singleKeyShortcuts?: boolean;
             theme?: "light" | "dark" | "system";
+        };
+        VerifyMfaRequest: {
+            code: string;
+        } | {
+            backupCode: string;
+        };
+        VerifyMfaResult: {
+            next: "done";
         };
         VersionInfo: {
             builtAt: string;
@@ -692,7 +700,10 @@ export const login: {
     };
     readonly responses: {
         readonly 200: JsonResponse<z.ZodObject<{
-        next: z.ZodLiteral<"done">;
+        next: z.ZodEnum<{
+        mfa: "mfa";
+        done: "done";
+        }>;
         }, z.core.$strict>, {
         "Set-Cookie": {
         description: string;
@@ -717,7 +728,10 @@ export const LoginRequestSchema: z.ZodObject<{
 
 // @public (undocumented)
 export const LoginResultSchema: z.ZodObject<{
-    next: z.ZodLiteral<"done">;
+    next: z.ZodEnum<{
+        mfa: "mfa";
+        done: "done";
+    }>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -1902,6 +1916,80 @@ export interface OperationTypes {
             };
         };
     };
+    // (undocumented)
+    verifyMfa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["VerifyMfaRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["VerifyMfaResult"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
 }
 
 // @public (undocumented)
@@ -1954,6 +2042,23 @@ export interface paths {
         get?: never;
         put?: never;
         post: OperationTypes["logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/auth/mfa/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["verifyMfa"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2794,6 +2899,52 @@ export const updateMe: {
         readonly 503: ProblemResponse;
     };
 };
+
+// @public (undocumented)
+export const verifyMfa: {
+    readonly method: "post";
+    readonly path: "/api/v1/auth/mfa/verify";
+    readonly operationId: "verifyMfa";
+    readonly tag: "auth";
+    readonly summary: "Complete a sign-in with a code of the authenticator app or a backup code";
+    readonly auth: "partial";
+    readonly rate: "mfa";
+    readonly request: {
+        readonly body: z.ZodUnion<readonly [z.ZodObject<{
+            code: z.ZodString;
+        }, z.core.$strict>, z.ZodObject<{
+            backupCode: z.ZodString;
+        }, z.core.$strict>]>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        next: z.ZodLiteral<"done">;
+        }, z.core.$strict>, {
+        "Set-Cookie": {
+        description: string;
+        schema: z.ZodString;
+        };
+        }>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const VerifyMfaRequestSchema: z.ZodUnion<readonly [z.ZodObject<{
+    code: z.ZodString;
+}, z.core.$strict>, z.ZodObject<{
+    backupCode: z.ZodString;
+}, z.core.$strict>]>;
+
+// @public (undocumented)
+export const VerifyMfaResultSchema: z.ZodObject<{
+    next: z.ZodLiteral<"done">;
+}, z.core.$strict>;
 
 // @public (undocumented)
 export const VersionInfoSchema: z.ZodObject<{

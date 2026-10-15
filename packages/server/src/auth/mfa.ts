@@ -7,12 +7,12 @@ import {
   type SecretBoxOptions,
   type SecretBoxPort,
 } from "@slugbase/core";
-import type { AuthStore } from "@slugbase/db";
+import type { AuthStore, SecondFactor } from "@slugbase/db";
 import { newSessionToken } from "./session-token.ts";
 import { uuidv7 } from "./uuidv7.ts";
 
-// Enrolling the second factor (doc 02 section 2.7, doc 04 sections 4.4 and
-// 10.3, doc 10 T7 and T17). The secret is generated here, sealed by the secret
+// Enrolling the second factor and signing in with it (doc 02 sections 2.3 and
+// 2.7, doc 04 sections 4.3, 4.4 and 10.3, doc 10 T7 and T17). The secret is generated here, sealed by the secret
 // box before it is stored, and shown once, as the text key, the otpauth URI
 // and the QR code; no operation returns it again. A secret, a code and a
 // backup code are never logged, put in a problem document or kept past the
@@ -147,6 +147,112 @@ export async function confirmEnrollment(dependencies: MfaDependencies, request: 
       return { kind: "invalid_code" };
     case "changed":
       return { kind: "no_enrolment" };
+    case "no_session":
+      return { kind: "no_session" };
+  }
+}
+
+export interface SecondFactorDependencies {
+  readonly store: Pick<AuthStore, "mfaStateOf" | "resealMfaSecret" | "unusedBackupCodes" | "completeMfaSignIn" | "recordMfaFailure">;
+  readonly secretBox: Pick<SecretBoxPort, "open" | "needsRotation" | "reseal">;
+  /** Whether a backup code matches an argon2id PHC string. */
+  readonly verifyCode: (hash: string, code: string) => Promise<boolean>;
+  /** The instant a code is checked at, in milliseconds since the epoch. */
+  readonly now: () => number;
+}
+
+/** What the person typed to finish signing in. */
+export type SecondFactorGiven = { readonly kind: "code"; readonly code: string } | { readonly kind: "backup"; readonly code: string };
+
+export interface SecondFactorRequest {
+  readonly accountId: string;
+  /** The partial session the code is given for. */
+  readonly sessionId: string;
+  readonly given: SecondFactorGiven;
+}
+
+export type SecondFactorOutcome =
+  /** The code was accepted: `token` is the cookie value of the full session from now on. */
+  | { readonly kind: "signed_in"; readonly token: string }
+  /**
+   * The code is wrong, outside its window or already used, whichever kind it was; the failure is counted
+   * against the partial session, and `sessionEnded` says that this was its fifth, which deleted it.
+   */
+  | { readonly kind: "invalid_code"; readonly sessionEnded: boolean }
+  /** The partial session is gone (expired, revoked or ended meanwhile); nothing was written. */
+  | { readonly kind: "no_session" };
+
+/** A backup code as it is read from paper: upper case, without the spaces and hyphens it may be grouped by. */
+function normalizeBackupCode(typed: string): string {
+  return typed.replace(/[\s-]/g, "").toUpperCase();
+}
+
+/**
+ * The factor a typed code matches for this account, or undefined when it matches none. A TOTP code is
+ * checked against the secret (reading a secret that is still sealed under a retired key seals it again
+ * under the current one); a backup code is checked against every unused code's argon2id hash, all of
+ * them whether or not one matches, so how long the check takes does not say which code it was.
+ */
+async function matchingFactor(
+  { store, secretBox, verifyCode, now }: SecondFactorDependencies,
+  accountId: string,
+  given: SecondFactorGiven,
+): Promise<SecondFactor | undefined> {
+  const state = await store.mfaStateOf(accountId);
+  if (state === undefined || state.enabledAt === null) {
+    return undefined;
+  }
+  if (given.kind === "code") {
+    const options = mfaSecretOptions(accountId);
+    const secret = await secretBox.open(state.secret, options);
+    let step: number | undefined;
+    try {
+      step = verifyTotp(secret, given.code, now());
+    } finally {
+      secret.fill(0);
+    }
+    if (step === undefined) {
+      return undefined;
+    }
+    if (await secretBox.needsRotation(state.secret.keyId)) {
+      await store.resealMfaSecret(accountId, state.secret.ciphertext, await secretBox.reseal(state.secret, options));
+    }
+    return { kind: "totp", step };
+  }
+  const typed = normalizeBackupCode(given.code);
+  const unused = await store.unusedBackupCodes(accountId);
+  const checked = await Promise.all(unused.map(async (code) => ({ id: code.id, matches: await verifyCode(code.hash, typed) })));
+  const match = checked.find((code) => code.matches);
+  return match === undefined ? undefined : { kind: "backup", codeId: match.id };
+}
+
+/**
+ * Completes the sign-in of a partial session with a TOTP code or a backup code (doc 02 section 2.3, doc
+ * 04 section 4.3, doc 10 T17). The factor is verified first; then one store transaction accepts it (a
+ * time step newer than the last accepted one, or an unused backup code, each atomically, so two
+ * requests presenting one code never both succeed) and turns the session into a full one under a new
+ * token. A code that does not verify, or whose step or backup code was already used, is one outcome and
+ * is counted against the session, which the fifth refusal deletes. A secret, a code and a backup code
+ * are never logged or kept past the call.
+ */
+export async function verifySecondFactor(dependencies: SecondFactorDependencies, request: SecondFactorRequest): Promise<SecondFactorOutcome> {
+  const { store } = dependencies;
+  const refused = async (): Promise<SecondFactorOutcome> => ({
+    kind: "invalid_code",
+    sessionEnded: await store.recordMfaFailure(request.sessionId, request.accountId),
+  });
+
+  const factor = await matchingFactor(dependencies, request.accountId, request.given);
+  if (factor === undefined) {
+    return refused();
+  }
+  const token = newSessionToken();
+  const outcome = await store.completeMfaSignIn({ accountId: request.accountId, sessionId: request.sessionId, factor, newTokenHash: token.hash });
+  switch (outcome) {
+    case "completed":
+      return { kind: "signed_in", token: token.value };
+    case "replayed":
+      return refused();
     case "no_session":
       return { kind: "no_session" };
   }

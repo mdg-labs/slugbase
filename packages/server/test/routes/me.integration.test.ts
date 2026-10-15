@@ -135,6 +135,7 @@ async function signIn(account: SeededAccount): Promise<Browser> {
   const created = await store.createSession({
     id: sessionId,
     accountId: account.id,
+    level: "full",
     remember: false,
     ipPrefix: null,
     userAgent: null,

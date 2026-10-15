@@ -13,6 +13,11 @@ export function hashPassword(password: string): Promise<string> {
   return hash(password);
 }
 
+/** Whether `code` matches the argon2id PHC string `stored`; a string the library cannot read is an error, never a match. */
+export function verifyHash(stored: string, code: string): Promise<boolean> {
+  return verify(stored, code);
+}
+
 /** Whether `stored` is an argon2id PHC string the library can read; anything else is treated as no password. */
 function isArgon2id(stored: string): boolean {
   if (!stored.startsWith(ARGON2ID_PREFIX)) {

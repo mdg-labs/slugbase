@@ -53,6 +53,37 @@ export type MfaActivationOutcome =
   /** The account has no full session with that id; nothing was written. */
   | "no_session";
 
+/** A second factor that was checked against what the account has stored, to complete a partial session. */
+export type SecondFactor =
+  /** A TOTP code of this time step. */
+  | { readonly kind: "totp"; readonly step: number }
+  /** The unused backup code with this id, whose hash the typed code matched. */
+  | { readonly kind: "backup"; readonly codeId: string };
+
+export interface SignInCompletion {
+  readonly accountId: string;
+  /** The partial session the code was given for; it continues as a full session under `newTokenHash`. */
+  readonly sessionId: string;
+  readonly factor: SecondFactor;
+  /** SHA-256 of the 32-byte token the full session gets. */
+  readonly newTokenHash: Buffer;
+}
+
+export type SignInCompletionOutcome =
+  /** The factor was accepted and the session is full under the new token. */
+  | "completed"
+  /** The time step or the backup code was already used (a replay, an older code, a parallel use); nothing was written. */
+  | "replayed"
+  /** The account has no such partial session, or its MFA is no longer on; nothing was written. */
+  | "no_session";
+
+/** An unused backup code as it is stored. */
+export interface UnusedBackupCode {
+  readonly id: string;
+  /** The argon2id PHC string. */
+  readonly hash: string;
+}
+
 export interface MfaStore {
   /**
    * The sealed secret of the account, whether pending or active; undefined for an account that does
@@ -74,6 +105,23 @@ export interface MfaStore {
    * the session a new token, in one transaction: all of it happens or none of it does.
    */
   activateMfa(activation: MfaActivation): Promise<MfaActivationOutcome>;
+  /**
+   * The account's backup codes that are not used yet, oldest first; none for an account that does
+   * not exist, is disabled or has MFA off. The caller checks a typed code against the hashes and
+   * hands the id of the one that matched to `completeMfaSignIn`.
+   */
+  unusedBackupCodes(accountId: string): Promise<readonly UnusedBackupCode[]>;
+  /**
+   * Accepts the factor (the time step, or the backup code, atomically, so one of them is accepted
+   * once however many requests present it) and turns the partial session into a full one under the
+   * new token, in one transaction: all of it happens or none of it does.
+   */
+  completeMfaSignIn(completion: SignInCompletion): Promise<SignInCompletionOutcome>;
+  /**
+   * Counts a refused code against the partial session, and deletes the session at the fifth. True when
+   * the session is over (deleted by this call, or not there any more), false while it still stands.
+   */
+  recordMfaFailure(sessionId: string, accountId: string): Promise<boolean>;
 }
 
 interface SecretRow {
@@ -87,11 +135,30 @@ interface FlagRow {
   done: boolean;
 }
 
+interface BackupCodeRow {
+  id: string;
+  code_hash: Buffer;
+}
+
+interface EndedRow {
+  ended: boolean;
+}
+
 /** Thrown inside a transaction to roll it back with the outcome the step found. */
 class RolledBack extends Error {
   readonly outcome: Exclude<MfaActivationOutcome, "activated">;
 
   constructor(outcome: Exclude<MfaActivationOutcome, "activated">) {
+    super(outcome);
+    this.outcome = outcome;
+  }
+}
+
+/** Thrown inside the sign-in transaction to roll it back with the outcome the step found. */
+class NotCompleted extends Error {
+  readonly outcome: Exclude<SignInCompletionOutcome, "completed">;
+
+  constructor(outcome: Exclude<SignInCompletionOutcome, "completed">) {
     super(outcome);
     this.outcome = outcome;
   }
@@ -196,6 +263,51 @@ export function bindMfaStore(client: postgres.Sql): MfaStore {
         throw error;
       }
       return "activated";
+    },
+
+    async unusedBackupCodes(accountId) {
+      const rows = await client<BackupCodeRow[]>`SELECT id, code_hash FROM sys_backup_codes_unused(${accountId}::uuid)`;
+      return rows.map((row) => ({ id: row.id, hash: row.code_hash.toString("utf8") }));
+    },
+
+    async completeMfaSignIn({ accountId, sessionId, factor, newTokenHash }) {
+      if (newTokenHash.length !== TOKEN_HASH_BYTES) {
+        throw new RangeError(`newTokenHash must be a ${String(TOKEN_HASH_BYTES)}-byte SHA-256 digest`);
+      }
+      try {
+        await client.begin(async (tx) => {
+          const accepted =
+            factor.kind === "totp"
+              ? await flag(tx<FlagRow[]>`SELECT sys_mfa_accept_step(${accountId}::uuid, ${factor.step}::bigint) AS done`, "sys_mfa_accept_step")
+              : await flag(tx<FlagRow[]>`SELECT sys_backup_code_consume(${accountId}::uuid, ${factor.codeId}::uuid) AS done`, "sys_backup_code_consume");
+          if (!accepted) {
+            throw new NotCompleted("replayed");
+          }
+          if (
+            !(await flag(
+              tx<FlagRow[]>`SELECT sys_session_promote(${sessionId}::uuid, ${accountId}::uuid, ${newTokenHash}::bytea) AS done`,
+              "sys_session_promote",
+            ))
+          ) {
+            throw new NotCompleted("no_session");
+          }
+        });
+      } catch (error) {
+        if (error instanceof NotCompleted) {
+          return error.outcome;
+        }
+        throw error;
+      }
+      return "completed";
+    },
+
+    async recordMfaFailure(sessionId, accountId) {
+      const rows = await client<EndedRow[]>`SELECT sys_session_mfa_failure(${sessionId}::uuid, ${accountId}::uuid) AS ended`;
+      const row = rows[0];
+      if (rows.length !== 1 || row === undefined) {
+        throw new Error("sys_session_mfa_failure did not return exactly one row");
+      }
+      return row.ended;
     },
   };
 }

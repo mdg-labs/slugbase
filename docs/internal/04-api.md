@@ -203,7 +203,7 @@ Multi-workspace automation uses one token per workspace. An `X-Slugbase-Workspac
 
 ### 4.3 Session levels
 
-- `partial`: password verified, TOTP pending. Only `POST /auth/mfa/verify`, `POST /auth/logout` and `GET /api/config` accept it; everything else returns `401 mfa_required`. Expires after 5 minutes; five failed codes revoke it.
+- `partial`: password verified, TOTP pending. Only `POST /auth/mfa/verify`, `POST /auth/logout` and `GET /api/config` accept it; every other operation that needs a session returns `401 mfa_required` (an `anon` operation never looks at the session). Expires after 5 minutes, and a request does not extend it; five failed codes revoke it. `POST /auth/login` makes a `partial` session only for an account whose MFA is on, and never a `full` one.
 - `full`: signed in. The session token is **rotated** on sign-in, on the `partial → full` transition and on every privilege change (role change of the account itself in the active workspace, instance-admin flag change, password change, MFA enabled or disabled).
 
 ### 4.4 Re-authentication ("sudo mode")
@@ -397,7 +397,7 @@ Unauthenticated, `Content-Type: application/opensearchdescription+xml`, built on
 | Method | Path | Summary | Auth | Rate |
 |---|---|---|---|---|
 | POST | `/auth/login` | `{ email, password, remember }` → done or MFA required; `401` for any bad credential, `403 email_unverified` when verification is required | anon | login |
-| POST | `/auth/mfa/verify` | `{ code }` or `{ backupCode }` completes a partial session | partial | mfa |
+| POST | `/auth/mfa/verify` | `{ code }` or `{ backupCode }` completes a partial session: `200 { next: "done" }` with the `Set-Cookie` of the new `full` token (the `remember` choice kept); a wrong, replayed or used code of either kind is one answer, `422 invalid_code` with no field named, and counts against the pending session and the `mfa` bucket; `422 validation_failed` for a session that is not waiting for a second factor | partial | mfa |
 | POST | `/auth/logout` | End this session; `204` and the cookie cleared | acct/partial | write |
 | POST | `/auth/register` | `{ displayName, email, password }` — create account (when registration is open); generic `202`; `503 mail_unavailable` when verification is required and no mail is configured. Without a verification requirement the personal workspace is created at registration instead of at verification | anon | register |
 | POST | `/auth/verify-email` | `{ token }` — redeem signup verification token, create the personal workspace, sign in | anon | token_redeem |
