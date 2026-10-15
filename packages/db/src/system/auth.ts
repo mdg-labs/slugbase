@@ -30,6 +30,17 @@ export interface NewSession {
   readonly replacedTokenHash: Buffer | null;
 }
 
+/** What a password change writes, in one transaction. */
+export interface PasswordChange {
+  readonly accountId: string;
+  /** The full session the change is made from; it stays signed in under `newTokenHash`. */
+  readonly sessionId: string;
+  /** An argon2id PHC string. */
+  readonly passwordHash: string;
+  /** SHA-256 of the 32-byte token the session continues with. */
+  readonly newTokenHash: Buffer;
+}
+
 /** A session that is valid now, with the account facts the chain needs. */
 export interface SessionRecord {
   readonly sessionId: string;
@@ -84,6 +95,20 @@ export interface AuthStore extends SetupStore {
    * `exceptSessionId` (null deletes them all), and returns how many it deleted.
    */
   revokeAllSessions(accountId: string, exceptSessionId: string | null): Promise<number>;
+  /**
+   * The argon2id hash of the account's password; null for an account that does not exist, is
+   * disabled or has no password, which a caller cannot and must not tell apart.
+   */
+  passwordHashOf(accountId: string): Promise<string | null>;
+  /** Records that a full session of the account re-authenticated now; false when the account has no such session, and nothing changes. */
+  markReauthenticated(sessionId: string, accountId: string): Promise<boolean>;
+  /**
+   * Sets the account's password, deletes every other session of the account (partial and expired
+   * ones included) and gives the session of the change a new token, in one transaction: either all
+   * three happen or none does. False, with nothing changed, when the account is unknown or disabled
+   * or has no full session with that id.
+   */
+  changePassword(change: PasswordChange): Promise<boolean>;
   /** Ends the pool. */
   close(): Promise<void>;
 }
@@ -133,6 +158,17 @@ interface ListedSessionRow {
 interface RevokedCountRow {
   revoked: string | number | bigint;
 }
+
+interface PasswordHashRow {
+  hash: string | null;
+}
+
+interface FlagRow {
+  done: boolean;
+}
+
+/** Thrown inside a transaction to roll it back when a step finds nothing to change. */
+class RolledBack extends Error {}
 
 const TOKEN_HASH_BYTES = 32;
 
@@ -248,6 +284,55 @@ export function bindAuthStore(client: postgres.Sql): Omit<AuthStore, "close"> {
         throw new Error("sys_session_revoke_all did not return exactly one row");
       }
       return Number(row.revoked);
+    },
+
+    async passwordHashOf(accountId) {
+      const rows = await client<PasswordHashRow[]>`SELECT sys_account_password_hash(${accountId}::uuid) AS hash`;
+      const row = rows[0];
+      if (rows.length !== 1 || row === undefined) {
+        throw new Error("sys_account_password_hash did not return exactly one row");
+      }
+      return row.hash;
+    },
+
+    async markReauthenticated(sessionId, accountId) {
+      const rows = await client<FlagRow[]>`SELECT sys_session_reauth(${sessionId}::uuid, ${accountId}::uuid) AS done`;
+      const row = rows[0];
+      if (rows.length !== 1 || row === undefined) {
+        throw new Error("sys_session_reauth did not return exactly one row");
+      }
+      return row.done;
+    },
+
+    async changePassword({ accountId, sessionId, passwordHash, newTokenHash }) {
+      assertTokenHash(newTokenHash, "newTokenHash");
+      const flag = async (rows: Promise<FlagRow[]>, name: string): Promise<boolean> => {
+        const result = await rows;
+        const row = result[0];
+        if (result.length !== 1 || row === undefined) {
+          throw new Error(`${name} did not return exactly one row`);
+        }
+        return row.done;
+      };
+      try {
+        await client.begin(async (tx) => {
+          // The account row is locked first, by every caller, so two changes made at once from two
+          // sessions queue on it instead of each holding its own session row and waiting for the other's.
+          if (!(await flag(tx<FlagRow[]>`SELECT sys_password_set(${accountId}::uuid, ${passwordHash}::text) AS done`, "sys_password_set"))) {
+            throw new RolledBack();
+          }
+          if (!(await flag(tx<FlagRow[]>`SELECT sys_session_rotate(${sessionId}::uuid, ${accountId}::uuid, ${newTokenHash}::bytea) AS done`, "sys_session_rotate"))) {
+            throw new RolledBack();
+          }
+          await tx`SELECT sys_session_revoke_all(${accountId}::uuid, ${sessionId}::uuid)`;
+        });
+      } catch (error) {
+        if (error instanceof RolledBack) {
+          return false;
+        }
+        throw error;
+      }
+      return true;
     },
   };
 }

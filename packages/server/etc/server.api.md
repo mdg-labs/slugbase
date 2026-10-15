@@ -155,6 +155,7 @@ export interface CreateServerOptions {
     readonly migrations: readonly MigrationChain[];
     // (undocumented)
     readonly modules: readonly ServerModule[];
+    readonly now?: () => number;
     readonly openApiDocument?: ContractDocument;
     readonly shutdownTimeoutMs?: number;
     readonly webRoot?: string;

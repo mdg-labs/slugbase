@@ -40,12 +40,9 @@ type SetupRequest = z.output<typeof SetupRequestSchema>;
 const LENGTH_DETAIL = "The password must be 12 to 256 characters long.";
 const BREACHED_DETAIL = "The password appears in a list of breached passwords. Choose a different one.";
 
-/** The field errors of a request the schema accepted but that cannot be written: a blank name, or a password the policy refuses. */
-function refusals(body: SetupRequest, displayName: string, workspaceName: string, policy: PasswordPolicy): ProblemFieldError[] {
+/** The field errors of a request the schema accepted but that cannot be written: a blank workspace name, or a password the policy refuses. */
+function refusals(body: SetupRequest, workspaceName: string, policy: PasswordPolicy): ProblemFieldError[] {
   const errors: ProblemFieldError[] = [];
-  if (displayName === "") {
-    errors.push({ path: "displayName", code: "too_small" });
-  }
   if (workspaceName === "") {
     errors.push({ path: "workspaceName", code: "too_small" });
   }
@@ -61,9 +58,8 @@ export function completeSetupRoute({ config, store, hashPassword, cookie, passwo
       throw new ProblemError("setup_completed", CLOSED);
     }
 
-    const displayName = body.displayName.trim();
     const workspaceName = body.workspaceName.trim();
-    const errors = refusals(body, displayName, workspaceName, passwordPolicy);
+    const errors = refusals(body, workspaceName, passwordPolicy);
     if (errors.length > 0) {
       const weak = errors.every((error) => error.path === "password");
       const detail = errors.some((error) => error.code === "breached") ? BREACHED_DETAIL : LENGTH_DETAIL;
@@ -79,7 +75,7 @@ export function completeSetupRoute({ config, store, hashPassword, cookie, passwo
       workspaceId,
       sessionId: uuidv7(),
       email: normalizeEmail(body.email),
-      displayName,
+      displayName: body.displayName,
       passwordHash: await hashPassword(body.password),
       locale: FIRST_LOCALE,
       workspaceName,

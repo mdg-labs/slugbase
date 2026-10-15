@@ -7,6 +7,7 @@ import { RATE_LIMIT_BUCKETS, RATE_LIMIT_DEFAULTS, RATE_LIMIT_SCOPES, rateLimitKe
 import { createServer, type Server } from "../../src/create-server.ts";
 import { seedAccount, storeFor } from "../auth/support.ts";
 import { readOperations, type DocumentedOperation } from "../contract/document.ts";
+import { FIXTURES } from "../contract/fixtures.ts";
 import { appUrl, tenantDatabase } from "../contract/support.ts";
 import { adapters, recordingLogger, serverConfig } from "../support.ts";
 
@@ -105,6 +106,15 @@ function pathOf(operation: DocumentedOperation): string {
   return operation.path.replace(/\{[^}]+\}/g, PATH_PARAMETER);
 }
 
+/**
+ * The body a request carries: the valid one of the operation's fixture, because the validation stage runs before
+ * the authorization stage, so an operation whose schema requires fields would answer 422 to an empty object
+ * instead of the 401 this suite asserts for a request without a credential.
+ */
+function bodyOf(operation: DocumentedOperation): string {
+  return JSON.stringify(Object.hasOwn(FIXTURES, operation.operationId) ? (FIXTURES[operation.operationId]?.body ?? {}) : {});
+}
+
 function requestFor(operation: DocumentedOperation, attempt: Attempt = {}): Request {
   const headers = new Headers();
   const sentOrigin = attempt.origin === undefined ? origin : attempt.origin;
@@ -128,7 +138,7 @@ function requestFor(operation: DocumentedOperation, attempt: Attempt = {}): Requ
   return new Request(new URL(pathOf(operation), origin), {
     method: operation.method.toUpperCase(),
     headers,
-    ...(carriesBody ? { body: "{}" } : {}),
+    ...(carriesBody ? { body: bodyOf(operation) } : {}),
   });
 }
 

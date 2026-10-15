@@ -7,6 +7,7 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   document.documentElement.className = "";
+  document.documentElement.removeAttribute("data-accent");
   window.localStorage.clear();
   Reflect.deleteProperty(Element.prototype, "getAnimations");
 });

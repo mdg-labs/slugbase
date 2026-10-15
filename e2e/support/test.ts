@@ -1,4 +1,5 @@
 import { expect, test as base, type Locator } from "@playwright/test";
+import { PREFERENCES_FIXTURE_TIMEOUT_MS, withAccountPreferences, type PreferencesOfAccount } from "./account-preferences.ts";
 import { findViolations, loadAllowlist } from "./axe.ts";
 
 export interface App {
@@ -8,13 +9,29 @@ export interface App {
   scan: () => Promise<void>;
 }
 
+export interface Fixtures {
+  app: App;
+  /**
+   * The theme and the locale of the signed-in account, for a journey that reads either (see account-preferences.ts):
+   * the journey holds the account's preferences until it ends, and the ones it set go back to what the account had
+   * then. A journey of a visitor without a session has no account and does not use it.
+   */
+  account: PreferencesOfAccount;
+}
+
 /**
  * `test` with an `app` fixture that makes the accessibility check part of
  * visiting a page (doc 08 section 5.2): `visit` and `scan` fail the test on a
  * WCAG 2.2 AA violation that axe-allowlist.json does not name, and a test that
  * ends on a page it never scanned (reached by a click, say) fails too.
  */
-export const test = base.extend<{ app: App }>({
+export const test = base.extend<Fixtures>({
+  account: [
+    async ({ request }, use) => {
+      await withAccountPreferences(request, use);
+    },
+    { timeout: PREFERENCES_FIXTURE_TIMEOUT_MS },
+  ],
   app: async ({ page }, use) => {
     const allowlist = loadAllowlist();
     const visited = new Set<string>();

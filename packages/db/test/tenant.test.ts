@@ -65,6 +65,7 @@ describe("the package entry point", () => {
   it("exports withTenant through createDatabase, the repository helper, the account repositories and the rate-limit store, and no raw handle", () => {
     expect(Object.keys(entry).sort()).toEqual(
       [
+        "ACCENT_PRESETS",
         "CE_CHAIN",
         "ConnectionRoleError",
         "MigrationError",

@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createWebApp, useConfig } from "../src/index.ts";
-import { CONFIG_BODY, PRODUCT_NAME, SESSION_PATH, json, problem, renderApp, signedIn, stubMatchMedia } from "./support.tsx";
+import { CONFIG_BODY, ME_PATH, PRODUCT_NAME, SESSION_PATH, json, problem, renderApp, signedIn, stubMatchMedia } from "./support.tsx";
 
 const WELCOME = `Welcome to ${PRODUCT_NAME}`;
 const WELCOME_DE = `Willkommen bei ${PRODUCT_NAME}`;
@@ -37,7 +37,7 @@ describe("createWebApp", () => {
     await renderApp(<App />);
 
     expect(await screen.findByRole("heading", { name: WELCOME })).toBeTruthy();
-    expect(fetch.mock.calls.map(([request]) => new URL(request.url).pathname)).toEqual(["/api/config", SESSION_PATH]);
+    expect(fetch.mock.calls.map(([request]) => new URL(request.url).pathname)).toEqual(["/api/config", SESSION_PATH, ME_PATH]);
   });
 
   it("renders nothing of the product while the configuration is on its way", async () => {

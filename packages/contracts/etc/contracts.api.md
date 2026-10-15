@@ -6,6 +6,9 @@
 
 import { z } from 'zod';
 
+// @public
+export const ACCENT_PRESETS: readonly ["periwinkle", "violet", "rose", "amber", "green", "teal"];
+
 // @public (undocumented)
 export const AccountSchema: z.ZodObject<{
     id: z.ZodUUID;
@@ -20,15 +23,36 @@ export const AccountSchema: z.ZodObject<{
         dark: "dark";
         system: "system";
     }>;
-    accent: z.ZodNullable<z.ZodString>;
+    accent: z.ZodNullable<z.ZodEnum<{
+        periwinkle: "periwinkle";
+        violet: "violet";
+        rose: "rose";
+        amber: "amber";
+        green: "green";
+        teal: "teal";
+    }>>;
     defaultView: z.ZodEnum<{
         grid: "grid";
         table: "table";
     }>;
+    singleKeyShortcuts: z.ZodBoolean;
     aiOptOut: z.ZodBoolean;
+    analyticsConsent: z.ZodEnum<{
+        unset: "unset";
+        granted: "granted";
+        denied: "denied";
+    }>;
+    onboarding: z.ZodObject<{
+        browserSetupDone: z.ZodBoolean;
+        importDone: z.ZodBoolean;
+        checklistDismissed: z.ZodBoolean;
+    }, z.core.$strict>;
     emailVerified: z.ZodBoolean;
     hasPassword: z.ZodBoolean;
 }, z.core.$strict>;
+
+// @public (undocumented)
+export const ANALYTICS_CONSENTS: readonly ["unset", "granted", "denied"];
 
 // @public (undocumented)
 export const ApiConfigSchema: z.ZodObject<{
@@ -64,6 +88,42 @@ export const AUTH_POLICIES: readonly ["anonymous", "partial", "account", "member
 
 // @public (undocumented)
 export type AuthPolicy = (typeof AUTH_POLICIES)[number];
+
+// @public (undocumented)
+export const BOOKMARK_VIEWS: readonly ["grid", "table"];
+
+// @public (undocumented)
+export const changePassword: {
+    readonly method: "post";
+    readonly path: "/api/v1/me/password";
+    readonly operationId: "changePassword";
+    readonly tag: "me";
+    readonly summary: "Change the account's password";
+    readonly auth: "account";
+    readonly rate: "write";
+    readonly reauth: true;
+    readonly request: {
+        readonly body: z.ZodObject<{
+            currentPassword: z.ZodString;
+            newPassword: z.ZodString;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 204: EmptyResponse;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const ChangePasswordRequestSchema: z.ZodObject<{
+    currentPassword: z.ZodString;
+    newPassword: z.ZodString;
+}, z.core.$strict>;
 
 // @public (undocumented)
 export const completeSetup: {
@@ -115,8 +175,9 @@ export interface ComponentTypes {
     // (undocumented)
     schemas: {
         Account: {
-            accent: string | null;
+            accent: ("periwinkle" | "violet" | "rose" | "amber" | "green" | "teal") | null;
             aiOptOut: boolean;
+            analyticsConsent: "unset" | "granted" | "denied";
             defaultView: "grid" | "table";
             displayName: string;
             email: string;
@@ -124,6 +185,8 @@ export interface ComponentTypes {
             hasPassword: boolean;
             id: string;
             locale: "en" | "de";
+            onboarding: ComponentTypes["schemas"]["Onboarding"];
+            singleKeyShortcuts: boolean;
             theme: "light" | "dark" | "system";
         };
         ApiConfig: {
@@ -141,6 +204,10 @@ export interface ComponentTypes {
                 version: string;
             };
             setupRequired?: boolean;
+        };
+        ChangePasswordRequest: {
+            currentPassword: string;
+            newPassword: string;
         };
         HealthStatus: {
             status: "ok";
@@ -163,6 +230,16 @@ export interface ComponentTypes {
             name: string;
             role: "owner" | "admin" | "member";
             workspaceId: string;
+        };
+        Onboarding: {
+            browserSetupDone: boolean;
+            checklistDismissed: boolean;
+            importDone: boolean;
+        };
+        OnboardingChanges: {
+            browserSetupDone?: boolean;
+            checklistDismissed?: boolean;
+            importDone?: boolean;
         };
         OpenApiDocument: {
             info: {
@@ -197,6 +274,9 @@ export interface ComponentTypes {
                 expected: number;
             };
         };
+        ReauthRequest: {
+            password: string;
+        };
         Session: {
             createdAt: string;
             current: boolean;
@@ -223,8 +303,15 @@ export interface ComponentTypes {
             setupRequired: boolean;
         };
         UpdateAccountRequest: {
+            accent?: "periwinkle" | "violet" | "rose" | "amber" | "green" | "teal";
+            aiOptOut?: boolean;
+            analyticsConsent?: "unset" | "granted" | "denied";
+            defaultView?: "grid" | "table";
             displayName?: string;
             locale?: "en" | "de";
+            onboarding?: ComponentTypes["schemas"]["OnboardingChanges"];
+            singleKeyShortcuts?: boolean;
+            theme?: "light" | "dark" | "system";
         };
         VersionInfo: {
             builtAt: string;
@@ -237,6 +324,9 @@ export interface ComponentTypes {
 
 // @public
 export function defineOperation<const D extends OperationDefinition>(definition: D): D;
+
+// @public
+export const DisplayNameSchema: z.ZodString;
 
 // @public (undocumented)
 export interface EmptyResponse {
@@ -326,12 +416,30 @@ export const getMe: {
         dark: "dark";
         system: "system";
         }>;
-        accent: z.ZodNullable<z.ZodString>;
+        accent: z.ZodNullable<z.ZodEnum<{
+        periwinkle: "periwinkle";
+        violet: "violet";
+        rose: "rose";
+        amber: "amber";
+        green: "green";
+        teal: "teal";
+        }>>;
         defaultView: z.ZodEnum<{
         grid: "grid";
         table: "table";
         }>;
+        singleKeyShortcuts: z.ZodBoolean;
         aiOptOut: z.ZodBoolean;
+        analyticsConsent: z.ZodEnum<{
+        unset: "unset";
+        granted: "granted";
+        denied: "denied";
+        }>;
+        onboarding: z.ZodObject<{
+        browserSetupDone: z.ZodBoolean;
+        importDone: z.ZodBoolean;
+        checklistDismissed: z.ZodBoolean;
+        }, z.core.$strict>;
         emailVerified: z.ZodBoolean;
         hasPassword: z.ZodBoolean;
         }, z.core.$strict>;
@@ -604,12 +712,30 @@ export const MeSchema: z.ZodObject<{
             dark: "dark";
             system: "system";
         }>;
-        accent: z.ZodNullable<z.ZodString>;
+        accent: z.ZodNullable<z.ZodEnum<{
+            periwinkle: "periwinkle";
+            violet: "violet";
+            rose: "rose";
+            amber: "amber";
+            green: "green";
+            teal: "teal";
+        }>>;
         defaultView: z.ZodEnum<{
             grid: "grid";
             table: "table";
         }>;
+        singleKeyShortcuts: z.ZodBoolean;
         aiOptOut: z.ZodBoolean;
+        analyticsConsent: z.ZodEnum<{
+            unset: "unset";
+            granted: "granted";
+            denied: "denied";
+        }>;
+        onboarding: z.ZodObject<{
+            browserSetupDone: z.ZodBoolean;
+            importDone: z.ZodBoolean;
+            checklistDismissed: z.ZodBoolean;
+        }, z.core.$strict>;
         emailVerified: z.ZodBoolean;
         hasPassword: z.ZodBoolean;
     }, z.core.$strict>;
@@ -624,6 +750,20 @@ export const MeSchema: z.ZodObject<{
     }, z.core.$strict>>;
     activeWorkspaceId: z.ZodNullable<z.ZodUUID>;
     clientErrorReportDsn: z.ZodOptional<z.ZodString>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const OnboardingChangesSchema: z.ZodObject<{
+    browserSetupDone: z.ZodOptional<z.ZodBoolean>;
+    importDone: z.ZodOptional<z.ZodBoolean>;
+    checklistDismissed: z.ZodOptional<z.ZodBoolean>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const OnboardingSchema: z.ZodObject<{
+    browserSetupDone: z.ZodBoolean;
+    importDone: z.ZodBoolean;
+    checklistDismissed: z.ZodBoolean;
 }, z.core.$strict>;
 
 // @public
@@ -683,6 +823,77 @@ export const operations: readonly OperationDefinition[];
 
 // @public (undocumented)
 export interface OperationTypes {
+    // (undocumented)
+    changePassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["ChangePasswordRequest"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     // (undocumented)
     completeSetup: {
         parameters: {
@@ -1194,6 +1405,77 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    reauthenticate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["ReauthRequest"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     revokeSession: {
         parameters: {
             query?: never;
@@ -1485,6 +1767,40 @@ export interface paths {
         options?: never;
         head?: never;
         patch: OperationTypes["updateMe"];
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["changePassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/me/reauth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["reauthenticate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     // (undocumented)
@@ -1905,6 +2221,36 @@ export const ReadyStatusSchema: z.ZodObject<{
     }, z.core.$strict>;
 }, z.core.$strict>;
 
+// @public (undocumented)
+export const reauthenticate: {
+    readonly method: "post";
+    readonly path: "/api/v1/me/reauth";
+    readonly operationId: "reauthenticate";
+    readonly tag: "me";
+    readonly summary: "Re-authenticate the session with the account's password";
+    readonly auth: "account";
+    readonly rate: "mfa";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            password: z.ZodString;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 204: EmptyResponse;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const ReauthRequestSchema: z.ZodObject<{
+    password: z.ZodString;
+}, z.core.$strict>;
+
 // @public
 export interface ResponseHeader {
     // (undocumented)
@@ -2037,6 +2383,9 @@ export const SetupStatusSchema: z.ZodObject<{
     setupRequired: z.ZodBoolean;
 }, z.core.$strict>;
 
+// @public (undocumented)
+export const THEMES: readonly ["light", "dark", "system"];
+
 // @public
 export const TOKEN_SCOPES: readonly ["read", "write"];
 
@@ -2050,6 +2399,35 @@ export const UpdateAccountRequestSchema: z.ZodObject<{
         en: "en";
         de: "de";
     }>>;
+    theme: z.ZodOptional<z.ZodEnum<{
+        light: "light";
+        dark: "dark";
+        system: "system";
+    }>>;
+    accent: z.ZodOptional<z.ZodEnum<{
+        periwinkle: "periwinkle";
+        violet: "violet";
+        rose: "rose";
+        amber: "amber";
+        green: "green";
+        teal: "teal";
+    }>>;
+    defaultView: z.ZodOptional<z.ZodEnum<{
+        grid: "grid";
+        table: "table";
+    }>>;
+    singleKeyShortcuts: z.ZodOptional<z.ZodBoolean>;
+    aiOptOut: z.ZodOptional<z.ZodBoolean>;
+    analyticsConsent: z.ZodOptional<z.ZodEnum<{
+        unset: "unset";
+        granted: "granted";
+        denied: "denied";
+    }>>;
+    onboarding: z.ZodOptional<z.ZodObject<{
+        browserSetupDone: z.ZodOptional<z.ZodBoolean>;
+        importDone: z.ZodOptional<z.ZodBoolean>;
+        checklistDismissed: z.ZodOptional<z.ZodBoolean>;
+    }, z.core.$strict>>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -2058,7 +2436,7 @@ export const updateMe: {
     readonly path: "/api/v1/me";
     readonly operationId: "updateMe";
     readonly tag: "me";
-    readonly summary: "Change the signed-in account's display name and language";
+    readonly summary: "Change the signed-in account's profile and preferences";
     readonly auth: "account";
     readonly rate: "write";
     readonly request: {
@@ -2068,6 +2446,35 @@ export const updateMe: {
                 en: "en";
                 de: "de";
             }>>;
+            theme: z.ZodOptional<z.ZodEnum<{
+                light: "light";
+                dark: "dark";
+                system: "system";
+            }>>;
+            accent: z.ZodOptional<z.ZodEnum<{
+                periwinkle: "periwinkle";
+                violet: "violet";
+                rose: "rose";
+                amber: "amber";
+                green: "green";
+                teal: "teal";
+            }>>;
+            defaultView: z.ZodOptional<z.ZodEnum<{
+                grid: "grid";
+                table: "table";
+            }>>;
+            singleKeyShortcuts: z.ZodOptional<z.ZodBoolean>;
+            aiOptOut: z.ZodOptional<z.ZodBoolean>;
+            analyticsConsent: z.ZodOptional<z.ZodEnum<{
+                unset: "unset";
+                granted: "granted";
+                denied: "denied";
+            }>>;
+            onboarding: z.ZodOptional<z.ZodObject<{
+                browserSetupDone: z.ZodOptional<z.ZodBoolean>;
+                importDone: z.ZodOptional<z.ZodBoolean>;
+                checklistDismissed: z.ZodOptional<z.ZodBoolean>;
+            }, z.core.$strict>>;
         }, z.core.$strict>;
     };
     readonly responses: {
@@ -2084,12 +2491,30 @@ export const updateMe: {
         dark: "dark";
         system: "system";
         }>;
-        accent: z.ZodNullable<z.ZodString>;
+        accent: z.ZodNullable<z.ZodEnum<{
+        periwinkle: "periwinkle";
+        violet: "violet";
+        rose: "rose";
+        amber: "amber";
+        green: "green";
+        teal: "teal";
+        }>>;
         defaultView: z.ZodEnum<{
         grid: "grid";
         table: "table";
         }>;
+        singleKeyShortcuts: z.ZodBoolean;
         aiOptOut: z.ZodBoolean;
+        analyticsConsent: z.ZodEnum<{
+        unset: "unset";
+        granted: "granted";
+        denied: "denied";
+        }>;
+        onboarding: z.ZodObject<{
+        browserSetupDone: z.ZodBoolean;
+        importDone: z.ZodBoolean;
+        checklistDismissed: z.ZodBoolean;
+        }, z.core.$strict>;
         emailVerified: z.ZodBoolean;
         hasPassword: z.ZodBoolean;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;

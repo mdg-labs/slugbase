@@ -5,8 +5,9 @@ import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
 
 // The profile write of doc 04 section 10.3 (doc 05 section 3.1): the one
 // account-level UPDATE the application role holds. The failure scenarios are an
-// account that changes a column of its row other than the two the profile owns,
-// and one that changes a row of another account.
+// account that changes a column of its row other than the ones the profile owns,
+// one that changes a row of another account, and a preference change that applies
+// in part.
 
 const HOOK_TIMEOUT_MS = 300_000;
 
@@ -99,14 +100,138 @@ describe("updateProfile", () => {
   });
 });
 
+interface PreferenceRow {
+  theme: string;
+  accent: string | null;
+  default_bookmark_view: string;
+  single_key_shortcuts: boolean;
+  ai_opt_out: boolean;
+  analytics_consent: string;
+  consent_at: Date | null;
+  onboarding: unknown;
+  signin_alerts: boolean;
+}
+
+function preferences(id: string): Promise<PreferenceRow | undefined> {
+  return asSystem(db, async (tx) => {
+    const [found] = await tx<PreferenceRow[]>`
+      SELECT theme, accent, default_bookmark_view, single_key_shortcuts, ai_opt_out, analytics_consent, consent_at, onboarding, signin_alerts
+      FROM accounts WHERE id = ${id}`;
+    return found;
+  });
+}
+
+describe("updateProfile preferences", () => {
+  it("answers the defaults of a new account", async () => {
+    const id = await account();
+    const profile = await tenant(id, (tx) => accountProfileRepository(tx).profile());
+    expect(profile).toMatchObject({
+      theme: "system",
+      accent: null,
+      defaultBookmarkView: "grid",
+      singleKeyShortcuts: true,
+      aiOptOut: false,
+      analyticsConsent: "unset",
+      onboarding: { browserSetupDone: false, importDone: false, checklistDismissed: false },
+    });
+  });
+
+  it("writes every preference and answers them", async () => {
+    const id = await account();
+    const profile = await tenant(id, (tx) =>
+      accountProfileRepository(tx).updateProfile({
+        theme: "dark",
+        accent: "teal",
+        defaultBookmarkView: "table",
+        singleKeyShortcuts: false,
+        aiOptOut: true,
+      }),
+    );
+    expect(profile).toMatchObject({ theme: "dark", accent: "teal", defaultBookmarkView: "table", singleKeyShortcuts: false, aiOptOut: true });
+    expect(await preferences(id)).toMatchObject({
+      theme: "dark",
+      accent: "teal",
+      default_bookmark_view: "table",
+      single_key_shortcuts: false,
+      ai_opt_out: true,
+    });
+  });
+
+  it("stores the analytics consent with the time of the choice, and clears the time for unset", async () => {
+    const id = await account();
+    expect((await preferences(id))?.consent_at).toBeNull();
+
+    await tenant(id, (tx) => accountProfileRepository(tx).updateProfile({ analyticsConsent: "granted" }));
+    const granted = await preferences(id);
+    expect(granted).toMatchObject({ analytics_consent: "granted" });
+    expect(granted?.consent_at).toBeInstanceOf(Date);
+
+    await tenant(id, (tx) => accountProfileRepository(tx).updateProfile({ analyticsConsent: "denied" }));
+    expect(await preferences(id)).toMatchObject({ analytics_consent: "denied", consent_at: expect.any(Date) as Date });
+
+    await tenant(id, (tx) => accountProfileRepository(tx).updateProfile({ analyticsConsent: "unset" }));
+    expect(await preferences(id)).toMatchObject({ analytics_consent: "unset", consent_at: null });
+  });
+
+  it("leaves the consent and its time alone when another preference changes", async () => {
+    const id = await account();
+    await tenant(id, (tx) => accountProfileRepository(tx).updateProfile({ analyticsConsent: "granted" }));
+    const before = await preferences(id);
+    await tenant(id, (tx) => accountProfileRepository(tx).updateProfile({ theme: "light" }));
+    expect(await preferences(id)).toMatchObject({ analytics_consent: "granted", consent_at: before?.consent_at, theme: "light" });
+  });
+
+  it("merges the onboarding keys given into the stored state and keeps the others", async () => {
+    const id = await account();
+    await tenant(id, (tx) => accountProfileRepository(tx).updateProfile({ onboarding: { importDone: true } }));
+    expect(await preferences(id)).toMatchObject({ onboarding: { importDone: true } });
+    const profile = await tenant(id, (tx) => accountProfileRepository(tx).updateProfile({ onboarding: { checklistDismissed: true } }));
+    expect(profile?.onboarding).toEqual({ browserSetupDone: false, importDone: true, checklistDismissed: true });
+    expect(await preferences(id)).toMatchObject({ onboarding: { importDone: true, checklistDismissed: true } });
+
+    await tenant(id, (tx) => accountProfileRepository(tx).updateProfile({ onboarding: {} }));
+    expect((await preferences(id))?.onboarding).toEqual({ importDone: true, checklistDismissed: true });
+  });
+
+  it("applies none of the changes when one of them is refused, and leaves the sign-in alerts alone", async () => {
+    const id = await account();
+    const before = await preferences(id);
+    await expect(
+      tenant(id, (tx) =>
+        accountProfileRepository(tx).updateProfile({ theme: "dark", aiOptOut: true, defaultBookmarkView: "list" as unknown as "grid" }),
+      ),
+    ).rejects.toMatchObject({ cause: { code: "23514" } });
+    expect(await preferences(id)).toEqual(before);
+  });
+
+  it("changes the preferences of the account of the transaction only", async () => {
+    const mine = await account();
+    const other = await account();
+    const before = await preferences(other);
+    await tenant(mine, (tx) => accountProfileRepository(tx).updateProfile({ theme: "dark", accent: "rose", singleKeyShortcuts: false, onboarding: { importDone: true } }));
+    expect(await preferences(other)).toEqual(before);
+  });
+});
+
 describe("the application role's update privilege on accounts", () => {
-  it("covers display_name and locale and no other column, and no table-wide privilege", async () => {
+  it("covers the profile and preference columns and no other column, and no table-wide privilege", async () => {
     const rows = await db.owner<{ column: string; app: boolean }[]>`
       SELECT a.attname AS column, has_column_privilege('slugbase_app', 'public.accounts', a.attname, 'UPDATE') AS app
       FROM pg_attribute a
       WHERE a.attrelid = 'public.accounts'::regclass AND a.attnum > 0 AND NOT a.attisdropped
       ORDER BY a.attnum`;
-    expect(rows.filter((found) => found.app).map((found) => found.column)).toEqual(["display_name", "locale"]);
+    expect(rows.filter((found) => found.app).map((found) => found.column)).toEqual([
+      "display_name",
+      "locale",
+      "theme",
+      "accent",
+      "default_bookmark_view",
+      "single_key_shortcuts",
+      "ai_opt_out",
+      "analytics_consent",
+      "consent_at",
+      "onboarding",
+    ]);
     const [table] = await db.owner<{ app: boolean }[]>`SELECT has_table_privilege('slugbase_app', 'public.accounts', 'UPDATE') AS app`;
     expect(table?.app).toBe(false);
   });
@@ -114,7 +239,7 @@ describe("the application role's update privilege on accounts", () => {
   it("refuses a statement that sets the email, the instance admin flag or the password hash", async () => {
     const id = await account();
     const before = await row(id);
-    for (const column of ["email = 'taken@example.test'", "is_instance_admin = true", "password_hash = 'x'", "disabled_at = now()", "id = gen_random_uuid()"]) {
+    for (const column of ["email = 'taken@example.test'", "is_instance_admin = true", "password_hash = 'x'", "disabled_at = now()", "id = gen_random_uuid()", "signin_alerts = false", "last_sign_in_at = now()"]) {
       await expect(
         db.app.begin(async (tx) => {
           await tx`SELECT set_config('app.account_id', ${id}, true)`;

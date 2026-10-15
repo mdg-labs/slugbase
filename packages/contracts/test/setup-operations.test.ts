@@ -70,6 +70,11 @@ describe("completeSetup", () => {
     expect(SetupRequestSchema.safeParse({ ...valid, email: "not an address" }).success).toBe(false);
     expect(SetupRequestSchema.safeParse({ ...valid, displayName: "" }).success).toBe(false);
     expect(SetupRequestSchema.safeParse({ ...valid, displayName: "x".repeat(101) }).success).toBe(false);
+    expect(SetupRequestSchema.safeParse({ ...valid, displayName: "   " }).success).toBe(false);
+    expect(SetupRequestSchema.safeParse({ ...valid, displayName: "\u{1F600}".repeat(100) }).success).toBe(true);
+    expect(SetupRequestSchema.safeParse({ ...valid, displayName: "\u{1F600}".repeat(101) }).success).toBe(false);
+    expect(SetupRequestSchema.safeParse({ ...valid, displayName: ` ${"x".repeat(100)} ` }).data?.displayName).toBe("x".repeat(100));
+    expect(body.properties["displayName"]).toMatchObject({ type: "string", minLength: 1, maxLength: 100 });
     expect(SetupRequestSchema.safeParse({ ...valid, workspaceName: "x".repeat(65) }).success).toBe(false);
   });
 

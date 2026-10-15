@@ -22,7 +22,10 @@ const ACCOUNT: Account = {
   theme: "system",
   accent: null,
   defaultView: "grid",
+  singleKeyShortcuts: true,
   aiOptOut: false,
+  analyticsConsent: "unset",
+  onboarding: { browserSetupDone: false, importDone: false, checklistDismissed: false },
   emailVerified: true,
   hasPassword: true,
 };
@@ -269,6 +272,30 @@ describe("the profile page", () => {
 
     fireEvent.change(nameInput(), { target: { value: "Ada" } });
     expect(screen.queryByText("Enter your name.")).toBeNull();
+  });
+
+  it("sends a name of 100 astral-plane characters and does not cut the input at 100 UTF-16 units", async () => {
+    const server = stubServer();
+    await openProfile();
+    const hundred = "\u{1F600}".repeat(100);
+
+    expect(nameInput().getAttribute("maxlength")).toBeNull();
+    fireEvent.change(nameInput(), { target: { value: `  ${hundred}  ` } });
+    await submit();
+
+    expect(await server.patches()).toEqual([{ displayName: hundred }]);
+    expect(screen.queryByText("Use at most 100 characters.")).toBeNull();
+  });
+
+  it("refuses a name of 101 characters before any request, however many UTF-16 units it takes", async () => {
+    const server = stubServer();
+    await openProfile();
+
+    fireEvent.change(nameInput(), { target: { value: "\u{1F600}".repeat(101) } });
+    await submit();
+
+    expect(screen.getByText("Use at most 100 characters.")).toBeTruthy();
+    expect(await server.patches()).toEqual([]);
   });
 
   it("names the field the server refused and raises the error toast, and keeps what was typed", async () => {

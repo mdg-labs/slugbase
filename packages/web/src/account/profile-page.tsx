@@ -114,7 +114,6 @@ function ProfileForm({ account }: { account: Account }): ReactElement {
             <Input
               autoComplete="name"
               disabled={save.isPending}
-              maxLength={NAME_MAX_LENGTH}
               onChange={(event) => {
                 setName(event.target.value);
                 setClientError(undefined);

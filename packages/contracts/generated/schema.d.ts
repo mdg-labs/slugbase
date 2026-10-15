@@ -66,8 +66,42 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Change the signed-in account's display name and language */
+        /** Change the signed-in account's profile and preferences */
         patch: operations["updateMe"];
+        trace?: never;
+    };
+    "/api/v1/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Change the account's password */
+        post: operations["changePassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/reauth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Re-authenticate the session with the account's password */
+        post: operations["reauthenticate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/me/sessions": {
@@ -212,10 +246,15 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         Account: {
-            /** @description The accent colour, a token name of the palette; null when none was chosen */
-            accent: string | null;
+            /** @description The accent colour, one of the six preset names; null when none was chosen, which shows the default */
+            accent: ("periwinkle" | "violet" | "rose" | "amber" | "green" | "teal") | null;
             /** @description Whether the account opted out of AI features */
             aiOptOut: boolean;
+            /**
+             * @description Whether the account agreed to product analytics; a choice is stored with the time it was made, and unset clears that time
+             * @enum {string}
+             */
+            analyticsConsent: "unset" | "granted" | "denied";
             /**
              * @description How bookmark lists are shown unless a list says otherwise
              * @enum {string}
@@ -239,8 +278,12 @@ export interface components {
              * @enum {string}
              */
             locale: "en" | "de";
+            /** @description The stored state of the Getting started checklist */
+            onboarding: components["schemas"]["Onboarding"];
+            /** @description Whether single-key shortcuts are on; modifier shortcuts always work */
+            singleKeyShortcuts: boolean;
             /**
-             * @description The colour scheme the account chose
+             * @description The colour scheme the account chose; system follows the operating system
              * @enum {string}
              */
             theme: "light" | "dark" | "system";
@@ -279,6 +322,12 @@ export interface components {
             };
             /** @description Whether first-run setup is pending; the same answer as GET /api/v1/setup/status. This server always sends it */
             setupRequired?: boolean;
+        };
+        ChangePasswordRequest: {
+            /** @description The account's current password */
+            currentPassword: string;
+            /** @description The new password, 12 to 256 characters and not on the breached list */
+            newPassword: string;
         };
         HealthStatus: {
             /** @constant */
@@ -324,6 +373,23 @@ export interface components {
              * @description The workspace's identifier
              */
             workspaceId: string;
+        };
+        Onboarding: {
+            /** @description Whether the browser setup step of the Getting started checklist is done */
+            browserSetupDone: boolean;
+            /** @description Whether the Getting started checklist is dismissed */
+            checklistDismissed: boolean;
+            /** @description Whether the import step of the Getting started checklist is done */
+            importDone: boolean;
+        };
+        /** @description The checklist keys to change; a key left out keeps its value */
+        OnboardingChanges: {
+            /** @description Whether the browser setup step of the Getting started checklist is done */
+            browserSetupDone?: boolean;
+            /** @description Whether the Getting started checklist is dismissed */
+            checklistDismissed?: boolean;
+            /** @description Whether the import step of the Getting started checklist is done */
+            importDone?: boolean;
         };
         OpenApiDocument: {
             info: {
@@ -377,6 +443,10 @@ export interface components {
                 expected: number;
             };
         };
+        ReauthRequest: {
+            /** @description The account's current password */
+            password: string;
+        };
         Session: {
             /**
              * Format: date-time
@@ -407,7 +477,7 @@ export interface components {
             nextCursor: string | null;
         };
         SetupRequest: {
-            /** @description The first account's display name */
+            /** @description The first account's display name; surrounding whitespace is removed */
             displayName: string;
             /**
              * Format: email
@@ -433,6 +503,23 @@ export interface components {
             setupRequired: boolean;
         };
         UpdateAccountRequest: {
+            /**
+             * @description The accent colour, one of the six preset names
+             * @enum {string}
+             */
+            accent?: "periwinkle" | "violet" | "rose" | "amber" | "green" | "teal";
+            /** @description Whether the account opted out of AI features */
+            aiOptOut?: boolean;
+            /**
+             * @description Whether the account agreed to product analytics; a choice is stored with the time it was made, and unset clears that time
+             * @enum {string}
+             */
+            analyticsConsent?: "unset" | "granted" | "denied";
+            /**
+             * @description How bookmark lists are shown unless a list says otherwise
+             * @enum {string}
+             */
+            defaultView?: "grid" | "table";
             /** @description The name shown to other members, 1 to 100 characters; surrounding whitespace is removed and a name that is blank after that is refused */
             displayName?: string;
             /**
@@ -440,6 +527,14 @@ export interface components {
              * @enum {string}
              */
             locale?: "en" | "de";
+            onboarding?: components["schemas"]["OnboardingChanges"];
+            /** @description Whether single-key shortcuts are on; modifier shortcuts always work */
+            singleKeyShortcuts?: boolean;
+            /**
+             * @description The colour scheme the account chose; system follows the operating system
+             * @enum {string}
+             */
+            theme?: "light" | "dark" | "system";
         };
         VersionInfo: {
             /** @description Build time, RFC 3339 UTC */
@@ -736,7 +831,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation: an unknown field, a name that is empty or longer than 100 characters, or a language other than en and de */
+            /** @description The body did not pass validation: an unknown field or onboarding key, a name that is empty or longer than 100 characters, or a value outside the one the field allows (a language other than en and de, an accent that is not a preset name) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -746,6 +841,162 @@ export interface operations {
                 };
             };
             /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    changePassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description The password is changed and every other session of the account is deleted; the response carries the Set-Cookie header of the session's new token */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself, or the credential is an API token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation; the new password is refused by the policy (weak_password); or the current password is wrong or the account has none, answered alike as validation_failed with the field in errors[] and nothing changed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    reauthenticate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReauthRequest"];
+            };
+        };
+        responses: {
+            /** @description The password is right; the session counts as re-authenticated for the next ten minutes */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete; or the password is wrong or the account has none, answered as reauth_required with the field in errors[] and the session unchanged */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many attempts; Retry-After says when to try again */
             429: {
                 headers: {
                     /** @description Whole seconds to wait before the request can succeed */

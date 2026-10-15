@@ -6,6 +6,7 @@ import { ProblemError } from "../../src/http/problem.ts";
 import { route } from "../../src/routes/register.ts";
 import { recordingLogger, serverConfig } from "../support.ts";
 import { buildDocument, type TestDocument } from "./build-document.ts";
+import { readOperations } from "./document.ts";
 import { seedAccount } from "../auth/support.ts";
 import { FIXTURES, WALKER_ACCOUNT } from "./fixtures.ts";
 import { matrixRequest } from "./matrix.ts";
@@ -70,34 +71,58 @@ describe("the walker over the committed document", () => {
   // "sign out everywhere" ends every other session of the account.
   async function sessionHooks(server: Server): Promise<PolicyHooks> {
     await seedAccount(database(), WALKER_ACCOUNT);
-    const cookies = new Map<string, string>();
-    for (const { operationId, kind } of classifyOperations(committed).operations) {
-      if (kind !== "account-level") {
-        continue;
-      }
-      const account = await seedAccount(database(), { email: `walker-${operationId}@example.test`.toLowerCase() });
+    const needsReauth = new Set(readOperations(committed).operations.filter((operation) => operation.reauth === true).map((operation) => operation.operationId));
+    const signIn = async (email: string, reauthenticate: boolean): Promise<string> => {
+      await seedAccount(database(), { email, password: WALKER_ACCOUNT.password });
       const response = await server.fetch(
         new Request(new URL("/api/v1/auth/login", origin), {
           method: "POST",
           headers: { origin, "content-type": "application/json" },
-          body: JSON.stringify({ email: account.email, password: account.password, remember: false }),
+          body: JSON.stringify({ email, password: WALKER_ACCOUNT.password, remember: false }),
         }),
       );
       const cookie = /^(__Host-slugbase_session=[A-Za-z0-9_-]{43});/.exec(response.headers.get("set-cookie") ?? "")?.[1];
       if (response.status !== 200 || cookie === undefined) {
         throw new Error(`the walker could not sign in: ${String(response.status)}`);
       }
-      cookies.set(operationId, cookie);
+      if (reauthenticate) {
+        const reauth = await server.fetch(
+          new Request(new URL("/api/v1/me/reauth", origin), {
+            method: "POST",
+            headers: { origin, "content-type": "application/json", cookie },
+            body: JSON.stringify({ password: WALKER_ACCOUNT.password }),
+          }),
+        );
+        if (reauth.status !== 204) {
+          throw new Error(`the walker could not re-authenticate: ${String(reauth.status)}`);
+        }
+      }
+      return cookie;
+    };
+    const cookies = new Map<string, string>();
+    const stale = new Map<string, string>();
+    for (const { operationId, kind } of classifyOperations(committed).operations) {
+      if (kind !== "account-level") {
+        continue;
+      }
+      const email = `walker-${operationId}@example.test`.toLowerCase();
+      cookies.set(operationId, await signIn(email, needsReauth.has(operationId)));
+      if (needsReauth.has(operationId)) {
+        // Its own account: the valid request of the operation ends the sessions of the account it is made for.
+        stale.set(operationId, await signIn(`walker-${operationId}-stale@example.test`.toLowerCase(), false));
+      }
     }
+    const credentialsOf = (held: ReadonlyMap<string, string>, operationId: string) => {
+      const cookie = held.get(operationId);
+      if (cookie === undefined) {
+        throw new Error(`the walker holds no session for ${operationId}`);
+      }
+      return { headers: { cookie } };
+    };
     return {
       ...world.hooks,
-      authorized: ({ operationId }) => {
-        const cookie = cookies.get(operationId);
-        if (cookie === undefined) {
-          throw new Error(`the walker holds no session for ${operationId}`);
-        }
-        return { headers: { cookie } };
-      },
+      authorized: ({ operationId }) => credentialsOf(cookies, operationId),
+      withoutReauth: ({ operationId }) => credentialsOf(stale, operationId),
     };
   }
 
@@ -111,8 +136,9 @@ describe("the walker over the committed document", () => {
     expect(report.failures).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each anonymous operation and for the sign-in; each of the six operations that need a session also answers 401 without one.
-    expect(report.calls).toBe(operations.length + 6);
+    // One valid request for each anonymous operation and for the sign-in; each of the eight operations that need a session
+    // also answers 401 without one, and the one that declares re-authentication answers 401 reauth_required without it.
+    expect(report.calls).toBe(operations.length + 9);
   });
 });
 
@@ -120,7 +146,7 @@ describe("the hooks over a test module", () => {
   const document = buildDocument(probeOperations, committed);
 
   it("run for every operation with a policy that needs a principal, and the server answers each as declared", async () => {
-    const counted: Record<keyof PolicyHooks, number> = { authorized: 0, tooLowRole: 0, readOnlyToken: 0, withoutEntitlement: 0, workspaceA: 0 };
+    const counted: Record<keyof PolicyHooks, number> = { authorized: 0, withoutReauth: 0, tooLowRole: 0, readOnlyToken: 0, withoutEntitlement: 0, workspaceA: 0 };
     const count = <K extends keyof PolicyHooks>(name: K): PolicyHooks[K] =>
       ((operation: Parameters<PolicyHooks[K]>[0]) => {
         counted[name] += 1;
@@ -128,6 +154,7 @@ describe("the hooks over a test module", () => {
       }) as PolicyHooks[K];
     const hooks: PolicyHooks = {
       authorized: count("authorized"),
+      withoutReauth: count("withoutReauth"),
       tooLowRole: count("tooLowRole"),
       readOnlyToken: count("readOnlyToken"),
       withoutEntitlement: count("withoutEntitlement"),
@@ -140,6 +167,8 @@ describe("the hooks over a test module", () => {
     expect(report.operations).toBe(probeOperations.length);
     expect(counted).toEqual({
       authorized: 8,
+      // no operation of the test module declares re-authentication
+      withoutReauth: 0,
       // every policy but the account one has a role below it
       tooLowRole: 7,
       // the one operation with a write scope

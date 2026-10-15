@@ -158,6 +158,8 @@ export interface ChainDependencies {
   readonly withTenant: Database["withTenant"];
   /** Decides the entitlement an operation declares (stage 9); by default every entitlement is refused. */
   readonly entitlements?: EntitlementCheck;
+  /** The instant, in milliseconds, stage 9 compares a session's re-authentication with; defaults to the system clock. */
+  readonly now?: () => number;
   /** The hooks modules registered, consulted by the handlers of the core flows. */
   readonly hooks: HookDispatcher;
   /** How stage 11 treats a response that differs from its declared schema. */
@@ -277,6 +279,7 @@ export function installChain(
     tenantResolver,
     withTenant,
     entitlements,
+    now,
   } = dependencies;
   const requestContext = createRequestContext({ logger, trustedProxyHops, ...(metrics === undefined ? {} : { metrics }) });
   const securityHeaders = createSecurityHeaders({ appOrigin });
@@ -298,7 +301,7 @@ export function installChain(
     "rate-limiting": rateLimiting.stage,
     "tenant-resolution": createTenantResolution({ resolver: tenantResolver, withTenant }),
     validation,
-    authorization: createAuthorization(entitlements === undefined ? {} : { entitlements }),
+    authorization: createAuthorization({ ...(entitlements === undefined ? {} : { entitlements }), ...(now === undefined ? {} : { now }) }),
   };
   const requestStages = REQUEST_STAGES.map((name) => ({
     name,

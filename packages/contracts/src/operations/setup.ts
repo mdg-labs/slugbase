@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { defineOperation, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
+import { DisplayNameSchema } from "./me.ts";
 
 // The first-run operations of doc 04 section 10.2 (community edition, doc 02
 // section 2.2). Both are anonymous: setup runs before any account exists, so the
@@ -20,7 +21,7 @@ export const SetupRequestSchema = z
       .max(256)
       .optional()
       .describe("The setup token printed to the server log at the latest server start (an earlier one stops working); required when the deployment requires one"),
-    displayName: z.string().min(1).max(100).describe("The first account's display name"),
+    displayName: DisplayNameSchema.describe("The first account's display name; surrounding whitespace is removed"),
     email: z.email().max(320).describe("The first account's email address"),
     password: z.string().describe("The first account's password, 12 to 256 characters"),
     workspaceName: z.string().min(1).max(64).describe("The name of the first workspace"),

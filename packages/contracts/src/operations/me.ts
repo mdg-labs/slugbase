@@ -7,6 +7,36 @@ import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimi
 
 export const WORKSPACE_ROLES = ["owner", "admin", "member"] as const;
 
+export const THEMES = ["light", "dark", "system"] as const;
+/** The six accent presets of doc 03 (Q36): a name of the palette, never a free colour. Periwinkle is the default. */
+export const ACCENT_PRESETS = ["periwinkle", "violet", "rose", "amber", "green", "teal"] as const;
+export const BOOKMARK_VIEWS = ["grid", "table"] as const;
+export const ANALYTICS_CONSENTS = ["unset", "granted", "denied"] as const;
+
+const ThemeSchema = z.enum(THEMES).describe("The colour scheme the account chose; system follows the operating system");
+const AccentSchema = z.enum(ACCENT_PRESETS).describe("The accent colour, one of the six preset names");
+const DefaultViewSchema = z.enum(BOOKMARK_VIEWS).describe("How bookmark lists are shown unless a list says otherwise");
+const AnalyticsConsentSchema = z
+  .enum(ANALYTICS_CONSENTS)
+  .describe("Whether the account agreed to product analytics; a choice is stored with the time it was made, and unset clears that time");
+
+const OnboardingFlags = {
+  browserSetupDone: z.boolean().describe("Whether the browser setup step of the Getting started checklist is done"),
+  importDone: z.boolean().describe("Whether the import step of the Getting started checklist is done"),
+  checklistDismissed: z.boolean().describe("Whether the Getting started checklist is dismissed"),
+};
+
+export const OnboardingSchema = z.strictObject(OnboardingFlags).meta({ id: "Onboarding" });
+
+export const OnboardingChangesSchema = z
+  .strictObject({
+    browserSetupDone: OnboardingFlags.browserSetupDone.optional(),
+    importDone: OnboardingFlags.importDone.optional(),
+    checklistDismissed: OnboardingFlags.checklistDismissed.optional(),
+  })
+  .describe("The checklist keys to change; a key left out keeps its value")
+  .meta({ id: "OnboardingChanges" });
+
 export const MembershipSchema = z
   .strictObject({
     workspaceId: z.uuid().describe("The workspace's identifier"),
@@ -15,16 +45,31 @@ export const MembershipSchema = z
   })
   .meta({ id: "Membership" });
 
+/**
+ * The display name rule of doc 02 section 2: the name with its surrounding whitespace removed, 1 to 100
+ * characters. Zod counts a character as one code point, as PostgreSQL's length() does, and a parsed value
+ * is the trimmed name that is stored.
+ */
+export const DisplayNameSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(100)
+  .describe("The name shown to other members, 1 to 100 characters; surrounding whitespace is removed and a name that is blank after that is refused");
+
 export const AccountSchema = z
   .strictObject({
     id: z.uuid().describe("The account's identifier"),
     email: z.string().describe("The account's email address, as stored"),
     displayName: z.string().describe("The name shown to other members"),
     locale: z.enum(["en", "de"]).describe("The language of the account's emails and of the app unless the browser overrides it"),
-    theme: z.enum(["light", "dark", "system"]).describe("The colour scheme the account chose"),
-    accent: z.string().nullable().describe("The accent colour, a token name of the palette; null when none was chosen"),
-    defaultView: z.enum(["grid", "table"]).describe("How bookmark lists are shown unless a list says otherwise"),
+    theme: ThemeSchema,
+    accent: AccentSchema.nullable().describe("The accent colour, one of the six preset names; null when none was chosen, which shows the default"),
+    defaultView: DefaultViewSchema,
+    singleKeyShortcuts: z.boolean().describe("Whether single-key shortcuts are on; modifier shortcuts always work"),
     aiOptOut: z.boolean().describe("Whether the account opted out of AI features"),
+    analyticsConsent: AnalyticsConsentSchema,
+    onboarding: OnboardingSchema.describe("The stored state of the Getting started checklist"),
     emailVerified: z.boolean().describe("Whether the email address was verified"),
     hasPassword: z.boolean().describe("Whether the account can sign in with a password; false for an account that signs in through an identity provider only"),
   })
@@ -32,8 +77,15 @@ export const AccountSchema = z
 
 export const UpdateAccountRequestSchema = z
   .strictObject({
-    displayName: z.string().min(1).max(100).optional().describe("The name shown to other members, 1 to 100 characters; surrounding whitespace is removed and a name that is blank after that is refused"),
+    displayName: DisplayNameSchema.optional(),
     locale: z.enum(["en", "de"]).optional().describe("The language of the account's emails and of the app unless the browser overrides it"),
+    theme: ThemeSchema.optional(),
+    accent: AccentSchema.optional(),
+    defaultView: DefaultViewSchema.optional(),
+    singleKeyShortcuts: z.boolean().optional().describe("Whether single-key shortcuts are on; modifier shortcuts always work"),
+    aiOptOut: z.boolean().optional().describe("Whether the account opted out of AI features"),
+    analyticsConsent: AnalyticsConsentSchema.optional(),
+    onboarding: OnboardingChangesSchema.optional(),
   })
   .meta({ id: "UpdateAccountRequest" });
 
@@ -174,7 +226,7 @@ export const updateMe = defineOperation({
   path: "/api/v1/me",
   operationId: "updateMe",
   tag: "me",
-  summary: "Change the signed-in account's display name and language",
+  summary: "Change the signed-in account's profile and preferences",
   auth: "account",
   rate: "write",
   request: { body: UpdateAccountRequestSchema },
@@ -183,7 +235,61 @@ export const updateMe = defineOperation({
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse("The request did not come from the application itself"),
-    422: problemResponse("The body did not pass validation: an unknown field, a name that is empty or longer than 100 characters, or a language other than en and de"),
+    422: problemResponse("The body did not pass validation: an unknown field or onboarding key, a name that is empty or longer than 100 characters, or a value outside the one the field allows (a language other than en and de, an accent that is not a preset name)"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const ReauthRequestSchema = z
+  .strictObject({
+    password: z.string().min(1).max(256).describe("The account's current password"),
+  })
+  .meta({ id: "ReauthRequest" });
+
+export const ChangePasswordRequestSchema = z
+  .strictObject({
+    currentPassword: z.string().min(1).max(256).describe("The account's current password"),
+    newPassword: z.string().describe("The new password, 12 to 256 characters and not on the breached list"),
+  })
+  .meta({ id: "ChangePasswordRequest" });
+
+export const reauthenticate = defineOperation({
+  method: "post",
+  path: "/api/v1/me/reauth",
+  operationId: "reauthenticate",
+  tag: "me",
+  summary: "Re-authenticate the session with the account's password",
+  auth: "account",
+  rate: "mfa",
+  request: { body: ReauthRequestSchema },
+  responses: {
+    204: emptyResponse("The password is right; the session counts as re-authenticated for the next ten minutes"),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, or its second factor is not complete; or the password is wrong or the account has none, answered as reauth_required with the field in errors[] and the session unchanged"),
+    403: problemResponse("The request did not come from the application itself"),
+    422: problemResponse("The body did not pass validation"),
+    429: rateLimitedResponse("Too many attempts; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const changePassword = defineOperation({
+  method: "post",
+  path: "/api/v1/me/password",
+  operationId: "changePassword",
+  tag: "me",
+  summary: "Change the account's password",
+  auth: "account",
+  rate: "write",
+  reauth: true,
+  request: { body: ChangePasswordRequestSchema },
+  responses: {
+    204: emptyResponse("The password is changed and every other session of the account is deleted; the response carries the Set-Cookie header of the session's new token"),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"),
+    403: problemResponse("The request did not come from the application itself, or the credential is an API token"),
+    422: problemResponse("The body did not pass validation; the new password is refused by the policy (weak_password); or the current password is wrong or the account has none, answered alike as validation_failed with the field in errors[] and nothing changed"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },

@@ -11,11 +11,19 @@ import type { PgTable } from 'drizzle-orm/pg-core';
 import { SQL } from 'drizzle-orm';
 
 // @public (undocumented)
+export const ACCENT_PRESETS: readonly ["periwinkle", "violet", "rose", "amber", "green", "teal"];
+
+// @public (undocumented)
+export type AccentPreset = (typeof ACCENT_PRESETS)[number];
+
+// @public (undocumented)
 export interface AccountProfile {
     // (undocumented)
-    readonly accent: string | null;
+    readonly accent: AccentPreset | null;
     // (undocumented)
     readonly aiOptOut: boolean;
+    // (undocumented)
+    readonly analyticsConsent: AnalyticsConsent;
     // (undocumented)
     readonly defaultBookmarkView: "grid" | "table";
     // (undocumented)
@@ -31,15 +39,33 @@ export interface AccountProfile {
     // (undocumented)
     readonly locale: "en" | "de";
     // (undocumented)
+    readonly onboarding: Onboarding;
+    // (undocumented)
+    readonly singleKeyShortcuts: boolean;
+    // (undocumented)
     readonly theme: "light" | "dark" | "system";
 }
 
 // @public
 export interface AccountProfileChanges {
     // (undocumented)
+    readonly accent?: AccentPreset;
+    // (undocumented)
+    readonly aiOptOut?: boolean;
+    // (undocumented)
+    readonly analyticsConsent?: AnalyticsConsent;
+    // (undocumented)
+    readonly defaultBookmarkView?: "grid" | "table";
+    // (undocumented)
     readonly displayName?: string;
     // (undocumented)
     readonly locale?: "en" | "de";
+    // (undocumented)
+    readonly onboarding?: Partial<Onboarding>;
+    // (undocumented)
+    readonly singleKeyShortcuts?: boolean;
+    // (undocumented)
+    readonly theme?: "light" | "dark" | "system";
 }
 
 // @public (undocumented)
@@ -52,13 +78,19 @@ export interface AccountProfileRepository {
 export function accountProfileRepository(tx: TenantTx): AccountProfileRepository;
 
 // @public (undocumented)
+export type AnalyticsConsent = "unset" | "granted" | "denied";
+
+// @public (undocumented)
 export interface AuthStore extends SetupStore {
+    changePassword(change: PasswordChange): Promise<boolean>;
     close(): Promise<void>;
     createSession(session: NewSession): Promise<boolean>;
     emailKey(email: string): Promise<string>;
     listSessions(accountId: string, afterId: string | null, limit: number): Promise<readonly SessionSummary[]>;
     loginLookup(email: string): Promise<LoginCandidate | undefined>;
     lookupSession(tokenHash: Buffer): Promise<SessionRecord | undefined>;
+    markReauthenticated(sessionId: string, accountId: string): Promise<boolean>;
+    passwordHashOf(accountId: string): Promise<string | null>;
     revokeAllSessions(accountId: string, exceptSessionId: string | null): Promise<number>;
     revokeSession(sessionId: string, accountId: string): Promise<boolean>;
 }
@@ -243,6 +275,25 @@ export interface NewSession {
     readonly replacedTokenHash: Buffer | null;
     readonly tokenHash: Buffer;
     readonly userAgent: string | null;
+}
+
+// @public
+export interface Onboarding {
+    // (undocumented)
+    readonly browserSetupDone: boolean;
+    // (undocumented)
+    readonly checklistDismissed: boolean;
+    // (undocumented)
+    readonly importDone: boolean;
+}
+
+// @public
+export interface PasswordChange {
+    // (undocumented)
+    readonly accountId: string;
+    readonly newTokenHash: Buffer;
+    readonly passwordHash: string;
+    readonly sessionId: string;
 }
 
 // @public (undocumented)

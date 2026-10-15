@@ -10,17 +10,16 @@ import { route } from "../register.ts";
 // and selects no hash and no secret. A browser error reporter's DSN is the
 // session's alone: it is not asked for on behalf of an API token.
 //
-// PATCH /api/v1/me changes the display name and the language of the account the
-// session belongs to and answers the account afterwards. The account is the
+// PATCH /api/v1/me changes the profile (display name, language) and the
+// preferences (theme, accent, default view, single-key shortcuts, AI opt-out,
+// analytics consent, onboarding state) of the account the session belongs to and
+// answers the account afterwards, applying every change in one statement. The account is the
 // principal's, never a value of the request, and the body is a closed object, so
 // a field the operation does not declare is a 422 before the handler runs.
 
 export interface ProfileRoutesOptions {
   readonly withTenant: Database["withTenant"];
 }
-
-/** A field error of a name that is blank once the surrounding whitespace is removed, which the schema's length check cannot see. */
-const BLANK_NAME = { path: "displayName", code: "too_small" } as const;
 
 function accountBody(profile: AccountProfile) {
   return {
@@ -31,7 +30,10 @@ function accountBody(profile: AccountProfile) {
     theme: profile.theme,
     accent: profile.accent,
     defaultView: profile.defaultBookmarkView,
+    singleKeyShortcuts: profile.singleKeyShortcuts,
     aiOptOut: profile.aiOptOut,
+    analyticsConsent: profile.analyticsConsent,
+    onboarding: profile.onboarding,
     emailVerified: profile.emailVerified,
     hasPassword: profile.hasPassword,
   };
@@ -69,14 +71,17 @@ export function profileRoutes({ withTenant }: ProfileRoutesOptions): RouteBindin
       if (principal === undefined) {
         throw new ProblemError("unauthenticated", "Authentication is required.");
       }
-      const displayName = body.displayName?.trim();
-      if (displayName === "") {
-        throw new ProblemError("validation_failed", "The request did not pass validation.", { errors: [BLANK_NAME] });
-      }
       const profile = await withTenant({ accountId: principal.accountId, requestId: requestIdOf(context) }, (tx) =>
         accountProfileRepository(tx).updateProfile({
-          ...(displayName === undefined ? {} : { displayName }),
+          ...(body.displayName === undefined ? {} : { displayName: body.displayName }),
           ...(body.locale === undefined ? {} : { locale: body.locale }),
+          ...(body.theme === undefined ? {} : { theme: body.theme }),
+          ...(body.accent === undefined ? {} : { accent: body.accent }),
+          ...(body.defaultView === undefined ? {} : { defaultBookmarkView: body.defaultView }),
+          ...(body.singleKeyShortcuts === undefined ? {} : { singleKeyShortcuts: body.singleKeyShortcuts }),
+          ...(body.aiOptOut === undefined ? {} : { aiOptOut: body.aiOptOut }),
+          ...(body.analyticsConsent === undefined ? {} : { analyticsConsent: body.analyticsConsent }),
+          ...(body.onboarding === undefined ? {} : { onboarding: body.onboarding }),
         }),
       );
       if (profile === undefined) {

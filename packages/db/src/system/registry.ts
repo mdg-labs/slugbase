@@ -26,4 +26,8 @@ export const systemOperations: readonly string[] = [
   "sys_setup_status",
   "sys_setup_token_set",
   "sys_complete_setup",
+  "sys_account_password_hash",
+  "sys_session_reauth",
+  "sys_password_set",
+  "sys_session_rotate",
 ];

@@ -12,6 +12,8 @@ import { componentResolver, validateSchema, type ResolveReference } from "./sche
 //                  (any operation but anonymous and machine ones)
 //   too-low role   a principal just below the policy: 403 forbidden; below `member`
 //                  that is an account with no workspace, which has nothing to name: 404 not_found
+//   without re-authentication  an operation that declares `reauth`, called by a session that has
+//                  not re-authenticated: 401 reauth_required
 //   read-only token  a read-only token on a write-scope operation: 403 token_scope
 //   no entitlement an operation that declares an entitlement: 403 entitlement_required
 //   workspace B    the identifiers of workspace B, as a principal of workspace A,
@@ -51,8 +53,16 @@ export interface Credentials {
  * document, so that the credential fits its policy.
  */
 export interface PolicyHooks {
-  /** Holds the role and the scope the operation needs, in workspace A. */
+  /**
+   * Holds the role and the scope the operation needs, in workspace A; for an operation that declares `reauth`,
+   * also a re-authentication within the window.
+   */
   authorized(operation: DocumentedOperation): Credentials;
+  /**
+   * A session that otherwise satisfies the policy but has no re-authentication, of an account whose other
+   * calls do not end it. Asked for only an operation that declares `reauth`.
+   */
+  withoutReauth(operation: DocumentedOperation): Credentials;
   /**
    * The highest principal still below the policy: refused with 403 forbidden, or with 404 not_found when the
    * policy is `member` and the principal has no workspace. Undefined where none is below it (`account`).
@@ -301,6 +311,9 @@ export async function walkContract(options: WalkerOptions): Promise<WalkerReport
     }
 
     await exercise("without credentials", undefined, fixture, { status: 401, code: "unauthenticated" });
+    if (operation.reauth === true) {
+      await exercise("without re-authentication", hooks.withoutReauth(operation), fixture, { status: 401, code: "reauth_required" });
+    }
 
     // `account` and `partial` admit every signed-in session, so no principal is below them.
     if (operation.auth !== "account" && operation.auth !== "partial") {

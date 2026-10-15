@@ -28,6 +28,14 @@ const problemResponse: RulesetFunction = (operation, _options, context) => {
   return found ? undefined : [{ message: "Operation must declare at least one 4xx response with application/problem+json", path: context.path }];
 };
 
+/**
+ * `x-slugbase-reauth` is how an operation says it needs a re-authenticated session (doc 04 section 4.4). It is
+ * published only as `true`; an absent key means no requirement, and any other value (`false`, a string, a
+ * number) is a declaration the authorization stage cannot read the same way everywhere.
+ */
+const reauthDeclaration: RulesetFunction = (value, _options, context) =>
+  value === undefined || value === true ? undefined : [{ message: "x-slugbase-reauth must be true when present", path: context.path }];
+
 /** Where a response body schema is an object written out in place instead of a named component. */
 function anonymousObjects(schema: unknown, path: JsonPath): IFunctionResult[] {
   if (!isRecord(schema)) {
@@ -115,6 +123,13 @@ export const ruleset = {
       severity: "error",
       given: OPERATIONS,
       then: { field: "x-slugbase-rate", function: truthy },
+    },
+    "slugbase-operation-reauth": {
+      description: "x-slugbase-reauth, when present, is true",
+      message: "{{error}}",
+      severity: "error",
+      given: OPERATIONS,
+      then: { field: "x-slugbase-reauth", function: reauthDeclaration },
     },
     "slugbase-problem-response": {
       description: "Every operation declares a 4xx application/problem+json response",

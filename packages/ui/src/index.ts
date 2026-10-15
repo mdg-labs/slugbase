@@ -20,10 +20,14 @@ export * from "./components/ui/skeleton.tsx";
 export * from "./components/ui/spinner.tsx";
 export * from "./components/ui/toast.tsx";
 export * from "./components/ui/tooltip.tsx";
+export { ShortcutsProvider, useShortcut, type ShortcutBinding, type ShortcutsProviderProps } from "./shortcuts/shortcuts.tsx";
 export {
+  ACCENT_STORAGE_KEY,
+  ACCENTS,
   THEME_STORAGE_KEY,
   ThemeProvider,
   useTheme,
+  type Accent,
   type ResolvedTheme,
   type Theme,
   type ThemeContextValue,

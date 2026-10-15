@@ -42,8 +42,10 @@ test.describe("the axe check", () => {
   });
 });
 
-// The theme is the member's stored choice (the key of ThemeProvider in packages/ui), set before the
-// page loads; the system preference would leave the result to how each engine applies media emulation.
+// The theme of a visitor without a session is the stored choice (the key of ThemeProvider in packages/ui),
+// set before the page loads; the system preference would leave the result to how each engine applies media
+// emulation. The theme of a signed-in member is the account's, set through the API before the page loads:
+// once the app has the account, its theme overrides the stored choice.
 for (const scheme of ["light", "dark"] as const) {
   const stored = async ({ page }: { page: Page }): Promise<void> => {
     await page.addInitScript((theme) => {
@@ -63,7 +65,9 @@ for (const scheme of ["light", "dark"] as const) {
   });
 
   test.describe(`the shell of a signed-in member in the ${scheme} theme`, () => {
-    test.beforeEach(stored);
+    test.beforeEach(async ({ account }) => {
+      await account.set({ theme: scheme, locale: "en" });
+    });
 
     test("has no accessibility violations", async ({ page, app }) => {
       const name = await productName(page);

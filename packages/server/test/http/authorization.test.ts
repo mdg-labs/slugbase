@@ -9,6 +9,7 @@ import {
 } from "@slugbase/core";
 import type { TenantContext } from "@slugbase/db";
 import { Hono } from "hono";
+import { FixedClock } from "@slugbase/testing";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
@@ -50,6 +51,8 @@ const ROLES: Partial<Record<string, WorkspaceRole>> = {
 };
 
 const MINUTE = 60_000;
+/** The instant the "anchored" session re-authenticated, for the tests that move an injected clock instead of reading the real one. */
+const ANCHOR = Date.parse("2026-10-14T12:00:00.000Z");
 
 function session(who: Who, state: Pick<SessionPrincipal, "mfaPending" | "reauthAt"> = {}): SessionPrincipal {
   return { kind: "session", sessionId: "stub-session", accountId: ACCOUNTS[who], activeWorkspaceId: WORKSPACE, instanceAdmin: who === "instanceAdmin", ...state };
@@ -66,6 +69,8 @@ function sessionState(name: string | undefined): Pick<SessionPrincipal, "mfaPend
       return { reauthAt: new Date(Date.now() - 11 * MINUTE) };
     case "future":
       return { reauthAt: new Date(Date.now() + 5 * MINUTE) };
+    case "anchored":
+      return { reauthAt: new Date(ANCHOR) };
     case "invalid":
       return { reauthAt: new Date(Number.NaN) };
     default:
@@ -112,6 +117,7 @@ interface Seen {
 interface SetupOptions {
   readonly authenticators?: boolean;
   readonly resolver?: TenantResolver;
+  readonly now?: () => number;
   readonly extraRoutes?: (handler: (id: string) => RouteBinding["handler"]) => readonly RouteBinding[];
 }
 
@@ -183,7 +189,7 @@ function setup(options: SetupOptions = {}) {
     machine: operationOf("/api/v1/events", "receiveEvent", "machine", { method: "post", audience: "machine" }),
     form: operationOf("/api/v1/contact", "sendContact", "anonymous", { method: "post", audience: "marketing-form" }),
     partial: operationOf("/api/v1/auth/mfa/verify", "verifyMfa", "partial", { method: "post" }),
-    changePassword: operationOf("/api/v1/me/password", "changePassword", "account", { method: "post", reauth: true }),
+    changeTestPassword: operationOf("/api/v1/test/password", "changeTestPassword", "account", { method: "post", reauth: true }),
     deleteWorkspace: operationOf("/api/v1/workspace/delete", "deleteWorkspace", "owner", { method: "post", reauth: true }),
     instanceReauth: operationOf("/api/v1/instance/accounts/delete", "deleteAccountAsAdmin", "instanceAdmin", { method: "post", reauth: true }),
   };
@@ -214,6 +220,7 @@ function setup(options: SetupOptions = {}) {
         return database.withTenant(context, fn);
       },
     },
+    ...(options.now === undefined ? {} : { now: options.now }),
   });
   return { server, seen, cookieCalls, bearerCalls, resolved, transactions, operations };
 }
@@ -544,7 +551,7 @@ describe("stage 9: authorization", () => {
 
 describe("stage 9: declared re-authentication and completed second factor (T18)", () => {
   const sensitive = [
-    ["changePassword", "/api/v1/me/password", "member"],
+    ["changeTestPassword", "/api/v1/test/password", "member"],
     ["deleteWorkspace", "/api/v1/workspace/delete", "owner"],
   ] as const;
   const withState = (who: Who, state: string) => ({ cookie: `sid=${who}; state=${state}` });
@@ -600,6 +607,48 @@ describe("stage 9: declared re-authentication and completed second factor (T18)"
     const fresh = await server.fetch(post("/api/v1/instance/accounts/delete", { ...BROWSER_MUTATION, ...withState("instanceAdmin", "fresh") }));
     expect(fresh.status).toBe(200);
     expect(seen.map((entry) => entry.operationId)).toEqual(["deleteAccountAsAdmin"]);
+  });
+
+  describe("under an injected clock", () => {
+    const clock = new FixedClock(ANCHOR);
+    const now = () => clock.now().getTime();
+
+    it.each(sensitive)("%s is accepted 9 minutes after the re-authentication and refused 11 minutes after it, by the clock the server was given", async (operationId, path, who) => {
+      const { server, seen } = setup({ now });
+      clock.set(ANCHOR + 9 * MINUTE);
+      const inside = await server.fetch(post(path, { ...BROWSER_MUTATION, ...withState(who, "anchored") }));
+      expect(inside.status).toBe(200);
+      expect(seen.map((entry) => entry.operationId)).toEqual([operationId]);
+
+      clock.set(ANCHOR + 11 * MINUTE);
+      const outside = await server.fetch(post(path, { ...BROWSER_MUTATION, ...withState(who, "anchored") }));
+      expect(outside.status).toBe(401);
+      expect(await codeOf(outside)).toBe("reauth_required");
+      expect(seen).toHaveLength(1);
+    });
+
+    it("refuses a session whose re-authentication lies after the injected instant", async () => {
+      const { server, seen } = setup({ now });
+      clock.set(ANCHOR - MINUTE);
+      const response = await server.fetch(post("/api/v1/test/password", { ...BROWSER_MUTATION, ...withState("member", "anchored") }));
+      expect(response.status).toBe(401);
+      expect(await codeOf(response)).toBe("reauth_required");
+      expect(seen).toEqual([]);
+    });
+
+    it("accepts a re-authentication 2 seconds after the injected instant and refuses one 6 seconds after it", async () => {
+      const { server, seen } = setup({ now });
+      clock.set(ANCHOR - 2_000);
+      const inside = await server.fetch(post("/api/v1/test/password", { ...BROWSER_MUTATION, ...withState("member", "anchored") }));
+      expect(inside.status).toBe(200);
+      expect(seen.map((entry) => entry.operationId)).toEqual(["changeTestPassword"]);
+
+      clock.set(ANCHOR - 6_000);
+      const outside = await server.fetch(post("/api/v1/test/password", { ...BROWSER_MUTATION, ...withState("member", "anchored") }));
+      expect(outside.status).toBe(401);
+      expect(await codeOf(outside)).toBe("reauth_required");
+      expect(seen).toHaveLength(1);
+    });
   });
 
   it("does not ask for re-authentication on an operation that does not declare it", async () => {

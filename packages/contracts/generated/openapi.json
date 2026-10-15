@@ -5,15 +5,37 @@
         "additionalProperties": false,
         "properties": {
           "accent": {
-            "description": "The accent colour, a token name of the palette; null when none was chosen",
-            "type": [
-              "string",
-              "null"
-            ]
+            "anyOf": [
+              {
+                "description": "The accent colour, one of the six preset names",
+                "enum": [
+                  "periwinkle",
+                  "violet",
+                  "rose",
+                  "amber",
+                  "green",
+                  "teal"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The accent colour, one of the six preset names; null when none was chosen, which shows the default"
           },
           "aiOptOut": {
             "description": "Whether the account opted out of AI features",
             "type": "boolean"
+          },
+          "analyticsConsent": {
+            "description": "Whether the account agreed to product analytics; a choice is stored with the time it was made, and unset clears that time",
+            "enum": [
+              "unset",
+              "granted",
+              "denied"
+            ],
+            "type": "string"
           },
           "defaultView": {
             "description": "How bookmark lists are shown unless a list says otherwise",
@@ -53,8 +75,16 @@
             ],
             "type": "string"
           },
+          "onboarding": {
+            "$ref": "#/components/schemas/Onboarding",
+            "description": "The stored state of the Getting started checklist"
+          },
+          "singleKeyShortcuts": {
+            "description": "Whether single-key shortcuts are on; modifier shortcuts always work",
+            "type": "boolean"
+          },
           "theme": {
-            "description": "The colour scheme the account chose",
+            "description": "The colour scheme the account chose; system follows the operating system",
             "enum": [
               "light",
               "dark",
@@ -71,7 +101,10 @@
           "theme",
           "accent",
           "defaultView",
+          "singleKeyShortcuts",
           "aiOptOut",
+          "analyticsConsent",
+          "onboarding",
           "emailVerified",
           "hasPassword"
         ],
@@ -156,6 +189,26 @@
           "defaultLocale",
           "docsBaseUrl",
           "features"
+        ],
+        "type": "object"
+      },
+      "ChangePasswordRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "currentPassword": {
+            "description": "The account's current password",
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          },
+          "newPassword": {
+            "description": "The new password, 12 to 256 characters and not on the breached list",
+            "type": "string"
+          }
+        },
+        "required": [
+          "currentPassword",
+          "newPassword"
         ],
         "type": "object"
       },
@@ -279,6 +332,48 @@
           "name",
           "role"
         ],
+        "type": "object"
+      },
+      "Onboarding": {
+        "additionalProperties": false,
+        "properties": {
+          "browserSetupDone": {
+            "description": "Whether the browser setup step of the Getting started checklist is done",
+            "type": "boolean"
+          },
+          "checklistDismissed": {
+            "description": "Whether the Getting started checklist is dismissed",
+            "type": "boolean"
+          },
+          "importDone": {
+            "description": "Whether the import step of the Getting started checklist is done",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "browserSetupDone",
+          "importDone",
+          "checklistDismissed"
+        ],
+        "type": "object"
+      },
+      "OnboardingChanges": {
+        "additionalProperties": false,
+        "description": "The checklist keys to change; a key left out keeps its value",
+        "properties": {
+          "browserSetupDone": {
+            "description": "Whether the browser setup step of the Getting started checklist is done",
+            "type": "boolean"
+          },
+          "checklistDismissed": {
+            "description": "Whether the Getting started checklist is dismissed",
+            "type": "boolean"
+          },
+          "importDone": {
+            "description": "Whether the import step of the Getting started checklist is done",
+            "type": "boolean"
+          }
+        },
         "type": "object"
       },
       "OpenApiDocument": {
@@ -460,6 +555,21 @@
         ],
         "type": "object"
       },
+      "ReauthRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "password": {
+            "description": "The account's current password",
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "type": "object"
+      },
       "Session": {
         "additionalProperties": false,
         "properties": {
@@ -538,7 +648,7 @@
         "additionalProperties": false,
         "properties": {
           "displayName": {
-            "description": "The first account's display name",
+            "description": "The first account's display name; surrounding whitespace is removed",
             "maxLength": 100,
             "minLength": 1,
             "type": "string"
@@ -605,6 +715,39 @@
       "UpdateAccountRequest": {
         "additionalProperties": false,
         "properties": {
+          "accent": {
+            "description": "The accent colour, one of the six preset names",
+            "enum": [
+              "periwinkle",
+              "violet",
+              "rose",
+              "amber",
+              "green",
+              "teal"
+            ],
+            "type": "string"
+          },
+          "aiOptOut": {
+            "description": "Whether the account opted out of AI features",
+            "type": "boolean"
+          },
+          "analyticsConsent": {
+            "description": "Whether the account agreed to product analytics; a choice is stored with the time it was made, and unset clears that time",
+            "enum": [
+              "unset",
+              "granted",
+              "denied"
+            ],
+            "type": "string"
+          },
+          "defaultView": {
+            "description": "How bookmark lists are shown unless a list says otherwise",
+            "enum": [
+              "grid",
+              "table"
+            ],
+            "type": "string"
+          },
           "displayName": {
             "description": "The name shown to other members, 1 to 100 characters; surrounding whitespace is removed and a name that is blank after that is refused",
             "maxLength": 100,
@@ -616,6 +759,22 @@
             "enum": [
               "en",
               "de"
+            ],
+            "type": "string"
+          },
+          "onboarding": {
+            "$ref": "#/components/schemas/OnboardingChanges"
+          },
+          "singleKeyShortcuts": {
+            "description": "Whether single-key shortcuts are on; modifier shortcuts always work",
+            "type": "boolean"
+          },
+          "theme": {
+            "description": "The colour scheme the account chose; system follows the operating system",
+            "enum": [
+              "light",
+              "dark",
+              "system"
             ],
             "type": "string"
           }
@@ -1020,7 +1179,7 @@
                 }
               }
             },
-            "description": "The body did not pass validation: an unknown field, a name that is empty or longer than 100 characters, or a language other than en and de"
+            "description": "The body did not pass validation: an unknown field or onboarding key, a name that is empty or longer than 100 characters, or a value outside the one the field allows (a language other than en and de, an accent that is not a preset name)"
           },
           "429": {
             "content": {
@@ -1054,12 +1213,207 @@
             "description": "The service is temporarily unavailable"
           }
         },
-        "summary": "Change the signed-in account's display name and language",
+        "summary": "Change the signed-in account's profile and preferences",
         "tags": [
           "me"
         ],
         "x-slugbase-auth": "account",
         "x-slugbase-rate": "write"
+      }
+    },
+    "/api/v1/me/password": {
+      "post": {
+        "operationId": "changePassword",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "The password is changed and every other session of the account is deleted; the response carries the Set-Cookie header of the session's new token"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself, or the credential is an API token"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body did not pass validation; the new password is refused by the policy (weak_password); or the current password is wrong or the account has none, answered alike as validation_failed with the field in errors[] and nothing changed"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Change the account's password",
+        "tags": [
+          "me"
+        ],
+        "x-slugbase-auth": "account",
+        "x-slugbase-rate": "write",
+        "x-slugbase-reauth": true
+      }
+    },
+    "/api/v1/me/reauth": {
+      "post": {
+        "operationId": "reauthenticate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReauthRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "The password is right; the session counts as re-authenticated for the next ten minutes"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete; or the password is wrong or the account has none, answered as reauth_required with the field in errors[] and the session unchanged"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body did not pass validation"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many attempts; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Re-authenticate the session with the account's password",
+        "tags": [
+          "me"
+        ],
+        "x-slugbase-auth": "account",
+        "x-slugbase-rate": "mfa"
       }
     },
     "/api/v1/me/sessions": {

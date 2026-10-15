@@ -355,6 +355,12 @@ export interface RateLimitRequest {
     readonly key: string;
 }
 
+// @public
+export const REAUTH_WINDOW_MS: number;
+
+// @public
+export function reauthenticatedRecently(reauthAt: Date | undefined, nowMs: number): boolean;
+
 // @public (undocumented)
 export interface SealedSecret {
     // (undocumented)

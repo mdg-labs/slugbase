@@ -26,3 +26,9 @@ export function meQuery(api: ApiClient) {
 export function withAccount(me: Me | undefined, account: Account): Me | undefined {
   return me === undefined ? undefined : { ...me, account };
 }
+
+/** The preferences `PATCH /me` changes besides the profile. */
+export type PreferenceChanges = Pick<
+  UpdateAccountRequest,
+  "theme" | "accent" | "defaultView" | "singleKeyShortcuts" | "aiOptOut" | "analyticsConsent" | "onboarding"
+>;

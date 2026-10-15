@@ -364,18 +364,35 @@ describe("POST /api/v1/setup", () => {
     });
   });
 
-  it("refuses a blank display name or workspace name with 422 validation_failed and writes nothing", async () => {
+  it("refuses a display name that is blank once trimmed with 422 validation_failed and writes nothing", async () => {
     const served = serve({ SETUP_TOKEN_REQUIRED: "false" });
-    const response = await setup(served, { body: { ...BODY, displayName: "   ", workspaceName: "\t" } });
+    const response = await setup(served, { body: { ...BODY, displayName: "   " } });
     expect(response.status).toBe(422);
-    expect(await problem(response)).toMatchObject({
-      code: "validation_failed",
-      errors: [
-        { path: "displayName", code: "too_small" },
-        { path: "workspaceName", code: "too_small" },
-      ],
-    });
+    expect(await problem(response)).toMatchObject({ code: "validation_failed", errors: [{ path: "displayName", code: "too_small" }] });
     expect(await counts()).toEqual(NOTHING);
+  });
+
+  it("refuses a workspace name that is blank once trimmed with 422 validation_failed and writes nothing", async () => {
+    const served = serve({ SETUP_TOKEN_REQUIRED: "false" });
+    const response = await setup(served, { body: { ...BODY, workspaceName: "\t" } });
+    expect(response.status).toBe(422);
+    expect(await problem(response)).toMatchObject({ code: "validation_failed", errors: [{ path: "workspaceName", code: "too_small" }] });
+    expect(await counts()).toEqual(NOTHING);
+  });
+
+  it("accepts 100 astral-plane characters and a spaced 100-character name stored trimmed, and refuses 101 characters", async () => {
+    const emoji = "\u{1F600}".repeat(100);
+    const refusing = serve({ SETUP_TOKEN_REQUIRED: "false" });
+    const tooLong = await setup(refusing, { body: { ...BODY, displayName: `${emoji}\u{1F600}` } });
+    expect(tooLong.status).toBe(422);
+    expect(await problem(tooLong)).toMatchObject({ code: "validation_failed", errors: [{ path: "displayName", code: "too_big" }] });
+    expect(await counts()).toEqual(NOTHING);
+
+    const served = serve({ SETUP_TOKEN_REQUIRED: "false" });
+    const response = await setup(served, { body: { ...BODY, displayName: `  ${emoji}  ` } });
+    expect(response.status).toBe(201);
+    const me = await get(served, ME, cookieOf(response));
+    expect(await me.json()).toMatchObject({ account: { displayName: emoji } });
   });
 
   it("refuses an unknown field and a malformed address with 422 and writes nothing", async () => {

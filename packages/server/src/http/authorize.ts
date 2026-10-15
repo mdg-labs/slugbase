@@ -1,5 +1,5 @@
 import type { AuthPolicy } from "@slugbase/contracts";
-import type { WorkspaceRole } from "@slugbase/core";
+import { reauthenticatedRecently, type WorkspaceRole } from "@slugbase/core";
 import type { RequestStage } from "./chain.ts";
 import { ProblemError } from "./problem.ts";
 
@@ -31,10 +31,9 @@ export const denyEntitlements: EntitlementCheck = () => false;
 export interface AuthorizationOptions {
   /** Defaults to refusing every entitlement. */
   readonly entitlements?: EntitlementCheck;
+  /** The instant, in milliseconds, a session's `reauth_at` is compared with; defaults to the system clock. */
+  readonly now?: () => number;
 }
-
-/** How recently a session must have re-authenticated for an operation that declares `reauth` (doc 04 section 4.4, doc 02 section 16). */
-export const REAUTH_WINDOW_MS = 10 * 60 * 1000;
 
 const DETAILS = {
   unauthenticated: "Authentication is required.",
@@ -45,15 +44,6 @@ const DETAILS = {
   token_scope: "This token's scope does not allow this operation.",
   entitlement_required: "This feature is not available.",
 } as const;
-
-/** Written as "within the window" so a missing, invalid or future timestamp is stale rather than fresh. */
-function reauthenticatedRecently(reauthAt: Date | undefined): boolean {
-  if (reauthAt === undefined) {
-    return false;
-  }
-  const age = Date.now() - reauthAt.getTime();
-  return age >= 0 && age <= REAUTH_WINDOW_MS;
-}
 
 /**
  * Stage 9. In this order: a principal is required unless the operation is
@@ -66,10 +56,10 @@ function reauthenticatedRecently(reauthAt: Date | undefined): boolean {
  * forbidden`), and a principal with no workspace is answered `404 not_found`
  * by all three; `instanceAdmin` needs an instance-admin session (`403
  * forbidden`); an operation that declares `reauth` needs a session
- * re-authenticated within `REAUTH_WINDOW_MS` (`401 reauth_required`); a declared
+ * re-authenticated within the window of `reauthenticatedRecently` (`401 reauth_required`); a declared
  * entitlement must be held (`403 entitlement_required`).
  */
-export function createAuthorization({ entitlements = denyEntitlements }: AuthorizationOptions = {}): RequestStage {
+export function createAuthorization({ entitlements = denyEntitlements, now = Date.now }: AuthorizationOptions = {}): RequestStage {
   return async (context, next) => {
     const operation = context.get("route")?.operation;
     if (operation === undefined) {
@@ -118,7 +108,7 @@ export function createAuthorization({ entitlements = denyEntitlements }: Authori
       throw new ProblemError("forbidden", DETAILS.forbidden);
     }
 
-    if (reauth === true && !(principal.kind === "session" && reauthenticatedRecently(principal.reauthAt))) {
+    if (reauth === true && !(principal.kind === "session" && reauthenticatedRecently(principal.reauthAt, now()))) {
       throw new ProblemError("reauth_required", DETAILS.reauth_required);
     }
 

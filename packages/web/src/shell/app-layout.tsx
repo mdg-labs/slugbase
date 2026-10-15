@@ -11,23 +11,22 @@ import { AccountMenu, AppShell, HomeIcon, LifeBuoyIcon, LogOutIcon, SettingsIcon
 import { Link, Outlet, useRouter, useRouterState } from "@tanstack/react-router";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
+import { AccountPreferences } from "../account/account-preferences.tsx";
+import { useUpdatePreferences } from "../account/use-update-preferences.ts";
 import { useSignOut } from "../auth/sign-out.ts";
 import { useConfig } from "../config/config-context.tsx";
 import { Slot, useExtensions } from "../extensions/index.ts";
 import { docsUrl } from "./docs-url.ts";
 import { OfflineBanner } from "./offline-banner.tsx";
 
-/**
- * The in-app layout route: the app shell around the page of the current route.
- * The sidebar lists the routes that exist; each page adds its own as it arrives.
- */
-export function AppLayout(): ReactElement {
+function AppLayoutShell(): ReactElement {
   const { t } = useTranslation();
   const { product, docsBaseUrl } = useConfig();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const extensions = useExtensions();
   const signOut = useSignOut();
   const router = useRouter();
+  const updatePreferences = useUpdatePreferences();
   const inSettings = pathname === "/settings" || pathname.startsWith("/settings/");
   const accountItems = [
     {
@@ -45,7 +44,13 @@ export function AppLayout(): ReactElement {
     <AppShell
       actions={
         <>
-          <ThemeToggle switchToDark={t("shell.switchToDark")} switchToLight={t("shell.switchToLight")} />
+          <ThemeToggle
+            onToggle={(theme) => {
+              updatePreferences.mutate({ theme });
+            }}
+            switchToDark={t("shell.switchToDark")}
+            switchToLight={t("shell.switchToLight")}
+          />
           <AccountMenu
             items={accountItems}
             label={t("shell.account")}
@@ -111,5 +116,17 @@ export function AppLayout(): ReactElement {
       <Slot name="banner.entitlement" />
       <Outlet />
     </AppShell>
+  );
+}
+
+/**
+ * The in-app layout route: the app shell around the page of the current route, under the account's
+ * preferences. The sidebar lists the routes that exist; each page adds its own as it arrives.
+ */
+export function AppLayout(): ReactElement {
+  return (
+    <AccountPreferences>
+      <AppLayoutShell />
+    </AccountPreferences>
   );
 }
