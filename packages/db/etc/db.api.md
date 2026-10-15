@@ -83,6 +83,63 @@ export function accountProfileRepository(tx: TenantTx): AccountProfileRepository
 export type AnalyticsConsent = "unset" | "granted" | "denied";
 
 // @public (undocumented)
+export type ApiTokenCreation = {
+    readonly kind: "created";
+    readonly token: ApiTokenRecord;
+}
+/** The account is not a member of the workspace, or the workspace is being deleted or does not exist; the three are not told apart. */
+| {
+    readonly kind: "not_a_member";
+} | {
+    readonly kind: "limit_reached";
+} | {
+    readonly kind: "name_taken";
+};
+
+// @public
+export interface ApiTokenPrincipalRecord {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly scope: "read" | "read-write";
+    // (undocumented)
+    readonly tokenId: string;
+    readonly workspaceId: string;
+}
+
+// @public
+export interface ApiTokenRecord {
+    // (undocumented)
+    readonly createdAt: Date;
+    readonly expiresAt: Date | null;
+    // (undocumented)
+    readonly id: string;
+    readonly lastUsedAt: Date | null;
+    // (undocumented)
+    readonly name: string;
+    readonly prefix: string;
+    // (undocumented)
+    readonly scope: ApiTokenScope;
+    // (undocumented)
+    readonly workspaceId: string;
+    // (undocumented)
+    readonly workspaceName: string;
+}
+
+// @public (undocumented)
+export interface ApiTokenRepository {
+    create(token: NewApiToken): Promise<ApiTokenCreation>;
+    list(afterId: string | null, limit: number): Promise<readonly ApiTokenRecord[]>;
+    revoke(id: string): Promise<boolean>;
+}
+
+// @public (undocumented)
+export function apiTokenRepository(tx: TenantTx): ApiTokenRepository;
+
+// @public (undocumented)
+export type ApiTokenScope = "read" | "read-write";
+
+// @public (undocumented)
 export interface AuthStore extends SetupStore, MfaStore {
     changePassword(change: PasswordChange): Promise<boolean>;
     close(): Promise<void>;
@@ -90,6 +147,7 @@ export interface AuthStore extends SetupStore, MfaStore {
     emailKey(email: string): Promise<string>;
     listSessions(accountId: string, afterId: string | null, limit: number): Promise<readonly SessionSummary[]>;
     loginLookup(email: string): Promise<LoginCandidate | undefined>;
+    lookupApiToken(tokenHash: Buffer, ipPrefix: string | null): Promise<ApiTokenPrincipalRecord | undefined>;
     lookupSession(tokenHash: Buffer): Promise<SessionRecord | undefined>;
     markReauthenticated(sessionId: string, accountId: string): Promise<boolean>;
     passwordHashOf(accountId: string): Promise<string | null>;
@@ -373,6 +431,21 @@ export function migrationLevel(options: MigrationLevelOptions): Promise<Migratio
 export interface MigrationLevelOptions {
     chains?: readonly MigrationChain[];
     url: string;
+}
+
+// @public (undocumented)
+export interface NewApiToken {
+    readonly expiresInDays: number | null;
+    readonly id: string;
+    readonly limit: number;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly scope: ApiTokenScope;
+    readonly tokenHash: Buffer;
+    // (undocumented)
+    readonly tokenPrefix: string;
+    readonly workspaceId: string;
 }
 
 // @public (undocumented)

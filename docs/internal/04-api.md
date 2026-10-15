@@ -40,7 +40,7 @@ defineOperation({
 })
 ```
 
-The authorization middleware (doc 01 §4, step 9) reads these extensions — the policy is data the OpenAPI document publishes, not a decorator hidden in a handler. The generator and Spectral reject an operation without them, and the server refuses to start when a registered route's policy differs from the committed document. An operation without `scope` is not token-callable: a bearer request to it answers `403 forbidden`.
+The authorization middleware (doc 01 §4, step 9) reads these extensions — the policy is data the OpenAPI document publishes, not a decorator hidden in a handler. The generator and Spectral reject an operation without them, and the server refuses to start when a registered route's policy differs from the committed document. An operation that requires an account or member principal and declares no `scope` is not token-callable: a bearer request to it answers `403 forbidden`. On an `anonymous` or `machine` operation the token-callability and scope checks (steps 8 and 9) do not apply and the handler does not read the token's principal; the request is still a bearer request for the earlier steps, so it skips the cross-site check (step 5) like any bearer request (§5).
 
 ### 1.3 Contract tests
 
@@ -98,7 +98,7 @@ Actions that are not CRUD use a sub-resource noun (`POST /bookmarks/{id}/open`, 
 - `GET` is safe and never changes state (the single exception, recording usage on `/go`, happens asynchronously and is not observable in the response).
 - `POST` creates (201 + `Location` + body) or performs an action (200/202/204).
 - `PATCH` is JSON Merge Patch semantics on declared fields; `PUT` replaces a whole set (`PUT /teams/{id}/members`).
-- `DELETE` answers `204`. Repeating it answers `204` only where the record keeps a state after the first call (a revoked API token, a revoked invitation); a hard-deleted resource (bookmark, folder, tag, team, share) keeps no tombstone, so a repeat is `404 not_found`. A resource the caller never could see is `404` as well.
+- `DELETE` answers `204`. Repeating it answers `204` only where the record keeps a state after the first call (a revoked API token, a revoked invitation) and only while the record is kept: a revoked API token's row stays until the retention purge removes it, 30 days after the revocation or the token's expiry, whichever is first (doc 05 §2.1, §6), and a repeat after that is `404 not_found`; a hard-deleted resource (bookmark, folder, tag, team, share) keeps no tombstone, so a repeat is `404 not_found`. A resource the caller never could see is `404` as well.
 - **Not found vs forbidden:** a resource in another workspace, or one the caller has no read access to, is **404** — existence is never disclosed. **403** is returned only when the caller can see the resource but may not perform the action (a member deleting a bookmark shared with them).
 - **Optimistic concurrency** on editable records: every bookmark, folder, team and workspace response carries `version` (an integer) and an `ETag`; `PATCH`/`PUT` accept `If-Match` and return `412 precondition_failed` on mismatch. The SPA sends it from the edit modal so two tabs don't silently overwrite each other. Optional for API-token callers.
 
@@ -135,7 +135,7 @@ Every error is an RFC 9457 problem document:
 | 401 | `unauthenticated` | No valid session or token; also the one generic answer to sign-in with an unknown email, a wrong password or a disabled account, and to a revoked, expired or disabled-account token |
 | 401 | `mfa_required` | Session exists at `partial` level; complete `POST /auth/mfa/verify` |
 | 401 | `reauth_required` | Sensitive operation needs a fresh re-authentication (§4.4) |
-| 403 | `forbidden` | Authenticated, can see the resource, may not do this; also a bearer request to an operation that is not token-callable, an instance-admin operation without MFA enrolled, and `POST /setup` with a missing or wrong setup token |
+| 403 | `forbidden` | Authenticated, can see the resource, may not do this; also a bearer request to an account or member operation that is not token-callable, an instance-admin operation without MFA enrolled, and `POST /setup` with a missing or wrong setup token |
 | 403 | `registration_refused` | A deployment's registration policy refused this sign-up (doc 01 §13); the response is the same for every refusal reason |
 | 403 | `cross_site_request` | Origin / Fetch-Metadata / content-type check failed (§5) |
 | 403 | `token_scope` | API token has `read` scope on a write operation |
@@ -155,7 +155,7 @@ Every error is an RFC 9457 problem document:
 | 410 | `token_expired` | Verification, reset, email-change or invitation token unknown, expired, used or revoked — one identical answer |
 | 412 | `precondition_failed` | `If-Match` mismatch |
 | 413 | `payload_too_large` | Body over the route limit (default 64 KiB; the import routes allow 5 MiB) |
-| 415 | `unsupported_media_type` | A bearer request whose mutation is not JSON (cookie and anonymous requests get `cross_site_request`, §5) |
+| 415 | `unsupported_media_type` | A bearer request whose mutation is not JSON, whatever the operation's auth policy (cookie requests and requests with no `Authorization` header get `cross_site_request`, §5) |
 | 422 | `validation_failed` | Schema validation; `errors[]` lists fields |
 | 422 | `bookmark_limit_reached` | Create would exceed the bookmark cap; carries `limit` and `used`. Import never returns it: it adds up to the limit and reports the rest as skipped |
 | 422 | `seat_limit_reached` | Invitation accept with no free seat (Cloud) |
@@ -172,7 +172,7 @@ Field codes inside `errors[]` of a `422 validation_failed` or a `403 forbidden`:
 
 | Field code | Operation | Meaning |
 |---|---|---|
-| `api_token_limit_reached` | `POST /me/api-tokens` | The account already has 10 active tokens |
+| `api_token_limit_reached` | `POST /me/api-tokens` (`422 validation_failed`, on `name`) | The account already has 10 tokens that are neither revoked nor expired |
 | `invitation_email_mismatch` | `POST /invitations/accept` | The signed-in account's verified email is not the invited address (`403 forbidden`) |
 | `invalid_password` | `POST /me/reauth` (`401 reauth_required`), `POST /me/password` on `currentPassword` (`422 validation_failed`) | The password is wrong, or the account has none; one answer for both, so the response does not tell them apart |
 | `last_sign_in_method` | `DELETE /me/identities/{id}` | Would leave the account with no way to sign in |
@@ -189,15 +189,15 @@ New codes are additive (§2.2); a client must treat an unknown `code` by its `st
 | Principal | Credential | Carries | Cross-site check (§5) | MFA |
 |---|---|---|---|---|
 | **Session** | `__Host-slugbase_session` cookie (`slugbase_session` without `Secure` when `APP_ORIGIN` is http) | account, active workspace, auth level (`partial` → `full`), re-auth timestamp | Required on unsafe methods | Enforced at login |
-| **API token** | `Authorization: Bearer slb_<43 base62 characters>` (32 random bytes) | account, **bound workspace**, scope (`read` / `read-write`) | Not applied (no ambient credential) | Not applicable (an already-trusted credential, D10) |
+| **API token** | `Authorization: Bearer slb_<43 base64url characters>` (32 random bytes) | account, **bound workspace**, scope (`read` / `read-write`) | Not applied (no ambient credential) | Not applicable (an already-trusted credential, D10) |
 | **Machine** | Route-specific: a module's inbound event endpoint (in Cloud, the billing service's events; no session; sender signature verified, idempotent), internal metrics port | nothing | Not applied | — |
 | **Anonymous** | none | — | Required on unsafe methods (login, register, setup, password reset, invitation accept) | — |
 
-When an `Authorization` header is present, cookies are **ignored** for that request — a request is either a token request or a browser request, never both. A bearer header that no resolver accepts is `401 unauthenticated` without falling back to a cookie.
+When an `Authorization` header is present, cookies are **ignored** for that request — a request is either a token request or a browser request, never both. A bearer header that no resolver accepts is `401 unauthenticated` without falling back to a cookie. An operation that declares an `audience` (`machine`, `marketing-form`) resolves no principal from the `Authorization` header or the cookies, so that `401` applies to operations without an `audience`.
 
 ### 4.2 API tokens and workspaces
 
-A token is created by a member for one workspace they belong to (default: the active one) and **bound** to it: every request made with it acts in that workspace, with the account's current role there, regardless of the account's session. A token cannot switch workspaces and is accepted only by operations that declare a scope (the † marker in §10) — token management, sessions, MFA, email, password, account deletion and `/instance/*` declare none, so a token gets `403 forbidden` there. A member who loses membership loses every token bound to that workspace (deleted in the same transaction as the membership; the token's next request is `401`). Tokens of a disabled account are inert (`401`).
+A token is created by a member for one workspace they belong to (default: the active one) and **bound** to it: every request made with it acts in that workspace, with the account's current role there, regardless of the account's session. A token cannot switch workspaces and is accepted only by account and member operations that declare a scope (the † marker in §10) — token management, sessions, MFA, email, password, account deletion and `/instance/*` declare none, so a token gets `403 forbidden` there. On an `anonymous` or `machine` operation (for example `GET /api/config` or `POST /auth/login`) the token-callability and scope checks (steps 8 and 9) do not apply and the handler does not read the token's principal; the request is still a bearer request for the earlier steps, so it skips the cross-site check (step 5) like any bearer request. A member who loses membership loses every token bound to that workspace (deleted in the same transaction as the membership; the token's next request is `401`). Tokens of a disabled account are inert (`401`).
 
 Multi-workspace automation uses one token per workspace. An `X-Slugbase-Workspace` header override is **not** offered at v1 (Q40).
 
@@ -226,13 +226,13 @@ Destructive or credential-changing operations require `reauthAt` within the last
 
 ## 5. Cross-site request rules
 
-Applied by middleware before routing (doc 01 §4, step 5) to every `POST`, `PUT`, `PATCH` and `DELETE` that is **not** bearer-authenticated and not a `machine` or `marketing-form` route:
+Applied by middleware before routing (doc 01 §4, step 5) to every `POST`, `PUT`, `PATCH` and `DELETE` that does **not** carry an `Authorization: Bearer` header (whatever the operation's auth policy, an `anonymous` one included) and is not a `machine` or `marketing-form` route:
 
 1. `Origin` must be present and equal `APP_ORIGIN` exactly (scheme, host, port). A missing `Origin` on an unsafe method is rejected.
 2. `Sec-Fetch-Site`, when present, must be `same-origin`.
 3. `Content-Type` must be `application/json`, with or without parameters such as `charset`. This holds for **every** mutation, including a `DELETE` without a body, so the SPA client sends `Content-Type: application/json` on all of them. The one exception is a route that declares `acceptsMultipart: true`, which also accepts `multipart/form-data`; only the Netscape import upload does. This makes every mutation a non-simple request a cross-site HTML form cannot produce.
 
-Failure is `403 cross_site_request`, logged at `warn` with the offending origin. This step owns the content-type rule for every cookie-authenticated and anonymous request; bearer requests skip it, and for them a non-JSON mutation is `415 unsupported_media_type` (body-limit stage). There is **no exemption list** (Q5): login, logout, registration, setup, MFA and reset are protected exactly like everything else, because they are all same-origin calls from the SPA.
+Failure is `403 cross_site_request`, logged at `warn` with the offending origin. This step owns the content-type rule for every request without a bearer token, cookie-authenticated or anonymous; bearer requests skip it, and for them a non-JSON mutation is `415 unsupported_media_type` (body-limit stage). There is **no exemption list** (Q5): login, logout, registration, setup, MFA and reset are protected exactly like everything else, because they are all same-origin calls from the SPA.
 
 A request that carries an `Authorization` header, and a request to a route with an `audience`, has its cookies dropped at this step, so no later stage or handler acts on the browser's session.
 
@@ -428,9 +428,9 @@ Unauthenticated, `Content-Type: application/opensearchdescription+xml`, built on
 | GET | `/me/sessions` | List sessions (§6.1: `limit`, `cursor`; `{ items, nextCursor }` with no `total`), newest first; each item `{ id, createdAt, lastSeenAt, userAgentFamily, ipPrefix, current }`; the cursor is valid only for the account it was issued to; never a token hash or a full address, and no location is derived | acct | | |
 | DELETE | `/me/sessions/{id}` | Revoke one session (`204`; `404 not_found` for an id the account does not hold, another account's included); revoking the current session also clears the cookie | acct | | |
 | DELETE | `/me/sessions` | Revoke all other sessions ("sign out everywhere"; `?includeCurrent=true` too, which also clears the cookie; `204`) | acct | | |
-| GET | `/me/api-tokens` | List tokens across workspaces (name, workspace, scope, prefix, created, last used, expires) | acct | | |
-| POST | `/me/api-tokens` | Create a token `{ name, scope: read\|read-write, expiresInDays: 30\|90\|365\|null, workspaceId? }` (default 90, Q47; workspace defaults to the active one and must be one the account belongs to) → secret shown once; at most 10 active (`api_token_limit_reached`) | acct | ✓ | token_create |
-| DELETE | `/me/api-tokens/{id}` | Revoke | acct | | |
+| GET | `/me/api-tokens` | List the account's tokens that are not revoked, across workspaces (§6.1: `limit`, `cursor`; `{ items, nextCursor }` with no `total`), newest first; each item `{ id, name, workspaceId, workspaceName, scope, prefix, createdAt, lastUsedAt, expiresAt }`; the cursor is valid only for the account it was issued to; never a hash or a secret | acct | | |
+| POST | `/me/api-tokens` | Create a token `{ name, scope: read\|read-write, expiresInDays: 30\|90\|365\|null, workspaceId? }` (`name` 1–64 characters; `expiresInDays` is 90 when left out, `null` means no expiry, Q47; `workspaceId` defaults to the active workspace and must be one the account belongs to, otherwise `404 not_found`) → `201` with the token as listed plus `token`, the secret `slb_` + 43 base64url characters, returned in this response only; no `Location`, as a single token has no read. `409 name_taken` for a name the account already has; at most 10 tokens that are neither revoked nor expired (the 11th is `422 validation_failed` with the field code `api_token_limit_reached`). Session principals only | acct | ✓ | token_create |
+| DELETE | `/me/api-tokens/{id}` | Revoke: `204`, also for a token that was revoked before, until the retention purge removes its row, 30 days after the revocation or the token's expiry, whichever is first (doc 05 §6), after which a repeat is `404 not_found`; `404 not_found` for an id the account does not hold, another account's included. The token is refused from its next request | acct | | |
 | GET | `/me/identities` | Linked OIDC identities | acct | | |
 | DELETE | `/me/identities/{id}` | Unlink (refused with `last_sign_in_method` if it is the only sign-in method) | acct | ✓ | |
 | GET | `/me/go-preferences` | Remembered slug choices in the active workspace | mem† (read) | | |

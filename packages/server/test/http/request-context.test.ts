@@ -13,7 +13,7 @@ import {
 } from "../../src/http/chain.ts";
 import { createLogger } from "../../src/http/logger.ts";
 import { requestIdFrom } from "../../src/http/request-context.ts";
-import { adapters, fakeDatabase, hookDispatcher, operation, serverConfig, documentOf, tenantDependencies, rateLimitDependencies } from "../support.ts";
+import { acceptAnyBearer, adapters, fakeDatabase, hookDispatcher, operation, serverConfig, documentOf, tenantDependencies, rateLimitDependencies } from "../support.ts";
 
 const exporter = new InMemorySpanExporter();
 
@@ -85,10 +85,12 @@ const whoami: ServerModule = {
 
 function compose(overrides: { hops?: number; logger?: Logger; modules?: readonly ServerModule[] } = {}) {
   const output = sink();
+  // The authentication stage is not under test: it accepts every Authorization header, so what is logged and traced is.
+  const bearer = acceptAnyBearer();
   const server = createServer({
     config: serverConfig({ TRUSTED_PROXY_HOPS: String(overrides.hops ?? 0) }),
-    adapters: adapters(),
-    modules: overrides.modules ?? [whoami],
+    adapters: { ...adapters(), tenantResolver: bearer.tenantResolver },
+    modules: [...(overrides.modules ?? [whoami]), bearer.module],
     openApiDocument: documentOf(overrides.modules ?? [whoami]),
     migrations: [],
     logger: overrides.logger ?? createLogger({ level: "info", destination: output }),

@@ -1,4 +1,4 @@
-import type { ApiCall, ApiResponse, FixturePrincipal, RequestFunction } from "@slugbase/testing/tenancy";
+import type { ApiCall, ApiResponse, FixturePrincipal, RequestFunction, TokenRequestFunction, TokenScope } from "@slugbase/testing/tenancy";
 import { buildRequest, type ContractFixtures, type Credentials, type RequestParts } from "./walker.ts";
 
 // The request function of the cross-tenant matrix in API mode (doc 08 section
@@ -70,6 +70,42 @@ export function matrixRequest({ send, origin, fixtures, credentialsOf }: MatrixR
         url: withQuery(call.url, base.query),
         body: overlay(base.body, call.body),
         credentials: credentialsOf(call.principal),
+        origin,
+      }),
+    );
+    return { status: response.status, body: await parse(response) };
+  };
+}
+
+export interface TokenRequestOptions {
+  readonly send: (request: Request) => Promise<Response>;
+  readonly origin: string;
+  readonly fixtures: ContractFixtures;
+  /** What a bearer request of a token of the scope sends. */
+  readonly credentialsOf: (scope: TokenScope) => Credentials;
+}
+
+/** A path parameter of an operation nobody wrote a fixture for: no row, which the refusal of a token does not look for. */
+const UNKNOWN_ID = "0192f3a0-0000-7000-8000-00000000dead";
+
+/**
+ * The request function of the token mode: it sends the operation's own fixture
+ * as a bearer request (or without a credential), and for an operation with no
+ * fixture an empty request with placeholder identifiers, so that an operation
+ * added to the contract is called before anyone writes its fixture. A refusal
+ * of a token comes before the body and the handler are looked at; an operation
+ * a token may call needs its fixture for the request to get past validation.
+ */
+export function tokenMatrixRequest({ send, origin, fixtures, credentialsOf }: TokenRequestOptions): TokenRequestFunction {
+  return async ({ operation, scope }) => {
+    const fixture = Object.hasOwn(fixtures, operation.operationId) ? fixtures[operation.operationId] : undefined;
+    const path = operation.path.replace(/\{([^}]+)\}/g, (_match, name: string) => encodeURIComponent(fixture?.path?.[name] ?? UNKNOWN_ID));
+    const response = await send(
+      buildRequest({
+        method: operation.method,
+        url: withQuery(path, fixture?.query),
+        body: fixture?.body,
+        credentials: scope === undefined ? undefined : credentialsOf(scope),
         origin,
       }),
     );

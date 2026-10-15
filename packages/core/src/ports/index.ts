@@ -25,6 +25,7 @@ export type {
   IdentityClaims,
   IdentityCompleteRequest,
   IdentityPort,
+  IdentityProviderConfig,
   IdentityProviderInfo,
 } from "./identity.ts";
 export type { MailMessage, MailPort } from "./mail.ts";

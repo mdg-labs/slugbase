@@ -100,6 +100,7 @@ export interface ServiceConfig {
   ports?: string[];
   /** A key written without a value takes the environment's value, and is absent when the environment has none. */
   environment: Record<string, string>;
+  env_file?: { path: string; required: boolean }[];
   depends_on?: Record<string, { condition: string }>;
   healthcheck?: { test: string[] };
   volumes?: string[];

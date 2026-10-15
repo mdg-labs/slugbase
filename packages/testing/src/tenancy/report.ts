@@ -1,4 +1,4 @@
-export type MatrixMode = "api" | "rls-only";
+export type MatrixMode = "api" | "rls-only" | "token";
 
 export interface MatrixFailure {
   readonly mode: MatrixMode;

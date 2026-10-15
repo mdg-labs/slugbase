@@ -41,4 +41,5 @@ export const systemOperations: readonly string[] = [
   "sys_mfa_lock",
   "sys_mfa_disable",
   "sys_account_mfa_enabled",
+  "sys_api_token_lookup",
 ];

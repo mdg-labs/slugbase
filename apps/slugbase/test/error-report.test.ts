@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { defineOperation, emptyResponse, problemResponse } from "@slugbase/contracts";
+import type { TenantResolver } from "@slugbase/core";
 import type { Database } from "@slugbase/db";
 import { createServer, loadConfig, type Logger, type ServerModule } from "@slugbase/server";
 import { afterEach, describe, expect, it } from "vitest";
@@ -74,6 +75,27 @@ function configWith(extra: Record<string, string>) {
   }).config;
 }
 
+// The bearer credential is not under test: the stub accepts every Authorization header as a token of one account,
+// so the request reaches the failing route and the report can be checked for the value it carried.
+const TOKEN_ACCOUNT = "0190a000-0000-7000-8000-0000000000b1";
+const TOKEN_WORKSPACE = "0190a000-0000-7000-8000-000000000001";
+const acceptAnyBearer: ServerModule = {
+  name: "accept-any-bearer",
+  register: () => ({
+    routes: [],
+    authenticators: [
+      {
+        credential: "bearer",
+        authenticate: () => Promise.resolve({ kind: "api-token", accountId: TOKEN_ACCOUNT, workspaceId: TOKEN_WORKSPACE, scope: "read-write" }),
+      },
+    ],
+  }),
+};
+const tenantResolver: TenantResolver = {
+  available: true,
+  resolve: () => Promise.resolve({ workspaceId: TOKEN_WORKSPACE, memberId: TOKEN_ACCOUNT, role: "member" }),
+};
+
 function serverWith(extra: Record<string, string>, failure: (body: string) => Error) {
   const config = configWith(extra);
   const module: ServerModule = {
@@ -91,8 +113,8 @@ function serverWith(extra: Record<string, string>, failure: (body: string) => Er
   };
   return createServer({
     config,
-    adapters: composeAdapters(config, logger),
-    modules: [module],
+    adapters: { ...composeAdapters(config, logger), tenantResolver },
+    modules: [module, acceptAnyBearer],
     openApiDocument: document,
     migrations: [],
     logger,

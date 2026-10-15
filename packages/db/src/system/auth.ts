@@ -61,6 +61,15 @@ export interface SessionRecord {
   readonly isInstanceAdmin: boolean;
 }
 
+/** The principal behind an API token that is valid now. */
+export interface ApiTokenPrincipalRecord {
+  readonly tokenId: string;
+  readonly accountId: string;
+  /** The workspace the token is bound to. */
+  readonly workspaceId: string;
+  readonly scope: "read" | "read-write";
+}
+
 /** A session of an account that is valid now, as the account sees it; never the token hash. */
 export interface SessionSummary {
   readonly id: string;
@@ -93,6 +102,13 @@ export interface AuthStore extends SetupStore, MfaStore {
    * last seen more than a minute ago has its sliding expiry moved forward in the same call.
    */
   lookupSession(tokenHash: Buffer): Promise<SessionRecord | undefined>;
+  /**
+   * The principal behind an API token hash, when the token exists, is not revoked or expired, its
+   * account is not disabled and its workspace is not being deleted; undefined otherwise, the cases
+   * not told apart. `ipPrefix` is the coarse network of the request (null when unknown); a token
+   * last used more than a minute ago has its last-used time and that prefix written in the same call.
+   */
+  lookupApiToken(tokenHash: Buffer, ipPrefix: string | null): Promise<ApiTokenPrincipalRecord | undefined>;
   /** Deletes one session of an account; false when there was none. */
   revokeSession(sessionId: string, accountId: string): Promise<boolean>;
   /**
@@ -145,6 +161,13 @@ interface SessionRow {
   active_workspace_id: string | null;
   reauth_at: Date | null;
   is_instance_admin: boolean;
+}
+
+interface ApiTokenRow {
+  token_id: string;
+  account_id: string;
+  workspace_id: string;
+  scope: string;
 }
 
 interface KeyRow {
@@ -264,6 +287,24 @@ export function bindAuthStore(client: postgres.Sql): Omit<AuthStore, "close"> {
         reauthAt: row.reauth_at,
         isInstanceAdmin: row.is_instance_admin,
       };
+    },
+
+    async lookupApiToken(tokenHash, ipPrefix) {
+      assertTokenHash(tokenHash, "tokenHash");
+      const rows = await client<ApiTokenRow[]>`
+        SELECT token_id, account_id, workspace_id, scope
+        FROM sys_api_token_lookup(${tokenHash}::bytea, ${ipPrefix}::cidr)`;
+      if (rows.length > 1) {
+        throw new Error("sys_api_token_lookup returned more than one token");
+      }
+      const row = rows[0];
+      if (row === undefined) {
+        return undefined;
+      }
+      if (row.scope !== "read" && row.scope !== "read-write") {
+        throw new Error("sys_api_token_lookup returned a scope outside read and read-write");
+      }
+      return { tokenId: row.token_id, accountId: row.account_id, workspaceId: row.workspace_id, scope: row.scope };
     },
 
     async revokeSession(sessionId, accountId) {

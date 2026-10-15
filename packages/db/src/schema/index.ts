@@ -1,6 +1,7 @@
 export { accounts } from "./accounts.ts";
 export { sessions } from "./sessions.ts";
 export { mfaBackupCodes } from "./mfa.ts";
+export { apiTokens } from "./api-tokens.ts";
 export { instanceState } from "./instance.ts";
 export { memberRole, workspaceMembers, workspaceSettings, workspaces } from "./workspaces.ts";
 export type { MemberRole } from "./workspaces.ts";

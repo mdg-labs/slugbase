@@ -85,6 +85,8 @@ export interface ClassifiedOperation {
     readonly pathParameters: readonly string[];
     // (undocumented)
     readonly policy: string;
+    readonly reauth: boolean;
+    readonly scope?: "read" | "write";
     readonly unwalkable: readonly string[];
 }
 
@@ -114,6 +116,12 @@ export interface FixturePrincipal {
     readonly role: PrincipalRole;
 }
 
+// @public
+export interface FixtureToken extends FixturePrincipal {
+    // (undocumented)
+    readonly scope: TokenScope;
+}
+
 // @public (undocumented)
 export function formatFailures(failures: readonly MatrixFailure[]): string;
 
@@ -136,6 +144,12 @@ export function identifiersOf(workspace: WorkspaceFixture, kind: IdentifierKind)
 
 // @public
 export type InputLocation = "query" | "body";
+
+// @public (undocumented)
+export function isFixtureToken(principal: FixturePrincipal): principal is FixtureToken;
+
+// @public
+export function isTokenCallable(operation: Pick<ClassifiedOperation, "scope" | "reauth">): boolean;
 
 // @public (undocumented)
 export function kindOfParameter(mapping: PathParameterMapping, operationId: string, parameter: string): IdentifierKind | undefined;
@@ -162,7 +176,7 @@ export class MatrixFailureError extends Error {
 }
 
 // @public (undocumented)
-export type MatrixMode = "api" | "rls-only";
+export type MatrixMode = "api" | "rls-only" | "token";
 
 // @public
 export function namesOf(workspace: WorkspaceFixture): readonly string[];
@@ -259,6 +273,9 @@ export function runApiMatrix(options: ApiMatrixOptions): Promise<ApiMatrixReport
 export function runRlsOnlyMatrix(options: RlsOnlyOptions): Promise<RlsOnlyReport>;
 
 // @public (undocumented)
+export function runTokenMatrix(options: TokenMatrixOptions): Promise<TokenMatrixReport>;
+
+// @public (undocumented)
 export interface TenantFixture {
     // (undocumented)
     readonly a: WorkspaceFixture;
@@ -266,6 +283,42 @@ export interface TenantFixture {
     readonly b: WorkspaceFixture;
     checksum(workspaceId: string): Promise<string>;
 }
+
+// @public
+export interface TokenCall {
+    // (undocumented)
+    readonly operation: ClassifiedOperation;
+    readonly scope: TokenScope | undefined;
+}
+
+// @public (undocumented)
+export interface TokenMatrixOptions {
+    readonly document: unknown;
+    // (undocumented)
+    readonly request: TokenRequestFunction;
+}
+
+// @public (undocumented)
+export interface TokenMatrixReport {
+    readonly attempts: number;
+    // (undocumented)
+    readonly classified: ClassificationSummary;
+    // (undocumented)
+    readonly failures: readonly MatrixFailure[];
+    readonly readable: number;
+    readonly refused: number;
+    readonly scoped: number;
+    readonly unaffected: number;
+}
+
+// @public
+export type TokenRequestFunction = (call: TokenCall) => Promise<ApiResponse>;
+
+// @public (undocumented)
+export type TokenScope = "read" | "read-write";
+
+// @public (undocumented)
+export function tokensOf(workspace: WorkspaceFixture): readonly FixtureToken[];
 
 // @public (undocumented)
 export interface WorkspaceFixture {
@@ -279,6 +332,7 @@ export interface WorkspaceFixture {
     readonly member: FixturePrincipal;
     // (undocumented)
     readonly owner: FixturePrincipal;
+    readonly tokens?: readonly FixtureToken[];
 }
 
 // (No @packageDocumentation comment for this package)

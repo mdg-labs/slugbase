@@ -1,4 +1,4 @@
-import { classifyOperations, createProbe, loadOpenApiDocument, runApiMatrix, type Probe } from "@slugbase/testing/tenancy";
+import { classifyOperations, createProbe, loadOpenApiDocument, runApiMatrix, runTokenMatrix, type Probe } from "@slugbase/testing/tenancy";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createServer, type Server, type ServerModule } from "../../src/create-server.ts";
@@ -7,9 +7,9 @@ import { route } from "../../src/routes/register.ts";
 import { recordingLogger, serverConfig } from "../support.ts";
 import { buildDocument, type TestDocument } from "./build-document.ts";
 import { readOperations } from "./document.ts";
-import { seedAccount } from "../auth/support.ts";
-import { FIXTURES, WALKER_ACCOUNT } from "./fixtures.ts";
-import { matrixRequest } from "./matrix.ts";
+import { seedAccount, seedMembership } from "../auth/support.ts";
+import { FIXTURES, WALKER_ACCOUNT, WALKER_WORKSPACE_ID } from "./fixtures.ts";
+import { matrixRequest, tokenMatrixRequest } from "./matrix.ts";
 import { getProbeAdminRow, getProbeRow, probeFixtures, probeModule, probeOperations } from "./probe-module.ts";
 import { createStubWorld, type StubWorld } from "./stubs.ts";
 import { appUrl, tenantDatabase } from "./support.ts";
@@ -75,8 +75,16 @@ describe("the walker over the committed document", () => {
   async function sessionHooks(server: Server): Promise<PolicyHooks> {
     await seedAccount(database(), WALKER_ACCOUNT);
     const needsReauth = new Set(readOperations(committed).operations.filter((operation) => operation.reauth === true).map((operation) => operation.operationId));
-    const signIn = async (email: string, reauthenticate: boolean): Promise<string> => {
-      await seedAccount(database(), { email, password: WALKER_ACCOUNT.password });
+    const signIn = async (email: string, reauthenticate: boolean, member = false): Promise<string> => {
+      const account = await seedAccount(database(), { email, password: WALKER_ACCOUNT.password });
+      if (member) {
+        // A token is bound to a workspace of the account, so the walker that creates one is a member of its own.
+        await database().owner.begin(async (tx) => {
+          await tx`SET LOCAL ROLE slugbase_system`;
+          await tx`INSERT INTO workspaces (id, name) VALUES (${WALKER_WORKSPACE_ID}, 'Walker workspace') ON CONFLICT DO NOTHING`;
+        });
+        await seedMembership(database(), { workspaceId: WALKER_WORKSPACE_ID, accountId: account.id, role: "member" });
+      }
       const response = await server.fetch(
         new Request(new URL("/api/v1/auth/login", origin), {
           method: "POST",
@@ -109,7 +117,7 @@ describe("the walker over the committed document", () => {
         continue;
       }
       const email = `walker-${operationId}@example.test`.toLowerCase();
-      cookies.set(operationId, await signIn(email, needsReauth.has(operationId)));
+      cookies.set(operationId, await signIn(email, needsReauth.has(operationId), operationId === "createApiToken"));
       if (needsReauth.has(operationId)) {
         // Its own account: the valid request of the operation ends the sessions of the account it is made for.
         stale.set(operationId, await signIn(`walker-${operationId}-stale@example.test`.toLowerCase(), false));
@@ -139,9 +147,9 @@ describe("the walker over the committed document", () => {
     expect(report.failures).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each anonymous operation and for the sign-in; each of the thirteen operations that need a session
-    // also answers 401 without one, and each of the four that declare re-authentication answers 401 reauth_required without it.
-    expect(report.calls).toBe(operations.length + 17);
+    // One valid request for each anonymous operation and for the sign-in; each of the sixteen operations that need a session
+    // also answers 401 without one, and each of the five that declare re-authentication answers 401 reauth_required without it.
+    expect(report.calls).toBe(operations.length + 21);
   });
 });
 
@@ -200,8 +208,9 @@ describe("the cross-tenant matrix in API mode over the server", () => {
     });
     expect(report.failures).toEqual([]);
     expect(report.classified.byKind["tenant-scoped"]).toBe(6);
-    // three principals of A against the two rows of B, on each of the three operations that take a row; once on the three that take none
-    expect(report.attempts).toBe(3 * 6 + 3 * 3);
+    // the three sessions and the six tokens (a read and a read-write one of each role) of A against the two rows of B, on each of the three
+    // operations that take a row; once on the three that take none
+    expect(report.attempts).toBe(9 * 6 + 9 * 3);
   });
 
   it("fails an operation that loads the row by id outside the tenant transaction", async () => {
@@ -223,7 +232,8 @@ describe("the cross-tenant matrix in API mode over the server", () => {
       request: matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: probeFixtures(probe), credentialsOf: (principal) => world.credentialsOf(principal) }),
     });
     expect(new Set(report.failures.map((failure) => failure.kind))).toEqual(new Set(["unexpected_status", "leaked_name"]));
-    expect(report.failures.filter((failure) => failure.kind === "unexpected_status")).toHaveLength(6);
+    // every session and every token of A reaches the handler, which answers 200 for the row of B
+    expect(report.failures.filter((failure) => failure.kind === "unexpected_status")).toHaveLength(9 * 2);
   });
 
   it("fails an admin operation that loads the row by id outside the tenant transaction, for the principals the policy admits only", async () => {
@@ -245,9 +255,38 @@ describe("the cross-tenant matrix in API mode over the server", () => {
       request: matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: probeFixtures(probe), credentialsOf: (principal) => world.credentialsOf(principal) }),
     });
     expect(new Set(report.failures.map((failure) => failure.kind))).toEqual(new Set(["unexpected_status", "leaked_name"]));
-    // the member is refused by stage 9 before the handler runs; the admin and the owner reach it
+    // the member, by session or by token, is refused by stage 9 before the handler runs; the admin and the owner reach it
     const unexpected = report.failures.filter((failure) => failure.kind === "unexpected_status");
-    expect(unexpected).toHaveLength(4);
+    expect(unexpected).toHaveLength((2 + 4) * 2);
     expect(unexpected.every((failure) => /^as (admin|owner) of A/.test(failure.detail))).toBe(true);
+  });
+});
+
+describe("the token-exclusion matrix over the server", () => {
+  const document = buildDocument(probeOperations, committed);
+
+  it("passes for the chain: a token never calls the instance operation, a read token no write, and the others answer as their handlers do", async () => {
+    const server = serve([probeModule(probe, world)], document);
+    const report = await runTokenMatrix({
+      document,
+      request: tokenMatrixRequest({ send: (request) => server.fetch(request), origin, fixtures: probeFixtures(probe), credentialsOf: (scope) => world.tokenOf(scope) }),
+    });
+    expect(report.failures).toEqual([]);
+    expect(report.classified.total).toBe(probeOperations.length);
+    // getProbeInstance declares no scope; checkProbeRow is the one write; the other six are reads
+    expect(report).toMatchObject({ refused: 1, scoped: 1, readable: 6, unaffected: 0 });
+    expect(report.attempts).toBe(probeOperations.length * 2);
+  });
+
+  it("calls an operation with no fixture, with placeholder identifiers: the refusal of a token does not look at the row", async () => {
+    const server = serve([probeModule(probe, world)], document);
+    const report = await runTokenMatrix({
+      document,
+      request: tokenMatrixRequest({ send: (request) => server.fetch(request), origin, fixtures: {}, credentialsOf: (scope) => world.tokenOf(scope) }),
+    });
+    // The one a token may not call is refused as declared with no fixture. The one that declares the write scope needs its body to get
+    // past validation, so a read token is answered 422 there, before the scope: the failure names what the fixture has to add.
+    expect(report.refused).toBe(1);
+    expect(report.failures.map((failure) => [failure.kind, failure.subject])).toEqual([["scope_not_enforced", expect.stringContaining("checkProbeRow") as string]]);
   });
 });

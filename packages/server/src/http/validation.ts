@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { refuseUncallableToken } from "./authorize.ts";
 import type { ChainContext, MatchedRoute, RequestStage, ValidatedInput } from "./chain.ts";
 import { ProblemError, VALIDATION_FAILED_DETAIL, fieldErrors, type ProblemFieldError } from "./problem.ts";
 
@@ -89,10 +90,12 @@ async function validate(context: ChainContext, route: MatchedRoute): Promise<Val
   return input;
 }
 
-/** Stage 8: parses the matched operation's params, query and body; a request that matches no operation passes through to the 404. */
+/** Stage 8: refuses a token on an account or member operation without a token scope (`anonymous` and `machine` operations are not subject to this check and their handlers do not read the token), then parses the matched operation's params, query and body; a request that matches no operation passes through to the 404. */
 export const validation: RequestStage = async (context, next) => {
   const route = context.get("route");
   if (route !== undefined) {
+    // An operation a token may never call is refused before its body is read (doc 04 section 4.2).
+    refuseUncallableToken(context.get("principal"), route.operation);
     context.set("input", await validate(context, route));
   }
   return next();

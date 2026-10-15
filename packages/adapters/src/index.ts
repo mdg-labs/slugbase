@@ -17,3 +17,11 @@ export type {
   RenderedMail,
   SmtpSecurity,
 } from "./mail/index.ts";
+export { createOidcIdentity } from "./identity/index.ts";
+export type {
+  CreateOidcIdentityOptions,
+  OidcIdentity,
+  OidcIdentityLogger,
+  OidcProviderMetadata,
+  OidcUnavailableReason,
+} from "./identity/index.ts";

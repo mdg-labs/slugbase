@@ -15,7 +15,7 @@ const COMMITTED = new URL("../../../contracts/generated/openapi.json", import.me
 
 function start(
   env: Record<string, string | undefined> = {},
-  overrides: { adapters?: Adapters; openApiDocument?: ReturnType<typeof documentFor>; authStore?: AuthStore } = {},
+  overrides: { adapters?: Adapters; openApiDocument?: ReturnType<typeof documentFor>; authStore?: AuthStore; logger?: ReturnType<typeof recordingLogger> } = {},
 ) {
   return createServer({
     config: serverConfig(env),
@@ -23,7 +23,7 @@ function start(
     modules: [],
     ...(overrides.openApiDocument === undefined ? {} : { openApiDocument: overrides.openApiDocument }),
     migrations: [],
-    logger: recordingLogger(),
+    logger: overrides.logger ?? recordingLogger(),
     database: fakeDatabase(),
     authStore: overrides.authStore ?? fakeAuthStore(),
     buildInfo: BUILD,
@@ -47,6 +47,7 @@ describe("GET /api/config", () => {
       defaultLocale: "en",
       docsBaseUrl: "https://docs.example.org/help",
       features: { mail: false, ai: false },
+      signIn: { oidc: [] },
       setupRequired: false,
       setupTokenRequired: false,
     });
@@ -89,6 +90,81 @@ describe("GET /api/config", () => {
       ((await (await get(start({}, { adapters: given }), "/api/config")).json()) as { features: object }).features;
     expect(await features(mail)).toEqual({ mail: true, ai: false });
     expect(await features(ai)).toEqual({ mail: false, ai: true });
+  });
+
+  describe("signIn.oidc", () => {
+    const SECRET = "client-secret-qx86";
+    const ISSUER = "https://accounts.example.com/private-issuer";
+
+    function withIdentity(listProviders: () => Promise<readonly { id: string; displayName: string }[]>, available = true): Adapters {
+      const ports = adapters();
+      return { ...ports, identity: { ...ports.identity, available, listProviders } };
+    }
+
+    const signIn = async (given: Adapters, env: Record<string, string | undefined> = {}, logger?: ReturnType<typeof recordingLogger>) => {
+      const response = await get(start(env, { adapters: given, ...(logger === undefined ? {} : { logger }) }), "/api/config");
+      const text = await response.text();
+      return { response, text, body: JSON.parse(text) as { signIn?: unknown } };
+    };
+
+    it("lists the providers the identity port answers, as slug and name", async () => {
+      const { response, body } = await signIn(
+        withIdentity(() =>
+          Promise.resolve([
+            { id: "google", displayName: "Google" },
+            { id: "company-sso", displayName: "Company SSO" },
+          ]),
+        ),
+      );
+      expect(response.status).toBe(200);
+      expect(body.signIn).toEqual({
+        oidc: [
+          { slug: "google", name: "Google" },
+          { slug: "company-sso", name: "Company SSO" },
+        ],
+      });
+    });
+
+    it("lists no provider, without asking the port, when none is configured", async () => {
+      let asked = 0;
+      const { body } = await signIn(
+        withIdentity(() => {
+          asked += 1;
+          return Promise.resolve([{ id: "google", displayName: "Google" }]);
+        }, false),
+      );
+      expect(body.signIn).toEqual({ oidc: [] });
+      expect(asked).toBe(0);
+    });
+
+    it("carries no secret and no URL of a provider, however much the port's answer holds", async () => {
+      const answer = { id: "google", displayName: "Google", clientSecret: SECRET, issuerUrl: ISSUER, tokenEndpoint: `${ISSUER}/token` };
+      const { text } = await signIn(withIdentity(() => Promise.resolve([answer])), {
+        OIDC_GOOGLE_CLIENT_ID: "client-id-qx87",
+        OIDC_GOOGLE_CLIENT_SECRET: SECRET,
+        OIDC_GOOGLE_ISSUER_URL: ISSUER,
+      });
+      expect(text).not.toContain(SECRET);
+      expect(text).not.toContain("client-id-qx87");
+      expect(text).not.toContain(ISSUER);
+      expect(JSON.parse(text)).toMatchObject({ signIn: { oidc: [{ slug: "google", name: "Google" }] } });
+      expect(Object.keys(((JSON.parse(text) as { signIn: { oidc: object[] } }).signIn.oidc[0]) ?? {}).sort()).toEqual(["name", "slug"]);
+    });
+
+    it("still answers, with no provider and a log line, when the port cannot list them", async () => {
+      const logger = recordingLogger();
+      const { response, body } = await signIn(
+        withIdentity(() => Promise.reject(new TypeError(`boom ${SECRET}`))),
+        {},
+        logger,
+      );
+      expect(response.status).toBe(200);
+      expect(body.signIn).toEqual({ oidc: [] });
+      expect(logger.entries.filter((entry) => entry.level === "warn")).toEqual([
+        { level: "warn", message: "The OIDC providers could not be listed", fields: { error: "TypeError" } },
+      ]);
+      expect(JSON.stringify(logger.entries)).not.toContain(SECRET);
+    });
   });
 
   it("is cacheable for 60 seconds, while the rest of the API is not", async () => {

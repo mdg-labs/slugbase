@@ -1,6 +1,21 @@
 export { envBoolean } from "./env-boolean.ts";
 export { composeEnvSchema, envFragment, requireAllOrNone } from "./fragment.ts";
-export type { ConfigIssue, EnvFragment, EnvSchema, IntersectUnion, MergedShape, RefineContext } from "./fragment.ts";
+export type {
+  CollectedOf,
+  ConfigIssue,
+  EnvFragment,
+  EnvSchema,
+  IntersectUnion,
+  MergedShape,
+  RefineContext,
+} from "./fragment.ts";
+export {
+  DEFAULT_OIDC_SCOPES,
+  OIDC_OPTIONAL_FIELDS,
+  OIDC_REQUIRED_FIELDS,
+  oidcFragment,
+  parseOidcProviders,
+} from "./oidc.ts";
 export {
   DEFAULT_DOCS_BASE_URL,
   LOG_LEVELS,
@@ -57,4 +72,4 @@ export {
   workerEnvSchema,
   workerFragments,
 } from "./schemas.ts";
-export type { ConfigByProcess, MigrateConfig, ProcessType, ServerConfig, WorkerConfig } from "./schemas.ts";
+export type { ConfigByProcess, ConfigOf, MigrateConfig, ProcessType, ServerConfig, WorkerConfig } from "./schemas.ts";

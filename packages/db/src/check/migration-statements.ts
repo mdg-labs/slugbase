@@ -101,7 +101,7 @@ const NAME_INTRODUCERS = new Set(["table", "on", "only", "references", "exists",
 const SYNTAX_BEFORE_PAREN = new Set([
   "using", "with", "check", "key", "unique", "distinct", "include", "inherits", "where", "in", "any", "all", "some",
   "exists", "and", "or", "not", "as", "when", "then", "else", "case", "is", "between", "like", "ilike", "to", "from",
-  "select", "default", "identity", "enum", "btree", "hash", "gin", "gist", "spgist", "brin", "if", "set", "update",
+  "select", "default", "identity", "enum", "btree", "hash", "gin", "gist", "spgist", "brin", "if", "set", "insert", "update",
   "delete", "cascade", "restrict", "references", "foreign", "primary", "exclude", "for", "values", "array", "row",
   "varying", "on", "only", "table", "union", "intersect", "except", "join", "limit", "by",
 ]);

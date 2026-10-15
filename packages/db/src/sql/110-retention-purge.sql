@@ -10,10 +10,22 @@
 -- another statement holds are skipped and found by the next call, so the purge
 -- never waits behind a request.
 --
+-- api_tokens: revoked_at or expires_at more than 30 days in the past, whichever
+-- of the two is set and whatever the other says (a revoked token that has not
+-- expired, an expired one that was never revoked). A token with no expiry that
+-- is not revoked, one that is active, and one revoked or expired less than 30
+-- days ago stay; the token lookup refuses a revoked or expired token from the
+-- moment it is one, so deleting the row later changes no answer except that a
+-- repeated revocation of a token that old is no longer answered as the first
+-- one (doc 04 section 2.4). The table is created by the schema migrations, which
+-- run before this file is applied, so the plpgsql body resolves it when it runs;
+-- the grants it needs are in 150-api-tokens.sql.
+--
 -- It takes no argument, so a caller cannot widen what it deletes, and it uses no
 -- dynamic SQL. It is entered in src/system/registry.ts. slugbase_system, the
--- owner, already holds DELETE on sessions (060-accounts-sessions.sql);
--- slugbase_app reaches the table only through the system operations.
+-- owner, already holds DELETE on sessions (060-accounts-sessions.sql) and holds
+-- DELETE on api_tokens (150-api-tokens.sql); slugbase_app reaches neither table
+-- for a delete except through this function.
 GRANT CREATE ON SCHEMA public TO slugbase_system;
 
 CREATE OR REPLACE FUNCTION public.sys_retention_purge()
@@ -24,6 +36,7 @@ CREATE OR REPLACE FUNCTION public.sys_retention_purge()
 DECLARE
   c_batch CONSTANT integer := 5000;
   v_now timestamptz := clock_timestamp();
+  c_token_retention CONSTANT interval := interval '30 days';
   v_deleted bigint;
 BEGIN
   DELETE FROM public.sessions
@@ -35,6 +48,16 @@ BEGIN
   );
   GET DIAGNOSTICS v_deleted = ROW_COUNT;
   RETURN QUERY SELECT 'sessions'::text, v_deleted;
+
+  DELETE FROM public.api_tokens
+  WHERE id IN (
+    SELECT t.id FROM public.api_tokens t
+    WHERE t.revoked_at <= v_now - c_token_retention OR t.expires_at <= v_now - c_token_retention
+    LIMIT c_batch
+    FOR UPDATE SKIP LOCKED
+  );
+  GET DIAGNOSTICS v_deleted = ROW_COUNT;
+  RETURN QUERY SELECT 'api_tokens'::text, v_deleted;
 END
 $$;
 

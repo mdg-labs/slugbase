@@ -8,6 +8,8 @@ import { EgressPort } from '@slugbase/core';
 import { EgressRequest } from '@slugbase/core';
 import { EgressResponse } from '@slugbase/core';
 import type { ErrorReportPort } from '@slugbase/core';
+import { IdentityPort } from '@slugbase/core';
+import { IdentityProviderConfig } from '@slugbase/core';
 import type { MailMessage } from '@slugbase/core';
 import { MailPort } from '@slugbase/core';
 import type { RateLimitPort } from '@slugbase/core';
@@ -38,6 +40,21 @@ export interface CreateEgressOptions {
 export function createLogOnlyMail(options: {
     readonly logger: MailLogger;
 }): MailPort;
+
+// @public
+export function createOidcIdentity(options: CreateOidcIdentityOptions): OidcIdentity;
+
+// @public (undocumented)
+export interface CreateOidcIdentityOptions {
+    readonly cacheTtlMs?: number;
+    // (undocumented)
+    readonly egress: EgressPort;
+    readonly failureTtlMs?: number;
+    // (undocumented)
+    readonly logger: OidcIdentityLogger;
+    readonly now?: () => number;
+    readonly providers: readonly IdentityProviderConfig[];
+}
 
 // @public
 export function createRateLimiter(options: CreateRateLimiterOptions): RateLimitPort;
@@ -133,6 +150,33 @@ export interface MailTemplateInput {
 
 // @public
 export type MailTemplates = Readonly<Record<string, MailTemplate>>;
+
+// @public (undocumented)
+export interface OidcIdentity extends IdentityPort {
+    metadata(providerId: string): Promise<OidcProviderMetadata | undefined>;
+}
+
+// @public
+export interface OidcIdentityLogger {
+    // (undocumented)
+    warn(message: string, fields?: Readonly<Record<string, unknown>>): void;
+}
+
+// @public
+export interface OidcProviderMetadata {
+    // (undocumented)
+    readonly authorizationEndpoint: string;
+    // (undocumented)
+    readonly issuer: string;
+    // (undocumented)
+    readonly jwksUri: string;
+    readonly keys: readonly Readonly<Record<string, unknown>>[];
+    // (undocumented)
+    readonly tokenEndpoint: string;
+}
+
+// @public
+export type OidcUnavailableReason = "discovery_failed" | "issuer_mismatch" | "invalid_discovery" | "keys_failed" | "invalid_keys";
 
 // @public
 export class RateLimitError extends Error {

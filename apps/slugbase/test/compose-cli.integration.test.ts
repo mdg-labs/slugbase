@@ -32,9 +32,10 @@ function writeEnv(entries: ReadonlyMap<string, string>): string {
   return file;
 }
 
-function compose(file: string, overrides: readonly string[] = []): { status: number | null; stdout: string; stderr: string } {
+function compose(file: string, overrides: readonly string[] = [], projectDirectory?: string): { status: number | null; stdout: string; stderr: string } {
   const files = [COMPOSE_FILE, ...overrides].flatMap((path) => ["-f", path]);
-  const result = spawnSync("docker", ["compose", "--project-name", "slugbase-compose-test", "--env-file", file, ...files, "config", "--format", "json"], {
+  const directoryArguments = projectDirectory === undefined ? [] : ["--project-directory", projectDirectory];
+  const result = spawnSync("docker", ["compose", "--project-name", "slugbase-compose-test", "--env-file", file, ...directoryArguments, ...files, "config", "--format", "json"], {
     encoding: "utf8",
     timeout: 60_000,
     env: { PATH: process.env["PATH"] ?? "", HOME: process.env["HOME"] ?? "" },
@@ -61,6 +62,46 @@ describe.skipIf(!hasDockerCompose)("compose.yml under Docker Compose (skipped: t
     expect(config.services["slugbase-worker"]?.environment["DATABASE_URL"]).toBe(`postgres://slugbase_app:${APP_PASSWORD}@postgres:5432/slugbase`);
     expect(config.services["slugbase-worker"]?.environment).not.toHaveProperty("DATABASE_MIGRATE_URL");
     expect(JSON.stringify(config.services["slugbase-worker"]?.environment)).not.toContain(SUPERUSER_PASSWORD);
+  });
+
+  describe("OIDC providers of the operator", () => {
+    type Services = Record<string, { environment: Record<string, string> }>;
+    const oidcKeys = ["OIDC_TEST_CLIENT_ID", "OIDC_TEST_CLIENT_SECRET", "OIDC_TEST_ISSUER_URL"];
+
+    function services(projectDirectory: string): Services {
+      const result = compose(writeEnv(operatorEnv()), [], projectDirectory);
+      expect(result.status, result.stderr).toBe(0);
+      return (JSON.parse(result.stdout) as { services: Services }).services;
+    }
+
+    it("passes the keys of .env.oidc in the project directory to the server and not to the worker, and the stack resolves as before", () => {
+      const project = mkdtempSync(join(directory, "project-"));
+      writeFileSync(join(project, ".env.oidc"), oidcKeys.map((key) => `${key}=placeholder`).join("\n") + "\n");
+      const config = services(project);
+      for (const key of oidcKeys) {
+        expect(config["slugbase"]?.environment[key], key).toBe("placeholder");
+        expect(config["slugbase-worker"]?.environment, key).not.toHaveProperty(key);
+      }
+      expect(config["slugbase"]?.environment["DATABASE_MIGRATE_URL"]).toBe(`postgres://slugbase_migrator:${MIGRATOR_PASSWORD}@postgres:5432/slugbase`);
+      expect(config["slugbase-worker"]?.environment).not.toHaveProperty("DATABASE_MIGRATE_URL");
+    });
+
+    it("resolves with no .env.oidc, and the server then has no OIDC key", () => {
+      const config = services(mkdtempSync(join(directory, "project-")));
+      for (const name of ["slugbase", "slugbase-worker"]) {
+        expect(Object.keys(config[name]?.environment ?? {}).filter((key) => key.startsWith("OIDC_")), name).toEqual([]);
+      }
+    });
+
+    it("keeps the required-key guards when .env.oidc is present", () => {
+      const project = mkdtempSync(join(directory, "project-"));
+      writeFileSync(join(project, ".env.oidc"), "OIDC_TEST_CLIENT_ID=placeholder\n");
+      const entries = operatorEnv();
+      entries.delete("APP_ORIGIN");
+      const result = compose(writeEnv(entries), [], project);
+      expect(result.status).not.toBe(0);
+      expect(result.stderr).toContain("APP_ORIGIN");
+    });
   });
 
   it.each([...OPERATOR_VALUES.keys()])("refuses to resolve without %s, and does not print a secret", (key) => {

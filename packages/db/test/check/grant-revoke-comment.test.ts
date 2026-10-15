@@ -24,6 +24,11 @@ describe("GRANT", () => {
     ["ALL", "GRANT ALL ON bookmarks TO r;"],
     ["ALL PRIVILEGES", "GRANT ALL PRIVILEGES ON bookmarks TO r;"],
     ["a column list", "GRANT SELECT (id, title), UPDATE (title) ON bookmarks TO r;"],
+    ["a column list of INSERT", "GRANT INSERT (id, title) ON bookmarks TO r;"],
+    ["a column list of INSERT on a schema-qualified table with TABLE", "GRANT INSERT (id, title) ON TABLE public.bookmarks TO slugbase_app;"],
+    ["a column list of INSERT without a space before the parenthesis", "GRANT INSERT(id) ON bookmarks TO r;"],
+    ["column lists of SELECT, INSERT and UPDATE together", "GRANT SELECT (id), INSERT (id, title), UPDATE (title) ON bookmarks TO r;"],
+    ["a column list of INSERT with quoted names, in lower case", 'grant insert ("id", "title") on table bookmarks to r;'],
     ["several roles", "GRANT SELECT ON bookmarks TO a, b, c;"],
     ["PUBLIC", "GRANT SELECT ON bookmarks TO PUBLIC;"],
     ["CURRENT_USER", "GRANT SELECT ON bookmarks TO CURRENT_USER;"],
@@ -57,6 +62,10 @@ describe("GRANT", () => {
     ["ALL TABLES without a schema", "GRANT SELECT ON ALL TABLES TO r;"],
     ["ALL TABLES IN SCHEMA without a name", "GRANT SELECT ON ALL TABLES IN SCHEMA TO r;"],
     ["a column list that is not closed", "GRANT SELECT (id ON bookmarks TO r;"],
+    ["a column list of INSERT that is not closed", "GRANT INSERT (id ON bookmarks TO r;"],
+    ["an empty column list of INSERT", "GRANT INSERT () ON bookmarks TO r;"],
+    ["a call in the column list of INSERT", "GRANT INSERT (lower(id)) ON bookmarks TO r;"],
+    ["a column list of INSERT on a function", "GRANT INSERT (id) ON FUNCTION f(int) TO r;"],
     ["an empty column list", "GRANT SELECT () ON bookmarks TO r;"],
     ["a string as a grantee", "GRANT SELECT ON bookmarks TO 'r';"],
     ["a Unicode-escaped name", 'GRANT SELECT ON U&"b\\006Fokmarks" TO r;'],
@@ -75,6 +84,24 @@ describe("GRANT", () => {
 
   it("does not hide a statement that follows", () => {
     expect(kindsOf("GRANT SELECT ON bookmarks TO r; DROP TABLE bookmarks;")).toEqual(["safe", "drop-table"]);
+  });
+
+  it("does not hide a data change that follows a column grant of INSERT", () => {
+    expect(kindsOf("GRANT INSERT (id) ON bookmarks TO r; INSERT INTO bookmarks (id) VALUES (1);")).toEqual(["safe", "data-change"]);
+    expect(kindsOf("GRANT INSERT (id) ON bookmarks TO r; INSERT INTO archive (id) SELECT id FROM bookmarks;")).toEqual(["safe", "data-change"]);
+  });
+});
+
+describe("INSERT as a statement", () => {
+  it.each([
+    ["INSERT ... VALUES", "INSERT INTO bookmarks (id) VALUES (1);"],
+    ["INSERT without a column list", "INSERT INTO bookmarks VALUES (1);"],
+    ["INSERT ... SELECT", "INSERT INTO archive (id) SELECT id FROM bookmarks;"],
+    ["INSERT ... DEFAULT VALUES", "INSERT INTO bookmarks DEFAULT VALUES;"],
+    ["an INSERT in a CTE", "WITH s AS (SELECT id FROM bookmarks) INSERT INTO archive SELECT id FROM s;"],
+    ["an INSERT without INTO", "INSERT (id) VALUES (1);"],
+  ])("still reads %s as a data change", (_name, sql) => {
+    expect(kindsOf(sql)).toEqual(["data-change"]);
   });
 });
 
@@ -142,6 +169,7 @@ describe("REVOKE", () => {
     ["several privileges", "REVOKE SELECT, INSERT, UPDATE, DELETE ON bookmarks FROM r;", ["public.bookmarks"]],
     ["ALL PRIVILEGES", "REVOKE ALL PRIVILEGES ON bookmarks FROM r;", ["public.bookmarks"]],
     ["a column list", "REVOKE SELECT (title) ON bookmarks FROM r;", ["public.bookmarks"]],
+    ["a column list of INSERT", "REVOKE INSERT (id, title) ON TABLE bookmarks FROM r;", ["public.bookmarks"]],
     ["several roles", "REVOKE SELECT ON bookmarks FROM a, b;", ["public.bookmarks"]],
     ["PUBLIC", "REVOKE ALL ON bookmarks FROM PUBLIC;", ["public.bookmarks"]],
     ["GRANT OPTION FOR", "REVOKE GRANT OPTION FOR SELECT ON bookmarks FROM r;", ["public.bookmarks"]],

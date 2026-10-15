@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { CompositionError, createServer, type RouteBinding, type ServerModule } from "../../src/create-server.ts";
 import { sanitiseOrigin } from "../../src/http/cross-site.ts";
-import { adapters, fakeDatabase, recordingLogger, serverConfig, documentOf } from "../support.ts";
+import { acceptAnyBearer, adapters, fakeDatabase, recordingLogger, serverConfig, documentOf } from "../support.ts";
 
 // The http/cross-site suite (doc 08 section 3.5): stage 5 of the chain, exercised
 // through the mutation routes a test module registers.
@@ -65,9 +65,12 @@ function setup(challenge: { ok: boolean } = { ok: true }) {
     },
   ];
   const module: ServerModule = { name: "cross-site-routes", register: () => ({ routes }) };
+  // The authentication stage is not under test: it accepts every Authorization header, so the rule of stage 5 is.
+  const bearer = acceptAnyBearer();
   const logger = recordingLogger();
   const port: Adapters = {
     ...adapters(),
+    tenantResolver: bearer.tenantResolver,
     challenge: {
       available: true,
       verify: (solution) => {
@@ -79,7 +82,7 @@ function setup(challenge: { ok: boolean } = { ok: true }) {
   const server = createServer({
     config: serverConfig(),
     adapters: port,
-    modules: [module],
+    modules: [module, bearer.module],
     openApiDocument: documentOf([module]),
     migrations: [],
     logger,

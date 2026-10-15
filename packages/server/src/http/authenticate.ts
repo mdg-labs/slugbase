@@ -36,12 +36,13 @@ export type Principal = SessionPrincipal | ApiTokenPrincipal;
 
 /**
  * Turns the `Authorization` header into an API-token principal. `authorization`
- * is the whole header value; the resolver answers `undefined` for a credential
- * it does not accept, and throws only when it cannot decide.
+ * is the whole header value and `clientIp` the client address across the trusted
+ * proxy hops (undefined without a socket); the resolver answers `undefined` for a
+ * credential it does not accept, and throws only when it cannot decide.
  */
 export interface BearerAuthenticator {
   readonly credential: "bearer";
-  authenticate(authorization: string): Promise<ApiTokenPrincipal | undefined>;
+  authenticate(authorization: string, request: { readonly clientIp: string | undefined }): Promise<ApiTokenPrincipal | undefined>;
 }
 
 /**
@@ -89,7 +90,7 @@ export function createAuthentication({ authenticators }: AuthenticationOptions):
         return next();
       }
       for (const authenticator of bearer) {
-        const principal = await authenticator.authenticate(authorization);
+        const principal = await authenticator.authenticate(authorization, { clientIp: context.get("clientIp") });
         if (principal !== undefined) {
           context.set("principal", principal);
           context.set("principalType", "api-token");

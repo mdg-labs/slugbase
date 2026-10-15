@@ -88,6 +88,25 @@ export interface AnalyticsPort extends Port {
 }
 
 // @public
+export const API_TOKEN_BYTES = 32;
+
+// @public
+export const API_TOKEN_DISPLAY_PREFIX_LENGTH = 6;
+
+// @public
+export const API_TOKEN_PREFIX = "slb_";
+
+// @public
+export const API_TOKEN_SECRET_LENGTH = 43;
+
+// @public (undocumented)
+export interface ApiToken {
+    readonly displayPrefix: string;
+    readonly hash: Buffer;
+    readonly value: string;
+}
+
+// @public
 export const BACKUP_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 // @public (undocumented)
@@ -98,6 +117,9 @@ export const BACKUP_CODE_LENGTH = 10;
 
 // @public
 export function base32Encode(bytes: Uint8Array): string;
+
+// @public
+export function bearerApiToken(authorization: string): string | undefined;
 
 // @public
 export class BreachedDatasetError extends Error {
@@ -229,10 +251,16 @@ export interface ErrorReportPort extends Port {
 }
 
 // @public
+export function generateApiToken(): ApiToken;
+
+// @public
 export function generateBackupCodes(count?: number): string[];
 
 // @public
 export function generateTotpSecret(): Uint8Array;
+
+// @public
+export function hashApiToken(value: string): Buffer;
 
 // @public (undocumented)
 export interface IdentityBeginRequest {
@@ -288,7 +316,24 @@ export interface IdentityPort extends Port {
     listProviders(): Promise<readonly IdentityProviderInfo[]>;
 }
 
-// @public (undocumented)
+// @public
+export interface IdentityProviderConfig {
+    readonly allowedDomains: readonly string[];
+    // (undocumented)
+    readonly autoCreate: boolean;
+    // (undocumented)
+    readonly clientId: string;
+    // (undocumented)
+    readonly clientSecret: string;
+    readonly issuerUrl: string;
+    readonly name: string;
+    // (undocumented)
+    readonly scopes: readonly string[];
+    // (undocumented)
+    readonly slug: string;
+}
+
+// @public
 export interface IdentityProviderInfo {
     // (undocumented)
     readonly displayName: string;
@@ -316,6 +361,9 @@ export interface MailPort extends Port {
     // (undocumented)
     send(message: MailMessage): Promise<void>;
 }
+
+// @public
+export const MAX_API_TOKENS_PER_USER = 10;
 
 // @public
 export function normalizeEmail(raw: string): string;

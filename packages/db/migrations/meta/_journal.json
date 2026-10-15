@@ -120,6 +120,34 @@
       "when": 1792064262569,
       "tag": "20261015113742_add_mfa_enabled_read",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792072786491,
+      "tag": "20261015135946_add_api_tokens",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1792074549469,
+      "tag": "20261015142909_add_api_token_lookup",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792079544959,
+      "tag": "20261015155224_add_api_token_insert_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792080948458,
+      "tag": "20261015161548_add_api_token_purge",
+      "breakpoints": true
     }
   ]
 }

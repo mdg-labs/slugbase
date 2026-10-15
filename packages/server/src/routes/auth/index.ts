@@ -1,5 +1,6 @@
 import { sessionCookieSpec, type MailPort, type PasswordPolicy, type SecretBoxPort } from "@slugbase/core";
 import type { AuthStore } from "@slugbase/db";
+import { createApiTokenAuthenticator } from "../../auth/api-tokens.ts";
 import { createSessionAuthenticator } from "../../auth/authenticator.ts";
 import { createPasswordVerifier, hashPassword as hashArgon2id, verifyHash, type PasswordVerifier } from "../../auth/password.ts";
 import type { ModuleContribution } from "../../create-server.ts";
@@ -32,8 +33,9 @@ export interface AuthRoutesOptions {
 /**
  * What password sign-in contributes (doc 04 sections 10.2 and 10.3): the login
  * and logout routes, the routes that list and revoke the account's sessions,
- * the routes that re-authenticate and change the password, and the authenticator
- * that turns the session cookie into a principal at stage 4 of the chain.
+ * the routes that re-authenticate and change the password, and the authenticators
+ * that turn the session cookie and the bearer API token into a principal at stage
+ * 4 of the chain.
  */
 export function authContribution({
   store,
@@ -51,6 +53,6 @@ export function authContribution({
     routes: [loginRoute({ store, passwords, cookie }), verifyMfaRoute({ store, secretBox, verifyCode: verifyHash, now, cookie }), logoutRoute({ store, cookie }), ...sessionRoutes({ store, cookie, cursorSecret: sessionSecret }),
       ...securityRoutes({ store, passwords, passwordPolicy, hashPassword, cookie, mail, secretBox, verifyCode: verifyHash, now }),
     ],
-    authenticators: [createSessionAuthenticator({ store, cookie })],
+    authenticators: [createSessionAuthenticator({ store, cookie }), createApiTokenAuthenticator({ store })],
   };
 }

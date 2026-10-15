@@ -84,8 +84,8 @@ Providers are configured only by the operator through `OIDC_<SLUG>_*` environmen
 ### 2.9 Personal API tokens
 
 - Created from Account settings after a fresh re-authentication, with a name and a target **workspace** (one of the member's workspaces, the active one by default) and a scope: `read` or `read-write` (Q16); expiry 30, 90 or 365 days or none, **defaulting to 90 days** in the dialog; unused tokens are not auto-revoked (Q47).
-- Format `slb_` + 32 random bytes encoded in base62 (43 characters); stored as a SHA-256 hash with a 6-character display prefix; shown once.
-- Last-used time and coarse IP prefix (as for sessions, §2.4) are recorded, at most once a minute. Max 10 active tokens per account; the 11th is refused with a field error. Names are unique per account. Revocable individually.
+- Format `slb_` + 32 random bytes encoded as base64url (43 characters, no padding); stored as a SHA-256 hash of the whole token with a 6-character display prefix (the first six characters after `slb_`); shown once, in the response that creates it, and never returned or logged again.
+- Last-used time and coarse IP prefix (as for sessions, §2.4) are recorded, at most once a minute. Max 10 active tokens per account; the 11th is refused with a field error. Names are unique per account among its tokens that are not revoked. Revocable individually; a revoked token stays recorded as revoked (so revoking it again is the same answer) and is refused from then on, and its name can be used again. A token counts toward the limit while it is neither revoked nor expired.
 - A token request runs as the account in the bound workspace with the account's current role there; losing membership makes the token inert (it is revoked automatically). When a request carries a bearer token, cookies are ignored entirely. API tokens skip MFA by design (doc 10 §5) and can never call: token management, password/email/MFA changes, session management, instance-admin operations, account deletion, billing checkout.
 - Tokens are **not** an entitlement; every account has them on every plan (old §23.4-4).
 
@@ -470,7 +470,7 @@ Starting values. **Config** values are environment or instance settings (doc 07 
 | Idempotency key retention | 24 h | fixed | doc 04 §6.3 |
 | List total shown exactly up to | 10 000 | fixed | §5.7 |
 | MFA backup codes | 10, single-use | fixed | §2.7 |
-| API tokens per account | 10 | config | §2.9 |
+| API tokens per account | 10 | fixed | §2.9 |
 | API token prefix | `slb_` | fixed | §2.9 |
 | AI suggestion timeout / max tags | 5 s / 5 | config | §14 |
 | Dashboard quick access / pinned / tags | 8 / 12 / 12 | config | §9.3 |

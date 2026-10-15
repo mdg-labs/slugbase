@@ -1,17 +1,21 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import type postgres from "postgres";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createRetentionStore, type RetentionStore } from "../src/index.ts";
 import { systemOperations } from "../src/system/registry.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, freshToken, seedAccount, sessionRows } from "./support/auth-fixture.ts";
+import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 
 // Retention (doc 05 section 6): sys_retention_purge() deletes what has outlived
 // its retention, a batch of 5 000 rows per table per call, and answers how many
-// it deleted per table. The first rule is the session rule.
+// it deleted per table. The rules so far: expired sessions, and API tokens that
+// were revoked or expired more than 30 days ago.
 
 const HOOK_TIMEOUT_MS = 300_000;
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 const BATCH = 5_000;
+const TOKEN_RETENTION_DAYS = 30;
 const FUNCTION = "public.sys_retention_purge()";
 
 let db: TestDatabase;
@@ -68,6 +72,14 @@ async function seedSession(session: SeedSession): Promise<string> {
   return id;
 }
 
+/** What a purge answers when it deleted `sessions` sessions and `apiTokens` API tokens, in the order of doc 05 section 6. */
+function counts(sessions: number, apiTokens = 0): { table: string; deleted: number }[] {
+  return [
+    { table: "sessions", deleted: sessions },
+    { table: "api_tokens", deleted: apiTokens },
+  ];
+}
+
 async function remainingIds(): Promise<string[]> {
   return (await sessionRows(db)).map((row) => row.id).sort();
 }
@@ -89,9 +101,9 @@ describe("purging expired sessions", () => {
     const otherLive = await seedSession({ accountId: other, expiresIn: HOUR_MS, absoluteExpiresIn: 100 * DAY_MS });
     const justLive = await seedSession({ accountId: other, expiresIn: 60_000, absoluteExpiresIn: 60_000 });
 
-    const counts = await store.purge();
+    const purged = await store.purge();
 
-    expect(counts).toEqual([{ table: "sessions", deleted: 4 }]);
+    expect(purged).toEqual(counts(4));
     expect(await remainingIds()).toEqual([live, otherLive, justLive].sort());
   });
 
@@ -100,7 +112,7 @@ describe("purging expired sessions", () => {
     const owner = await account();
     const live = await seedSession({ accountId: owner, expiresIn: DAY_MS, absoluteExpiresIn: DAY_MS });
 
-    expect(await store.purge()).toEqual([{ table: "sessions", deleted: 0 }]);
+    expect(await store.purge()).toEqual(counts(0));
     expect(await remainingIds()).toEqual([live]);
   });
 
@@ -130,11 +142,11 @@ describe("purging expired sessions", () => {
         FROM generate_series(1, ${2 * BATCH + extra}) AS n`;
     });
 
-    expect(await store.purge()).toEqual([{ table: "sessions", deleted: BATCH }]);
+    expect(await store.purge()).toEqual(counts(BATCH));
     expect((await sessionRows(db)).length).toBe(BATCH + extra + 1);
-    expect(await store.purge()).toEqual([{ table: "sessions", deleted: BATCH }]);
-    expect(await store.purge()).toEqual([{ table: "sessions", deleted: extra }]);
-    expect(await store.purge()).toEqual([{ table: "sessions", deleted: 0 }]);
+    expect(await store.purge()).toEqual(counts(BATCH));
+    expect(await store.purge()).toEqual(counts(extra));
+    expect(await store.purge()).toEqual(counts(0));
     expect(await remainingIds()).toEqual([live]);
   }, HOOK_TIMEOUT_MS);
 
@@ -158,14 +170,182 @@ describe("purging expired sessions", () => {
     });
     await lockTaken;
 
-    const counts = await store.purge();
+    const purged = await store.purge();
     release();
     await holder;
 
-    expect(counts).toEqual([{ table: "sessions", deleted: 1 }]);
+    expect(purged).toEqual(counts(1));
     expect(await remainingIds()).toEqual([locked]);
-    expect(await store.purge()).toEqual([{ table: "sessions", deleted: 1 }]);
+    expect(await store.purge()).toEqual(counts(1));
     expect(await remainingIds()).toEqual([]);
+  });
+});
+
+interface Holder {
+  readonly accountId: string;
+  readonly workspaceId: string;
+}
+
+/** An account that is a member of a workspace of its own, which is what an API token needs to be bound to. */
+async function holder(): Promise<Holder> {
+  const accountId = await account();
+  const workspaceId = await seedWorkspace(db, { createdBy: accountId });
+  await seedMember(db, { workspaceId, accountId, role: "owner" });
+  return { accountId, workspaceId };
+}
+
+interface SeedToken {
+  readonly holder: Holder;
+  /** Offsets from now in days; negative is in the past, null leaves the column empty. */
+  readonly revokedIn: number | null;
+  readonly expiresIn: number | null;
+}
+
+/**
+ * Seeds rows with the offsets a test needs, which the application never writes (a revocation
+ * date in the past, a creation date). slugbase_system holds no INSERT on api_tokens, so the table
+ * owner inserts, in the account-level setting of the row's account, so the policy admits it.
+ */
+async function asOwner(accountId: string, work: (tx: postgres.TransactionSql) => Promise<unknown>): Promise<void> {
+  await db.owner.begin(async (tx) => {
+    await tx`SELECT set_config('app.account_id', ${accountId}, true)`;
+    await work(tx);
+  });
+}
+
+async function seedToken(token: SeedToken): Promise<string> {
+  const id = freshId();
+  const { hash } = freshToken();
+  await asOwner(token.holder.accountId, async (tx) => {
+    await tx`
+      INSERT INTO api_tokens (id, account_id, workspace_id, name, token_hash, token_prefix, scope, expires_at, revoked_at, created_at)
+      VALUES (${id}, ${token.holder.accountId}, ${token.holder.workspaceId}, ${id}, ${hash}, 'abcdef', 'read',
+              now() + ${token.expiresIn} * interval '1 day', now() + ${token.revokedIn} * interval '1 day',
+              now() - interval '400 days')`;
+  });
+  return id;
+}
+
+async function tokenIds(): Promise<string[]> {
+  const rows = await asSystem(db, (tx) => tx<{ id: string }[]>`SELECT id FROM api_tokens`);
+  return rows.map((row) => row.id).sort();
+}
+
+async function clearApiTokens(): Promise<void> {
+  await asSystem(db, (tx) => tx`DELETE FROM api_tokens`);
+}
+
+describe("purging revoked and expired API tokens", () => {
+  beforeEach(async () => {
+    await clearApiTokens();
+  });
+
+  it("deletes a token revoked or expired more than 30 days ago and keeps the rest", async () => {
+    const owner = await holder();
+    const other = await holder();
+    const over = TOKEN_RETENTION_DAYS + 1;
+    const under = TOKEN_RETENTION_DAYS - 1;
+    // Past retention: revoked, expired, and both; whatever the other column says.
+    await seedToken({ holder: owner, revokedIn: -over, expiresIn: 60 });
+    await seedToken({ holder: owner, revokedIn: -over, expiresIn: null });
+    await seedToken({ holder: owner, revokedIn: null, expiresIn: -over });
+    await seedToken({ holder: other, revokedIn: -over, expiresIn: -over });
+    await seedToken({ holder: other, revokedIn: -under, expiresIn: -over });
+    await seedToken({ holder: other, revokedIn: -1, expiresIn: -over });
+    // Kept: inside the 30 days, active, and without an expiry.
+    const revokedRecently = await seedToken({ holder: owner, revokedIn: -under, expiresIn: 60 });
+    const expiredRecently = await seedToken({ holder: other, revokedIn: null, expiresIn: -under });
+    const bothRecently = await seedToken({ holder: other, revokedIn: -1, expiresIn: -under });
+    const active = await seedToken({ holder: owner, revokedIn: null, expiresIn: 60 });
+    const forever = await seedToken({ holder: other, revokedIn: null, expiresIn: null });
+    const expiresSoon = await seedToken({ holder: other, revokedIn: null, expiresIn: 0.001 });
+
+    const purged = await store.purge();
+
+    expect(purged).toEqual(counts(0, 6));
+    expect(await tokenIds()).toEqual([revokedRecently, expiredRecently, bothRecently, active, forever, expiresSoon].sort());
+  });
+
+  it("deletes nothing and says so when no token is past its retention", async () => {
+    const owner = await holder();
+    const active = await seedToken({ holder: owner, revokedIn: null, expiresIn: 90 });
+    const revoked = await seedToken({ holder: owner, revokedIn: -2, expiresIn: 90 });
+
+    expect(await store.purge()).toEqual(counts(0, 0));
+    expect(await tokenIds()).toEqual([active, revoked].sort());
+  });
+
+  it("leaves the accounts, the memberships and the workspaces alone", async () => {
+    const owner = await holder();
+    await seedToken({ holder: owner, revokedIn: -TOKEN_RETENTION_DAYS - 1, expiresIn: null });
+    const count = async () =>
+      (await db.owner<{ accounts: number; members: number; workspaces: number }[]>`
+        SELECT (SELECT count(*) FROM accounts)::int AS accounts,
+               (SELECT count(*) FROM workspace_members)::int AS members,
+               (SELECT count(*) FROM workspaces)::int AS workspaces`)[0];
+    const before = await count();
+
+    expect(await store.purge()).toEqual(counts(0, 1));
+
+    expect(await count()).toEqual(before);
+  });
+
+  it("deletes one batch of 5 000 per call and finishes the rest on the next calls", async () => {
+    const owner = await holder();
+    const live = await seedToken({ holder: owner, revokedIn: null, expiresIn: 90 });
+    const extra = 123;
+    await asOwner(owner.accountId, async (tx) => {
+      await tx`
+        INSERT INTO api_tokens (id, account_id, workspace_id, name, token_hash, token_prefix, scope, expires_at, revoked_at, created_at)
+        SELECT gen_random_uuid(), ${owner.accountId}, ${owner.workspaceId}, 'n' || n::text,
+               decode(md5('a' || n::text) || md5('b' || n::text), 'hex'), 'abcdef', 'read',
+               now() + interval '10 days', now() - interval '31 days', now() - interval '400 days'
+        FROM generate_series(1, ${2 * BATCH + extra}) AS n`;
+    });
+
+    expect(await store.purge()).toEqual(counts(0, BATCH));
+    expect((await tokenIds()).length).toBe(BATCH + extra + 1);
+    expect(await store.purge()).toEqual(counts(0, BATCH));
+    expect(await store.purge()).toEqual(counts(0, extra));
+    expect(await store.purge()).toEqual(counts(0, 0));
+    expect(await tokenIds()).toEqual([live]);
+  }, HOOK_TIMEOUT_MS);
+
+  it("does not wait for a token a concurrent statement holds and deletes it on a later call", async () => {
+    const owner = await holder();
+    const locked = await seedToken({ holder: owner, revokedIn: -TOKEN_RETENTION_DAYS - 1, expiresIn: null });
+    await seedToken({ holder: owner, revokedIn: -TOKEN_RETENTION_DAYS - 1, expiresIn: null });
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let acquired: () => void = () => undefined;
+    const lockTaken = new Promise<void>((resolve) => {
+      acquired = resolve;
+    });
+    const holding = asSystem(db, async (tx) => {
+      await tx`SELECT id FROM api_tokens WHERE id = ${locked} FOR UPDATE`;
+      acquired();
+      await held;
+    });
+    await lockTaken;
+
+    const purged = await store.purge();
+    release();
+    await holding;
+
+    expect(purged).toEqual(counts(0, 1));
+    expect(await tokenIds()).toEqual([locked]);
+    expect(await store.purge()).toEqual(counts(0, 1));
+    expect(await tokenIds()).toEqual([]);
+  });
+
+  it("gives slugbase_app no DELETE on api_tokens: the purge is the only way it removes one", async () => {
+    await expect(db.app.unsafe("DELETE FROM public.api_tokens")).rejects.toMatchObject({ code: "42501" });
+    const rows = await db.owner<{ app: boolean; system: boolean }[]>`
+      SELECT has_table_privilege('slugbase_app', 'public.api_tokens', 'DELETE') AS app,
+             has_table_privilege('slugbase_system', 'public.api_tokens', 'DELETE') AS system`;
+    expect([...rows]).toEqual([{ app: false, system: true }]);
   });
 });
 

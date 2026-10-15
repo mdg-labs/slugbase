@@ -261,9 +261,10 @@ describe.each(browserMutations.map((operation) => [`${operation.method.toUpperCa
       expectRefused(await answerOf(operation, { contentType: null, body: false, cookie: false }));
     });
 
-    it("refuses a non-bearer Authorization header as it refuses a request without one, and drops the cookie", async () => {
-      expectRefused(await answerOf(operation, { origin: null, authorization: "Basic dXNlcjpwYXNz" }));
-      expectRefused(await answerOf(operation, { origin: "https://evil.example", authorization: "Basic dXNlcjpwYXNz" }));
+    it("answers a non-bearer Authorization header 401 unauthenticated, as no credential, and does not read the cookie that comes with it", async () => {
+      for (const sentOrigin of [null, "https://evil.example", origin]) {
+        expect(await answerOf(operation, { origin: sentOrigin, authorization: "Basic dXNlcjpwYXNz" })).toEqual({ status: 401, code: "unauthenticated" });
+      }
     });
 
     it("lets the same-origin JSON request through the rule", async () => {
@@ -284,36 +285,28 @@ describe("the session is untouched by everything refused above", () => {
 });
 
 describe("a request that carries a bearer token", () => {
-  // No API-token authenticator is composed yet, so no bearer credential is accepted: the request is
-  // anonymous, its cookie is dropped, and the rule's origin and fetch-site checks do not apply to it.
-  // The token-accepted path is covered once a resolver exists; what is checked here is the part the
-  // rule owns (T5, doc 04 section 4.1).
+  // A bearer header that no resolver accepts is 401 whatever the operation, so the request is neither
+  // refused by the rule nor answered as the session of the cookie that comes with it (T5, doc 04 section
+  // 4.1). That a token the server accepts is not asked for an Origin is held with a real token in
+  // test/auth/api-token-bearer.integration.test.ts.
   const BEARER = "Bearer not-a-token";
 
   describe.each(browserMutations.map((operation) => [`${operation.method.toUpperCase()} ${operation.path}`, operation] as const))(
     "%s",
     (_name, operation) => {
-      it("skips the Origin and Sec-Fetch-Site checks", async () => {
+      it("is not refused by the Origin and Sec-Fetch-Site checks, but as an unaccepted credential", async () => {
         for (const attempt of [
           { origin: null },
           { origin: "https://evil.example" },
           { origin: "https://evil.example", fetchSite: "cross-site" },
           { fetchSite: "cross-site" },
         ] satisfies Attempt[]) {
-          const answer = await answerOf(operation, { ...attempt, authorization: BEARER });
-          expectPassesTheRule(operation, answer);
-          if (operation.auth !== "anonymous") {
-            expect(answer).toEqual({ status: 401, code: "unauthenticated" });
-          }
+          expect(await answerOf(operation, { ...attempt, authorization: BEARER })).toEqual({ status: 401, code: "unauthenticated" });
         }
       });
 
       it("ignores the session cookie that comes with it", async () => {
-        const answer = await answerOf(operation, { authorization: BEARER });
-        expectPassesTheRule(operation, answer);
-        if (operation.auth !== "anonymous") {
-          expect(answer).toEqual({ status: 401, code: "unauthenticated" });
-        }
+        expect(await answerOf(operation, { authorization: BEARER })).toEqual({ status: 401, code: "unauthenticated" });
       });
 
       if (takesBody(operation)) {
@@ -341,7 +334,6 @@ describe("a request that carries a bearer token", () => {
   it("leaves the session as it was", async () => {
     await expectSessionIntact();
   });
-
 });
 
 describe("operations that declare an audience", () => {

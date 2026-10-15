@@ -53,10 +53,19 @@ describe("getApiConfig", () => {
   it("carries exactly the fields a server without accounts can answer, and the setup answers besides", () => {
     const api = schemas["ApiConfig"] as { properties: Obj; required: string[] };
     const names = ["apiVersion", "defaultLocale", "docsBaseUrl", "features", "locales", "origin", "product"];
-    expect(Object.keys(api.properties).sort()).toEqual([...names, "setupRequired", "setupTokenRequired"].sort());
+    expect(Object.keys(api.properties).sort()).toEqual([...names, "setupRequired", "setupTokenRequired", "signIn"].sort());
     expect([...api.required].sort()).toEqual(names);
     expect(api.properties["setupRequired"]).toMatchObject({ type: "boolean" });
     expect(api.properties["setupTokenRequired"]).toMatchObject({ type: "boolean" });
+    const signIn = api.properties["signIn"] as { additionalProperties: unknown; properties: Obj; required: string[] };
+    expect(signIn.additionalProperties).toBe(false);
+    expect(Object.keys(signIn.properties)).toEqual(["oidc"]);
+    expect(signIn.required).toEqual(["oidc"]);
+    const provider = (signIn.properties["oidc"] as { type: string; items: { additionalProperties: unknown; properties: Obj; required: string[] } });
+    expect(provider.type).toBe("array");
+    expect(provider.items.additionalProperties).toBe(false);
+    expect(Object.keys(provider.items.properties).sort()).toEqual(["name", "slug"]);
+    expect([...provider.items.required].sort()).toEqual(["name", "slug"]);
     const features = api.properties["features"] as { properties: Obj; required: string[] };
     expect(Object.keys(features.properties).sort()).toEqual(["ai", "mail"]);
     expect([...features.required].sort()).toEqual(["ai", "mail"]);
@@ -72,6 +81,15 @@ describe("ApiConfigSchema", () => {
     expect(ApiConfigSchema.safeParse({ ...config, signIn: { password: true } }).success).toBe(false);
     expect(ApiConfigSchema.safeParse({ ...config, features: { ...config.features, billing: true } }).success).toBe(false);
     expect(ApiConfigSchema.safeParse({ ...config, product: { ...config.product, commit: "abc" } }).success).toBe(false);
+  });
+
+  it("accepts signIn.oidc as a list of slug and name, and leaves it out of a document that does not state it", () => {
+    const signIn = { oidc: [{ slug: "google", name: "Google" }] };
+    expect(ApiConfigSchema.parse({ ...config, signIn })).toEqual({ ...config, signIn });
+    expect(ApiConfigSchema.parse({ ...config, signIn: { oidc: [] } })).toEqual({ ...config, signIn: { oidc: [] } });
+    expect(ApiConfigSchema.safeParse({ ...config, signIn: { oidc: [{ slug: "google", name: "Google", issuerUrl: "https://x.example.com" }] } }).success).toBe(false);
+    expect(ApiConfigSchema.safeParse({ ...config, signIn: { oidc: [{ slug: "google" }] } }).success).toBe(false);
+    expect(ApiConfigSchema.safeParse({ ...config, signIn: {} }).success).toBe(false);
   });
 
   it("accepts setupRequired as a boolean, and leaves it out of a document that does not state it", () => {

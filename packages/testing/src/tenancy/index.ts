@@ -2,13 +2,17 @@ export { runApiMatrix } from "./api-mode.js";
 export type { ApiCall, ApiMatrixOptions, ApiMatrixReport, ApiResponse, RequestFunction } from "./api-mode.js";
 export { runRlsOnlyMatrix } from "./rls-mode.js";
 export type { RlsOnlyOptions, RlsOnlyReport } from "./rls-mode.js";
-export { IDENTIFIER_KINDS, identifiersOf, namesOf, principalsOf } from "./fixture.js";
+export { isTokenCallable, runTokenMatrix } from "./token-mode.js";
+export type { TokenCall, TokenMatrixOptions, TokenMatrixReport, TokenRequestFunction } from "./token-mode.js";
+export { IDENTIFIER_KINDS, identifiersOf, isFixtureToken, namesOf, principalsOf, tokensOf } from "./fixture.js";
 export type {
   FixtureIdentifier,
   FixturePrincipal,
+  FixtureToken,
   IdentifierKind,
   PrincipalRole,
   TenantFixture,
+  TokenScope,
   WorkspaceFixture,
 } from "./fixture.js";
 export { kindOfParameter, PATH_PARAMETER_MAPPING, REPOSITORY_SAMPLES } from "./mapping.js";

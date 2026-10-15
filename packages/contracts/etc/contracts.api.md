@@ -55,6 +55,12 @@ export const AccountSchema: z.ZodObject<{
 // @public (undocumented)
 export const ANALYTICS_CONSENTS: readonly ["unset", "granted", "denied"];
 
+// @public
+export const API_TOKEN_EXPIRY_DAYS: readonly [30, 90, 365];
+
+// @public (undocumented)
+export const API_TOKEN_SCOPES: readonly ["read", "read-write"];
+
 // @public (undocumented)
 export const ApiConfigSchema: z.ZodObject<{
     apiVersion: z.ZodLiteral<"v1">;
@@ -70,8 +76,60 @@ export const ApiConfigSchema: z.ZodObject<{
         mail: z.ZodBoolean;
         ai: z.ZodBoolean;
     }, z.core.$strict>;
+    signIn: z.ZodOptional<z.ZodObject<{
+        oidc: z.ZodArray<z.ZodObject<{
+            slug: z.ZodString;
+            name: z.ZodString;
+        }, z.core.$strict>>;
+    }, z.core.$strict>>;
     setupRequired: z.ZodOptional<z.ZodBoolean>;
     setupTokenRequired: z.ZodOptional<z.ZodBoolean>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const ApiTokenIdParamsSchema: z.ZodObject<{
+    id: z.ZodUUID;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const ApiTokenListQuerySchema: z.ZodObject<{
+    limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+    cursor: z.ZodOptional<z.ZodString>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const ApiTokenListSchema: z.ZodObject<{
+    items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        workspaceId: z.ZodUUID;
+        workspaceName: z.ZodString;
+        scope: z.ZodEnum<{
+            read: "read";
+            "read-write": "read-write";
+        }>;
+        prefix: z.ZodString;
+        createdAt: z.ZodISODateTime;
+        lastUsedAt: z.ZodNullable<z.ZodISODateTime>;
+        expiresAt: z.ZodNullable<z.ZodISODateTime>;
+    }, z.core.$strict>>;
+    nextCursor: z.ZodNullable<z.ZodString>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const ApiTokenSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    name: z.ZodString;
+    workspaceId: z.ZodUUID;
+    workspaceName: z.ZodString;
+    scope: z.ZodEnum<{
+        read: "read";
+        "read-write": "read-write";
+    }>;
+    prefix: z.ZodString;
+    createdAt: z.ZodISODateTime;
+    lastUsedAt: z.ZodNullable<z.ZodISODateTime>;
+    expiresAt: z.ZodNullable<z.ZodISODateTime>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -208,6 +266,27 @@ export interface ComponentTypes {
             };
             setupRequired?: boolean;
             setupTokenRequired?: boolean;
+            signIn?: {
+                oidc: {
+                    name: string;
+                    slug: string;
+                }[];
+            };
+        };
+        ApiToken: {
+            createdAt: string;
+            expiresAt: string | null;
+            id: string;
+            lastUsedAt: string | null;
+            name: string;
+            prefix: string;
+            scope: "read" | "read-write";
+            workspaceId: string;
+            workspaceName: string;
+        };
+        ApiTokenList: {
+            items: ComponentTypes["schemas"]["ApiToken"][];
+            nextCursor: string | null;
         };
         ChangePasswordRequest: {
             currentPassword: string;
@@ -215,6 +294,24 @@ export interface ComponentTypes {
         };
         ConfirmMfaEnrollmentRequest: {
             code: string;
+        };
+        CreateApiTokenRequest: {
+            expiresInDays: (30 | 90 | 365) | null;
+            name: string;
+            scope: "read" | "read-write";
+            workspaceId?: string;
+        };
+        CreatedApiToken: {
+            createdAt: string;
+            expiresAt: string | null;
+            id: string;
+            lastUsedAt: string | null;
+            name: string;
+            prefix: string;
+            scope: "read" | "read-write";
+            token: string;
+            workspaceId: string;
+            workspaceName: string;
         };
         DisableMfaRequest: {
             code: string;
@@ -395,6 +492,82 @@ export const ConfirmMfaEnrollmentRequestSchema: z.ZodObject<{
     code: z.ZodString;
 }, z.core.$strict>;
 
+// @public (undocumented)
+export const createApiToken: {
+    readonly method: "post";
+    readonly path: "/api/v1/me/api-tokens";
+    readonly operationId: "createApiToken";
+    readonly tag: "me";
+    readonly summary: "Create an API token";
+    readonly auth: "account";
+    readonly rate: "token_create";
+    readonly reauth: true;
+    readonly request: {
+        readonly body: z.ZodObject<{
+            name: z.ZodString;
+            scope: z.ZodEnum<{
+                read: "read";
+                "read-write": "read-write";
+            }>;
+            expiresInDays: z.ZodDefault<z.ZodUnion<readonly [z.ZodLiteral<30 | 90 | 365>, z.ZodNull]>>;
+            workspaceId: z.ZodOptional<z.ZodUUID>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 201: JsonResponse<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        workspaceId: z.ZodUUID;
+        workspaceName: z.ZodString;
+        scope: z.ZodEnum<{
+        read: "read";
+        "read-write": "read-write";
+        }>;
+        prefix: z.ZodString;
+        createdAt: z.ZodISODateTime;
+        lastUsedAt: z.ZodNullable<z.ZodISODateTime>;
+        expiresAt: z.ZodNullable<z.ZodISODateTime>;
+        token: z.ZodString;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 409: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const CreateApiTokenRequestSchema: z.ZodObject<{
+    name: z.ZodString;
+    scope: z.ZodEnum<{
+        read: "read";
+        "read-write": "read-write";
+    }>;
+    expiresInDays: z.ZodDefault<z.ZodUnion<readonly [z.ZodLiteral<30 | 90 | 365>, z.ZodNull]>>;
+    workspaceId: z.ZodOptional<z.ZodUUID>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const CreatedApiTokenSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    name: z.ZodString;
+    workspaceId: z.ZodUUID;
+    workspaceName: z.ZodString;
+    scope: z.ZodEnum<{
+        read: "read";
+        "read-write": "read-write";
+    }>;
+    prefix: z.ZodString;
+    createdAt: z.ZodISODateTime;
+    lastUsedAt: z.ZodNullable<z.ZodISODateTime>;
+    expiresAt: z.ZodNullable<z.ZodISODateTime>;
+    token: z.ZodString;
+}, z.core.$strict>;
+
 // @public
 export function defineOperation<const D extends OperationDefinition>(definition: D): D;
 
@@ -475,6 +648,12 @@ export const getApiConfig: {
         mail: z.ZodBoolean;
         ai: z.ZodBoolean;
         }, z.core.$strict>;
+        signIn: z.ZodOptional<z.ZodObject<{
+        oidc: z.ZodArray<z.ZodObject<{
+        slug: z.ZodString;
+        name: z.ZodString;
+        }, z.core.$strict>>;
+        }, z.core.$strict>>;
         setupRequired: z.ZodOptional<z.ZodBoolean>;
         setupTokenRequired: z.ZodOptional<z.ZodBoolean>;
         }, z.core.$strict>, {
@@ -700,6 +879,48 @@ export interface JsonResponseOptions<H extends ResponseHeaders = ResponseHeaders
     // (undocumented)
     readonly headers?: H;
 }
+
+// @public (undocumented)
+export const listApiTokens: {
+    readonly method: "get";
+    readonly path: "/api/v1/me/api-tokens";
+    readonly operationId: "listApiTokens";
+    readonly tag: "me";
+    readonly summary: "List the account's API tokens";
+    readonly auth: "account";
+    readonly rate: "read";
+    readonly request: {
+        readonly query: z.ZodObject<{
+            limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+            cursor: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        workspaceId: z.ZodUUID;
+        workspaceName: z.ZodString;
+        scope: z.ZodEnum<{
+        read: "read";
+        "read-write": "read-write";
+        }>;
+        prefix: z.ZodString;
+        createdAt: z.ZodISODateTime;
+        lastUsedAt: z.ZodNullable<z.ZodISODateTime>;
+        expiresAt: z.ZodNullable<z.ZodISODateTime>;
+        }, z.core.$strict>>;
+        nextCursor: z.ZodNullable<z.ZodString>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
 
 // @public (undocumented)
 export const listSessions: {
@@ -1169,6 +1390,95 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    createApiToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["CreateApiTokenRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["CreatedApiToken"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     disableMfa: {
         parameters: {
             query?: never;
@@ -1487,6 +1797,78 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    listApiTokens: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["ApiTokenList"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     listSessions: {
         parameters: {
             query?: {
@@ -1793,6 +2175,83 @@ export interface OperationTypes {
                 };
             };
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    revokeApiToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2279,6 +2738,40 @@ export interface paths {
         options?: never;
         head?: never;
         patch: OperationTypes["updateMe"];
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/me/api-tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["listApiTokens"];
+        put?: never;
+        post: OperationTypes["createApiToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/me/api-tokens/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: OperationTypes["revokeApiToken"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     // (undocumented)
@@ -2884,6 +3377,32 @@ export const RETRY_AFTER_HEADER = "Retry-After";
 
 // @public
 export const RetryAfterSchema: z.ZodNumber;
+
+// @public (undocumented)
+export const revokeApiToken: {
+    readonly method: "delete";
+    readonly path: "/api/v1/me/api-tokens/{id}";
+    readonly operationId: "revokeApiToken";
+    readonly tag: "me";
+    readonly summary: "Revoke one of the account's API tokens";
+    readonly auth: "account";
+    readonly rate: "write";
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 204: EmptyResponse;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
 
 // @public (undocumented)
 export const revokeSession: {

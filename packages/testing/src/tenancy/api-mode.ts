@@ -1,7 +1,9 @@
 import {
   identifiersOf,
+  isFixtureToken,
   namesOf,
   principalsOf,
+  tokensOf,
   type FixtureIdentifier,
   type FixturePrincipal,
   type PrincipalRole,
@@ -16,6 +18,7 @@ import {
   type InputLocation,
 } from "./openapi.js";
 import type { MatrixFailure } from "./report.js";
+import { isTokenCallable } from "./token-mode.js";
 
 // API mode of the cross-tenant matrix (doc 08 section 3.3, D8): every principal
 // of workspace A attempts every tenant-scoped operation against every
@@ -29,14 +32,42 @@ import type { MatrixFailure } from "./report.js";
 // The policy is the operation's `x-slugbase-auth` level: `member`, `admin` or
 // `owner`. A principal of workspace A below it never reaches the handler, so a
 // 404 is asserted exactly where a lookup happens.
+//
+// The principals of A are its three sessions and, when the fixture holds them,
+// its API tokens, bound to A. A token is refused before the role is looked at:
+// 403 where the operation is not token-callable (it declares no scope, or
+// re-authentication), and 403 where it declares the write scope and the token
+// is read-only. A token that gets past both is answered by role like a session.
 
 const ROLE_RANK: Readonly<Record<PrincipalRole, number>> = { member: 1, admin: 2, owner: 3 };
 
 /** The status the chain answers a principal of workspace A for a row of workspace B, by the policy of the operation. */
-function expectedStatus(policy: string, role: PrincipalRole): number {
-  const required = Object.hasOwn(ROLE_RANK, policy) ? ROLE_RANK[policy as PrincipalRole] : undefined;
+function expectedStatus(operation: ClassifiedOperation, principal: FixturePrincipal): number {
+  if (isFixtureToken(principal) && (!isTokenCallable(operation) || (operation.scope === "write" && principal.scope !== "read-write"))) {
+    return 403;
+  }
+  const required = Object.hasOwn(ROLE_RANK, operation.policy) ? ROLE_RANK[operation.policy as PrincipalRole] : undefined;
   // A policy outside the tenant-scoped ones does not reach here; it is held to the stricter answer.
-  return required !== undefined && ROLE_RANK[role] < required ? 403 : 404;
+  return required !== undefined && ROLE_RANK[principal.role] < required ? 403 : 404;
+}
+
+/** How a failure names the principal: `admin of A`, or `admin of A by a read-write token`. */
+function describePrincipal(principal: FixturePrincipal): string {
+  return isFixtureToken(principal) ? `${principal.role} of A by a ${principal.scope} token` : `${principal.role} of A`;
+}
+
+/** Why the status is the expected one, for the failure that says it was not. */
+function reasonFor(operation: ClassifiedOperation, principal: FixturePrincipal, expected: number): string {
+  if (expected === 404) {
+    return "a 403 discloses that the row exists";
+  }
+  if (isFixtureToken(principal) && !isTokenCallable(operation)) {
+    return "the operation declares no scope for a token, or re-authentication: a token never calls it";
+  }
+  if (isFixtureToken(principal) && operation.scope === "write" && principal.scope !== "read-write") {
+    return "a read token may not call an operation of the write scope";
+  }
+  return `the ${operation.policy} policy refuses a ${principal.role} before any lookup`;
 }
 
 /** One request the matrix makes. */
@@ -232,7 +263,7 @@ export async function runApiMatrix(options: ApiMatrixOptions): Promise<ApiMatrix
     }
 
     const combinations = product(targets);
-    for (const principal of principalsOf(fixture.a)) {
+    for (const principal of [...principalsOf(fixture.a), ...tokensOf(fixture.a)]) {
       for (const combination of combinations) {
         const pathTargets: Record<string, string> = {};
         for (const [target, id] of combination) {
@@ -249,7 +280,7 @@ export async function runApiMatrix(options: ApiMatrixOptions): Promise<ApiMatrix
           query,
           body,
         };
-        const where = `as ${principal.role} of A, ${call.url}`;
+        const where = `as ${describePrincipal(principal)}, ${call.url}`;
         attempts += 1;
 
         let response: ApiResponse | undefined;
@@ -260,14 +291,14 @@ export async function runApiMatrix(options: ApiMatrixOptions): Promise<ApiMatrix
         }
 
         if (response !== undefined) {
-          const expected = expectedStatus(operation.policy, principal.role);
+          const expected = expectedStatus(operation, principal);
           if (targets.length > 0 && response.status !== expected) {
-            const reason =
-              expected === 404
-                ? "a 403 discloses that the row exists"
-                : `the ${operation.policy} policy refuses a ${principal.role} before any lookup`;
             failures.push(
-              failure(subject, "unexpected_status", `${where}: answered ${String(response.status)}, expected ${String(expected)} (${reason})`),
+              failure(
+                subject,
+                "unexpected_status",
+                `${where}: answered ${String(response.status)}, expected ${String(expected)} (${reasonFor(operation, principal, expected)})`,
+              ),
             );
           }
           const leaked = leakedNames(response.body, names, `${decodeURIComponent(call.url)} ${bodyText(call.body)}`);
