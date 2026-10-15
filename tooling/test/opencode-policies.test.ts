@@ -50,12 +50,23 @@ const DENIED = [
   "git add ./",
   "git add -A",
   "git add --all",
+  "git push origin main",
+  "git push origin HEAD:main",
+  "git push origin HEAD:refs/heads/main",
+  "git push origin +HEAD:refs/heads/main",
+  "git push origin +HEAD:main",
+  "git push origin +main",
+  "git push origin +dev:main",
+  "git push --force origin dev",
+  "git push -f origin dev",
 ];
 
 const ALLOWED = [
   "git add ./packages/core/src/x.ts",
   "git add packages/core/src/x.ts",
   "git add .gitignore",
+  "git push origin dev",
+  "git push origin HEAD:dev",
 ];
 
 describe("opencode policies", () => {
