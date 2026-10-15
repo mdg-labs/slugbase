@@ -629,7 +629,7 @@ export function createServer(options: CreateServerOptions): Server {
         progress.migrating = true;
         try {
           logger.info("Migrating the database");
-          const { applied } = await runMigrations({ url: migrateUrl, chains: composition.migrations });
+          const { applied } = await runMigrations({ url: migrateUrl, chains: composition.migrations, jobs: composition.jobs });
           logger.info("The database is migrated", { applied: applied.length });
         } catch (error) {
           await (shutdown ??= stop());
