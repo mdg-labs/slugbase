@@ -11,6 +11,9 @@ import { DisplayNameSchema } from "./me.ts";
 export const SetupStatusSchema = z
   .strictObject({
     setupRequired: z.boolean().describe("Whether first-run setup is pending: the instance has no account, has not completed setup and has setup turned on"),
+    setupTokenRequired: z
+      .boolean()
+      .describe("Whether the first account needs the one-time setup token: true only while setup is pending and the deployment requires one, false otherwise. A flag only, never the token"),
   })
   .meta({ id: "SetupStatus" });
 

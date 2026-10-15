@@ -178,6 +178,17 @@ async function statusOf(served: Served): Promise<boolean> {
   return ((await response.json()) as { setupRequired: boolean }).setupRequired;
 }
 
+type TokenAnswer = { setupRequired: boolean; setupTokenRequired: unknown };
+
+/** The two answers that carry the token requirement, read whole so a field that should not be there shows. */
+async function tokenAnswers(served: Served): Promise<{ status: TokenAnswer; config: TokenAnswer & Record<string, unknown> }> {
+  const status = await get(served, STATUS);
+  const config = await get(served, CONFIG);
+  expect(status.status).toBe(200);
+  expect(config.status).toBe(200);
+  return { status: (await status.json()) as TokenAnswer, config: (await config.json()) as TokenAnswer & Record<string, unknown> };
+}
+
 async function configSaysSetupRequired(served: Served): Promise<boolean | undefined> {
   const response = await get(served, CONFIG);
   expect(response.status).toBe(200);
@@ -203,6 +214,43 @@ describe("GET /api/v1/setup/status and the setupRequired of /api/config", () => 
     expect((await setup(served)).status).toBe(201);
     expect(await statusOf(served)).toBe(false);
     expect(await configSaysSetupRequired(served)).toBe(false);
+  });
+
+  it("report setupTokenRequired alike, as SETUP_TOKEN_REQUIRED while setup is pending and false otherwise", async () => {
+    const without = serve({ SETUP_TOKEN_REQUIRED: "false" });
+    const { status, config } = await tokenAnswers(without);
+    expect(status).toEqual({ setupRequired: true, setupTokenRequired: false });
+    expect(config).toMatchObject({ setupRequired: true, setupTokenRequired: false });
+
+    const withToken = await tokenAnswers(serve({ SETUP_TOKEN_REQUIRED: "true" }));
+    expect(withToken.status).toEqual({ setupRequired: true, setupTokenRequired: true });
+    expect(withToken.config).toMatchObject({ setupRequired: true, setupTokenRequired: true });
+
+    const off = await tokenAnswers(serve({ SETUP_ENABLED: "false", SETUP_TOKEN_REQUIRED: "true" }));
+    expect(off.status).toEqual({ setupRequired: false, setupTokenRequired: false });
+    expect(off.config).toMatchObject({ setupRequired: false, setupTokenRequired: false });
+  });
+
+  it("report setupTokenRequired false once the first account exists, whatever SETUP_TOKEN_REQUIRED says", async () => {
+    const served = serve({ SETUP_TOKEN_REQUIRED: "false" });
+    expect((await setup(served)).status).toBe(201);
+    const after = await tokenAnswers(served);
+    expect(after.status).toEqual({ setupRequired: false, setupTokenRequired: false });
+    expect(after.config).toMatchObject({ setupRequired: false, setupTokenRequired: false });
+  });
+
+  it("never carry the setup token or its hash, only the boolean", async () => {
+    const served = serve({ SETUP_TOKEN_REQUIRED: "true" }, storeFor(database()));
+    running.push(await served.server.start({ port: 0 }));
+    const printed = served.logger.entries.find((entry) => entry.fields["setupToken"] !== undefined)?.fields["setupToken"];
+    const token = typeof printed === "string" ? printed : undefined;
+    expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    const bodies = await Promise.all([get(served, STATUS), get(served, CONFIG)].map(async (r) => (await r).text()));
+    for (const text of bodies) {
+      expect(typeof (JSON.parse(text) as TokenAnswer).setupTokenRequired).toBe("boolean");
+      expect(text).not.toContain(token ?? "unreachable");
+      expect(text).not.toMatch(/hash/i);
+    }
   });
 
   it("say that setup is not pending when the deployment turns it off", async () => {

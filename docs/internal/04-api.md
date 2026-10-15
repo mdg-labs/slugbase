@@ -335,6 +335,7 @@ Unauthenticated, cacheable for 60 s (`Cache-Control: public, max-age=60`; the pe
   "product": { "name": "SlugBase", "version": "1.4.2" },
   "signIn": { "password": true, "registration": true, "oidc": [ { "slug": "google", "name": "Google" } ] },
   "setupRequired": false,
+  "setupTokenRequired": false,
   "instance": { "displayName": "SlugBase", "signInNotice": null },
   "locales": ["en", "de"], "defaultLocale": "en",
   "features": { "mail": true, "ai": true, "billing": true, "analyticsConsentRequired": true },
@@ -342,7 +343,7 @@ Unauthenticated, cacheable for 60 s (`Cache-Control: public, max-age=60`; the pe
 }
 ```
 
-The document starts small and grows additively (§2.2): `apiVersion`, `origin`, `product`, `locales`, `defaultLocale`, `docsBaseUrl` (the configured documentation base URL, default `https://slugbase.app/docs`, from `DOCS_BASE_URL`; the help links of doc 03 are built on it) and `features.mail` / `features.ai` exist from the first server; `setupRequired` is the answer of `GET /setup/status` (the deployment has setup on and the instance has no account and never completed setup) and is present on every response of the Community server; `signIn`, `instance`, `legal`, `features.billing` and `features.analyticsConsentRequired` are added by the features that can populate them (doc 01 §11). `signIn.oidc` lists only enabled providers that answered discovery, never a secret or a provider URL. `instance.displayName` and `instance.signInNotice` are the instance settings of §10.10; the notice is plain text and the sign-in page renders it as text only.
+The document starts small and grows additively (§2.2): `apiVersion`, `origin`, `product`, `locales`, `defaultLocale`, `docsBaseUrl` (the configured documentation base URL, default `https://slugbase.app/docs`, from `DOCS_BASE_URL`; the help links of doc 03 are built on it) and `features.mail` / `features.ai` exist from the first server; `setupRequired` is the answer of `GET /setup/status` (the deployment has setup on and the instance has no account and never completed setup) and is present on every response of the Community server; `setupTokenRequired` is the other half of that answer, `true` only while setup is pending and the deployment has `SETUP_TOKEN_REQUIRED` on (so the setup wizard asks for the token only then), `false` otherwise, and a flag only: never the token or its hash; `signIn`, `instance`, `legal`, `features.billing` and `features.analyticsConsentRequired` are added by the features that can populate them (doc 01 §11). `signIn.oidc` lists only enabled providers that answered discovery, never a secret or a provider URL. `instance.displayName` and `instance.signInNotice` are the instance settings of §10.10; the notice is plain text and the sign-in page renders it as text only.
 
 `features` reports **whether a port is configured**, never entitlements (those need a workspace — `GET /entitlements`). `billing: true` only means a non-no-op billing adapter is composed; the SPA uses it to decide whether to load the Cloud extension routes' data, not to branch product behaviour (D4).
 
@@ -405,7 +406,7 @@ Unauthenticated, `Content-Type: application/opensearchdescription+xml`, built on
 | POST | `/auth/password/reset` | `{ token, newPassword }` — redeem reset token, set password, revoke all sessions | anon | token_redeem |
 | GET | `/auth/oidc/{provider}/start` | Begin OIDC (302); `intent=login\|link\|reauth\|invite` (§4.5) | anon | login |
 | GET | `/auth/oidc/{provider}/callback` | Finish OIDC (302) | anon | login |
-| GET | `/setup/status` | `{ setupRequired }` — whether first-run setup is pending (CE) | anon | public |
+| GET | `/setup/status` | `{ setupRequired, setupTokenRequired }` — whether first-run setup is pending and whether it needs the setup token (`true` only while pending and `SETUP_TOKEN_REQUIRED` is on; never the token itself) (CE) | anon | public |
 | POST | `/setup` | `{ setupToken?, displayName, email, password, workspaceName }` — create first account (instance admin + owner) and first workspace, sign in (`201 { workspaceId }`, the new workspace active); `422 weak_password` outside 12–256 characters or for a breached password (Q15); `403 setup_completed` once any account exists or with `SETUP_ENABLED=false`, `403 forbidden` for a missing or wrong setup token | anon | setup |
 
 ### 10.3 me (account)

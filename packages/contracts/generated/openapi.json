@@ -179,6 +179,10 @@
           "setupRequired": {
             "description": "Whether first-run setup is pending; the same answer as GET /api/v1/setup/status. This server always sends it",
             "type": "boolean"
+          },
+          "setupTokenRequired": {
+            "description": "Whether the first account needs the one-time setup token; the same answer as GET /api/v1/setup/status, true only while setup is pending. A flag only, never the token. This server always sends it",
+            "type": "boolean"
           }
         },
         "required": [
@@ -705,10 +709,15 @@
           "setupRequired": {
             "description": "Whether first-run setup is pending: the instance has no account, has not completed setup and has setup turned on",
             "type": "boolean"
+          },
+          "setupTokenRequired": {
+            "description": "Whether the first account needs the one-time setup token: true only while setup is pending and the deployment requires one, false otherwise. A flag only, never the token",
+            "type": "boolean"
           }
         },
         "required": [
-          "setupRequired"
+          "setupRequired",
+          "setupTokenRequired"
         ],
         "type": "object"
       },

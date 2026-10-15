@@ -41,6 +41,10 @@ export const ApiConfigSchema = z
       .boolean()
       .optional()
       .describe("Whether first-run setup is pending; the same answer as GET /api/v1/setup/status. This server always sends it"),
+    setupTokenRequired: z
+      .boolean()
+      .optional()
+      .describe("Whether the first account needs the one-time setup token; the same answer as GET /api/v1/setup/status, true only while setup is pending. A flag only, never the token. This server always sends it"),
   })
   .meta({ id: "ApiConfig" });
 
