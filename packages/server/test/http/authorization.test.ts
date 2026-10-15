@@ -635,6 +635,20 @@ describe("stage 9: declared re-authentication and completed second factor (T18)"
       expect(await codeOf(response)).toBe("reauth_required");
       expect(seen).toEqual([]);
     });
+
+    it("accepts a re-authentication 2 seconds after the injected instant and refuses one 6 seconds after it", async () => {
+      const { server, seen } = setup({ now });
+      clock.set(ANCHOR - 2_000);
+      const inside = await server.fetch(post("/api/v1/test/password", { ...BROWSER_MUTATION, ...withState("member", "anchored") }));
+      expect(inside.status).toBe(200);
+      expect(seen.map((entry) => entry.operationId)).toEqual(["changeTestPassword"]);
+
+      clock.set(ANCHOR - 6_000);
+      const outside = await server.fetch(post("/api/v1/test/password", { ...BROWSER_MUTATION, ...withState("member", "anchored") }));
+      expect(outside.status).toBe(401);
+      expect(await codeOf(outside)).toBe("reauth_required");
+      expect(seen).toHaveLength(1);
+    });
   });
 
   it("does not ask for re-authentication on an operation that does not declare it", async () => {

@@ -30,4 +30,16 @@ describe("reauthenticatedRecently", () => {
     expect(reauthenticatedRecently(new Date(Number.NaN), START)).toBe(false);
     expect(reauthenticatedRecently(new Date(START + MINUTE), START)).toBe(false);
   });
+
+  it("accepts a stamp up to 5 seconds ahead of the clock it is given and refuses one a millisecond further", () => {
+    expect(reauthenticatedRecently(new Date(START + 5_000), START)).toBe(true);
+    expect(reauthenticatedRecently(new Date(START + 5_000 + 1), START)).toBe(false);
+  });
+
+  it("keeps the end of the window exact where the stamp is ahead of the clock", () => {
+    expect(reauthenticatedRecently(new Date(START), START + REAUTH_WINDOW_MS)).toBe(true);
+    expect(reauthenticatedRecently(new Date(START), START + REAUTH_WINDOW_MS + 1)).toBe(false);
+    expect(reauthenticatedRecently(new Date(START - 5_000), START + REAUTH_WINDOW_MS - 5_000)).toBe(true);
+    expect(reauthenticatedRecently(new Date(START - 5_000), START + REAUTH_WINDOW_MS - 5_000 + 1)).toBe(false);
+  });
 });

@@ -208,7 +208,7 @@ Multi-workspace automation uses one token per workspace. An `X-Slugbase-Workspac
 
 ### 4.4 Re-authentication ("sudo mode")
 
-Destructive or credential-changing operations require `reauthAt` within the last 10 minutes on the session (the `Re` column of §10): change password, remove password, change email, start MFA enrolment, disable MFA, regenerate backup codes, create an API token, unlink a sign-in method, delete the account, delete a workspace, transfer ownership, and the instance-admin operations marked ✓. Without it they return `401 reauth_required`; the SPA prompts for the password or a TOTP code via `POST /me/reauth` (accounts without a password re-authenticate through the provider: `GET /auth/oidc/{provider}/start?intent=reauth`) and retries.
+Destructive or credential-changing operations require `reauthAt` within the last 10 minutes on the session (the `Re` column of §10): change password, remove password, change email, start MFA enrolment, disable MFA, regenerate backup codes, create an API token, unlink a sign-in method, delete the account, delete a workspace, transfer ownership, and the instance-admin operations marked ✓. Without it they return `401 reauth_required`; the SPA prompts for the password or a TOTP code via `POST /me/reauth` (accounts without a password re-authenticate through the provider: `GET /auth/oidc/{provider}/start?intent=reauth`) and retries. The freshness check tolerates a difference of up to 5 seconds between the database clock that stamps `reauthAt` and the application clock; the 10-minute end of the window is exact.
 
 ### 4.5 Sign-in flows (shape only — behaviour in doc 02 §2)
 
