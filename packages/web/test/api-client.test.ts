@@ -47,6 +47,55 @@ describe("the API client", () => {
     await expect(api.GET("/api/config")).rejects.toThrow("network down");
   });
 
+  describe("a mutation without a body", () => {
+    const sentRequest = async (call: (api: ReturnType<typeof createApiClient>) => Promise<unknown>): Promise<Request> => {
+      const send = transport(() => new Response(null, { status: 204 }));
+      await call(createApiClient({ fetch: send }));
+      const request = send.mock.calls[0]?.[0];
+      if (request === undefined) {
+        throw new Error("nothing was sent");
+      }
+      return request;
+    };
+
+    it("declares application/json, which the cross-site rule of the server requires", async () => {
+      const request = await sentRequest((api) => api.POST("/api/v1/auth/logout"));
+
+      expect(request.method).toBe("POST");
+      expect(request.headers.get("Content-Type")).toBe("application/json");
+    });
+
+    it("declares it for a DELETE too, without a header of its own at the call", async () => {
+      const request = await sentRequest((api) => api.DELETE("/api/v1/me/sessions"));
+
+      expect(request.method).toBe("DELETE");
+      expect(request.headers.get("Content-Type")).toBe("application/json");
+    });
+
+    it("keeps the type a call set itself", async () => {
+      const request = await sentRequest((api) =>
+        api.POST("/api/v1/auth/logout", { headers: { "Content-Type": "application/json; charset=utf-8" } }),
+      );
+
+      expect(request.headers.get("Content-Type")).toBe("application/json; charset=utf-8");
+    });
+
+    it("leaves a read without a type", async () => {
+      const request = await sentRequest((api) => api.GET("/api/config"));
+
+      expect(request.headers.has("Content-Type")).toBe(false);
+    });
+
+    it("leaves the type of a request with a body to its serializer", async () => {
+      const request = await sentRequest((api) =>
+        api.POST("/api/v1/me/password", { body: { currentPassword: "old", newPassword: "new" } }),
+      );
+
+      expect(request.headers.get("Content-Type")).toBe("application/json");
+      expect(await request.json()).toEqual({ currentPassword: "old", newPassword: "new" });
+    });
+  });
+
   describe("onUnauthenticated", () => {
     function clientAnswering(response: Response, path: "/api/config" | "/version") {
       const onUnauthenticated = vi.fn<() => void>();

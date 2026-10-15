@@ -1,5 +1,5 @@
 import type { PasswordPolicy, PasswordProblem } from "@slugbase/core";
-import type { AuthStore } from "@slugbase/db";
+import type { AuthStore, QueuedJob } from "@slugbase/db";
 import type { PasswordVerifier } from "./password.ts";
 import { newSessionToken } from "./session-token.ts";
 
@@ -51,6 +51,11 @@ export interface PasswordChangeDependencies extends ReauthDependencies {
   readonly passwordPolicy: PasswordPolicy;
   /** Hashes the new password into an argon2id PHC string. */
   readonly hashPassword: (password: string) => Promise<string>;
+  /**
+   * The jobs a change of this account's password puts on their queues, in the transaction that writes
+   * the change (the email that tells the account about it). None when it returns an empty list.
+   */
+  readonly jobsOnChange?: (accountId: string) => readonly QueuedJob[];
 }
 
 export interface PasswordChangeRequest {
@@ -75,8 +80,9 @@ export type PasswordChangeOutcome =
  * Changes the password of the account of the session. The new password is checked
  * against the policy and the current one is verified before anything is hashed or
  * written. The stored hash, the deletion of the account's other sessions and the
- * session's new token are then written by one store call in one transaction, so a
- * failure leaves the old password, the old sessions and the old token.
+ * session's new token are then written by one store call in one transaction, together
+ * with the jobs the change announces, so a failure leaves the old password, the old
+ * sessions, the old token and no job.
  */
 export async function changePassword(dependencies: PasswordChangeDependencies, request: PasswordChangeRequest): Promise<PasswordChangeOutcome> {
   const problems = dependencies.passwordPolicy.check(request.newPassword);
@@ -92,6 +98,7 @@ export async function changePassword(dependencies: PasswordChangeDependencies, r
     sessionId: request.sessionId,
     passwordHash: await dependencies.hashPassword(request.newPassword),
     newTokenHash: token.hash,
+    jobs: dependencies.jobsOnChange?.(request.accountId) ?? [],
   });
   return changed ? { kind: "changed", token: token.value } : { kind: "no_session" };
 }

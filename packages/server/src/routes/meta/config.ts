@@ -5,7 +5,7 @@ import type { BuildInfo } from "../../build-info.ts";
 import type { ServerConfig } from "../../config/index.ts";
 import type { RouteBinding } from "../../http/chain.ts";
 import { route } from "../register.ts";
-import { setupRequired } from "../setup/status.ts";
+import { setupStatus } from "../setup/status.ts";
 
 // GET /api/config (doc 04 section 9.1): what the web app needs before sign-in.
 // It is fetched at run time, so one build of the web app runs on any host (doc
@@ -18,8 +18,8 @@ const LOCALES = ["en", "de"] as const;
 const CACHE_CONTROL = "public, max-age=60";
 
 export interface ApiConfigOptions {
-  readonly config: Pick<ServerConfig, "APP_ORIGIN" | "DOCS_BASE_URL" | "SETUP_ENABLED">;
-  /** `setupRequired` is the answer of `GET /api/v1/setup/status`. */
+  readonly config: Pick<ServerConfig, "APP_ORIGIN" | "DOCS_BASE_URL" | "SETUP_ENABLED" | "SETUP_TOKEN_REQUIRED">;
+  /** `setupRequired` and `setupTokenRequired` are the answer of `GET /api/v1/setup/status`. */
   readonly store: Pick<SetupStore, "setupPending">;
   readonly buildInfo: BuildInfo;
   /** `features` reports whether a port is configured, never an entitlement. */
@@ -38,7 +38,7 @@ export function apiConfigRoute({ config, store, buildInfo, adapters }: ApiConfig
       defaultLocale: LOCALES[0],
       docsBaseUrl: config.DOCS_BASE_URL,
       features: { mail: adapters.mail.available, ai: adapters.ai.available },
-      setupRequired: await setupRequired({ config, store }),
+      ...(await setupStatus({ config, store })),
     },
   }));
 }

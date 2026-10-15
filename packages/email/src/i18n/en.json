@@ -1,0 +1,13 @@
+{
+  "layout": {
+    "footer": "You are receiving this email because of a change to your {appName} account."
+  },
+  "passwordChanged": {
+    "subject": "Your {appName} password was changed",
+    "greeting": "Hi {name},",
+    "greetingAnonymous": "Hi,",
+    "body": "The password of your {appName} account was changed. Every other device was signed out.",
+    "notYou": "If you did not make this change, contact the administrator of this {appName} instance right away.",
+    "action": "Review your account security"
+  }
+}

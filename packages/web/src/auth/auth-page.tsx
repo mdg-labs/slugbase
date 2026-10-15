@@ -1,4 +1,4 @@
-import { AuthCard, type AuthCardProps } from "@slugbase/ui/patterns";
+import { AuthCard, AuthLayout, type AuthCardProps, type AuthLayoutProps } from "@slugbase/ui/patterns";
 import type { ReactElement } from "react";
 import { Slot, useSlotFilled } from "../extensions/index.ts";
 
@@ -9,4 +9,10 @@ import { Slot, useSlotFilled } from "../extensions/index.ts";
 export function AuthPage(props: Omit<AuthCardProps, "footer">): ReactElement {
   const hasFooter = useSlotFilled("auth.footer");
   return <AuthCard {...props} footer={hasFooter ? <Slot name="auth.footer" /> : undefined} />;
+}
+
+/** The page a wizard of the auth screens sits on; its footer is the slot `auth.footer`, as for {@link AuthPage}. */
+export function AuthWizardPage(props: Omit<AuthLayoutProps, "footer" | "size">): ReactElement {
+  const hasFooter = useSlotFilled("auth.footer");
+  return <AuthLayout {...props} footer={hasFooter ? <Slot name="auth.footer" /> : undefined} size="md" />;
 }

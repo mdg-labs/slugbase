@@ -10,9 +10,9 @@ import {
   type MailTemplates,
 } from "@slugbase/adapters";
 import "@slugbase/contracts";
-import { unconfigured, type Adapters, type MailPort } from "@slugbase/core";
+import { ACCOUNT_NOTIFICATIONS, unconfigured, type Adapters, type MailPort } from "@slugbase/core";
 import { createRateLimitStore, type MigrationChain } from "@slugbase/db";
-import "@slugbase/email";
+import { createMailTemplates } from "@slugbase/email";
 import {
   ConfigError,
   PROCESS_TYPES,
@@ -135,9 +135,17 @@ const MIGRATIONS: readonly MigrationChain[] = [];
 
 const RATE_LIMIT_POOL_SIZE = 4;
 
-// The mail flows and their templates arrive with the first flow that sends mail; until then no template
-// is registered, and a message that names one is refused by the SMTP adapter instead of being sent.
-const MAIL_TEMPLATES: MailTemplates = {};
+// The templates are the ones of `@slugbase/email`, with every link on the deployment's own origin. A
+// notification the core can name that has no template stops the process at start-up, not at the first send.
+function mailTemplates(config: ServerConfig | WorkerConfig): MailTemplates {
+  const templates = createMailTemplates({ appOrigin: config.APP_ORIGIN });
+  for (const name of ACCOUNT_NOTIFICATIONS) {
+    if (!Object.hasOwn(templates, name)) {
+      throw new Error(`the mail template ${name} is missing`);
+    }
+  }
+  return templates;
+}
 
 // Mail is the SMTP adapter when the operator set the SMTP keys, and the log-only adapter, which reports
 // itself unavailable, when not. The configuration refuses a partial set: the host, port, security mode and sender
@@ -149,7 +157,7 @@ function composeMail(config: ServerConfig | WorkerConfig, logger: Logger): MailP
     return createLogOnlyMail({ logger });
   }
   const auth = user === undefined || pass === undefined ? undefined : { user, pass };
-  return createSmtpMail({ host, port, security, ...(auth === undefined ? {} : { auth }), from, templates: MAIL_TEMPLATES });
+  return createSmtpMail({ host, port, security, ...(auth === undefined ? {} : { auth }), from, templates: mailTemplates(config) });
 }
 
 // The secret box is built from the environment by the server and the worker
@@ -217,9 +225,11 @@ async function runServer(config: ServerConfig, trap: SignalTrap): Promise<void> 
   await runUntilSignal(trap, () => server.start(), logger);
 }
 
-// `migrate` applies the CE chain, installs the pg-boss schema and applies the
-// migration sets, as the migrator role (doc 05 section 5.3). Nothing to do is a
-// success. A failure names neither the connection string nor the password.
+// `migrate` applies the CE chain, installs the pg-boss schema with the queues of
+// the worker's built-in jobs and applies the migration sets, as the migrator role
+// (doc 05 section 5.3). CE composes no module, so no module job is passed. Nothing
+// to do is a success. A failure names neither the connection string nor the
+// password.
 async function runMigrate(config: MigrateConfig): Promise<void> {
   const logger = createLogger({ level: config.LOG_LEVEL });
   const { applied } = await runMigrations({ url: config.DATABASE_MIGRATE_URL, chains: MIGRATIONS });

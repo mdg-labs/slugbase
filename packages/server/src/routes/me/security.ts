@@ -1,11 +1,13 @@
 import { changePassword as changePasswordOperation, reauthenticate as reauthenticateOperation } from "@slugbase/contracts";
-import type { PasswordPolicy, SessionCookieSpec } from "@slugbase/core";
+import type { MailPort, PasswordPolicy, SessionCookieSpec } from "@slugbase/core";
 import type { AuthStore } from "@slugbase/db";
 import { setSessionCookie } from "../../auth/cookie.ts";
 import type { PasswordVerifier } from "../../auth/password.ts";
 import { changePassword, reauthenticate } from "../../auth/reauth.ts";
+import { uuidv7 } from "../../auth/uuidv7.ts";
 import type { ChainContext, RouteBinding } from "../../http/chain.ts";
 import { ProblemError } from "../../http/problem.ts";
+import { queueMailSend } from "../../worker/jobs/mail-send.ts";
 import { route } from "../register.ts";
 
 // POST /api/v1/me/reauth and POST /api/v1/me/password (doc 04 sections 4.4 and
@@ -13,7 +15,11 @@ import { route } from "../register.ts";
 // token: the only secret that leaves is the Set-Cookie of the rotated session.
 // The password change declares `reauth`, so the authorization stage has refused
 // a session that has not re-authenticated within ten minutes before this
-// handler runs.
+// handler runs. A password change also queues the "password changed" email in the
+// transaction that writes the change, so the message exists exactly when the change
+// does and the request never waits for a delivery: whether the relay takes it is the
+// worker's business, and the request answers either way. An instance that sends no
+// mail (the log-only adapter) queues nothing.
 
 const UNAUTHENTICATED = "Authentication is required.";
 const WRONG_PASSWORD = "The password is wrong.";
@@ -28,6 +34,8 @@ export interface SecurityRoutesOptions {
   /** Hashes the new password into an argon2id PHC string. */
   readonly hashPassword: (password: string) => Promise<string>;
   readonly cookie: SessionCookieSpec;
+  /** The mail port of the composition; a message is queued only when it can send. */
+  readonly mail: Pick<MailPort, "available">;
 }
 
 function sessionOf(context: ChainContext): { readonly sessionId: string; readonly accountId: string } {
@@ -38,7 +46,7 @@ function sessionOf(context: ChainContext): { readonly sessionId: string; readonl
   return principal;
 }
 
-export function securityRoutes({ store, passwords, passwordPolicy, hashPassword, cookie }: SecurityRoutesOptions): RouteBinding[] {
+export function securityRoutes({ store, passwords, passwordPolicy, hashPassword, cookie, mail }: SecurityRoutesOptions): RouteBinding[] {
   return [
     route(reauthenticateOperation).handle(async ({ body }, context) => {
       const { sessionId, accountId } = sessionOf(context);
@@ -55,7 +63,13 @@ export function securityRoutes({ store, passwords, passwordPolicy, hashPassword,
     route(changePasswordOperation).handle(async ({ body }, context) => {
       const { sessionId, accountId } = sessionOf(context);
       const outcome = await changePassword(
-        { store, passwords, passwordPolicy, hashPassword },
+        {
+          store,
+          passwords,
+          passwordPolicy,
+          hashPassword,
+          jobsOnChange: (changed) => (mail.available ? [queueMailSend(uuidv7(), "passwordChanged", changed)] : []),
+        },
         { accountId, sessionId, currentPassword: body.currentPassword, newPassword: body.newPassword },
       );
       switch (outcome.kind) {

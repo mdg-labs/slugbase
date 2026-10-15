@@ -2,6 +2,8 @@ import { createRequire } from "node:module";
 import { setTimeout as sleep } from "node:timers/promises";
 import { MigrationError } from "@slugbase/db";
 import { PgBoss, getConstructionPlans, getMigrationPlans } from "pg-boss";
+import { queueSettings } from "../worker/queues.ts";
+import type { JobDefinition } from "../worker/job.ts";
 import { connectionSecrets, redact } from "./secrets.ts";
 
 // The pg-boss chain of doc 05 section 5.5: second after the CE chain, recorded
@@ -315,6 +317,22 @@ async function upgrade(db: Db, pid: number, from: number, target: number): Promi
   }
 }
 
+// Creates the queue of each job with the settings the worker applies to it, and leaves a queue that
+// exists alone: how a changed definition reaches an existing queue is the worker's updateQueue. A queue
+// is a row of pgboss.queue and no DDL (the queues are not partitioned), so this stays schema-only and
+// fast. pg-boss runs its create as one script that opens its own transaction, which a failure leaves
+// open in this session.
+async function createQueues(boss: PgBoss, db: Db, jobs: readonly JobDefinition[]): Promise<void> {
+  for (const job of jobs) {
+    try {
+      await boss.createQueue(job.name, queueSettings(job));
+    } catch (error) {
+      await db.executeSql("ROLLBACK");
+      throw error;
+    }
+  }
+}
+
 /**
  * Installs the pg-boss schema when the database has none, and upgrades an older
  * one to the version this build runs, as `slugbase_owner` over `url`
@@ -322,12 +340,15 @@ async function upgrade(db: Db, pid: number, from: number, target: number): Promi
  * lock of `migrate`; the index builds of an upgrade run outside a transaction
  * with `lock_timeout` off and `statement_timeout` as their bound, and are
  * recorded before the upgrade so that a run that stops part-way is finished by
- * the next one, which drops the INVALID index of an interrupted build. Returns the
+ * the next one, which drops the INVALID index of an interrupted build. It then
+ * creates the queue of each of `jobs`, with the settings the worker applies, so
+ * that a transaction that queues a job finds its queue before any worker has
+ * started; a failure to create one rejects the call. Returns the
  * version this call installed or upgraded to, and undefined when the schema was
  * already at it, also when another `migrate` got there first. A schema newer
  * than this build rejects.
  */
-export async function installPgBoss(url: string): Promise<number | undefined> {
+export async function installPgBoss(url: string, jobs: readonly JobDefinition[] = []): Promise<number | undefined> {
   const secrets = connectionSecrets(url);
   try {
     const expected = expectedVersion();
@@ -393,6 +414,7 @@ export async function installPgBoss(url: string): Promise<number | undefined> {
           `the pg-boss schema is at version ${version === null ? "none" : String(version)}, and this build installs and runs version ${String(expected)}`,
         );
       }
+      await createQueues(boss, db, jobs);
       return changed ? expected : undefined;
     } finally {
       await pool.close();
@@ -404,7 +426,7 @@ export async function installPgBoss(url: string): Promise<number | undefined> {
     const code = (error as { code?: unknown } | null)?.code;
     const message = error instanceof Error && error.message !== "" ? error.message : "unknown error";
     throw new MigrationError(
-      redact(`the pg-boss schema could not be installed or upgraded: ${message}`, secrets),
+      redact(`the pg-boss schema or its queues could not be set up: ${message}`, secrets),
       typeof code === "string" ? redact(code, secrets) : undefined,
     );
   }

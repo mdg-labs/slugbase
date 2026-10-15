@@ -70,6 +70,7 @@ export const ApiConfigSchema: z.ZodObject<{
         ai: z.ZodBoolean;
     }, z.core.$strict>;
     setupRequired: z.ZodOptional<z.ZodBoolean>;
+    setupTokenRequired: z.ZodOptional<z.ZodBoolean>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -204,6 +205,7 @@ export interface ComponentTypes {
                 version: string;
             };
             setupRequired?: boolean;
+            setupTokenRequired?: boolean;
         };
         ChangePasswordRequest: {
             currentPassword: string;
@@ -301,6 +303,7 @@ export interface ComponentTypes {
         };
         SetupStatus: {
             setupRequired: boolean;
+            setupTokenRequired: boolean;
         };
         UpdateAccountRequest: {
             accent?: "periwinkle" | "violet" | "rose" | "amber" | "green" | "teal";
@@ -364,6 +367,7 @@ export const getApiConfig: {
         ai: z.ZodBoolean;
         }, z.core.$strict>;
         setupRequired: z.ZodOptional<z.ZodBoolean>;
+        setupTokenRequired: z.ZodOptional<z.ZodBoolean>;
         }, z.core.$strict>, {
         "Cache-Control": {
         description: string;
@@ -527,6 +531,7 @@ export const getSetupStatus: {
     readonly responses: {
         readonly 200: JsonResponse<z.ZodObject<{
         setupRequired: z.ZodBoolean;
+        setupTokenRequired: z.ZodBoolean;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
         readonly 400: ProblemResponse;
         readonly 429: RateLimitedResponse;
@@ -2381,6 +2386,7 @@ export const SetupResultSchema: z.ZodObject<{
 // @public (undocumented)
 export const SetupStatusSchema: z.ZodObject<{
     setupRequired: z.ZodBoolean;
+    setupTokenRequired: z.ZodBoolean;
 }, z.core.$strict>;
 
 // @public (undocumented)

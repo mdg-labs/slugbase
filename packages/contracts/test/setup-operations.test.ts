@@ -31,12 +31,15 @@ describe("getSetupStatus", () => {
     expect(operation?.["x-slugbase-scope"]).toBeUndefined();
   });
 
-  it("answers { setupRequired } and problem+json for every client error", () => {
+  it("answers { setupRequired, setupTokenRequired } and problem+json for every client error", () => {
     const responses = responsesOf(operation);
     expect(responses["200"]?.content).toEqual({ "application/json": { schema: { $ref: "#/components/schemas/SetupStatus" } } });
-    expect(SetupStatusSchema.parse({ setupRequired: true })).toEqual({ setupRequired: true });
-    expect(SetupStatusSchema.safeParse({ setupRequired: "yes" }).success).toBe(false);
-    expect(SetupStatusSchema.safeParse({ setupRequired: true, extra: 1 }).success).toBe(false);
+    const answer = { setupRequired: true, setupTokenRequired: false };
+    expect(SetupStatusSchema.parse(answer)).toEqual(answer);
+    expect(SetupStatusSchema.safeParse({ setupRequired: true }).success).toBe(false);
+    expect(SetupStatusSchema.safeParse({ ...answer, setupRequired: "yes" }).success).toBe(false);
+    expect(SetupStatusSchema.safeParse({ ...answer, setupTokenRequired: "secret" }).success).toBe(false);
+    expect(SetupStatusSchema.safeParse({ ...answer, extra: 1 }).success).toBe(false);
     for (const status of ["400", "429", "503"]) {
       expect(Object.keys(responses[status]?.content ?? {}), status).toEqual(["application/problem+json"]);
     }

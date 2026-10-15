@@ -7,6 +7,15 @@
 import type { ProblemCode } from '@slugbase/contracts';
 
 // @public
+export const ACCOUNT_NOTIFICATIONS: readonly ["passwordChanged"];
+
+// @public (undocumented)
+export type AccountNotification = (typeof ACCOUNT_NOTIFICATIONS)[number];
+
+// @public
+export function accountNotification(template: AccountNotification, recipient: NotificationRecipient): MailMessage;
+
+// @public
 export interface Adapters {
     // (undocumented)
     readonly ai: AiSuggestPort;
@@ -292,6 +301,15 @@ export interface MailPort extends Port {
 
 // @public
 export function normalizeEmail(raw: string): string;
+
+// @public
+export interface NotificationRecipient {
+    // (undocumented)
+    readonly displayName: string;
+    // (undocumented)
+    readonly email: string;
+    readonly locale: string;
+}
 
 // @public
 export const PASSWORD_MAX_LENGTH = 256;

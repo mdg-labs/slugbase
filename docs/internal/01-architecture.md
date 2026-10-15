@@ -19,7 +19,7 @@
 | Password hashing | argon2id (`@node-rs/argon2`), OWASP parameters (m=19 MiB, t=2, p=1) as the floor | Memory-hard, native binding, no node-gyp |
 | MFA | TOTP via `otpauth`; the enrolment QR is rendered server-side as SVG with `qrcode` | RFC 6238; backup codes hashed |
 | OIDC | `openid-client` v6 | Certified relying-party library; PKCE, nonce, state handled correctly |
-| Mail rendering | React Email templates → HTML + text, sent through the mail port | Same component model as the app, previewable, i18n-aware |
+| Mail rendering | Plain TypeScript template functions in `@slugbase/email`: string builders with one HTML-escape function render subject, text and HTML parts (an inline-styled table layout), sent through the mail port; wording from the EN + DE catalogs (D19) | No runtime dependency: the CE image ships `packages/email/dist` without that package's `node_modules`, so nothing has to resolve at run time |
 | Web app | React 19 + Vite SPA, TanStack Router + TanStack Query (D13) | Static assets, typed routes and search params (filters live in the URL), cache-first data fetching |
 | UI system | coss ui (Base UI + Tailwind CSS v4), vendored in `@slugbase/ui`; `lucide-react`; `cmdk`-equivalent coss Command for the palette (D13) | One accessible component vocabulary; copy-and-own |
 | i18n | `i18next` + `react-i18next`; ICU plural rules; EN + DE catalogs (D19) | Mature, typed keys via generated declarations |

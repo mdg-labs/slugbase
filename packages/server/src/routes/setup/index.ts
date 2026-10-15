@@ -6,7 +6,7 @@ import type { RouteBinding } from "../../http/chain.ts";
 import { completeSetupRoute } from "./complete.ts";
 import { setupStatusRoute } from "./status.ts";
 
-export { setupRequired } from "./status.ts";
+export { setupRequired, setupStatus } from "./status.ts";
 
 export interface SetupRoutesOptions {
   readonly config: Pick<ServerConfig, "APP_ORIGIN" | "SETUP_ENABLED" | "SETUP_TOKEN_REQUIRED">;

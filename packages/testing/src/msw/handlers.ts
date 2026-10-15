@@ -65,6 +65,7 @@ export function baseFixtures(document: OpenApiDocument): Readonly<Record<string,
       docsBaseUrl: "https://slugbase.app/docs",
       features: { mail: false, ai: false },
       setupRequired: false,
+      setupTokenRequired: false,
     },
     getOpenApiDocument: document,
   };

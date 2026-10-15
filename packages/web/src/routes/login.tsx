@@ -5,6 +5,7 @@ import { AuthPage } from "../auth/auth-page.tsx";
 import { LoginForm } from "../auth/login-form.tsx";
 import { sessionQuery } from "../auth/session.ts";
 import { useConfig } from "../config/config-context.tsx";
+import { isSetupRequired } from "../config/setup-state.ts";
 
 function LoginPage(): ReactElement {
   const { t } = useTranslation();
@@ -23,7 +24,12 @@ export const Route = createFileRoute("/login")({
   // A visitor who is signed in has nothing to do here. The session is asked afresh each time:
   // whatever the page last knew may be a session that has since ended. A check that cannot be
   // answered leaves the form in place; signing in reports what is wrong.
+  // While the instance has no account there is nobody to sign in: the visitor is sent to set it up.
   beforeLoad: async ({ context }) => {
+    if (isSetupRequired(context.queryClient)) {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error -- the router takes a thrown redirect (#82)
+      throw redirect({ to: "/setup", replace: true });
+    }
     const signedIn = await context.queryClient.query({ ...sessionQuery(context.api), staleTime: 0 }).then(
       () => true,
       () => false,

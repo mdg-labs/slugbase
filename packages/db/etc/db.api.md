@@ -291,10 +291,22 @@ export interface Onboarding {
 export interface PasswordChange {
     // (undocumented)
     readonly accountId: string;
+    readonly jobs?: readonly QueuedJob[];
     readonly newTokenHash: Buffer;
     readonly passwordHash: string;
     readonly sessionId: string;
 }
+
+// @public (undocumented)
+export interface QueuedJob {
+    // (undocumented)
+    readonly data: QueuedJobData;
+    readonly id: string;
+    readonly queue: string;
+}
+
+// @public
+export type QueuedJobData = Readonly<Record<string, string | number | boolean | null>>;
 
 // @public (undocumented)
 export interface RateLimitStore {

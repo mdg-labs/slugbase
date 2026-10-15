@@ -4,6 +4,38 @@
 
 ```ts
 
+// @public
+export function createMailTemplates(input: MailTemplateOptions): MailTemplates;
+
+// @public
+export type MailTemplate = (input: MailTemplateInput) => RenderedMail;
+
+// @public (undocumented)
+export interface MailTemplateInput {
+    // (undocumented)
+    readonly data: Readonly<Record<string, string | number | boolean>>;
+    // (undocumented)
+    readonly locale: string;
+}
+
+// @public (undocumented)
+export interface MailTemplateOptions {
+    readonly appOrigin: string;
+}
+
+// @public
+export type MailTemplates = Readonly<Record<string, MailTemplate>>;
+
+// @public
+export interface RenderedMail {
+    // (undocumented)
+    readonly html: string;
+    // (undocumented)
+    readonly subject: string;
+    // (undocumented)
+    readonly text: string;
+}
+
 // (No @packageDocumentation comment for this package)
 
 ```

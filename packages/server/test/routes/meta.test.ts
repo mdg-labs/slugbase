@@ -48,6 +48,7 @@ describe("GET /api/config", () => {
       docsBaseUrl: "https://docs.example.org/help",
       features: { mail: false, ai: false },
       setupRequired: false,
+      setupTokenRequired: false,
     });
   });
 
@@ -58,6 +59,19 @@ describe("GET /api/config", () => {
     expect(await answer({}, true)).toBe(true);
     expect(await answer({}, false)).toBe(false);
     expect(await answer({ SETUP_ENABLED: "false" }, true)).toBe(false);
+  });
+
+  it("reports setupTokenRequired as SETUP_TOKEN_REQUIRED, true only while setup is pending, and never the token", async () => {
+    const answer = async (env: Record<string, string>, pending: boolean) =>
+      (await (await get(start(env, { authStore: fakeAuthStore({ setupPending: () => Promise.resolve(pending) }) }), "/api/config")).json()) as {
+        setupRequired: boolean;
+        setupTokenRequired: unknown;
+      };
+    expect(await answer({ SETUP_TOKEN_REQUIRED: "false" }, true)).toMatchObject({ setupRequired: true, setupTokenRequired: false });
+    expect(await answer({ SETUP_TOKEN_REQUIRED: "true" }, true)).toMatchObject({ setupRequired: true, setupTokenRequired: true });
+    expect(await answer({}, true)).toMatchObject({ setupTokenRequired: true });
+    expect(await answer({ SETUP_TOKEN_REQUIRED: "true" }, false)).toMatchObject({ setupRequired: false, setupTokenRequired: false });
+    expect(await answer({ SETUP_ENABLED: "false", SETUP_TOKEN_REQUIRED: "true" }, true)).toMatchObject({ setupRequired: false, setupTokenRequired: false });
   });
 
   it("does not answer when the database cannot say whether setup is pending", async () => {

@@ -322,6 +322,8 @@ export interface components {
             };
             /** @description Whether first-run setup is pending; the same answer as GET /api/v1/setup/status. This server always sends it */
             setupRequired?: boolean;
+            /** @description Whether the first account needs the one-time setup token; the same answer as GET /api/v1/setup/status, true only while setup is pending. A flag only, never the token. This server always sends it */
+            setupTokenRequired?: boolean;
         };
         ChangePasswordRequest: {
             /** @description The account's current password */
@@ -501,6 +503,8 @@ export interface components {
         SetupStatus: {
             /** @description Whether first-run setup is pending: the instance has no account, has not completed setup and has setup turned on */
             setupRequired: boolean;
+            /** @description Whether the first account needs the one-time setup token: true only while setup is pending and the deployment requires one, false otherwise. A flag only, never the token */
+            setupTokenRequired: boolean;
         };
         UpdateAccountRequest: {
             /**

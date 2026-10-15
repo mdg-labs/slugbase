@@ -419,7 +419,7 @@ export function createServer(options: CreateServerOptions): Server {
     openApiRoute({ enabled: config.API_DOCS_ENABLED, document: options.openApiDocument }),
   ];
   // Password sign-in is part of the server, not a module: the session cookie is the one browser credential (doc 04 section 4.1).
-  const auth = authContribution({ store: authStore, appOrigin: config.APP_ORIGIN, sessionSecret: config.SESSION_SECRET, passwordPolicy });
+  const auth = authContribution({ store: authStore, appOrigin: config.APP_ORIGIN, sessionSecret: config.SESSION_SECRET, passwordPolicy, mail: adapters.mail });
   builtInRoutes.push(...(auth.routes ?? []));
   // So is first-run setup: it signs the first account in, on the same pool.
   builtInRoutes.push(...setupRoutes({ config, store: authStore, passwordPolicy }));
@@ -629,7 +629,7 @@ export function createServer(options: CreateServerOptions): Server {
         progress.migrating = true;
         try {
           logger.info("Migrating the database");
-          const { applied } = await runMigrations({ url: migrateUrl, chains: composition.migrations });
+          const { applied } = await runMigrations({ url: migrateUrl, chains: composition.migrations, jobs: composition.jobs });
           logger.info("The database is migrated", { applied: applied.length });
         } catch (error) {
           await (shutdown ??= stop());
