@@ -134,7 +134,7 @@ describe("mail in the composition root", () => {
     expect(() => loadConfig("server", { ...environment, SMTP_USER: smtp.SMTP_USER, SMTP_PASS: smtp.SMTP_PASS })).toThrow(/SMTP_HOST/);
   });
 
-  it("registers no template yet, so the SMTP adapter refuses a message instead of sending it", async () => {
+  it("refuses a message whose template is not registered instead of sending it", async () => {
     const config = loadConfig("server", { ...environment, ...smtp }).config;
     await expect(composeAdapters(config, logger).mail.send(message)).rejects.toMatchObject({ reason: "unknown_template" });
   });

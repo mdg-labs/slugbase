@@ -1,4 +1,5 @@
 import postgres from "postgres";
+import { enqueueInTransaction, type QueuedJob } from "./queue.ts";
 import { bindSetupStore, type SetupStore } from "./setup.ts";
 
 // The wrappers of the system operations behind sign-in and the session cookie
@@ -39,6 +40,8 @@ export interface PasswordChange {
   readonly passwordHash: string;
   /** SHA-256 of the 32-byte token the session continues with. */
   readonly newTokenHash: Buffer;
+  /** Jobs put on their queues in the same transaction: they exist exactly when the change is committed. */
+  readonly jobs?: readonly QueuedJob[];
 }
 
 /** A session that is valid now, with the account facts the chain needs. */
@@ -106,7 +109,8 @@ export interface AuthStore extends SetupStore {
    * Sets the account's password, deletes every other session of the account (partial and expired
    * ones included) and gives the session of the change a new token, in one transaction: either all
    * three happen or none does. False, with nothing changed, when the account is unknown or disabled
-   * or has no full session with that id.
+   * or has no full session with that id. The jobs of the change, if any, are queued in that
+   * transaction too, and a job that cannot be queued undoes the change and rejects.
    */
   changePassword(change: PasswordChange): Promise<boolean>;
   /** Ends the pool. */
@@ -304,7 +308,7 @@ export function bindAuthStore(client: postgres.Sql): Omit<AuthStore, "close"> {
       return row.done;
     },
 
-    async changePassword({ accountId, sessionId, passwordHash, newTokenHash }) {
+    async changePassword({ accountId, sessionId, passwordHash, newTokenHash, jobs = [] }) {
       assertTokenHash(newTokenHash, "newTokenHash");
       const flag = async (rows: Promise<FlagRow[]>, name: string): Promise<boolean> => {
         const result = await rows;
@@ -325,6 +329,9 @@ export function bindAuthStore(client: postgres.Sql): Omit<AuthStore, "close"> {
             throw new RolledBack();
           }
           await tx`SELECT sys_session_revoke_all(${accountId}::uuid, ${sessionId}::uuid)`;
+          for (const job of jobs) {
+            await enqueueInTransaction(tx, job);
+          }
         });
       } catch (error) {
         if (error instanceof RolledBack) {

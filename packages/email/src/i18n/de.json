@@ -1,0 +1,13 @@
+{
+  "layout": {
+    "footer": "Du erhältst diese E-Mail, weil sich etwas an deinem {appName}-Konto geändert hat."
+  },
+  "passwordChanged": {
+    "subject": "Dein {appName}-Passwort wurde geändert",
+    "greeting": "Hallo {name},",
+    "greetingAnonymous": "Hallo,",
+    "body": "Das Passwort deines {appName}-Kontos wurde geändert. Alle anderen Geräte wurden abgemeldet.",
+    "notYou": "Falls du diese Änderung nicht vorgenommen hast, wende dich sofort an die Administration dieser {appName}-Instanz.",
+    "action": "Kontosicherheit prüfen"
+  }
+}

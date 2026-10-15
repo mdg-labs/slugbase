@@ -35,6 +35,7 @@ export { createRateLimitStore } from "./system/rate-limit.ts";
 export type { RateLimitStore, RateLimitStoreOptions, RateLimitTake, RateLimitTaken } from "./system/rate-limit.ts";
 export { createRetentionStore } from "./system/retention.ts";
 export type { RetentionPurgeCount, RetentionStore, RetentionStoreOptions } from "./system/retention.ts";
+export type { QueuedJob, QueuedJobData } from "./system/queue.ts";
 export { createAuthStore } from "./system/auth.ts";
 export type {
   AuthStore,

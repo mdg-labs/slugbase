@@ -1,4 +1,4 @@
-import { sessionCookieSpec, type PasswordPolicy } from "@slugbase/core";
+import { sessionCookieSpec, type MailPort, type PasswordPolicy } from "@slugbase/core";
 import type { AuthStore } from "@slugbase/db";
 import { createSessionAuthenticator } from "../../auth/authenticator.ts";
 import { createPasswordVerifier, hashPassword as hashArgon2id, type PasswordVerifier } from "../../auth/password.ts";
@@ -16,6 +16,8 @@ export interface AuthRoutesOptions {
   readonly sessionSecret: string;
   /** The password policy a changed password is held to. */
   readonly passwordPolicy: PasswordPolicy;
+  /** The mail port: a password change queues its email only when the port can send. */
+  readonly mail: Pick<MailPort, "available">;
   /** Defaults to argon2id verification. */
   readonly passwords?: PasswordVerifier;
   /** Defaults to argon2id hashing. */
@@ -33,13 +35,14 @@ export function authContribution({
   appOrigin,
   sessionSecret,
   passwordPolicy,
+  mail,
   passwords = createPasswordVerifier(),
   hashPassword = hashArgon2id,
 }: AuthRoutesOptions): ModuleContribution {
   const cookie = sessionCookieSpec(appOrigin);
   return {
     routes: [loginRoute({ store, passwords, cookie }), logoutRoute({ store, cookie }), ...sessionRoutes({ store, cookie, cursorSecret: sessionSecret }),
-      ...securityRoutes({ store, passwords, passwordPolicy, hashPassword, cookie }),
+      ...securityRoutes({ store, passwords, passwordPolicy, hashPassword, cookie, mail }),
     ],
     authenticators: [createSessionAuthenticator({ store, cookie })],
   };

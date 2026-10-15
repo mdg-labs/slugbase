@@ -13,6 +13,7 @@ import {
 import { assertApplicationRole } from "../migrate/role-guard.ts";
 import { createMetrics, startMetricsListener, type MetricsListener, type QueueSnapshot } from "../metrics/index.ts";
 import type { JobDefinition, JobPayload, ScheduleDefinition } from "./job.ts";
+import { createMailModule } from "./jobs/mail-send.ts";
 import { createMaintenanceModule } from "./maintenance.ts";
 
 export const DEFAULT_WORKER_POOL_SIZE = 5;
@@ -83,7 +84,8 @@ function errorFields(error: unknown): Record<string, unknown> {
 
 /**
  * The worker process (doc 01 section 3): pg-boss as `slugbase_app` with the
- * modules' jobs as consumers and their schedules as pg-boss schedules. It never
+ * modules' jobs as consumers and their schedules as pg-boss schedules. The retention
+ * jobs and `mail.send` run in every worker, whatever modules it composes. It never
  * installs or migrates the pg-boss schema; `migrate` does (doc 05 section 5.5).
  * It fails before connecting when a port has no adapter or the modules conflict.
  */
@@ -129,7 +131,7 @@ export function createWorker(options: CreateWorkerOptions): Worker {
 
   let composition: Composition;
   try {
-    composition = compose([createMaintenanceModule(maintenanceStores), ...options.modules], context, []);
+    composition = compose([createMaintenanceModule(maintenanceStores), createMailModule(), ...options.modules], context, []);
   } catch (error) {
     void database.close();
     void closeMaintenanceStores();
