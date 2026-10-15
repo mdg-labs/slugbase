@@ -19,6 +19,7 @@
     "20261015113742_add_mfa_enabled_read": "268eac1f624c2d447db92841fa6b0f4e4417e3502e85eb36ebafb095e10f679f",
     "20261015135946_add_api_tokens": "e29f673f23db2bd19da1baeb577e54292fad1d5440561e3da8f445a7fee7c643",
     "20261015142909_add_api_token_lookup": "3a0330dc2ab713b15908fbb676d304b02b538895c9b65df44f329ca57371f7f1",
-    "20261015155224_add_api_token_insert_columns": "bdc5d68dc97e64b35cc1e65e463c850e5d62c1d79b462bcedad2d1ded802e80c"
+    "20261015155224_add_api_token_insert_columns": "bdc5d68dc97e64b35cc1e65e463c850e5d62c1d79b462bcedad2d1ded802e80c",
+    "20261015161548_add_api_token_purge": "6bee3393676fa3bedb15601bfc38c21c53046973abdf8ffa6efccdf1158b88e4"
   }
 }

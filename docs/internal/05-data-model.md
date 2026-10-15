@@ -129,7 +129,7 @@ Index `(account_id)`, `(expires_at)`. The account sees its own sessions through 
 | `revoked_at` | timestamptz | Set by `DELETE /me/api-tokens/{id}`, keeping the first time; the row stays, so a repeated revocation is answered as the first one (doc 04 §2.4), and the token lookup treats it as inert |
 | `created_at` | timestamptz | |
 
-Unique `(account_id, name)` among the rows with `revoked_at IS NULL` (a partial unique index), so a revoked token's name can be used again; CHECKs on the name length, the hash length (32), the prefix length (6) and the scope. The per-account count (10 tokens that are neither revoked nor expired, `MAX_API_TOKENS_PER_USER`) is enforced in the service, under a lock on the account's row so two creations at once cannot both pass it. Management uses the account policy `account_id = app_account_id()` in an account-level transaction; `slugbase_app` may read every column but `token_hash`, insert and update `revoked_at` alone, and holds no DELETE (a token leaves with its membership or account).
+Unique `(account_id, name)` among the rows with `revoked_at IS NULL` (a partial unique index), so a revoked token's name can be used again; CHECKs on the name length, the hash length (32), the prefix length (6) and the scope. The per-account count (10 tokens that are neither revoked nor expired, `MAX_API_TOKENS_PER_USER`) is enforced in the service, under a lock on the account's row so two creations at once cannot both pass it. Management uses the account policy `account_id = app_account_id()` in an account-level transaction; `slugbase_app` may read every column but `token_hash`, insert and update `revoked_at` alone, and holds no DELETE (a token leaves with its membership or account, or when `sys_retention_purge()` deletes it 30 days after it was revoked or expired, §6).
 
 **`mfa_backup_codes`** — RLS: S (enabled and forced, no policy; `slugbase_app` has no privilege on it). `id`, `account_id` → accounts CASCADE, `code_hash bytea` (the argon2id PHC string, as bytes, of the 10-char code — low entropy, so a slow hash), `used_at`. Partial index `(account_id) WHERE used_at IS NULL`.
 
@@ -397,7 +397,7 @@ The complete list of operations that cross the tenant or account boundary. Each 
 | `sys_go_other_workspaces(slug)` | `/go` miss: which of the member's other workspaces resolve the slug | Up to 20 `{ id, name }` of workspaces the calling account (from `app_account_id()`, never an argument) belongs to and where it can access a forwarding, non-archived bookmark with that slug; runs only for results with no candidate |
 | `sys_favicon_get(host)` / `sys_favicon_put(...)` | Deployment-wide cache | |
 | `sys_rate_limit_take(key, capacity, refill, cost)` | Deployment-wide buckets | One `INSERT … ON CONFLICT DO UPDATE … RETURNING` with the database clock |
-| `sys_retention_purge()` | Scheduled, all workspaces | §6 table, one statement per table, each epic adding the rule of the tables it creates; takes no argument, deletes at most 5 000 rows per table per call (rows another statement holds are skipped for the next call) and returns one `(table_name, deleted)` row per table for the job to log, counts only. It covers `sessions` so far |
+| `sys_retention_purge()` | Scheduled, all workspaces | §6 table, one statement per table, each epic adding the rule of the tables it creates; takes no argument, deletes at most 5 000 rows per table per call (rows another statement holds are skipped for the next call) and returns one `(table_name, deleted)` row per table for the job to log, counts only. It covers `sessions` and `api_tokens` so far |
 | `sys_instance_*` (`list_workspaces`, `create_workspace`, `list_accounts`, `set_admin`, `disable`, `reset_mfa`, `mark_verified`, `delete_workspace`, `delete_account`, `add_membership`, `update_settings`, `list_instance_audit`) | CE instance administration spans workspaces | Each re-checks `is_instance_admin` of `app_account_id()` **inside** the function and writes an instance audit event; `create_workspace` is the only writer of an owner invitation, `add_membership` also writes an event into the workspace's own audit log |
 | `sys_delete_account(account_id)` | Touches every workspace the account is in | §7.1 |
 | Cloud: system operations of the `cloud` chain | Inbound billing events and their reconciliation have no session | Defined in the `cloud` chain under the same rules as this table (Cloud doc 06); any change to billing state bumps `entitlement_version` in the same transaction |
@@ -502,6 +502,7 @@ Adding an enum value is expand-only; removing one is a contract migration after 
 | Data | Kept for | Then |
 |---|---|---|
 | `sessions` past `expires_at` or `absolute_expires_at` | 0 | Deleted |
+| `api_tokens` revoked (`revoked_at`) or expired (`expires_at`) | 30 days | Deleted (a token with no expiry that is not revoked is kept) |
 | `oidc_login_states` | 10 min | Deleted |
 | `credential_tokens` used or expired | 7 days (forensics) | Deleted |
 | `workspace_invitations` not pending | 30 days | Deleted |
