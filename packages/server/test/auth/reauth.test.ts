@@ -1,9 +1,9 @@
 import * as argon2 from "@node-rs/argon2";
 import { createPasswordPolicy } from "@slugbase/core";
-import { createHash } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPasswordVerifier, hashPassword } from "../../src/auth/password.ts";
 import { changePassword, reauthenticate, type PasswordChangeDependencies } from "../../src/auth/reauth.ts";
+import { newSessionToken } from "../../src/auth/session-token.ts";
 
 // The checks in front of re-authentication and the password change (doc 04
 // sections 4.4 and 10.3, doc 10 T8 and T18): a wrong password, an account
@@ -16,7 +16,13 @@ vi.mock("@node-rs/argon2", async (importOriginal) => {
   return { ...original, verify: vi.fn(original.verify) };
 });
 
+vi.mock("../../src/auth/session-token.ts", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../../src/auth/session-token.ts")>();
+  return { ...original, newSessionToken: vi.fn(original.newSessionToken) };
+});
+
 const verifyCalls = vi.mocked(argon2.verify);
+const issuedTokens = vi.mocked(newSessionToken);
 
 const ACCOUNT = "0192f3a0-0000-7000-8000-0000000000a1";
 const SESSION = "0192f3a0-0000-7000-8000-0000000000b1";
@@ -29,6 +35,7 @@ let storedHash: string;
 beforeEach(async () => {
   storedHash = await hashPassword(CURRENT);
   verifyCalls.mockClear();
+  issuedTokens.mockClear();
 });
 
 interface Calls {
@@ -114,7 +121,13 @@ describe("changePassword", () => {
       throw new Error("not changed");
     }
     expect(outcome.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    expect(change?.newTokenHash.equals(createHash("sha256").update(Buffer.from(outcome.token, "base64url")).digest())).toBe(true);
+    expect(issuedTokens).toHaveBeenCalledTimes(1);
+    const issued = issuedTokens.mock.results[0];
+    if (issued?.type !== "return") {
+      throw new Error("no token was issued");
+    }
+    expect(outcome.token).toBe(issued.value.value);
+    expect(change?.newTokenHash.equals(issued.value.hash)).toBe(true);
   });
 
   it("refuses a password the policy refuses, naming why, before verifying anything or writing", async () => {
