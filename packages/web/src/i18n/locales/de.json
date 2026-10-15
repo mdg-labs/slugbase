@@ -216,6 +216,92 @@
             "action": "Überall sonst abmelden"
           }
         }
+      },
+      "mfa": {
+        "title": "Zwei-Faktor-Authentifizierung",
+        "description": {
+          "on": "Die Anmeldung verlangt zusätzlich zum Passwort einen Code aus deiner Authenticator-App.",
+          "off": "Ergänze deine Anmeldung um einen Code aus einer Authenticator-App, damit ein gestohlenes Passwort nicht ausreicht."
+        },
+        "status": {
+          "label": "Status",
+          "on": "An",
+          "off": "Aus"
+        },
+        "cancel": "Abbrechen",
+        "close": "Schließen",
+        "done": "Fertig",
+        "copied": "Kopiert",
+        "enrol": {
+          "open": "Einrichten",
+          "title": "Zwei-Faktor-Authentifizierung einrichten",
+          "description": "Verbinde eine Authenticator-App mit deinem Konto.",
+          "step": "Schritt {step} von {count}",
+          "back": "Zurück",
+          "next": "Weiter",
+          "turnOn": "Einschalten",
+          "scan": {
+            "title": "Code scannen",
+            "description": "Öffne deine Authenticator-App und scanne diesen QR-Code."
+          },
+          "qr": {
+            "alt": "QR-Code zum Scannen mit deiner Authenticator-App"
+          },
+          "key": {
+            "description": "Scannen geht nicht? Gib stattdessen diesen Schlüssel in deiner App ein.",
+            "label": "Einrichtungsschlüssel",
+            "copy": "Einrichtungsschlüssel kopieren"
+          },
+          "verify": {
+            "title": "Code eingeben",
+            "description": "Gib den sechsstelligen Code ein, den deine App jetzt anzeigt, um die Verbindung zu prüfen."
+          }
+        },
+        "code": {
+          "label": "Authentifizierungscode",
+          "slot": "Ziffer {position} von {length}",
+          "required": "Gib den sechsstelligen Code ein."
+        },
+        "backupCode": {
+          "label": "Backup-Code",
+          "required": "Gib einen Backup-Code ein."
+        },
+        "useBackup": "Stattdessen einen Backup-Code verwenden",
+        "useCode": "Stattdessen die Authenticator-App verwenden",
+        "password": {
+          "label": "Passwort",
+          "required": "Gib dein Passwort ein."
+        },
+        "codes": {
+          "title": "Backup-Codes speichern",
+          "description": "Jeder Code funktioniert einmal, falls du deine Authenticator-App verlierst.",
+          "note": "Bewahre sie sicher auf. Sie werden nicht noch einmal angezeigt.",
+          "label": "Backup-Codes",
+          "copy": "Alle Backup-Codes kopieren",
+          "acknowledge": "Ich habe diese Backup-Codes gespeichert"
+        },
+        "regenerate": {
+          "open": "Backup-Codes ersetzen",
+          "title": "Backup-Codes ersetzen",
+          "description": "Gib einen Code aus deiner Authenticator-App ein. Die bisherigen Codes funktionieren danach nicht mehr.",
+          "submit": "Codes ersetzen"
+        },
+        "disable": {
+          "open": "Ausschalten",
+          "title": "Zwei-Faktor-Authentifizierung ausschalten",
+          "description": "Gib einen Code und dein Passwort ein. Die Anmeldung braucht danach nur noch dein Passwort.",
+          "submit": "Ausschalten",
+          "confirmTitle": "Zwei-Faktor-Authentifizierung ausschalten?",
+          "confirmDescription": "Dein Konto ist dann nur noch durch das Passwort geschützt, und deine Backup-Codes funktionieren nicht mehr.",
+          "confirm": "Ausschalten",
+          "done": "Die Zwei-Faktor-Authentifizierung ist aus"
+        },
+        "error": {
+          "invalidCode": "Dieser Code ist ungültig. Prüfe ihn und versuche es erneut.",
+          "wrongPassword": "Das Passwort stimmt nicht.",
+          "reauthRequired": "Bestätige, dass du es bist, um fortzufahren.",
+          "unavailable": "Das hat nicht geklappt. Versuche es gleich noch einmal."
+        }
       }
     }
   },

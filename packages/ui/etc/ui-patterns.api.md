@@ -501,6 +501,25 @@ export interface SettingSwitchProps {
 }
 
 // @public
+export function ShownOnce(input: ShownOnceProps): ReactElement;
+
+// @public (undocumented)
+export interface ShownOnceProps {
+    // (undocumented)
+    acknowledged: boolean;
+    acknowledgeLabel: ReactNode;
+    // (undocumented)
+    className?: string;
+    copiedLabel: string;
+    copyLabel: string;
+    label: string;
+    note?: ReactNode;
+    // (undocumented)
+    onAcknowledgedChange: (acknowledged: boolean) => void;
+    values: readonly string[];
+}
+
+// @public
 export function StatusBadge(input: StatusBadgeProps): ReactElement;
 
 // @public (undocumented)
@@ -557,6 +576,7 @@ export interface WizardProps {
     className?: string;
     // (undocumented)
     description?: ReactNode;
+    nextDisabled?: boolean;
     nextLabel: string;
     onBack?: () => void;
     onNext: () => void;

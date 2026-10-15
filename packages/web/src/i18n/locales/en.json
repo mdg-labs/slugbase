@@ -216,6 +216,92 @@
             "action": "Sign out everywhere else"
           }
         }
+      },
+      "mfa": {
+        "title": "Two-factor authentication",
+        "description": {
+          "on": "Signing in asks for a code from your authenticator app as well as your password.",
+          "off": "Add a code from an authenticator app to your sign-in, so a stolen password is not enough."
+        },
+        "status": {
+          "label": "Status",
+          "on": "On",
+          "off": "Off"
+        },
+        "cancel": "Cancel",
+        "close": "Close",
+        "done": "Done",
+        "copied": "Copied",
+        "enrol": {
+          "open": "Set up",
+          "title": "Set up two-factor authentication",
+          "description": "Pair an authenticator app with your account.",
+          "step": "Step {step} of {count}",
+          "back": "Back",
+          "next": "Next",
+          "turnOn": "Turn on",
+          "scan": {
+            "title": "Scan the code",
+            "description": "Open your authenticator app and scan this QR code."
+          },
+          "qr": {
+            "alt": "QR code to scan with your authenticator app"
+          },
+          "key": {
+            "description": "Cannot scan it? Enter this key in your app instead.",
+            "label": "Setup key",
+            "copy": "Copy the setup key"
+          },
+          "verify": {
+            "title": "Enter a code",
+            "description": "Type the six-digit code your app shows now, to check the pairing."
+          }
+        },
+        "code": {
+          "label": "Authentication code",
+          "slot": "Digit {position} of {length}",
+          "required": "Enter the six-digit code."
+        },
+        "backupCode": {
+          "label": "Backup code",
+          "required": "Enter a backup code."
+        },
+        "useBackup": "Use a backup code instead",
+        "useCode": "Use the authenticator app instead",
+        "password": {
+          "label": "Password",
+          "required": "Enter your password."
+        },
+        "codes": {
+          "title": "Save your backup codes",
+          "description": "Each code works once, if you lose your authenticator app.",
+          "note": "Keep them somewhere safe. They are not shown again.",
+          "label": "Backup codes",
+          "copy": "Copy all backup codes",
+          "acknowledge": "I have saved these backup codes"
+        },
+        "regenerate": {
+          "open": "Replace backup codes",
+          "title": "Replace your backup codes",
+          "description": "Enter a code from your authenticator app. The codes you have now stop working.",
+          "submit": "Replace codes"
+        },
+        "disable": {
+          "open": "Turn off",
+          "title": "Turn off two-factor authentication",
+          "description": "Enter a code and your password. Signing in then needs your password alone.",
+          "submit": "Turn off",
+          "confirmTitle": "Turn off two-factor authentication?",
+          "confirmDescription": "Your account will be protected by its password alone, and your backup codes will stop working.",
+          "confirm": "Turn off",
+          "done": "Two-factor authentication is off"
+        },
+        "error": {
+          "invalidCode": "That code is not valid. Check it and try again.",
+          "wrongPassword": "The password is not right.",
+          "reauthRequired": "Confirm it is you to continue.",
+          "unavailable": "That did not work. Try again in a moment."
+        }
       }
     }
   },
