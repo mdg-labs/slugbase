@@ -59,7 +59,7 @@ const writeProbe = defineOperation({
   auth: "member",
   scope: "write",
   rate: "write",
-  body: z.strictObject({}),
+  request: { body: z.strictObject({}) },
   responses: { 200: jsonResponse("done", z.strictObject({})), 404: problemResponse("no workspace") },
 });
 
@@ -434,6 +434,15 @@ describe("the scope of a token", () => {
     );
     expect(response.status).toBe(415);
     expect((await problemOf(response)).code).toBe("unsupported_media_type");
+  });
+
+  it("validates the body of a bearer mutation against the operation's schema", async () => {
+    const world = serve();
+    const alice = await holder();
+    const write = await issue(alice, { scope: "read-write" });
+    const response = await call(world, "POST", "/api/v1/workspace-probe", bearer(write), { unexpected: true });
+    expect(response.status).toBe(422);
+    expect((await problemOf(response)).code).toBe("validation_failed");
   });
 });
 
