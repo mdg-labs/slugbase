@@ -56,3 +56,4 @@ existing line by adding its PR number.
 - **stale workaround** — a test keeps a workaround for a harness gap the same change closes, with a comment that is no longer true and a tool requirement no other test has — PR 409
 - **start-time race** — a test takes a background trigger out of play (a cron schedule) only after starting the component that fires it, so a fire in the window before the removal (the start's own first pass, a row an earlier test left) breaks the test — PR 457
 - **leaked starting state** — a test asserts a starting state that persisted browser state (saved localStorage) or a late emulation decides, instead of setting it before the page loads — PR 457
+- **ignored declaration key** — a test fixture declares a field under a key the consuming type does not read (a top-level `body` where the stage reads `request.body`), the extra key compiles, and the declared check never runs — PR 479
