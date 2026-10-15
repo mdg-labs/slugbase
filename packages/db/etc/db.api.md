@@ -39,6 +39,8 @@ export interface AccountProfile {
     // (undocumented)
     readonly locale: "en" | "de";
     // (undocumented)
+    readonly mfaEnabled: boolean;
+    // (undocumented)
     readonly onboarding: Onboarding;
     // (undocumented)
     readonly singleKeyShortcuts: boolean;
@@ -81,7 +83,7 @@ export function accountProfileRepository(tx: TenantTx): AccountProfileRepository
 export type AnalyticsConsent = "unset" | "granted" | "denied";
 
 // @public (undocumented)
-export interface AuthStore extends SetupStore {
+export interface AuthStore extends SetupStore, MfaStore {
     changePassword(change: PasswordChange): Promise<boolean>;
     close(): Promise<void>;
     createSession(session: NewSession): Promise<boolean>;
@@ -102,7 +104,48 @@ export interface AuthStoreOptions {
 }
 
 // @public
+export interface BackupCodeRecord {
+    // (undocumented)
+    readonly hash: string;
+    readonly id: string;
+}
+
+// @public
+export interface BackupCodesRegeneration {
+    // (undocumented)
+    readonly accountId: string;
+    readonly backupCodes: readonly BackupCodeRecord[];
+    readonly step: number;
+}
+
+// @public (undocumented)
+export type BackupCodesRegenerationOutcome =
+/** The account's backup codes are exactly the new ones; every earlier one is gone. */
+"regenerated"
+/** The time step was already accepted (a replay or an older code); nothing was written. */
+| "replayed"
+/** The account does not exist, is disabled or has MFA off; nothing was written. */
+| "not_enabled";
+
+// @public
 export const CE_CHAIN: MigrationChain;
+
+// @public
+export interface CodeReauthentication {
+    // (undocumented)
+    readonly accountId: string;
+    readonly sessionId: string;
+    readonly step: number;
+}
+
+// @public (undocumented)
+export type CodeReauthenticationOutcome =
+/** The step is accepted and `reauth_at` of the session is now. */
+"reauthenticated"
+/** The time step was already accepted (a replay or an older code); nothing was written. */
+| "replayed"
+/** The account has no full session with that id; nothing was written. */
+| "no_session";
 
 // @public (undocumented)
 export interface CompleteSetup {
@@ -219,6 +262,73 @@ export interface MembershipRepository {
 export function membershipRepository(tx: TenantTx): MembershipRepository;
 
 // @public
+export interface MfaActivation {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly backupCodes: readonly BackupCodeRecord[];
+    readonly jobs?: readonly QueuedJob[];
+    readonly newTokenHash: Buffer;
+    readonly secret: Uint8Array;
+    readonly sessionId: string;
+    readonly step: number;
+}
+
+// @public (undocumented)
+export type MfaActivationOutcome =
+/** MFA is enabled, the backup codes are stored and the session has its new token. */
+"activated"
+/** The time step was already accepted (a replay or an older code); nothing was written. */
+| "replayed"
+/** The pending secret was replaced, MFA is already on or the account is gone; nothing was written. */
+| "changed"
+/** The account has no full session with that id; nothing was written. */
+| "no_session";
+
+// @public
+export interface MfaDisabling {
+    // (undocumented)
+    readonly accountId: string;
+    readonly factor: SecondFactor;
+    readonly jobs?: readonly QueuedJob[];
+    readonly newTokenHash: Buffer;
+    readonly sessionId: string;
+}
+
+// @public (undocumented)
+export type MfaDisablingOutcome =
+/** The secret, `mfa_enabled_at`, the accepted step and every backup code are gone and the session has its new token. */
+"disabled"
+/** The time step or the backup code was already used (a replay, an older code, a parallel use); nothing was written. */
+| "replayed"
+/** The account does not exist, is disabled or has MFA off; nothing was written. */
+| "not_enabled"
+/** The account has no full session with that id; nothing was written. */
+| "no_session";
+
+// @public
+export interface MfaState {
+    readonly enabledAt: Date | null;
+    readonly lastStep: number | null;
+    // (undocumented)
+    readonly secret: SealedMfaSecret;
+}
+
+// @public (undocumented)
+export interface MfaStore {
+    activateMfa(activation: MfaActivation): Promise<MfaActivationOutcome>;
+    completeMfaSignIn(completion: SignInCompletion): Promise<SignInCompletionOutcome>;
+    disableMfa(disabling: MfaDisabling): Promise<MfaDisablingOutcome>;
+    mfaStateOf(accountId: string): Promise<MfaState | undefined>;
+    reauthenticateWithStep(reauthentication: CodeReauthentication): Promise<CodeReauthenticationOutcome>;
+    recordMfaFailure(sessionId: string, accountId: string): Promise<boolean>;
+    regenerateBackupCodes(regeneration: BackupCodesRegeneration): Promise<BackupCodesRegenerationOutcome>;
+    resealMfaSecret(accountId: string, expected: Uint8Array, secret: SealedMfaSecret): Promise<boolean>;
+    startMfaEnrollment(accountId: string, secret: SealedMfaSecret): Promise<boolean>;
+    unusedBackupCodes(accountId: string): Promise<readonly UnusedBackupCode[]>;
+}
+
+// @public
 export function migrate(options: MigrateOptions): Promise<MigrateResult>;
 
 // @public (undocumented)
@@ -271,6 +381,7 @@ export interface NewSession {
     readonly accountId: string;
     readonly id: string;
     readonly ipPrefix: string | null;
+    readonly level: "partial" | "full";
     readonly remember: boolean;
     readonly replacedTokenHash: Buffer | null;
     readonly tokenHash: Buffer;
@@ -399,6 +510,27 @@ export interface ScopedRepositoryDefinition<T extends WorkspaceTable> {
 }
 
 // @public
+export interface SealedMfaSecret {
+    // (undocumented)
+    readonly ciphertext: Uint8Array;
+    // (undocumented)
+    readonly keyId: string;
+}
+
+// @public
+export type SecondFactor =
+/** A TOTP code of this time step. */
+    {
+    readonly kind: "totp";
+    readonly step: number;
+}
+/** The unused backup code with this id, whose hash the typed code matched. */
+| {
+    readonly kind: "backup";
+    readonly codeId: string;
+};
+
+// @public
 export interface SessionRecord {
     // (undocumented)
     readonly accountId: string;
@@ -442,6 +574,25 @@ export interface SetupStore {
     setupPending(): Promise<boolean>;
 }
 
+// @public (undocumented)
+export interface SignInCompletion {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly factor: SecondFactor;
+    readonly newTokenHash: Buffer;
+    readonly sessionId: string;
+}
+
+// @public (undocumented)
+export type SignInCompletionOutcome =
+/** The factor was accepted and the session is full under the new token. */
+"completed"
+/** The time step or the backup code was already used (a replay, an older code, a parallel use); nothing was written. */
+| "replayed"
+/** The account has no such partial session, or its MFA is no longer on; nothing was written. */
+| "no_session";
+
 // @public
 export interface TenantContext {
     accountId: string;
@@ -466,6 +617,13 @@ export interface TenantTx {
     // (undocumented)
     readonly requestId: string;
     readonly workspaceId: string | undefined;
+}
+
+// @public
+export interface UnusedBackupCode {
+    readonly hash: string;
+    // (undocumented)
+    readonly id: string;
 }
 
 // @public (undocumented)

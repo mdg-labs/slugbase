@@ -65,9 +65,9 @@ Two distinct flows, both with hashed single-use tokens, carried in the URL fragm
 
 ### 2.7 Multi-factor authentication (TOTP)
 
-- **Enrol**: generate a secret (stored through `SecretBoxPort`), show a QR code (the server returns it as SVG, with the `otpauth://` URI, issuer `TOTP_ISSUER`, default "SlugBase" plus the deployment host) and the text key; activation requires a valid code. A code is a 6-digit RFC 6238 code with a 30-second step; one step of clock skew either side is accepted. Activation rotates the session and shows **10 backup codes once** (shown-once pattern, doc 03), stored hashed.
-- **Regenerate backup codes**: requires a current TOTP code; invalidates the old set; shown once.
-- **Disable**: requires a current TOTP code or a backup code plus the password (or OIDC re-auth).
+- **Enrol**: starting needs a fresh re-authentication. It generates a secret (20 random bytes, stored through `SecretBoxPort` with the id of the key that sealed it), shows a QR code (the server returns it as SVG, with the `otpauth://` URI, issuer `TOTP_ISSUER`, default "SlugBase" plus the deployment host name, without its port, in parentheses, for example "SlugBase (links.example.com)") and the text key, once: no operation returns the secret again. Starting again before confirming replaces the pending secret, and an unconfirmed enrolment changes nothing about sign-in; starting on an account whose MFA is on is refused. Activation requires a valid code of the pending secret. A code is a 6-digit RFC 6238 code (HMAC-SHA-1) with a 30-second step; one step of clock skew either side is accepted, so a code is accepted for 90 seconds, and a code of a step already accepted for the account, or of an earlier one, is refused (replay). Every attempt counts against the `mfa` limit (doc 04 §7). Activation sets `mfa_enabled_at` and the accepted step, rotates the session, and shows **10 backup codes once** (shown-once pattern, doc 03), each 10 characters from an alphabet without look-alike characters (`0`, `1`, `I`, `O`), stored only as argon2id hashes. A secret still sealed under a retired key is sealed again under the current key when it is read (doc 01 §10).
+- **Regenerate backup codes**: requires a fresh re-authentication and a current TOTP code (a backup code does not authorise it); invalidates the whole old set, used codes included; shown once. Every attempt counts against the `mfa` limit.
+- **Disable**: requires a fresh re-authentication, and a current TOTP code or an unused backup code plus the password (or OIDC re-auth, which arrives with the OIDC work). The password is checked before the code, so a wrong password spends nothing. It clears the secret, the activation time and the accepted step, deletes every backup code and rotates the session; the account then signs in with its password alone. Every attempt counts against the `mfa` limit.
 - **Recovery** when a member has lost both: on CE an instance admin can reset MFA for an account (audited, notifies the account by email); on Cloud the operator console does it after a documented support identity check. Neither path reveals or copies the secret.
 - **Instance admins** must have MFA enrolled to use any instance-admin operation (doc 01 §10); the admin area prompts enrolment first.
 
@@ -483,7 +483,7 @@ Token buckets through `RateLimitPort` (doc 01 §8.2); each operation names its b
 | Bucket | Applies to | Per IP | Per account or target |
 |---|---|---|---|
 | `login` | Password sign-in and the start and callback of OIDC sign-in | 10 / min | 20 / hour per **email** (counted for unknown emails too) |
-| `mfa` | MFA code, TOTP re-authentication and MFA enrolment confirmation | 10 / min | 5 failures per pending session (then it ends); 30 / hour per account |
+| `mfa` | MFA code, TOTP re-authentication, MFA enrolment confirmation, backup-code regeneration and disabling MFA | 10 / min | 5 failures per pending session (then it ends); 30 / hour per account |
 | `register` | Registration | 5 / hour | — |
 | `reset` | Password-reset request, verification resend, email-change request, invitation resend | 5 / hour | 3 / hour per target email |
 | `token_redeem` | Redeeming an emailed or invitation token (verify email, reset password, confirm or cancel an email change, inspect and accept an invitation) | 10 / hour | — |

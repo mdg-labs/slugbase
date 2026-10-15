@@ -36,6 +36,8 @@ export interface WizardProps {
   onBack?: () => void;
   /** Called when the step is submitted, by the Next button or the Enter key; the step checks its fields and goes on. */
   onNext: () => void;
+  /** Keeps Next from acting until the step allows it, for example until a shown-once secret is acknowledged. */
+  nextDisabled?: boolean;
   /** A request of the step is running: Next shows it and neither button acts. */
   pending?: boolean;
   className?: string;
@@ -58,13 +60,14 @@ export function Wizard({
   nextLabel,
   onBack,
   onNext,
+  nextDisabled = false,
   pending = false,
   className,
 }: WizardProps): ReactElement {
   const headingId = useId();
   function submit(event: SyntheticEvent): void {
     event.preventDefault();
-    if (!pending) {
+    if (!pending && !nextDisabled) {
       onNext();
     }
   }
@@ -94,7 +97,7 @@ export function Wizard({
               {backLabel}
             </Button>
           )}
-          <Button loading={pending} type="submit">
+          <Button disabled={nextDisabled} loading={pending} type="submit">
             {nextLabel}
           </Button>
         </CardFooter>

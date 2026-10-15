@@ -52,6 +52,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/mfa/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete a sign-in with a code of the authenticator app or a backup code */
+        post: operations["verifyMfa"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -68,6 +85,74 @@ export interface paths {
         head?: never;
         /** Change the signed-in account's profile and preferences */
         patch: operations["updateMe"];
+        trace?: never;
+    };
+    "/api/v1/me/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Turn the second factor off */
+        delete: operations["disableMfa"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/backup-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Replace the account's backup codes with ten new ones */
+        post: operations["regenerateMfaBackupCodes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/enrollment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start enrolling an authenticator app */
+        post: operations["startMfaEnrollment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/enrollment/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm the authenticator app with a code and turn the second factor on */
+        post: operations["confirmMfaEnrollment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/me/password": {
@@ -96,7 +181,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Re-authenticate the session with the account's password */
+        /** Re-authenticate the session with the account's password or a code of its authenticator app */
         post: operations["reauthenticate"];
         delete?: never;
         options?: never;
@@ -278,6 +363,8 @@ export interface components {
              * @enum {string}
              */
             locale: "en" | "de";
+            /** @description Whether a second factor is on; false when it is off or an enrolment is only pending */
+            mfaEnabled: boolean;
             /** @description The stored state of the Getting started checklist */
             onboarding: components["schemas"]["Onboarding"];
             /** @description Whether single-key shortcuts are on; modifier shortcuts always work */
@@ -331,6 +418,21 @@ export interface components {
             /** @description The new password, 12 to 256 characters and not on the breached list */
             newPassword: string;
         };
+        ConfirmMfaEnrollmentRequest: {
+            /** @description The current six-digit code of the authenticator app; spaces between the digits are ignored */
+            code: string;
+        };
+        DisableMfaRequest: {
+            /** @description The current six-digit code of the authenticator app; spaces between the digits are ignored */
+            code: string;
+            /** @description The account's current password */
+            password: string;
+        } | {
+            /** @description One of the account's unused backup codes, which may be written in lower case and grouped by spaces or hyphens */
+            backupCode: string;
+            /** @description The account's current password */
+            password: string;
+        };
         HealthStatus: {
             /** @constant */
             status: "ok";
@@ -348,10 +450,10 @@ export interface components {
         };
         LoginResult: {
             /**
-             * @description The sign-in is complete and the session cookie is set
-             * @constant
+             * @description `done`: the sign-in is complete. `mfa`: the password is right and the account's second factor is still to be given (POST /auth/mfa/verify); the session cookie is set either way, and a pending one expires after 5 minutes
+             * @enum {string}
              */
-            next: "done";
+            next: "done" | "mfa";
         };
         Me: {
             account: components["schemas"]["Account"];
@@ -375,6 +477,18 @@ export interface components {
              * @description The workspace's identifier
              */
             workspaceId: string;
+        };
+        MfaBackupCodes: {
+            /** @description Ten single-use backup codes of ten characters each, shown only in this response */
+            backupCodes: string[];
+        };
+        MfaEnrollment: {
+            /** @description The otpauth:// URI the QR code holds; it names the issuer, the account's email and the secret */
+            otpauthUri: string;
+            /** @description The QR code of the URI as an SVG document, to be shown as an image and never inserted into the page as markup */
+            qrSvg: string;
+            /** @description The text key an authenticator app takes when it cannot scan the code: the secret in base32, shown only in this response */
+            secret: string;
         };
         Onboarding: {
             /** @description Whether the browser setup step of the Getting started checklist is done */
@@ -448,6 +562,13 @@ export interface components {
         ReauthRequest: {
             /** @description The account's current password */
             password: string;
+        } | {
+            /** @description The current six-digit code of the authenticator app, for an account whose second factor is on; spaces between the digits are ignored */
+            code: string;
+        };
+        RegenerateBackupCodesRequest: {
+            /** @description The current six-digit code of the authenticator app; spaces between the digits are ignored. A backup code is not accepted here */
+            code: string;
         };
         Session: {
             /**
@@ -540,6 +661,20 @@ export interface components {
              */
             theme?: "light" | "dark" | "system";
         };
+        VerifyMfaRequest: {
+            /** @description A code of the authenticator app: six digits, which may be grouped by a space */
+            code: string;
+        } | {
+            /** @description One of the account's unused backup codes, which may be written in lower case and grouped by spaces or hyphens */
+            backupCode: string;
+        };
+        VerifyMfaResult: {
+            /**
+             * @description The sign-in is complete and the session cookie holds the new token
+             * @constant
+             */
+            next: "done";
+        };
         VersionInfo: {
             /** @description Build time, RFC 3339 UTC */
             builtAt: string;
@@ -603,7 +738,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Signed in; a new session cookie replaces any the request carried */
+            /** @description The password is right; a new session cookie replaces any the request carried. The session is full when `next` is `done` and a partial one, good for POST /auth/mfa/verify, POST /auth/logout and GET /api/config only, when it is `mfa` */
             200: {
                 headers: {
                     /** @description The session cookie: HttpOnly, SameSite=Lax, Path=/, Secure and __Host- prefixed when the deployment is served over https */
@@ -716,6 +851,88 @@ export interface operations {
                 };
             };
             /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    verifyMfa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyMfaRequest"];
+            };
+        };
+        responses: {
+            /** @description The code is right: the partial session is now a full one under a new token, which the cookie carries; the old token is refused from now on */
+            200: {
+                headers: {
+                    /** @description The session cookie of the new token, with the attributes of the sign-in cookie; the choice to stay signed in is kept */
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerifyMfaResult"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or it ended: it expired after 5 minutes or was revoked by its fifth refused code */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself, or the credential is an API token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The code is wrong, outside the accepted window or already used, or the backup code is wrong or used (invalid_code, one answer for all of them and counted against the mfa limit; the fifth refusal ends the pending session); the body did not pass validation; or the session is not waiting for a second factor (validation_failed) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many attempts; Retry-After says when to try again */
             429: {
                 headers: {
                     /** @description Whole seconds to wait before the request can succeed */
@@ -866,6 +1083,322 @@ export interface operations {
             };
         };
     };
+    disableMfa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DisableMfaRequest"];
+            };
+        };
+        responses: {
+            /** @description The secret, the activation time and every backup code are deleted and the account signs in with its password alone; the response carries the Set-Cookie header of the session's new token */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself, or the credential is an API token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The code or backup code is wrong, outside the accepted window or already used (invalid_code, counted against the mfa limit); the password is wrong or the account has none (validation_failed with the field in errors[]); the body did not pass validation; or the account's second factor is not on (validation_failed). Nothing changes in any of these cases */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many attempts; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    regenerateMfaBackupCodes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegenerateBackupCodesRequest"];
+            };
+        };
+        responses: {
+            /** @description The old set is invalid from now on, used and unused codes alike; the ten new codes are returned once and never again */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaBackupCodes"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself, or the credential is an API token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The code is wrong, outside the accepted window or already used (invalid_code, counted against the mfa limit; the old backup codes stay valid); the body did not pass validation; or the account's second factor is not on (validation_failed) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many attempts; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    startMfaEnrollment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A new pending secret as a text key, an otpauth:// URI and a QR code; an earlier unconfirmed secret is replaced and sign-in is unchanged until a code is confirmed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaEnrollment"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself, or the credential is an API token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The account's second factor is already on, answered as validation_failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    confirmMfaEnrollment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmMfaEnrollmentRequest"];
+            };
+        };
+        responses: {
+            /** @description The second factor is on; the backup codes are returned once and never again */
+            200: {
+                headers: {
+                    /** @description The session cookie of the session's new token, with the attributes of the sign-in cookie; the old token is refused from now on */
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaBackupCodes"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself, or the credential is an API token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The code is wrong, outside the accepted window or already used (invalid_code, counted against the mfa limit); the body did not pass validation; or no enrolment is pending (validation_failed) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many attempts; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     changePassword: {
         parameters: {
             query?: never;
@@ -957,7 +1490,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The password is right; the session counts as re-authenticated for the next ten minutes */
+            /** @description The password or the code is right; the session counts as re-authenticated for the next ten minutes */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -991,7 +1524,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation */
+            /** @description The code is wrong, outside the accepted window or already used, or the account's second factor is not on (invalid_code, counted against the mfa limit and the session unchanged); or the body did not pass validation */
             422: {
                 headers: {
                     [name: string]: unknown;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildOpenApiDocument, serializeOpenApiDocument } from "../src/openapi/generate.ts";
-import { ACCENT_PRESETS, AccountSchema, ChangePasswordRequestSchema, ReauthRequestSchema, MembershipSchema, MeSchema, RevokeSessionsQuerySchema, SessionIdParamsSchema, SessionListQuerySchema, SessionListSchema, SessionSchema, UpdateAccountRequestSchema } from "../src/operations/me.ts";
+import { ACCENT_PRESETS, AccountSchema, ChangePasswordRequestSchema, DisableMfaRequestSchema, ReauthRequestSchema, RegenerateBackupCodesRequestSchema, MembershipSchema, MeSchema, RevokeSessionsQuerySchema, SessionIdParamsSchema, SessionListQuerySchema, SessionListSchema, SessionSchema, UpdateAccountRequestSchema } from "../src/operations/me.ts";
 import { operations } from "../src/operations/index.ts";
 
 type Obj = Record<string, unknown>;
@@ -122,7 +122,7 @@ describe("the account operation", () => {
     const account = schemas["Account"] as { additionalProperties: unknown; properties: Obj; required: string[] };
     expect(account.additionalProperties).toBe(false);
     expect(Object.keys(account.properties).sort()).toEqual([
-      "accent", "aiOptOut", "analyticsConsent", "defaultView", "displayName", "email", "emailVerified", "hasPassword", "id", "locale", "onboarding", "singleKeyShortcuts", "theme",
+      "accent", "aiOptOut", "analyticsConsent", "defaultView", "displayName", "email", "emailVerified", "hasPassword", "id", "locale", "mfaEnabled", "onboarding", "singleKeyShortcuts", "theme",
     ]);
     expect([...account.required].sort()).toEqual(Object.keys(account.properties).sort());
     const membership = schemas["Membership"] as { additionalProperties: unknown; properties: Obj; required: string[] };
@@ -145,6 +145,7 @@ describe("the account operation", () => {
       onboarding: { browserSetupDone: false, importDone: true, checklistDismissed: false },
       emailVerified: true,
       hasPassword: false,
+      mfaEnabled: false,
     };
     const membership = { workspaceId: "0192f3a0-0000-7000-8000-0000000000b1", name: "Notes", role: "admin" };
     expect(MeSchema.safeParse({ account, memberships: [membership], activeWorkspaceId: null }).success).toBe(true);
@@ -311,20 +312,75 @@ describe("the re-authentication and password operations", () => {
   });
 
   it("takes closed bodies that name the passwords and no account, session or hash", () => {
-    for (const [name, fields] of [
-      ["ReauthRequest", ["password"]],
-      ["ChangePasswordRequest", ["currentPassword", "newPassword"]],
-    ] as const) {
-      const schema = schemas[name] as { additionalProperties: unknown; properties: Obj; required: string[] };
-      expect(schema.additionalProperties, name).toBe(false);
-      expect(Object.keys(schema.properties).sort(), name).toEqual([...fields].sort());
-      expect([...schema.required].sort(), name).toEqual([...fields].sort());
-    }
+    const changePassword = schemas["ChangePasswordRequest"] as { additionalProperties: unknown; properties: Obj; required: string[] };
+    expect(changePassword.additionalProperties).toBe(false);
+    expect(Object.keys(changePassword.properties).sort()).toEqual(["currentPassword", "newPassword"]);
+    expect([...changePassword.required].sort()).toEqual(["currentPassword", "newPassword"]);
     expect(ReauthRequestSchema.safeParse({ password: "x" }).success).toBe(true);
     expect(ReauthRequestSchema.safeParse({ password: "" }).success).toBe(false);
     expect(ReauthRequestSchema.safeParse({ password: "x", sessionId: "y" }).success).toBe(false);
     expect(ChangePasswordRequestSchema.safeParse({ currentPassword: "old", newPassword: "a new long password" }).success).toBe(true);
     expect(ChangePasswordRequestSchema.safeParse({ currentPassword: "old" }).success).toBe(false);
     expect(ChangePasswordRequestSchema.safeParse({ currentPassword: "old", newPassword: "a new long password", accountId: "x" }).success).toBe(false);
+  });
+
+  it("takes the password or a TOTP code to re-authenticate, never both and never anything else", () => {
+    expect(schemas["ReauthRequest"]?.["anyOf"]).toHaveLength(2);
+    expect(ReauthRequestSchema.safeParse({ code: "123456" }).success).toBe(true);
+    expect(ReauthRequestSchema.safeParse({ code: "" }).success).toBe(false);
+    expect(ReauthRequestSchema.safeParse({ code: "1".repeat(17) }).success).toBe(false);
+    expect(ReauthRequestSchema.safeParse({ code: "123456", password: "x" }).success).toBe(false);
+    expect(ReauthRequestSchema.safeParse({ backupCode: "ABCDE23456" }).success).toBe(false);
+    expect(ReauthRequestSchema.safeParse({}).success).toBe(false);
+  });
+});
+
+describe("the backup-code and disable operations", () => {
+  const regenerate = paths["/api/v1/me/mfa/backup-codes"]?.["post"];
+  const disable = paths["/api/v1/me/mfa"]?.["delete"];
+
+  it.each([
+    ["regenerateMfaBackupCodes", regenerate],
+    ["disableMfa", disable],
+  ])("declares %s: an account operation in the mfa bucket that requires re-authentication and is not token-callable", (operationId, operation) => {
+    expect(operation?.["operationId"]).toBe(operationId);
+    expect(operation?.["x-slugbase-auth"]).toBe("account");
+    expect(operation?.["x-slugbase-rate"]).toBe("mfa");
+    expect(operation?.["x-slugbase-scope"]).toBeUndefined();
+    expect(operation?.["x-slugbase-reauth"]).toBe(true);
+    const responses = responsesOf(operation);
+    const clientErrors = Object.keys(responses).filter((status) => status.startsWith("4"));
+    expect(clientErrors).toEqual(expect.arrayContaining(["400", "401", "403", "422", "429"]));
+    for (const status of clientErrors) {
+      expect(Object.keys(responses[status]?.content ?? {}), status).toEqual(["application/problem+json"]);
+    }
+  });
+
+  it("answers regeneration with the ten codes and disabling with an empty 204", () => {
+    expect(responsesOf(regenerate)["200"]?.content).toEqual({ "application/json": { schema: { $ref: "#/components/schemas/MfaBackupCodes" } } });
+    expect(responsesOf(disable)["204"]?.content).toBeUndefined();
+  });
+
+  it("takes a closed TOTP code to regenerate, and no backup code", () => {
+    const schema = schemas["RegenerateBackupCodesRequest"] as { additionalProperties: unknown; properties: Obj; required: string[] };
+    expect(schema.additionalProperties).toBe(false);
+    expect(Object.keys(schema.properties)).toEqual(["code"]);
+    expect(RegenerateBackupCodesRequestSchema.safeParse({ code: "123456" }).success).toBe(true);
+    expect(RegenerateBackupCodesRequestSchema.safeParse({ code: "" }).success).toBe(false);
+    expect(RegenerateBackupCodesRequestSchema.safeParse({ code: "1".repeat(17) }).success).toBe(false);
+    expect(RegenerateBackupCodesRequestSchema.safeParse({ backupCode: "ABCDE23456" }).success).toBe(false);
+    expect(RegenerateBackupCodesRequestSchema.safeParse({ code: "123456", extra: 1 }).success).toBe(false);
+  });
+
+  it("takes the password with exactly one of a TOTP code and a backup code to disable", () => {
+    expect(schemas["DisableMfaRequest"]?.["anyOf"]).toHaveLength(2);
+    expect(DisableMfaRequestSchema.safeParse({ password: "x", code: "123456" }).success).toBe(true);
+    expect(DisableMfaRequestSchema.safeParse({ password: "x", backupCode: "ABCDE23456" }).success).toBe(true);
+    expect(DisableMfaRequestSchema.safeParse({ code: "123456" }).success).toBe(false);
+    expect(DisableMfaRequestSchema.safeParse({ backupCode: "ABCDE23456" }).success).toBe(false);
+    expect(DisableMfaRequestSchema.safeParse({ password: "x" }).success).toBe(false);
+    expect(DisableMfaRequestSchema.safeParse({ password: "x", code: "123456", backupCode: "ABCDE23456" }).success).toBe(false);
+    expect(DisableMfaRequestSchema.safeParse({ password: "", code: "123456" }).success).toBe(false);
+    expect(DisableMfaRequestSchema.safeParse({ password: "x", code: "123456", accountId: "y" }).success).toBe(false);
   });
 });

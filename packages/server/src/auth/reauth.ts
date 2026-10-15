@@ -30,8 +30,9 @@ export type ReauthOutcome =
   /** The session no longer exists; nothing was written. */
   | "no_session";
 
-async function passwordMatches(
-  { store, passwords }: ReauthDependencies,
+/** Whether `password` is the account's password, at the cost of one argon2id verification whether or not the account has one. */
+export async function passwordMatches(
+  { store, passwords }: { readonly store: Pick<AuthStore, "passwordHashOf">; readonly passwords: PasswordVerifier },
   accountId: string,
   password: string,
 ): Promise<boolean> {

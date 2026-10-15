@@ -188,7 +188,7 @@ function setup(options: SetupOptions = {}) {
     gated: operationOf("/api/v1/teams", "listTeams", "member", { scope: "read", entitlement: "teams.manage" }),
     machine: operationOf("/api/v1/events", "receiveEvent", "machine", { method: "post", audience: "machine" }),
     form: operationOf("/api/v1/contact", "sendContact", "anonymous", { method: "post", audience: "marketing-form" }),
-    partial: operationOf("/api/v1/auth/mfa/verify", "verifyMfa", "partial", { method: "post" }),
+    partial: operationOf("/api/v1/test/partial", "checkPartial", "partial", { method: "post" }),
     changeTestPassword: operationOf("/api/v1/test/password", "changeTestPassword", "account", { method: "post", reauth: true }),
     deleteWorkspace: operationOf("/api/v1/workspace/delete", "deleteWorkspace", "owner", { method: "post", reauth: true }),
     instanceReauth: operationOf("/api/v1/instance/accounts/delete", "deleteAccountAsAdmin", "instanceAdmin", { method: "post", reauth: true }),
@@ -675,15 +675,15 @@ describe("stage 9: declared re-authentication and completed second factor (T18)"
 
     it("is admitted by an operation that declares the partial policy, and so is a completed session", async () => {
       const { server, seen } = setup();
-      expect((await server.fetch(post("/api/v1/auth/mfa/verify", { ...BROWSER_MUTATION, ...withState("member", "partial") }))).status).toBe(200);
-      expect((await server.fetch(post("/api/v1/auth/mfa/verify", { ...BROWSER_MUTATION, ...cookieOf("member") }))).status).toBe(200);
-      expect(seen.map((entry) => entry.operationId)).toEqual(["verifyMfa", "verifyMfa"]);
+      expect((await server.fetch(post("/api/v1/test/partial", { ...BROWSER_MUTATION, ...withState("member", "partial") }))).status).toBe(200);
+      expect((await server.fetch(post("/api/v1/test/partial", { ...BROWSER_MUTATION, ...cookieOf("member") }))).status).toBe(200);
+      expect(seen.map((entry) => entry.operationId)).toEqual(["checkPartial", "checkPartial"]);
     });
 
     it("is refused the partial operation without a credential, and an API token is refused it", async () => {
       const { server, seen } = setup();
-      expect((await server.fetch(post("/api/v1/auth/mfa/verify", BROWSER_MUTATION))).status).toBe(401);
-      const response = await server.fetch(post("/api/v1/auth/mfa/verify", { ...BROWSER_MUTATION, authorization: "Bearer slb_member_write" }));
+      expect((await server.fetch(post("/api/v1/test/partial", BROWSER_MUTATION))).status).toBe(401);
+      const response = await server.fetch(post("/api/v1/test/partial", { ...BROWSER_MUTATION, authorization: "Bearer slb_member_write" }));
       expect(response.status).toBe(403);
       expect(seen).toEqual([]);
     });

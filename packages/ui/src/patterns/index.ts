@@ -21,7 +21,9 @@ export { SelectField, type SelectFieldProps, type SelectOption } from "./select-
 export { SettingSwitch, type SettingSwitchProps } from "./setting-switch.tsx";
 export { SettingsNav, type SettingsNavGroup, type SettingsNavItem, type SettingsNavProps } from "./settings-nav.tsx";
 export { SettingsSection, type SettingsSectionProps } from "./settings-section.tsx";
+export { ShownOnce, type ShownOnceProps } from "./shown-once.tsx";
 export { StatusBadge, type StatusBadgeProps, type StatusBadgeVariant } from "./status-badge.tsx";
+export { Totp, type TotpProps } from "./totp.tsx";
 export { Wizard, type WizardProps } from "./wizard.tsx";
 export type { Accent, ResolvedTheme } from "../theme/theme-provider.tsx";
 export { ThemeToggle, type ThemeToggleProps } from "./theme-toggle.tsx";

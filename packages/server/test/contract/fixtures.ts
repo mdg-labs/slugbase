@@ -17,6 +17,9 @@ export const FIXTURES: ContractFixtures = {
   getApiConfig: {},
   getOpenApiDocument: {},
   login: { body: { ...WALKER_ACCOUNT, remember: false } },
+  // An account-level operation: no workspace or other account's identifier is part of it, and it acts on the session's own account. The walker's
+  // session is a complete one, which has no second factor to give, so the valid request is the declared 422; the pending session is walked by the sign-in tests.
+  verifyMfa: { body: { code: "000000" }, status: 422 },
   logout: {},
   getMe: {},
   // An account-level operation: no workspace or other account's identifier is part of it, and the account it changes is the walker's own.
@@ -24,6 +27,14 @@ export const FIXTURES: ContractFixtures = {
   // The walker signs each session in with this password; the valid change is made by a session that has just re-authenticated with it.
   reauthenticate: { body: { password: WALKER_ACCOUNT.password } },
   changePassword: { body: { currentPassword: WALKER_ACCOUNT.password, newPassword: "a new password for the walker" } },
+  // Account-level operations: no workspace or other account's identifier is part of them, and the account they act on is the walker's own.
+  // The walker's session has just re-authenticated, so the start is valid; it stores a pending secret of the walker's own account.
+  startMfaEnrollment: {},
+  // The walker cannot know the code of the secret the start gave it: the valid request is the declared 422.
+  confirmMfaEnrollment: { body: { code: "000000" }, status: 422 },
+  // The walker's account has no second factor on, so a valid request has nothing to regenerate or turn off: the declared 422. Both act on the walker's own account only.
+  regenerateMfaBackupCodes: { body: { code: "000000" }, status: 422 },
+  disableMfa: { body: { password: WALKER_ACCOUNT.password, code: "000000" }, status: 422 },
   listSessions: {},
   // The walker has one session, which every call of the walk needs; a revocation that succeeds is covered by the session route tests.
   revokeSession: { path: { id: UNKNOWN_SESSION_ID }, status: 404 },

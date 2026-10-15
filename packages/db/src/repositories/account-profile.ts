@@ -4,8 +4,8 @@ import { tenantHandle, type TenantTx } from "../tenant.ts";
 
 // The signed-in account's own profile (doc 04 section 10.3): the columns
 // `slugbase_app` may read of its own row, and whether the account has a
-// password, which the column privileges keep the application from reading.
-// Nothing secret is selected.
+// password and whether its second factor is on, which the column privileges keep
+// the application from reading. Nothing secret is selected.
 
 export const ACCENT_PRESETS = ["periwinkle", "violet", "rose", "amber", "green", "teal"] as const;
 export type AccentPreset = (typeof ACCENT_PRESETS)[number];
@@ -33,6 +33,7 @@ export interface AccountProfile {
   readonly onboarding: Onboarding;
   readonly emailVerified: boolean;
   readonly hasPassword: boolean;
+  readonly mfaEnabled: boolean;
 }
 
 // The columns hold these values by their CHECK constraints (doc 05 section 2.1); a value outside them is a schema drift.
@@ -108,6 +109,11 @@ export function accountProfileRepository(tx: TenantTx): AccountProfileRepository
       if (typeof hasPassword !== "boolean") {
         throw new Error("sys_account_has_password did not answer for a visible account");
       }
+      const mfa = await handle.execute<{ mfa_enabled: boolean | null }>(sql`SELECT public.sys_account_mfa_enabled() AS mfa_enabled`);
+      const mfaEnabled = mfa[0]?.mfa_enabled;
+      if (typeof mfaEnabled !== "boolean") {
+        throw new Error("sys_account_mfa_enabled did not answer for a visible account");
+      }
       return {
         id: row.id,
         email: row.email,
@@ -122,6 +128,7 @@ export function accountProfileRepository(tx: TenantTx): AccountProfileRepository
         onboarding: onboardingOf(row.onboarding),
         emailVerified: row.emailVerifiedAt !== null,
         hasPassword,
+        mfaEnabled,
       };
     },
     async updateProfile(changes) {

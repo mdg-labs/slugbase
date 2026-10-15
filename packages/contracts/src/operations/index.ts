@@ -1,11 +1,11 @@
 import type { OperationDefinition } from "./define.ts";
-import { login, logout } from "./auth.ts";
-import { changePassword, getMe, listSessions, reauthenticate, revokeSession, revokeSessions, updateMe } from "./me.ts";
+import { login, logout, verifyMfa } from "./auth.ts";
+import { changePassword, confirmMfaEnrollment, disableMfa, getMe, listSessions, reauthenticate, regenerateMfaBackupCodes, revokeSession, revokeSessions, startMfaEnrollment, updateMe } from "./me.ts";
 import { getApiConfig, getHealth, getOpenApiDocument, getReady, getVersion } from "./meta.ts";
 import { completeSetup, getSetupStatus } from "./setup.ts";
 
 /** Every operation the generator publishes. A new tag file adds its operations here. */
-export const operations: readonly OperationDefinition[] = [getHealth, getReady, getVersion, getApiConfig, getOpenApiDocument, login, logout, getMe, updateMe, listSessions, revokeSession, revokeSessions, reauthenticate, changePassword, getSetupStatus, completeSetup];
+export const operations: readonly OperationDefinition[] = [getHealth, getReady, getVersion, getApiConfig, getOpenApiDocument, login, verifyMfa, logout, getMe, updateMe, listSessions, revokeSession, revokeSessions, reauthenticate, changePassword, startMfaEnrollment, confirmMfaEnrollment, regenerateMfaBackupCodes, disableMfa, getSetupStatus, completeSetup];
 
 export * from "./auth.ts";
 export * from "./define.ts";

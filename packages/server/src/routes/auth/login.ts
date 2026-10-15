@@ -54,6 +54,6 @@ export function loginRoute({ store, passwords, cookie }: LoginRouteOptions): Rou
     if (signedIn === undefined) {
       throw new ProblemError("unauthenticated", REFUSED);
     }
-    return { status: 200, headers: { "Set-Cookie": setSessionCookie(cookie, signedIn.token) }, body: { next: "done" } };
+    return { status: 200, headers: { "Set-Cookie": setSessionCookie(cookie, signedIn.token) }, body: { next: signedIn.next } };
   });
 }

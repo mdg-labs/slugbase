@@ -35,9 +35,12 @@ beforeAll(async () => {
 }, HOOK_TIMEOUT_MS);
 
 function serve(modules: readonly ServerModule[], document?: TestDocument): Server {
+  // The walker signs in once for each operation that needs a session, and calls each of the mfa bucket's operations several times,
+  // more often than the default limits of one address allow.
+  const config = serverConfig({ NODE_ENV: "test", DATABASE_URL: appUrl(database()), RATE_LIMIT_LOGIN_IP: "100/min", RATE_LIMIT_MFA_IP: "100/min", RATE_LIMIT_MFA_ACCOUNT: "1000/hour" });
   return createServer({
-    config: serverConfig({ NODE_ENV: "test", DATABASE_URL: appUrl(database()) }),
-    adapters: world.adapters(),
+    config,
+    adapters: world.adapters(config),
     modules,
     migrations: [],
     logger: recordingLogger(),
@@ -136,9 +139,9 @@ describe("the walker over the committed document", () => {
     expect(report.failures).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each anonymous operation and for the sign-in; each of the eight operations that need a session
-    // also answers 401 without one, and the one that declares re-authentication answers 401 reauth_required without it.
-    expect(report.calls).toBe(operations.length + 9);
+    // One valid request for each anonymous operation and for the sign-in; each of the thirteen operations that need a session
+    // also answers 401 without one, and each of the four that declare re-authentication answers 401 reauth_required without it.
+    expect(report.calls).toBe(operations.length + 17);
   });
 });
 

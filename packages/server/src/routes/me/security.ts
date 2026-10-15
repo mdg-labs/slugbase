@@ -1,7 +1,8 @@
 import { changePassword as changePasswordOperation, reauthenticate as reauthenticateOperation } from "@slugbase/contracts";
-import type { MailPort, PasswordPolicy, SessionCookieSpec } from "@slugbase/core";
+import type { MailPort, PasswordPolicy, SecretBoxPort, SessionCookieSpec } from "@slugbase/core";
 import type { AuthStore } from "@slugbase/db";
 import { setSessionCookie } from "../../auth/cookie.ts";
+import { reauthenticateWithCode } from "../../auth/mfa.ts";
 import type { PasswordVerifier } from "../../auth/password.ts";
 import { changePassword, reauthenticate } from "../../auth/reauth.ts";
 import { uuidv7 } from "../../auth/uuidv7.ts";
@@ -11,7 +12,11 @@ import { queueMailSend } from "../../worker/jobs/mail-send.ts";
 import { route } from "../register.ts";
 
 // POST /api/v1/me/reauth and POST /api/v1/me/password (doc 04 sections 4.4 and
-// 10.3, doc 10 T18). Neither answers with, or logs, a password, a hash or a
+// 10.3, doc 10 T18). Re-authentication takes the password or, for an account
+// whose second factor is on, a TOTP code; a wrong password is 401
+// reauth_required and a wrong code 422 invalid_code, and the operation sits in
+// the `mfa` bucket, which takes a token for every attempt of either kind.
+// Neither operation answers with, or logs, a password, a code, a hash or a
 // token: the only secret that leaves is the Set-Cookie of the rotated session.
 // The password change declares `reauth`, so the authorization stage has refused
 // a session that has not re-authenticated within ten minutes before this
@@ -23,13 +28,23 @@ import { route } from "../register.ts";
 
 const UNAUTHENTICATED = "Authentication is required.";
 const WRONG_PASSWORD = "The password is wrong.";
+const INVALID_CODE = "The code is wrong, has expired or was already used.";
 const WRONG_CURRENT_PASSWORD = "The current password is wrong.";
 const LENGTH_DETAIL = "The password must be 12 to 256 characters long.";
 const BREACHED_DETAIL = "The password appears in a list of breached passwords. Choose a different one.";
 
 export interface SecurityRoutesOptions {
-  readonly store: Pick<AuthStore, "passwordHashOf" | "markReauthenticated" | "changePassword">;
+  readonly store: Pick<
+    AuthStore,
+    "passwordHashOf" | "markReauthenticated" | "changePassword" | "mfaStateOf" | "resealMfaSecret" | "unusedBackupCodes" | "reauthenticateWithStep"
+  >;
   readonly passwords: PasswordVerifier;
+  /** Opens the sealed TOTP secret a code is checked against. */
+  readonly secretBox: Pick<SecretBoxPort, "open" | "needsRotation" | "reseal">;
+  /** Whether a backup code matches an argon2id PHC string. */
+  readonly verifyCode: (hash: string, code: string) => Promise<boolean>;
+  /** The instant a code is checked at, in milliseconds since the epoch. */
+  readonly now: () => number;
   readonly passwordPolicy: PasswordPolicy;
   /** Hashes the new password into an argon2id PHC string. */
   readonly hashPassword: (password: string) => Promise<string>;
@@ -46,10 +61,20 @@ function sessionOf(context: ChainContext): { readonly sessionId: string; readonl
   return principal;
 }
 
-export function securityRoutes({ store, passwords, passwordPolicy, hashPassword, cookie, mail }: SecurityRoutesOptions): RouteBinding[] {
+export function securityRoutes({ store, passwords, passwordPolicy, hashPassword, cookie, mail, secretBox, verifyCode, now }: SecurityRoutesOptions): RouteBinding[] {
   return [
     route(reauthenticateOperation).handle(async ({ body }, context) => {
       const { sessionId, accountId } = sessionOf(context);
+      if ("code" in body) {
+        const result = await reauthenticateWithCode({ store, secretBox, verifyCode, now }, { accountId, sessionId, code: body.code });
+        if (result === "no_session") {
+          throw new ProblemError("unauthenticated", UNAUTHENTICATED);
+        }
+        if (result === "invalid_code") {
+          throw new ProblemError("invalid_code", INVALID_CODE, { errors: [{ path: "code", code: "invalid_code" }] });
+        }
+        return { status: 204 };
+      }
       const outcome = await reauthenticate({ store, passwords }, { accountId, sessionId, password: body.password });
       if (outcome === "no_session") {
         throw new ProblemError("unauthenticated", UNAUTHENTICATED);

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, cidr, index, pgTable, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, cidr, index, pgTable, smallint, text, timestamp, unique, uuid } from "drizzle-orm/pg-core";
 import { accounts } from "./accounts.ts";
 import { bytea } from "./types.ts";
 import { workspaces } from "./workspaces.ts";
@@ -31,12 +31,15 @@ export const sessions = pgTable(
     ipPrefix: cidr(),
     /** Truncated to 256 characters. */
     userAgent: text(),
+    /** Codes refused while the session is partial; the fifth deletes it (sys_session_mfa_failure). */
+    mfaFailures: smallint().notNull().default(0),
   },
   (table) => [
     unique("sessions_token_hash_key").on(table.tokenHash),
     check("sessions_token_hash_check", sql`length(${table.tokenHash}) = 32`),
     check("sessions_level_check", sql`${table.level} IN ('partial', 'full')`),
     check("sessions_user_agent_check", sql`length(${table.userAgent}) <= 256`),
+    check("sessions_mfa_failures_check", sql`${table.mfaFailures} >= 0`),
     index("sessions_account_id_idx").on(table.accountId),
     index("sessions_expires_at_idx").on(table.expiresAt),
   ],

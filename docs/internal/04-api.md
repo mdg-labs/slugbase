@@ -203,7 +203,7 @@ Multi-workspace automation uses one token per workspace. An `X-Slugbase-Workspac
 
 ### 4.3 Session levels
 
-- `partial`: password verified, TOTP pending. Only `POST /auth/mfa/verify`, `POST /auth/logout` and `GET /api/config` accept it; everything else returns `401 mfa_required`. Expires after 5 minutes; five failed codes revoke it.
+- `partial`: password verified, TOTP pending. Only `POST /auth/mfa/verify`, `POST /auth/logout` and `GET /api/config` accept it; every other operation that needs a session returns `401 mfa_required` (an `anon` operation never looks at the session). Expires after 5 minutes, and a request does not extend it; five failed codes revoke it. `POST /auth/login` makes a `partial` session only for an account whose MFA is on, and never a `full` one.
 - `full`: signed in. The session token is **rotated** on sign-in, on the `partial → full` transition and on every privilege change (role change of the account itself in the active workspace, instance-admin flag change, password change, MFA enabled or disabled).
 
 ### 4.4 Re-authentication ("sudo mode")
@@ -298,7 +298,7 @@ This table is the single list of defaults; doc 02 §16 shows the same values.
 | Bucket | Applies to | Limit (per IP) | Limit (per account / target) |
 |---|---|---|---|
 | `login` | `POST /auth/login`, `GET /auth/oidc/{provider}/start`, `/callback` | 10 / min | 20 / hour per **email** (counted even for unknown emails) |
-| `mfa` | `POST /auth/mfa/verify`, `POST /me/reauth` (TOTP), `POST /me/mfa/enrollment/confirm` | 10 / min | 5 failures per pending session (then the session is revoked); 30 / hour per account |
+| `mfa` | `POST /auth/mfa/verify`, `POST /me/reauth`, `POST /me/mfa/enrollment/confirm`, `POST /me/mfa/backup-codes`, `DELETE /me/mfa` | 10 / min | 5 failures per pending session (then the session is revoked); 30 / hour per account |
 | `register` | `POST /auth/register` | 5 / hour | — |
 | `reset` | `POST /auth/password/forgot`, `/auth/verify-email/resend`, `POST /me/email`, `POST /invitations/{id}/resend` | 5 / hour | 3 / hour per target email |
 | `token_redeem` | `POST /auth/verify-email`, `/auth/password/reset`, `/invitations/inspect`, `/invitations/accept`, `/me/email/confirm`, `/me/email/cancel` | 10 / hour | — |
@@ -397,7 +397,7 @@ Unauthenticated, `Content-Type: application/opensearchdescription+xml`, built on
 | Method | Path | Summary | Auth | Rate |
 |---|---|---|---|---|
 | POST | `/auth/login` | `{ email, password, remember }` → done or MFA required; `401` for any bad credential, `403 email_unverified` when verification is required | anon | login |
-| POST | `/auth/mfa/verify` | `{ code }` or `{ backupCode }` completes a partial session | partial | mfa |
+| POST | `/auth/mfa/verify` | `{ code }` or `{ backupCode }` completes a partial session: `200 { next: "done" }` with the `Set-Cookie` of the new `full` token (the `remember` choice kept); a wrong, replayed or used code of either kind is one answer, `422 invalid_code` with no field named, and counts against the pending session and the `mfa` bucket; `422 validation_failed` for a session that is not waiting for a second factor | partial | mfa |
 | POST | `/auth/logout` | End this session; `204` and the cookie cleared | acct/partial | write |
 | POST | `/auth/register` | `{ displayName, email, password }` — create account (when registration is open); generic `202`; `503 mail_unavailable` when verification is required and no mail is configured. Without a verification requirement the personal workspace is created at registration instead of at verification | anon | register |
 | POST | `/auth/verify-email` | `{ token }` — redeem signup verification token, create the personal workspace, sign in | anon | token_redeem |
@@ -413,18 +413,18 @@ Unauthenticated, `Content-Type: application/opensearchdescription+xml`, built on
 
 | Method | Path | Summary | Auth | Re | Rate |
 |---|---|---|---|---|---|
-| GET | `/me` | `{ account, memberships, activeWorkspaceId, clientErrorReportDsn? }`: the account (`id`, `email`, `displayName`, `locale`, `theme`, `accent`, `defaultView`, `singleKeyShortcuts`, `aiOptOut`, `analyticsConsent`, `onboarding`, `emailVerified`, `hasPassword`), its memberships (`workspaceId`, `name`, `role`), the workspace the request acts in (`null` when none) and, only for a session principal and only when a deployment registers a source (doc 01 §13), `clientErrorReportDsn`; never a hash or secret | acct† (read) | | |
+| GET | `/me` | `{ account, memberships, activeWorkspaceId, clientErrorReportDsn? }`: the account (`id`, `email`, `displayName`, `locale`, `theme`, `accent`, `defaultView`, `singleKeyShortcuts`, `aiOptOut`, `analyticsConsent`, `onboarding`, `emailVerified`, `hasPassword`, `mfaEnabled` (true exactly when the second factor is confirmed; false when it is off or an enrolment is only pending)), its memberships (`workspaceId`, `name`, `role`), the workspace the request acts in (`null` when none) and, only for a session principal and only when a deployment registers a source (doc 01 §13), `clientErrorReportDsn`; never a hash or secret | acct† (read) | | |
 | PATCH | `/me` | A closed object of optional fields, merged into the account: `displayName`, `locale`, `theme` (`system`, `dark`, `light`), `accent` (one of the six preset names `periwinkle`, `violet`, `rose`, `amber`, `green`, `teal`; never a colour value), `defaultView` (`grid`, `table`), `singleKeyShortcuts`, `aiOptOut`, `analyticsConsent` (`unset`, `granted`, `denied`; a choice is stored with its time, `unset` clears it) and `onboarding` (the keys `browserSetupDone`, `importDone`, `checklistDismissed` to change, no other key); `signinAlerts` joins the list with the security page (doc 03 §11.3). Answers the account | acct | | |
-| POST | `/me/reauth` | `{ password }` or `{ code }` (TOTP) → refresh `reauthAt`; `204`, and a wrong password is `401 reauth_required` with the field in `errors[]` that changes nothing (the TOTP variant arrives with MFA) | acct | | mfa |
+| POST | `/me/reauth` | `{ password }` or `{ code }` (TOTP, for an account whose MFA is on) → refresh `reauthAt`; `204`. A wrong password is `401 reauth_required` with the field in `errors[]`; a wrong, replayed or out-of-window code, or a code for an account whose MFA is off, is `422 invalid_code` naming `code`; neither changes anything. A code's time step is accepted atomically with the refresh, so it serves once. Every attempt counts against the `mfa` bucket | acct | | mfa |
 | POST | `/me/password` | `{ currentPassword, newPassword }` — change password; `204` with the `Set-Cookie` of this session's new token, and every other session of the account is deleted in the same transaction. A wrong current password (or an account without a password) is `422 validation_failed` naming `currentPassword`; a refused new password is `422 weak_password`. Setting a first password on an account without one (which then omits `currentPassword` and needs a fresh re-authentication) arrives with OIDC | acct | ✓ | |
 | POST | `/me/email` | Request email change → verification to new address, notice to the old one | acct | ✓ | reset |
 | POST | `/me/email/confirm` | `{ token }` — redeem email-change token | anon | | token_redeem |
 | POST | `/me/email/cancel` | `{ token }` — the "this wasn't me" link: cancel the pending change, revoke every session | anon | | token_redeem |
 | DELETE | `/me/email/pending` | Cancel pending change | acct | | |
-| POST | `/me/mfa/enrollment` | Start: secret + `otpauth://` URI + QR (SVG); replaces an unconfirmed secret | acct | ✓ | |
-| POST | `/me/mfa/enrollment/confirm` | Confirm with a code → 10 backup codes, shown once; rotates the session | acct | | mfa |
-| DELETE | `/me/mfa` | Disable MFA (TOTP code or backup code, plus the password) | acct | ✓ | |
-| POST | `/me/mfa/backup-codes` | Regenerate backup codes with a current TOTP code (old ones invalid) | acct | ✓ | |
+| POST | `/me/mfa/enrollment` | Start: `200 { secret, otpauthUri, qrSvg }` — the text key, the `otpauth://` URI and the QR code as an SVG document; replaces an unconfirmed secret and leaves sign-in unchanged; `422 validation_failed` on an account whose MFA is on. The secret is never returned again | acct | ✓ | |
+| POST | `/me/mfa/enrollment/confirm` | `{ code }` — confirm with a code of the pending secret → `200 { backupCodes }`, exactly 10, shown once, with the `Set-Cookie` of the rotated session; a wrong, expired or replayed code is `422 invalid_code` naming `code`, and every attempt counts against the `mfa` bucket; `422 validation_failed` when no enrolment is pending | acct | | mfa |
+| DELETE | `/me/mfa` | Disable MFA: `{ password, code }` or `{ password, backupCode }` → `204` with the `Set-Cookie` of the rotated session; clears the secret, `mfa_enabled_at` and the accepted step and deletes every backup code. The password is checked first, so a wrong one is `422 validation_failed` naming `password` and spends no code; a wrong, replayed, used or out-of-window code is `422 invalid_code` naming the field given; `422 validation_failed` when MFA is not on. Nothing changes on any refusal | acct | ✓ | mfa |
+| POST | `/me/mfa/backup-codes` | `{ code }` — regenerate with a current TOTP code (a backup code is not accepted) → `200 { backupCodes }`, exactly 10, shown once; the whole old set, used and unused codes alike, is invalid from then on; a wrong, replayed or out-of-window code is `422 invalid_code` naming `code` and leaves the old set; `422 validation_failed` when MFA is not on | acct | ✓ | mfa |
 | GET | `/me/sessions` | List sessions (§6.1: `limit`, `cursor`; `{ items, nextCursor }` with no `total`), newest first; each item `{ id, createdAt, lastSeenAt, userAgentFamily, ipPrefix, current }`; the cursor is valid only for the account it was issued to; never a token hash or a full address, and no location is derived | acct | | |
 | DELETE | `/me/sessions/{id}` | Revoke one session (`204`; `404 not_found` for an id the account does not hold, another account's included); revoking the current session also clears the cookie | acct | | |
 | DELETE | `/me/sessions` | Revoke all other sessions ("sign out everywhere"; `?includeCurrent=true` too, which also clears the cookie; `204`) | acct | | |

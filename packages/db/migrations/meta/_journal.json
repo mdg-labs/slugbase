@@ -92,6 +92,34 @@
       "when": 1792017018303,
       "tag": "20261014223018_add_password_change",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792057020091,
+      "tag": "20261015093700_add_mfa",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792059781483,
+      "tag": "20261015102301_add_mfa_sign_in",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1792062138044,
+      "tag": "20261015110218_add_mfa_management",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1792064262569,
+      "tag": "20261015113742_add_mfa_enabled_read",
+      "breakpoints": true
     }
   ]
 }

@@ -79,6 +79,19 @@ describe("Wizard", () => {
     expect(onBack).not.toHaveBeenCalled();
   });
 
+  it("does not go on while Next is disabled, by the button or the form", () => {
+    const onNext = vi.fn();
+    const { rerender } = render(<Steps nextDisabled onNext={onNext} />);
+
+    expect(screen.getByRole("button", { name: "Next" }).hasAttribute("disabled")).toBe(true);
+    fireEvent.submit(screen.getByLabelText("Name").closest("form") ?? document.body);
+    expect(onNext).not.toHaveBeenCalled();
+
+    rerender(<Steps nextDisabled={false} onNext={onNext} />);
+    fireEvent.click(screen.getByRole("button", { name: "Next" }));
+    expect(onNext).toHaveBeenCalledTimes(1);
+  });
+
   it("is free of accessibility violations in both themes", async () => {
     for (const dark of [false, true]) {
       document.documentElement.classList.toggle("dark", dark);

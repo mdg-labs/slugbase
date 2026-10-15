@@ -501,6 +501,25 @@ export interface SettingSwitchProps {
 }
 
 // @public
+export function ShownOnce(input: ShownOnceProps): ReactElement;
+
+// @public (undocumented)
+export interface ShownOnceProps {
+    // (undocumented)
+    acknowledged: boolean;
+    acknowledgeLabel: ReactNode;
+    // (undocumented)
+    className?: string;
+    copiedLabel: string;
+    copyLabel: string;
+    label: string;
+    note?: ReactNode;
+    // (undocumented)
+    onAcknowledgedChange: (acknowledged: boolean) => void;
+    values: readonly string[];
+}
+
+// @public
 export function StatusBadge(input: StatusBadgeProps): ReactElement;
 
 // @public (undocumented)
@@ -525,6 +544,25 @@ export interface ThemeToggleProps {
     switchToLight: string;
 }
 
+// @public
+export function Totp(input: TotpProps): ReactElement;
+
+// @public (undocumented)
+export interface TotpProps {
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    disabled?: boolean;
+    inputRef?: Ref<HTMLInputElement>;
+    length?: number;
+    name?: string;
+    onComplete?: (value: string) => void;
+    // (undocumented)
+    onValueChange: (value: string) => void;
+    slotLabel: (position: number, length: number) => string;
+    value: string;
+}
+
 export { TriangleAlertIcon }
 
 // @public
@@ -538,6 +576,7 @@ export interface WizardProps {
     className?: string;
     // (undocumented)
     description?: ReactNode;
+    nextDisabled?: boolean;
     nextLabel: string;
     onBack?: () => void;
     onNext: () => void;

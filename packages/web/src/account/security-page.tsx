@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { meQuery } from "./me.ts";
 import { PasswordCard } from "./password-card.tsx";
 import { SessionsCard } from "./sessions-card.tsx";
+import { TwoFactorCard } from "./two-factor-card.tsx";
 
 /** `/settings/account/security` (doc 03 section 11.2): the password and the sessions of the signed-in account. */
 export function AccountSecurityPage(): ReactElement {
@@ -26,6 +27,7 @@ export function AccountSecurityPage(): ReactElement {
           variant="info"
         />
       )}
+      {me.data === undefined ? null : <TwoFactorCard enabled={me.data.account.mfaEnabled} key={`mfa-${me.data.account.id}`} />}
       {me.isPending ? <Loading label={t("shell.loading")} /> : null}
       {me.isError ? (
         <Banner

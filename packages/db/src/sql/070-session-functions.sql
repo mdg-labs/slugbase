@@ -28,8 +28,13 @@ CREATE OR REPLACE FUNCTION public.sys_login_lookup(p_email text)
 -- deletes the session of the token the request carried (p_replaced_token_hash,
 -- when not null), in one call, so a sign-in never leaves both rows or neither.
 -- Answers false, and changes nothing, when the account does not exist or is
--- disabled. Only a full session can be created here; the second-factor step
--- adds the pending one. The account's last sign-in time is set with it.
+-- disabled, and when the level does not fit the account's second factor: an
+-- account whose MFA is on gets only a partial session (doc 02 section 2.3, doc
+-- 10 T17), and an account whose MFA is off only a full one. A partial session
+-- (the password is verified, the code is pending) expires after 5 minutes, both
+-- its sliding and its absolute expiry, and is not moved forward by a lookup;
+-- sys_session_promote makes it a full session once the code is accepted. A full
+-- session sets the account's last sign-in time with its creation.
 CREATE OR REPLACE FUNCTION public.sys_session_create(
   p_id uuid,
   p_account_id uuid,
@@ -48,12 +53,12 @@ DECLARE
 BEGIN
   IF NOT coalesce(
     p_id IS NOT NULL AND p_account_id IS NOT NULL AND p_remember IS NOT NULL
-    AND p_level = 'full'
+    AND p_level IN ('partial', 'full')
     AND octet_length(p_token_hash) = 32
     AND (p_replaced_token_hash IS NULL OR octet_length(p_replaced_token_hash) = 32),
     false
   ) THEN
-    RAISE EXCEPTION 'sys_session_create needs an id, an account, a full level, a remember flag and 32-byte token hashes'
+    RAISE EXCEPTION 'sys_session_create needs an id, an account, a partial or full level, a remember flag and 32-byte token hashes'
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
 
@@ -62,11 +67,16 @@ BEGIN
     ip_prefix, user_agent
   )
   SELECT p_id, p_token_hash, a.id, p_level, p_remember, v_now, v_now,
-         v_now + CASE WHEN p_remember THEN interval '90 days' ELSE interval '30 days' END,
-         v_now + interval '180 days',
+         CASE
+           WHEN p_level = 'partial' THEN v_now + interval '5 minutes'
+           WHEN p_remember THEN v_now + interval '90 days'
+           ELSE v_now + interval '30 days'
+         END,
+         CASE WHEN p_level = 'partial' THEN v_now + interval '5 minutes' ELSE v_now + interval '180 days' END,
          p_ip_prefix, left(p_user_agent, 256)
   FROM public.accounts a
-  WHERE a.id = p_account_id AND a.disabled_at IS NULL;
+  WHERE a.id = p_account_id AND a.disabled_at IS NULL
+    AND (a.mfa_enabled_at IS NOT NULL) = (p_level = 'partial');
   IF NOT FOUND THEN
     RETURN false;
   END IF;
@@ -74,7 +84,9 @@ BEGIN
   IF p_replaced_token_hash IS NOT NULL THEN
     DELETE FROM public.sessions WHERE token_hash = p_replaced_token_hash;
   END IF;
-  UPDATE public.accounts SET last_sign_in_at = v_now WHERE id = p_account_id;
+  IF p_level = 'full' THEN
+    UPDATE public.accounts SET last_sign_in_at = v_now WHERE id = p_account_id;
+  END IF;
   RETURN true;
 END
 $$;
