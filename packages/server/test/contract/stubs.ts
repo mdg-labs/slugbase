@@ -1,5 +1,5 @@
 import type { Adapters, TenantResolution, TenantResolver } from "@slugbase/core";
-import type { FixturePrincipal, TenantFixture } from "@slugbase/testing/tenancy";
+import { isFixtureToken, type FixturePrincipal, type TenantFixture, type TokenScope } from "@slugbase/testing/tenancy";
 import type { ApiTokenPrincipal, Authenticator, ModuleContext, SessionPrincipal } from "../../src/create-server.ts";
 import { testKey, testSecretBox } from "../secret-box.ts";
 import { adapters } from "../support.ts";
@@ -27,15 +27,17 @@ export interface StubWorld {
   /** The adapters of the server under test: unconfigured ports, the in-memory rate limiter and the stub tenant resolver. */
   adapters(config?: ModuleContext["config"]): Adapters;
   readonly hooks: PolicyHooks;
-  /** What a fixture principal sends: its session cookie. */
+  /** What a fixture principal sends: its session cookie, or for a token its bearer header. */
   credentialsOf(principal: FixturePrincipal): Credentials;
+  /** A bearer token of the given scope, of the owner of workspace A. */
+  tokenOf(scope: TokenScope): Credentials;
 }
 
 function sessionCredentials(accountId: string): Credentials {
   return { headers: { cookie: `${COOKIE}=session:${accountId}` } };
 }
 
-function tokenCredentials(scope: "read" | "read-write", accountId: string): Credentials {
+function tokenCredentials(scope: TokenScope, accountId: string): Credentials {
   return { headers: { authorization: `Bearer stub-token.${scope}.${accountId}` } };
 }
 
@@ -100,7 +102,8 @@ export function createStubWorld(fixture: TenantFixture): StubWorld {
   return {
     authenticators: [cookie, bearer],
     adapters: (config) => ({ ...adapters(config), tenantResolver: resolver, secretBox: testSecretBox(testKey("walker-1")) }),
-    credentialsOf: (principal) => sessionCredentials(principal.accountId),
+    credentialsOf: (principal) => (isFixtureToken(principal) ? tokenCredentials(principal.scope, principal.accountId) : sessionCredentials(principal.accountId)),
+    tokenOf: (scope) => tokenCredentials(scope, fixture.a.owner.accountId),
     hooks: {
       authorized: (operation) => authorized(operation.auth),
       // The stub sessions carry no re-authentication, so every one of them is a session that has none.

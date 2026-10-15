@@ -28,6 +28,17 @@ export interface FixturePrincipal {
   readonly credentials: string;
 }
 
+export type TokenScope = "read" | "read-write";
+
+/** An API token of an account of the workspace, bound to that workspace and acting with the account's role in it. */
+export interface FixtureToken extends FixturePrincipal {
+  readonly scope: TokenScope;
+}
+
+export function isFixtureToken(principal: FixturePrincipal): principal is FixtureToken {
+  return "scope" in principal;
+}
+
 export interface FixtureIdentifier {
   readonly kind: IdentifierKind;
   /** The value a path parameter takes: an id, or a slug for the `slug` kind. */
@@ -41,6 +52,12 @@ export interface WorkspaceFixture {
   readonly owner: FixturePrincipal;
   readonly admin: FixturePrincipal;
   readonly member: FixturePrincipal;
+  /**
+   * API tokens bound to the workspace, one for each role and scope the fixture
+   * covers. The API mode of the matrix sends them beside the sessions of the
+   * three principals; a fixture with none leaves the matrix to sessions.
+   */
+  readonly tokens?: readonly FixtureToken[];
   /** Every identifier the workspace holds. */
   readonly identifiers: readonly FixtureIdentifier[];
   /** Strings only this workspace's content contains (titles, labels), so a response that quotes them is a leak. */
@@ -60,6 +77,10 @@ export interface TenantFixture {
 
 export function principalsOf(workspace: WorkspaceFixture): readonly FixturePrincipal[] {
   return [workspace.owner, workspace.admin, workspace.member];
+}
+
+export function tokensOf(workspace: WorkspaceFixture): readonly FixtureToken[] {
+  return workspace.tokens ?? [];
 }
 
 export function identifiersOf(workspace: WorkspaceFixture, kind: IdentifierKind): readonly FixtureIdentifier[] {

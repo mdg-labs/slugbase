@@ -1,6 +1,6 @@
 import type { RepositoryMethodEntry } from "@slugbase/db";
 import { testRepositoryMethods, type TestDatabase } from "@slugbase/db/testing";
-import type { FixtureIdentifier, FixturePrincipal, PrincipalRole, TenantFixture, WorkspaceFixture } from "./fixture.js";
+import type { FixtureIdentifier, FixturePrincipal, FixtureToken, PrincipalRole, TenantFixture, TokenScope, WorkspaceFixture } from "./fixture.js";
 import type { RepositorySample } from "./mapping.js";
 
 // The probe implementation of the fixture over one test-only table, created by
@@ -68,6 +68,12 @@ function principal(side: "a" | "b", role: PrincipalRole): FixturePrincipal {
   return { role, accountId, credentials: `session:${accountId}` };
 }
 
+/** The tokens of an account of the workspace, one for each role and scope: it acts with the role of the account. */
+function tokenOf(side: "a" | "b", role: PrincipalRole, scope: TokenScope): FixtureToken {
+  const accountId = ACCOUNTS[side][role];
+  return { role, accountId, scope, credentials: `token:${scope}:${accountId}` };
+}
+
 function workspaceFixture(side: "a" | "b", id: string): WorkspaceFixture {
   const rows = ROWS[side];
   const identifiers: FixtureIdentifier[] = [
@@ -83,6 +89,7 @@ function workspaceFixture(side: "a" | "b", id: string): WorkspaceFixture {
     owner: principal(side, "owner"),
     admin: principal(side, "admin"),
     member: principal(side, "member"),
+    tokens: (["owner", "admin", "member"] as const).flatMap((role) => (["read", "read-write"] as const).map((scope) => tokenOf(side, role, scope))),
     identifiers,
     markers: [`matrix-probe-${side}-shared`, `matrix-probe-${side}-unshared`],
   };

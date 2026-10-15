@@ -13,6 +13,7 @@ import {
   type ApiCall,
   type ApiResponse,
   type Probe,
+  type TenantFixture,
 } from "../src/tenancy.ts";
 
 // The cross-tenant matrix (doc 08 section 3.3, D8, T1, T2). The first suite
@@ -377,6 +378,10 @@ describe("API mode over the probe table", () => {
   };
   const mapping = { bookmarkId: "bookmark" } as const;
 
+  // The handlers below stand alone, with no chain in front of them to refuse a token that declares no scope; the probe's tokens
+  // are exercised over the real chain in the contract tests of @slugbase/server.
+  const sessionsOnly = (fixture: TenantFixture): TenantFixture => ({ ...fixture, a: { ...fixture.a, tokens: [] } });
+
   /** Runs `statement` as the table owner in workspace A and then in B until a row comes back: a system operation that ignores the boundary. */
   async function everywhere(probe: Probe, statement: string, id: string): Promise<Record<string, unknown> | undefined> {
     for (const workspaceId of [probe.fixture.a.id, probe.fixture.b.id]) {
@@ -409,7 +414,7 @@ describe("API mode over the probe table", () => {
   it("passes a handler that reads inside the tenant transaction", async () => {
     const report = await runApiMatrix({
       document: READ_API,
-      fixture: scoped.fixture,
+      fixture: sessionsOnly(scoped.fixture),
       mapping,
       request: (call) => loadInTenant(scoped, call),
     });
@@ -421,7 +426,7 @@ describe("API mode over the probe table", () => {
   it("detects the endpoint that loads a row by id outside the tenant transaction", async () => {
     const report = await runApiMatrix({
       document: READ_API,
-      fixture: scoped.fixture,
+      fixture: sessionsOnly(scoped.fixture),
       mapping,
       request: async (call) => {
         const row = await everywhere(scoped, `SELECT * FROM ${scoped.table} WHERE id = $1`, call.targets["bookmarkId"] ?? "");
@@ -436,7 +441,7 @@ describe("API mode over the probe table", () => {
   it("detects the same endpoint changing a row of B, by the checksum, even when it answers 404", async () => {
     const report = await runApiMatrix({
       document: DELETE_API,
-      fixture: victim.fixture,
+      fixture: sessionsOnly(victim.fixture),
       mapping,
       request: async (call) => {
         await everywhere(victim, `DELETE FROM ${victim.table} WHERE id = $1 RETURNING *`, call.targets["bookmarkId"] ?? "");

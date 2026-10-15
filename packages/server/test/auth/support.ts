@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { createAuthStore, type AuthStore } from "@slugbase/db";
+import { generateApiToken } from "@slugbase/core";
+import { apiTokenRepository, createAuthStore, type AuthStore } from "@slugbase/db";
 import type { TestDatabase } from "@slugbase/testing/db";
 import { hashPassword } from "../../src/auth/password.ts";
 import { createAccountOnlyTenantResolver } from "../../src/auth/tenant-resolver.ts";
@@ -126,6 +127,37 @@ export async function seedMembership(
       INSERT INTO workspace_members (workspace_id, account_id, role, last_active_at)
       VALUES (${membership.workspaceId}, ${membership.accountId}, ${membership.role ?? "member"}, ${membership.lastActiveAt ?? null})`;
   });
+}
+
+let tokenNumber = 0;
+
+export interface SeedTokenOptions {
+  readonly accountId: string;
+  readonly workspaceId: string;
+  readonly scope?: "read" | "read-write";
+}
+
+/** Mints an API token of an account for a workspace through the repository, as creating one does; the value is the credential a client sends. */
+export async function seedApiToken(database: TestDatabase, options: SeedTokenOptions): Promise<{ readonly id: string; readonly value: string }> {
+  tokenNumber += 1;
+  const token = generateApiToken();
+  const id = `0192f3a0-aaaa-7000-8000-${tokenNumber.toString(16).padStart(12, "0")}`;
+  const outcome = await tenantDatabase(database).withTenant({ accountId: options.accountId, requestId: "seed-api-token" }, (tx) =>
+    apiTokenRepository(tx).create({
+      id,
+      workspaceId: options.workspaceId,
+      name: `seeded token ${String(tokenNumber)}`,
+      scope: options.scope ?? "read",
+      tokenHash: token.hash,
+      tokenPrefix: token.displayPrefix,
+      expiresInDays: 90,
+      limit: 10,
+    }),
+  );
+  if (outcome.kind !== "created") {
+    throw new Error(`the token could not be seeded: ${outcome.kind}`);
+  }
+  return { id, value: token.value };
 }
 
 export async function removeMembership(database: TestDatabase, workspaceId: string, accountId: string): Promise<void> {

@@ -1,4 +1,4 @@
-import { classifyOperations, createProbe, loadOpenApiDocument, runApiMatrix, type Probe } from "@slugbase/testing/tenancy";
+import { classifyOperations, createProbe, loadOpenApiDocument, runApiMatrix, runTokenMatrix, type Probe } from "@slugbase/testing/tenancy";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createServer, type Server, type ServerModule } from "../../src/create-server.ts";
@@ -9,7 +9,7 @@ import { buildDocument, type TestDocument } from "./build-document.ts";
 import { readOperations } from "./document.ts";
 import { seedAccount, seedMembership } from "../auth/support.ts";
 import { FIXTURES, WALKER_ACCOUNT, WALKER_WORKSPACE_ID } from "./fixtures.ts";
-import { matrixRequest } from "./matrix.ts";
+import { matrixRequest, tokenMatrixRequest } from "./matrix.ts";
 import { getProbeAdminRow, getProbeRow, probeFixtures, probeModule, probeOperations } from "./probe-module.ts";
 import { createStubWorld, type StubWorld } from "./stubs.ts";
 import { appUrl, tenantDatabase } from "./support.ts";
@@ -208,8 +208,9 @@ describe("the cross-tenant matrix in API mode over the server", () => {
     });
     expect(report.failures).toEqual([]);
     expect(report.classified.byKind["tenant-scoped"]).toBe(6);
-    // three principals of A against the two rows of B, on each of the three operations that take a row; once on the three that take none
-    expect(report.attempts).toBe(3 * 6 + 3 * 3);
+    // the three sessions and the six tokens (a read and a read-write one of each role) of A against the two rows of B, on each of the three
+    // operations that take a row; once on the three that take none
+    expect(report.attempts).toBe(9 * 6 + 9 * 3);
   });
 
   it("fails an operation that loads the row by id outside the tenant transaction", async () => {
@@ -231,7 +232,8 @@ describe("the cross-tenant matrix in API mode over the server", () => {
       request: matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: probeFixtures(probe), credentialsOf: (principal) => world.credentialsOf(principal) }),
     });
     expect(new Set(report.failures.map((failure) => failure.kind))).toEqual(new Set(["unexpected_status", "leaked_name"]));
-    expect(report.failures.filter((failure) => failure.kind === "unexpected_status")).toHaveLength(6);
+    // every session and every token of A reaches the handler, which answers 200 for the row of B
+    expect(report.failures.filter((failure) => failure.kind === "unexpected_status")).toHaveLength(9 * 2);
   });
 
   it("fails an admin operation that loads the row by id outside the tenant transaction, for the principals the policy admits only", async () => {
@@ -253,9 +255,38 @@ describe("the cross-tenant matrix in API mode over the server", () => {
       request: matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: probeFixtures(probe), credentialsOf: (principal) => world.credentialsOf(principal) }),
     });
     expect(new Set(report.failures.map((failure) => failure.kind))).toEqual(new Set(["unexpected_status", "leaked_name"]));
-    // the member is refused by stage 9 before the handler runs; the admin and the owner reach it
+    // the member, by session or by token, is refused by stage 9 before the handler runs; the admin and the owner reach it
     const unexpected = report.failures.filter((failure) => failure.kind === "unexpected_status");
-    expect(unexpected).toHaveLength(4);
+    expect(unexpected).toHaveLength((2 + 4) * 2);
     expect(unexpected.every((failure) => /^as (admin|owner) of A/.test(failure.detail))).toBe(true);
+  });
+});
+
+describe("the token-exclusion matrix over the server", () => {
+  const document = buildDocument(probeOperations, committed);
+
+  it("passes for the chain: a token never calls the instance operation, a read token no write, and the others answer as their handlers do", async () => {
+    const server = serve([probeModule(probe, world)], document);
+    const report = await runTokenMatrix({
+      document,
+      request: tokenMatrixRequest({ send: (request) => server.fetch(request), origin, fixtures: probeFixtures(probe), credentialsOf: (scope) => world.tokenOf(scope) }),
+    });
+    expect(report.failures).toEqual([]);
+    expect(report.classified.total).toBe(probeOperations.length);
+    // getProbeInstance declares no scope; checkProbeRow is the one write; the other six are reads
+    expect(report).toMatchObject({ refused: 1, scoped: 1, readable: 6, unaffected: 0 });
+    expect(report.attempts).toBe(probeOperations.length * 2);
+  });
+
+  it("calls an operation with no fixture, with placeholder identifiers: the refusal of a token does not look at the row", async () => {
+    const server = serve([probeModule(probe, world)], document);
+    const report = await runTokenMatrix({
+      document,
+      request: tokenMatrixRequest({ send: (request) => server.fetch(request), origin, fixtures: {}, credentialsOf: (scope) => world.tokenOf(scope) }),
+    });
+    // The one a token may not call is refused as declared with no fixture. The one that declares the write scope needs its body to get
+    // past validation, so a read token is answered 422 there, before the scope: the failure names what the fixture has to add.
+    expect(report.refused).toBe(1);
+    expect(report.failures.map((failure) => [failure.kind, failure.subject])).toEqual([["scope_not_enforced", expect.stringContaining("checkProbeRow") as string]]);
   });
 });

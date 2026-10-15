@@ -47,6 +47,10 @@ export interface ClassifiedOperation {
   /** The path template, such as `/api/v1/bookmarks/{bookmarkId}`. */
   readonly path: string;
   readonly policy: string;
+  /** The token scope the operation declares (`x-slugbase-scope`); absent when an API token may not call it. */
+  readonly scope?: "read" | "write";
+  /** Whether the operation declares that it needs re-authentication (`x-slugbase-reauth`), which an API token never has. */
+  readonly reauth: boolean;
   readonly kind: OperationKind;
   /** The path parameters of the template, in order. */
   readonly pathParameters: readonly string[];
@@ -447,6 +451,8 @@ export function classifyOperations(document: unknown): Classification {
         method,
         path,
         policy,
+        ...(operation["x-slugbase-scope"] === "read" || operation["x-slugbase-scope"] === "write" ? { scope: operation["x-slugbase-scope"] } : {}),
+        reauth: operation["x-slugbase-reauth"] === true,
         kind,
         pathParameters: templateParameters(path),
         inputs: collected.inputs,

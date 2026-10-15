@@ -1,4 +1,4 @@
-import type { FixtureIdentifier, FixturePrincipal, PrincipalRole, TenantFixture, WorkspaceFixture } from "../../src/tenancy.ts";
+import type { FixtureIdentifier, FixturePrincipal, FixtureToken, PrincipalRole, TenantFixture, WorkspaceFixture } from "../../src/tenancy.ts";
 
 // A two-workspace fixture held in memory, for the tests of the runner itself:
 // the checksum is a counter the stubs can bump to stand for a changed row.
@@ -14,6 +14,13 @@ export const B_MARKER = "quarterly-plan-of-b";
 function principal(side: string, role: PrincipalRole): FixturePrincipal {
   const accountId = `0192f3a0-0000-7000-8000-${side}-${role}`.padEnd(36, "0").slice(0, 36);
   return { role, accountId, credentials: `session:${accountId}` };
+}
+
+/** A token of each role and scope of workspace A, which the fixture is asked for with `withTokens`. */
+function tokens(side: string): FixtureToken[] {
+  return (["owner", "admin", "member"] as const).flatMap((role) =>
+    (["read", "read-write"] as const).map((scope) => ({ ...principal(side, role), scope, credentials: `token:${scope}:${role}` })),
+  );
 }
 
 function workspace(side: string, id: string, identifiers: readonly FixtureIdentifier[], markers: string[]): WorkspaceFixture {
@@ -32,10 +39,10 @@ export interface MemoryFixture extends TenantFixture {
   touchB(): void;
 }
 
-export function memoryFixture(): MemoryFixture {
+export function memoryFixture({ withTokens = false }: { withTokens?: boolean } = {}): MemoryFixture {
   let version = 0;
   return {
-    a: workspace("a", A_ID, [{ kind: "workspace", id: A_ID }], ["marker-of-a"]),
+    a: { ...workspace("a", A_ID, [{ kind: "workspace", id: A_ID }], ["marker-of-a"]), ...(withTokens ? { tokens: tokens("a") } : {}) },
     b: workspace(
       "b",
       B_ID,
@@ -62,6 +69,9 @@ interface OperationSpec {
   auth: string | undefined;
   parameters?: unknown[];
   requestBody?: unknown;
+  /** The `x-slugbase-scope` extension. */
+  scope?: string;
+  reauth?: boolean;
 }
 
 /** An OpenAPI document with the given operations, each carrying the policy extension. */
@@ -72,6 +82,8 @@ export function documentOf(operations: readonly OperationSpec[], components?: un
     item[operation.method ?? "get"] = {
       operationId: operation.operationId,
       ...(operation.auth === undefined ? {} : { "x-slugbase-auth": operation.auth }),
+      ...(operation.scope === undefined ? {} : { "x-slugbase-scope": operation.scope }),
+      ...(operation.reauth === undefined ? {} : { "x-slugbase-reauth": operation.reauth }),
       ...(operation.parameters === undefined ? {} : { parameters: operation.parameters }),
       ...(operation.requestBody === undefined ? {} : { requestBody: operation.requestBody }),
       responses: { "200": { description: "ok" } },
