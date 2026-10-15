@@ -29,6 +29,7 @@ import { assertApplicationRole, runMigrations } from "./migrate/index.ts";
 import { loadCommittedDocument } from "./routes/committed-document.ts";
 import { probeRoutes } from "./routes/health.ts";
 import { authContribution } from "./routes/auth/index.ts";
+import { apiTokenRoutes } from "./routes/me/api-tokens.ts";
 import { mfaRoutes } from "./routes/me/mfa.ts";
 import { profileRoutes } from "./routes/me/profile.ts";
 import { apiConfigRoute } from "./routes/meta/config.ts";
@@ -463,6 +464,8 @@ export function createServer(options: CreateServerOptions): Server {
   });
   // The signed-in account is part of the server like its sign-in: it reads the account's own rows and memberships.
   builtInRoutes.push(...profileRoutes({ withTenant: context.withTenant }));
+  // So are the account's personal API tokens: created, listed and revoked in an account-level transaction on the account's own rows.
+  builtInRoutes.push(...apiTokenRoutes({ withTenant: context.withTenant, cursorSecret: config.SESSION_SECRET }));
   // So is the second factor's management: enrolment reads the account's email for the authenticator entry and writes the sealed secret;
   // regenerating the backup codes and turning the factor off check a code, and the latter the password too.
   builtInRoutes.push(

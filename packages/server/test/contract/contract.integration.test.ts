@@ -7,8 +7,8 @@ import { route } from "../../src/routes/register.ts";
 import { recordingLogger, serverConfig } from "../support.ts";
 import { buildDocument, type TestDocument } from "./build-document.ts";
 import { readOperations } from "./document.ts";
-import { seedAccount } from "../auth/support.ts";
-import { FIXTURES, WALKER_ACCOUNT } from "./fixtures.ts";
+import { seedAccount, seedMembership } from "../auth/support.ts";
+import { FIXTURES, WALKER_ACCOUNT, WALKER_WORKSPACE_ID } from "./fixtures.ts";
 import { matrixRequest } from "./matrix.ts";
 import { getProbeAdminRow, getProbeRow, probeFixtures, probeModule, probeOperations } from "./probe-module.ts";
 import { createStubWorld, type StubWorld } from "./stubs.ts";
@@ -75,8 +75,16 @@ describe("the walker over the committed document", () => {
   async function sessionHooks(server: Server): Promise<PolicyHooks> {
     await seedAccount(database(), WALKER_ACCOUNT);
     const needsReauth = new Set(readOperations(committed).operations.filter((operation) => operation.reauth === true).map((operation) => operation.operationId));
-    const signIn = async (email: string, reauthenticate: boolean): Promise<string> => {
-      await seedAccount(database(), { email, password: WALKER_ACCOUNT.password });
+    const signIn = async (email: string, reauthenticate: boolean, member = false): Promise<string> => {
+      const account = await seedAccount(database(), { email, password: WALKER_ACCOUNT.password });
+      if (member) {
+        // A token is bound to a workspace of the account, so the walker that creates one is a member of its own.
+        await database().owner.begin(async (tx) => {
+          await tx`SET LOCAL ROLE slugbase_system`;
+          await tx`INSERT INTO workspaces (id, name) VALUES (${WALKER_WORKSPACE_ID}, 'Walker workspace') ON CONFLICT DO NOTHING`;
+        });
+        await seedMembership(database(), { workspaceId: WALKER_WORKSPACE_ID, accountId: account.id, role: "member" });
+      }
       const response = await server.fetch(
         new Request(new URL("/api/v1/auth/login", origin), {
           method: "POST",
@@ -109,7 +117,7 @@ describe("the walker over the committed document", () => {
         continue;
       }
       const email = `walker-${operationId}@example.test`.toLowerCase();
-      cookies.set(operationId, await signIn(email, needsReauth.has(operationId)));
+      cookies.set(operationId, await signIn(email, needsReauth.has(operationId), operationId === "createApiToken"));
       if (needsReauth.has(operationId)) {
         // Its own account: the valid request of the operation ends the sessions of the account it is made for.
         stale.set(operationId, await signIn(`walker-${operationId}-stale@example.test`.toLowerCase(), false));
@@ -139,9 +147,9 @@ describe("the walker over the committed document", () => {
     expect(report.failures).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each anonymous operation and for the sign-in; each of the thirteen operations that need a session
-    // also answers 401 without one, and each of the four that declare re-authentication answers 401 reauth_required without it.
-    expect(report.calls).toBe(operations.length + 17);
+    // One valid request for each anonymous operation and for the sign-in; each of the sixteen operations that need a session
+    // also answers 401 without one, and each of the five that declare re-authentication answers 401 reauth_required without it.
+    expect(report.calls).toBe(operations.length + 21);
   });
 });
 

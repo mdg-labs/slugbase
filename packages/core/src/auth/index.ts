@@ -1,3 +1,13 @@
+export {
+  API_TOKEN_BYTES,
+  API_TOKEN_DISPLAY_PREFIX_LENGTH,
+  API_TOKEN_PREFIX,
+  API_TOKEN_SECRET_LENGTH,
+  MAX_API_TOKENS_PER_USER,
+  generateApiToken,
+  hashApiToken,
+} from "./api-tokens.ts";
+export type { ApiToken } from "./api-tokens.ts";
 export { BreachedDatasetError, createBreachedPasswords, loadBreachedPasswords } from "./breached/index.ts";
 export type { BreachedPasswords } from "./breached/index.ts";
 export { normalizeEmail } from "./email.ts";

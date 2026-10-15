@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildOpenApiDocument, serializeOpenApiDocument } from "../src/openapi/generate.ts";
-import { ACCENT_PRESETS, AccountSchema, ChangePasswordRequestSchema, DisableMfaRequestSchema, ReauthRequestSchema, RegenerateBackupCodesRequestSchema, MembershipSchema, MeSchema, RevokeSessionsQuerySchema, SessionIdParamsSchema, SessionListQuerySchema, SessionListSchema, SessionSchema, UpdateAccountRequestSchema } from "../src/operations/me.ts";
+import { ACCENT_PRESETS, AccountSchema, ApiTokenIdParamsSchema, ApiTokenListQuerySchema, ApiTokenListSchema, ApiTokenSchema, CreateApiTokenRequestSchema, CreatedApiTokenSchema, ChangePasswordRequestSchema, DisableMfaRequestSchema, ReauthRequestSchema, RegenerateBackupCodesRequestSchema, MembershipSchema, MeSchema, RevokeSessionsQuerySchema, SessionIdParamsSchema, SessionListQuerySchema, SessionListSchema, SessionSchema, UpdateAccountRequestSchema } from "../src/operations/me.ts";
 import { operations } from "../src/operations/index.ts";
 
 type Obj = Record<string, unknown>;
@@ -382,5 +382,97 @@ describe("the backup-code and disable operations", () => {
     expect(DisableMfaRequestSchema.safeParse({ password: "x", code: "123456", backupCode: "ABCDE23456" }).success).toBe(false);
     expect(DisableMfaRequestSchema.safeParse({ password: "", code: "123456" }).success).toBe(false);
     expect(DisableMfaRequestSchema.safeParse({ password: "x", code: "123456", accountId: "y" }).success).toBe(false);
+  });
+});
+
+describe("the API token operations", () => {
+  const TOKEN = {
+    id: "0192f3a0-0000-7000-8000-0000000000b1",
+    name: "CI",
+    workspaceId: "0192f3a0-0000-7000-8000-0000000000c1",
+    workspaceName: "Team",
+    scope: "read",
+    prefix: "AbCdEf",
+    createdAt: "2026-10-15T10:00:00.000Z",
+    lastUsedAt: null,
+    expiresAt: null,
+  };
+
+  it.each([
+    ["get", "/api/v1/me/api-tokens", "listApiTokens", "read", false],
+    ["post", "/api/v1/me/api-tokens", "createApiToken", "token_create", true],
+    ["delete", "/api/v1/me/api-tokens/{id}", "revokeApiToken", "write", false],
+  ])("%s %s is %s: an account operation in the %s bucket that no API token may call", (method, path, operationId, rate, reauth) => {
+    const operation = paths[path]?.[method];
+    expect(operation?.["operationId"]).toBe(operationId);
+    expect(operation?.["x-slugbase-auth"]).toBe("account");
+    expect(operation?.["x-slugbase-rate"]).toBe(rate);
+    expect(operation?.["x-slugbase-scope"]).toBeUndefined();
+    expect(operation?.["x-slugbase-reauth"]).toBe(reauth ? true : undefined);
+  });
+
+  it("declares application/problem+json for every client error, and 404, 409 and 422 on the creation", () => {
+    for (const [path, method] of [
+      ["/api/v1/me/api-tokens", "get"],
+      ["/api/v1/me/api-tokens", "post"],
+      ["/api/v1/me/api-tokens/{id}", "delete"],
+    ] as const) {
+      const responses = responsesOf(paths[path]?.[method]);
+      const clientErrors = Object.keys(responses).filter((status) => status.startsWith("4"));
+      expect(clientErrors, `${method} ${path}`).toContain("401");
+      expect(clientErrors, `${method} ${path}`).toContain("429");
+      for (const status of clientErrors) {
+        expect(Object.keys(responses[status]?.content ?? {}), `${method} ${path} ${status}`).toEqual(["application/problem+json"]);
+      }
+    }
+    expect(Object.keys(responsesOf(paths["/api/v1/me/api-tokens"]?.["post"]))).toEqual(expect.arrayContaining(["201", "401", "404", "409", "422"]));
+    expect(Object.keys(responsesOf(paths["/api/v1/me/api-tokens/{id}"]?.["delete"]))).toEqual(expect.arrayContaining(["204", "404"]));
+  });
+
+  it("lists closed ApiToken objects with no hash and no secret, and returns the secret only on the creation", () => {
+    const token = schemas["ApiToken"] as { additionalProperties: unknown; properties: Obj; required: string[] };
+    expect(token.additionalProperties).toBe(false);
+    expect(Object.keys(token.properties).sort()).toEqual(["createdAt", "expiresAt", "id", "lastUsedAt", "name", "prefix", "scope", "workspaceId", "workspaceName"]);
+    expect([...token.required].sort()).toEqual(Object.keys(token.properties).sort());
+    expect(responsesOf(paths["/api/v1/me/api-tokens"]?.["get"])["200"]?.content).toEqual({ "application/json": { schema: { $ref: "#/components/schemas/ApiTokenList" } } });
+    expect(responsesOf(paths["/api/v1/me/api-tokens"]?.["post"])["201"]?.content).toEqual({ "application/json": { schema: { $ref: "#/components/schemas/CreatedApiToken" } } });
+    expect(ApiTokenSchema.safeParse({ ...TOKEN, token: "slb_x" }).success).toBe(false);
+    expect(ApiTokenSchema.safeParse({ ...TOKEN, tokenHash: "00" }).success).toBe(false);
+    expect(ApiTokenSchema.safeParse(TOKEN).success).toBe(true);
+    expect(CreatedApiTokenSchema.safeParse({ ...TOKEN, token: `slb_${"A".repeat(43)}` }).success).toBe(true);
+    expect(CreatedApiTokenSchema.safeParse(TOKEN).success).toBe(false);
+    expect(ApiTokenListSchema.safeParse({ items: [TOKEN], nextCursor: null }).success).toBe(true);
+  });
+
+  it("takes a name of 1 to 64 characters, a scope of read or read-write and an expiry of 30, 90, 365 or null that is 90 when left out", () => {
+    expect(CreateApiTokenRequestSchema.parse({ name: " CI ", scope: "read" })).toEqual({ name: "CI", scope: "read", expiresInDays: 90 });
+    expect(CreateApiTokenRequestSchema.parse({ name: "CI", scope: "read-write", expiresInDays: null }).expiresInDays).toBeNull();
+    for (const days of [30, 90, 365]) {
+      expect(CreateApiTokenRequestSchema.parse({ name: "CI", scope: "read", expiresInDays: days }).expiresInDays).toBe(days);
+    }
+    for (const days of [0, 1, 31, 366, "90", 90.5]) {
+      expect(CreateApiTokenRequestSchema.safeParse({ name: "CI", scope: "read", expiresInDays: days }).success, String(days)).toBe(false);
+    }
+    expect(CreateApiTokenRequestSchema.safeParse({ name: "", scope: "read" }).success).toBe(false);
+    expect(CreateApiTokenRequestSchema.safeParse({ name: "   ", scope: "read" }).success).toBe(false);
+    expect(CreateApiTokenRequestSchema.safeParse({ name: "x".repeat(64), scope: "read" }).success).toBe(true);
+    expect(CreateApiTokenRequestSchema.safeParse({ name: "x".repeat(65), scope: "read" }).success).toBe(false);
+    expect(CreateApiTokenRequestSchema.safeParse({ name: "CI", scope: "write" }).success).toBe(false);
+    expect(CreateApiTokenRequestSchema.safeParse({ name: "CI" }).success).toBe(false);
+  });
+
+  it("takes an optional workspace UUID and refuses a field it does not declare, an account among them", () => {
+    const workspaceId = "0192f3a0-0000-7000-8000-0000000000c1";
+    expect(CreateApiTokenRequestSchema.parse({ name: "CI", scope: "read", workspaceId }).workspaceId).toBe(workspaceId);
+    expect(CreateApiTokenRequestSchema.safeParse({ name: "CI", scope: "read", workspaceId: "not-a-uuid" }).success).toBe(false);
+    expect(CreateApiTokenRequestSchema.safeParse({ name: "CI", scope: "read", accountId: workspaceId }).success).toBe(false);
+  });
+
+  it("pages the list like the sessions and takes a UUID path identifier", () => {
+    expect(ApiTokenListQuerySchema.parse({}).limit).toBe(50);
+    expect(ApiTokenListQuerySchema.safeParse({ limit: "101" }).success).toBe(false);
+    expect(ApiTokenListQuerySchema.safeParse({ limit: "0" }).success).toBe(false);
+    expect(ApiTokenIdParamsSchema.safeParse({ id: "0192f3a0-0000-7000-8000-0000000000b1" }).success).toBe(true);
+    expect(ApiTokenIdParamsSchema.safeParse({ id: "nope" }).success).toBe(false);
   });
 });

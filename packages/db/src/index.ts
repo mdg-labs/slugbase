@@ -26,6 +26,8 @@ export type {
 } from "./repositories/scoped.ts";
 export { ACCENT_PRESETS, accountProfileRepository } from "./repositories/account-profile.ts";
 export type { AccentPreset, AccountProfile, AccountProfileChanges, AccountProfileRepository, AnalyticsConsent, Onboarding } from "./repositories/account-profile.ts";
+export { apiTokenRepository } from "./repositories/api-tokens.ts";
+export type { ApiTokenCreation, ApiTokenRecord, ApiTokenRepository, ApiTokenScope, NewApiToken } from "./repositories/api-tokens.ts";
 export { membershipRepository } from "./repositories/memberships.ts";
 export type { Membership, MembershipRepository } from "./repositories/memberships.ts";
 export type { MemberRole } from "./schema/workspaces.ts";

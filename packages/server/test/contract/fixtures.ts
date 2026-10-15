@@ -10,6 +10,12 @@ export const WALKER_ACCOUNT = { email: "walker@example.test", password: "a passw
 /** A session id no account holds: the walker's request to revoke it is the declared 404. */
 export const UNKNOWN_SESSION_ID = "0192f3a0-cccc-7000-8000-000000000001";
 
+/** The workspace the walker that creates an API token is a member of. */
+export const WALKER_WORKSPACE_ID = "0192f3a0-cccc-7000-8000-0000000000f1";
+
+/** A token id no account holds: the walker's request to revoke it is the declared 404. */
+export const UNKNOWN_API_TOKEN_ID = "0192f3a0-cccc-7000-8000-000000000002";
+
 export const FIXTURES: ContractFixtures = {
   getHealth: {},
   getReady: {},
@@ -39,6 +45,12 @@ export const FIXTURES: ContractFixtures = {
   // The walker has one session, which every call of the walk needs; a revocation that succeeds is covered by the session route tests.
   revokeSession: { path: { id: UNKNOWN_SESSION_ID }, status: 404 },
   revokeSessions: {},
+  // Account-level operations: no workspace of another account is part of them, and the tokens they act on are the walker's own. The walker
+  // that creates is a member of the workspace it names (the contract test seeds it, the stub tenant resolver knows no workspace of a real
+  // session), so the valid request is the declared 201; a token that is not its own is the 404 the revocation answers.
+  listApiTokens: {},
+  createApiToken: { body: { name: "Walker token", scope: "read", workspaceId: WALKER_WORKSPACE_ID } },
+  revokeApiToken: { path: { id: UNKNOWN_API_TOKEN_ID }, status: 404 },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

@@ -172,7 +172,7 @@ Field codes inside `errors[]` of a `422 validation_failed` or a `403 forbidden`:
 
 | Field code | Operation | Meaning |
 |---|---|---|
-| `api_token_limit_reached` | `POST /me/api-tokens` | The account already has 10 active tokens |
+| `api_token_limit_reached` | `POST /me/api-tokens` (`422 validation_failed`, on `name`) | The account already has 10 tokens that are neither revoked nor expired |
 | `invitation_email_mismatch` | `POST /invitations/accept` | The signed-in account's verified email is not the invited address (`403 forbidden`) |
 | `invalid_password` | `POST /me/reauth` (`401 reauth_required`), `POST /me/password` on `currentPassword` (`422 validation_failed`) | The password is wrong, or the account has none; one answer for both, so the response does not tell them apart |
 | `last_sign_in_method` | `DELETE /me/identities/{id}` | Would leave the account with no way to sign in |
@@ -189,7 +189,7 @@ New codes are additive (§2.2); a client must treat an unknown `code` by its `st
 | Principal | Credential | Carries | Cross-site check (§5) | MFA |
 |---|---|---|---|---|
 | **Session** | `__Host-slugbase_session` cookie (`slugbase_session` without `Secure` when `APP_ORIGIN` is http) | account, active workspace, auth level (`partial` → `full`), re-auth timestamp | Required on unsafe methods | Enforced at login |
-| **API token** | `Authorization: Bearer slb_<43 base62 characters>` (32 random bytes) | account, **bound workspace**, scope (`read` / `read-write`) | Not applied (no ambient credential) | Not applicable (an already-trusted credential, D10) |
+| **API token** | `Authorization: Bearer slb_<43 base64url characters>` (32 random bytes) | account, **bound workspace**, scope (`read` / `read-write`) | Not applied (no ambient credential) | Not applicable (an already-trusted credential, D10) |
 | **Machine** | Route-specific: a module's inbound event endpoint (in Cloud, the billing service's events; no session; sender signature verified, idempotent), internal metrics port | nothing | Not applied | — |
 | **Anonymous** | none | — | Required on unsafe methods (login, register, setup, password reset, invitation accept) | — |
 
@@ -428,9 +428,9 @@ Unauthenticated, `Content-Type: application/opensearchdescription+xml`, built on
 | GET | `/me/sessions` | List sessions (§6.1: `limit`, `cursor`; `{ items, nextCursor }` with no `total`), newest first; each item `{ id, createdAt, lastSeenAt, userAgentFamily, ipPrefix, current }`; the cursor is valid only for the account it was issued to; never a token hash or a full address, and no location is derived | acct | | |
 | DELETE | `/me/sessions/{id}` | Revoke one session (`204`; `404 not_found` for an id the account does not hold, another account's included); revoking the current session also clears the cookie | acct | | |
 | DELETE | `/me/sessions` | Revoke all other sessions ("sign out everywhere"; `?includeCurrent=true` too, which also clears the cookie; `204`) | acct | | |
-| GET | `/me/api-tokens` | List tokens across workspaces (name, workspace, scope, prefix, created, last used, expires) | acct | | |
-| POST | `/me/api-tokens` | Create a token `{ name, scope: read\|read-write, expiresInDays: 30\|90\|365\|null, workspaceId? }` (default 90, Q47; workspace defaults to the active one and must be one the account belongs to) → secret shown once; at most 10 active (`api_token_limit_reached`) | acct | ✓ | token_create |
-| DELETE | `/me/api-tokens/{id}` | Revoke | acct | | |
+| GET | `/me/api-tokens` | List the account's tokens that are not revoked, across workspaces (§6.1: `limit`, `cursor`; `{ items, nextCursor }` with no `total`), newest first; each item `{ id, name, workspaceId, workspaceName, scope, prefix, createdAt, lastUsedAt, expiresAt }`; the cursor is valid only for the account it was issued to; never a hash or a secret | acct | | |
+| POST | `/me/api-tokens` | Create a token `{ name, scope: read\|read-write, expiresInDays: 30\|90\|365\|null, workspaceId? }` (`name` 1–64 characters; `expiresInDays` is 90 when left out, `null` means no expiry, Q47; `workspaceId` defaults to the active workspace and must be one the account belongs to, otherwise `404 not_found`) → `201` with the token as listed plus `token`, the secret `slb_` + 43 base64url characters, returned in this response only; no `Location`, as a single token has no read. `409 name_taken` for a name the account already has; at most 10 tokens that are neither revoked nor expired (the 11th is `422 validation_failed` with the field code `api_token_limit_reached`). Session principals only | acct | ✓ | token_create |
+| DELETE | `/me/api-tokens/{id}` | Revoke: `204`, also for a token that was revoked before; `404 not_found` for an id the account does not hold, another account's included. The token is refused from its next request | acct | | |
 | GET | `/me/identities` | Linked OIDC identities | acct | | |
 | DELETE | `/me/identities/{id}` | Unlink (refused with `last_sign_in_method` if it is the only sign-in method) | acct | ✓ | |
 | GET | `/me/go-preferences` | Remembered slug choices in the active workspace | mem† (read) | | |

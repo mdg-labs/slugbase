@@ -120,6 +120,13 @@
       "when": 1792064262569,
       "tag": "20261015113742_add_mfa_enabled_read",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1792072786491,
+      "tag": "20261015135946_add_api_tokens",
+      "breakpoints": true
     }
   ]
 }

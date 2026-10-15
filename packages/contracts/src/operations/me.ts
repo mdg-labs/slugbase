@@ -432,3 +432,122 @@ export const disableMfa = defineOperation({
     503: problemResponse("The service is temporarily unavailable"),
   },
 });
+
+export const API_TOKEN_SCOPES = ["read", "read-write"] as const;
+/** The lifetimes of a new token in days (Q47); null in a request means it never expires. */
+export const API_TOKEN_EXPIRY_DAYS = [30, 90, 365] as const;
+
+export const ApiTokenSchema = z
+  .strictObject({
+    id: z.uuid().describe("The token's identifier; it names the token to revoke and is not part of the secret"),
+    name: z.string().describe("The name the token was given, unique among the account's tokens"),
+    workspaceId: z.uuid().describe("The workspace the token is bound to; every request made with it acts in that workspace"),
+    workspaceName: z.string().describe("The name of that workspace"),
+    scope: z.enum(API_TOKEN_SCOPES).describe("What the token may do: read, or read and write"),
+    prefix: z.string().describe("The first six characters of the secret after slb_, to tell tokens apart and to search for a leaked one; never enough to use it"),
+    createdAt: z.iso.datetime().describe("When the token was created, RFC 3339 UTC"),
+    lastUsedAt: z.iso.datetime().nullable().describe("When the token last authenticated a request, RFC 3339 UTC; null when it never has"),
+    expiresAt: z.iso.datetime().nullable().describe("When the token stops working, RFC 3339 UTC; null when it never expires"),
+  })
+  .meta({ id: "ApiToken" });
+
+export const ApiTokenListSchema = z
+  .strictObject({
+    items: z.array(ApiTokenSchema).describe("One page of the account's tokens that are not revoked, newest first, across every workspace; no hash and no secret"),
+    nextCursor: z.string().nullable().describe("Passed as `cursor` to get the next page; null on the last page"),
+  })
+  .meta({ id: "ApiTokenList" });
+
+export const CreatedApiTokenSchema = ApiTokenSchema.extend({
+  token: z.string().describe("The secret, slb_ followed by 43 characters; shown only in this response, and only its hash is kept"),
+}).meta({ id: "CreatedApiToken" });
+
+export const ApiTokenListQuerySchema = z.strictObject({
+  limit: z.coerce.number().int().min(1).max(100).default(50).describe("The most tokens to return, at most 100"),
+  cursor: z.string().min(1).max(512).optional().describe("The `nextCursor` of the previous page; valid only for the account that received it"),
+});
+
+export const CreateApiTokenRequestSchema = z
+  .strictObject({
+    name: z.string().trim().min(1).max(64).describe("The token's name, 1 to 64 characters, unique among the account's tokens; surrounding whitespace is removed"),
+    scope: z.enum(API_TOKEN_SCOPES).describe("What the token may do: read, or read and write"),
+    expiresInDays: z
+      .union([z.literal([...API_TOKEN_EXPIRY_DAYS]), z.null()])
+      .default(90)
+      .describe("Days until the token stops working: 30, 90 or 365; null for a token that never expires; 90 when left out"),
+    workspaceId: z
+      .uuid()
+      .optional()
+      .describe("The workspace to bind the token to, one the account is a member of; the workspace the request acts in when left out"),
+  })
+  .meta({ id: "CreateApiTokenRequest" });
+
+export const ApiTokenIdParamsSchema = z.strictObject({
+  id: z.uuid().describe("The token's identifier, as listed"),
+});
+
+export const listApiTokens = defineOperation({
+  method: "get",
+  path: "/api/v1/me/api-tokens",
+  operationId: "listApiTokens",
+  tag: "me",
+  summary: "List the account's API tokens",
+  auth: "account",
+  rate: "read",
+  request: { query: ApiTokenListQuerySchema },
+  responses: {
+    200: jsonResponse("One page of the account's tokens that are not revoked, across its workspaces; never a hash or a secret", ApiTokenListSchema),
+    400: problemResponse("The request was malformed, or the cursor is not one this account was issued"),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    403: problemResponse("The credential is an API token"),
+    422: problemResponse("The query did not pass validation"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const createApiToken = defineOperation({
+  method: "post",
+  path: "/api/v1/me/api-tokens",
+  operationId: "createApiToken",
+  tag: "me",
+  summary: "Create an API token",
+  auth: "account",
+  rate: "token_create",
+  reauth: true,
+  request: { body: CreateApiTokenRequestSchema },
+  responses: {
+    201: jsonResponse("The token is created; its secret is in this response only and is never returned again", CreatedApiTokenSchema),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"),
+    403: problemResponse("The request did not come from the application itself, or the credential is an API token"),
+    404: problemResponse("The account is not a member of the workspace named, or the request names none and acts in none"),
+    409: problemResponse("The account already has a token with this name (name_taken)"),
+    422: problemResponse(
+      "The body did not pass validation (a name outside 1 to 64 characters, an unknown scope, an expiry other than 30, 90, 365 or null); or the account already has 10 tokens that are neither revoked nor expired (validation_failed with the field code api_token_limit_reached)",
+    ),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const revokeApiToken = defineOperation({
+  method: "delete",
+  path: "/api/v1/me/api-tokens/{id}",
+  operationId: "revokeApiToken",
+  tag: "me",
+  summary: "Revoke one of the account's API tokens",
+  auth: "account",
+  rate: "write",
+  request: { params: ApiTokenIdParamsSchema },
+  responses: {
+    204: emptyResponse("The token is revoked and refused from its next request; a token that was revoked before is answered the same way"),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    403: problemResponse("The request did not come from the application itself, or the credential is an API token"),
+    404: problemResponse("The account has no token with this identifier, another account's included"),
+    422: problemResponse("The identifier did not pass validation"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});

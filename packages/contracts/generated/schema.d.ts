@@ -87,6 +87,41 @@ export interface paths {
         patch: operations["updateMe"];
         trace?: never;
     };
+    "/api/v1/me/api-tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the account's API tokens */
+        get: operations["listApiTokens"];
+        put?: never;
+        /** Create an API token */
+        post: operations["createApiToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/api-tokens/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke one of the account's API tokens */
+        delete: operations["revokeApiToken"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/mfa": {
         parameters: {
             query?: never;
@@ -412,6 +447,44 @@ export interface components {
             /** @description Whether the first account needs the one-time setup token; the same answer as GET /api/v1/setup/status, true only while setup is pending. A flag only, never the token. This server always sends it */
             setupTokenRequired?: boolean;
         };
+        ApiToken: {
+            /**
+             * Format: date-time
+             * @description When the token was created, RFC 3339 UTC
+             */
+            createdAt: string;
+            /** @description When the token stops working, RFC 3339 UTC; null when it never expires */
+            expiresAt: string | null;
+            /**
+             * Format: uuid
+             * @description The token's identifier; it names the token to revoke and is not part of the secret
+             */
+            id: string;
+            /** @description When the token last authenticated a request, RFC 3339 UTC; null when it never has */
+            lastUsedAt: string | null;
+            /** @description The name the token was given, unique among the account's tokens */
+            name: string;
+            /** @description The first six characters of the secret after slb_, to tell tokens apart and to search for a leaked one; never enough to use it */
+            prefix: string;
+            /**
+             * @description What the token may do: read, or read and write
+             * @enum {string}
+             */
+            scope: "read" | "read-write";
+            /**
+             * Format: uuid
+             * @description The workspace the token is bound to; every request made with it acts in that workspace
+             */
+            workspaceId: string;
+            /** @description The name of that workspace */
+            workspaceName: string;
+        };
+        ApiTokenList: {
+            /** @description One page of the account's tokens that are not revoked, newest first, across every workspace; no hash and no secret */
+            items: components["schemas"]["ApiToken"][];
+            /** @description Passed as `cursor` to get the next page; null on the last page */
+            nextCursor: string | null;
+        };
         ChangePasswordRequest: {
             /** @description The account's current password */
             currentPassword: string;
@@ -421,6 +494,59 @@ export interface components {
         ConfirmMfaEnrollmentRequest: {
             /** @description The current six-digit code of the authenticator app; spaces between the digits are ignored */
             code: string;
+        };
+        CreateApiTokenRequest: {
+            /**
+             * @description Days until the token stops working: 30, 90 or 365; null for a token that never expires; 90 when left out
+             * @default 90
+             */
+            expiresInDays: (30 | 90 | 365) | null;
+            /** @description The token's name, 1 to 64 characters, unique among the account's tokens; surrounding whitespace is removed */
+            name: string;
+            /**
+             * @description What the token may do: read, or read and write
+             * @enum {string}
+             */
+            scope: "read" | "read-write";
+            /**
+             * Format: uuid
+             * @description The workspace to bind the token to, one the account is a member of; the workspace the request acts in when left out
+             */
+            workspaceId?: string;
+        };
+        CreatedApiToken: {
+            /**
+             * Format: date-time
+             * @description When the token was created, RFC 3339 UTC
+             */
+            createdAt: string;
+            /** @description When the token stops working, RFC 3339 UTC; null when it never expires */
+            expiresAt: string | null;
+            /**
+             * Format: uuid
+             * @description The token's identifier; it names the token to revoke and is not part of the secret
+             */
+            id: string;
+            /** @description When the token last authenticated a request, RFC 3339 UTC; null when it never has */
+            lastUsedAt: string | null;
+            /** @description The name the token was given, unique among the account's tokens */
+            name: string;
+            /** @description The first six characters of the secret after slb_, to tell tokens apart and to search for a leaked one; never enough to use it */
+            prefix: string;
+            /**
+             * @description What the token may do: read, or read and write
+             * @enum {string}
+             */
+            scope: "read" | "read-write";
+            /** @description The secret, slb_ followed by 43 characters; shown only in this response, and only its hash is kept */
+            token: string;
+            /**
+             * Format: uuid
+             * @description The workspace the token is bound to; every request made with it acts in that workspace
+             */
+            workspaceId: string;
+            /** @description The name of that workspace */
+            workspaceName: string;
         };
         DisableMfaRequest: {
             /** @description The current six-digit code of the authenticator app; spaces between the digits are ignored */
@@ -1053,6 +1179,268 @@ export interface operations {
                 };
             };
             /** @description The body did not pass validation: an unknown field or onboarding key, a name that is empty or longer than 100 characters, or a value outside the one the field allows (a language other than en and de, an accent that is not a preset name) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listApiTokens: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of the account's tokens that are not revoked, across its workspaces; never a hash or a secret */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiTokenList"];
+                };
+            };
+            /** @description The request was malformed, or the cursor is not one this account was issued */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The credential is an API token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The query did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createApiToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateApiTokenRequest"];
+            };
+        };
+        responses: {
+            /** @description The token is created; its secret is in this response only and is never returned again */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedApiToken"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself, or the credential is an API token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The account is not a member of the workspace named, or the request names none and acts in none */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The account already has a token with this name (name_taken) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation (a name outside 1 to 64 characters, an unknown scope, an expiry other than 30, 90, 365 or null); or the account already has 10 tokens that are neither revoked nor expired (validation_failed with the field code api_token_limit_reached) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    revokeApiToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The token is revoked and refused from its next request; a token that was revoked before is answered the same way */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself, or the credential is an API token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The account has no token with this identifier, another account's included */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The identifier did not pass validation */
             422: {
                 headers: {
                     [name: string]: unknown;

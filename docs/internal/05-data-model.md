@@ -120,15 +120,16 @@ Index `(account_id)`, `(expires_at)`. The account sees its own sessions through 
 | `workspace_id` | uuid NOT NULL | Bound workspace, chosen at creation among the account's workspaces (doc 04 §4.2) |
 | — | FK `(workspace_id, account_id)` → `workspace_members` ON DELETE CASCADE | Losing membership deletes the token |
 | `name` | text NOT NULL | 1–64 chars |
-| `token_hash` | bytea NOT NULL UNIQUE | SHA-256 of the token (`slb_` + 32 random bytes, base62) |
+| `token_hash` | bytea NOT NULL UNIQUE | SHA-256 (32 bytes) of the whole token as the bearer presents it (`slb_` + 32 random bytes as 43 base64url characters); `slugbase_app` has no SELECT on the column |
 | `token_prefix` | text NOT NULL | First 6 chars after `slb_`, for display and leak scanning |
 | `scope` | text NOT NULL | `read` / `read-write` |
 | `expires_at` | timestamptz | NULL = no expiry (Q47); the creation dialog defaults to 90 days |
 | `last_used_at` | timestamptz | Written at most once a minute |
 | `last_used_ip_prefix` | cidr | Same coarse prefix as sessions, written with `last_used_at` |
+| `revoked_at` | timestamptz | Set by `DELETE /me/api-tokens/{id}`, keeping the first time; the row stays, so a repeated revocation is answered as the first one (doc 04 §2.4), and the token lookup treats it as inert |
 | `created_at` | timestamptz | |
 
-`UNIQUE (account_id, name)`; the per-account count (10 active tokens, `MAX_API_TOKENS_PER_USER`) is enforced in the service.
+Unique `(account_id, name)` among the rows with `revoked_at IS NULL` (a partial unique index), so a revoked token's name can be used again; CHECKs on the name length, the hash length (32), the prefix length (6) and the scope. The per-account count (10 tokens that are neither revoked nor expired, `MAX_API_TOKENS_PER_USER`) is enforced in the service, under a lock on the account's row so two creations at once cannot both pass it. Management uses the account policy `account_id = app_account_id()` in an account-level transaction; `slugbase_app` may read every column but `token_hash`, insert and update `revoked_at` alone, and holds no DELETE (a token leaves with its membership or account).
 
 **`mfa_backup_codes`** — RLS: S (enabled and forced, no policy; `slugbase_app` has no privilege on it). `id`, `account_id` → accounts CASCADE, `code_hash bytea` (the argon2id PHC string, as bytes, of the 10-char code — low entropy, so a slow hash), `used_at`. Partial index `(account_id) WHERE used_at IS NULL`.
 
@@ -382,7 +383,7 @@ The complete list of operations that cross the tenant or account boundary. Each 
 | `sys_account_password_hash(account_id)` | The password hash is column-protected and the application verifies it | The argon2id hash of an account that exists, is not disabled and has a password; NULL for every other case, which callers treat alike |
 | `sys_session_reauth(id, account_id)` | `sessions` is not readable by the app role | Sets `reauth_at` of one full session of the account to the database clock's now and says whether there was one (doc 04 section 4.4) |
 | `sys_password_set(account_id, hash)` | Column-protected | Stores a hash that has the shape of an argon2id PHC string (the `$argon2id$` prefix, an optional version field, the `m`, `t` and `p` parameters, and a non-empty base64 salt and hash; any other string, one with leading or trailing whitespace included, is refused) and sets `password_changed_at` to now (invalidates the account's sessions created before it); false, changing nothing, for an unknown or disabled account. It does not check the lengths of the salt or hash or that the hash decodes: the application's hasher is the only writer. The password change runs it, `sys_session_rotate` and `sys_session_revoke_all(account_id, current session)` in one transaction, in that order: the account row is locked first, so two changes made at once queue instead of deadlocking, and a failure at any step leaves the old password, the old sessions and the old token |
-| `sys_api_token_lookup(token_hash)` | Runs before any account is known | Token principal (account, workspace, scope, disabled/expired checks; a workspace being deleted is inert); throttled `last_used_at` and IP-prefix write |
+| `sys_api_token_lookup(token_hash)` | Runs before any account is known | Token principal (account, workspace, scope, disabled/expired/revoked checks; a workspace being deleted is inert); throttled `last_used_at` and IP-prefix write |
 | `sys_credential_token_issue(purpose, account_id, hash, target_email, ttl)` / `sys_credential_token_consume(purpose, hash)` | Redeemed anonymously by token | Consume is single-use (`UPDATE … SET used_at … WHERE used_at IS NULL AND expires_at > now() RETURNING`) |
 | `sys_oidc_state_*`, `sys_identity_lookup(provider, subject)` | OIDC callback is anonymous | |
 | `sys_create_account(id, email, display_name, password_hash, locale, email_verified)` | Registration, setup, invitation accept are anonymous | Inserts the account under the id the application generated (Q91); never an instance admin. A unique violation (the email, case-insensitively, or the id) inserts nothing and answers `false`, so the caller responds generically |
