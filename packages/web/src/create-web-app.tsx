@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { createApiClient } from "./api/client.ts";
 import { mfaMiddleware } from "./auth/mfa.ts";
 import { ReauthPrompt } from "./auth/reauth-prompt.tsx";
+import { ReauthProvider } from "./auth/reauth-context.tsx";
 import { createReauth, reauthMiddleware } from "./auth/reauth.ts";
 import { fetchConfig, type ConfigResult } from "./config/bootstrap.ts";
 import { ConfigFailure } from "./config/config-failure.tsx";
@@ -81,10 +82,12 @@ export function createWebApp({ extensions }: CreateWebAppOptions): ComponentType
           <AccountI18nProvider defaultLocale={loaded.config.defaultLocale}>
             <LocalisedSpinners>
               <AppFeedback expiry={sessionExpiry} router={router}>
-                <ExtensionsProvider extensions={extensions}>
-                  <RouterProvider router={router} />
-                </ExtensionsProvider>
-                <ReauthPrompt api={api} reauth={reauth} />
+                <ReauthProvider reauth={reauth}>
+                  <ExtensionsProvider extensions={extensions}>
+                    <RouterProvider router={router} />
+                  </ExtensionsProvider>
+                  <ReauthPrompt api={api} reauth={reauth} />
+                </ReauthProvider>
               </AppFeedback>
             </LocalisedSpinners>
           </AccountI18nProvider>

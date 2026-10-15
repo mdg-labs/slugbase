@@ -76,6 +76,9 @@ function stubServer({ sessions, password, reauth, revoke, hasPassword = true }: 
     if (pathname === SESSION_PATH && request.method === "GET") {
       return search.includes("limit=1&") || search.endsWith("limit=1") ? json({ items: listed.slice(0, 1), nextCursor: null }) : (sessions?.() ?? json({ items: listed, nextCursor: null }));
     }
+    if (pathname === "/api/v1/me/identities") {
+      return json({ items: [], nextCursor: null });
+    }
     if (pathname === PASSWORD_PATH) {
       return password?.(calls.filter((entry) => entry.path === PASSWORD_PATH).length) ?? new Response(null, { status: 204 });
     }
@@ -189,12 +192,13 @@ describe("the security page", () => {
     expect(window.location.pathname).toBe("/settings/account/security");
   });
 
-  it("says an account without a password has none, instead of showing a form that cannot work", async () => {
+  it("offers an account without a password to add one, without asking for a current password", async () => {
     stubServer({ hasPassword: false });
     await openSecurity();
 
-    expect(await screen.findByText("This account has no password")).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 2, name: "Add a password" })).toBeTruthy();
     expect(screen.queryByLabelText("Current password")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Change password" })).toBeNull();
   });
 });
 

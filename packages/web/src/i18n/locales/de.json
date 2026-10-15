@@ -177,9 +177,12 @@
           "breached": "Dieses Passwort ist in einem bekannten Datenleck aufgetaucht. Wähle ein anderes.",
           "weak": "Wähle ein stärkeres Passwort."
         },
-        "none": {
-          "title": "Dieses Konto hat kein Passwort",
-          "description": "Du meldest dich über einen Identitätsanbieter an. Ein Passwort hinzuzufügen ist noch nicht möglich."
+        "added": "Dein Passwort wurde hinzugefügt. Deine anderen Sitzungen wurden abgemeldet.",
+        "add": {
+          "title": "Passwort hinzufügen",
+          "description": "Füge ein Passwort hinzu, um dich auch mit deiner E-Mail-Adresse anzumelden. Deine anderen Sitzungen werden dabei abgemeldet.",
+          "submit": "Passwort hinzufügen",
+          "gained": "Dieses Konto hat bereits ein Passwort. Lade die Seite neu, um es zu ändern."
         }
       },
       "sessions": {
@@ -302,6 +305,40 @@
           "wrongPassword": "Das Passwort stimmt nicht.",
           "reauthRequired": "Bestätige, dass du es bist, um fortzufahren.",
           "unavailable": "Das hat nicht geklappt. Versuche es gleich noch einmal."
+        }
+      },
+      "identities": {
+        "title": "Verknüpfte Anmeldemethoden",
+        "description": "Die Anbieter, mit denen du dich anmelden kannst. Es bleibt immer mindestens eine Möglichkeit zur Anmeldung.",
+        "column": {
+          "provider": "Anbieter",
+          "email": "E-Mail bei Verknüpfung",
+          "lastUsed": "Zuletzt verwendet",
+          "actions": "Aktionen"
+        },
+        "noEmail": "Nicht angegeben",
+        "neverUsed": "Nie",
+        "none": "Mit deinem Konto ist kein Anbieter verknüpft.",
+        "link": "Verknüpfen",
+        "linkNamed": "{provider} verknüpfen",
+        "unlink": "Trennen",
+        "unlinkNamed": "{provider} trennen",
+        "unlinked": "Anmeldemethode getrennt",
+        "loadFailed": {
+          "title": "Deine verknüpften Anmeldemethoden konnten nicht geladen werden"
+        },
+        "error": {
+          "lastMethod": {
+            "title": "Das ist deine einzige Möglichkeit zur Anmeldung",
+            "description": "Füge zuerst ein Passwort hinzu oder verknüpfe einen anderen Anbieter, und trenne dann diesen."
+          },
+          "refused": "Diese Anmeldemethode konnte nicht getrennt werden."
+        },
+        "confirm": {
+          "title": "{provider} trennen?",
+          "description": "Du kannst dich dann nicht mehr mit {provider} anmelden. Mindestens eine Möglichkeit zur Anmeldung muss bleiben, daher geht das nur, solange dein Konto ein Passwort oder einen anderen verknüpften Anbieter hat.",
+          "action": "Trennen",
+          "cancel": "Abbrechen"
         }
       }
     },
@@ -458,8 +495,11 @@
         "unknown": "Zu viele Anmeldeversuche. Versuche es später erneut.",
         "seconds": "Zu viele Anmeldeversuche. Versuche es in {count, plural, one {# Sekunde} other {# Sekunden}} erneut.",
         "minutes": "Zu viele Anmeldeversuche. Versuche es in {count, plural, one {# Minute} other {# Minuten}} erneut."
-      }
-    }
+      },
+      "oidcFailed": "Die Anmeldung mit diesem Anbieter hat nicht funktioniert. Versuche es erneut oder melde dich mit E-Mail-Adresse und Passwort an."
+    },
+    "or": "oder",
+    "provider": "Weiter mit {name}"
   },
   "loginMfa": {
     "title": "Zweistufige Bestätigung",
@@ -513,6 +553,11 @@
         "seconds": "Zu viele Versuche. Versuche es in {count, plural, one {# Sekunde} other {# Sekunden}} noch einmal.",
         "minutes": "Zu viele Versuche. Versuche es in {count, plural, one {# Minute} other {# Minuten}} noch einmal."
       }
+    },
+    "provider": {
+      "description": "Für diese Änderung musst du über deinen Anmeldeanbieter bestätigen, dass du es bist.",
+      "confirm": "Mit {name} bestätigen",
+      "none": "Es ist kein Anmeldeanbieter verfügbar, um deine Identität zu bestätigen. Wende dich an deine Administration."
     }
   },
   "setup": {
