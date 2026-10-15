@@ -293,6 +293,32 @@
       }
     }
   },
+  "loginMfa": {
+    "title": "Zweistufige Bestätigung",
+    "description": "Gib einen Code ein, um die Anmeldung abzuschließen.",
+    "code": {
+      "label": "Bestätigungscode",
+      "slot": "Ziffer {position} von {length}",
+      "required": "Gib den sechsstelligen Code ein."
+    },
+    "backupCode": {
+      "label": "Backup-Code",
+      "required": "Gib einen Backup-Code ein."
+    },
+    "submit": "Bestätigen",
+    "useBackup": "Stattdessen einen Backup-Code verwenden",
+    "useCode": "Stattdessen die Authenticator-App verwenden",
+    "back": "Zurück zur Anmeldung",
+    "expired": {
+      "title": "Deine Anmeldung ist abgelaufen",
+      "description": "Melde dich erneut an, um fortzufahren."
+    },
+    "error": {
+      "invalidCode": "Dieser Code ist nicht gültig. Prüfe ihn und versuche es erneut.",
+      "unavailable": "Der Code konnte gerade nicht geprüft werden. Versuche es gleich noch einmal.",
+      "backUnavailable": "Der Weg zurück zur Anmeldung hat nicht geklappt. Versuche es erneut."
+    }
+  },
   "signOut": {
     "failed": {
       "title": "Du bist weiterhin angemeldet",

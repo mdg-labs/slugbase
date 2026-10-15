@@ -525,6 +525,25 @@ export interface ThemeToggleProps {
     switchToLight: string;
 }
 
+// @public
+export function Totp(input: TotpProps): ReactElement;
+
+// @public (undocumented)
+export interface TotpProps {
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    disabled?: boolean;
+    inputRef?: Ref<HTMLInputElement>;
+    length?: number;
+    name?: string;
+    onComplete?: (value: string) => void;
+    // (undocumented)
+    onValueChange: (value: string) => void;
+    slotLabel: (position: number, length: number) => string;
+    value: string;
+}
+
 export { TriangleAlertIcon }
 
 // @public

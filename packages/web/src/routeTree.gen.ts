@@ -16,6 +16,7 @@ import { Route as AppIndexRouteImport } from "./routes/_app/index.tsx";
 import { Route as AppSplatRouteImport } from "./routes/_app/$.tsx";
 import { Route as App403RouteImport } from "./routes/_app/403.tsx";
 import { Route as AppSettingsRouteImport } from "./routes/_app/settings.tsx";
+import { Route as LoginMfaRouteImport } from "./routes/login_.mfa.tsx";
 import { Route as AppSettingsIndexRouteImport } from "./routes/_app/settings/index.tsx";
 import { Route as AppSettingsAccountIndexRouteImport } from "./routes/_app/settings/account/index.tsx";
 import { Route as AppSettingsAccountPreferencesRouteImport } from "./routes/_app/settings/account/preferences.tsx";
@@ -55,6 +56,11 @@ const AppSettingsRoute = AppSettingsRouteImport.update({
   path: "/settings",
   getParentRoute: () => AppRoute,
 } as any);
+const LoginMfaRoute = LoginMfaRouteImport.update({
+  id: "/login_/mfa",
+  path: "/login/mfa",
+  getParentRoute: () => rootRouteImport,
+} as any);
 const AppSettingsIndexRoute = AppSettingsIndexRouteImport.update({
   id: "/",
   path: "/",
@@ -85,6 +91,7 @@ export interface FileRoutesByFullPath {
   "/$": typeof AppSplatRoute;
   "/403": typeof App403Route;
   "/settings": typeof AppSettingsRouteWithChildren;
+  "/login/mfa": typeof LoginMfaRoute;
   "/settings/": typeof AppSettingsIndexRoute;
   "/settings/account/preferences": typeof AppSettingsAccountPreferencesRoute;
   "/settings/account/security": typeof AppSettingsAccountSecurityRoute;
@@ -95,6 +102,7 @@ export interface FileRoutesByTo {
   "/setup": typeof SetupRoute;
   "/$": typeof AppSplatRoute;
   "/403": typeof App403Route;
+  "/login/mfa": typeof LoginMfaRoute;
   "/": typeof AppIndexRoute;
   "/settings": typeof AppSettingsIndexRoute;
   "/settings/account/preferences": typeof AppSettingsAccountPreferencesRoute;
@@ -109,6 +117,7 @@ export interface FileRoutesById {
   "/_app/$": typeof AppSplatRoute;
   "/_app/403": typeof App403Route;
   "/_app/settings": typeof AppSettingsRouteWithChildren;
+  "/login_/mfa": typeof LoginMfaRoute;
   "/_app/": typeof AppIndexRoute;
   "/_app/settings/": typeof AppSettingsIndexRoute;
   "/_app/settings/account/preferences": typeof AppSettingsAccountPreferencesRoute;
@@ -124,6 +133,7 @@ export interface FileRouteTypes {
     | "/$"
     | "/403"
     | "/settings"
+    | "/login/mfa"
     | "/settings/"
     | "/settings/account/preferences"
     | "/settings/account/security"
@@ -134,6 +144,7 @@ export interface FileRouteTypes {
     | "/setup"
     | "/$"
     | "/403"
+    | "/login/mfa"
     | "/"
     | "/settings"
     | "/settings/account/preferences"
@@ -147,6 +158,7 @@ export interface FileRouteTypes {
     | "/_app/$"
     | "/_app/403"
     | "/_app/settings"
+    | "/login_/mfa"
     | "/_app/"
     | "/_app/settings/"
     | "/_app/settings/account/preferences"
@@ -158,6 +170,7 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren;
   LoginRoute: typeof LoginRoute;
   SetupRoute: typeof SetupRoute;
+  LoginMfaRoute: typeof LoginMfaRoute;
 }
 
 declare module "@tanstack/react-router" {
@@ -210,6 +223,13 @@ declare module "@tanstack/react-router" {
       fullPath: "/settings";
       preLoaderRoute: typeof AppSettingsRouteImport;
       parentRoute: typeof AppRoute;
+    };
+    "/login_/mfa": {
+      id: "/login_/mfa";
+      path: "/login/mfa";
+      fullPath: "/login/mfa";
+      preLoaderRoute: typeof LoginMfaRouteImport;
+      parentRoute: typeof rootRouteImport;
     };
     "/_app/settings/": {
       id: "/_app/settings/";
@@ -280,6 +300,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
   SetupRoute: SetupRoute,
+  LoginMfaRoute: LoginMfaRoute,
 };
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

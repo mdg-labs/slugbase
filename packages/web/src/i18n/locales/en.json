@@ -293,6 +293,32 @@
       }
     }
   },
+  "loginMfa": {
+    "title": "Two-step verification",
+    "description": "Enter a code to finish signing in.",
+    "code": {
+      "label": "Authentication code",
+      "slot": "Digit {position} of {length}",
+      "required": "Enter the six-digit code."
+    },
+    "backupCode": {
+      "label": "Backup code",
+      "required": "Enter a backup code."
+    },
+    "submit": "Verify",
+    "useBackup": "Use a backup code instead",
+    "useCode": "Use the authenticator app instead",
+    "back": "Back to sign in",
+    "expired": {
+      "title": "Your sign-in has expired",
+      "description": "Sign in again to continue."
+    },
+    "error": {
+      "invalidCode": "That code is not valid. Check it and try again.",
+      "unavailable": "The code could not be checked right now. Try again in a moment.",
+      "backUnavailable": "Going back to sign in did not work. Try again."
+    }
+  },
   "signOut": {
     "failed": {
       "title": "You are still signed in",

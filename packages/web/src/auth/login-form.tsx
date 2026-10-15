@@ -5,6 +5,7 @@ import { useRouter } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactElement, type SyntheticEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiProblemError } from "../api/client.ts";
+import { mfaPath } from "./mfa.ts";
 import { safeNextPath } from "./next-path.ts";
 
 type FieldName = "email" | "password";
@@ -115,14 +116,16 @@ export function LoginForm({ next }: { next: string | undefined }): ReactElement 
     const controller = new AbortController();
     request.current = controller;
     setSubmitting(true);
+    let secondFactor = false;
     try {
-      const { error } = await router.options.context.api.POST("/api/v1/auth/login", {
+      const { data, error } = await router.options.context.api.POST("/api/v1/auth/login", {
         body: { email: address, password, remember },
         signal: controller.signal,
       });
       if (error !== undefined) {
         throw new Error("The sign-in did not answer with a problem document", { cause: error });
       }
+      secondFactor = data.next === "mfa";
     } catch (caught) {
       if (controller.signal.aborted) {
         return;
@@ -135,7 +138,8 @@ export function LoginForm({ next }: { next: string | undefined }): ReactElement 
     }
     // What the previous visitor of this browser left in the cache is not for the next one.
     queryClient.clear();
-    router.history.replace(safeNextPath(next));
+    // A password is right but the account has a second factor: the session is only half signed in until the code is given.
+    router.history.replace(secondFactor ? mfaPath(next) : safeNextPath(next));
   }
 
   const emailError = fieldMessage("email");

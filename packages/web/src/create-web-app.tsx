@@ -3,6 +3,7 @@ import { RouterProvider } from "@tanstack/react-router";
 import { ThemeProvider } from "@slugbase/ui";
 import { Suspense, use, type ComponentType, type ReactElement } from "react";
 import { createApiClient } from "./api/client.ts";
+import { mfaMiddleware } from "./auth/mfa.ts";
 import { ReauthPrompt } from "./auth/reauth-prompt.tsx";
 import { createReauth, reauthMiddleware } from "./auth/reauth.ts";
 import { fetchConfig, type ConfigResult } from "./config/bootstrap.ts";
@@ -53,6 +54,7 @@ export function createWebApp({ extensions }: CreateWebAppOptions): ComponentType
   // The configuration request is a GET that never needs re-authentication, and it is made in this turn, before
   // the middleware (which a request waits for) is registered.
   api.use(reauthMiddleware(reauth));
+  api.use(mfaMiddleware(router.history));
 
   function Product({ result }: { result: Promise<ConfigResult> }): ReactElement {
     const loaded = use(result);
