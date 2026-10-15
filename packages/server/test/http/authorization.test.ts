@@ -271,15 +271,26 @@ describe("the failure scenario (T3): an anonymous caller of an operation that re
 });
 
 describe("stage 4: authentication", () => {
-  it("makes every request anonymous when no authenticator is registered, whatever credential it carries", async () => {
+  it("makes a request anonymous when no module registers an authenticator and it carries only a cookie", async () => {
     const { server, seen, resolved } = setup({ authenticators: false });
-    const open = await server.fetch(get("/api/v1/open", { authorization: "Bearer slb_member_write", ...cookieOf("owner") }));
+    const open = await server.fetch(get("/api/v1/open", cookieOf("owner")));
     expect(open.status).toBe(200);
     expect(seen).toEqual([{ operationId: "openThing", principal: undefined, tenant: undefined }]);
 
-    const guarded = await server.fetch(get("/api/v1/bookmarks", { authorization: "Bearer slb_member_write", ...cookieOf("owner") }));
+    const guarded = await server.fetch(get("/api/v1/bookmarks", cookieOf("owner")));
     expect(guarded.status).toBe(401);
     expect(seen).toHaveLength(1);
+    expect(resolved).toEqual([]);
+  });
+
+  it("answers 401 to an Authorization header that is not an API token of the server, whatever the module authenticators", async () => {
+    const { server, seen, resolved } = setup({ authenticators: false });
+    for (const path of ["/api/v1/open", "/api/v1/bookmarks"]) {
+      const response = await server.fetch(get(path, { authorization: "Bearer slb_member_write", ...cookieOf("owner") }));
+      expect(response.status, path).toBe(401);
+      expect(await codeOf(response)).toBe("unauthenticated");
+    }
+    expect(seen).toEqual([]);
     expect(resolved).toEqual([]);
   });
 

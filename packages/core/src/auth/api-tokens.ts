@@ -44,3 +44,23 @@ export function generateApiToken(): ApiToken {
     displayPrefix: value.slice(API_TOKEN_PREFIX.length, API_TOKEN_PREFIX.length + API_TOKEN_DISPLAY_PREFIX_LENGTH),
   };
 }
+
+const BEARER_SCHEME = "bearer";
+const TOKEN_CHARACTERS = /^[A-Za-z0-9_-]+$/;
+
+/**
+ * The token of an `Authorization` header value, or undefined when the value is
+ * not `Bearer` followed by one space and a token of the shape `generateApiToken`
+ * makes: `slb_` and 43 base64url characters. The scheme name is case-insensitive
+ * (RFC 9110); nothing else is accepted, so a value of another shape never reaches
+ * a database lookup.
+ */
+export function bearerApiToken(authorization: string): string | undefined {
+  const split = authorization.indexOf(" ");
+  if (split < 0 || authorization.slice(0, split).toLowerCase() !== BEARER_SCHEME) {
+    return undefined;
+  }
+  const value = authorization.slice(split + 1);
+  const secret = value.slice(API_TOKEN_PREFIX.length);
+  return value.startsWith(API_TOKEN_PREFIX) && secret.length === API_TOKEN_SECRET_LENGTH && TOKEN_CHARACTERS.test(secret) ? value : undefined;
+}

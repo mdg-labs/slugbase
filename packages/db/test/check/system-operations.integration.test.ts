@@ -129,6 +129,7 @@ describe("the shipped chain", () => {
       "sys_mfa_lock",
       "sys_mfa_disable",
       "sys_account_mfa_enabled",
+      "sys_api_token_lookup",
     ]);
     expect(checkRules).toContain(systemOperationsRule);
     const database = await scratch();

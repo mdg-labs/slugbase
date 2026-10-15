@@ -3,7 +3,7 @@ import { defineOperation, jsonResponse, problemResponse } from "@slugbase/contra
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { createServer, type RouteBinding, type RunningServer } from "../../src/create-server.ts";
-import { adapters, fakeDatabase, recordingLogger, serverConfig, documentOf } from "../support.ts";
+import { acceptAnyBearer, adapters, fakeDatabase, recordingLogger, serverConfig, documentOf } from "../support.ts";
 
 // The cross-site rule over a real socket (doc 01 section 4 step 5, doc 10 T5):
 // the request the listener hands the chain is what a browser's form post and a
@@ -61,10 +61,12 @@ afterEach(async () => {
 });
 
 async function listen(): Promise<number> {
+  // The authentication stage is not under test: it accepts every Authorization header, so what the cross-site stage does with a bearer request is.
+  const bearer = acceptAnyBearer();
   const server = createServer({
     config: serverConfig(),
-    adapters: adapters(),
-    modules: [{ name: "cross-site-fixture", register: () => ({ routes }) }],
+    adapters: { ...adapters(), tenantResolver: bearer.tenantResolver },
+    modules: [{ name: "cross-site-fixture", register: () => ({ routes }) }, bearer.module],
     openApiDocument: documentOf([{ name: "cross-site-fixture", register: () => ({ routes }) }]),
     migrations: [],
     logger: recordingLogger(),

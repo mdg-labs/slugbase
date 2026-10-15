@@ -19,6 +19,7 @@ const authStore: AuthStore = {
   loginLookup: unexpected,
   createSession: unexpected,
   lookupSession: unexpected,
+  lookupApiToken: unexpected,
   revokeSession: unexpected,
   listSessions: unexpected,
   revokeAllSessions: unexpected,

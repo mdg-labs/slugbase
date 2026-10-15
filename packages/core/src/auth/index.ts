@@ -4,6 +4,7 @@ export {
   API_TOKEN_PREFIX,
   API_TOKEN_SECRET_LENGTH,
   MAX_API_TOKENS_PER_USER,
+  bearerApiToken,
   generateApiToken,
   hashApiToken,
 } from "./api-tokens.ts";

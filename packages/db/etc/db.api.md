@@ -97,6 +97,17 @@ export type ApiTokenCreation = {
 };
 
 // @public
+export interface ApiTokenPrincipalRecord {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly scope: "read" | "read-write";
+    // (undocumented)
+    readonly tokenId: string;
+    readonly workspaceId: string;
+}
+
+// @public
 export interface ApiTokenRecord {
     // (undocumented)
     readonly createdAt: Date;
@@ -136,6 +147,7 @@ export interface AuthStore extends SetupStore, MfaStore {
     emailKey(email: string): Promise<string>;
     listSessions(accountId: string, afterId: string | null, limit: number): Promise<readonly SessionSummary[]>;
     loginLookup(email: string): Promise<LoginCandidate | undefined>;
+    lookupApiToken(tokenHash: Buffer, ipPrefix: string | null): Promise<ApiTokenPrincipalRecord | undefined>;
     lookupSession(tokenHash: Buffer): Promise<SessionRecord | undefined>;
     markReauthenticated(sessionId: string, accountId: string): Promise<boolean>;
     passwordHashOf(accountId: string): Promise<string | null>;

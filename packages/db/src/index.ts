@@ -40,6 +40,7 @@ export type { RetentionPurgeCount, RetentionStore, RetentionStoreOptions } from 
 export type { QueuedJob, QueuedJobData } from "./system/queue.ts";
 export { createAuthStore } from "./system/auth.ts";
 export type {
+  ApiTokenPrincipalRecord,
   AuthStore,
   AuthStoreOptions,
   LoginCandidate,

@@ -1,4 +1,4 @@
-import { unconfigured, type Adapters } from "@slugbase/core";
+import { unconfigured, type Adapters, type TenantResolver } from "@slugbase/core";
 import type { AuthStore, Database } from "@slugbase/db";
 import { defineOperation, jsonResponse, problemResponse, type OperationDefinition } from "@slugbase/contracts";
 import { z } from "zod";
@@ -76,6 +76,7 @@ export function fakeAuthStore(overrides: Partial<AuthStore> = {}): AuthStore {
     loginLookup: unexpected("loginLookup"),
     createSession: unexpected("createSession"),
     lookupSession: unexpected("lookupSession"),
+    lookupApiToken: unexpected("lookupApiToken"),
     revokeSession: unexpected("revokeSession"),
     listSessions: unexpected("listSessions"),
     revokeAllSessions: unexpected("revokeAllSessions"),
@@ -165,4 +166,32 @@ export function documentOf(modules: readonly ServerModule[]): ContractDocument {
     }
   }
   return documentFor(operations);
+}
+
+const BEARER_ACCOUNT = "0190a000-0000-7000-8000-0000000000b1";
+const BEARER_WORKSPACE = "0190a000-0000-7000-8000-000000000001";
+
+/**
+ * A module whose bearer authenticator accepts every `Authorization` header as a read-write token of one
+ * account, and the tenant resolver that gives that account a workspace. For a test of a stage other than
+ * authentication that sends an `Authorization` header through the whole server: the built-in authenticator
+ * refuses a header that is not a token it knows, so such a request would be answered 401 before the stage
+ * under test.
+ */
+export function acceptAnyBearer(): { readonly module: ServerModule; readonly tenantResolver: TenantResolver } {
+  return {
+    module: {
+      name: "accept-any-bearer",
+      register: () => ({
+        routes: [],
+        authenticators: [
+          {
+            credential: "bearer",
+            authenticate: () => Promise.resolve({ kind: "api-token", accountId: BEARER_ACCOUNT, workspaceId: BEARER_WORKSPACE, scope: "read-write" }),
+          },
+        ],
+      }),
+    },
+    tenantResolver: { available: true, resolve: () => Promise.resolve({ workspaceId: BEARER_WORKSPACE, memberId: BEARER_ACCOUNT, role: "member" }) },
+  };
 }

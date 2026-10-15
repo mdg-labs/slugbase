@@ -1,5 +1,6 @@
-import type { AuthPolicy } from "@slugbase/contracts";
+import type { AuthPolicy, OperationDefinition } from "@slugbase/contracts";
 import { reauthenticatedRecently, type WorkspaceRole } from "@slugbase/core";
+import type { Principal } from "./authenticate.ts";
 import type { RequestStage } from "./chain.ts";
 import { ProblemError } from "./problem.ts";
 
@@ -46,12 +47,34 @@ const DETAILS = {
 } as const;
 
 /**
+ * An operation that requires an account or member principal accepts an API token
+ * only when it declares a scope, and not at all when it declares `reauth` (`403
+ * forbidden`; doc 04 sections 1.2 and 4.2). An `anonymous` or `machine` operation
+ * is outside the rule: this check does not apply to it and its handler does not
+ * read the token principal. The request is still a bearer request for the
+ * earlier stages, so it skips the cross-site check of stage 5. The answer
+ * depends on the operation alone, so the validation stage asks it first: a token
+ * request to an operation it may never call is refused whatever its body says.
+ * Stage 9 asks it again as part of its own order.
+ */
+export function refuseUncallableToken(principal: Principal | undefined, operation: OperationDefinition): void {
+  if (principal?.kind !== "api-token" || operation.auth === "anonymous" || operation.auth === "machine") {
+    return;
+  }
+  if (operation.scope === undefined || operation.reauth === true) {
+    throw new ProblemError("forbidden", DETAILS.forbidden);
+  }
+}
+
+/**
  * Stage 9. In this order: a principal is required unless the operation is
  * `anonymous` or `machine` (`401 unauthenticated`); a session still waiting for
  * its second factor is accepted only by a `partial` operation (`401
- * mfa_required`); an API token is accepted only by an operation that declares a
- * scope and not at all by one that declares `reauth` (`403 forbidden`), and a
- * read-only token not by a write (`403 token_scope`); `member`, `admin` and
+ * mfa_required`); an API token is accepted only by an operation that requires
+ * an account or member principal and declares a scope, and not at all by one
+ * that declares `reauth` (`403 forbidden`), and a read-only token not by a
+ * write (`403 token_scope`); `anonymous` and `machine` operations never reach
+ * these checks; `member`, `admin` and
  * `owner` need the role of the resolved workspace or a higher one (`403
  * forbidden`), and a principal with no workspace is answered `404 not_found`
  * by all three; `instanceAdmin` needs an instance-admin session (`403
@@ -85,9 +108,7 @@ export function createAuthorization({ entitlements = denyEntitlements, now = Dat
     }
 
     if (principal.kind === "api-token") {
-      if (scope === undefined || reauth === true) {
-        throw new ProblemError("forbidden", DETAILS.forbidden);
-      }
+      refuseUncallableToken(principal, operation);
       if (scope === "write" && principal.scope !== "read-write") {
         throw new ProblemError("token_scope", DETAILS.token_scope);
       }

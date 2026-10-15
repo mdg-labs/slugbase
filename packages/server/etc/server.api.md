@@ -40,7 +40,9 @@ export type Authenticator = BearerAuthenticator | CookieAuthenticator;
 // @public
 export interface BearerAuthenticator {
     // (undocumented)
-    authenticate(authorization: string): Promise<ApiTokenPrincipal | undefined>;
+    authenticate(authorization: string, request: {
+        readonly clientIp: string | undefined;
+    }): Promise<ApiTokenPrincipal | undefined>;
     // (undocumented)
     readonly credential: "bearer";
 }

@@ -119,6 +119,9 @@ export const BACKUP_CODE_LENGTH = 10;
 export function base32Encode(bytes: Uint8Array): string;
 
 // @public
+export function bearerApiToken(authorization: string): string | undefined;
+
+// @public
 export class BreachedDatasetError extends Error {
     constructor(reason: string);
 }

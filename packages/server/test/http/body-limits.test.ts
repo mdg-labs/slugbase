@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import { createServer, type ServerModule } from "../../src/create-server.ts";
 import { DEFAULT_MAX_BODY_BYTES } from "../../src/http/body-limits.ts";
-import { adapters, fakeDatabase, recordingLogger, serverConfig, documentOf } from "../support.ts";
+import { acceptAnyBearer, adapters, fakeDatabase, recordingLogger, serverConfig, documentOf } from "../support.ts";
 
 // Stage 3 of the chain (doc 01 section 4), exercised through test routes a test
 // module registers: no product mutation exists yet.
@@ -53,10 +53,12 @@ const testRoutes: ServerModule = {
 };
 
 function server() {
+  // The authentication stage is not under test: it accepts every Authorization header, so the content type of a bearer mutation is.
+  const bearer = acceptAnyBearer();
   return createServer({
     config: serverConfig(),
-    adapters: adapters(),
-    modules: [testRoutes],
+    adapters: { ...adapters(), tenantResolver: bearer.tenantResolver },
+    modules: [testRoutes, bearer.module],
     openApiDocument: documentOf([testRoutes]),
     migrations: [],
     logger: recordingLogger(),

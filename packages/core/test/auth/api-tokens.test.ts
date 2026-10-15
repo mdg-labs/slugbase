@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   API_TOKEN_SECRET_LENGTH,
   MAX_API_TOKENS_PER_USER,
+  bearerApiToken,
   generateApiToken,
   hashApiToken,
 } from "../../src/index.ts";
@@ -35,5 +36,37 @@ describe("generateApiToken", () => {
 describe("the limit", () => {
   it("is the ten active tokens per account of doc 02 section 2.9", () => {
     expect(MAX_API_TOKENS_PER_USER).toBe(10);
+  });
+});
+
+describe("bearerApiToken", () => {
+  const { value } = generateApiToken();
+
+  it("returns the token of a Bearer header, whatever the case of the scheme", () => {
+    expect(bearerApiToken(`Bearer ${value}`)).toBe(value);
+    expect(bearerApiToken(`bearer ${value}`)).toBe(value);
+    expect(bearerApiToken(`BEARER ${value}`)).toBe(value);
+  });
+
+  it("answers undefined for another scheme, a missing or doubled space and surrounding whitespace", () => {
+    for (const header of [`Basic ${value}`, `Token ${value}`, `Bearer${value}`, `Bearer  ${value}`, `Bearer ${value} `, ` Bearer ${value}`, value, "", "Bearer"]) {
+      expect(bearerApiToken(header)).toBeUndefined();
+    }
+  });
+
+  it("answers undefined for a value that is not slb_ and 43 base64url characters", () => {
+    const secret = value.slice(4);
+    for (const token of [
+      secret,
+      `SLB_${secret}`,
+      `slb_${secret}A`,
+      `slb_${secret.slice(1)}`,
+      `slb_${secret.slice(1)}=`,
+      `slb_${secret.slice(1)}+`,
+      `slb_${secret.slice(1)}\n`,
+      "slb_",
+    ]) {
+      expect(bearerApiToken(`Bearer ${token}`)).toBeUndefined();
+    }
   });
 });
