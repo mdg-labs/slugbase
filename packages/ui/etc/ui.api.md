@@ -378,6 +378,16 @@ export function Skeleton(input: React_3.ComponentProps<"div">): React_3.ReactEle
 // @public (undocumented)
 export function Spinner(input: React_3.ComponentProps<typeof Loader2Icon>): React_3.ReactElement;
 
+// @public
+export function SpinnerLabelProvider(input: SpinnerLabelProviderProps): React_3.ReactElement;
+
+// @public (undocumented)
+export interface SpinnerLabelProviderProps {
+    // (undocumented)
+    children: React_3.ReactNode;
+    label: string;
+}
+
 // @public (undocumented)
 export type Theme = "light" | "dark" | "system";
 

@@ -322,6 +322,26 @@ describe("a sign-in under way", () => {
     expect(await screen.findByRole("heading", { level: 1, name: `Welcome to ${PRODUCT_NAME}` })).toBeTruthy();
   });
 
+  it("names the loading button in the interface language", async () => {
+    vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["de-AT"]);
+    stubServer(() => new Promise<Response>(() => undefined));
+    window.history.replaceState(null, "", "/login");
+    const App = createWebApp({ extensions: [] });
+    await renderApp(<App />);
+    await screen.findByRole("heading", { level: 1, name: "Anmelden" });
+    typeInto("E-Mail", "ada@example.org");
+    typeInto("Passwort", "correct horse");
+
+    await act(async () => {
+      fireEvent.submit(screen.getByRole("button", { name: /^Anmelden/ }).closest("form") ?? document.body);
+      await Promise.resolve();
+    });
+
+    const button = screen.getByRole("button", { name: /^Anmelden\s?Wird geladen$/ });
+    expect(button.hasAttribute("data-loading")).toBe(true);
+    expect(screen.queryByText("Loading")).toBeNull();
+  });
+
   it("abandons the request when the page goes away", async () => {
     let signal: AbortSignal | undefined;
     stubServer((request) => {
