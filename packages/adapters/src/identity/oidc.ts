@@ -317,6 +317,9 @@ export function createOidcIdentity(options: CreateOidcIdentityOptions): OidcIden
       url.searchParams.set("nonce", request.nonce);
       url.searchParams.set("code_challenge", request.codeChallenge);
       url.searchParams.set("code_challenge_method", "S256");
+      if (request.reauthenticate === true) {
+        url.searchParams.set("prompt", "login");
+      }
       return { authorizationUrl: url.href };
     },
     async complete(request: IdentityCompleteRequest): Promise<IdentityClaims> {

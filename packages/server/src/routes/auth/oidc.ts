@@ -24,20 +24,28 @@ import type { ChainContext, RouteBinding } from "../../http/chain.ts";
 import { networkPrefixOf } from "../../http/trusted-proxy.ts";
 import { route } from "../register.ts";
 
-// GET /api/v1/auth/oidc/{provider}/start and /callback (doc 04 sections 4.5 and 10.2, doc 02 section 2.8, doc 10
-// T4, T12 and T20): the authorization-code flow with PKCE, a state and a nonce, signing in the account an
-// identity is already linked to. The start stores the handshake server side and binds it to the browser with a
-// short-lived pre-auth cookie; the callback consumes the record once and signs in only when the identity
-// port has verified the provider's ID token. Everything that can go wrong ends on `/login` with the same
-// failure code and nothing in the answer says which step refused, so the answer reveals neither whether an
-// account exists nor why a handshake failed; the reason goes to the log as a fixed word.
+// GET /api/v1/auth/oidc/{provider}/start and /callback (doc 04 sections 4.4, 4.5 and 10.2, doc 02 section 2.8,
+// doc 10 T4, T12, T18 and T20): the authorization-code flow with PKCE, a state and a nonce, for three intents.
+// `login` signs in the account an identity is already linked to. `link` adds the identity to the account of the
+// signed-in session that started the handshake, and `reauth` marks that session as re-authenticated when the
+// identity belongs to its account. The start stores the handshake server side and binds it to the browser with
+// a short-lived pre-auth cookie; the callback consumes the record once and acts only when the identity port has
+// verified the provider's ID token. `link` and `reauth` are started only by a complete session, in a request
+// that a browser reports as coming from the application itself (`Sec-Fetch-Site: same-origin`, or `none` for the
+// address bar; a request that names another site or no site at all is refused), and end only in a browser whose
+// current session is the one of the account that started them. Everything that can go wrong
+// ends on `/login` with the same failure code and nothing in the answer says which step refused, so the answer
+// reveals neither whether an account exists nor why a handshake failed; the reason goes to the log as a fixed word.
 
 const SUBKEY_BYTES = 32;
 const FAILURE_LOCATION = `/login?error=${OIDC_FAILURE_CODE}`;
 const MAX_CODE_LENGTH = 2048;
 
 export interface OidcRoutesOptions {
-  readonly store: Pick<AuthStore, "createOidcLoginState" | "consumeOidcLoginState" | "signInWithIdentity">;
+  readonly store: Pick<
+    AuthStore,
+    "createOidcLoginState" | "consumeOidcLoginState" | "signInWithIdentity" | "linkIdentity" | "reauthenticateWithIdentity"
+  >;
   readonly identity: Pick<IdentityPort, "begin" | "complete">;
   /** Seals the PKCE verifier while the handshake is in flight, and opens it at the callback. */
   readonly secretBox: Pick<SecretBoxPort, "seal" | "open">;
@@ -58,7 +66,12 @@ type Refusal =
   | "unsupported_intent"
   | "exchange_failed"
   | "invalid_token"
-  | "unknown_identity";
+  | "unknown_identity"
+  | "no_session"
+  | "cross_site_start"
+  | "session_mismatch"
+  | "identity_in_use"
+  | "unknown_account";
 
 function preAuthAttributes(spec: OidcPreAuthCookieSpec, maxAge: number): string {
   return `Max-Age=${String(maxAge)}; Path=/; HttpOnly; SameSite=Lax${spec.secure ? "; Secure" : ""}`;
@@ -82,6 +95,25 @@ function describeFailure(error: unknown): Refusal {
   return error instanceof PortUnavailable ? "provider_unavailable" : "exchange_failed";
 }
 
+// The account of a complete session of this request: a session that is waiting for its second factor, an API token
+// and no credential at all are no session here.
+function signedInSession(context: ChainContext): { readonly sessionId: string; readonly accountId: string } | undefined {
+  const principal = context.get("principal");
+  return principal?.kind === "session" && principal.mfaPending !== true ? { sessionId: principal.sessionId, accountId: principal.accountId } : undefined;
+}
+
+// A browser says where a navigation came from (Sec-Fetch-Site). Only the application's own page (`same-origin`)
+// and the address bar or a bookmark (`none`) may start a link or a re-authentication. A page of another site, a
+// sibling subdomain included, may not, and neither may a request that carries no such header: a browser that
+// does not send it cannot show the request came from the application, so it fails closed there. Such a browser
+// cannot link or re-authenticate through a provider; a sign-in through a provider (`login`) is not affected. An
+// account with a password re-authenticates with it, one with a second factor and no password uses a code, and one
+// with neither cannot re-authenticate on that browser.
+function fromTheApplication(context: ChainContext): boolean {
+  const site = context.req.raw.headers.get("sec-fetch-site");
+  return site === "same-origin" || site === "none";
+}
+
 function refused(context: ChainContext, provider: string, reason: Refusal): void {
   context.get("logger")?.warn("An OIDC sign-in ended without a session", { provider, reason });
 }
@@ -94,6 +126,20 @@ export function oidcRoutes({ store, identity, secretBox, appOrigin, sessionSecre
   const failure = { status: 302, headers: { Location: FAILURE_LOCATION, "Set-Cookie": clearPreAuthCookie(preAuth) } } as const;
 
   const start = route(startOidcSignIn).handle(async ({ params, query }, context) => {
+    const intent = query.intent;
+    let linkAccountId: string | null = null;
+    if (intent !== "login") {
+      const session = signedInSession(context);
+      if (session === undefined) {
+        refused(context, params.provider, "no_session");
+        return failure;
+      }
+      if (!fromTheApplication(context)) {
+        refused(context, params.provider, "cross_site_start");
+        return failure;
+      }
+      linkAccountId = session.accountId;
+    }
     const handshake = newOidcHandshake();
     let authorizationUrl: string;
     try {
@@ -103,6 +149,7 @@ export function oidcRoutes({ store, identity, secretBox, appOrigin, sessionSecre
         state: handshake.state,
         nonce: handshake.nonce,
         codeChallenge: handshake.codeChallenge,
+        ...(intent === "reauth" ? { reauthenticate: true } : {}),
       }));
     } catch (error) {
       refused(context, params.provider, describeFailure(error));
@@ -112,11 +159,11 @@ export function oidcRoutes({ store, identity, secretBox, appOrigin, sessionSecre
     await store.createOidcLoginState({
       stateHash: handshake.stateHash,
       provider: params.provider,
-      intent: "login",
+      intent,
       nonce: handshake.nonce,
       codeVerifier: sealed,
       returnTo: safeReturnTo(query.returnTo),
-      linkAccountId: null,
+      linkAccountId,
     });
     return {
       status: 302,
@@ -148,9 +195,18 @@ export function oidcRoutes({ store, identity, secretBox, appOrigin, sessionSecre
     if (record === undefined) {
       return fail("unknown_state");
     }
-    // The only intent that can start today is the sign-in; the others arrive with their own operations.
-    if (record.intent !== "login") {
+    // The invitation intent arrives with its own operation.
+    if (record.intent === "invite") {
       return fail("unsupported_intent");
+    }
+    // A link or a re-authentication is the work of the account that started it: the browser must still hold a
+    // complete session of that account, not merely the pre-auth cookie of the handshake.
+    let owner: ReturnType<typeof signedInSession>;
+    if (record.intent !== "login") {
+      owner = signedInSession(context);
+      if (owner === undefined || owner.accountId !== record.linkAccountId) {
+        return fail("session_mismatch");
+      }
     }
     const code = codes[0];
     if (query.has("error") || codes.length !== 1 || code === undefined || code === "" || code.length > MAX_CODE_LENGTH) {
@@ -174,6 +230,34 @@ export function oidcRoutes({ store, identity, secretBox, appOrigin, sessionSecre
     }
     if (claims.providerId !== params.provider) {
       return fail("invalid_token");
+    }
+
+    if (owner !== undefined) {
+      if (record.intent === "link") {
+        const linked = await store.linkIdentity({
+          accountId: owner.accountId,
+          id: uuidv7(),
+          provider: params.provider,
+          subject: claims.subject,
+          email: claims.email,
+        });
+        if (linked === "taken") {
+          return fail("identity_in_use");
+        }
+        if (linked === "no_account") {
+          return fail("unknown_account");
+        }
+      } else if (
+        !(await store.reauthenticateWithIdentity({
+          sessionId: owner.sessionId,
+          accountId: owner.accountId,
+          provider: params.provider,
+          subject: claims.subject,
+        }))
+      ) {
+        return fail("unknown_identity");
+      }
+      return { status: 302, headers: { Location: safeReturnTo(record.returnTo), "Set-Cookie": clearPreAuthCookie(preAuth) } };
     }
 
     const token = newSessionToken();

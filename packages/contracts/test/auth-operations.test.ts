@@ -141,11 +141,12 @@ describe("the OIDC sign-in redirects", () => {
     expect(callback?.["operationId"]).toBe("completeOidcSignIn");
   });
 
-  it("take the provider slug in the path, the start also an optional returnTo, and the callback no declared query", () => {
+  it("take the provider slug in the path, the start also an optional returnTo and an intent, and the callback no declared query", () => {
     const parameters = (operation: Obj | undefined): Obj[] => operation?.["parameters"] as Obj[];
     expect(parameters(start).map((parameter) => [parameter["in"], parameter["name"], parameter["required"]])).toEqual([
       ["path", "provider", true],
       ["query", "returnTo", false],
+      ["query", "intent", false],
     ]);
     expect(parameters(callback).map((parameter) => [parameter["in"], parameter["name"]])).toEqual([["path", "provider"]]);
     expect(OidcProviderParamsSchema.safeParse({ provider: "my-idp2" }).success).toBe(true);
@@ -153,7 +154,15 @@ describe("the OIDC sign-in redirects", () => {
       expect(OidcProviderParamsSchema.safeParse({ provider }).success, provider).toBe(false);
     }
     expect(OidcStartQuerySchema.safeParse({}).success).toBe(true);
-    expect(OidcStartQuerySchema.safeParse({ returnTo: "/go/docs", intent: "link" }).success).toBe(false);
+    expect(OidcStartQuerySchema.parse({}).intent).toBe("login");
+    for (const intent of ["login", "link", "reauth"]) {
+      expect(OidcStartQuerySchema.safeParse({ returnTo: "/go/docs", intent }).success, intent).toBe(true);
+    }
+    // The invitation intent arrives with its own operation.
+    for (const intent of ["invite", "delete", ""]) {
+      expect(OidcStartQuerySchema.safeParse({ intent }).success, intent).toBe(false);
+    }
+    expect(OidcStartQuerySchema.safeParse({ returnTo: "/go/docs", unknown: "x" }).success).toBe(false);
     expect(OidcStartQuerySchema.safeParse({ returnTo: "x".repeat(2049) }).success).toBe(false);
   });
 

@@ -158,13 +158,13 @@ export const changePassword: {
     readonly path: "/api/v1/me/password";
     readonly operationId: "changePassword";
     readonly tag: "me";
-    readonly summary: "Change the account's password";
+    readonly summary: "Change the account's password, or set the first one";
     readonly auth: "account";
     readonly rate: "write";
     readonly reauth: true;
     readonly request: {
         readonly body: z.ZodObject<{
-            currentPassword: z.ZodString;
+            currentPassword: z.ZodOptional<z.ZodString>;
             newPassword: z.ZodString;
         }, z.core.$strict>;
     };
@@ -181,7 +181,7 @@ export const changePassword: {
 
 // @public (undocumented)
 export const ChangePasswordRequestSchema: z.ZodObject<{
-    currentPassword: z.ZodString;
+    currentPassword: z.ZodOptional<z.ZodString>;
     newPassword: z.ZodString;
 }, z.core.$strict>;
 
@@ -321,7 +321,7 @@ export interface ComponentTypes {
             nextCursor: string | null;
         };
         ChangePasswordRequest: {
-            currentPassword: string;
+            currentPassword?: string;
             newPassword: string;
         };
         ConfirmMfaEnrollmentRequest: {
@@ -347,13 +347,24 @@ export interface ComponentTypes {
         };
         DisableMfaRequest: {
             code: string;
-            password: string;
+            password?: string;
         } | {
             backupCode: string;
-            password: string;
+            password?: string;
         };
         HealthStatus: {
             status: "ok";
+        };
+        Identity: {
+            createdAt: string;
+            emailAtLink: string;
+            id: string;
+            lastUsedAt: string | null;
+            provider: string;
+        };
+        IdentityList: {
+            items: ComponentTypes["schemas"]["Identity"][];
+            nextCursor: string | null;
         };
         LoginRequest: {
             email: string;
@@ -615,10 +626,10 @@ export const disableMfa: {
     readonly reauth: true;
     readonly request: {
         readonly body: z.ZodUnion<readonly [z.ZodObject<{
-            password: z.ZodString;
+            password: z.ZodOptional<z.ZodString>;
             code: z.ZodString;
         }, z.core.$strict>, z.ZodObject<{
-            password: z.ZodString;
+            password: z.ZodOptional<z.ZodString>;
             backupCode: z.ZodString;
         }, z.core.$strict>]>;
     };
@@ -635,10 +646,10 @@ export const disableMfa: {
 
 // @public (undocumented)
 export const DisableMfaRequestSchema: z.ZodUnion<readonly [z.ZodObject<{
-    password: z.ZodString;
+    password: z.ZodOptional<z.ZodString>;
     code: z.ZodString;
 }, z.core.$strict>, z.ZodObject<{
-    password: z.ZodString;
+    password: z.ZodOptional<z.ZodString>;
     backupCode: z.ZodString;
 }, z.core.$strict>]>;
 
@@ -893,6 +904,38 @@ export const HTTP_METHODS: readonly ["get", "post", "put", "patch", "delete"];
 // @public (undocumented)
 export type HttpMethod = (typeof HTTP_METHODS)[number];
 
+// @public (undocumented)
+export const IdentityIdParamsSchema: z.ZodObject<{
+    id: z.ZodUUID;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const IdentityListQuerySchema: z.ZodObject<{
+    limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+    cursor: z.ZodOptional<z.ZodString>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const IdentityListSchema: z.ZodObject<{
+    items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        provider: z.ZodString;
+        emailAtLink: z.ZodString;
+        createdAt: z.ZodISODateTime;
+        lastUsedAt: z.ZodNullable<z.ZodISODateTime>;
+    }, z.core.$strict>>;
+    nextCursor: z.ZodNullable<z.ZodString>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const IdentitySchema: z.ZodObject<{
+    id: z.ZodUUID;
+    provider: z.ZodString;
+    emailAtLink: z.ZodString;
+    createdAt: z.ZodISODateTime;
+    lastUsedAt: z.ZodNullable<z.ZodISODateTime>;
+}, z.core.$strict>;
+
 // @public
 export interface JsonResponse<S extends z.ZodType = z.ZodType, H extends ResponseHeaders = ResponseHeaders> {
     // (undocumented)
@@ -944,6 +987,41 @@ export const listApiTokens: {
         createdAt: z.ZodISODateTime;
         lastUsedAt: z.ZodNullable<z.ZodISODateTime>;
         expiresAt: z.ZodNullable<z.ZodISODateTime>;
+        }, z.core.$strict>>;
+        nextCursor: z.ZodNullable<z.ZodString>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const listIdentities: {
+    readonly method: "get";
+    readonly path: "/api/v1/me/identities";
+    readonly operationId: "listIdentities";
+    readonly tag: "me";
+    readonly summary: "List the identities linked to the account";
+    readonly auth: "account";
+    readonly rate: "read";
+    readonly request: {
+        readonly query: z.ZodObject<{
+            limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+            cursor: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        provider: z.ZodString;
+        emailAtLink: z.ZodString;
+        createdAt: z.ZodISODateTime;
+        lastUsedAt: z.ZodNullable<z.ZodISODateTime>;
         }, z.core.$strict>>;
         nextCursor: z.ZodNullable<z.ZodString>;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
@@ -1142,6 +1220,9 @@ export const MfaEnrollmentSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
+export const OIDC_START_INTENTS: readonly ["login", "link", "reauth"];
+
+// @public (undocumented)
 export const OidcProviderParamsSchema: z.ZodObject<{
     provider: z.ZodString;
 }, z.core.$strict>;
@@ -1149,6 +1230,11 @@ export const OidcProviderParamsSchema: z.ZodObject<{
 // @public (undocumented)
 export const OidcStartQuerySchema: z.ZodObject<{
     returnTo: z.ZodOptional<z.ZodString>;
+    intent: z.ZodDefault<z.ZodEnum<{
+        login: "login";
+        link: "link";
+        reauth: "reauth";
+    }>>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -1968,6 +2054,78 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    listIdentities: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["IdentityList"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     listSessions: {
         parameters: {
             query?: {
@@ -2605,6 +2763,7 @@ export interface OperationTypes {
         parameters: {
             query?: {
                 returnTo?: string;
+                intent?: "login" | "link" | "reauth";
             };
             header?: never;
             path: {
@@ -2623,6 +2782,83 @@ export interface OperationTypes {
                 content?: never;
             };
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    unlinkIdentity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2959,6 +3195,40 @@ export interface paths {
         put?: never;
         post?: never;
         delete: OperationTypes["revokeApiToken"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/me/identities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["listIdentities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/me/identities/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: OperationTypes["unlinkIdentity"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3750,6 +4020,11 @@ export const startOidcSignIn: {
         }, z.core.$strict>;
         readonly query: z.ZodObject<{
             returnTo: z.ZodOptional<z.ZodString>;
+            intent: z.ZodDefault<z.ZodEnum<{
+                login: "login";
+                link: "link";
+                reauth: "reauth";
+            }>>;
         }, z.core.$strict>;
     };
     readonly responses: {
@@ -3778,6 +4053,33 @@ export const TOKEN_SCOPES: readonly ["read", "write"];
 
 // @public (undocumented)
 export type TokenScope = (typeof TOKEN_SCOPES)[number];
+
+// @public (undocumented)
+export const unlinkIdentity: {
+    readonly method: "delete";
+    readonly path: "/api/v1/me/identities/{id}";
+    readonly operationId: "unlinkIdentity";
+    readonly tag: "me";
+    readonly summary: "Unlink one of the account's identities";
+    readonly auth: "account";
+    readonly rate: "write";
+    readonly reauth: true;
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 204: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
 
 // @public (undocumented)
 export const UpdateAccountRequestSchema: z.ZodObject<{

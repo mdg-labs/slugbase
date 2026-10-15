@@ -1,4 +1,4 @@
 {
-  "sha256": "20aa60318c68e6da83855fc23b68b712f9f41dc2b37e00a94073818ecd7288c0",
-  "migration": "20261015192449_add_oidc_sign_in"
+  "sha256": "7df046098f4e65b8eeea1d196f1ccb37b9647874f7dfc9114ac0ac8013948a68",
+  "migration": "20261015202136_add_identity_management"
 }

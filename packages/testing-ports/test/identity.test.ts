@@ -99,6 +99,13 @@ describe("FakeIdentity", () => {
     await expect(identity.begin({ providerId: "other", redirectUri: REDIRECT, state: "s", nonce: "n", codeChallenge: "c" })).rejects.toMatchObject({ reason: "provider_unavailable" });
   });
 
+  it("asks for the credentials again only for a re-authentication, as the adapter does", async () => {
+    const identity = fake();
+    const request = { providerId: "idp", redirectUri: REDIRECT, state: "s", nonce: "n", codeChallenge: "c" };
+    expect(new URL((await identity.begin(request)).authorizationUrl).searchParams.has("prompt")).toBe(false);
+    expect(new URL((await identity.begin({ ...request, reauthenticate: true })).authorizationUrl).searchParams.get("prompt")).toBe("login");
+  });
+
   it("will not approve a request it did not see", () => {
     expect(() => fake().approve(`${ISSUER}/authorize?state=unknown`, { subject: "s" })).toThrow("not made by this FakeIdentity");
   });

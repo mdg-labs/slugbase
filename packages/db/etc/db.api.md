@@ -16,6 +16,25 @@ export const ACCENT_PRESETS: readonly ["periwinkle", "violet", "rose", "amber", 
 // @public (undocumented)
 export type AccentPreset = (typeof ACCENT_PRESETS)[number];
 
+// @public
+export interface AccountIdentity {
+    // (undocumented)
+    readonly createdAt: Date;
+    readonly emailAtLink: string;
+    // (undocumented)
+    readonly id: string;
+    readonly lastUsedAt: Date | null;
+    readonly provider: string;
+}
+
+// @public (undocumented)
+export interface AccountIdentityRepository {
+    list(afterId: string | null, limit: number): Promise<readonly AccountIdentity[]>;
+}
+
+// @public (undocumented)
+export function accountIdentityRepository(tx: TenantTx): AccountIdentityRepository;
+
 // @public (undocumented)
 export interface AccountProfile {
     // (undocumented)
@@ -277,6 +296,38 @@ export interface DatabaseOptions {
 export function defineScopedRepository<T extends WorkspaceTable>(name: string, table: T): ScopedRepositoryDefinition<T>;
 
 // @public
+export interface IdentityLink {
+    readonly accountId: string;
+    readonly email: string;
+    readonly id: string;
+    readonly provider: string;
+    readonly subject: string;
+}
+
+// @public (undocumented)
+export type IdentityLinkOutcome =
+/** The account holds the identity from now on. */
+"linked"
+/** The account held it already; nothing changed. */
+| "already_linked"
+/** Another account holds it; nothing changed. */
+| "taken"
+/** The account does not exist or is disabled; nothing changed. */
+| "no_account";
+
+// @public
+export interface IdentityReauthentication {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly provider: string;
+    // (undocumented)
+    readonly sessionId: string;
+    // (undocumented)
+    readonly subject: string;
+}
+
+// @public
 export interface IdentitySignIn {
     readonly ipPrefix: string | null;
     readonly provider: string;
@@ -286,6 +337,13 @@ export interface IdentitySignIn {
     readonly tokenHash: Buffer;
     readonly userAgent: string | null;
 }
+
+// @public (undocumented)
+export type IdentityUnlinkOutcome = "unlinked"
+/** The account holds no identity with this id, or does not exist or is disabled; the cases are not told apart. */
+| "not_found"
+/** The account has no password and no other identity; nothing changed. */
+| "last_sign_in_method";
 
 // @public (undocumented)
 export type InsertValues<T extends WorkspaceTable> = Omit<InferInsertModel<T>, "workspaceId"> & {
@@ -504,7 +562,10 @@ export interface OidcLoginState {
 export interface OidcStore {
     consumeOidcLoginState(stateHash: Buffer, provider: string): Promise<OidcLoginState | undefined>;
     createOidcLoginState(state: NewOidcLoginState): Promise<void>;
+    linkIdentity(link: IdentityLink): Promise<IdentityLinkOutcome>;
+    reauthenticateWithIdentity(reauthentication: IdentityReauthentication): Promise<boolean>;
     signInWithIdentity(signIn: IdentitySignIn): Promise<boolean>;
+    unlinkIdentity(accountId: string, identityId: string): Promise<IdentityUnlinkOutcome>;
 }
 
 // @public
@@ -521,6 +582,7 @@ export interface Onboarding {
 export interface PasswordChange {
     // (undocumented)
     readonly accountId: string;
+    readonly initial?: boolean;
     readonly jobs?: readonly QueuedJob[];
     readonly newTokenHash: Buffer;
     readonly passwordHash: string;

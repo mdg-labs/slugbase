@@ -170,6 +170,14 @@ describe("begin", () => {
     });
   });
 
+  it("asks the provider for the credentials again only for a re-authentication", async () => {
+    const { identity } = setup();
+    const request = { providerId: "idp", redirectUri: REDIRECT, state: "s", nonce: "n", codeChallenge: "c" };
+    expect(new URL((await identity.begin(request)).authorizationUrl).searchParams.has("prompt")).toBe(false);
+    expect(new URL((await identity.begin({ ...request, reauthenticate: false })).authorizationUrl).searchParams.has("prompt")).toBe(false);
+    expect(new URL((await identity.begin({ ...request, reauthenticate: true })).authorizationUrl).searchParams.get("prompt")).toBe("login");
+  });
+
   it("asks for the openid scope even when the operator's scopes leave it out, and keeps the query of the endpoint", async () => {
     const egress = new ScriptedEgress();
     egress.discovery = discovery({ authorization_endpoint: `${ISSUER}/authorize?tenant=a` });

@@ -251,7 +251,12 @@ export const ReauthRequestSchema = z
 
 export const ChangePasswordRequestSchema = z
   .strictObject({
-    currentPassword: z.string().min(1).max(256).describe("The account's current password"),
+    currentPassword: z
+      .string()
+      .min(1)
+      .max(256)
+      .optional()
+      .describe("The account's current password. Left out only to set the first password of an account that has none, which needs a re-authentication within the last ten minutes; an account that has a password is refused without it"),
     newPassword: z.string().describe("The new password, 12 to 256 characters and not on the breached list"),
   })
   .meta({ id: "ChangePasswordRequest" });
@@ -268,7 +273,7 @@ export const reauthenticate = defineOperation({
   responses: {
     204: emptyResponse("The password or the code is right; the session counts as re-authenticated for the next ten minutes"),
     400: problemResponse("The request was malformed"),
-    401: problemResponse("There is no session, or its second factor is not complete; or the password is wrong or the account has none, answered as reauth_required with the field in errors[] and the session unchanged"),
+    401: problemResponse("There is no session, or its second factor is not complete; or the password is wrong or the account has none, answered as reauth_required with the field in errors[] and the session unchanged. An account without a password re-authenticates through its provider (GET /auth/oidc/{provider}/start with the reauth intent) or, when its second factor is on, with a code"),
     403: problemResponse("The request did not come from the application itself"),
     422: problemResponse(
       "The code is wrong, outside the accepted window or already used, or the account's second factor is not on (invalid_code, counted against the mfa limit and the session unchanged); or the body did not pass validation",
@@ -283,17 +288,17 @@ export const changePassword = defineOperation({
   path: "/api/v1/me/password",
   operationId: "changePassword",
   tag: "me",
-  summary: "Change the account's password",
+  summary: "Change the account's password, or set the first one",
   auth: "account",
   rate: "write",
   reauth: true,
   request: { body: ChangePasswordRequestSchema },
   responses: {
-    204: emptyResponse("The password is changed and every other session of the account is deleted; the response carries the Set-Cookie header of the session's new token"),
+    204: emptyResponse("The password is changed, or the first one set, and every other session of the account is deleted; the response carries the Set-Cookie header of the session's new token"),
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"),
     403: problemResponse("The request did not come from the application itself, or the credential is an API token"),
-    422: problemResponse("The body did not pass validation; the new password is refused by the policy (weak_password); or the current password is wrong or the account has none, answered alike as validation_failed with the field in errors[] and nothing changed"),
+    422: problemResponse("The body did not pass validation; the new password is refused by the policy (weak_password); or the current password is wrong, is missing although the account has a password, or is given although the account has none, answered alike as validation_failed with the field in errors[] and nothing changed"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },
@@ -374,14 +379,21 @@ export const RegenerateBackupCodesRequestSchema = z
   })
   .meta({ id: "RegenerateBackupCodesRequest" });
 
+const DisableMfaPassword = z
+  .string()
+  .min(1)
+  .max(256)
+  .optional()
+  .describe("The account's current password. Left out only by an account that has none, whose re-authentication within the last ten minutes stands in for it; an account that has a password is refused without it");
+
 export const DisableMfaRequestSchema = z
   .union([
     z.strictObject({
-      password: z.string().min(1).max(256).describe("The account's current password"),
+      password: DisableMfaPassword,
       code: z.string().min(1).max(16).describe("The current six-digit code of the authenticator app; spaces between the digits are ignored"),
     }),
     z.strictObject({
-      password: z.string().min(1).max(256).describe("The account's current password"),
+      password: DisableMfaPassword,
       backupCode: z.string().min(1).max(32).describe("One of the account's unused backup codes, which may be written in lower case and grouped by spaces or hyphens"),
     }),
   ])
@@ -426,7 +438,7 @@ export const disableMfa = defineOperation({
     401: problemResponse("There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"),
     403: problemResponse("The request did not come from the application itself, or the credential is an API token"),
     422: problemResponse(
-      "The code or backup code is wrong, outside the accepted window or already used (invalid_code, counted against the mfa limit); the password is wrong or the account has none (validation_failed with the field in errors[]); the body did not pass validation; or the account's second factor is not on (validation_failed). Nothing changes in any of these cases",
+      "The code or backup code is wrong, outside the accepted window or already used (invalid_code, counted against the mfa limit); the password is wrong, is missing although the account has one, or is given although the account has none (validation_failed with the field in errors[]); the body did not pass validation; or the account's second factor is not on (validation_failed). Nothing changes in any of these cases",
     ),
     429: rateLimitedResponse("Too many attempts; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
@@ -547,6 +559,76 @@ export const revokeApiToken = defineOperation({
     403: problemResponse("The request did not come from the application itself, or the credential is an API token"),
     404: problemResponse("The account has no token with this identifier, another account's included, or its row was removed by the retention purge"),
     422: problemResponse("The identifier did not pass validation"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const IdentitySchema = z
+  .strictObject({
+    id: z.uuid().describe("The identity's identifier; it names the identity to unlink and is not the provider's subject"),
+    provider: z.string().describe("The slug of the provider, as GET /api/config lists it under signIn.oidc; a provider the operator has since removed is still listed"),
+    emailAtLink: z.string().describe("The address the provider asserted when the identity was linked, for display; empty when it asserted none"),
+    createdAt: z.iso.datetime().describe("When the identity was linked, RFC 3339 UTC"),
+    lastUsedAt: z.iso.datetime().nullable().describe("When the identity last signed in or re-authenticated the account, RFC 3339 UTC; null when it never has"),
+  })
+  .meta({ id: "Identity" });
+
+export const IdentityListSchema = z
+  .strictObject({
+    items: z.array(IdentitySchema).describe("One page of the account's linked identities, newest first; never the provider's subject"),
+    nextCursor: z.string().nullable().describe("Passed as `cursor` to get the next page; null on the last page"),
+  })
+  .meta({ id: "IdentityList" });
+
+export const IdentityListQuerySchema = z.strictObject({
+  limit: z.coerce.number().int().min(1).max(100).default(50).describe("The most identities to return, at most 100"),
+  cursor: z.string().min(1).max(512).optional().describe("The `nextCursor` of the previous page; valid only for the account that received it"),
+});
+
+export const IdentityIdParamsSchema = z.strictObject({
+  id: z.uuid().describe("The identity's identifier, as listed"),
+});
+
+export const listIdentities = defineOperation({
+  method: "get",
+  path: "/api/v1/me/identities",
+  operationId: "listIdentities",
+  tag: "me",
+  summary: "List the identities linked to the account",
+  auth: "account",
+  rate: "read",
+  request: { query: IdentityListQuerySchema },
+  responses: {
+    200: jsonResponse("One page of the account's linked identities, newest first; no subject of the provider", IdentityListSchema),
+    400: problemResponse("The request was malformed, or the cursor is not one this account was issued"),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    403: problemResponse("The credential is an API token"),
+    422: problemResponse("The query did not pass validation"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const unlinkIdentity = defineOperation({
+  method: "delete",
+  path: "/api/v1/me/identities/{id}",
+  operationId: "unlinkIdentity",
+  tag: "me",
+  summary: "Unlink one of the account's identities",
+  auth: "account",
+  rate: "write",
+  reauth: true,
+  request: { params: IdentityIdParamsSchema },
+  responses: {
+    204: emptyResponse("The identity is unlinked and can no longer sign in the account; the account's sessions are unchanged"),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"),
+    403: problemResponse("The request did not come from the application itself, or the credential is an API token"),
+    404: problemResponse("The account has no identity with this identifier, another account's included"),
+    422: problemResponse(
+      "The identifier did not pass validation; or the identity is the account's only way to sign in, because the account has no password and no other identity (validation_failed with the field code last_sign_in_method in errors[]). Nothing changes",
+    ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },

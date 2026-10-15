@@ -106,6 +106,8 @@ export interface FakeIdentityBeginRequest {
     // (undocumented)
     readonly providerId: string;
     // (undocumented)
+    readonly reauthenticate?: boolean;
+    // (undocumented)
     readonly redirectUri: string;
     // (undocumented)
     readonly state: string;

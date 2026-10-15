@@ -156,6 +156,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/identities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the identities linked to the account */
+        get: operations["listIdentities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/identities/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Unlink one of the account's identities */
+        delete: operations["unlinkIdentity"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/mfa": {
         parameters: {
             query?: never;
@@ -233,7 +267,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Change the account's password */
+        /** Change the account's password, or set the first one */
         post: operations["changePassword"];
         delete?: never;
         options?: never;
@@ -530,8 +564,8 @@ export interface components {
             nextCursor: string | null;
         };
         ChangePasswordRequest: {
-            /** @description The account's current password */
-            currentPassword: string;
+            /** @description The account's current password. Left out only to set the first password of an account that has none, which needs a re-authentication within the last ten minutes; an account that has a password is refused without it */
+            currentPassword?: string;
             /** @description The new password, 12 to 256 characters and not on the breached list */
             newPassword: string;
         };
@@ -595,17 +629,41 @@ export interface components {
         DisableMfaRequest: {
             /** @description The current six-digit code of the authenticator app; spaces between the digits are ignored */
             code: string;
-            /** @description The account's current password */
-            password: string;
+            /** @description The account's current password. Left out only by an account that has none, whose re-authentication within the last ten minutes stands in for it; an account that has a password is refused without it */
+            password?: string;
         } | {
             /** @description One of the account's unused backup codes, which may be written in lower case and grouped by spaces or hyphens */
             backupCode: string;
-            /** @description The account's current password */
-            password: string;
+            /** @description The account's current password. Left out only by an account that has none, whose re-authentication within the last ten minutes stands in for it; an account that has a password is refused without it */
+            password?: string;
         };
         HealthStatus: {
             /** @constant */
             status: "ok";
+        };
+        Identity: {
+            /**
+             * Format: date-time
+             * @description When the identity was linked, RFC 3339 UTC
+             */
+            createdAt: string;
+            /** @description The address the provider asserted when the identity was linked, for display; empty when it asserted none */
+            emailAtLink: string;
+            /**
+             * Format: uuid
+             * @description The identity's identifier; it names the identity to unlink and is not the provider's subject
+             */
+            id: string;
+            /** @description When the identity last signed in or re-authenticated the account, RFC 3339 UTC; null when it never has */
+            lastUsedAt: string | null;
+            /** @description The slug of the provider, as GET /api/config lists it under signIn.oidc; a provider the operator has since removed is still listed */
+            provider: string;
+        };
+        IdentityList: {
+            /** @description One page of the account's linked identities, newest first; never the provider's subject */
+            items: components["schemas"]["Identity"][];
+            /** @description Passed as `cursor` to get the next page; null on the last page */
+            nextCursor: string | null;
         };
         LoginRequest: {
             /** @description The account's email address; case does not matter */
@@ -1135,12 +1193,12 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The handshake is over and the browser is sent on. When the identity is linked to an account that can sign in, a new full session cookie is set and the browser goes to the returnTo of the start, a path of this application. For every other outcome (a missing, reused, expired or foreign state, a refusal by the provider, a token that fails validation, an identity nobody linked, a disabled account) no session is created and the browser goes to /login?error=oidc_failed, one answer that does not say which. The pre-auth cookie is cleared either way */
+            /** @description The handshake is over and the browser is sent on to the returnTo of the start, a path of this application. For the login intent, when the identity is linked to an account that can sign in, a new full session cookie is set. For the link intent the identity is added to the account that started the handshake, which must be the account of the browser's current session, and no session changes. For the reauth intent the browser's current session, which must be a session of the account that started the handshake and of an account the provider's identity is linked to, counts as re-authenticated from now. For every other outcome (a missing, reused, expired or foreign state, a refusal by the provider, a token that fails validation, an identity nobody linked, a disabled account, a link or reauth in a browser whose session is not the one that started it, an identity already linked to another account) nothing is changed and the browser goes to /login?error=oidc_failed, one answer that does not say which. The pre-auth cookie is cleared either way */
             302: {
                 headers: {
                     /** @description A path of this application: the returnTo of the start, or /login?error=oidc_failed */
                     Location: string;
-                    /** @description The session cookie of a successful sign-in, with the attributes of the password sign-in cookie, and the cleared pre-auth cookie; on a failure only the cleared pre-auth cookie */
+                    /** @description The session cookie of a successful sign-in, with the attributes of the password sign-in cookie, and the cleared pre-auth cookie; on a failure, and for the link and reauth intents, only the cleared pre-auth cookie */
                     "Set-Cookie": string;
                     [name: string]: unknown;
                 };
@@ -1190,6 +1248,7 @@ export interface operations {
         parameters: {
             query?: {
                 returnTo?: string;
+                intent?: "login" | "link" | "reauth";
             };
             header?: never;
             path: {
@@ -1199,7 +1258,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The browser is sent to the provider with a PKCE challenge (S256), a state and a nonce, and receives the pre-auth cookie. When the provider is unknown or unavailable the browser is sent to /login?error=oidc_failed instead, the same answer a failed callback gives */
+            /** @description The browser is sent to the provider with a PKCE challenge (S256), a state and a nonce, and receives the pre-auth cookie; for the reauth intent the provider is asked to ask for the credentials again. When the provider is unknown or unavailable, or the link or reauth intent comes without a complete session, from another site or without a Sec-Fetch-Site header, the browser is sent to /login?error=oidc_failed instead, the same answer a failed callback gives */
             302: {
                 headers: {
                     /** @description Where the browser goes next: the provider's authorization endpoint, or /login?error=oidc_failed when the handshake cannot start */
@@ -1641,6 +1700,170 @@ export interface operations {
             };
         };
     };
+    listIdentities: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of the account's linked identities, newest first; no subject of the provider */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdentityList"];
+                };
+            };
+            /** @description The request was malformed, or the cursor is not one this account was issued */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The credential is an API token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The query did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    unlinkIdentity: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The identity is unlinked and can no longer sign in the account; the account's sessions are unchanged */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself, or the credential is an API token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The account has no identity with this identifier, another account's included */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The identifier did not pass validation; or the identity is the account's only way to sign in, because the account has no password and no other identity (validation_failed with the field code last_sign_in_method in errors[]). Nothing changes */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     disableMfa: {
         parameters: {
             query?: never;
@@ -1688,7 +1911,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The code or backup code is wrong, outside the accepted window or already used (invalid_code, counted against the mfa limit); the password is wrong or the account has none (validation_failed with the field in errors[]); the body did not pass validation; or the account's second factor is not on (validation_failed). Nothing changes in any of these cases */
+            /** @description The code or backup code is wrong, outside the accepted window or already used (invalid_code, counted against the mfa limit); the password is wrong, is missing although the account has one, or is given although the account has none (validation_failed with the field in errors[]); the body did not pass validation; or the account's second factor is not on (validation_failed). Nothing changes in any of these cases */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -1970,7 +2193,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The password is changed and every other session of the account is deleted; the response carries the Set-Cookie header of the session's new token */
+            /** @description The password is changed, or the first one set, and every other session of the account is deleted; the response carries the Set-Cookie header of the session's new token */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -2004,7 +2227,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation; the new password is refused by the policy (weak_password); or the current password is wrong or the account has none, answered alike as validation_failed with the field in errors[] and nothing changed */
+            /** @description The body did not pass validation; the new password is refused by the policy (weak_password); or the current password is wrong, is missing although the account has a password, or is given although the account has none, answered alike as validation_failed with the field in errors[] and nothing changed */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -2064,7 +2287,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description There is no session, or its second factor is not complete; or the password is wrong or the account has none, answered as reauth_required with the field in errors[] and the session unchanged */
+            /** @description There is no session, or its second factor is not complete; or the password is wrong or the account has none, answered as reauth_required with the field in errors[] and the session unchanged. An account without a password re-authenticates through its provider (GET /auth/oidc/{provider}/start with the reauth intent) or, when its second factor is on, with a code */
             401: {
                 headers: {
                     [name: string]: unknown;

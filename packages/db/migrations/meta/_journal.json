@@ -155,6 +155,13 @@
       "when": 1792092289238,
       "tag": "20261015192449_add_oidc_sign_in",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1792095696549,
+      "tag": "20261015202136_add_identity_management",
+      "breakpoints": true
     }
   ]
 }

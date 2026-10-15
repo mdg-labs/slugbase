@@ -117,12 +117,20 @@ export const OidcProviderParamsSchema = z.strictObject({
     .describe("The slug of the provider, as GET /api/config lists it under signIn.oidc"),
 });
 
+export const OIDC_START_INTENTS = ["login", "link", "reauth"] as const;
+
 export const OidcStartQuerySchema = z.strictObject({
   returnTo: z
     .string()
     .max(2048)
     .optional()
-    .describe("Where the browser goes once signed in: a path of this application, such as /go/docs. Anything else is ignored and the browser goes to /"),
+    .describe("Where the browser goes once the handshake is over: a path of this application, such as /go/docs. Anything else is ignored and the browser goes to /"),
+  intent: z
+    .enum(OIDC_START_INTENTS)
+    .default("login")
+    .describe(
+      "What the handshake is for. `login` (the default) signs in the account the identity is linked to. `link` adds the identity to the signed-in account. `reauth` proves the signed-in account's member at the provider, which counts as a re-authentication of the session for ten minutes. `link` and `reauth` need a complete session, and the browser must report the request as coming from the application itself (Sec-Fetch-Site same-origin, or none for the address bar); a request from another site or without that header is refused",
+    ),
 });
 
 const OIDC_REDIRECT_HEADERS = {
@@ -147,7 +155,7 @@ export const startOidcSignIn = defineOperation({
   request: { params: OidcProviderParamsSchema, query: OidcStartQuerySchema },
   responses: {
     302: emptyResponse(
-      "The browser is sent to the provider with a PKCE challenge (S256), a state and a nonce, and receives the pre-auth cookie. When the provider is unknown or unavailable the browser is sent to /login?error=oidc_failed instead, the same answer a failed callback gives",
+      "The browser is sent to the provider with a PKCE challenge (S256), a state and a nonce, and receives the pre-auth cookie; for the reauth intent the provider is asked to ask for the credentials again. When the provider is unknown or unavailable, or the link or reauth intent comes without a complete session, from another site or without a Sec-Fetch-Site header, the browser is sent to /login?error=oidc_failed instead, the same answer a failed callback gives",
       { headers: OIDC_REDIRECT_HEADERS },
     ),
     400: problemResponse("The request was malformed"),
@@ -171,12 +179,12 @@ export const completeOidcSignIn = defineOperation({
   request: { params: OidcProviderParamsSchema },
   responses: {
     302: emptyResponse(
-      "The handshake is over and the browser is sent on. When the identity is linked to an account that can sign in, a new full session cookie is set and the browser goes to the returnTo of the start, a path of this application. For every other outcome (a missing, reused, expired or foreign state, a refusal by the provider, a token that fails validation, an identity nobody linked, a disabled account) no session is created and the browser goes to /login?error=oidc_failed, one answer that does not say which. The pre-auth cookie is cleared either way",
+      "The handshake is over and the browser is sent on to the returnTo of the start, a path of this application. For the login intent, when the identity is linked to an account that can sign in, a new full session cookie is set. For the link intent the identity is added to the account that started the handshake, which must be the account of the browser's current session, and no session changes. For the reauth intent the browser's current session, which must be a session of the account that started the handshake and of an account the provider's identity is linked to, counts as re-authenticated from now. For every other outcome (a missing, reused, expired or foreign state, a refusal by the provider, a token that fails validation, an identity nobody linked, a disabled account, a link or reauth in a browser whose session is not the one that started it, an identity already linked to another account) nothing is changed and the browser goes to /login?error=oidc_failed, one answer that does not say which. The pre-auth cookie is cleared either way",
       {
         headers: {
           Location: { description: "A path of this application: the returnTo of the start, or /login?error=oidc_failed", schema: z.string() },
           "Set-Cookie": {
-            description: "The session cookie of a successful sign-in, with the attributes of the password sign-in cookie, and the cleared pre-auth cookie; on a failure only the cleared pre-auth cookie",
+            description: "The session cookie of a successful sign-in, with the attributes of the password sign-in cookie, and the cleared pre-auth cookie; on a failure, and for the link and reauth intents, only the cleared pre-auth cookie",
             schema: z.string(),
           },
         },

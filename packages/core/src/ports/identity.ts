@@ -32,6 +32,11 @@ export interface IdentityBeginRequest {
   readonly state: string;
   readonly nonce: string;
   readonly codeChallenge: string;
+  /**
+   * The handshake proves the member again (the `reauth` intent): the provider is asked to ask for the credentials
+   * even when the browser has a session there. Absent or false for a sign-in and for linking.
+   */
+  readonly reauthenticate?: boolean;
 }
 
 export interface IdentityCompleteRequest {

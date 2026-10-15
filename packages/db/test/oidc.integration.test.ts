@@ -39,10 +39,10 @@ afterAll(async () => {
 
 let emailNumber = 0;
 
-async function account(options: { disabled?: boolean; mfa?: boolean } = {}): Promise<string> {
+async function account(options: { disabled?: boolean; mfa?: boolean; noPassword?: boolean } = {}): Promise<string> {
   emailNumber += 1;
   const id = freshId();
-  await seedAccount(db, { id, email: `oidc${String(emailNumber)}@example.test`, passwordHash: "$argon2id$stub", disabledAt: options.disabled === true ? new Date() : null });
+  await seedAccount(db, { id, email: `oidc${String(emailNumber)}@example.test`, passwordHash: options.noPassword === true ? null : "$argon2id$stub", disabledAt: options.disabled === true ? new Date() : null });
   if (options.mfa === true) {
     await asSystem(db, (tx) => tx`UPDATE accounts SET mfa_secret = ${Buffer.alloc(40, 2)}, mfa_secret_key_id = 'k1', mfa_enabled_at = now() WHERE id = ${id}`);
   }
@@ -89,7 +89,9 @@ function signIn(overrides: Partial<Parameters<AuthStore["signInWithIdentity"]>[0
 
 describe("the OIDC system operations", () => {
   it("are registered", () => {
-    expect(systemOperations).toEqual(expect.arrayContaining(["sys_oidc_state_create", "sys_oidc_state_consume", "sys_identity_sign_in"]));
+    expect(systemOperations).toEqual(
+      expect.arrayContaining(["sys_oidc_state_create", "sys_oidc_state_consume", "sys_identity_sign_in", "sys_identity_link", "sys_identity_unlink", "sys_identity_reauth", "sys_password_set_initial"]),
+    );
   });
 });
 
@@ -283,5 +285,235 @@ describe("account_identities", () => {
     });
     const rows = await asSystem(db, (tx) => tx<{ id: string }[]>`SELECT id FROM account_identities WHERE account_id = ${holder}`);
     expect(rows).toHaveLength(0);
+  });
+});
+
+const HASH = "$argon2id$v=19$m=19456,t=2,p=1$sFLPcSAWqw4Wpd/8O0PrNw$xLekCysBXktEpmApalRynWfjPdndgkAFMEe1+x82+K4";
+
+async function identityRows(accountId: string): Promise<{ id: string; provider: string; subject: string; email_at_link: string; last_used_at: Date | null }[]> {
+  return asSystem(
+    db,
+    (tx) => tx<{ id: string; provider: string; subject: string; email_at_link: string; last_used_at: Date | null }[]>`
+      SELECT id, provider, subject, email_at_link, last_used_at FROM account_identities WHERE account_id = ${accountId} ORDER BY id`,
+  );
+}
+
+async function fullSession(accountId: string): Promise<{ id: string; hash: Buffer }> {
+  const { hash } = freshToken();
+  const id = freshId();
+  expect(await store.createSession({ id, accountId, level: "full", remember: false, ipPrefix: null, userAgent: null, tokenHash: hash, replacedTokenHash: null })).toBe(true);
+  return { id, hash };
+}
+
+describe("linking an identity", () => {
+  it("adds the identity the provider asserted to the account, with the address as asserted", async () => {
+    const holder = await account();
+    const id = freshId();
+
+    expect(await store.linkIdentity({ accountId: holder, id, provider: "idp", subject: "link-1", email: "Asserted@Example.test" })).toBe("linked");
+
+    expect(await identityRows(holder)).toEqual([{ id, provider: "idp", subject: "link-1", email_at_link: "Asserted@Example.test", last_used_at: null }]);
+  });
+
+  it("keeps an identity another account holds where it is: nothing moves, and the answer is `taken`", async () => {
+    const owner = await account();
+    const intruder = await account();
+    const id = await link(owner, "idp", "held-subject");
+
+    expect(await store.linkIdentity({ accountId: intruder, id: freshId(), provider: "idp", subject: "held-subject", email: "x@example.test" })).toBe("taken");
+
+    expect(await identityRows(intruder)).toEqual([]);
+    expect((await identityRows(owner)).map((row) => row.id)).toEqual([id]);
+  });
+
+  it("answers `already_linked` for an identity the account holds, and changes nothing", async () => {
+    const holder = await account();
+    const id = await link(holder, "idp", "again-subject");
+
+    expect(await store.linkIdentity({ accountId: holder, id: freshId(), provider: "idp", subject: "again-subject", email: "other@example.test" })).toBe("already_linked");
+
+    expect(await identityRows(holder)).toMatchObject([{ id, email_at_link: "linked@example.test" }]);
+  });
+
+  it("links a subject of another provider, and an empty address", async () => {
+    const holder = await account();
+    await link(holder, "idp", "shared-subject");
+    expect(await store.linkIdentity({ accountId: holder, id: freshId(), provider: "other", subject: "shared-subject", email: "" })).toBe("linked");
+    expect(await identityRows(holder)).toHaveLength(2);
+  });
+
+  it("links to an account that exists and is not disabled only", async () => {
+    expect(await store.linkIdentity({ accountId: freshId(), id: freshId(), provider: "idp", subject: "ghost-1", email: "" })).toBe("no_account");
+    const disabled = await account({ disabled: true });
+    expect(await store.linkIdentity({ accountId: disabled, id: freshId(), provider: "idp", subject: "ghost-2", email: "" })).toBe("no_account");
+    expect(await identityRows(disabled)).toEqual([]);
+  });
+
+  it("links a subject to one of two accounts that ask together", async () => {
+    const first = await account();
+    const second = await account();
+    const outcomes = await Promise.all(
+      [first, second].map((accountId) => store.linkIdentity({ accountId, id: freshId(), provider: "idp", subject: "race-subject", email: "" })),
+    );
+    expect(outcomes.toSorted()).toEqual(["linked", "taken"]);
+    expect((await identityRows(first)).length + (await identityRows(second)).length).toBe(1);
+  });
+
+  it("refuses a provider or a subject outside the table's bounds, and cuts the address", async () => {
+    const holder = await account();
+    await expect(store.linkIdentity({ accountId: holder, id: freshId(), provider: "", subject: "s", email: "" })).rejects.toMatchObject({ code: "22023" });
+    await expect(store.linkIdentity({ accountId: holder, id: freshId(), provider: "idp", subject: "s".repeat(256), email: "" })).rejects.toMatchObject({ code: "22023" });
+    expect(await store.linkIdentity({ accountId: holder, id: freshId(), provider: "idp", subject: "long-address", email: "a".repeat(400) })).toBe("linked");
+    expect((await identityRows(holder))[0]?.email_at_link).toHaveLength(320);
+  });
+});
+
+describe("unlinking an identity", () => {
+  it("deletes the account's identity when it has a password", async () => {
+    const holder = await account();
+    const id = await link(holder, "idp", "unlink-1");
+
+    expect(await store.unlinkIdentity(holder, id)).toBe("unlinked");
+
+    expect(await identityRows(holder)).toEqual([]);
+  });
+
+  it("deletes one of two identities of an account without a password", async () => {
+    const holder = await account({ noPassword: true });
+    const first = await link(holder, "idp", "unlink-2a");
+    const second = await link(holder, "idp", "unlink-2b");
+
+    expect(await store.unlinkIdentity(holder, first)).toBe("unlinked");
+
+    expect((await identityRows(holder)).map((row) => row.id)).toEqual([second]);
+  });
+
+  it("refuses the only identity of an account without a password, and deletes nothing", async () => {
+    const holder = await account({ noPassword: true });
+    const only = await link(holder, "idp", "unlink-3");
+
+    expect(await store.unlinkIdentity(holder, only)).toBe("last_sign_in_method");
+
+    expect((await identityRows(holder)).map((row) => row.id)).toEqual([only]);
+  });
+
+  it("answers an identity of another account like one that does not exist, and deletes nothing", async () => {
+    const holder = await account({ noPassword: true });
+    const stranger = await account();
+    const theirs = await link(stranger, "idp", "unlink-4");
+
+    expect(await store.unlinkIdentity(holder, theirs)).toBe("not_found");
+    expect(await store.unlinkIdentity(holder, freshId())).toBe("not_found");
+
+    expect((await identityRows(stranger)).map((row) => row.id)).toEqual([theirs]);
+  });
+
+  it("answers `not_found` for a disabled account", async () => {
+    const holder = await account({ disabled: true });
+    const id = await link(holder, "idp", "unlink-5");
+    expect(await store.unlinkIdentity(holder, id)).toBe("not_found");
+    expect(await identityRows(holder)).toHaveLength(1);
+  });
+
+  it("leaves one identity when two unlinks of an account without a password arrive together", async () => {
+    for (let round = 0; round < 5; round += 1) {
+      const holder = await account({ noPassword: true });
+      const first = await link(holder, "idp", `race-a-${String(round)}`);
+      const second = await link(holder, "idp", `race-b-${String(round)}`);
+
+      const outcomes = await Promise.all([store.unlinkIdentity(holder, first), store.unlinkIdentity(holder, second)]);
+
+      expect(outcomes.toSorted(), `round ${String(round)}`).toEqual(["last_sign_in_method", "unlinked"]);
+      expect(await identityRows(holder), `round ${String(round)}`).toHaveLength(1);
+    }
+  });
+});
+
+describe("re-authenticating with an identity", () => {
+  it("sets reauth_at of the session of the identity's account and the identity's last-used time", async () => {
+    const holder = await account({ noPassword: true });
+    await link(holder, "idp", "reauth-1");
+    const session = await fullSession(holder);
+    expect((await store.lookupSession(session.hash))?.reauthAt).toBeNull();
+
+    expect(await store.reauthenticateWithIdentity({ sessionId: session.id, accountId: holder, provider: "idp", subject: "reauth-1" })).toBe(true);
+
+    expect((await store.lookupSession(session.hash))?.reauthAt).toBeInstanceOf(Date);
+    expect((await identityRows(holder))[0]?.last_used_at).toBeInstanceOf(Date);
+  });
+
+  it("accepts no identity of another account, however valid the session: nothing changes", async () => {
+    const holder = await account({ noPassword: true });
+    const stranger = await account();
+    await link(stranger, "idp", "reauth-2");
+    const session = await fullSession(holder);
+
+    expect(await store.reauthenticateWithIdentity({ sessionId: session.id, accountId: holder, provider: "idp", subject: "reauth-2" })).toBe(false);
+    expect(await store.reauthenticateWithIdentity({ sessionId: session.id, accountId: holder, provider: "idp", subject: "never-linked" })).toBe(false);
+
+    expect((await store.lookupSession(session.hash))?.reauthAt).toBeNull();
+    expect((await identityRows(stranger))[0]?.last_used_at).toBeNull();
+  });
+
+  it("accepts the identity for no session of another account", async () => {
+    const holder = await account();
+    const stranger = await account();
+    await link(holder, "idp", "reauth-3");
+    const theirSession = await fullSession(stranger);
+
+    expect(await store.reauthenticateWithIdentity({ sessionId: theirSession.id, accountId: holder, provider: "idp", subject: "reauth-3" })).toBe(false);
+
+    expect((await store.lookupSession(theirSession.hash))?.reauthAt).toBeNull();
+    expect((await identityRows(holder))[0]?.last_used_at).toBeNull();
+  });
+
+  it("accepts a disabled account's identity for nothing, and a session that does not exist", async () => {
+    const disabled = await account({ disabled: true });
+    await link(disabled, "idp", "reauth-4");
+    expect(await store.reauthenticateWithIdentity({ sessionId: freshId(), accountId: disabled, provider: "idp", subject: "reauth-4" })).toBe(false);
+    const holder = await account();
+    await link(holder, "idp", "reauth-5");
+    expect(await store.reauthenticateWithIdentity({ sessionId: freshId(), accountId: holder, provider: "idp", subject: "reauth-5" })).toBe(false);
+    expect((await identityRows(holder))[0]?.last_used_at).toBeNull();
+  });
+});
+
+describe("setting a first password", () => {
+  it("stores it for an account without one, keeps the signing session under its new token and refuses the others", async () => {
+    const holder = await account({ noPassword: true });
+    const current = await fullSession(holder);
+    const other = await fullSession(holder);
+    const { hash: newTokenHash } = freshToken();
+
+    expect(await store.changePassword({ accountId: holder, sessionId: current.id, passwordHash: HASH, initial: true, newTokenHash })).toBe(true);
+
+    expect(await store.passwordHashOf(holder)).toBe(HASH);
+    expect((await store.lookupSession(newTokenHash))?.sessionId).toBe(current.id);
+    expect(await store.lookupSession(other.hash)).toBeUndefined();
+  });
+
+  it("never replaces a password: the change is refused whole, with the old password, the sessions and the token as they were", async () => {
+    const holder = await account();
+    const before = await store.passwordHashOf(holder);
+    const current = await fullSession(holder);
+    const other = await fullSession(holder);
+    const { hash: newTokenHash } = freshToken();
+
+    expect(await store.changePassword({ accountId: holder, sessionId: current.id, passwordHash: HASH, initial: true, newTokenHash })).toBe(false);
+
+    expect(await store.passwordHashOf(holder)).toBe(before);
+    expect((await store.lookupSession(current.hash))?.sessionId).toBe(current.id);
+    expect((await store.lookupSession(other.hash))?.sessionId).toBe(other.id);
+    expect(await store.lookupSession(newTokenHash)).toBeUndefined();
+  });
+
+  it("sets one password when two first passwords arrive together", async () => {
+    const holder = await account({ noPassword: true });
+    const one = await fullSession(holder);
+    const two = await fullSession(holder);
+    const outcomes = await Promise.all(
+      [one, two].map((session) => store.changePassword({ accountId: holder, sessionId: session.id, passwordHash: HASH, initial: true, newTokenHash: freshToken().hash })),
+    );
+    expect(outcomes.toSorted()).toEqual([false, true]);
   });
 });

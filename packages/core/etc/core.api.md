@@ -276,6 +276,7 @@ export interface IdentityBeginRequest {
     readonly nonce: string;
     // (undocumented)
     readonly providerId: string;
+    readonly reauthenticate?: boolean;
     readonly redirectUri: string;
     // (undocumented)
     readonly state: string;

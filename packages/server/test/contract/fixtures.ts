@@ -16,6 +16,9 @@ export const WALKER_WORKSPACE_ID = "0192f3a0-cccc-7000-8000-0000000000f1";
 /** A token id no account holds: the walker's request to revoke it is the declared 404. */
 export const UNKNOWN_API_TOKEN_ID = "0192f3a0-cccc-7000-8000-000000000002";
 
+/** An identity id no account holds: the walker's request to unlink it is the declared 404. */
+export const UNKNOWN_IDENTITY_ID = "0192f3a0-cccc-7000-8000-000000000003";
+
 export const FIXTURES: ContractFixtures = {
   getHealth: {},
   getReady: {},
@@ -56,6 +59,10 @@ export const FIXTURES: ContractFixtures = {
   listApiTokens: {},
   createApiToken: { body: { name: "Walker token", scope: "read", workspaceId: WALKER_WORKSPACE_ID } },
   revokeApiToken: { path: { id: UNKNOWN_API_TOKEN_ID }, status: 404 },
+  // Account-level operations: no workspace or other account's identifier is part of them, and the identities they act on are the walker's own.
+  // The walker has none, so a valid unlink names an identity that is not its own, which is the declared 404 whoever holds it.
+  listIdentities: {},
+  unlinkIdentity: { path: { id: UNKNOWN_IDENTITY_ID }, status: 404 },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

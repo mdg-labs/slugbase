@@ -35,6 +35,7 @@ export interface FakeIdentityBeginRequest {
   readonly state: string;
   readonly nonce: string;
   readonly codeChallenge: string;
+  readonly reauthenticate?: boolean;
 }
 
 export interface FakeIdentityCompleteRequest {
@@ -140,6 +141,9 @@ export class FakeIdentity {
     url.searchParams.set("nonce", request.nonce);
     url.searchParams.set("code_challenge", request.codeChallenge);
     url.searchParams.set("code_challenge_method", "S256");
+    if (request.reauthenticate === true) {
+      url.searchParams.set("prompt", "login");
+    }
     return Promise.resolve({ authorizationUrl: url.href });
   }
 

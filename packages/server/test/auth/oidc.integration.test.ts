@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { FakeIdentity, type FakeIdentityGrant } from "@slugbase/testing";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -9,7 +10,7 @@ import { appUrl, tenantDatabase } from "../contract/support.ts";
 import { memoryRateLimiter } from "../http/rate-limit-support.ts";
 import { testKey, testSecretBox } from "../secret-box.ts";
 import { adapters, recordingLogger, serverConfig } from "../support.ts";
-import { disableAccount, issuedToken, seedAccount, sessionRows, sha256, storeFor, type SeededAccount } from "./support.ts";
+import { disableAccount, issuedToken, seedAccount, seedApiToken, seedMembership, seedWorkspace, sessionRows, sha256, storeFor, type SeededAccount } from "./support.ts";
 
 // OIDC sign-in with an identity that is already linked, through the whole chain over the migrated database (doc
 // 02 sections 2.3 and 2.8, doc 04 section 4.5, doc 10 T4, T12 and T20). The provider is a FakeIdentity that
@@ -17,6 +18,10 @@ import { disableAccount, issuedToken, seedAccount, sessionRows, sha256, storeFor
 // ends in a session when it must not (a tampered nonce, another audience or issuer, an expired token, a
 // replayed state, a callback from another browser, an identity nobody linked, a disabled account) and an answer
 // that tells those cases apart.
+// The link and reauth intents add: an identity linked to, or accepted as proof for, an account that did not
+// start the handshake (another account's browser session, no session, an identity another account holds), a
+// link or re-authentication started by a page of another site or by a session still waiting for its second
+// factor, and a re-authentication that counts without the account's own identity.
 
 const SESSION_COOKIE = "__Host-slugbase_session";
 const PREAUTH_COOKIE = "__Host-slugbase_oidc";
@@ -126,8 +131,8 @@ interface Begun {
   readonly state: string;
 }
 
-async function begin(world: World, query = ""): Promise<Begun> {
-  const response = await start(world, query);
+async function begin(world: World, query = "", headers: Record<string, string> = {}): Promise<Begun> {
+  const response = await startWith(world, query, headers);
   const authorizationUrl = response.headers.get("location") ?? "";
   const preAuth = cookieValue(response, PREAUTH_COOKIE);
   const state = new URL(authorizationUrl, world.origin).searchParams.get("state");
@@ -138,8 +143,8 @@ async function begin(world: World, query = ""): Promise<Begun> {
 }
 
 /** Starts a handshake and plays the person approving it: the address the provider sends the browser back to. */
-async function approved(world: World, grant: FakeIdentityGrant, query = ""): Promise<Begun & { readonly callbackUrl: string }> {
-  const begun = await begin(world, query);
+async function approved(world: World, grant: FakeIdentityGrant, query = "", headers: Record<string, string> = {}): Promise<Begun & { readonly callbackUrl: string }> {
+  const begun = await begin(world, query, headers);
   return { ...begun, callbackUrl: world.fake.approve(begun.authorizationUrl, grant) };
 }
 
@@ -264,10 +269,21 @@ describe("GET /api/v1/auth/oidc/{provider}/start", () => {
     expect(limited.headers.get("retry-after")).toMatch(/^[1-9]\d*$/);
   });
 
-  it("refuses a query it does not declare, as any operation does", async () => {
+  it("refuses a query it does not declare, and an intent it does not know, as any operation does", async () => {
     const world = serve();
-    const response = await start(world, "?intent=link");
-    expect(response.status).toBe(422);
+    expect((await start(world, "?unknown=1")).status).toBe(422);
+    expect((await start(world, "?intent=delete")).status).toBe(422);
+    expect((await start(world, "?intent=invite")).status).toBe(422);
+  });
+
+  it("starts a sign-in for the explicit login intent, as it does without one", async () => {
+    const world = serve();
+    const { state } = await begin(world, "?intent=login");
+    const rows = await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      return tx<{ intent: string; link_account_id: string | null }[]>`SELECT intent, link_account_id FROM oidc_login_states WHERE state_hash = ${sha256(Buffer.from(state))}`;
+    });
+    expect(rows[0]).toEqual({ intent: "login", link_account_id: null });
   });
 });
 
@@ -508,5 +524,308 @@ describe("GET /api/v1/auth/oidc/{provider}/callback", () => {
     expect((await callback(world, url, undefined)).status).toBe(302);
     expect((await callback(world, url, undefined)).status).toBe(302);
     expect((await callback(world, url, undefined)).status).toBe(429);
+  });
+});
+
+/** The whole sign-in with an identity, to hold a complete session of a passwordless account: its token. */
+async function signedInToken(world: World, account: SeededAccount, subject: string): Promise<string> {
+  const flow = await approved(world, { subject, email: account.email, emailVerified: true });
+  const response = await callback(world, flow.callbackUrl, flow.preAuth);
+  const token = issuedToken(response);
+  if (token === undefined) {
+    throw new Error("the sign-in did not give a session");
+  }
+  return token;
+}
+
+function sessionCookie(token: string): string {
+  return `${SESSION_COOKIE}=${token}`;
+}
+
+async function storedState(state: string): Promise<{ intent: string; link_account_id: string | null; return_to: string } | undefined> {
+  const rows = await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    return tx<{ intent: string; link_account_id: string | null; return_to: string }[]>`
+      SELECT intent, link_account_id, return_to FROM oidc_login_states WHERE state_hash = ${sha256(Buffer.from(state))}`;
+  });
+  return rows[0];
+}
+
+async function identitiesOf(accountId: string): Promise<{ provider: string; subject: string; email_at_link: string }[]> {
+  return database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    return tx<{ provider: string; subject: string; email_at_link: string }[]>`
+      SELECT provider, subject, email_at_link FROM account_identities WHERE account_id = ${accountId} ORDER BY created_at, id`;
+  });
+}
+
+async function reauthAtOf(token: string): Promise<Date | null | undefined> {
+  return (await store.lookupSession(sha256(Buffer.from(token, "base64url"))))?.reauthAt;
+}
+
+// A browser following a link inside the application says so with Sec-Fetch-Site: same-origin; a test that means
+// another origin, the address bar or no header at all sets (or clears) it itself.
+function startWith(world: World, query: string, headers: Record<string, string>): Promise<Response> {
+  return world.server.fetch(new Request(new URL(`${START}${query}`, world.origin), { headers: { "sec-fetch-site": "same-origin", ...headers } }));
+}
+
+describe("GET /api/v1/auth/oidc/{provider}/start with the link and reauth intents", () => {
+  it.each(["link", "reauth"] as const)("stores a %s handshake for the account of the complete session that started it", async (intent) => {
+    const world = serve();
+    const { account, subject } = await linkedAccount();
+    const token = await signedInToken(world, account, subject);
+
+    const response = await startWith(world, `?intent=${intent}&returnTo=/settings/security`, { cookie: sessionCookie(token) });
+
+    expect(response.status).toBe(302);
+    const location = new URL(response.headers.get("location") ?? "");
+    expect(`${location.origin}${location.pathname}`).toBe(`${ISSUER}/authorize`);
+    // Only a re-authentication asks the provider for the credentials again.
+    expect(location.searchParams.get("prompt")).toBe(intent === "reauth" ? "login" : null);
+    expect(cookieValue(response, PREAUTH_COOKIE)).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    const state = location.searchParams.get("state") ?? "";
+    expect(await storedState(state)).toEqual({ intent, link_account_id: account.id, return_to: "/settings/security" });
+  });
+
+  it.each(["link", "reauth"] as const)("sends a request without a session to the generic failure and stores nothing for %s", async (intent) => {
+    const world = serve();
+    const before = await stateCount();
+
+    expectFailed(await start(world, `?intent=${intent}`));
+    expectFailed(await startWith(world, `?intent=${intent}`, { cookie: sessionCookie("A".repeat(43)) }));
+
+    expect(await stateCount()).toBe(before);
+    expect(world.logs.entries.at(-1)).toMatchObject({ fields: { reason: "no_session" } });
+  });
+
+  it.each(["link", "reauth"] as const)("refuses a %s from a page of another site, a sibling subdomain included, or without Sec-Fetch-Site, and starts one from the application or the address bar", async (intent) => {
+    const world = serve();
+    const { account, subject } = await linkedAccount();
+    const token = await signedInToken(world, account, subject);
+    const before = await stateCount();
+
+    for (const site of ["cross-site", "same-site"]) {
+      expectFailed(await startWith(world, `?intent=${intent}`, { cookie: sessionCookie(token), "sec-fetch-site": site }));
+    }
+    // A browser that sends no Sec-Fetch-Site cannot show the request came from the application.
+    expectFailed(await world.server.fetch(new Request(new URL(`${START}?intent=${intent}`, world.origin), { headers: { cookie: sessionCookie(token) } })));
+    expect(await stateCount()).toBe(before);
+    expect(world.logs.entries.at(-1)).toMatchObject({ fields: { reason: "cross_site_start" } });
+
+    for (const site of ["same-origin", "none"]) {
+      expect((await startWith(world, `?intent=${intent}`, { cookie: sessionCookie(token), "sec-fetch-site": site })).headers.get("location")).toContain(ISSUER);
+    }
+  });
+
+  it("refuses a session that is still waiting for its second factor", async () => {
+    const world = serve();
+    const { account } = await linkedAccount({ mfa: true });
+    const secret = randomBytes(32);
+    expect(await store.createSession({ id: "0192f3a0-eeee-7000-8000-000000000001", accountId: account.id, level: "partial", remember: false, ipPrefix: null, userAgent: null, tokenHash: sha256(secret), replacedTokenHash: null })).toBe(true);
+    const before = await stateCount();
+
+    expectFailed(await startWith(world, "?intent=link", { cookie: sessionCookie(secret.toString("base64url")) }));
+
+    expect(await stateCount()).toBe(before);
+  });
+
+  it("refuses an API token, whatever its scope", async () => {
+    const world = serve();
+    const { account } = await linkedAccount();
+    const workspaceId = await seedWorkspace(database());
+    await seedMembership(database(), { workspaceId, accountId: account.id });
+    const apiToken = await seedApiToken(database(), { accountId: account.id, workspaceId, scope: "read-write" });
+    const before = await stateCount();
+
+    expectFailed(await startWith(world, "?intent=link", { authorization: `Bearer ${apiToken.value}` }));
+
+    expect(await stateCount()).toBe(before);
+  });
+});
+
+describe("GET /api/v1/auth/oidc/{provider}/callback with the link intent", () => {
+  it("adds the identity to the account of the browser's session, with the address the provider asserted, and changes no session", async () => {
+    const world = serve();
+    const { account, subject } = await linkedAccount();
+    const token = await signedInToken(world, account, subject);
+    const flow = await approved(world, { subject: "second-identity", email: "second@idp.example.test", emailVerified: true }, "?intent=link&returnTo=/settings/security", { cookie: sessionCookie(token) });
+
+    const response = await callback(world, flow.callbackUrl, flow.preAuth, { cookie: sessionCookie(token) });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("/settings/security");
+    expect(response.headers.getSetCookie()).toHaveLength(1);
+    expect(response.headers.getSetCookie()[0]).toMatch(new RegExp(`^${PREAUTH_COOKIE}=; Max-Age=0;`));
+    expect(await identitiesOf(account.id)).toMatchObject([{ subject }, { provider: "idp", subject: "second-identity", email_at_link: "second@idp.example.test" }]);
+    expect(await store.lookupSession(sha256(Buffer.from(token, "base64url")))).toMatchObject({ accountId: account.id });
+    expect(await sessionCount(account.id)).toBe(1);
+  });
+
+  it("takes the identity from no one: an identity another account holds is refused with the generic failure, and stays where it is", async () => {
+    const world = serve();
+    const mine = await linkedAccount();
+    const theirs = await linkedAccount({ subject: "held-by-the-other-account" });
+    const token = await signedInToken(world, mine.account, mine.subject);
+    const flow = await approved(world, { subject: "held-by-the-other-account" }, "?intent=link", { cookie: sessionCookie(token) });
+
+    const response = await callback(world, flow.callbackUrl, flow.preAuth, { cookie: sessionCookie(token) });
+
+    expectFailed(response);
+    expect(world.logs.entries.at(-1)).toMatchObject({ fields: { reason: "identity_in_use" } });
+    expect((await identitiesOf(mine.account.id)).map((row) => row.subject)).toEqual([mine.subject]);
+    expect((await identitiesOf(theirs.account.id)).map((row) => row.subject)).toEqual(["held-by-the-other-account"]);
+  });
+
+  it("answers the refusal for an identity another account holds as it answers a failed validation", async () => {
+    const world = serve();
+    const mine = await linkedAccount();
+    await linkedAccount({ subject: "held-too" });
+    const token = await signedInToken(world, mine.account, mine.subject);
+    const taken = await approved(world, { subject: "held-too" }, "?intent=link", { cookie: sessionCookie(token) });
+    const forged = await approved(world, { subject: "held-too", nonce: "other" }, "?intent=link", { cookie: sessionCookie(token) });
+
+    const refused = await callback(world, taken.callbackUrl, taken.preAuth, { cookie: sessionCookie(token) });
+    const invalid = await callback(world, forged.callbackUrl, forged.preAuth, { cookie: sessionCookie(token) });
+
+    expectFailed(refused);
+    expectFailed(invalid);
+    expect(refused.headers.getSetCookie()).toEqual(invalid.headers.getSetCookie());
+    expect(await refused.text()).toBe(await invalid.text());
+  });
+
+  it("adds the identity to the account that started the handshake and no other: the browser of another account's session is refused, the state used up", async () => {
+    const world = serve();
+    const starter = await linkedAccount();
+    const other = await linkedAccount();
+    const starterToken = await signedInToken(world, starter.account, starter.subject);
+    const otherToken = await signedInToken(world, other.account, other.subject);
+    const flow = await approved(world, { subject: "carried-over" }, "?intent=link", { cookie: sessionCookie(starterToken) });
+
+    expectFailed(await callback(world, flow.callbackUrl, flow.preAuth, { cookie: sessionCookie(otherToken) }));
+    expect(world.logs.entries.at(-1)).toMatchObject({ fields: { reason: "session_mismatch" } });
+    // The right browser cannot use it afterwards either.
+    expectFailed(await callback(world, flow.callbackUrl, flow.preAuth, { cookie: sessionCookie(starterToken) }));
+
+    expect(await identitiesOf(starter.account.id)).toHaveLength(1);
+    expect(await identitiesOf(other.account.id)).toHaveLength(1);
+  });
+
+  it("refuses a browser with no session at all, and a signed-out one that ends the handshake", async () => {
+    const world = serve();
+    const { account, subject } = await linkedAccount();
+    const token = await signedInToken(world, account, subject);
+    const flow = await approved(world, { subject: "signed-out-link" }, "?intent=link", { cookie: sessionCookie(token) });
+
+    expectFailed(await callback(world, flow.callbackUrl, flow.preAuth));
+
+    expect(await identitiesOf(account.id)).toHaveLength(1);
+  });
+
+  it("refuses the callback of a handshake started by a session that has since ended", async () => {
+    const world = serve();
+    const { account, subject } = await linkedAccount();
+    const token = await signedInToken(world, account, subject);
+    const flow = await approved(world, { subject: "ended-session" }, "?intent=link", { cookie: sessionCookie(token) });
+    expect((await world.server.fetch(new Request(new URL("/api/v1/auth/logout", world.origin), { method: "POST", headers: { origin: world.origin, "content-type": "application/json", cookie: sessionCookie(token) } }))).status).toBe(204);
+
+    expectFailed(await callback(world, flow.callbackUrl, flow.preAuth, { cookie: sessionCookie(token) }));
+
+    expect(await identitiesOf(account.id)).toHaveLength(1);
+  });
+
+  it("keeps the guards of the sign-in: no cookie of the handshake, a replayed state and a token that fails validation link nothing", async () => {
+    const world = serve();
+    const { account, subject } = await linkedAccount();
+    const token = await signedInToken(world, account, subject);
+    const headers = { cookie: sessionCookie(token) };
+    const flow = await approved(world, { subject: "guarded-link" }, "?intent=link", headers);
+
+    expectFailed(await callback(world, flow.callbackUrl, undefined, headers));
+    expectFailed(await callback(world, flow.callbackUrl, "x".repeat(43), headers));
+    expect(await identitiesOf(account.id)).toHaveLength(1);
+
+    expect((await callback(world, flow.callbackUrl, flow.preAuth, headers)).status).toBe(302);
+    expectFailed(await callback(world, flow.callbackUrl, flow.preAuth, headers));
+    expect(await identitiesOf(account.id)).toHaveLength(2);
+
+    for (const fault of [{ nonce: "other" }, { audience: "another-client" }, { issuer: "https://evil.example.test" }, { expiresInSeconds: -5 }]) {
+      const bad = await approved(world, { subject: "never-linked", ...fault }, "?intent=link", headers);
+      expectFailed(await callback(world, bad.callbackUrl, bad.preAuth, headers));
+    }
+    expect(await identitiesOf(account.id)).toHaveLength(2);
+  });
+
+  it("leaves an identity the account holds alone: linking it again is no error and no second row", async () => {
+    const world = serve();
+    const { account, subject } = await linkedAccount();
+    const token = await signedInToken(world, account, subject);
+    const flow = await approved(world, { subject, email: "changed@idp.example.test", emailVerified: true }, "?intent=link", { cookie: sessionCookie(token) });
+
+    expect((await callback(world, flow.callbackUrl, flow.preAuth, { cookie: sessionCookie(token) })).headers.get("location")).toBe("/");
+
+    expect(await identitiesOf(account.id)).toMatchObject([{ subject, email_at_link: account.email }]);
+  });
+});
+
+describe("GET /api/v1/auth/oidc/{provider}/callback with the reauth intent", () => {
+  it("counts the browser's session as re-authenticated when the provider asserts an identity of its account", async () => {
+    const world = serve();
+    const { account, subject } = await linkedAccount();
+    const token = await signedInToken(world, account, subject);
+    expect(await reauthAtOf(token)).toBeNull();
+    const flow = await approved(world, { subject }, "?intent=reauth&returnTo=/settings/security", { cookie: sessionCookie(token) });
+
+    const response = await callback(world, flow.callbackUrl, flow.preAuth, { cookie: sessionCookie(token) });
+
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("/settings/security");
+    expect(response.headers.getSetCookie()).toHaveLength(1);
+    expect((await reauthAtOf(token))?.getTime()).toBeGreaterThan(Date.now() - 60_000);
+    expect(await sessionCount(account.id)).toBe(1);
+  });
+
+  it("is no proof when the provider asserts an identity the account does not hold, however valid the token", async () => {
+    const world = serve();
+    const { account, subject } = await linkedAccount();
+    const stranger = await linkedAccount({ subject: "a-stranger" });
+    const token = await signedInToken(world, account, subject);
+
+    for (const asserted of ["a-stranger", "nobody-linked-this"]) {
+      const flow = await approved(world, { subject: asserted, email: account.email, emailVerified: true }, "?intent=reauth", { cookie: sessionCookie(token) });
+      expectFailed(await callback(world, flow.callbackUrl, flow.preAuth, { cookie: sessionCookie(token) }));
+    }
+
+    expect(await reauthAtOf(token)).toBeNull();
+    expect(world.logs.entries.at(-1)).toMatchObject({ fields: { reason: "unknown_identity" } });
+    expect(stranger.subject).toBe("a-stranger");
+  });
+
+  it("re-authenticates the session of the account that started the handshake and no other", async () => {
+    const world = serve();
+    const starter = await linkedAccount();
+    const other = await linkedAccount();
+    const starterToken = await signedInToken(world, starter.account, starter.subject);
+    const otherToken = await signedInToken(world, other.account, other.subject);
+    const flow = await approved(world, { subject: other.subject }, "?intent=reauth", { cookie: sessionCookie(starterToken) });
+
+    expectFailed(await callback(world, flow.callbackUrl, flow.preAuth, { cookie: sessionCookie(otherToken) }));
+    expectFailed(await callback(world, flow.callbackUrl, flow.preAuth, { cookie: sessionCookie(starterToken) }));
+
+    expect(await reauthAtOf(starterToken)).toBeNull();
+    expect(await reauthAtOf(otherToken)).toBeNull();
+  });
+
+  it("re-authenticates nothing for a browser with no session, a replayed state or a token that fails validation", async () => {
+    const world = serve();
+    const { account, subject } = await linkedAccount();
+    const token = await signedInToken(world, account, subject);
+    const headers = { cookie: sessionCookie(token) };
+    const flow = await approved(world, { subject }, "?intent=reauth", headers);
+
+    expectFailed(await callback(world, flow.callbackUrl, flow.preAuth));
+    expect(await reauthAtOf(token)).toBeNull();
+    const bad = await approved(world, { subject, nonce: "other" }, "?intent=reauth", headers);
+    expectFailed(await callback(world, bad.callbackUrl, bad.preAuth, headers));
+    expect(await reauthAtOf(token)).toBeNull();
   });
 });

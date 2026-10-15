@@ -70,6 +70,7 @@ describe("the package entry point", () => {
         "ConnectionRoleError",
         "MigrationError",
         "TenantContextError",
+        "accountIdentityRepository",
         "accountProfileRepository",
         "apiTokenRepository",
         "connectionRole",
