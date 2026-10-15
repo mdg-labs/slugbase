@@ -159,6 +159,22 @@ async function storedRows(accountId: string): Promise<Stored[]> {
   return [...rows];
 }
 
+/**
+ * Moves a token's revocation back in time. The application never writes that date, so the table
+ * owner does, in the account-level setting of the row's account so the row policy admits it.
+ */
+async function backdateRevocation(accountId: string, id: string, days: number): Promise<void> {
+  await database().owner.begin(async (tx) => {
+    await tx`SELECT set_config('app.account_id', ${accountId}, true)`;
+    await tx`UPDATE api_tokens SET revoked_at = now() - ${days} * interval '1 day' WHERE id = ${id}`;
+  });
+}
+
+/** One run of the scheduled retention purge, which is what removes a revoked token's row (doc 05 section 6). */
+async function runRetentionPurge(): Promise<void> {
+  await database().app`SELECT table_name, deleted FROM sys_retention_purge()`;
+}
+
 describe("POST /api/v1/me/api-tokens", () => {
   it("answers 201 with the token in the active workspace, a slb_ secret of 43 characters, its 6-character prefix and a 90-day expiry by default", async () => {
     const world = serve();
@@ -453,6 +469,25 @@ describe("DELETE /api/v1/me/api-tokens/{id}", () => {
     expect(row?.revoked_at).toBeInstanceOf(Date);
     expect((await revoke(world, alice, token.id)).status).toBe(204);
     expect((await storedRows(alice.account.id))[0]?.revoked_at).toEqual(row?.revoked_at);
+  });
+
+  it("answers 204 again for a token revoked less than 30 days ago, and 404 not_found once the retention purge has removed its row", async () => {
+    const world = serve();
+    const alice = await person(world);
+    const token = await created(world, alice, { name: "CI", scope: "read" });
+    expect((await revoke(world, alice, token.id)).status).toBe(204);
+
+    await backdateRevocation(alice.account.id, token.id, 29);
+    await runRetentionPurge();
+    expect((await storedRows(alice.account.id)).map((row) => row.id)).toEqual([token.id]);
+    expect((await revoke(world, alice, token.id)).status).toBe(204);
+
+    await backdateRevocation(alice.account.id, token.id, 31);
+    await runRetentionPurge();
+    expect(await storedRows(alice.account.id)).toEqual([]);
+    const response = await revoke(world, alice, token.id);
+    expect(response.status).toBe(404);
+    expect((await problem(response))["code"]).toBe("not_found");
   });
 
   it("answers 404 for another account's token and for an unknown id, and leaves the token active and listed for its owner", async () => {

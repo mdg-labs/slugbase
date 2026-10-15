@@ -541,11 +541,11 @@ export const revokeApiToken = defineOperation({
   rate: "write",
   request: { params: ApiTokenIdParamsSchema },
   responses: {
-    204: emptyResponse("The token is revoked and refused from its next request; a token that was revoked before is answered the same way"),
+    204: emptyResponse("The token is revoked and refused from its next request; a token that was revoked before is answered the same way until the retention purge removes its row, 30 days after the revocation or the token's expiry, whichever is first"),
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse("The request did not come from the application itself, or the credential is an API token"),
-    404: problemResponse("The account has no token with this identifier, another account's included"),
+    404: problemResponse("The account has no token with this identifier, another account's included, or its row was removed by the retention purge"),
     422: problemResponse("The identifier did not pass validation"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),

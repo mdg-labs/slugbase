@@ -1397,7 +1397,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The token is revoked and refused from its next request; a token that was revoked before is answered the same way */
+            /** @description The token is revoked and refused from its next request; a token that was revoked before is answered the same way until the retention purge removes its row, 30 days after the revocation or the token's expiry, whichever is first */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -1431,7 +1431,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The account has no token with this identifier, another account's included */
+            /** @description The account has no token with this identifier, another account's included, or its row was removed by the retention purge */
             404: {
                 headers: {
                     [name: string]: unknown;
