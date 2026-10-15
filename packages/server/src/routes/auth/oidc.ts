@@ -7,6 +7,7 @@ import {
   oidcCodeVerifierOptions,
   oidcPreAuthCookieSpec,
   oidcStateIsBound,
+  reauthenticatedRecently,
   safeReturnTo,
   truncateUserAgent,
   PortUnavailable,
@@ -21,6 +22,7 @@ import { readCookie, setSessionCookie } from "../../auth/cookie.ts";
 import { hashSessionToken, newSessionToken } from "../../auth/session-token.ts";
 import { uuidv7 } from "../../auth/uuidv7.ts";
 import type { ChainContext, RouteBinding } from "../../http/chain.ts";
+import { ProblemError } from "../../http/problem.ts";
 import { networkPrefixOf } from "../../http/trusted-proxy.ts";
 import { route } from "../register.ts";
 
@@ -33,7 +35,12 @@ import { route } from "../register.ts";
 // verified the provider's ID token. `link` and `reauth` are started only by a complete session, in a request
 // that a browser reports as coming from the application itself (`Sec-Fetch-Site: same-origin`, or `none` for the
 // address bar; a request that names another site or no site at all is refused), and end only in a browser whose
-// current session is the one of the account that started them. Everything that can go wrong
+// current session is the one of the account that started them. Linking an identity also needs a fresh
+// re-authentication (doc 04 section 4.4, doc 10 T18), because a linked identity outlives a password change and the
+// revocation of every session: the start answers a session that has not re-authenticated within the window
+// with the `401 reauth_required` problem, the one answer the application's own page can act on, and the
+// callback checks the same window again, because up to ten minutes pass between the two. `reauth` needs
+// none, since it is how a session gets one. Everything that can go wrong
 // ends on `/login` with the same failure code and nothing in the answer says which step refused, so the answer
 // reveals neither whether an account exists nor why a handshake failed; the reason goes to the log as a fixed word.
 
@@ -54,6 +61,8 @@ export interface OidcRoutesOptions {
   /** `SESSION_SECRET`: the pre-auth cookie is a keyed hash made with a key derived from it. */
   readonly sessionSecret: string;
   readonly sessionCookie: SessionCookieSpec;
+  /** The instant, in milliseconds, a session's `reauth_at` is compared with; defaults to the system clock. */
+  readonly now?: () => number;
 }
 
 /** The fixed words of the log line that says why a handshake did not end in a session. */
@@ -70,6 +79,7 @@ type Refusal =
   | "no_session"
   | "cross_site_start"
   | "session_mismatch"
+  | "reauth_required"
   | "identity_in_use"
   | "unknown_account";
 
@@ -97,9 +107,13 @@ function describeFailure(error: unknown): Refusal {
 
 // The account of a complete session of this request: a session that is waiting for its second factor, an API token
 // and no credential at all are no session here.
-function signedInSession(context: ChainContext): { readonly sessionId: string; readonly accountId: string } | undefined {
+function signedInSession(
+  context: ChainContext,
+): { readonly sessionId: string; readonly accountId: string; readonly reauthAt: Date | undefined } | undefined {
   const principal = context.get("principal");
-  return principal?.kind === "session" && principal.mfaPending !== true ? { sessionId: principal.sessionId, accountId: principal.accountId } : undefined;
+  return principal?.kind === "session" && principal.mfaPending !== true
+    ? { sessionId: principal.sessionId, accountId: principal.accountId, reauthAt: principal.reauthAt }
+    : undefined;
 }
 
 // A browser says where a navigation came from (Sec-Fetch-Site). Only the application's own page (`same-origin`)
@@ -118,7 +132,7 @@ function refused(context: ChainContext, provider: string, reason: Refusal): void
   context.get("logger")?.warn("An OIDC sign-in ended without a session", { provider, reason });
 }
 
-export function oidcRoutes({ store, identity, secretBox, appOrigin, sessionSecret, sessionCookie }: OidcRoutesOptions): RouteBinding[] {
+export function oidcRoutes({ store, identity, secretBox, appOrigin, sessionSecret, sessionCookie, now = Date.now }: OidcRoutesOptions): RouteBinding[] {
   const preAuth = oidcPreAuthCookieSpec(appOrigin);
   const origin = new URL(appOrigin).origin;
   const bindingKey = Buffer.from(hkdfSync("sha256", sessionSecret, "", "slugbase:oidc:pre-auth", SUBKEY_BYTES));
@@ -137,6 +151,12 @@ export function oidcRoutes({ store, identity, secretBox, appOrigin, sessionSecre
       if (!fromTheApplication(context)) {
         refused(context, params.provider, "cross_site_start");
         return failure;
+      }
+      // Starting a link is the one start that answers with a problem: the member is in the application, and the
+      // page needs to tell "re-authenticate first" apart from a handshake that failed.
+      if (intent === "link" && !reauthenticatedRecently(session.reauthAt, now())) {
+        refused(context, params.provider, "reauth_required");
+        throw new ProblemError("reauth_required", "Recent re-authentication is required.");
       }
       linkAccountId = session.accountId;
     }
@@ -206,6 +226,9 @@ export function oidcRoutes({ store, identity, secretBox, appOrigin, sessionSecre
       owner = signedInSession(context);
       if (owner === undefined || owner.accountId !== record.linkAccountId) {
         return fail("session_mismatch");
+      }
+      if (record.intent === "link" && !reauthenticatedRecently(owner.reauthAt, now())) {
+        return fail("reauth_required");
       }
     }
     const code = codes[0];

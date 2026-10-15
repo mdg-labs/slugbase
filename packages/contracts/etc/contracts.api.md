@@ -2789,6 +2789,14 @@ export interface OperationTypes {
                     "application/problem+json": ComponentTypes["schemas"]["Problem"];
                 };
             };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4039,6 +4047,7 @@ export const startOidcSignIn: {
         };
         }>;
         readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
         readonly 422: ProblemResponse;
         readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;

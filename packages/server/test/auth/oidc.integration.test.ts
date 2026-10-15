@@ -538,6 +538,23 @@ async function signedInToken(world: World, account: SeededAccount, subject: stri
   return token;
 }
 
+/** A complete session that has just re-authenticated through its provider, as linking an identity needs. */
+async function freshToken(world: World, account: SeededAccount, subject: string): Promise<string> {
+  const token = await signedInToken(world, account, subject);
+  const flow = await approved(world, { subject }, "?intent=reauth", { cookie: sessionCookie(token) });
+  expect((await callback(world, flow.callbackUrl, flow.preAuth, { cookie: sessionCookie(token) })).headers.get("location")).not.toBe(FAILED);
+  expect((await reauthAtOf(token))?.getTime()).toBeGreaterThan(Date.now() - 60_000);
+  return token;
+}
+
+/** Moves the re-authentication of a session back in time, as the minutes passing would. */
+async function ageReauth(token: string, minutes: number): Promise<void> {
+  await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    await tx`UPDATE sessions SET reauth_at = now() - make_interval(mins => ${minutes}) WHERE token_hash = ${sha256(Buffer.from(token, "base64url"))}`;
+  });
+}
+
 function sessionCookie(token: string): string {
   return `${SESSION_COOKIE}=${token}`;
 }
@@ -573,7 +590,7 @@ describe("GET /api/v1/auth/oidc/{provider}/start with the link and reauth intent
   it.each(["link", "reauth"] as const)("stores a %s handshake for the account of the complete session that started it", async (intent) => {
     const world = serve();
     const { account, subject } = await linkedAccount();
-    const token = await signedInToken(world, account, subject);
+    const token = await freshToken(world, account, subject);
 
     const response = await startWith(world, `?intent=${intent}&returnTo=/settings/security`, { cookie: sessionCookie(token) });
 
@@ -601,7 +618,7 @@ describe("GET /api/v1/auth/oidc/{provider}/start with the link and reauth intent
   it.each(["link", "reauth"] as const)("refuses a %s from a page of another site, a sibling subdomain included, or without Sec-Fetch-Site, and starts one from the application or the address bar", async (intent) => {
     const world = serve();
     const { account, subject } = await linkedAccount();
-    const token = await signedInToken(world, account, subject);
+    const token = await freshToken(world, account, subject);
     const before = await stateCount();
 
     for (const site of ["cross-site", "same-site"]) {
@@ -643,11 +660,114 @@ describe("GET /api/v1/auth/oidc/{provider}/start with the link and reauth intent
   });
 });
 
+describe("linking an identity needs a fresh re-authentication (T18)", () => {
+  async function expectReauthRequired(response: Response): Promise<void> {
+    expect(response.status).toBe(401);
+    expect(response.headers.get("content-type")).toContain("application/problem+json");
+    expect(await response.json()).toMatchObject({ status: 401, code: "reauth_required" });
+    expect(response.headers.get("location")).toBeNull();
+    expect(cookieValue(response, PREAUTH_COOKIE)).toBeUndefined();
+  }
+
+  it("answers 401 reauth_required to a start of the link intent from a session that has never re-authenticated, storing nothing", async () => {
+    const world = serve();
+    const { account, subject } = await linkedAccount();
+    const token = await signedInToken(world, account, subject);
+    const before = await stateCount();
+
+    await expectReauthRequired(await startWith(world, "?intent=link&returnTo=/settings/security", { cookie: sessionCookie(token) }));
+
+    expect(await stateCount()).toBe(before);
+    expect(world.logs.entries.at(-1)).toMatchObject({ fields: { reason: "reauth_required" } });
+  });
+
+  it("answers it as well once the ten minutes have passed, and starts a link inside the window", async () => {
+    const world = serve();
+    const { account, subject } = await linkedAccount();
+    const token = await freshToken(world, account, subject);
+
+    await ageReauth(token, 9);
+    expect((await startWith(world, "?intent=link", { cookie: sessionCookie(token) })).headers.get("location")).toContain(ISSUER);
+    await ageReauth(token, 11);
+    await expectReauthRequired(await startWith(world, "?intent=link", { cookie: sessionCookie(token) }));
+  });
+
+  it("lets the same session start a link after it re-authenticates, with the provider's reauth intent", async () => {
+    const world = serve();
+    const { account, subject } = await linkedAccount();
+    const token = await signedInToken(world, account, subject);
+    await expectReauthRequired(await startWith(world, "?intent=link", { cookie: sessionCookie(token) }));
+
+    const flow = await approved(world, { subject }, "?intent=reauth", { cookie: sessionCookie(token) });
+    expect((await callback(world, flow.callbackUrl, flow.preAuth, { cookie: sessionCookie(token) })).headers.get("location")).toBe("/");
+
+    const linking = await approved(world, { subject: "after-reauth" }, "?intent=link", { cookie: sessionCookie(token) });
+    expect((await callback(world, linking.callbackUrl, linking.preAuth, { cookie: sessionCookie(token) })).headers.get("location")).toBe("/");
+    expect(await identitiesOf(account.id)).toMatchObject([{ subject }, { subject: "after-reauth" }]);
+  });
+
+  it("starts the reauth and login intents without a fresh re-authentication", async () => {
+    const world = serve();
+    const { account, subject } = await linkedAccount();
+    const token = await signedInToken(world, account, subject);
+    await ageReauth(token, 60);
+
+    for (const query of ["?intent=reauth", "?intent=login", ""]) {
+      const response = await startWith(world, query, { cookie: sessionCookie(token) });
+      expect(response.status).toBe(302);
+      expect(response.headers.get("location")).toContain(ISSUER);
+    }
+  });
+
+  it("keeps the generic failure for a request without a session or from another site, whatever the re-authentication", async () => {
+    const world = serve();
+    const { account, subject } = await linkedAccount();
+    const token = await signedInToken(world, account, subject);
+
+    expectFailed(await start(world, "?intent=link"));
+    expectFailed(await startWith(world, "?intent=link", { cookie: sessionCookie(token), "sec-fetch-site": "cross-site" }));
+    expect(world.logs.entries.at(-1)).toMatchObject({ fields: { reason: "cross_site_start" } });
+  });
+
+  it("links nothing when the window lapses between the start and the callback, and links through a new handshake after a re-authentication", async () => {
+    const world = serve();
+    const { account, subject } = await linkedAccount();
+    const token = await freshToken(world, account, subject);
+    const flow = await approved(world, { subject: "lapsed" }, "?intent=link", { cookie: sessionCookie(token) });
+    await ageReauth(token, 11);
+
+    expectFailed(await callback(world, flow.callbackUrl, flow.preAuth, { cookie: sessionCookie(token) }));
+
+    expect(world.logs.entries.at(-1)).toMatchObject({ fields: { reason: "reauth_required" } });
+    expect(await identitiesOf(account.id)).toMatchObject([{ subject }]);
+    // The state is used up, so the same address does not work after the member re-authenticates either.
+    const reauthFlow = await approved(world, { subject }, "?intent=reauth", { cookie: sessionCookie(token) });
+    await callback(world, reauthFlow.callbackUrl, reauthFlow.preAuth, { cookie: sessionCookie(token) });
+    expectFailed(await callback(world, flow.callbackUrl, flow.preAuth, { cookie: sessionCookie(token) }));
+    expect(await identitiesOf(account.id)).toHaveLength(1);
+    const again = await approved(world, { subject: "lapsed" }, "?intent=link", { cookie: sessionCookie(token) });
+    expect((await callback(world, again.callbackUrl, again.preAuth, { cookie: sessionCookie(token) })).headers.get("location")).toBe("/");
+    expect(await identitiesOf(account.id)).toMatchObject([{ subject }, { subject: "lapsed" }]);
+  });
+
+  it("does not link for a reauth handshake whose session never re-authenticated, only counting it as a re-authentication", async () => {
+    const world = serve();
+    const { account, subject } = await linkedAccount();
+    const token = await signedInToken(world, account, subject);
+    const flow = await approved(world, { subject: "not-a-link" }, "?intent=reauth", { cookie: sessionCookie(token) });
+
+    expectFailed(await callback(world, flow.callbackUrl, flow.preAuth, { cookie: sessionCookie(token) }));
+
+    expect(await identitiesOf(account.id)).toHaveLength(1);
+    expect(await reauthAtOf(token)).toBeNull();
+  });
+});
+
 describe("GET /api/v1/auth/oidc/{provider}/callback with the link intent", () => {
   it("adds the identity to the account of the browser's session, with the address the provider asserted, and changes no session", async () => {
     const world = serve();
     const { account, subject } = await linkedAccount();
-    const token = await signedInToken(world, account, subject);
+    const token = await freshToken(world, account, subject);
     const flow = await approved(world, { subject: "second-identity", email: "second@idp.example.test", emailVerified: true }, "?intent=link&returnTo=/settings/security", { cookie: sessionCookie(token) });
 
     const response = await callback(world, flow.callbackUrl, flow.preAuth, { cookie: sessionCookie(token) });
@@ -665,7 +785,7 @@ describe("GET /api/v1/auth/oidc/{provider}/callback with the link intent", () =>
     const world = serve();
     const mine = await linkedAccount();
     const theirs = await linkedAccount({ subject: "held-by-the-other-account" });
-    const token = await signedInToken(world, mine.account, mine.subject);
+    const token = await freshToken(world, mine.account, mine.subject);
     const flow = await approved(world, { subject: "held-by-the-other-account" }, "?intent=link", { cookie: sessionCookie(token) });
 
     const response = await callback(world, flow.callbackUrl, flow.preAuth, { cookie: sessionCookie(token) });
@@ -680,7 +800,7 @@ describe("GET /api/v1/auth/oidc/{provider}/callback with the link intent", () =>
     const world = serve();
     const mine = await linkedAccount();
     await linkedAccount({ subject: "held-too" });
-    const token = await signedInToken(world, mine.account, mine.subject);
+    const token = await freshToken(world, mine.account, mine.subject);
     const taken = await approved(world, { subject: "held-too" }, "?intent=link", { cookie: sessionCookie(token) });
     const forged = await approved(world, { subject: "held-too", nonce: "other" }, "?intent=link", { cookie: sessionCookie(token) });
 
@@ -697,8 +817,8 @@ describe("GET /api/v1/auth/oidc/{provider}/callback with the link intent", () =>
     const world = serve();
     const starter = await linkedAccount();
     const other = await linkedAccount();
-    const starterToken = await signedInToken(world, starter.account, starter.subject);
-    const otherToken = await signedInToken(world, other.account, other.subject);
+    const starterToken = await freshToken(world, starter.account, starter.subject);
+    const otherToken = await freshToken(world, other.account, other.subject);
     const flow = await approved(world, { subject: "carried-over" }, "?intent=link", { cookie: sessionCookie(starterToken) });
 
     expectFailed(await callback(world, flow.callbackUrl, flow.preAuth, { cookie: sessionCookie(otherToken) }));
@@ -713,7 +833,7 @@ describe("GET /api/v1/auth/oidc/{provider}/callback with the link intent", () =>
   it("refuses a browser with no session at all, and a signed-out one that ends the handshake", async () => {
     const world = serve();
     const { account, subject } = await linkedAccount();
-    const token = await signedInToken(world, account, subject);
+    const token = await freshToken(world, account, subject);
     const flow = await approved(world, { subject: "signed-out-link" }, "?intent=link", { cookie: sessionCookie(token) });
 
     expectFailed(await callback(world, flow.callbackUrl, flow.preAuth));
@@ -724,7 +844,7 @@ describe("GET /api/v1/auth/oidc/{provider}/callback with the link intent", () =>
   it("refuses the callback of a handshake started by a session that has since ended", async () => {
     const world = serve();
     const { account, subject } = await linkedAccount();
-    const token = await signedInToken(world, account, subject);
+    const token = await freshToken(world, account, subject);
     const flow = await approved(world, { subject: "ended-session" }, "?intent=link", { cookie: sessionCookie(token) });
     expect((await world.server.fetch(new Request(new URL("/api/v1/auth/logout", world.origin), { method: "POST", headers: { origin: world.origin, "content-type": "application/json", cookie: sessionCookie(token) } }))).status).toBe(204);
 
@@ -736,7 +856,7 @@ describe("GET /api/v1/auth/oidc/{provider}/callback with the link intent", () =>
   it("keeps the guards of the sign-in: no cookie of the handshake, a replayed state and a token that fails validation link nothing", async () => {
     const world = serve();
     const { account, subject } = await linkedAccount();
-    const token = await signedInToken(world, account, subject);
+    const token = await freshToken(world, account, subject);
     const headers = { cookie: sessionCookie(token) };
     const flow = await approved(world, { subject: "guarded-link" }, "?intent=link", headers);
 
@@ -758,7 +878,7 @@ describe("GET /api/v1/auth/oidc/{provider}/callback with the link intent", () =>
   it("leaves an identity the account holds alone: linking it again is no error and no second row", async () => {
     const world = serve();
     const { account, subject } = await linkedAccount();
-    const token = await signedInToken(world, account, subject);
+    const token = await freshToken(world, account, subject);
     const flow = await approved(world, { subject, email: "changed@idp.example.test", emailVerified: true }, "?intent=link", { cookie: sessionCookie(token) });
 
     expect((await callback(world, flow.callbackUrl, flow.preAuth, { cookie: sessionCookie(token) })).headers.get("location")).toBe("/");

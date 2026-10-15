@@ -129,7 +129,7 @@ export const OidcStartQuerySchema = z.strictObject({
     .enum(OIDC_START_INTENTS)
     .default("login")
     .describe(
-      "What the handshake is for. `login` (the default) signs in the account the identity is linked to. `link` adds the identity to the signed-in account. `reauth` proves the signed-in account's member at the provider, which counts as a re-authentication of the session for ten minutes. `link` and `reauth` need a complete session, and the browser must report the request as coming from the application itself (Sec-Fetch-Site same-origin, or none for the address bar); a request from another site or without that header is refused",
+      "What the handshake is for. `login` (the default) signs in the account the identity is linked to. `link` adds the identity to the signed-in account and, because a linked identity outlives a password change and the end of every session, needs a session that re-authenticated within the last ten minutes: otherwise the start is answered `401 reauth_required` (re-authenticate with `POST /me/reauth` or the `reauth` intent, then start again), and the callback checks the same window. `reauth` proves the signed-in account's member at the provider, which counts as a re-authentication of the session for ten minutes. `link` and `reauth` need a complete session, and the browser must report the request as coming from the application itself (Sec-Fetch-Site same-origin, or none for the address bar); a request from another site or without that header is refused",
     ),
 });
 
@@ -159,6 +159,7 @@ export const startOidcSignIn = defineOperation({
       { headers: OIDC_REDIRECT_HEADERS },
     ),
     400: problemResponse("The request was malformed"),
+    401: problemResponse("The link intent comes from a complete session that has not re-authenticated within the last ten minutes (reauth_required); nothing is stored. The login and reauth intents never answer it"),
     422: problemResponse("The path or the query did not pass validation"),
     429: rateLimitedResponse("Too many sign-in attempts from this address; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
@@ -179,7 +180,7 @@ export const completeOidcSignIn = defineOperation({
   request: { params: OidcProviderParamsSchema },
   responses: {
     302: emptyResponse(
-      "The handshake is over and the browser is sent on to the returnTo of the start, a path of this application. For the login intent, when the identity is linked to an account that can sign in, a new full session cookie is set. For the link intent the identity is added to the account that started the handshake, which must be the account of the browser's current session, and no session changes. For the reauth intent the browser's current session, which must be a session of the account that started the handshake and of an account the provider's identity is linked to, counts as re-authenticated from now. For every other outcome (a missing, reused, expired or foreign state, a refusal by the provider, a token that fails validation, an identity nobody linked, a disabled account, a link or reauth in a browser whose session is not the one that started it, an identity already linked to another account) nothing is changed and the browser goes to /login?error=oidc_failed, one answer that does not say which. The pre-auth cookie is cleared either way",
+      "The handshake is over and the browser is sent on to the returnTo of the start, a path of this application. For the login intent, when the identity is linked to an account that can sign in, a new full session cookie is set. For the link intent the identity is added to the account that started the handshake, which must be the account of the browser's current session, and no session changes. For the reauth intent the browser's current session, which must be a session of the account that started the handshake and of an account the provider's identity is linked to, counts as re-authenticated from now. For every other outcome (a missing, reused, expired or foreign state, a refusal by the provider, a token that fails validation, an identity nobody linked, a disabled account, a link or reauth in a browser whose session is not the one that started it, a link whose session has not re-authenticated within the last ten minutes at the callback, an identity already linked to another account) nothing is changed and the browser goes to /login?error=oidc_failed, one answer that does not say which. The pre-auth cookie is cleared either way",
       {
         headers: {
           Location: { description: "A path of this application: the returnTo of the start, or /login?error=oidc_failed", schema: z.string() },

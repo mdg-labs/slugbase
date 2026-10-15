@@ -54,7 +54,7 @@ export function authContribution({
 }: AuthRoutesOptions): ModuleContribution {
   const cookie = sessionCookieSpec(appOrigin);
   return {
-    routes: [loginRoute({ store, passwords, cookie }), ...oidcRoutes({ store, identity, secretBox, appOrigin, sessionSecret, sessionCookie: cookie }), verifyMfaRoute({ store, secretBox, verifyCode: verifyHash, now, cookie }), logoutRoute({ store, cookie }), ...sessionRoutes({ store, cookie, cursorSecret: sessionSecret }),
+    routes: [loginRoute({ store, passwords, cookie }), ...oidcRoutes({ store, identity, secretBox, appOrigin, sessionSecret, sessionCookie: cookie, now }), verifyMfaRoute({ store, secretBox, verifyCode: verifyHash, now, cookie }), logoutRoute({ store, cookie }), ...sessionRoutes({ store, cookie, cursorSecret: sessionSecret }),
       ...securityRoutes({ store, passwords, passwordPolicy, hashPassword, cookie, mail, secretBox, verifyCode: verifyHash, now }),
     ],
     authenticators: [createSessionAuthenticator({ store, cookie }), createApiTokenAuthenticator({ store })],
