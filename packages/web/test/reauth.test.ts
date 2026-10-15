@@ -38,6 +38,25 @@ describe("reauthMiddleware", () => {
     expect(reauth.isOpen()).toBe(false);
   });
 
+  it("sends a request without a body again with the type it was first sent with", async () => {
+    const reauth = createReauth();
+    const types: (string | null)[] = [];
+    const transport = vi.fn<Transport>((request) => {
+      types.push(request.headers.get("Content-Type"));
+      return Promise.resolve(types.length === 1 ? problem(401, "reauth_required", "req-1") : new Response(null, { status: 204 }));
+    });
+    const api = apiWith(reauth, transport);
+
+    const result = api.DELETE("/api/v1/me/sessions");
+    await vi.waitFor(() => {
+      expect(reauth.isOpen()).toBe(true);
+    });
+    reauth.settle(true);
+
+    expect((await result).response.status).toBe(204);
+    expect(types).toEqual(["application/json", "application/json"]);
+  });
+
   it("sends it again only once: a second reauth_required is the answer", async () => {
     const reauth = createReauth();
     const transport = vi.fn<Transport>(() => Promise.resolve(problem(401, "reauth_required", "req-1")));

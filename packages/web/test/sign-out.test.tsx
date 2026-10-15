@@ -102,6 +102,7 @@ describe("Sign out in the account menu", () => {
     const logouts = callsTo(fetch, LOGOUT_PATH);
     expect(logouts).toHaveLength(1);
     expect(logouts[0]?.method).toBe("POST");
+    expect(logouts[0]?.headers.get("Content-Type")).toBe("application/json");
     expect(history.location.pathname).toBe("/login");
     expect(history.location.search).toBe("");
     expect(queryClient.getQueryData(["bookmarks"])).toBeUndefined();

@@ -31,7 +31,10 @@ describe("createWebApp", () => {
   it("requests /api/config before anything renders and shows the product name from it", async () => {
     const fetch = stubTransport((request) => signedIn(request));
     const App = createWebApp({ extensions: [] });
-    expect(fetch).toHaveBeenCalledTimes(1);
+    // The client's request handling runs before the transport is called, so the call follows within the turn.
+    await vi.waitFor(() => {
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
     expect(fetch.mock.calls[0]?.[0].url).toBe(`${window.location.origin}/api/config`);
 
     await renderApp(<App />);

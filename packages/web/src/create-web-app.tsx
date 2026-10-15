@@ -50,7 +50,7 @@ export function createWebApp({ extensions }: CreateWebAppOptions): ComponentType
     }
     return result;
   });
-  // The configuration request is a GET that never needs re-authentication, and it starts in this turn, before
+  // The configuration request is a GET that never needs re-authentication, and it is made in this turn, before
   // the middleware (which a request waits for) is registered.
   api.use(reauthMiddleware(reauth));
 

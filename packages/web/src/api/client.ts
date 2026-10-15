@@ -111,6 +111,26 @@ function endsSession(request: Request, response: Response, problem: ProblemField
   );
 }
 
+const JSON_CONTENT_TYPE = "application/json";
+
+/**
+ * The server refuses a cookie-authenticated mutation that does not declare `application/json` (a cross-site
+ * rule, doc 10 T3), and openapi-fetch declares nothing for a request without a body. This declares it for such a
+ * request in one place, so a call such as the sign-out needs no header of its own. A request with a body keeps
+ * the type its serializer chose, including the boundary of a multipart one, and a read has no body to type.
+ * It runs before any middleware that copies the request, so a request that is sent again carries it too.
+ */
+function createBodylessMutationMiddleware(): Middleware {
+  return {
+    onRequest({ request }) {
+      if (request.method !== "GET" && request.method !== "HEAD" && request.body === null && !request.headers.has("Content-Type")) {
+        request.headers.set("Content-Type", JSON_CONTENT_TYPE);
+      }
+      return undefined;
+    },
+  };
+}
+
 function createProblemMiddleware(onUnauthenticated: (() => void) | undefined): Middleware {
   return {
     async onResponse({ request, response }) {
@@ -146,6 +166,7 @@ export function createApiClient(options: ApiClientOptions = {}): ApiClient {
     credentials: "same-origin",
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
   });
+  client.use(createBodylessMutationMiddleware());
   client.use(createProblemMiddleware(options.onUnauthenticated));
   return client;
 }
