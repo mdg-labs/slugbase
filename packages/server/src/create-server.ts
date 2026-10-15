@@ -21,6 +21,7 @@ import {
   type StageImplementations,
   type StageName,
 } from "./http/chain.ts";
+import { invalidSubscriber, registeredSubscriber, type EventSubscriber, type RegisteredSubscriber } from "./events/index.ts";
 import { createHookDispatcher, invalidHookRefusals, invalidHooks, type HookRefusals, type HookRegistration, type ServerHooks } from "./hooks/index.ts";
 import { ProblemError, responseStage } from "./http/problem.ts";
 import { validation } from "./http/validation.ts";
@@ -86,6 +87,12 @@ export interface ModuleContribution {
    * credentials to the chain; they cannot change where authentication runs.
    */
   readonly authenticators?: readonly Authenticator[];
+  /**
+   * Bindings to the domain events of `@slugbase/core`, each handled by the worker after the change that emitted
+   * the event is committed. Delivery is at least once, so a handler is idempotent on `eventId`; an event
+   * never vetoes or changes the flow that emitted it (doc 01 section 7.1).
+   */
+  readonly subscribers?: readonly EventSubscriber[];
 }
 
 /**
@@ -192,6 +199,7 @@ export type CompositionErrorCode =
   | "invalid_module"
   | "duplicate_module"
   | "invalid_hook"
+  | "invalid_subscriber"
   | "module_failed"
   | "duplicate_route"
   | "invalid_route"
@@ -257,6 +265,8 @@ export interface Composition {
   readonly schedules: readonly ScheduleDefinition[];
   readonly migrations: readonly MigrationChain[];
   readonly authenticators: readonly Authenticator[];
+  /** The event subscribers of the modules, in the order the modules were composed. */
+  readonly subscribers: readonly RegisteredSubscriber[];
   /** The hooks of the modules, in the order the modules were composed. */
   readonly hooks: readonly HookRegistration[];
 }
@@ -309,6 +319,7 @@ export function compose(
   const schedules: ScheduleDefinition[] = [];
   const chains: MigrationChain[] = [...migrations];
   const authenticators: Authenticator[] = [];
+  const subscribers: RegisteredSubscriber[] = [];
   const hooks: HookRegistration[] = [];
 
   for (const module of modules) {
@@ -348,6 +359,18 @@ export function compose(
     schedules.push(...(contribution.schedules ?? []));
     chains.push(...(contribution.migrations ?? []));
     authenticators.push(...(contribution.authenticators ?? []));
+
+    const declared: unknown = contribution.subscribers ?? [];
+    if (!Array.isArray(declared)) {
+      throw new CompositionError("invalid_subscriber", `module ${module.name} registers invalid subscribers: subscribers must be a list`);
+    }
+    for (const subscriber of declared as unknown[]) {
+      const problem = invalidSubscriber(subscriber);
+      if (problem !== undefined) {
+        throw new CompositionError("invalid_subscriber", `module ${module.name} registers an invalid subscriber: ${problem}`);
+      }
+      subscribers.push(registeredSubscriber(module.name, subscriber as EventSubscriber));
+    }
   }
 
   for (const binding of routes) {
@@ -391,7 +414,7 @@ export function compose(
     }
   }
 
-  return { routes, jobs, schedules, migrations: chains, authenticators, hooks };
+  return { routes, jobs, schedules, migrations: chains, authenticators, subscribers, hooks };
 }
 
 /** Answers a request no operation matches, or leaves it to the next handler by returning undefined. */

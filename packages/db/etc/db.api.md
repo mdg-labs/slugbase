@@ -231,6 +231,7 @@ export interface CompleteSetup {
     readonly displayName: string;
     readonly email: string;
     readonly ipPrefix: string | null;
+    readonly jobs?: readonly QueuedJob[];
     // (undocumented)
     readonly locale: string;
     readonly passwordHash: string;

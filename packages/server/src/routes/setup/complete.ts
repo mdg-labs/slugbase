@@ -7,6 +7,7 @@ import { newSessionToken } from "../../auth/session-token.ts";
 import { hashSetupToken } from "../../auth/setup-token.ts";
 import { uuidv7 } from "../../auth/uuidv7.ts";
 import type { ServerConfig } from "../../config/index.ts";
+import { queueDomainEvent } from "../../events/publish.ts";
 import type { RouteBinding } from "../../http/chain.ts";
 import { ProblemError, type ProblemFieldError } from "../../http/problem.ts";
 import { networkPrefixOf } from "../../http/trusted-proxy.ts";
@@ -17,7 +18,10 @@ import { setupRequired } from "./status.ts";
 // 2.1): creates the first account, as instance admin, with its workspace, and
 // signs it in. The check that it happens once is the database's
 // (`sys_complete_setup` takes an advisory lock and re-checks under it); the
-// check here only spares a closed instance the cost of hashing a password.
+// check here only spares a closed instance the cost of hashing a password. The
+// `account.created` event is queued in the setup's own transaction (doc 01 section
+// 7.1 and 8.1), so it exists exactly when the account does; setup skips the
+// registration policy (doc 01 section 13.5) but announces its account like any other.
 
 const CLOSED = "First-run setup is completed or turned off.";
 const WRONG_TOKEN = "The setup token is missing or wrong.";
@@ -70,8 +74,9 @@ export function completeSetupRoute({ config, store, hashPassword, cookie, passwo
 
     const token = newSessionToken();
     const workspaceId = uuidv7();
+    const accountId = uuidv7();
     const outcome = await store.completeSetup({
-      accountId: uuidv7(),
+      accountId,
       workspaceId,
       sessionId: uuidv7(),
       email: normalizeEmail(body.email),
@@ -84,6 +89,7 @@ export function completeSetupRoute({ config, store, hashPassword, cookie, passwo
       sessionTokenHash: token.hash,
       ipPrefix: networkPrefixOf(context.get("clientIp")) ?? null,
       userAgent: truncateUserAgent(context.req.raw.headers.get("user-agent")),
+      jobs: [queueDomainEvent(uuidv7(), "account.created", { accountId, path: "setup" })],
     });
     if (outcome === "setup_completed") {
       throw new ProblemError("setup_completed", CLOSED);

@@ -7,7 +7,13 @@
 import type { ProblemCode } from '@slugbase/contracts';
 
 // @public
+export const ACCOUNT_CREATION_PATHS: readonly ["self-registration", "invitation", "oidc", "setup"];
+
+// @public
 export const ACCOUNT_NOTIFICATIONS: readonly ["passwordChanged", "mfaEnabled", "mfaDisabled"];
+
+// @public (undocumented)
+export type AccountCreationPath = (typeof ACCOUNT_CREATION_PATHS)[number];
 
 // @public (undocumented)
 export type AccountNotification = (typeof ACCOUNT_NOTIFICATIONS)[number];
@@ -88,6 +94,11 @@ export interface AnalyticsPort extends Port {
 }
 
 // @public
+export type AnyDomainEvent = {
+    [Name in DomainEventName]: DomainEvent<Name>;
+}[DomainEventName];
+
+// @public
 export const API_TOKEN_BYTES = 32;
 
 // @public
@@ -165,6 +176,58 @@ export function createBreachedPasswords(records: Uint8Array): BreachedPasswords;
 
 // @public (undocumented)
 export function createPasswordPolicy(input?: PasswordPolicyOptions): PasswordPolicy;
+
+// @public (undocumented)
+export const DOMAIN_EVENT_NAMES: readonly DomainEventName[];
+
+// @public
+export const DOMAIN_EVENTS: {
+    readonly "account.created": {
+        readonly accountId: {
+            readonly type: "uuid";
+        };
+        readonly path: {
+            readonly type: "enum";
+            readonly values: readonly ["self-registration", "invitation", "oidc", "setup"];
+        };
+    };
+};
+
+// @public
+export interface DomainEvent<Name extends DomainEventName = DomainEventName> {
+    // (undocumented)
+    readonly eventId: string;
+    // (undocumented)
+    readonly name: Name;
+    // (undocumented)
+    readonly payload: DomainEventPayload<Name>;
+}
+
+// @public
+export type DomainEventField = {
+    readonly type: "uuid";
+} | {
+    readonly type: "enum";
+    readonly values: readonly [string, ...string[]];
+};
+
+// @public
+export type DomainEventFieldValue<Field> = Field extends {
+    readonly values: readonly (infer Value)[];
+} ? Value : string;
+
+// @public (undocumented)
+export type DomainEventName = keyof typeof DOMAIN_EVENTS;
+
+// @public
+export type DomainEventPayload<Name extends DomainEventName = DomainEventName> = {
+    readonly [Key in keyof (typeof DOMAIN_EVENTS)[Name]]: DomainEventFieldValue<(typeof DOMAIN_EVENTS)[Name][Key]>;
+};
+
+// @public
+export class DomainEventPayloadError extends Error {
+    constructor(name: string, problem: string);
+}
 
 // @public
 export const EGRESS_MAX_REQUEST_BODY_BYTES = 1048576;
@@ -357,6 +420,9 @@ export interface IdentityProviderInfo {
     readonly id: string;
 }
 
+// @public (undocumented)
+export function isDomainEventName(value: unknown): value is DomainEventName;
+
 // @public
 export function loadBreachedPasswords(): BreachedPasswords;
 
@@ -438,6 +504,9 @@ export interface OtpauthOptions {
 
 // @public
 export function otpauthUri(input: OtpauthOptions): string;
+
+// @public
+export function parseDomainEventPayload<Name extends DomainEventName>(name: Name, value: unknown): DomainEventPayload<Name>;
 
 // @public
 export const PASSWORD_MAX_LENGTH = 256;

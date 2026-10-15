@@ -5,9 +5,11 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { createAccountOnlyTenantResolver } from "../../src/auth/tenant-resolver.ts";
 import { createServer, type RunningServer, type Server } from "../../src/create-server.ts";
 import { hashPassword } from "../../src/auth/password.ts";
+import { runMigrations } from "../../src/migrate/index.ts";
 import { uuidv7 } from "../../src/auth/uuidv7.ts";
 import { storeFor } from "../auth/support.ts";
 import { appUrl, tenantDatabase } from "../contract/support.ts";
+import { urlOf } from "../migrate/support.ts";
 import { adapters, recordingLogger, serverConfig } from "../support.ts";
 
 // First-run setup through the whole chain over the migrated database (doc 02
@@ -31,9 +33,11 @@ const database = useTestDatabase();
 let store: AuthStore;
 const running: RunningServer[] = [];
 
-beforeAll(() => {
+beforeAll(async () => {
   store = storeFor(database());
-});
+  // Setup queues the account.created event, so the queues exist, as they do once the image entrypoint has run migrate.
+  await runMigrations({ url: urlOf(database().owner) });
+}, HOOK_TIMEOUT_MS);
 
 afterAll(async () => {
   await store.close();

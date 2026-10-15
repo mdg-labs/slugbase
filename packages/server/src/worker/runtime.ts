@@ -1,4 +1,4 @@
-import type { Adapters } from "@slugbase/core";
+import type { Adapters, DomainEventName } from "@slugbase/core";
 import { createDatabase, createRateLimitStore, createRetentionStore, type Database } from "@slugbase/db";
 import { PgBoss } from "pg-boss";
 import type { WorkerConfig } from "../config/index.ts";
@@ -10,6 +10,7 @@ import {
   type ModuleContext,
   type ServerModule,
 } from "../create-server.ts";
+import { subscribersOf, type RegisteredSubscriber } from "../events/subscriber.ts";
 import { assertApplicationRole } from "../migrate/role-guard.ts";
 import { createMetrics, startMetricsListener, type MetricsListener, type QueueSnapshot } from "../metrics/index.ts";
 import type { JobDefinition, JobPayload, ScheduleDefinition } from "./job.ts";
@@ -125,7 +126,9 @@ export function createWorker(options: CreateWorkerOptions): Worker {
 
   let composition: Composition;
   try {
-    composition = compose([...createBuiltInModules(maintenanceStores), ...options.modules], context, []);
+    // The event jobs read the subscribers when a job runs, which is after `composition` is assigned.
+    const subscribersFor = (name: DomainEventName): readonly RegisteredSubscriber[] => subscribersOf(composition.subscribers, name);
+    composition = compose([...createBuiltInModules(maintenanceStores, subscribersFor), ...options.modules], context, []);
   } catch (error) {
     void database.close();
     void closeMaintenanceStores();
