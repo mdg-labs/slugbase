@@ -1,28 +1,39 @@
-import { confirmMfaEnrollment as confirmMfaEnrollmentOperation, startMfaEnrollment as startMfaEnrollmentOperation } from "@slugbase/contracts";
+import {
+  confirmMfaEnrollment as confirmMfaEnrollmentOperation,
+  disableMfa as disableMfaOperation,
+  regenerateMfaBackupCodes as regenerateMfaBackupCodesOperation,
+  startMfaEnrollment as startMfaEnrollmentOperation,
+} from "@slugbase/contracts";
 import type { SessionCookieSpec } from "@slugbase/core";
 import { accountProfileRepository, type Database } from "@slugbase/db";
 import { setSessionCookie } from "../../auth/cookie.ts";
-import { confirmEnrollment, startEnrollment, type MfaDependencies } from "../../auth/mfa.ts";
+import { confirmEnrollment, disableMfa, regenerateBackupCodes, startEnrollment, type ManagementDependencies, type MfaDependencies } from "../../auth/mfa.ts";
 import type { ChainContext, RouteBinding } from "../../http/chain.ts";
 import { ProblemError, requestIdOf } from "../../http/problem.ts";
 import { route } from "../register.ts";
 
-// POST /api/v1/me/mfa/enrollment and POST /api/v1/me/mfa/enrollment/confirm
-// (doc 04 section 10.3, doc 02 section 2.7, doc 10 T7). Starting an enrolment
-// declares `reauth`, so the authorization stage has refused a session that has
-// not re-authenticated within ten minutes before the handler runs; confirming
-// is limited by the `mfa` bucket, which takes a token for every attempt, a
-// wrong code included. The account is always the session's, never a value of
-// the request. Only the start response carries the secret and only the confirm
-// response carries the backup codes; neither is logged, and a problem document
-// is built from fixed text.
+// POST /api/v1/me/mfa/enrollment, POST /api/v1/me/mfa/enrollment/confirm,
+// POST /api/v1/me/mfa/backup-codes and DELETE /api/v1/me/mfa (doc 04 section
+// 10.3, doc 02 section 2.7, doc 10 T7 and T17). Starting an enrolment,
+// regenerating the backup codes and disabling the factor declare `reauth`, so
+// the authorization stage has refused a session that has not re-authenticated
+// within ten minutes before the handler runs; regenerating and disabling also
+// need the second factor, and every operation that takes a code is limited by
+// the `mfa` bucket, which takes a token for every attempt, a wrong code
+// included. The account is always the session's, never a value of the request.
+// Only the start response carries the secret and only the confirm and
+// regenerate responses carry backup codes; none is logged, and a problem
+// document is built from fixed text.
 
 const UNAUTHENTICATED = "Authentication is required.";
 const ALREADY_ENABLED = "Two-factor authentication is already on.";
 const NO_ENROLMENT = "There is no authenticator enrolment to confirm. Start one first.";
 const INVALID_CODE = "The code is wrong or has expired.";
+const NOT_ENABLED = "Two-factor authentication is not on.";
+const WRONG_PASSWORD = "The password is wrong.";
 
-export interface MfaRoutesOptions extends MfaDependencies {
+export interface MfaRoutesOptions extends Omit<MfaDependencies, "store">, Omit<ManagementDependencies, "store" | "secretBox"> {
+  readonly store: MfaDependencies["store"] & ManagementDependencies["store"];
   readonly withTenant: Database["withTenant"];
   readonly cookie: SessionCookieSpec;
 }
@@ -60,6 +71,39 @@ export function mfaRoutes({ withTenant, cookie, ...dependencies }: MfaRoutesOpti
           throw new ProblemError("invalid_code", INVALID_CODE, { errors: [{ path: "code", code: "invalid_code" }] });
         case "no_enrolment":
           throw new ProblemError("validation_failed", NO_ENROLMENT);
+        case "no_session":
+          throw new ProblemError("unauthenticated", UNAUTHENTICATED);
+      }
+    }),
+
+    route(regenerateMfaBackupCodesOperation).handle(async ({ body }, context) => {
+      const { accountId } = sessionOf(context);
+      const outcome = await regenerateBackupCodes(dependencies, { accountId, code: body.code });
+      switch (outcome.kind) {
+        case "regenerated":
+          return { status: 200, body: { backupCodes: [...outcome.backupCodes] } };
+        case "invalid_code":
+          throw new ProblemError("invalid_code", INVALID_CODE, { errors: [{ path: "code", code: "invalid_code" }] });
+        case "not_enabled":
+          throw new ProblemError("validation_failed", NOT_ENABLED);
+      }
+    }),
+
+    route(disableMfaOperation).handle(async ({ body }, context) => {
+      const { sessionId, accountId } = sessionOf(context);
+      const given = "code" in body ? ({ kind: "code", code: body.code } as const) : ({ kind: "backup", code: body.backupCode } as const);
+      const outcome = await disableMfa(dependencies, { accountId, sessionId, password: body.password, given });
+      switch (outcome.kind) {
+        case "disabled":
+          return { status: 204, headers: { "Set-Cookie": setSessionCookie(cookie, outcome.token) } };
+        case "wrong_password":
+          throw new ProblemError("validation_failed", WRONG_PASSWORD, { errors: [{ path: "password", code: "invalid_password" }] });
+        case "invalid_code": {
+          const path = given.kind === "code" ? "code" : "backupCode";
+          throw new ProblemError("invalid_code", INVALID_CODE, { errors: [{ path, code: "invalid_code" }] });
+        }
+        case "not_enabled":
+          throw new ProblemError("validation_failed", NOT_ENABLED);
         case "no_session":
           throw new ProblemError("unauthenticated", UNAUTHENTICATED);
       }

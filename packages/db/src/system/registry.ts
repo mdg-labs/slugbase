@@ -38,4 +38,6 @@ export const systemOperations: readonly string[] = [
   "sys_backup_codes_unused",
   "sys_session_promote",
   "sys_session_mfa_failure",
+  "sys_mfa_lock",
+  "sys_mfa_disable",
 ];

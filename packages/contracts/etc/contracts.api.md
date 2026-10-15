@@ -214,6 +214,13 @@ export interface ComponentTypes {
         ConfirmMfaEnrollmentRequest: {
             code: string;
         };
+        DisableMfaRequest: {
+            code: string;
+            password: string;
+        } | {
+            backupCode: string;
+            password: string;
+        };
         HealthStatus: {
             status: "ok";
         };
@@ -289,6 +296,11 @@ export interface ComponentTypes {
         };
         ReauthRequest: {
             password: string;
+        } | {
+            code: string;
+        };
+        RegenerateBackupCodesRequest: {
+            code: string;
         };
         Session: {
             createdAt: string;
@@ -383,6 +395,45 @@ export const ConfirmMfaEnrollmentRequestSchema: z.ZodObject<{
 
 // @public
 export function defineOperation<const D extends OperationDefinition>(definition: D): D;
+
+// @public (undocumented)
+export const disableMfa: {
+    readonly method: "delete";
+    readonly path: "/api/v1/me/mfa";
+    readonly operationId: "disableMfa";
+    readonly tag: "me";
+    readonly summary: "Turn the second factor off";
+    readonly auth: "account";
+    readonly rate: "mfa";
+    readonly reauth: true;
+    readonly request: {
+        readonly body: z.ZodUnion<readonly [z.ZodObject<{
+            password: z.ZodString;
+            code: z.ZodString;
+        }, z.core.$strict>, z.ZodObject<{
+            password: z.ZodString;
+            backupCode: z.ZodString;
+        }, z.core.$strict>]>;
+    };
+    readonly responses: {
+        readonly 204: EmptyResponse;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const DisableMfaRequestSchema: z.ZodUnion<readonly [z.ZodObject<{
+    password: z.ZodString;
+    code: z.ZodString;
+}, z.core.$strict>, z.ZodObject<{
+    password: z.ZodString;
+    backupCode: z.ZodString;
+}, z.core.$strict>]>;
 
 // @public
 export const DisplayNameSchema: z.ZodString;
@@ -1114,6 +1165,77 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    disableMfa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["DisableMfaRequest"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     getApiConfig: {
         parameters: {
             query?: never;
@@ -1629,6 +1751,79 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    regenerateMfaBackupCodes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["RegenerateBackupCodesRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["MfaBackupCodes"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     revokeSession: {
         parameters: {
             query?: never;
@@ -2080,6 +2275,40 @@ export interface paths {
         options?: never;
         head?: never;
         patch: OperationTypes["updateMe"];
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/me/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: OperationTypes["disableMfa"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/me/mfa/backup-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["regenerateMfaBackupCodes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     // (undocumented)
@@ -2574,13 +2803,15 @@ export const reauthenticate: {
     readonly path: "/api/v1/me/reauth";
     readonly operationId: "reauthenticate";
     readonly tag: "me";
-    readonly summary: "Re-authenticate the session with the account's password";
+    readonly summary: "Re-authenticate the session with the account's password or a code of its authenticator app";
     readonly auth: "account";
     readonly rate: "mfa";
     readonly request: {
-        readonly body: z.ZodObject<{
+        readonly body: z.ZodUnion<readonly [z.ZodObject<{
             password: z.ZodString;
-        }, z.core.$strict>;
+        }, z.core.$strict>, z.ZodObject<{
+            code: z.ZodString;
+        }, z.core.$strict>]>;
     };
     readonly responses: {
         readonly 204: EmptyResponse;
@@ -2594,9 +2825,44 @@ export const reauthenticate: {
 };
 
 // @public (undocumented)
-export const ReauthRequestSchema: z.ZodObject<{
+export const ReauthRequestSchema: z.ZodUnion<readonly [z.ZodObject<{
     password: z.ZodString;
+}, z.core.$strict>, z.ZodObject<{
+    code: z.ZodString;
+}, z.core.$strict>]>;
+
+// @public (undocumented)
+export const RegenerateBackupCodesRequestSchema: z.ZodObject<{
+    code: z.ZodString;
 }, z.core.$strict>;
+
+// @public (undocumented)
+export const regenerateMfaBackupCodes: {
+    readonly method: "post";
+    readonly path: "/api/v1/me/mfa/backup-codes";
+    readonly operationId: "regenerateMfaBackupCodes";
+    readonly tag: "me";
+    readonly summary: "Replace the account's backup codes with ten new ones";
+    readonly auth: "account";
+    readonly rate: "mfa";
+    readonly reauth: true;
+    readonly request: {
+        readonly body: z.ZodObject<{
+            code: z.ZodString;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        backupCodes: z.ZodArray<z.ZodString>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
 
 // @public
 export interface ResponseHeader {

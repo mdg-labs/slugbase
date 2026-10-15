@@ -231,6 +231,54 @@
         ],
         "type": "object"
       },
+      "DisableMfaRequest": {
+        "anyOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "description": "The current six-digit code of the authenticator app; spaces between the digits are ignored",
+                "maxLength": 16,
+                "minLength": 1,
+                "type": "string"
+              },
+              "password": {
+                "description": "The account's current password",
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "password",
+              "code"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "backupCode": {
+                "description": "One of the account's unused backup codes, which may be written in lower case and grouped by spaces or hyphens",
+                "maxLength": 32,
+                "minLength": 1,
+                "type": "string"
+              },
+              "password": {
+                "description": "The account's current password",
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "password",
+              "backupCode"
+            ],
+            "type": "object"
+          }
+        ]
+      },
       "HealthStatus": {
         "additionalProperties": false,
         "properties": {
@@ -619,17 +667,51 @@
         "type": "object"
       },
       "ReauthRequest": {
+        "anyOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "password": {
+                "description": "The account's current password",
+                "maxLength": 256,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "password"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "code": {
+                "description": "The current six-digit code of the authenticator app, for an account whose second factor is on; spaces between the digits are ignored",
+                "maxLength": 16,
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "code"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "RegenerateBackupCodesRequest": {
         "additionalProperties": false,
         "properties": {
-          "password": {
-            "description": "The account's current password",
-            "maxLength": 256,
+          "code": {
+            "description": "The current six-digit code of the authenticator app; spaces between the digits are ignored. A backup code is not accepted here",
+            "maxLength": 16,
             "minLength": 1,
             "type": "string"
           }
         },
         "required": [
-          "password"
+          "code"
         ],
         "type": "object"
       },
@@ -1450,6 +1532,209 @@
         "x-slugbase-rate": "write"
       }
     },
+    "/api/v1/me/mfa": {
+      "delete": {
+        "operationId": "disableMfa",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisableMfaRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "The secret, the activation time and every backup code are deleted and the account signs in with its password alone; the response carries the Set-Cookie header of the session's new token"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself, or the credential is an API token"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The code or backup code is wrong, outside the accepted window or already used (invalid_code, counted against the mfa limit); the password is wrong or the account has none (validation_failed with the field in errors[]); the body did not pass validation; or the account's second factor is not on (validation_failed). Nothing changes in any of these cases"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many attempts; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Turn the second factor off",
+        "tags": [
+          "me"
+        ],
+        "x-slugbase-auth": "account",
+        "x-slugbase-rate": "mfa",
+        "x-slugbase-reauth": true
+      }
+    },
+    "/api/v1/me/mfa/backup-codes": {
+      "post": {
+        "operationId": "regenerateMfaBackupCodes",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegenerateBackupCodesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MfaBackupCodes"
+                }
+              }
+            },
+            "description": "The old set is invalid from now on, used and unused codes alike; the ten new codes are returned once and never again"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself, or the credential is an API token"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The code is wrong, outside the accepted window or already used (invalid_code, counted against the mfa limit; the old backup codes stay valid); the body did not pass validation; or the account's second factor is not on (validation_failed)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many attempts; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Replace the account's backup codes with ten new ones",
+        "tags": [
+          "me"
+        ],
+        "x-slugbase-auth": "account",
+        "x-slugbase-rate": "mfa",
+        "x-slugbase-reauth": true
+      }
+    },
     "/api/v1/me/mfa/enrollment": {
       "post": {
         "operationId": "startMfaEnrollment",
@@ -1771,7 +2056,7 @@
         },
         "responses": {
           "204": {
-            "description": "The password is right; the session counts as re-authenticated for the next ten minutes"
+            "description": "The password or the code is right; the session counts as re-authenticated for the next ten minutes"
           },
           "400": {
             "content": {
@@ -1811,7 +2096,7 @@
                 }
               }
             },
-            "description": "The body did not pass validation"
+            "description": "The code is wrong, outside the accepted window or already used, or the account's second factor is not on (invalid_code, counted against the mfa limit and the session unchanged); or the body did not pass validation"
           },
           "429": {
             "content": {
@@ -1845,7 +2130,7 @@
             "description": "The service is temporarily unavailable"
           }
         },
-        "summary": "Re-authenticate the session with the account's password",
+        "summary": "Re-authenticate the session with the account's password or a code of its authenticator app",
         "tags": [
           "me"
         ],

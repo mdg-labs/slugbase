@@ -1,6 +1,6 @@
 -- The system operations behind the second factor (doc 05 sections 2.1, 3.1 and
 -- 3.3, doc 02 sections 2.3 and 2.7, doc 10 T7 and T17). The columns and the
--- table are defined in src/schema/. All eight functions are entered in
+-- table are defined in src/schema/. All ten functions are entered in
 -- src/system/registry.ts. slugbase_owner creates each function and hands it to
 -- slugbase_system, which needs CREATE on the schema for the length of those
 -- statements.
@@ -281,6 +281,61 @@ BEGIN
 END
 $$;
 
+-- sys_mfa_lock(account_id): takes, for the rest of the transaction, the row locks
+-- that a change of the account's whole second factor needs, in the one order
+-- every writer of these rows uses: the account's backup-code rows (in id
+-- order), then the account row, and after them the session row (sys_session_*).
+-- A sign-in with a backup code consumes the code row and then promotes the
+-- session, which locks the account row; taking the account row before the code
+-- rows here would let the two wait for each other. Answers false, and locks
+-- nothing of the account, when it does not exist, is disabled or has MFA off. A
+-- caller that rewrites the backup codes or turns MFA off calls it first, so that
+-- two of them made at once queue instead of each leaving a set of codes the
+-- other cannot see (each later statement of the transaction sees what the
+-- earlier holder committed).
+CREATE OR REPLACE FUNCTION public.sys_mfa_lock(p_account_id uuid) RETURNS boolean
+  LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+  SET search_path = pg_catalog, public, pg_temp
+  AS $$
+BEGIN
+  IF p_account_id IS NULL THEN
+    RAISE EXCEPTION 'sys_mfa_lock needs an account'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  PERFORM 1 FROM public.mfa_backup_codes c WHERE c.account_id = p_account_id ORDER BY c.id FOR UPDATE;
+  PERFORM 1 FROM public.accounts a
+  WHERE a.id = p_account_id AND a.disabled_at IS NULL AND a.mfa_enabled_at IS NOT NULL
+  FOR UPDATE;
+  RETURN FOUND;
+END
+$$;
+
+-- sys_mfa_disable(account_id): turns the second factor off: clears the secret,
+-- its key id, enabled_at and the last accepted step, and deletes every backup
+-- code of the account, used ones included. Answers false, and changes nothing,
+-- for an unknown or disabled account and for one whose MFA is not enabled. The
+-- application has checked the account's second factor and password before it
+-- asks, and has called sys_mfa_lock in the same transaction.
+CREATE OR REPLACE FUNCTION public.sys_mfa_disable(p_account_id uuid) RETURNS boolean
+  LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+  SET search_path = pg_catalog, public, pg_temp
+  AS $$
+BEGIN
+  IF p_account_id IS NULL THEN
+    RAISE EXCEPTION 'sys_mfa_disable needs an account'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  UPDATE public.accounts
+  SET mfa_secret = NULL, mfa_secret_key_id = NULL, mfa_enabled_at = NULL, mfa_last_step = NULL
+  WHERE id = p_account_id AND disabled_at IS NULL AND mfa_enabled_at IS NOT NULL;
+  IF NOT FOUND THEN
+    RETURN false;
+  END IF;
+  DELETE FROM public.mfa_backup_codes WHERE account_id = p_account_id;
+  RETURN true;
+END
+$$;
+
 ALTER FUNCTION public.sys_mfa_get_secret(uuid) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_mfa_set(uuid, text, bytea, text, bytea) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_mfa_accept_step(uuid, bigint) OWNER TO slugbase_system;
@@ -289,6 +344,8 @@ ALTER FUNCTION public.sys_backup_code_consume(uuid, uuid) OWNER TO slugbase_syst
 ALTER FUNCTION public.sys_backup_codes_unused(uuid) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_session_promote(uuid, uuid, bytea) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_session_mfa_failure(uuid, uuid) OWNER TO slugbase_system;
+ALTER FUNCTION public.sys_mfa_lock(uuid) OWNER TO slugbase_system;
+ALTER FUNCTION public.sys_mfa_disable(uuid) OWNER TO slugbase_system;
 REVOKE CREATE ON SCHEMA public FROM slugbase_system;
 
 REVOKE ALL ON FUNCTION public.sys_mfa_get_secret(uuid) FROM PUBLIC;
@@ -299,6 +356,8 @@ REVOKE ALL ON FUNCTION public.sys_backup_code_consume(uuid, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sys_backup_codes_unused(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sys_session_promote(uuid, uuid, bytea) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sys_session_mfa_failure(uuid, uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.sys_mfa_lock(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.sys_mfa_disable(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.sys_mfa_get_secret(uuid) TO slugbase_app;
 GRANT EXECUTE ON FUNCTION public.sys_mfa_set(uuid, text, bytea, text, bytea) TO slugbase_app;
 GRANT EXECUTE ON FUNCTION public.sys_mfa_accept_step(uuid, bigint) TO slugbase_app;
@@ -307,6 +366,8 @@ GRANT EXECUTE ON FUNCTION public.sys_backup_code_consume(uuid, uuid) TO slugbase
 GRANT EXECUTE ON FUNCTION public.sys_backup_codes_unused(uuid) TO slugbase_app;
 GRANT EXECUTE ON FUNCTION public.sys_session_promote(uuid, uuid, bytea) TO slugbase_app;
 GRANT EXECUTE ON FUNCTION public.sys_session_mfa_failure(uuid, uuid) TO slugbase_app;
+GRANT EXECUTE ON FUNCTION public.sys_mfa_lock(uuid) TO slugbase_app;
+GRANT EXECUTE ON FUNCTION public.sys_mfa_disable(uuid) TO slugbase_app;
 
 -- mfa_backup_codes: no app access and no policy, so no role that is subject to
 -- row-level security sees a row; slugbase_system, which bypasses it, reaches the

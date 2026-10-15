@@ -34,6 +34,11 @@ const PATH_PARAMETER = "0192f3a0-cccc-7000-8000-000000000001";
 const MUTATING = new Set(["post", "put", "patch", "delete"]);
 const WITH_BODY = new Set(["post", "put", "patch"]);
 
+/** Whether the operation takes a body: a POST, PUT or PATCH does, and a DELETE does when it declares one. */
+function takesBody(operation: DocumentedOperation): boolean {
+  return WITH_BODY.has(operation.method) || operation.entry["requestBody"] !== undefined;
+}
+
 const database = useTestDatabase();
 const committed = loadOpenApiDocument();
 const origin = serverConfig({ NODE_ENV: "test" }).APP_ORIGIN;
@@ -134,7 +139,7 @@ function requestFor(operation: DocumentedOperation, attempt: Attempt = {}): Requ
   if (attempt.cookie !== false) {
     headers.set("cookie", cookie);
   }
-  const carriesBody = attempt.body !== false && WITH_BODY.has(operation.method);
+  const carriesBody = attempt.body !== false && takesBody(operation);
   return new Request(new URL(pathOf(operation), origin), {
     method: operation.method.toUpperCase(),
     headers,
@@ -311,7 +316,7 @@ describe("a request that carries a bearer token", () => {
         }
       });
 
-      if (WITH_BODY.has(operation.method)) {
+      if (takesBody(operation)) {
         it("still has to be JSON, which is held ahead of authentication", async () => {
           const answer = await answerOf(operation, { origin: null, contentType: "text/plain", authorization: BEARER });
           expect(answer).toEqual({ status: 415, code: "unsupported_media_type" });

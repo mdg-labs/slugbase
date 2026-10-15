@@ -242,9 +242,10 @@ export const updateMe = defineOperation({
 });
 
 export const ReauthRequestSchema = z
-  .strictObject({
-    password: z.string().min(1).max(256).describe("The account's current password"),
-  })
+  .union([
+    z.strictObject({ password: z.string().min(1).max(256).describe("The account's current password") }),
+    z.strictObject({ code: z.string().min(1).max(16).describe("The current six-digit code of the authenticator app, for an account whose second factor is on; spaces between the digits are ignored") }),
+  ])
   .meta({ id: "ReauthRequest" });
 
 export const ChangePasswordRequestSchema = z
@@ -259,16 +260,18 @@ export const reauthenticate = defineOperation({
   path: "/api/v1/me/reauth",
   operationId: "reauthenticate",
   tag: "me",
-  summary: "Re-authenticate the session with the account's password",
+  summary: "Re-authenticate the session with the account's password or a code of its authenticator app",
   auth: "account",
   rate: "mfa",
   request: { body: ReauthRequestSchema },
   responses: {
-    204: emptyResponse("The password is right; the session counts as re-authenticated for the next ten minutes"),
+    204: emptyResponse("The password or the code is right; the session counts as re-authenticated for the next ten minutes"),
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete; or the password is wrong or the account has none, answered as reauth_required with the field in errors[] and the session unchanged"),
     403: problemResponse("The request did not come from the application itself"),
-    422: problemResponse("The body did not pass validation"),
+    422: problemResponse(
+      "The code is wrong, outside the accepted window or already used, or the account's second factor is not on (invalid_code, counted against the mfa limit and the session unchanged); or the body did not pass validation",
+    ),
     429: rateLimitedResponse("Too many attempts; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },
@@ -358,6 +361,71 @@ export const confirmMfaEnrollment = defineOperation({
     403: problemResponse("The request did not come from the application itself, or the credential is an API token"),
     422: problemResponse(
       "The code is wrong, outside the accepted window or already used (invalid_code, counted against the mfa limit); the body did not pass validation; or no enrolment is pending (validation_failed)",
+    ),
+    429: rateLimitedResponse("Too many attempts; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const RegenerateBackupCodesRequestSchema = z
+  .strictObject({
+    code: z.string().min(1).max(16).describe("The current six-digit code of the authenticator app; spaces between the digits are ignored. A backup code is not accepted here"),
+  })
+  .meta({ id: "RegenerateBackupCodesRequest" });
+
+export const DisableMfaRequestSchema = z
+  .union([
+    z.strictObject({
+      password: z.string().min(1).max(256).describe("The account's current password"),
+      code: z.string().min(1).max(16).describe("The current six-digit code of the authenticator app; spaces between the digits are ignored"),
+    }),
+    z.strictObject({
+      password: z.string().min(1).max(256).describe("The account's current password"),
+      backupCode: z.string().min(1).max(32).describe("One of the account's unused backup codes, which may be written in lower case and grouped by spaces or hyphens"),
+    }),
+  ])
+  .meta({ id: "DisableMfaRequest" });
+
+export const regenerateMfaBackupCodes = defineOperation({
+  method: "post",
+  path: "/api/v1/me/mfa/backup-codes",
+  operationId: "regenerateMfaBackupCodes",
+  tag: "me",
+  summary: "Replace the account's backup codes with ten new ones",
+  auth: "account",
+  rate: "mfa",
+  reauth: true,
+  request: { body: RegenerateBackupCodesRequestSchema },
+  responses: {
+    200: jsonResponse("The old set is invalid from now on, used and unused codes alike; the ten new codes are returned once and never again", MfaBackupCodesSchema),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"),
+    403: problemResponse("The request did not come from the application itself, or the credential is an API token"),
+    422: problemResponse(
+      "The code is wrong, outside the accepted window or already used (invalid_code, counted against the mfa limit; the old backup codes stay valid); the body did not pass validation; or the account's second factor is not on (validation_failed)",
+    ),
+    429: rateLimitedResponse("Too many attempts; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const disableMfa = defineOperation({
+  method: "delete",
+  path: "/api/v1/me/mfa",
+  operationId: "disableMfa",
+  tag: "me",
+  summary: "Turn the second factor off",
+  auth: "account",
+  rate: "mfa",
+  reauth: true,
+  request: { body: DisableMfaRequestSchema },
+  responses: {
+    204: emptyResponse("The secret, the activation time and every backup code are deleted and the account signs in with its password alone; the response carries the Set-Cookie header of the session's new token"),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"),
+    403: problemResponse("The request did not come from the application itself, or the credential is an API token"),
+    422: problemResponse(
+      "The code or backup code is wrong, outside the accepted window or already used (invalid_code, counted against the mfa limit); the password is wrong or the account has none (validation_failed with the field in errors[]); the body did not pass validation; or the account's second factor is not on (validation_failed). Nothing changes in any of these cases",
     ),
     429: rateLimitedResponse("Too many attempts; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),

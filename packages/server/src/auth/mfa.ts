@@ -8,11 +8,14 @@ import {
   type SecretBoxPort,
 } from "@slugbase/core";
 import type { AuthStore, SecondFactor } from "@slugbase/db";
+import { passwordMatches } from "./reauth.ts";
+import type { PasswordVerifier } from "./password.ts";
 import { newSessionToken } from "./session-token.ts";
 import { uuidv7 } from "./uuidv7.ts";
 
-// Enrolling the second factor and signing in with it (doc 02 sections 2.3 and
-// 2.7, doc 04 sections 4.3, 4.4 and 10.3, doc 10 T7 and T17). The secret is generated here, sealed by the secret
+// Enrolling the second factor, signing in with it, regenerating its backup
+// codes, turning it off and re-authenticating with it (doc 02 sections 2.3 and
+// 2.7, doc 04 sections 4.3, 4.4 and 10.3, doc 10 T7, T17 and T18). The secret is generated here, sealed by the secret
 // box before it is stored, and shown once, as the text key, the otpauth URI
 // and the QR code; no operation returns it again. A secret, a code and a
 // backup code are never logged, put in a problem document or kept past the
@@ -152,13 +155,18 @@ export async function confirmEnrollment(dependencies: MfaDependencies, request: 
   }
 }
 
-export interface SecondFactorDependencies {
-  readonly store: Pick<AuthStore, "mfaStateOf" | "resealMfaSecret" | "unusedBackupCodes" | "completeMfaSignIn" | "recordMfaFailure">;
+/** What checking a typed code against the account's stored second factor needs. */
+export interface FactorCheckDependencies {
+  readonly store: Pick<AuthStore, "mfaStateOf" | "resealMfaSecret" | "unusedBackupCodes">;
   readonly secretBox: Pick<SecretBoxPort, "open" | "needsRotation" | "reseal">;
   /** Whether a backup code matches an argon2id PHC string. */
   readonly verifyCode: (hash: string, code: string) => Promise<boolean>;
   /** The instant a code is checked at, in milliseconds since the epoch. */
   readonly now: () => number;
+}
+
+export interface SecondFactorDependencies extends FactorCheckDependencies {
+  readonly store: Pick<AuthStore, "mfaStateOf" | "resealMfaSecret" | "unusedBackupCodes" | "completeMfaSignIn" | "recordMfaFailure">;
 }
 
 /** What the person typed to finish signing in. */
@@ -193,8 +201,8 @@ function normalizeBackupCode(typed: string): string {
  * under the current one); a backup code is checked against every unused code's argon2id hash, all of
  * them whether or not one matches, so how long the check takes does not say which code it was.
  */
-async function matchingFactor(
-  { store, secretBox, verifyCode, now }: SecondFactorDependencies,
+export async function matchingFactor(
+  { store, secretBox, verifyCode, now }: FactorCheckDependencies,
   accountId: string,
   given: SecondFactorGiven,
 ): Promise<SecondFactor | undefined> {
@@ -255,5 +263,143 @@ export async function verifySecondFactor(dependencies: SecondFactorDependencies,
       return refused();
     case "no_session":
       return { kind: "no_session" };
+  }
+}
+
+export interface ManagementDependencies extends FactorCheckDependencies {
+  readonly store: Pick<AuthStore, "mfaStateOf" | "resealMfaSecret" | "unusedBackupCodes" | "regenerateBackupCodes" | "disableMfa" | "passwordHashOf">;
+  /** Hashes a backup code into an argon2id PHC string. */
+  readonly hashCode: (code: string) => Promise<string>;
+  /** Checks the account's password; the verifier sign-in and re-authentication use. */
+  readonly passwords: PasswordVerifier;
+}
+
+export type BackupCodesRegenerationResult =
+  /** The account's backup codes are now exactly `backupCodes`, shown once; every earlier one is invalid. */
+  | { readonly kind: "regenerated"; readonly backupCodes: readonly string[] }
+  /** The code is wrong, outside its window or already used; nothing was written. */
+  | { readonly kind: "invalid_code" }
+  /** The account's second factor is not on; nothing was written. */
+  | { readonly kind: "not_enabled" };
+
+/**
+ * Replaces the account's backup codes when `code` is a current TOTP code of its secret (a backup
+ * code is not accepted: the codes being replaced cannot authorise their own replacement, doc 02
+ * section 2.7). The code is verified before anything is generated or hashed; the accepted time step
+ * and the new codes (argon2id hashes) are then written by one store call in one transaction, so a
+ * failure leaves the old set valid and no second set.
+ */
+export async function regenerateBackupCodes(
+  dependencies: ManagementDependencies,
+  request: { readonly accountId: string; readonly code: string },
+): Promise<BackupCodesRegenerationResult> {
+  const { store } = dependencies;
+  const state = await store.mfaStateOf(request.accountId);
+  if (state === undefined || state.enabledAt === null) {
+    return { kind: "not_enabled" };
+  }
+  const factor = await matchingFactor(dependencies, request.accountId, { kind: "code", code: request.code });
+  if (factor?.kind !== "totp") {
+    return { kind: "invalid_code" };
+  }
+  const plain = generateBackupCodes();
+  const records = await Promise.all(plain.map(async (code) => ({ id: uuidv7(), hash: await dependencies.hashCode(code) })));
+  switch (await store.regenerateBackupCodes({ accountId: request.accountId, step: factor.step, backupCodes: records })) {
+    case "regenerated":
+      return { kind: "regenerated", backupCodes: plain };
+    case "replayed":
+      return { kind: "invalid_code" };
+    case "not_enabled":
+      return { kind: "not_enabled" };
+  }
+}
+
+export interface MfaDisabling {
+  readonly accountId: string;
+  /** The full session the request is made from; it continues under a new token. */
+  readonly sessionId: string;
+  readonly password: string;
+  readonly given: SecondFactorGiven;
+}
+
+export type MfaDisablingResult =
+  /** The factor is off; `token` is the cookie value of the session from now on. */
+  | { readonly kind: "disabled"; readonly token: string }
+  /** The password is wrong or the account has none; the code was not looked at and nothing was written. */
+  | { readonly kind: "wrong_password" }
+  /** The code is wrong, outside its window or already used; nothing was written. */
+  | { readonly kind: "invalid_code" }
+  /** The account's second factor is not on; nothing was written. */
+  | { readonly kind: "not_enabled" }
+  /** The session no longer exists; nothing was written. */
+  | { readonly kind: "no_session" };
+
+/**
+ * Turns the second factor off for an account that gives its password and a current TOTP code or an
+ * unused backup code (doc 02 section 2.7, doc 10 T17). The password and then the code are verified
+ * before anything is written, so a wrong password never spends a code or a time step. The accepted
+ * step or consumed backup code, the cleared secret and activation time, the deleted backup codes and
+ * the session's new token are then written by one store call in one transaction, so a failure leaves
+ * the factor on, every code in place and the old token.
+ */
+export async function disableMfa(dependencies: ManagementDependencies, request: MfaDisabling): Promise<MfaDisablingResult> {
+  const { store } = dependencies;
+  const state = await store.mfaStateOf(request.accountId);
+  if (state === undefined || state.enabledAt === null) {
+    return { kind: "not_enabled" };
+  }
+  if (!(await passwordMatches({ store, passwords: dependencies.passwords }, request.accountId, request.password))) {
+    return { kind: "wrong_password" };
+  }
+  const factor = await matchingFactor(dependencies, request.accountId, request.given);
+  if (factor === undefined) {
+    return { kind: "invalid_code" };
+  }
+  const token = newSessionToken();
+  switch (await store.disableMfa({ accountId: request.accountId, sessionId: request.sessionId, factor, newTokenHash: token.hash })) {
+    case "disabled":
+      return { kind: "disabled", token: token.value };
+    case "replayed":
+      return { kind: "invalid_code" };
+    case "not_enabled":
+      return { kind: "not_enabled" };
+    case "no_session":
+      return { kind: "no_session" };
+  }
+}
+
+export interface CodeReauthDependencies extends FactorCheckDependencies {
+  readonly store: Pick<AuthStore, "mfaStateOf" | "resealMfaSecret" | "unusedBackupCodes" | "reauthenticateWithStep">;
+}
+
+export type CodeReauthResult =
+  /** `reauth_at` of the session is now. */
+  | "reauthenticated"
+  /** The code is wrong, outside its window or already used, or the account's second factor is not on; nothing was written. */
+  | "invalid_code"
+  /** The session no longer exists; nothing was written. */
+  | "no_session";
+
+/**
+ * Sets `reauth_at` of the session when `code` is a current TOTP code of an account whose second factor
+ * is on (doc 04 section 10.3). The step is accepted and the session marked in one transaction, so a
+ * code is spent only by a request that re-authenticates, and a step already accepted never serves
+ * twice. A failed check changes nothing.
+ */
+export async function reauthenticateWithCode(
+  dependencies: CodeReauthDependencies,
+  request: { readonly accountId: string; readonly sessionId: string; readonly code: string },
+): Promise<CodeReauthResult> {
+  const factor = await matchingFactor(dependencies, request.accountId, { kind: "code", code: request.code });
+  if (factor?.kind !== "totp") {
+    return "invalid_code";
+  }
+  switch (await dependencies.store.reauthenticateWithStep({ accountId: request.accountId, sessionId: request.sessionId, step: factor.step })) {
+    case "reauthenticated":
+      return "reauthenticated";
+    case "replayed":
+      return "invalid_code";
+    case "no_session":
+      return "no_session";
   }
 }

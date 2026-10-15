@@ -84,6 +84,61 @@ export interface UnusedBackupCode {
   readonly hash: string;
 }
 
+/** What regenerating the backup codes writes, in one transaction. */
+export interface BackupCodesRegeneration {
+  readonly accountId: string;
+  /** The time step of the code that authorised the regeneration. */
+  readonly step: number;
+  /** Exactly the codes the account has afterwards. */
+  readonly backupCodes: readonly BackupCodeRecord[];
+}
+
+export type BackupCodesRegenerationOutcome =
+  /** The account's backup codes are exactly the new ones; every earlier one is gone. */
+  | "regenerated"
+  /** The time step was already accepted (a replay or an older code); nothing was written. */
+  | "replayed"
+  /** The account does not exist, is disabled or has MFA off; nothing was written. */
+  | "not_enabled";
+
+/** What turning MFA off writes, in one transaction. */
+export interface MfaDisabling {
+  readonly accountId: string;
+  /** The full session the request is made from; it continues under `newTokenHash`. */
+  readonly sessionId: string;
+  /** The second factor the caller checked: its time step or its backup code is accepted in the same transaction. */
+  readonly factor: SecondFactor;
+  /** SHA-256 of the 32-byte token the session continues with. */
+  readonly newTokenHash: Buffer;
+}
+
+export type MfaDisablingOutcome =
+  /** The secret, `mfa_enabled_at`, the accepted step and every backup code are gone and the session has its new token. */
+  | "disabled"
+  /** The time step or the backup code was already used (a replay, an older code, a parallel use); nothing was written. */
+  | "replayed"
+  /** The account does not exist, is disabled or has MFA off; nothing was written. */
+  | "not_enabled"
+  /** The account has no full session with that id; nothing was written. */
+  | "no_session";
+
+/** What re-authenticating with a code writes, in one transaction. */
+export interface CodeReauthentication {
+  readonly accountId: string;
+  /** The full session that re-authenticates. */
+  readonly sessionId: string;
+  /** The time step of the code that verified. */
+  readonly step: number;
+}
+
+export type CodeReauthenticationOutcome =
+  /** The step is accepted and `reauth_at` of the session is now. */
+  | "reauthenticated"
+  /** The time step was already accepted (a replay or an older code); nothing was written. */
+  | "replayed"
+  /** The account has no full session with that id; nothing was written. */
+  | "no_session";
+
 export interface MfaStore {
   /**
    * The sealed secret of the account, whether pending or active; undefined for an account that does
@@ -122,6 +177,24 @@ export interface MfaStore {
    * the session is over (deleted by this call, or not there any more), false while it still stands.
    */
   recordMfaFailure(sessionId: string, accountId: string): Promise<boolean>;
+  /**
+   * Accepts the time step and gives the account exactly these backup codes, deleting the ones it had,
+   * in one transaction: all of it happens or none of it does. Row locks are taken in the order of
+   * sys_mfa_lock (the backup-code rows, then the account), so a regeneration made at once with another,
+   * or with a sign-in using a backup code, queues instead of deadlocking or leaving two sets.
+   */
+  regenerateBackupCodes(regeneration: BackupCodesRegeneration): Promise<BackupCodesRegenerationOutcome>;
+  /**
+   * Accepts the factor, clears the secret, `mfa_enabled_at` and the accepted step, deletes every
+   * backup code and gives the session a new token, in one transaction: all of it happens or none of
+   * it does. Locks are taken in the order of sys_mfa_lock, then the session row.
+   */
+  disableMfa(disabling: MfaDisabling): Promise<MfaDisablingOutcome>;
+  /**
+   * Accepts the time step and records that the session re-authenticated now, in one transaction, so a
+   * step is not spent by a request that then fails to re-authenticate.
+   */
+  reauthenticateWithStep(reauthentication: CodeReauthentication): Promise<CodeReauthenticationOutcome>;
 }
 
 interface SecretRow {
@@ -159,6 +232,16 @@ class NotCompleted extends Error {
   readonly outcome: Exclude<SignInCompletionOutcome, "completed">;
 
   constructor(outcome: Exclude<SignInCompletionOutcome, "completed">) {
+    super(outcome);
+    this.outcome = outcome;
+  }
+}
+
+/** Thrown inside a transaction to roll it back with the outcome the step found. */
+class Stopped<Outcome extends string> extends Error {
+  readonly outcome: Outcome;
+
+  constructor(outcome: Outcome) {
     super(outcome);
     this.outcome = outcome;
   }
@@ -308,6 +391,92 @@ export function bindMfaStore(client: postgres.Sql): MfaStore {
         throw new Error("sys_session_mfa_failure did not return exactly one row");
       }
       return row.ended;
+    },
+
+    async regenerateBackupCodes({ accountId, step, backupCodes }) {
+      const ids = backupCodes.map((code) => code.id);
+      const hashes = backupCodes.map((code) => Buffer.from(code.hash, "utf8"));
+      try {
+        await client.begin(async (tx) => {
+          if (!(await flag(tx<FlagRow[]>`SELECT sys_mfa_lock(${accountId}::uuid) AS done`, "sys_mfa_lock"))) {
+            throw new Stopped<"not_enabled">("not_enabled");
+          }
+          if (!(await flag(tx<FlagRow[]>`SELECT sys_mfa_accept_step(${accountId}::uuid, ${step}::bigint) AS done`, "sys_mfa_accept_step"))) {
+            throw new Stopped<"replayed">("replayed");
+          }
+          if (
+            !(await flag(
+              tx<FlagRow[]>`SELECT sys_backup_codes_replace(${accountId}::uuid, ${tx.array(ids, UUID_ARRAY_OID)}::uuid[], ${tx.array(hashes, BYTEA_ARRAY_OID)}::bytea[]) AS done`,
+              "sys_backup_codes_replace",
+            ))
+          ) {
+            throw new Stopped<"not_enabled">("not_enabled");
+          }
+        });
+      } catch (error) {
+        if (error instanceof Stopped) {
+          return error.outcome as BackupCodesRegenerationOutcome;
+        }
+        throw error;
+      }
+      return "regenerated";
+    },
+
+    async disableMfa({ accountId, sessionId, factor, newTokenHash }) {
+      if (newTokenHash.length !== TOKEN_HASH_BYTES) {
+        throw new RangeError(`newTokenHash must be a ${String(TOKEN_HASH_BYTES)}-byte SHA-256 digest`);
+      }
+      try {
+        await client.begin(async (tx) => {
+          // The same order as a sign-in with a backup code: the code rows, the account row, the session row.
+          if (!(await flag(tx<FlagRow[]>`SELECT sys_mfa_lock(${accountId}::uuid) AS done`, "sys_mfa_lock"))) {
+            throw new Stopped<"not_enabled">("not_enabled");
+          }
+          const accepted =
+            factor.kind === "totp"
+              ? await flag(tx<FlagRow[]>`SELECT sys_mfa_accept_step(${accountId}::uuid, ${factor.step}::bigint) AS done`, "sys_mfa_accept_step")
+              : await flag(tx<FlagRow[]>`SELECT sys_backup_code_consume(${accountId}::uuid, ${factor.codeId}::uuid) AS done`, "sys_backup_code_consume");
+          if (!accepted) {
+            throw new Stopped<"replayed">("replayed");
+          }
+          if (!(await flag(tx<FlagRow[]>`SELECT sys_mfa_disable(${accountId}::uuid) AS done`, "sys_mfa_disable"))) {
+            throw new Stopped<"not_enabled">("not_enabled");
+          }
+          if (
+            !(await flag(
+              tx<FlagRow[]>`SELECT sys_session_rotate(${sessionId}::uuid, ${accountId}::uuid, ${newTokenHash}::bytea) AS done`,
+              "sys_session_rotate",
+            ))
+          ) {
+            throw new Stopped<"no_session">("no_session");
+          }
+        });
+      } catch (error) {
+        if (error instanceof Stopped) {
+          return error.outcome as MfaDisablingOutcome;
+        }
+        throw error;
+      }
+      return "disabled";
+    },
+
+    async reauthenticateWithStep({ accountId, sessionId, step }) {
+      try {
+        await client.begin(async (tx) => {
+          if (!(await flag(tx<FlagRow[]>`SELECT sys_mfa_accept_step(${accountId}::uuid, ${step}::bigint) AS done`, "sys_mfa_accept_step"))) {
+            throw new Stopped<"replayed">("replayed");
+          }
+          if (!(await flag(tx<FlagRow[]>`SELECT sys_session_reauth(${sessionId}::uuid, ${accountId}::uuid) AS done`, "sys_session_reauth"))) {
+            throw new Stopped<"no_session">("no_session");
+          }
+        });
+      } catch (error) {
+        if (error instanceof Stopped) {
+          return error.outcome as CodeReauthenticationOutcome;
+        }
+        throw error;
+      }
+      return "reauthenticated";
     },
   };
 }

@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import type postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createAuthStore, type AuthStore, type SealedMfaSecret } from "../src/index.ts";
 import { systemOperations } from "../src/system/registry.ts";
@@ -111,7 +112,9 @@ describe("the second-factor system operations", () => {
     "sys_backup_codes_replace",
     "sys_backup_codes_unused",
     "sys_mfa_accept_step",
+    "sys_mfa_disable",
     "sys_mfa_get_secret",
+    "sys_mfa_lock",
     "sys_mfa_set",
     "sys_session_mfa_failure",
     "sys_session_promote",
@@ -570,14 +573,15 @@ describe("deleting an account", () => {
   });
 });
 
-/** An account whose MFA is on, with its ten backup codes, the way an enrolment leaves it. */
+/** An account whose MFA is on, with its ten backup codes, the way an enrolment leaves it; `session` is the full session of the enrolment under its new token. */
 async function enrolled(step = 100) {
   const { accountId, session, secret } = await pending();
   const issued = codes();
+  const rotated = freshToken();
   expect(
-    await store.activateMfa({ accountId, sessionId: session.id, step, secret: secret.ciphertext, backupCodes: issued, newTokenHash: freshToken().hash }),
+    await store.activateMfa({ accountId, sessionId: session.id, step, secret: secret.ciphertext, backupCodes: issued, newTokenHash: rotated.hash }),
   ).toBe("activated");
-  return { accountId, issued, step };
+  return { accountId, issued, step, session: { id: session.id, hash: rotated.hash } };
 }
 
 async function partialSignIn(accountId: string, overrides: { remember?: boolean; replacedTokenHash?: Buffer | null } = {}) {
@@ -823,5 +827,277 @@ describe("recordMfaFailure", () => {
     expect(await store.recordMfaFailure(partial.id, other)).toBe(true);
     expect((await sessionById(accountId, partial.id))?.failures).toBe(0);
     expect(await store.recordMfaFailure(freshId(), accountId)).toBe(true);
+  });
+});
+
+const OFF = { secret: null, key_id: null, enabled_at: null, last_step: null };
+
+/**
+ * Starts `work` while another transaction holds a backup-code row and waits until `work` is blocked
+ * on a lock, so that what the held transaction does next happens with `work` queued behind it.
+ */
+async function queuedBehind<T>(holder: () => Promise<void>, work: () => Promise<T>, then: () => Promise<void>): Promise<T> {
+  let release: () => void = () => undefined;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let acquired: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    acquired = resolve;
+  });
+  const holding = db.owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    await holder.call(tx);
+    acquired();
+    await released;
+    await then.call(tx);
+  });
+  holding.catch(() => undefined);
+  await held;
+  const queued = work();
+  queued.catch(() => undefined);
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    const [waiting] = await db.owner<{ n: string }[]>`
+      SELECT count(*)::text AS n FROM pg_locks WHERE NOT granted AND pid <> pg_backend_pid()`;
+    if (Number(waiting?.n) > 0) {
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  release();
+  await holding;
+  return queued;
+}
+
+describe("regenerateBackupCodes", () => {
+  it("accepts the step and gives the account exactly the new codes: the old ones, used and unused, are gone, and MFA stays on", async () => {
+    const { accountId, issued, step } = await enrolled(800);
+    expect(await store.completeMfaSignIn({ accountId, sessionId: (await partialSignIn(accountId)).id, factor: { kind: "backup", codeId: issued[0]?.id ?? "" }, newTokenHash: freshToken().hash })).toBe(
+      "completed",
+    );
+    const fresh = codes();
+
+    expect(await store.regenerateBackupCodes({ accountId, step: step + 1, backupCodes: fresh })).toBe("regenerated");
+
+    const stored = await backupCodeRows(accountId);
+    expect(stored.map((code) => code.id)).toEqual(fresh.map((code) => code.id).sort());
+    expect(stored.every((code) => code.used_at === null)).toBe(true);
+    const row = await mfaRow(accountId);
+    expect(row.enabled_at).toBeInstanceOf(Date);
+    expect(row.last_step).toBe(String(step + 1));
+  });
+
+  it("answers replayed and keeps the old codes when the step is not newer than the accepted one", async () => {
+    const { accountId, issued, step } = await enrolled(810);
+    for (const stale of [step, step - 1]) {
+      expect(await store.regenerateBackupCodes({ accountId, step: stale, backupCodes: codes() })).toBe("replayed");
+    }
+    expect((await backupCodeRows(accountId)).map((code) => code.id)).toEqual(issued.map((code) => code.id).sort());
+    expect((await mfaRow(accountId)).last_step).toBe(String(step));
+  });
+
+  it("answers not_enabled and writes nothing for an account whose MFA is off, a disabled one and one that does not exist", async () => {
+    const plain = await account();
+    const disabled = await account();
+    await asSystem(db, (tx) => tx`UPDATE accounts SET disabled_at = now() WHERE id = ${disabled}`);
+    for (const accountId of [plain, disabled, freshId()]) {
+      expect(await store.regenerateBackupCodes({ accountId, step: 5, backupCodes: codes() })).toBe("not_enabled");
+      expect(await backupCodeRows(accountId)).toEqual([]);
+    }
+    expect((await mfaRow(plain)).last_step).toBeNull();
+  });
+
+  it("rolls the accepted step back when the new set is refused", async () => {
+    const { accountId, issued, step } = await enrolled(820);
+    await expect(store.regenerateBackupCodes({ accountId, step: step + 1, backupCodes: [] })).rejects.toThrow();
+    expect((await mfaRow(accountId)).last_step).toBe(String(step));
+    expect((await backupCodeRows(accountId)).map((code) => code.id)).toEqual(issued.map((code) => code.id).sort());
+  });
+
+  it("regenerates once when two requests carry the same step at once", async () => {
+    const { accountId, step } = await enrolled(830);
+    const results = await Promise.all([
+      store.regenerateBackupCodes({ accountId, step: step + 1, backupCodes: codes() }),
+      store.regenerateBackupCodes({ accountId, step: step + 1, backupCodes: codes() }),
+    ]);
+    expect([...results].sort()).toEqual(["regenerated", "replayed"]);
+    expect(await backupCodeRows(accountId)).toHaveLength(10);
+  });
+
+  it("leaves one set of ten when two requests with newer steps run at once", async () => {
+    const { accountId, step } = await enrolled(840);
+    await Promise.all([
+      store.regenerateBackupCodes({ accountId, step: step + 1, backupCodes: codes() }),
+      store.regenerateBackupCodes({ accountId, step: step + 2, backupCodes: codes() }),
+    ]);
+    expect(await backupCodeRows(accountId)).toHaveLength(10);
+  });
+
+  it("queues behind a sign-in that holds a backup code and then the account row, taking its locks in their order, so neither is a deadlock victim", async () => {
+    const { accountId, issued, step } = await enrolled(850);
+    const fresh = codes();
+    let regenerated: string | undefined;
+    const outcome = await queuedBehind(
+      async function (this: unknown) {
+        const tx = this as postgres.TransactionSql;
+        await tx`SELECT sys_backup_code_consume(${accountId}::uuid, ${issued[4]?.id ?? ""}::uuid)`;
+      },
+      async () => {
+        regenerated = await store.regenerateBackupCodes({ accountId, step: step + 1, backupCodes: fresh });
+        return regenerated;
+      },
+      async function (this: unknown) {
+        // What the sign-in does next: it locks the account row.
+        const tx = this as postgres.TransactionSql;
+        await tx`SELECT 1 FROM accounts WHERE id = ${accountId} FOR UPDATE`;
+      },
+    );
+    expect(outcome).toBe("regenerated");
+    expect(regenerated).toBe("regenerated");
+    expect((await backupCodeRows(accountId)).map((code) => code.id)).toEqual(fresh.map((code) => code.id).sort());
+  });
+
+  it("refuses a missing account in sys_mfa_lock and in sys_mfa_disable with invalid_parameter_value", async () => {
+    for (const statement of [(tx: postgres.TransactionSql) => tx`SELECT sys_mfa_lock(NULL::uuid)`, (tx: postgres.TransactionSql) => tx`SELECT sys_mfa_disable(NULL::uuid)`]) {
+      await expect(asSystem(db, async (tx) => statement(tx))).rejects.toMatchObject({ code: "22023" });
+    }
+  });
+});
+
+describe("disableMfa", () => {
+  it("accepts the step, clears the secret, the activation and the step, deletes every backup code and gives the session its new token", async () => {
+    const { accountId, step, session } = await enrolled(900);
+    const next = freshToken();
+
+    expect(await store.disableMfa({ accountId, sessionId: session.id, factor: { kind: "totp", step: step + 1 }, newTokenHash: next.hash })).toBe("disabled");
+
+    expect(await mfaRow(accountId)).toEqual(OFF);
+    expect(await backupCodeRows(accountId)).toEqual([]);
+    expect(await store.mfaStateOf(accountId)).toBeUndefined();
+    expect(await store.lookupSession(session.hash)).toBeUndefined();
+    expect((await store.lookupSession(next.hash))?.sessionId).toBe(session.id);
+  });
+
+  it("accepts an unused backup code in place of a step, and deletes the code with the rest", async () => {
+    const { accountId, issued, session } = await enrolled(910);
+    const next = freshToken();
+
+    expect(await store.disableMfa({ accountId, sessionId: session.id, factor: { kind: "backup", codeId: issued[0]?.id ?? "" }, newTokenHash: next.hash })).toBe("disabled");
+
+    expect(await mfaRow(accountId)).toEqual(OFF);
+    expect(await backupCodeRows(accountId)).toEqual([]);
+    expect((await store.lookupSession(next.hash))?.sessionId).toBe(session.id);
+  });
+
+  it("answers replayed and changes nothing for a step already accepted and for a used backup code", async () => {
+    const { accountId, issued, step, session } = await enrolled(920);
+    expect(await store.completeMfaSignIn({ accountId, sessionId: (await partialSignIn(accountId)).id, factor: { kind: "backup", codeId: issued[0]?.id ?? "" }, newTokenHash: freshToken().hash })).toBe(
+      "completed",
+    );
+    const before = await backupCodeRows(accountId);
+
+    for (const factor of [{ kind: "totp", step } as const, { kind: "backup", codeId: issued[0]?.id ?? "" } as const]) {
+      expect(await store.disableMfa({ accountId, sessionId: session.id, factor, newTokenHash: freshToken().hash })).toBe("replayed");
+    }
+
+    expect((await mfaRow(accountId)).enabled_at).toBeInstanceOf(Date);
+    expect((await mfaRow(accountId)).last_step).toBe(String(step));
+    expect(await backupCodeRows(accountId)).toEqual(before);
+    expect((await store.lookupSession(session.hash))?.sessionId).toBe(session.id);
+  });
+
+  it("answers not_enabled and changes nothing for an account whose MFA is off", async () => {
+    const accountId = await account();
+    const session = await signIn(accountId);
+    expect(await store.disableMfa({ accountId, sessionId: session.id, factor: { kind: "totp", step: 5 }, newTokenHash: freshToken().hash })).toBe("not_enabled");
+    expect((await store.lookupSession(session.hash))?.sessionId).toBe(session.id);
+  });
+
+  it("answers no_session and rolls the step, the cleared columns and the deleted codes back when the account has no such full session", async () => {
+    const { accountId, issued, step } = await enrolled(930);
+    const before = await mfaRow(accountId);
+    const partial = await partialSignIn(accountId);
+
+    for (const sessionId of [freshId(), partial.id]) {
+      expect(await store.disableMfa({ accountId, sessionId, factor: { kind: "totp", step: step + 1 }, newTokenHash: freshToken().hash })).toBe("no_session");
+      expect(await store.disableMfa({ accountId, sessionId, factor: { kind: "backup", codeId: issued[1]?.id ?? "" }, newTokenHash: freshToken().hash })).toBe("no_session");
+    }
+
+    expect(await mfaRow(accountId)).toEqual(before);
+    const rows = await backupCodeRows(accountId);
+    expect(rows.map((code) => code.id)).toEqual(issued.map((code) => code.id).sort());
+    expect(rows.every((code) => code.used_at === null)).toBe(true);
+  });
+
+  it("disables one of two requests made at once with the same step", async () => {
+    const { accountId, step, session } = await enrolled(940);
+    const results = await Promise.all(
+      [0, 1].map(() => store.disableMfa({ accountId, sessionId: session.id, factor: { kind: "totp", step: step + 1 }, newTokenHash: freshToken().hash })),
+    );
+    expect([...results].sort()).toEqual(["disabled", "not_enabled"]);
+    expect(await mfaRow(accountId)).toEqual(OFF);
+  });
+
+  it("lets the account enrol again from nothing: the old step does not carry over", async () => {
+    const { accountId, step, session } = await enrolled(950);
+    expect(await store.disableMfa({ accountId, sessionId: session.id, factor: { kind: "totp", step: step + 1 }, newTokenHash: freshToken().hash })).toBe("disabled");
+
+    expect(await store.startMfaEnrollment(accountId, sealed())).toBe(true);
+    expect((await mfaRow(accountId)).last_step).toBeNull();
+  });
+
+  it("queues behind a sign-in that holds another backup code and then the account row, so neither is a deadlock victim", async () => {
+    const { accountId, issued, step, session } = await enrolled(960);
+    const outcome = await queuedBehind(
+      async function (this: unknown) {
+        const tx = this as postgres.TransactionSql;
+        await tx`SELECT sys_backup_code_consume(${accountId}::uuid, ${issued[5]?.id ?? ""}::uuid)`;
+      },
+      () => store.disableMfa({ accountId, sessionId: session.id, factor: { kind: "totp", step: step + 1 }, newTokenHash: freshToken().hash }),
+      async function (this: unknown) {
+        const tx = this as postgres.TransactionSql;
+        await tx`SELECT 1 FROM accounts WHERE id = ${accountId} FOR UPDATE`;
+      },
+    );
+    expect(outcome).toBe("disabled");
+    expect(await mfaRow(accountId)).toEqual(OFF);
+    expect(await backupCodeRows(accountId)).toEqual([]);
+  });
+
+  it("refuses a token hash of the wrong length before sending anything", async () => {
+    const { accountId, session } = await enrolled(970);
+    await expect(store.disableMfa({ accountId, sessionId: session.id, factor: { kind: "totp", step: 5000 }, newTokenHash: Buffer.alloc(31) })).rejects.toThrow(RangeError);
+  });
+});
+
+describe("reauthenticateWithStep", () => {
+  it("accepts the step and records the re-authentication of the full session in one transaction", async () => {
+    const { accountId, step, session } = await enrolled(1000);
+    expect((await store.lookupSession(session.hash))?.reauthAt).toBeNull();
+
+    expect(await store.reauthenticateWithStep({ accountId, sessionId: session.id, step: step + 1 })).toBe("reauthenticated");
+
+    expect((await store.lookupSession(session.hash))?.reauthAt).toBeInstanceOf(Date);
+    expect((await mfaRow(accountId)).last_step).toBe(String(step + 1));
+  });
+
+  it("answers replayed and records nothing for a step that was already accepted or is older", async () => {
+    const { accountId, step, session } = await enrolled(1010);
+    for (const stale of [step, step - 1]) {
+      expect(await store.reauthenticateWithStep({ accountId, sessionId: session.id, step: stale })).toBe("replayed");
+    }
+    expect((await store.lookupSession(session.hash))?.reauthAt).toBeNull();
+    expect((await mfaRow(accountId)).last_step).toBe(String(step));
+  });
+
+  it("answers no_session and does not spend the step when the account has no such full session", async () => {
+    const { accountId, step } = await enrolled(1020);
+    const partial = await partialSignIn(accountId);
+    for (const sessionId of [freshId(), partial.id]) {
+      expect(await store.reauthenticateWithStep({ accountId, sessionId, step: step + 1 })).toBe("no_session");
+    }
+    expect((await mfaRow(accountId)).last_step).toBe(String(step));
+    expect((await store.lookupSession(partial.hash))?.reauthAt).toBeNull();
   });
 });

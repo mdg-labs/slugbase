@@ -109,7 +109,41 @@ export interface BackupCodeRecord {
 }
 
 // @public
+export interface BackupCodesRegeneration {
+    // (undocumented)
+    readonly accountId: string;
+    readonly backupCodes: readonly BackupCodeRecord[];
+    readonly step: number;
+}
+
+// @public (undocumented)
+export type BackupCodesRegenerationOutcome =
+/** The account's backup codes are exactly the new ones; every earlier one is gone. */
+"regenerated"
+/** The time step was already accepted (a replay or an older code); nothing was written. */
+| "replayed"
+/** The account does not exist, is disabled or has MFA off; nothing was written. */
+| "not_enabled";
+
+// @public
 export const CE_CHAIN: MigrationChain;
+
+// @public
+export interface CodeReauthentication {
+    // (undocumented)
+    readonly accountId: string;
+    readonly sessionId: string;
+    readonly step: number;
+}
+
+// @public (undocumented)
+export type CodeReauthenticationOutcome =
+/** The step is accepted and `reauth_at` of the session is now. */
+"reauthenticated"
+/** The time step was already accepted (a replay or an older code); nothing was written. */
+| "replayed"
+/** The account has no full session with that id; nothing was written. */
+| "no_session";
 
 // @public (undocumented)
 export interface CompleteSetup {
@@ -249,6 +283,26 @@ export type MfaActivationOutcome =
 | "no_session";
 
 // @public
+export interface MfaDisabling {
+    // (undocumented)
+    readonly accountId: string;
+    readonly factor: SecondFactor;
+    readonly newTokenHash: Buffer;
+    readonly sessionId: string;
+}
+
+// @public (undocumented)
+export type MfaDisablingOutcome =
+/** The secret, `mfa_enabled_at`, the accepted step and every backup code are gone and the session has its new token. */
+"disabled"
+/** The time step or the backup code was already used (a replay, an older code, a parallel use); nothing was written. */
+| "replayed"
+/** The account does not exist, is disabled or has MFA off; nothing was written. */
+| "not_enabled"
+/** The account has no full session with that id; nothing was written. */
+| "no_session";
+
+// @public
 export interface MfaState {
     readonly enabledAt: Date | null;
     readonly lastStep: number | null;
@@ -260,8 +314,11 @@ export interface MfaState {
 export interface MfaStore {
     activateMfa(activation: MfaActivation): Promise<MfaActivationOutcome>;
     completeMfaSignIn(completion: SignInCompletion): Promise<SignInCompletionOutcome>;
+    disableMfa(disabling: MfaDisabling): Promise<MfaDisablingOutcome>;
     mfaStateOf(accountId: string): Promise<MfaState | undefined>;
+    reauthenticateWithStep(reauthentication: CodeReauthentication): Promise<CodeReauthenticationOutcome>;
     recordMfaFailure(sessionId: string, accountId: string): Promise<boolean>;
+    regenerateBackupCodes(regeneration: BackupCodesRegeneration): Promise<BackupCodesRegenerationOutcome>;
     resealMfaSecret(accountId: string, expected: Uint8Array, secret: SealedMfaSecret): Promise<boolean>;
     startMfaEnrollment(accountId: string, secret: SealedMfaSecret): Promise<boolean>;
     unusedBackupCodes(accountId: string): Promise<readonly UnusedBackupCode[]>;

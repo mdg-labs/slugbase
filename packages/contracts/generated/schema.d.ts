@@ -87,6 +87,40 @@ export interface paths {
         patch: operations["updateMe"];
         trace?: never;
     };
+    "/api/v1/me/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Turn the second factor off */
+        delete: operations["disableMfa"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/mfa/backup-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Replace the account's backup codes with ten new ones */
+        post: operations["regenerateMfaBackupCodes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/mfa/enrollment": {
         parameters: {
             query?: never;
@@ -147,7 +181,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Re-authenticate the session with the account's password */
+        /** Re-authenticate the session with the account's password or a code of its authenticator app */
         post: operations["reauthenticate"];
         delete?: never;
         options?: never;
@@ -386,6 +420,17 @@ export interface components {
             /** @description The current six-digit code of the authenticator app; spaces between the digits are ignored */
             code: string;
         };
+        DisableMfaRequest: {
+            /** @description The current six-digit code of the authenticator app; spaces between the digits are ignored */
+            code: string;
+            /** @description The account's current password */
+            password: string;
+        } | {
+            /** @description One of the account's unused backup codes, which may be written in lower case and grouped by spaces or hyphens */
+            backupCode: string;
+            /** @description The account's current password */
+            password: string;
+        };
         HealthStatus: {
             /** @constant */
             status: "ok";
@@ -515,6 +560,13 @@ export interface components {
         ReauthRequest: {
             /** @description The account's current password */
             password: string;
+        } | {
+            /** @description The current six-digit code of the authenticator app, for an account whose second factor is on; spaces between the digits are ignored */
+            code: string;
+        };
+        RegenerateBackupCodesRequest: {
+            /** @description The current six-digit code of the authenticator app; spaces between the digits are ignored. A backup code is not accepted here */
+            code: string;
         };
         Session: {
             /**
@@ -1029,6 +1081,164 @@ export interface operations {
             };
         };
     };
+    disableMfa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DisableMfaRequest"];
+            };
+        };
+        responses: {
+            /** @description The secret, the activation time and every backup code are deleted and the account signs in with its password alone; the response carries the Set-Cookie header of the session's new token */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself, or the credential is an API token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The code or backup code is wrong, outside the accepted window or already used (invalid_code, counted against the mfa limit); the password is wrong or the account has none (validation_failed with the field in errors[]); the body did not pass validation; or the account's second factor is not on (validation_failed). Nothing changes in any of these cases */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many attempts; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    regenerateMfaBackupCodes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegenerateBackupCodesRequest"];
+            };
+        };
+        responses: {
+            /** @description The old set is invalid from now on, used and unused codes alike; the ten new codes are returned once and never again */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MfaBackupCodes"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself, or the credential is an API token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The code is wrong, outside the accepted window or already used (invalid_code, counted against the mfa limit; the old backup codes stay valid); the body did not pass validation; or the account's second factor is not on (validation_failed) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many attempts; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     startMfaEnrollment: {
         parameters: {
             query?: never;
@@ -1278,7 +1488,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The password is right; the session counts as re-authenticated for the next ten minutes */
+            /** @description The password or the code is right; the session counts as re-authenticated for the next ten minutes */
             204: {
                 headers: {
                     [name: string]: unknown;
@@ -1312,7 +1522,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation */
+            /** @description The code is wrong, outside the accepted window or already used, or the account's second factor is not on (invalid_code, counted against the mfa limit and the session unchanged); or the body did not pass validation */
             422: {
                 headers: {
                     [name: string]: unknown;

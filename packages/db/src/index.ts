@@ -49,8 +49,14 @@ export type {
 export type { CompleteSetup, SetupOutcome, SetupStore } from "./system/setup.ts";
 export type {
   BackupCodeRecord,
+  BackupCodesRegeneration,
+  BackupCodesRegenerationOutcome,
+  CodeReauthentication,
+  CodeReauthenticationOutcome,
   MfaActivation,
   MfaActivationOutcome,
+  MfaDisabling,
+  MfaDisablingOutcome,
   MfaState,
   MfaStore,
   SealedMfaSecret,

@@ -32,6 +32,9 @@ export const FIXTURES: ContractFixtures = {
   startMfaEnrollment: {},
   // The walker cannot know the code of the secret the start gave it: the valid request is the declared 422.
   confirmMfaEnrollment: { body: { code: "000000" }, status: 422 },
+  // The walker's account has no second factor on, so a valid request has nothing to regenerate or turn off: the declared 422. Both act on the walker's own account only.
+  regenerateMfaBackupCodes: { body: { code: "000000" }, status: 422 },
+  disableMfa: { body: { password: WALKER_ACCOUNT.password, code: "000000" }, status: 422 },
   listSessions: {},
   // The walker has one session, which every call of the walk needs; a revocation that succeeds is covered by the session route tests.
   revokeSession: { path: { id: UNKNOWN_SESSION_ID }, status: 404 },

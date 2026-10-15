@@ -6,7 +6,7 @@ import { createAuthStore, createDatabase, type AuthStore, type Database, type Mi
 import { Hono } from "hono";
 import { DEVELOPMENT_BUILD_INFO, type BuildInfo } from "./build-info.ts";
 import { renderQrSvg } from "./auth/qr.ts";
-import { hashPassword } from "./auth/password.ts";
+import { createPasswordVerifier, hashPassword, verifyHash } from "./auth/password.ts";
 import { ensureSetupToken } from "./auth/setup-token.ts";
 import { createMembershipTenantResolver, defersToMembershipResolver } from "./auth/tenant-resolver.ts";
 import { createRateLimitRegistry, type ServerConfig, type WorkerConfig } from "./config/index.ts";
@@ -427,9 +427,12 @@ export function createServer(options: CreateServerOptions): Server {
     apiConfigRoute({ config, store: authStore, buildInfo, adapters }),
     openApiRoute({ enabled: config.API_DOCS_ENABLED, document: options.openApiDocument }),
   ];
+  // One verifier serves sign-in, re-authentication and the second factor's password check, so its dummy hash is made once.
+  const passwords = createPasswordVerifier();
   // Password sign-in is part of the server, not a module: the session cookie is the one browser credential (doc 04 section 4.1).
   const auth = authContribution({
     store: authStore,
+    passwords,
     appOrigin: config.APP_ORIGIN,
     sessionSecret: config.SESSION_SECRET,
     passwordPolicy,
@@ -460,7 +463,8 @@ export function createServer(options: CreateServerOptions): Server {
   });
   // The signed-in account is part of the server like its sign-in: it reads the account's own rows and memberships.
   builtInRoutes.push(...profileRoutes({ withTenant: context.withTenant }));
-  // So is the second factor's enrolment: it reads the account's email for the authenticator entry and writes the sealed secret.
+  // So is the second factor's management: enrolment reads the account's email for the authenticator entry and writes the sealed secret;
+  // regenerating the backup codes and turning the factor off check a code, and the latter the password too.
   builtInRoutes.push(
     ...mfaRoutes({
       store: authStore,
@@ -468,6 +472,8 @@ export function createServer(options: CreateServerOptions): Server {
       withTenant: context.withTenant,
       cookie: sessionCookieSpec(config.APP_ORIGIN),
       hashCode: hashPassword,
+      verifyCode: verifyHash,
+      passwords,
       now: options.now ?? Date.now,
       issuer: config.TOTP_ISSUER ?? defaultTotpIssuer(config.APP_ORIGIN),
       renderQr: renderQrSvg,

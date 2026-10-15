@@ -49,7 +49,7 @@ export function authContribution({
   const cookie = sessionCookieSpec(appOrigin);
   return {
     routes: [loginRoute({ store, passwords, cookie }), verifyMfaRoute({ store, secretBox, verifyCode: verifyHash, now, cookie }), logoutRoute({ store, cookie }), ...sessionRoutes({ store, cookie, cursorSecret: sessionSecret }),
-      ...securityRoutes({ store, passwords, passwordPolicy, hashPassword, cookie, mail }),
+      ...securityRoutes({ store, passwords, passwordPolicy, hashPassword, cookie, mail, secretBox, verifyCode: verifyHash, now }),
     ],
     authenticators: [createSessionAuthenticator({ store, cookie })],
   };
