@@ -95,7 +95,7 @@ export function securityRoutes({ store, passwords, passwordPolicy, hashPassword,
           hashPassword,
           jobsOnChange: (changed) => (mail.available ? [queueMailSend(uuidv7(), "passwordChanged", changed)] : []),
         },
-        { accountId, sessionId, currentPassword: body.currentPassword, newPassword: body.newPassword },
+        { accountId, sessionId, ...(body.currentPassword === undefined ? {} : { currentPassword: body.currentPassword }), newPassword: body.newPassword },
       );
       switch (outcome.kind) {
         case "changed":

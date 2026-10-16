@@ -1,11 +1,12 @@
 import { Button } from "@slugbase/ui";
-import { Banner, FormField, PasswordStrength, SecretInput, SettingsSection } from "@slugbase/ui/patterns";
+import { Banner, FormField, PasswordStrength, SecretInput, SettingsSection, feedbackToast } from "@slugbase/ui/patterns";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useState, type ReactElement, type SyntheticEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiProblemError } from "../api/client.ts";
 import { passwordScore } from "../auth/password-strength.ts";
+import { ME_QUERY_KEY } from "./me.ts";
 import { SESSIONS_QUERY_KEY } from "./sessions.ts";
 
 type FieldName = "currentPassword" | "newPassword";
@@ -34,8 +35,12 @@ function refusals(error: unknown): Partial<Record<FieldName, readonly FieldProbl
   };
 }
 
-/** The Password card of `/settings/account/security` (doc 03 section 11.2): the current and the new password, with the strength of the new one. */
-export function PasswordCard(): ReactElement {
+/**
+ * The Password card of `/settings/account/security` (doc 03 section 11.2): the current and the new password, with the
+ * strength of the new one. For an account without a password (`hasPassword` false) it is "Add a password": the new
+ * password alone, confirmed by the re-authentication through the sign-in provider.
+ */
+export function PasswordCard({ hasPassword }: { hasPassword: boolean }): ReactElement {
   const { t } = useTranslation();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -46,7 +51,7 @@ export function PasswordCard(): ReactElement {
   const change = useMutation({
     mutationKey: ["account", "password"],
     meta: { fieldErrors: true },
-    mutationFn: async (body: { currentPassword: string; newPassword: string }): Promise<void> => {
+    mutationFn: async (body: { currentPassword?: string; newPassword: string }): Promise<void> => {
       const { response, error } = await router.options.context.api.POST("/api/v1/me/password", { body });
       if (!response.ok) {
         throw new Error("The password change did not answer with a problem document", { cause: error });
@@ -56,6 +61,11 @@ export function PasswordCard(): ReactElement {
       setCurrentPassword("");
       setNewPassword("");
       void queryClient.invalidateQueries({ queryKey: SESSIONS_QUERY_KEY });
+      if (!hasPassword) {
+        // The account has a password now: the card turns into the change form once the account is read again.
+        feedbackToast.success(t("settings.security.password.added"));
+        void queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
+      }
     },
   });
 
@@ -97,17 +107,19 @@ export function PasswordCard(): ReactElement {
       return;
     }
     const missing: Partial<Record<FieldName, FieldProblem>> = {
-      ...(currentPassword === "" ? { currentPassword: "currentRequired" as const } : {}),
+      ...(hasPassword && currentPassword === "" ? { currentPassword: "currentRequired" as const } : {}),
       ...(newPassword === "" ? { newPassword: "newRequired" as const } : {}),
     };
     setLocal(missing);
     if (Object.keys(missing).length > 0) {
       return;
     }
-    change.mutate({ currentPassword, newPassword });
+    change.mutate(hasPassword ? { currentPassword, newPassword } : { newPassword });
   }
 
   const currentError = fieldError("currentPassword");
+  // An account that gained a password since this page loaded is refused the first-password form; the field it names is not shown.
+  const gainedPassword = !hasPassword && refused.currentPassword !== undefined;
   const newError = fieldError("newPassword");
   const score = passwordScore(newPassword);
   const scoreLabels = [
@@ -121,31 +133,34 @@ export function PasswordCard(): ReactElement {
   return (
     <form noValidate onSubmit={submit}>
       <SettingsSection
-        description={t("settings.security.password.description")}
+        description={hasPassword ? t("settings.security.password.description") : t("settings.security.password.add.description")}
         footer={
           <Button loading={change.isPending} type="submit">
-            {t("settings.security.password.submit")}
+            {hasPassword ? t("settings.security.password.submit") : t("settings.security.password.add.submit")}
           </Button>
         }
-        title={t("settings.security.password.title")}
+        title={hasPassword ? t("settings.security.password.title") : t("settings.security.password.add.title")}
       >
         <div className="flex flex-col gap-5">
-          {change.isSuccess ? (
+          {change.isSuccess && hasPassword ? (
             <Banner title={t("settings.security.password.changed")} variant="success" />
           ) : null}
-          <FormField error={currentError} label={t("settings.security.password.current.label")} name="currentPassword">
-            <SecretInput
-              autoComplete="current-password"
-              disabled={change.isPending}
-              hideLabel={t("settings.security.password.hide")}
-              onChange={(event) => {
-                setCurrentPassword(event.target.value);
-                edited();
-              }}
-              showLabel={t("settings.security.password.show")}
-              value={currentPassword}
-            />
-          </FormField>
+          {gainedPassword ? <Banner title={t("settings.security.password.add.gained")} variant="error" /> : null}
+          {hasPassword ? (
+            <FormField error={currentError} label={t("settings.security.password.current.label")} name="currentPassword">
+              <SecretInput
+                autoComplete="current-password"
+                disabled={change.isPending}
+                hideLabel={t("settings.security.password.hide")}
+                onChange={(event) => {
+                  setCurrentPassword(event.target.value);
+                  edited();
+                }}
+                showLabel={t("settings.security.password.show")}
+                value={currentPassword}
+              />
+            </FormField>
+          ) : null}
           <div className="flex flex-col gap-2">
             <FormField
               description={t("settings.security.password.new.description")}

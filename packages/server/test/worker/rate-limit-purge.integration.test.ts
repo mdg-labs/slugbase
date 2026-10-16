@@ -79,7 +79,7 @@ async function until(check: () => Promise<boolean>, timeoutMs: number, what: str
 describe("the idle rate-limit bucket purge of a worker without modules", () => {
   it("registers the purge job and its schedule", async () => {
     const created = ceWorker();
-    expect(created.jobs.map((job) => job.name)).toEqual([JOB, "retention.purge", "mail.send"]);
+    expect(created.jobs.map((job) => job.name)).toEqual([JOB, "retention.purge", "mail.send", "event.account.created"]);
     expect(created.schedules.map((schedule) => schedule.name)).toEqual([SCHEDULE, "retention.purge"]);
 
     started.push(await created.start());

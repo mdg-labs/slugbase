@@ -16,6 +16,25 @@ export const ACCENT_PRESETS: readonly ["periwinkle", "violet", "rose", "amber", 
 // @public (undocumented)
 export type AccentPreset = (typeof ACCENT_PRESETS)[number];
 
+// @public
+export interface AccountIdentity {
+    // (undocumented)
+    readonly createdAt: Date;
+    readonly emailAtLink: string;
+    // (undocumented)
+    readonly id: string;
+    readonly lastUsedAt: Date | null;
+    readonly provider: string;
+}
+
+// @public (undocumented)
+export interface AccountIdentityRepository {
+    list(afterId: string | null, limit: number): Promise<readonly AccountIdentity[]>;
+}
+
+// @public (undocumented)
+export function accountIdentityRepository(tx: TenantTx): AccountIdentityRepository;
+
 // @public (undocumented)
 export interface AccountProfile {
     // (undocumented)
@@ -140,7 +159,7 @@ export function apiTokenRepository(tx: TenantTx): ApiTokenRepository;
 export type ApiTokenScope = "read" | "read-write";
 
 // @public (undocumented)
-export interface AuthStore extends SetupStore, MfaStore {
+export interface AuthStore extends SetupStore, MfaStore, OidcStore {
     changePassword(change: PasswordChange): Promise<boolean>;
     close(): Promise<void>;
     createSession(session: NewSession): Promise<boolean>;
@@ -212,6 +231,7 @@ export interface CompleteSetup {
     readonly displayName: string;
     readonly email: string;
     readonly ipPrefix: string | null;
+    readonly jobs?: readonly QueuedJob[];
     // (undocumented)
     readonly locale: string;
     readonly passwordHash: string;
@@ -275,6 +295,56 @@ export interface DatabaseOptions {
 
 // @public
 export function defineScopedRepository<T extends WorkspaceTable>(name: string, table: T): ScopedRepositoryDefinition<T>;
+
+// @public
+export interface IdentityLink {
+    readonly accountId: string;
+    readonly email: string;
+    readonly id: string;
+    readonly provider: string;
+    readonly subject: string;
+}
+
+// @public (undocumented)
+export type IdentityLinkOutcome =
+/** The account holds the identity from now on. */
+"linked"
+/** The account held it already; nothing changed. */
+| "already_linked"
+/** Another account holds it; nothing changed. */
+| "taken"
+/** The account does not exist or is disabled; nothing changed. */
+| "no_account";
+
+// @public
+export interface IdentityReauthentication {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly provider: string;
+    // (undocumented)
+    readonly sessionId: string;
+    // (undocumented)
+    readonly subject: string;
+}
+
+// @public
+export interface IdentitySignIn {
+    readonly ipPrefix: string | null;
+    readonly provider: string;
+    readonly replacedTokenHash: Buffer | null;
+    readonly sessionId: string;
+    readonly subject: string;
+    readonly tokenHash: Buffer;
+    readonly userAgent: string | null;
+}
+
+// @public (undocumented)
+export type IdentityUnlinkOutcome = "unlinked"
+/** The account holds no identity with this id, or does not exist or is disabled; the cases are not told apart. */
+| "not_found"
+/** The account has no password and no other identity; nothing changed. */
+| "last_sign_in_method";
 
 // @public (undocumented)
 export type InsertValues<T extends WorkspaceTable> = Omit<InferInsertModel<T>, "workspaceId"> & {
@@ -448,6 +518,20 @@ export interface NewApiToken {
     readonly workspaceId: string;
 }
 
+// @public
+export interface NewOidcLoginState {
+    // (undocumented)
+    readonly codeVerifier: SealedVerifier;
+    // (undocumented)
+    readonly intent: "login" | "link" | "reauth";
+    readonly linkAccountId: string | null;
+    // (undocumented)
+    readonly nonce: string;
+    readonly provider: string;
+    readonly returnTo: string;
+    readonly stateHash: Buffer;
+}
+
 // @public (undocumented)
 export interface NewSession {
     // (undocumented)
@@ -459,6 +543,30 @@ export interface NewSession {
     readonly replacedTokenHash: Buffer | null;
     readonly tokenHash: Buffer;
     readonly userAgent: string | null;
+}
+
+// @public
+export interface OidcLoginState {
+    // (undocumented)
+    readonly codeVerifier: SealedVerifier;
+    // (undocumented)
+    readonly intent: "login" | "link" | "reauth" | "invite";
+    // (undocumented)
+    readonly linkAccountId: string | null;
+    // (undocumented)
+    readonly nonce: string;
+    // (undocumented)
+    readonly returnTo: string;
+}
+
+// @public (undocumented)
+export interface OidcStore {
+    consumeOidcLoginState(stateHash: Buffer, provider: string): Promise<OidcLoginState | undefined>;
+    createOidcLoginState(state: NewOidcLoginState): Promise<void>;
+    linkIdentity(link: IdentityLink): Promise<IdentityLinkOutcome>;
+    reauthenticateWithIdentity(reauthentication: IdentityReauthentication): Promise<boolean>;
+    signInWithIdentity(signIn: IdentitySignIn): Promise<boolean>;
+    unlinkIdentity(accountId: string, identityId: string): Promise<IdentityUnlinkOutcome>;
 }
 
 // @public
@@ -475,6 +583,7 @@ export interface Onboarding {
 export interface PasswordChange {
     // (undocumented)
     readonly accountId: string;
+    readonly initial?: boolean;
     readonly jobs?: readonly QueuedJob[];
     readonly newTokenHash: Buffer;
     readonly passwordHash: string;
@@ -584,6 +693,14 @@ export interface ScopedRepositoryDefinition<T extends WorkspaceTable> {
 
 // @public
 export interface SealedMfaSecret {
+    // (undocumented)
+    readonly ciphertext: Uint8Array;
+    // (undocumented)
+    readonly keyId: string;
+}
+
+// @public
+export interface SealedVerifier {
     // (undocumented)
     readonly ciphertext: Uint8Array;
     // (undocumented)

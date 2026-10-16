@@ -26,6 +26,8 @@ export type {
 } from "./repositories/scoped.ts";
 export { ACCENT_PRESETS, accountProfileRepository } from "./repositories/account-profile.ts";
 export type { AccentPreset, AccountProfile, AccountProfileChanges, AccountProfileRepository, AnalyticsConsent, Onboarding } from "./repositories/account-profile.ts";
+export { accountIdentityRepository } from "./repositories/account-identities.ts";
+export type { AccountIdentity, AccountIdentityRepository } from "./repositories/account-identities.ts";
 export { apiTokenRepository } from "./repositories/api-tokens.ts";
 export type { ApiTokenCreation, ApiTokenRecord, ApiTokenRepository, ApiTokenScope, NewApiToken } from "./repositories/api-tokens.ts";
 export { membershipRepository } from "./repositories/memberships.ts";
@@ -50,6 +52,7 @@ export type {
   SessionSummary,
 } from "./system/auth.ts";
 export type { CompleteSetup, SetupOutcome, SetupStore } from "./system/setup.ts";
+export type { IdentityLink, IdentityLinkOutcome, IdentityReauthentication, IdentitySignIn, IdentityUnlinkOutcome, NewOidcLoginState, OidcLoginState, OidcStore, SealedVerifier } from "./system/oidc.ts";
 export type {
   BackupCodeRecord,
   BackupCodesRegeneration,

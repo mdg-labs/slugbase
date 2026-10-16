@@ -3,6 +3,10 @@ import { Banner, FormField, FormOverlay, SecretInput } from "@slugbase/ui/patter
 import { useState, useSyncExternalStore, type ReactElement, type SyntheticEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiProblemError, isSessionEnded, type ApiClient } from "../api/client.ts";
+import { useCachedAccount } from "../account/use-cached-account.ts";
+import { useConfig } from "../config/config-context.tsx";
+import { REAUTH_INTENT, currentReturnTo, oidcProvidersOf } from "./oidc.ts";
+import { ProviderButtons } from "./provider-buttons.tsx";
 import type { Reauth } from "./reauth.ts";
 
 const SECONDS_PER_MINUTE = 60;
@@ -123,10 +127,45 @@ function PasswordStep({ reauth, api }: { reauth: Reauth; api: ApiClient }): Reac
 }
 
 /**
+ * The step for an account without a password: it confirms the member at a sign-in provider, which is a
+ * top-level navigation that comes back to the page the member is on (doc 04 section 4.5, `intent=reauth`).
+ * The request that asked for it is not sent again; the member repeats the action once they are back.
+ */
+function ProviderStep({ reauth }: { reauth: Reauth }): ReactElement {
+  const { t } = useTranslation();
+  const providers = oidcProvidersOf(useConfig());
+  return (
+    <div className="flex flex-col gap-4">
+      {providers.length === 0 ? (
+        <Banner title={t("reauth.provider.none")} variant="error" />
+      ) : (
+        <ProviderButtons
+          intent={REAUTH_INTENT}
+          label={(name) => t("reauth.provider.confirm", { name })}
+          providers={providers}
+          returnTo={currentReturnTo()}
+        />
+      )}
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <Button
+          onClick={() => {
+            reauth.settle(false);
+          }}
+          variant="outline"
+        >
+          {t("reauth.cancel")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
  * The shared re-authentication prompt (doc 04 section 4.4, doc 03 section 11.2): a dialog that asks for the
- * account's password and confirms it with `POST /me/reauth`. It opens when a request answers `401
- * reauth_required` (see `reauthMiddleware`); the request is sent again once the password is accepted. The second-factor
- * and provider variants are further steps of this prompt.
+ * account's password and confirms it with `POST /me/reauth`, or, for an account without a password, sends the
+ * member through their sign-in provider. It opens when a request answers `401 reauth_required` (see
+ * `reauthMiddleware`); the request is sent again once the password is accepted. The second-factor variant is a
+ * further step of this prompt.
  */
 export function ReauthPrompt({ reauth, api }: { reauth: Reauth; api: ApiClient }): ReactElement {
   const { t } = useTranslation();
@@ -134,10 +173,12 @@ export function ReauthPrompt({ reauth, api }: { reauth: Reauth; api: ApiClient }
     (listener) => reauth.subscribe(listener),
     () => reauth.isOpen(),
   );
+  // Only an account the app knows has no password gets the provider step; with no account in the cache the password asks.
+  const viaProvider = useCachedAccount()?.hasPassword === false;
   return (
     <FormOverlay
       closeLabel={t("reauth.close")}
-      description={t("reauth.description")}
+      description={viaProvider ? t("reauth.provider.description") : t("reauth.description")}
       onOpenChange={(next) => {
         if (!next) {
           reauth.settle(false);
@@ -146,7 +187,7 @@ export function ReauthPrompt({ reauth, api }: { reauth: Reauth; api: ApiClient }
       open={open}
       title={t("reauth.title")}
     >
-      <PasswordStep api={api} reauth={reauth} />
+      {viaProvider ? <ProviderStep reauth={reauth} /> : <PasswordStep api={api} reauth={reauth} />}
     </FormOverlay>
   );
 }

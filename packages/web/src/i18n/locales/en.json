@@ -141,6 +141,10 @@
     },
     "security": {
       "title": "Security",
+      "providerFailed": {
+        "title": "Linking or confirming with that provider did not work. Try again.",
+        "dismiss": "Dismiss"
+      },
       "loadFailed": {
         "title": "Your security settings could not be loaded"
       },
@@ -177,9 +181,12 @@
           "breached": "This password appeared in a known data breach. Choose another one.",
           "weak": "Choose a stronger password."
         },
-        "none": {
-          "title": "This account has no password",
-          "description": "You sign in through an identity provider. Adding a password is not available yet."
+        "added": "Your password was added. Your other sessions were signed out.",
+        "add": {
+          "title": "Add a password",
+          "description": "Add a password to sign in with your email address as well. Your other sessions are signed out when you do.",
+          "submit": "Add a password",
+          "gained": "This account already has a password. Reload the page to change it."
         }
       },
       "sessions": {
@@ -302,6 +309,40 @@
           "wrongPassword": "The password is not right.",
           "reauthRequired": "Confirm it is you to continue.",
           "unavailable": "That did not work. Try again in a moment."
+        }
+      },
+      "identities": {
+        "title": "Linked sign-in methods",
+        "description": "The providers you can sign in with. You always keep at least one way to sign in.",
+        "column": {
+          "provider": "Provider",
+          "email": "Email at link",
+          "lastUsed": "Last used",
+          "actions": "Actions"
+        },
+        "noEmail": "Not given",
+        "neverUsed": "Never",
+        "none": "No provider is linked to your account.",
+        "link": "Link",
+        "linkNamed": "Link {provider}",
+        "unlink": "Unlink",
+        "unlinkNamed": "Unlink {provider}",
+        "unlinked": "Sign-in method unlinked",
+        "loadFailed": {
+          "title": "Your linked sign-in methods could not be loaded"
+        },
+        "error": {
+          "lastMethod": {
+            "title": "This is your only way to sign in",
+            "description": "Add a password or link another provider first, then unlink this one."
+          },
+          "refused": "This sign-in method could not be unlinked."
+        },
+        "confirm": {
+          "title": "Unlink {provider}?",
+          "description": "You will no longer be able to sign in with {provider}. At least one way to sign in must remain, so this works only while your account has a password or another linked provider.",
+          "action": "Unlink",
+          "cancel": "Cancel"
         }
       }
     },
@@ -458,8 +499,11 @@
         "unknown": "Too many sign-in attempts. Try again later.",
         "seconds": "Too many sign-in attempts. Try again in {count, plural, one {# second} other {# seconds}}.",
         "minutes": "Too many sign-in attempts. Try again in {count, plural, one {# minute} other {# minutes}}."
-      }
-    }
+      },
+      "oidcFailed": "Signing in with that provider did not work. Try again, or sign in with your email address and password."
+    },
+    "or": "or",
+    "provider": "Continue with {name}"
   },
   "loginMfa": {
     "title": "Two-step verification",
@@ -513,6 +557,11 @@
         "seconds": "Too many attempts. Try again in {count, plural, one {# second} other {# seconds}}.",
         "minutes": "Too many attempts. Try again in {count, plural, one {# minute} other {# minutes}}."
       }
+    },
+    "provider": {
+      "description": "This change needs you to confirm it is you with your sign-in provider.",
+      "confirm": "Confirm with {name}",
+      "none": "No sign-in provider is available to confirm it is you. Ask your administrator."
     }
   },
   "setup": {

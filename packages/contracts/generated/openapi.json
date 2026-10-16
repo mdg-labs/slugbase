@@ -342,7 +342,7 @@
         "additionalProperties": false,
         "properties": {
           "currentPassword": {
-            "description": "The account's current password",
+            "description": "The account's current password. Left out only to set the first password of an account that has none, which needs a re-authentication within the last ten minutes; an account that has a password is refused without it",
             "maxLength": 256,
             "minLength": 1,
             "type": "string"
@@ -353,7 +353,6 @@
           }
         },
         "required": [
-          "currentPassword",
           "newPassword"
         ],
         "type": "object"
@@ -518,14 +517,13 @@
                 "type": "string"
               },
               "password": {
-                "description": "The account's current password",
+                "description": "The account's current password. Left out only by an account that has none, whose re-authentication within the last ten minutes stands in for it; an account that has a password is refused without it",
                 "maxLength": 256,
                 "minLength": 1,
                 "type": "string"
               }
             },
             "required": [
-              "password",
               "code"
             ],
             "type": "object"
@@ -540,14 +538,13 @@
                 "type": "string"
               },
               "password": {
-                "description": "The account's current password",
+                "description": "The account's current password. Left out only by an account that has none, whose re-authentication within the last ten minutes stands in for it; an account that has a password is refused without it",
                 "maxLength": 256,
                 "minLength": 1,
                 "type": "string"
               }
             },
             "required": [
-              "password",
               "backupCode"
             ],
             "type": "object"
@@ -564,6 +561,76 @@
         },
         "required": [
           "status"
+        ],
+        "type": "object"
+      },
+      "Identity": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "description": "When the identity was linked, RFC 3339 UTC",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "type": "string"
+          },
+          "emailAtLink": {
+            "description": "The address the provider asserted when the identity was linked, for display; empty when it asserted none",
+            "type": "string"
+          },
+          "id": {
+            "description": "The identity's identifier; it names the identity to unlink and is not the provider's subject",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "lastUsedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the identity last signed in or re-authenticated the account, RFC 3339 UTC; null when it never has"
+          },
+          "provider": {
+            "description": "The slug of the provider, as GET /api/config lists it under signIn.oidc; a provider the operator has since removed is still listed",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "emailAtLink",
+          "createdAt",
+          "lastUsedAt"
+        ],
+        "type": "object"
+      },
+      "IdentityList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "One page of the account's linked identities, newest first; never the provider's subject",
+            "items": {
+              "$ref": "#/components/schemas/Identity"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "description": "Passed as `cursor` to get the next page; null on the last page",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
         ],
         "type": "object"
       },
@@ -1640,6 +1707,235 @@
         "x-slugbase-rate": "mfa"
       }
     },
+    "/api/v1/auth/oidc/{provider}/callback": {
+      "get": {
+        "operationId": "completeOidcSignIn",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "description": "The slug of the provider, as GET /api/config lists it under signIn.oidc",
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "The handshake is over and the browser is sent on to the returnTo of the start, a path of this application. For the login intent, when the identity is linked to an account that can sign in, a new full session cookie is set. For the link intent the identity is added to the account that started the handshake, which must be the account of the browser's current session, and no session changes. For the reauth intent the browser's current session, which must be a session of the account that started the handshake and of an account the provider's identity is linked to, counts as re-authenticated from now. For every other outcome (a missing, reused, expired or foreign state, a refusal by the provider, a token that fails validation, an identity nobody linked, a disabled account, a link or reauth in a browser whose session is not the one that started it, a link whose session has not re-authenticated within the last ten minutes at the callback, an identity already linked to another account) nothing is changed and the browser goes to /login?error=oidc_failed, one answer that does not say which. The pre-auth cookie is cleared either way",
+            "headers": {
+              "Location": {
+                "description": "A path of this application: the returnTo of the start, or /login?error=oidc_failed",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Set-Cookie": {
+                "description": "The session cookie of a successful sign-in, with the attributes of the password sign-in cookie, and the cleared pre-auth cookie; on a failure, and for the link and reauth intents, only the cleared pre-auth cookie",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The path did not pass validation"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many sign-in attempts from this address; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Finish signing in with an OIDC provider",
+        "tags": [
+          "auth"
+        ],
+        "x-slugbase-auth": "anonymous",
+        "x-slugbase-rate": "login"
+      }
+    },
+    "/api/v1/auth/oidc/{provider}/start": {
+      "get": {
+        "operationId": "startOidcSignIn",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "description": "The slug of the provider, as GET /api/config lists it under signIn.oidc",
+              "maxLength": 64,
+              "minLength": 1,
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "returnTo",
+            "required": false,
+            "schema": {
+              "description": "Where the browser goes once the handshake is over: a path of this application, such as /go/docs. Anything else is ignored and the browser goes to /",
+              "maxLength": 2048,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "intent",
+            "required": false,
+            "schema": {
+              "default": "login",
+              "description": "What the handshake is for. `login` (the default) signs in the account the identity is linked to. `link` adds the identity to the signed-in account and, because a linked identity outlives a password change and the end of every session, needs a session that re-authenticated within the last ten minutes: otherwise the start is answered `401 reauth_required` (re-authenticate with `POST /me/reauth` or the `reauth` intent, then start again), and the callback checks the same window. `reauth` proves the signed-in account's member at the provider, which counts as a re-authentication of the session for ten minutes. `link` and `reauth` need a complete session, and the browser must report the request as coming from the application itself (Sec-Fetch-Site same-origin, or none for the address bar); a request from another site or without that header is refused",
+              "enum": [
+                "login",
+                "link",
+                "reauth"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "The browser is sent to the provider with a PKCE challenge (S256), a state and a nonce, and receives the pre-auth cookie; for the reauth intent the provider is asked to ask for the credentials again. When the provider is unknown or unavailable, or the link or reauth intent comes without a complete session, from another site or without a Sec-Fetch-Site header, the browser is sent to /login?error=oidc_failed instead, the same answer a failed callback gives",
+            "headers": {
+              "Location": {
+                "description": "Where the browser goes next: the provider's authorization endpoint, or /login?error=oidc_failed when the handshake cannot start",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "Set-Cookie": {
+                "description": "The pre-auth cookie that binds the handshake to this browser: HttpOnly, SameSite=Lax, Path=/, valid for 10 minutes, Secure and __Host- prefixed when the deployment is served over https; cleared when no handshake started",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The link intent comes from a complete session that has not re-authenticated within the last ten minutes (reauth_required); nothing is stored. The login and reauth intents never answer it"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The path or the query did not pass validation"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many sign-in attempts from this address; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Start signing in with an OIDC provider",
+        "tags": [
+          "auth"
+        ],
+        "x-slugbase-auth": "anonymous",
+        "x-slugbase-rate": "login"
+      }
+    },
     "/api/v1/me": {
       "get": {
         "operationId": "getMe",
@@ -2159,6 +2455,236 @@
         "x-slugbase-rate": "write"
       }
     },
+    "/api/v1/me/identities": {
+      "get": {
+        "operationId": "listIdentities",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "The most identities to return, at most 100",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "description": "The `nextCursor` of the previous page; valid only for the account that received it",
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdentityList"
+                }
+              }
+            },
+            "description": "One page of the account's linked identities, newest first; no subject of the provider"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed, or the cursor is not one this account was issued"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The credential is an API token"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The query did not pass validation"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "List the identities linked to the account",
+        "tags": [
+          "me"
+        ],
+        "x-slugbase-auth": "account",
+        "x-slugbase-rate": "read"
+      }
+    },
+    "/api/v1/me/identities/{id}": {
+      "delete": {
+        "operationId": "unlinkIdentity",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The identity's identifier, as listed",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The identity is unlinked and can no longer sign in the account; the account's sessions are unchanged"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself, or the credential is an API token"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The account has no identity with this identifier, another account's included"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The identifier did not pass validation; or the identity is the account's only way to sign in, because the account has no password and no other identity (validation_failed with the field code last_sign_in_method in errors[]). Nothing changes"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Unlink one of the account's identities",
+        "tags": [
+          "me"
+        ],
+        "x-slugbase-auth": "account",
+        "x-slugbase-rate": "write",
+        "x-slugbase-reauth": true
+      }
+    },
     "/api/v1/me/mfa": {
       "delete": {
         "operationId": "disableMfa",
@@ -2214,7 +2740,7 @@
                 }
               }
             },
-            "description": "The code or backup code is wrong, outside the accepted window or already used (invalid_code, counted against the mfa limit); the password is wrong or the account has none (validation_failed with the field in errors[]); the body did not pass validation; or the account's second factor is not on (validation_failed). Nothing changes in any of these cases"
+            "description": "The code or backup code is wrong, outside the accepted window or already used (invalid_code, counted against the mfa limit); the password is wrong, is missing although the account has one, or is given although the account has none (validation_failed with the field in errors[]); the body did not pass validation; or the account's second factor is not on (validation_failed). Nothing changes in any of these cases"
           },
           "429": {
             "content": {
@@ -2585,7 +3111,7 @@
         },
         "responses": {
           "204": {
-            "description": "The password is changed and every other session of the account is deleted; the response carries the Set-Cookie header of the session's new token"
+            "description": "The password is changed, or the first one set, and every other session of the account is deleted; the response carries the Set-Cookie header of the session's new token"
           },
           "400": {
             "content": {
@@ -2625,7 +3151,7 @@
                 }
               }
             },
-            "description": "The body did not pass validation; the new password is refused by the policy (weak_password); or the current password is wrong or the account has none, answered alike as validation_failed with the field in errors[] and nothing changed"
+            "description": "The body did not pass validation; the new password is refused by the policy (weak_password); or the current password is wrong, is missing although the account has a password, or is given although the account has none, answered alike as validation_failed with the field in errors[] and nothing changed"
           },
           "429": {
             "content": {
@@ -2659,7 +3185,7 @@
             "description": "The service is temporarily unavailable"
           }
         },
-        "summary": "Change the account's password",
+        "summary": "Change the account's password, or set the first one",
         "tags": [
           "me"
         ],
@@ -2703,7 +3229,7 @@
                 }
               }
             },
-            "description": "There is no session, or its second factor is not complete; or the password is wrong or the account has none, answered as reauth_required with the field in errors[] and the session unchanged"
+            "description": "There is no session, or its second factor is not complete; or the password is wrong or the account has none, answered as reauth_required with the field in errors[] and the session unchanged. An account without a password re-authenticates through its provider (GET /auth/oidc/{provider}/start with the reauth intent) or, when its second factor is on, with a code"
           },
           "403": {
             "content": {

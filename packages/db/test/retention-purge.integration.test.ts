@@ -8,8 +8,8 @@ import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 
 // Retention (doc 05 section 6): sys_retention_purge() deletes what has outlived
 // its retention, a batch of 5 000 rows per table per call, and answers how many
-// it deleted per table. The rules so far: expired sessions, and API tokens that
-// were revoked or expired more than 30 days ago.
+// it deleted per table. The rules so far: expired sessions, API tokens that
+// were revoked or expired more than 30 days ago, and OIDC login states past their expiry.
 
 const HOOK_TIMEOUT_MS = 300_000;
 const HOUR_MS = 3_600_000;
@@ -72,11 +72,12 @@ async function seedSession(session: SeedSession): Promise<string> {
   return id;
 }
 
-/** What a purge answers when it deleted `sessions` sessions and `apiTokens` API tokens, in the order of doc 05 section 6. */
-function counts(sessions: number, apiTokens = 0): { table: string; deleted: number }[] {
+/** What a purge answers when it deleted `sessions` sessions, `apiTokens` API tokens and `loginStates` OIDC login states, in the order of doc 05 section 6. */
+function counts(sessions: number, apiTokens = 0, loginStates = 0): { table: string; deleted: number }[] {
   return [
     { table: "sessions", deleted: sessions },
     { table: "api_tokens", deleted: apiTokens },
+    { table: "oidc_login_states", deleted: loginStates },
   ];
 }
 
@@ -346,6 +347,37 @@ describe("purging revoked and expired API tokens", () => {
       SELECT has_table_privilege('slugbase_app', 'public.api_tokens', 'DELETE') AS app,
              has_table_privilege('slugbase_system', 'public.api_tokens', 'DELETE') AS system`;
     expect([...rows]).toEqual([{ app: false, system: true }]);
+  });
+});
+
+describe("purging expired OIDC login states", () => {
+  async function seedState(expiresIn: number): Promise<Buffer> {
+    const { hash } = freshToken();
+    await asSystem(db, (tx) => tx`
+      INSERT INTO oidc_login_states (state_hash, provider, intent, nonce, code_verifier, code_verifier_key_id, return_to, expires_at)
+      VALUES (${hash}, 'idp', 'login', 'nonce', ${Buffer.alloc(40, 1)}, 'k1', '/', now() + ${expiresIn} * interval '1 millisecond')`);
+    return hash;
+  }
+
+  async function remainingStates(): Promise<string[]> {
+    const rows = await asSystem(db, (tx) => tx<{ state_hash: Buffer }[]>`SELECT state_hash FROM oidc_login_states`);
+    return rows.map((row) => row.state_hash.toString("hex")).sort();
+  }
+
+  it("deletes a state past its expiry, keeps the live ones, and counts what it deleted", async () => {
+    await clearSessions();
+    await asSystem(db, (tx) => tx`DELETE FROM oidc_login_states`);
+    await seedState(-HOUR_MS);
+    await seedState(-1000);
+    const live = await seedState(60_000);
+
+    expect(await store.purge()).toEqual(counts(0, 0, 2));
+    expect(await remainingStates()).toEqual([live.toString("hex")]);
+    expect(await store.purge()).toEqual(counts(0, 0, 0));
+  });
+
+  it("gives slugbase_app no DELETE on oidc_login_states: the purge and the consume are the only ways a state is removed", async () => {
+    await expect(db.app.unsafe("DELETE FROM public.oidc_login_states")).rejects.toMatchObject({ code: "42501" });
   });
 });
 

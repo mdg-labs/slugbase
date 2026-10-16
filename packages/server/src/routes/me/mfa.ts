@@ -106,7 +106,7 @@ export function mfaRoutes({ withTenant, cookie, mail, ...options }: MfaRoutesOpt
     route(disableMfaOperation).handle(async ({ body }, context) => {
       const { sessionId, accountId } = sessionOf(context);
       const given = "code" in body ? ({ kind: "code", code: body.code } as const) : ({ kind: "backup", code: body.backupCode } as const);
-      const outcome = await disableMfa(dependencies, { accountId, sessionId, password: body.password, given });
+      const outcome = await disableMfa(dependencies, { accountId, sessionId, ...(body.password === undefined ? {} : { password: body.password }), given });
       switch (outcome.kind) {
         case "disabled":
           return { status: 204, headers: { "Set-Cookie": setSessionCookie(cookie, outcome.token) } };

@@ -16,6 +16,9 @@ export const WALKER_WORKSPACE_ID = "0192f3a0-cccc-7000-8000-0000000000f1";
 /** A token id no account holds: the walker's request to revoke it is the declared 404. */
 export const UNKNOWN_API_TOKEN_ID = "0192f3a0-cccc-7000-8000-000000000002";
 
+/** An identity id no account holds: the walker's request to unlink it is the declared 404. */
+export const UNKNOWN_IDENTITY_ID = "0192f3a0-cccc-7000-8000-000000000003";
+
 export const FIXTURES: ContractFixtures = {
   getHealth: {},
   getReady: {},
@@ -27,6 +30,11 @@ export const FIXTURES: ContractFixtures = {
   // session is a complete one, which has no second factor to give, so the valid request is the declared 422; the pending session is walked by the sign-in tests.
   verifyMfa: { body: { code: "000000" }, status: 422 },
   logout: {},
+  // Anonymous operations: the provider's slug is the only identifier, it names a deployment-wide setting and no workspace or account, and there is
+  // nothing of another account's to name. The walker's server has no provider, so both answer the declared 302 to /login with the failure code;
+  // the handshake itself is walked by the OIDC sign-in tests.
+  startOidcSignIn: { path: { provider: "idp" }, status: 302 },
+  completeOidcSignIn: { path: { provider: "idp" }, status: 302 },
   getMe: {},
   // An account-level operation: no workspace or other account's identifier is part of it, and the account it changes is the walker's own.
   updateMe: { body: { displayName: "Walker", locale: "en", theme: "system", accent: "periwinkle", defaultView: "grid", singleKeyShortcuts: true } },
@@ -51,6 +59,10 @@ export const FIXTURES: ContractFixtures = {
   listApiTokens: {},
   createApiToken: { body: { name: "Walker token", scope: "read", workspaceId: WALKER_WORKSPACE_ID } },
   revokeApiToken: { path: { id: UNKNOWN_API_TOKEN_ID }, status: 404 },
+  // Account-level operations: no workspace or other account's identifier is part of them, and the identities they act on are the walker's own.
+  // The walker has none, so a valid unlink names an identity that is not its own, which is the declared 404 whoever holds it.
+  listIdentities: {},
+  unlinkIdentity: { path: { id: UNKNOWN_IDENTITY_ID }, status: 404 },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

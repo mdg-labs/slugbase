@@ -147,9 +147,9 @@ describe("the walker over the committed document", () => {
     expect(report.failures).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each anonymous operation and for the sign-in; each of the sixteen operations that need a session
-    // also answers 401 without one, and each of the five that declare re-authentication answers 401 reauth_required without it.
-    expect(report.calls).toBe(operations.length + 21);
+    // One valid request for each anonymous operation and for the sign-in; each of the eighteen operations that need a session
+    // also answers 401 without one, and each of the six that declare re-authentication answers 401 reauth_required without it.
+    expect(report.calls).toBe(operations.length + 24);
   });
 });
 

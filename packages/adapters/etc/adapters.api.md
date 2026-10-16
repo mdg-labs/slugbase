@@ -172,8 +172,13 @@ export interface OidcProviderMetadata {
     readonly jwksUri: string;
     readonly keys: readonly Readonly<Record<string, unknown>>[];
     // (undocumented)
+    readonly tokenAuthMethod: OidcTokenAuthMethod;
+    // (undocumented)
     readonly tokenEndpoint: string;
 }
+
+// @public
+export type OidcTokenAuthMethod = "client_secret_basic" | "client_secret_post";
 
 // @public
 export type OidcUnavailableReason = "discovery_failed" | "issuer_mismatch" | "invalid_discovery" | "keys_failed" | "invalid_keys";

@@ -78,6 +78,114 @@ export type FakeEgressRoute = {
     readonly kind: "timeout";
 };
 
+// @public (undocumented)
+export class FakeIdentity {
+    constructor(input: FakeIdentityOptions);
+    approve(authorizationUrl: string, grant: FakeIdentityGrant): string;
+    // (undocumented)
+    readonly available = true;
+    // (undocumented)
+    begin(request: FakeIdentityBeginRequest): Promise<{
+        readonly authorizationUrl: string;
+    }>;
+    // (undocumented)
+    complete(request: FakeIdentityCompleteRequest): Promise<FakeIdentityClaims>;
+    // (undocumented)
+    listProviders(): Promise<readonly {
+        readonly id: string;
+        readonly displayName: string;
+    }[]>;
+}
+
+// @public (undocumented)
+export interface FakeIdentityBeginRequest {
+    // (undocumented)
+    readonly codeChallenge: string;
+    // (undocumented)
+    readonly nonce: string;
+    // (undocumented)
+    readonly providerId: string;
+    // (undocumented)
+    readonly reauthenticate?: boolean;
+    // (undocumented)
+    readonly redirectUri: string;
+    // (undocumented)
+    readonly state: string;
+}
+
+// @public (undocumented)
+export interface FakeIdentityClaims {
+    // (undocumented)
+    readonly displayName?: string;
+    // (undocumented)
+    readonly email: string;
+    // (undocumented)
+    readonly emailVerified: boolean;
+    // (undocumented)
+    readonly providerId: string;
+    // (undocumented)
+    readonly subject: string;
+}
+
+// @public (undocumented)
+export interface FakeIdentityCompleteRequest {
+    // (undocumented)
+    readonly code: string;
+    // (undocumented)
+    readonly codeVerifier: string;
+    // (undocumented)
+    readonly nonce: string;
+    // (undocumented)
+    readonly providerId: string;
+    // (undocumented)
+    readonly redirectUri: string;
+}
+
+// @public
+export class FakeIdentityError extends Error {
+    constructor(reason: FakeIdentityFailureReason);
+    // (undocumented)
+    readonly reason: FakeIdentityFailureReason;
+}
+
+// @public (undocumented)
+export type FakeIdentityFailureReason = "provider_unavailable" | "exchange_failed" | "invalid_token";
+
+// @public
+export interface FakeIdentityGrant {
+    readonly audience?: string;
+    // (undocumented)
+    readonly displayName?: string;
+    // (undocumented)
+    readonly email?: string;
+    // (undocumented)
+    readonly emailVerified?: boolean;
+    readonly expiresInSeconds?: number;
+    readonly issuer?: string;
+    readonly nonce?: string;
+    // (undocumented)
+    readonly subject: string;
+}
+
+// @public (undocumented)
+export interface FakeIdentityOptions {
+    readonly now?: () => number;
+    // (undocumented)
+    readonly providers: readonly FakeIdentityProvider[];
+}
+
+// @public (undocumented)
+export interface FakeIdentityProvider {
+    // (undocumented)
+    readonly clientId: string;
+    // (undocumented)
+    readonly displayName: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly issuer: string;
+}
+
 // @public
 export class FixedClock {
     constructor(start?: Date | number);

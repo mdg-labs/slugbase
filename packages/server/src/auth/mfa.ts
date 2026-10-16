@@ -329,14 +329,15 @@ export interface MfaDisabling {
   readonly accountId: string;
   /** The full session the request is made from; it continues under a new token. */
   readonly sessionId: string;
-  readonly password: string;
+  /** Absent only for an account that has no password. */
+  readonly password?: string;
   readonly given: SecondFactorGiven;
 }
 
 export type MfaDisablingResult =
   /** The factor is off; `token` is the cookie value of the session from now on. */
   | { readonly kind: "disabled"; readonly token: string }
-  /** The password is wrong or the account has none; the code was not looked at and nothing was written. */
+  /** The password is wrong, is missing although the account has one, or is given although it has none; the code was not looked at and nothing was written. */
   | { readonly kind: "wrong_password" }
   /** The code is wrong, outside its window or already used; nothing was written. */
   | { readonly kind: "invalid_code" }
@@ -346,7 +347,7 @@ export type MfaDisablingResult =
   | { readonly kind: "no_session" };
 
 /**
- * Turns the second factor off for an account that gives its password and a current TOTP code or an
+ * Turns the second factor off for an account that gives its password (an account without one gives none) and a current TOTP code or an
  * unused backup code (doc 02 section 2.7, doc 10 T17). The password and then the code are verified
  * before anything is written, so a wrong password never spends a code or a time step. The accepted
  * step or consumed backup code, the cleared secret and activation time, the deleted backup codes and
@@ -359,7 +360,13 @@ export async function disableMfa(dependencies: ManagementDependencies, request: 
   if (state === undefined || state.enabledAt === null) {
     return { kind: "not_enabled" };
   }
-  if (!(await passwordMatches({ store, passwords: dependencies.passwords }, request.accountId, request.password))) {
+  // An account without a password gives none: the request's declared re-authentication, which it can only have
+  // made through its provider or with a code, stands in for it. An account with a password always gives it.
+  const passwordAccepted =
+    request.password === undefined
+      ? (await store.passwordHashOf(request.accountId)) === null
+      : await passwordMatches({ store, passwords: dependencies.passwords }, request.accountId, request.password);
+  if (!passwordAccepted) {
     return { kind: "wrong_password" };
   }
   const factor = await matchingFactor(dependencies, request.accountId, request.given);

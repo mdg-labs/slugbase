@@ -1,5 +1,6 @@
 import postgres from "postgres";
 import { bindMfaStore, type MfaStore } from "./mfa.ts";
+import { bindOidcStore, type OidcStore } from "./oidc.ts";
 import { enqueueInTransaction, type QueuedJob } from "./queue.ts";
 import { bindSetupStore, type SetupStore } from "./setup.ts";
 
@@ -45,6 +46,11 @@ export interface PasswordChange {
   readonly sessionId: string;
   /** An argon2id PHC string. */
   readonly passwordHash: string;
+  /**
+   * The first password of an account that has none: the change is refused, as if the account were unknown,
+   * when the account has a password by the time it is written.
+   */
+  readonly initial?: boolean;
   /** SHA-256 of the 32-byte token the session continues with. */
   readonly newTokenHash: Buffer;
   /** Jobs put on their queues in the same transaction: they exist exactly when the change is committed. */
@@ -81,7 +87,7 @@ export interface SessionSummary {
   readonly userAgent: string | null;
 }
 
-export interface AuthStore extends SetupStore, MfaStore {
+export interface AuthStore extends SetupStore, MfaStore, OidcStore {
   /**
    * The address folded the way the database compares emails: two addresses that name one account
    * (`loginLookup` finds the same row) fold to one string, and no two others do. For what counts
@@ -133,7 +139,7 @@ export interface AuthStore extends SetupStore, MfaStore {
    * Sets the account's password, deletes every other session of the account (partial and expired
    * ones included) and gives the session of the change a new token, in one transaction: either all
    * three happen or none does. False, with nothing changed, when the account is unknown or disabled
-   * or has no full session with that id. The jobs of the change, if any, are queued in that
+   * or has no full session with that id (and, for the first password, when the account has a password by then). The jobs of the change, if any, are queued in that
    * transaction too, and a job that cannot be queued undoes the change and rejects.
    */
   changePassword(change: PasswordChange): Promise<boolean>;
@@ -218,6 +224,7 @@ export function bindAuthStore(client: postgres.Sql): Omit<AuthStore, "close"> {
   return {
     ...bindSetupStore(client),
     ...bindMfaStore(client),
+    ...bindOidcStore(client),
 
     async emailKey(email) {
       // The `email` column is citext, which compares lower(a) = lower(b) in the database's default
@@ -358,7 +365,7 @@ export function bindAuthStore(client: postgres.Sql): Omit<AuthStore, "close"> {
       return row.done;
     },
 
-    async changePassword({ accountId, sessionId, passwordHash, newTokenHash, jobs = [] }) {
+    async changePassword({ accountId, sessionId, passwordHash, initial = false, newTokenHash, jobs = [] }) {
       assertTokenHash(newTokenHash, "newTokenHash");
       const flag = async (rows: Promise<FlagRow[]>, name: string): Promise<boolean> => {
         const result = await rows;
@@ -372,7 +379,10 @@ export function bindAuthStore(client: postgres.Sql): Omit<AuthStore, "close"> {
         await client.begin(async (tx) => {
           // The account row is locked first, by every caller, so two changes made at once from two
           // sessions queue on it instead of each holding its own session row and waiting for the other's.
-          if (!(await flag(tx<FlagRow[]>`SELECT sys_password_set(${accountId}::uuid, ${passwordHash}::text) AS done`, "sys_password_set"))) {
+          const stored = initial
+            ? tx<FlagRow[]>`SELECT sys_password_set_initial(${accountId}::uuid, ${passwordHash}::text) AS done`
+            : tx<FlagRow[]>`SELECT sys_password_set(${accountId}::uuid, ${passwordHash}::text) AS done`;
+          if (!(await flag(stored, initial ? "sys_password_set_initial" : "sys_password_set"))) {
             throw new RolledBack();
           }
           if (!(await flag(tx<FlagRow[]>`SELECT sys_session_rotate(${sessionId}::uuid, ${accountId}::uuid, ${newTokenHash}::bytea) AS done`, "sys_session_rotate"))) {

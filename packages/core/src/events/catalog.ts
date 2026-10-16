@@ -1,0 +1,89 @@
+// The domain event catalog (doc 01 section 7.1 and 7.4, doc 09 section 2): the
+// notification points inside core flows. An event announces a change that is
+// committed; it never vetoes or alters the flow (the hooks of doc 01 section 13
+// do that). A payload holds scalar identifiers and enumerated values only: never
+// an email address, a name or any other personal data, because the payload travels
+// through the job queue and the logs of the subscribers (doc 10 T7). A subscriber
+// that needs more reads current state by identifier. Adding an event is a contract
+// change (doc 01 section 7.4).
+
+/** How an account came to exist; `setup` is first-run setup, which the registration policy skips (doc 01 section 13.5). */
+export const ACCOUNT_CREATION_PATHS = ["self-registration", "invitation", "oidc", "setup"] as const;
+
+export type AccountCreationPath = (typeof ACCOUNT_CREATION_PATHS)[number];
+
+/** The kinds of field a payload holds. */
+export type DomainEventField =
+  | { readonly type: "uuid" }
+  | { readonly type: "enum"; readonly values: readonly [string, ...string[]] };
+
+/** The payload of every event, field by field. */
+export const DOMAIN_EVENTS = {
+  "account.created": {
+    accountId: { type: "uuid" },
+    path: { type: "enum", values: ACCOUNT_CREATION_PATHS },
+  },
+} as const satisfies Record<string, Readonly<Record<string, DomainEventField>>>;
+
+export type DomainEventName = keyof typeof DOMAIN_EVENTS;
+
+/** The value a field holds: the listed values of an enum, a string for an identifier. */
+export type DomainEventFieldValue<Field> = Field extends { readonly values: readonly (infer Value)[] } ? Value : string;
+
+/** The payload of the event `Name`. */
+export type DomainEventPayload<Name extends DomainEventName = DomainEventName> = {
+  readonly [Key in keyof (typeof DOMAIN_EVENTS)[Name]]: DomainEventFieldValue<(typeof DOMAIN_EVENTS)[Name][Key]>;
+};
+
+/** What a subscriber receives. `eventId` is the same on every delivery of one event, so a subscriber deduplicates on it. */
+export interface DomainEvent<Name extends DomainEventName = DomainEventName> {
+  readonly eventId: string;
+  readonly name: Name;
+  readonly payload: DomainEventPayload<Name>;
+}
+
+/** The events a subscriber binds to, as the union of `DomainEvent` over the catalog. */
+export type AnyDomainEvent = { [Name in DomainEventName]: DomainEvent<Name> }[DomainEventName];
+
+export const DOMAIN_EVENT_NAMES = Object.keys(DOMAIN_EVENTS) as readonly DomainEventName[];
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isDomainEventName(value: unknown): value is DomainEventName {
+  return typeof value === "string" && Object.hasOwn(DOMAIN_EVENTS, value);
+}
+
+/** Thrown when a payload is not the one the catalog declares for its event; the message names fields, never values. */
+export class DomainEventPayloadError extends Error {
+  constructor(name: string, problem: string) {
+    super(`the payload of ${name} ${problem}`);
+    this.name = "DomainEventPayloadError";
+  }
+}
+
+function fits(field: DomainEventField, value: unknown): boolean {
+  if (typeof value !== "string") {
+    return false;
+  }
+  return field.type === "uuid" ? UUID.test(value) : field.values.includes(value);
+}
+
+/** The payload of the event `name` as the catalog declares it: exactly its fields, each of its kind; anything else throws. */
+export function parseDomainEventPayload<Name extends DomainEventName>(name: Name, value: unknown): DomainEventPayload<Name> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new DomainEventPayloadError(name, "must be an object");
+  }
+  const fields: Readonly<Record<string, DomainEventField>> = DOMAIN_EVENTS[name];
+  const given = value as Readonly<Record<string, unknown>>;
+  for (const key of Object.keys(given)) {
+    if (!Object.hasOwn(fields, key)) {
+      throw new DomainEventPayloadError(name, `has the field ${key}, which the catalog does not declare`);
+    }
+  }
+  for (const [key, field] of Object.entries(fields)) {
+    if (!fits(field, given[key])) {
+      throw new DomainEventPayloadError(name, `has no valid ${key}`);
+    }
+  }
+  return given as DomainEventPayload<Name>;
+}

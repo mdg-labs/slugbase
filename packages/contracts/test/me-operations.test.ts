@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildOpenApiDocument, serializeOpenApiDocument } from "../src/openapi/generate.ts";
-import { ACCENT_PRESETS, AccountSchema, ApiTokenIdParamsSchema, ApiTokenListQuerySchema, ApiTokenListSchema, ApiTokenSchema, CreateApiTokenRequestSchema, CreatedApiTokenSchema, ChangePasswordRequestSchema, DisableMfaRequestSchema, ReauthRequestSchema, RegenerateBackupCodesRequestSchema, MembershipSchema, MeSchema, RevokeSessionsQuerySchema, SessionIdParamsSchema, SessionListQuerySchema, SessionListSchema, SessionSchema, UpdateAccountRequestSchema } from "../src/operations/me.ts";
+import { ACCENT_PRESETS, AccountSchema, ApiTokenIdParamsSchema, ApiTokenListQuerySchema, ApiTokenListSchema, ApiTokenSchema, CreateApiTokenRequestSchema, CreatedApiTokenSchema, ChangePasswordRequestSchema, DisableMfaRequestSchema, IdentityIdParamsSchema, IdentityListQuerySchema, IdentityListSchema, IdentitySchema, ReauthRequestSchema, RegenerateBackupCodesRequestSchema, MembershipSchema, MeSchema, RevokeSessionsQuerySchema, SessionIdParamsSchema, SessionListQuerySchema, SessionListSchema, SessionSchema, UpdateAccountRequestSchema } from "../src/operations/me.ts";
 import { operations } from "../src/operations/index.ts";
 
 type Obj = Record<string, unknown>;
@@ -315,7 +315,10 @@ describe("the re-authentication and password operations", () => {
     const changePassword = schemas["ChangePasswordRequest"] as { additionalProperties: unknown; properties: Obj; required: string[] };
     expect(changePassword.additionalProperties).toBe(false);
     expect(Object.keys(changePassword.properties).sort()).toEqual(["currentPassword", "newPassword"]);
-    expect([...changePassword.required].sort()).toEqual(["currentPassword", "newPassword"]);
+    // The current password is left out only to set the first password of an account that has none.
+    expect([...changePassword.required].sort()).toEqual(["newPassword"]);
+    expect(ChangePasswordRequestSchema.safeParse({ newPassword: "a new long password" }).success).toBe(true);
+    expect(ChangePasswordRequestSchema.safeParse({ currentPassword: "", newPassword: "a new long password" }).success).toBe(false);
     expect(ReauthRequestSchema.safeParse({ password: "x" }).success).toBe(true);
     expect(ReauthRequestSchema.safeParse({ password: "" }).success).toBe(false);
     expect(ReauthRequestSchema.safeParse({ password: "x", sessionId: "y" }).success).toBe(false);
@@ -372,12 +375,13 @@ describe("the backup-code and disable operations", () => {
     expect(RegenerateBackupCodesRequestSchema.safeParse({ code: "123456", extra: 1 }).success).toBe(false);
   });
 
-  it("takes the password with exactly one of a TOTP code and a backup code to disable", () => {
+  it("takes exactly one of a TOTP code and a backup code to disable, with the password an account without one leaves out", () => {
     expect(schemas["DisableMfaRequest"]?.["anyOf"]).toHaveLength(2);
     expect(DisableMfaRequestSchema.safeParse({ password: "x", code: "123456" }).success).toBe(true);
     expect(DisableMfaRequestSchema.safeParse({ password: "x", backupCode: "ABCDE23456" }).success).toBe(true);
-    expect(DisableMfaRequestSchema.safeParse({ code: "123456" }).success).toBe(false);
-    expect(DisableMfaRequestSchema.safeParse({ backupCode: "ABCDE23456" }).success).toBe(false);
+    expect(DisableMfaRequestSchema.safeParse({ code: "123456" }).success).toBe(true);
+    expect(DisableMfaRequestSchema.safeParse({ backupCode: "ABCDE23456" }).success).toBe(true);
+    expect(DisableMfaRequestSchema.safeParse({}).success).toBe(false);
     expect(DisableMfaRequestSchema.safeParse({ password: "x" }).success).toBe(false);
     expect(DisableMfaRequestSchema.safeParse({ password: "x", code: "123456", backupCode: "ABCDE23456" }).success).toBe(false);
     expect(DisableMfaRequestSchema.safeParse({ password: "", code: "123456" }).success).toBe(false);
@@ -474,5 +478,63 @@ describe("the API token operations", () => {
     expect(ApiTokenListQuerySchema.safeParse({ limit: "0" }).success).toBe(false);
     expect(ApiTokenIdParamsSchema.safeParse({ id: "0192f3a0-0000-7000-8000-0000000000b1" }).success).toBe(true);
     expect(ApiTokenIdParamsSchema.safeParse({ id: "nope" }).success).toBe(false);
+  });
+});
+
+describe("the identity operations", () => {
+  const IDENTITY = {
+    id: "0192f3a0-0000-7000-8000-0000000000d1",
+    provider: "idp",
+    emailAtLink: "person@example.test",
+    createdAt: "2026-10-15T10:00:00.000Z",
+    lastUsedAt: null,
+  };
+
+  it.each([
+    ["get", "/api/v1/me/identities", "listIdentities", "read", false],
+    ["delete", "/api/v1/me/identities/{id}", "unlinkIdentity", "write", true],
+  ])("%s %s is %s: an account operation in the %s bucket that no API token may call", (method, path, operationId, rate, reauth) => {
+    const operation = paths[path]?.[method];
+    expect(operation?.["operationId"]).toBe(operationId);
+    expect(operation?.["x-slugbase-auth"]).toBe("account");
+    expect(operation?.["x-slugbase-rate"]).toBe(rate);
+    expect(operation?.["x-slugbase-scope"]).toBeUndefined();
+    expect(operation?.["x-slugbase-reauth"]).toBe(reauth ? true : undefined);
+    expect(operation?.["requestBody"]).toBeUndefined();
+  });
+
+  it("declares application/problem+json for every client error, and 404 and 422 on the unlink", () => {
+    for (const [path, method] of [
+      ["/api/v1/me/identities", "get"],
+      ["/api/v1/me/identities/{id}", "delete"],
+    ] as const) {
+      const responses = responsesOf(paths[path]?.[method]);
+      const clientErrors = Object.keys(responses).filter((status) => status.startsWith("4"));
+      expect(clientErrors, `${method} ${path}`).toEqual(expect.arrayContaining(["401", "403", "422", "429"]));
+      for (const status of clientErrors) {
+        expect(Object.keys(responses[status]?.content ?? {}), `${method} ${path} ${status}`).toEqual(["application/problem+json"]);
+      }
+    }
+    expect(Object.keys(responsesOf(paths["/api/v1/me/identities/{id}"]?.["delete"]))).toEqual(expect.arrayContaining(["204", "401", "404", "422"]));
+    expect(JSON.stringify(responsesOf(paths["/api/v1/me/identities/{id}"]?.["delete"])["422"])).toContain("last_sign_in_method");
+  });
+
+  it("lists closed Identity objects with no subject of the provider", () => {
+    const identity = schemas["Identity"] as { additionalProperties: unknown; properties: Obj; required: string[] };
+    expect(identity.additionalProperties).toBe(false);
+    expect(Object.keys(identity.properties).sort()).toEqual(["createdAt", "emailAtLink", "id", "lastUsedAt", "provider"]);
+    expect([...identity.required].sort()).toEqual(Object.keys(identity.properties).sort());
+    expect(responsesOf(paths["/api/v1/me/identities"]?.["get"])["200"]?.content).toEqual({ "application/json": { schema: { $ref: "#/components/schemas/IdentityList" } } });
+    expect(IdentitySchema.safeParse(IDENTITY).success).toBe(true);
+    expect(IdentitySchema.safeParse({ ...IDENTITY, subject: "sub-1" }).success).toBe(false);
+    expect(IdentityListSchema.safeParse({ items: [IDENTITY], nextCursor: null }).success).toBe(true);
+  });
+
+  it("takes the page query and an identifier that is a UUID", () => {
+    expect(IdentityListQuerySchema.parse({}).limit).toBe(50);
+    expect(IdentityListQuerySchema.safeParse({ limit: "101" }).success).toBe(false);
+    expect(IdentityListQuerySchema.safeParse({ offset: "1" }).success).toBe(false);
+    expect(IdentityIdParamsSchema.safeParse({ id: IDENTITY.id }).success).toBe(true);
+    expect(IdentityIdParamsSchema.safeParse({ id: "not-a-uuid" }).success).toBe(false);
   });
 });

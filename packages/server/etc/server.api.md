@@ -9,6 +9,9 @@ import { AuthStore } from '@slugbase/db';
 import type { ClientErrorReportRequest } from '@slugbase/core';
 import type { Context } from 'hono';
 import { Database } from '@slugbase/db';
+import { DomainEvent } from '@slugbase/core';
+import { DomainEventName } from '@slugbase/core';
+import { DomainEventPayload } from '@slugbase/core';
 import { EmptyResponse } from '@slugbase/contracts';
 import { IdentityProviderConfig } from '@slugbase/core';
 import { JsonResponse } from '@slugbase/contracts';
@@ -17,6 +20,7 @@ import { MigrationChain } from '@slugbase/db';
 import { OperationDefinition } from '@slugbase/contracts';
 import { Problem } from '@slugbase/contracts';
 import { ProblemCode } from '@slugbase/contracts';
+import type { QueuedJob } from '@slugbase/db';
 import type { TenantPrincipal } from '@slugbase/core';
 import type { TenantResolver } from '@slugbase/core';
 import type { TenantTx } from '@slugbase/db';
@@ -34,6 +38,9 @@ export interface ApiTokenPrincipal extends Extract<TenantPrincipal, {
 
 // @public
 export function assertIdempotent<Payload extends JobPayload>(check: IdempotencyCheck<Payload>): Promise<void>;
+
+// @public
+export function assertRegistrationAllowed(hooks: HookDispatcher, input: RegistrationPolicyInput): Promise<void>;
 
 // @public
 export type Authenticator = BearerAuthenticator | CookieAuthenticator;
@@ -90,7 +97,7 @@ export class CompositionError extends Error {
 }
 
 // @public (undocumented)
-export type CompositionErrorCode = "missing_adapter" | "invalid_module" | "duplicate_module" | "invalid_hook" | "module_failed" | "duplicate_route" | "invalid_route" | "invalid_web_root" | "missing_policy" | "undocumented_operation" | "policy_mismatch" | "duplicate_job" | "unknown_job" | "duplicate_schedule" | "invalid_schedule";
+export type CompositionErrorCode = "missing_adapter" | "invalid_module" | "duplicate_module" | "invalid_hook" | "invalid_subscriber" | "module_failed" | "duplicate_route" | "invalid_route" | "invalid_web_root" | "missing_policy" | "undocumented_operation" | "policy_mismatch" | "duplicate_job" | "unknown_job" | "duplicate_schedule" | "invalid_schedule";
 
 // @public (undocumented)
 export interface ConfigByProcess {
@@ -407,6 +414,27 @@ export const errorReportFragment: EnvFragment<    {
 ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 }, object>;
 
+// @public
+export interface EventBinding<Name extends DomainEventName = DomainEventName> {
+    // (undocumented)
+    readonly event: Name;
+    // (undocumented)
+    readonly handle: (event: DomainEvent<Name>) => void | Promise<void>;
+}
+
+// @public
+export class EventDeliveryError extends Error {
+    constructor(name: string, modules: readonly string[]);
+}
+
+// @public
+export function eventJobName(name: DomainEventName): string;
+
+// @public
+export type EventSubscriber = {
+    [Name in DomainEventName]: EventBinding<Name>;
+}[DomainEventName];
+
 // @public (undocumented)
 export const HOOK_NAMES: readonly ["seatCheck", "deletionGuard", "registrationPolicy"];
 
@@ -638,6 +666,7 @@ export interface ModuleContribution {
     readonly migrations?: readonly MigrationChain[];
     readonly routes?: readonly RouteBinding[];
     readonly schedules?: readonly ScheduleDefinition[];
+    readonly subscribers?: readonly EventSubscriber[];
 }
 
 // @public (undocumented)
@@ -706,6 +735,9 @@ export const PROCESS_TYPES: readonly ["server", "worker", "migrate"];
 
 // @public (undocumented)
 export type ProcessType = (typeof PROCESS_TYPES)[number];
+
+// @public
+export function queueDomainEvent<Name extends DomainEventName>(eventId: string, name: Name, payload: DomainEventPayload<Name>): QueuedJob;
 
 // @public (undocumented)
 export const RATE_LIMIT_BUCKETS: readonly RateLimitBucket[];

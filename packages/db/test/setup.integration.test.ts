@@ -454,3 +454,88 @@ describe("sys_complete_setup", () => {
     await expect(store.setSetupToken(Buffer.alloc(31))).rejects.toThrow(RangeError);
   });
 });
+
+describe("the jobs of a setup", () => {
+  const QUEUE = "event.account.created";
+
+  // The queue and job tables `migrate` creates through pg-boss, reduced to the columns the enqueue writes and reads.
+  beforeAll(async () => {
+    await db.owner.unsafe(`
+      CREATE TABLE pgboss.queue (
+        name text PRIMARY KEY, retention_seconds int NOT NULL, expire_seconds int NOT NULL, deletion_seconds int NOT NULL,
+        retry_limit int NOT NULL, retry_delay int NOT NULL, retry_backoff boolean NOT NULL, retry_delay_max int,
+        policy text NOT NULL, dead_letter text, heartbeat_seconds int);
+      CREATE TABLE pgboss.job (
+        id uuid PRIMARY KEY, name text NOT NULL, data jsonb, keep_until timestamptz NOT NULL, expire_seconds int NOT NULL,
+        deletion_seconds int NOT NULL, retry_limit int NOT NULL, retry_delay int NOT NULL, retry_backoff boolean NOT NULL,
+        retry_delay_max int, policy text NOT NULL, dead_letter text, heartbeat_seconds int);
+      INSERT INTO pgboss.queue VALUES ('${QUEUE}', 3600, 900, 3600, 3, 5, true, NULL, 'standard', NULL, NULL);`);
+  }, HOOK_TIMEOUT_MS);
+
+  beforeEach(async () => {
+    await db.owner`TRUNCATE pgboss.job`;
+  });
+
+  function jobFor(accountId: string, queue = QUEUE) {
+    return { id: freshId(), queue, data: { eventId: freshId(), accountId, path: "setup" } };
+  }
+
+  async function queued(): Promise<{ id: string; name: string; data: Record<string, unknown> }[]> {
+    return db.app<{ id: string; name: string; data: Record<string, unknown> }[]>`SELECT id, name, data FROM pgboss.job ORDER BY id`;
+  }
+
+  it("queues them in the transaction that creates the account", async () => {
+    const setup = request();
+    const job = jobFor(setup.accountId);
+
+    expect(await store.completeSetup({ ...setup, jobs: [job] })).toBe("completed");
+
+    expect(await queued()).toEqual([{ id: job.id, name: QUEUE, data: job.data }]);
+  });
+
+  it("queues none when setup is already completed, and none when the token is wrong", async () => {
+    const token = freshToken();
+    await store.setSetupToken(token.hash);
+    expect(await store.completeSetup({ ...request({ tokenRequired: true, tokenHash: freshToken().hash }), jobs: [jobFor(freshId())] })).toBe("forbidden");
+    expect(await queued()).toEqual([]);
+
+    expect(await store.completeSetup({ ...request({ tokenRequired: true, tokenHash: token.hash }), jobs: [jobFor(freshId())] })).toBe("completed");
+    expect(await queued()).toHaveLength(1);
+    await db.owner`TRUNCATE pgboss.job`;
+
+    expect(await store.completeSetup({ ...request(), jobs: [jobFor(freshId())] })).toBe("setup_completed");
+    expect(await queued()).toEqual([]);
+  });
+
+  it("queues exactly one set of jobs when many calls arrive at once", async () => {
+    const outcomes = await Promise.all(
+      Array.from({ length: PARALLEL_CALLS }, () => {
+        const setup = request();
+        return store.completeSetup({ ...setup, jobs: [jobFor(setup.accountId)] });
+      }),
+    );
+    expect(outcomes.filter((outcome) => outcome === "completed")).toHaveLength(1);
+    expect(await queued()).toHaveLength(1);
+  });
+
+  it("leaves no account when a job cannot be queued, because its queue does not exist", async () => {
+    const setup = request();
+
+    await expect(store.completeSetup({ ...setup, jobs: [jobFor(setup.accountId, "event.missing.queue")] })).rejects.toMatchObject({
+      name: "QueueMissingError",
+    });
+
+    expect(await counts()).toEqual(NOTHING);
+    expect(await queued()).toEqual([]);
+    expect(await store.setupPending()).toBe(true);
+  });
+
+  it("leaves no job when a step after the account fails", async () => {
+    const setup = request({ workspaceName: "x".repeat(65) });
+
+    await expect(store.completeSetup({ ...setup, jobs: [jobFor(setup.accountId)] })).rejects.toMatchObject({ code: "23514" });
+
+    expect(await counts()).toEqual(NOTHING);
+    expect(await queued()).toEqual([]);
+  });
+});

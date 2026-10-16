@@ -63,7 +63,8 @@ export interface PasswordChangeRequest {
   readonly accountId: string;
   /** The full session the change is made from; it continues under a new token. */
   readonly sessionId: string;
-  readonly currentPassword: string;
+  /** Absent only for the first password of an account that has none. */
+  readonly currentPassword?: string;
   readonly newPassword: string;
 }
 
@@ -72,13 +73,19 @@ export type PasswordChangeOutcome =
   | { readonly kind: "changed"; readonly token: string }
   /** The policy refuses the new password; nothing was written. */
   | { readonly kind: "weak_password"; readonly problems: readonly PasswordProblem[] }
-  /** The current password is wrong or the account has none; nothing was written. */
+  /**
+   * The current password is wrong, is missing although the account has a password, or is given although
+   * it has none; nothing was written.
+   */
   | { readonly kind: "wrong_password" }
   /** The account or the session no longer exists; nothing was written. */
   | { readonly kind: "no_session" };
 
 /**
- * Changes the password of the account of the session. The new password is checked
+ * Changes the password of the account of the session, or sets the first one: a request without
+ * `currentPassword` is accepted only for an account that has no password, and is written only if the
+ * account still has none (the caller's operation requires a re-authentication within ten minutes, which
+ * for such an account is the one through its provider). The new password is checked
  * against the policy and the current one is verified before anything is hashed or
  * written. The stored hash, the deletion of the account's other sessions and the
  * session's new token are then written by one store call in one transaction, together
@@ -90,7 +97,12 @@ export async function changePassword(dependencies: PasswordChangeDependencies, r
   if (problems.length > 0) {
     return { kind: "weak_password", problems };
   }
-  if (!(await passwordMatches(dependencies, request.accountId, request.currentPassword))) {
+  const initial = request.currentPassword === undefined;
+  if (initial) {
+    if ((await dependencies.store.passwordHashOf(request.accountId)) !== null) {
+      return { kind: "wrong_password" };
+    }
+  } else if (!(await passwordMatches(dependencies, request.accountId, request.currentPassword))) {
     return { kind: "wrong_password" };
   }
   const token = newSessionToken();
@@ -98,8 +110,14 @@ export async function changePassword(dependencies: PasswordChangeDependencies, r
     accountId: request.accountId,
     sessionId: request.sessionId,
     passwordHash: await dependencies.hashPassword(request.newPassword),
+    initial,
     newTokenHash: token.hash,
     jobs: dependencies.jobsOnChange?.(request.accountId) ?? [],
   });
-  return changed ? { kind: "changed", token: token.value } : { kind: "no_session" };
+  if (changed) {
+    return { kind: "changed", token: token.value };
+  }
+  // A first password is refused by the store when a password appeared after the check above; say so as the
+  // refusal it is, not as a session that ended.
+  return initial && (await dependencies.store.passwordHashOf(request.accountId)) !== null ? { kind: "wrong_password" } : { kind: "no_session" };
 }

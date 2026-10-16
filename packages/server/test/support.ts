@@ -4,7 +4,7 @@ import { defineOperation, jsonResponse, problemResponse, type OperationDefinitio
 import { z } from "zod";
 import type { ChainDependencies } from "../src/http/chain.ts";
 import { createRateLimitRegistry, loadConfig } from "../src/config/index.ts";
-import { createHookDispatcher, type HookDispatcher, type HookRegistration } from "../src/hooks/index.ts";
+import { HookResult, createHookDispatcher, type HookDispatcher, type HookRegistration } from "../src/hooks/index.ts";
 import type { ContractDocument, Logger, ModuleContext, ServerModule } from "../src/create-server.ts";
 import { productionEnv } from "./config/support.ts";
 import { memoryRateLimiter } from "./http/rate-limit-support.ts";
@@ -93,6 +93,12 @@ export function fakeAuthStore(overrides: Partial<AuthStore> = {}): AuthStore {
     regenerateBackupCodes: unexpected("regenerateBackupCodes"),
     disableMfa: unexpected("disableMfa"),
     reauthenticateWithStep: unexpected("reauthenticateWithStep"),
+    createOidcLoginState: unexpected("createOidcLoginState"),
+    consumeOidcLoginState: unexpected("consumeOidcLoginState"),
+    signInWithIdentity: unexpected("signInWithIdentity"),
+    linkIdentity: unexpected("linkIdentity"),
+    unlinkIdentity: unexpected("unlinkIdentity"),
+    reauthenticateWithIdentity: unexpected("reauthenticateWithIdentity"),
     setupPending: () => Promise.resolve(false),
     setSetupToken: unexpected("setSetupToken"),
     completeSetup: unexpected("completeSetup"),
@@ -193,5 +199,28 @@ export function acceptAnyBearer(): { readonly module: ServerModule; readonly ten
       }),
     },
     tenantResolver: { available: true, resolve: () => Promise.resolve({ workspaceId: BEARER_WORKSPACE, memberId: BEARER_ACCOUNT, role: "member" }) },
+  };
+}
+
+export interface RegistrationPolicyModuleOptions {
+  readonly name?: string;
+  /** The email domain the module refuses, without the `@`; every other address is allowed. */
+  readonly domain?: string;
+  /** The reason the hook gives; the dispatcher answers `registration_refused` whatever it is. */
+  readonly reason?: string;
+}
+
+/**
+ * A module whose registration policy refuses one email domain and allows every other address, for the tests of
+ * the account-creation paths (self-registration, invitation, OIDC) to compose. It refuses on any path.
+ */
+export function registrationPolicyModule(options: RegistrationPolicyModuleOptions = {}): ServerModule {
+  const { name = "registration-policy", domain = "blocked.example", reason = "domain_blocked" } = options;
+  return {
+    name,
+    hooks: {
+      registrationPolicy: ({ email }) => (email.toLowerCase().endsWith(`@${domain.toLowerCase()}`) ? HookResult.refuse(reason) : HookResult.allow()),
+    },
+    register: () => ({}),
   };
 }

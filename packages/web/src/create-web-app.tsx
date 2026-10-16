@@ -1,10 +1,12 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
-import { ThemeProvider } from "@slugbase/ui";
-import { Suspense, use, type ComponentType, type ReactElement } from "react";
+import { SpinnerLabelProvider, ThemeProvider } from "@slugbase/ui";
+import { Suspense, use, type ComponentType, type ReactElement, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { createApiClient } from "./api/client.ts";
 import { mfaMiddleware } from "./auth/mfa.ts";
 import { ReauthPrompt } from "./auth/reauth-prompt.tsx";
+import { ReauthProvider } from "./auth/reauth-context.tsx";
 import { createReauth, reauthMiddleware } from "./auth/reauth.ts";
 import { fetchConfig, type ConfigResult } from "./config/bootstrap.ts";
 import { ConfigFailure } from "./config/config-failure.tsx";
@@ -18,6 +20,12 @@ import { createAppRouter } from "./router.ts";
 import { AppFeedback } from "./shell/app-feedback.tsx";
 import { createSessionExpiry } from "./shell/session-expiry.tsx";
 import { ShellLoading } from "./shell/shell-loading.tsx";
+
+/** Gives the spinners of the library, such as a loading button's, their label in the interface language. */
+function LocalisedSpinners({ children }: { children: ReactNode }): ReactElement {
+  const { t } = useTranslation();
+  return <SpinnerLabelProvider label={t("shell.loading")}>{children}</SpinnerLabelProvider>;
+}
 
 export interface CreateWebAppOptions {
   /** What the composition adds; CE passes none. */
@@ -62,7 +70,9 @@ export function createWebApp({ extensions }: CreateWebAppOptions): ComponentType
       // No configuration, so no account preference or default locale: the browser's languages, then English.
       return (
         <I18nProvider>
-          <ConfigFailure requestId={loaded.requestId} />
+          <LocalisedSpinners>
+            <ConfigFailure requestId={loaded.requestId} />
+          </LocalisedSpinners>
         </I18nProvider>
       );
     }
@@ -70,12 +80,16 @@ export function createWebApp({ extensions }: CreateWebAppOptions): ComponentType
       <ConfigProvider config={loaded.config}>
         <QueryClientProvider client={queryClient}>
           <AccountI18nProvider defaultLocale={loaded.config.defaultLocale}>
-            <AppFeedback expiry={sessionExpiry} router={router}>
-              <ExtensionsProvider extensions={extensions}>
-                <RouterProvider router={router} />
-              </ExtensionsProvider>
-              <ReauthPrompt api={api} reauth={reauth} />
-            </AppFeedback>
+            <LocalisedSpinners>
+              <AppFeedback expiry={sessionExpiry} router={router}>
+                <ReauthProvider reauth={reauth}>
+                  <ExtensionsProvider extensions={extensions}>
+                    <RouterProvider router={router} />
+                  </ExtensionsProvider>
+                  <ReauthPrompt api={api} reauth={reauth} />
+                </ReauthProvider>
+              </AppFeedback>
+            </LocalisedSpinners>
           </AccountI18nProvider>
         </QueryClientProvider>
       </ConfigProvider>

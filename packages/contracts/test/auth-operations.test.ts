@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { buildOpenApiDocument, serializeOpenApiDocument } from "../src/openapi/generate.ts";
-import { LoginRequestSchema, LoginResultSchema, VerifyMfaRequestSchema, VerifyMfaResultSchema, login, logout, verifyMfa } from "../src/operations/auth.ts";
+import {
+  LoginRequestSchema,
+  LoginResultSchema,
+  OidcProviderParamsSchema,
+  OidcStartQuerySchema,
+  VerifyMfaRequestSchema,
+  VerifyMfaResultSchema,
+  completeOidcSignIn,
+  login,
+  logout,
+  startOidcSignIn,
+  verifyMfa,
+} from "../src/operations/auth.ts";
 import { operations } from "../src/operations/index.ts";
 
 type Obj = Record<string, unknown>;
@@ -108,5 +120,62 @@ describe("logout", () => {
     const responses = responsesOf(operation);
     expect(responses["204"]).toEqual({ description: "The session is deleted and its cookie cleared" });
     expect(Object.keys(responses["401"]?.content ?? {})).toEqual(["application/problem+json"]);
+  });
+});
+
+describe("the OIDC sign-in redirects", () => {
+  const start = paths["/api/v1/auth/oidc/{provider}/start"]?.["get"];
+  const callback = paths["/api/v1/auth/oidc/{provider}/callback"]?.["get"];
+
+  it("are anonymous GETs in the login bucket and are not token-callable", () => {
+    expect(startOidcSignIn.path).toBe("/api/v1/auth/oidc/{provider}/start");
+    expect(completeOidcSignIn.path).toBe("/api/v1/auth/oidc/{provider}/callback");
+    for (const operation of [start, callback]) {
+      expect(operation?.["x-slugbase-auth"]).toBe("anonymous");
+      expect(operation?.["x-slugbase-rate"]).toBe("login");
+      expect(operation?.["x-slugbase-scope"]).toBeUndefined();
+      expect(operation?.["x-slugbase-reauth"]).toBeUndefined();
+      expect(operation?.["requestBody"]).toBeUndefined();
+    }
+    expect(start?.["operationId"]).toBe("startOidcSignIn");
+    expect(callback?.["operationId"]).toBe("completeOidcSignIn");
+  });
+
+  it("take the provider slug in the path, the start also an optional returnTo and an intent, and the callback no declared query", () => {
+    const parameters = (operation: Obj | undefined): Obj[] => operation?.["parameters"] as Obj[];
+    expect(parameters(start).map((parameter) => [parameter["in"], parameter["name"], parameter["required"]])).toEqual([
+      ["path", "provider", true],
+      ["query", "returnTo", false],
+      ["query", "intent", false],
+    ]);
+    expect(parameters(callback).map((parameter) => [parameter["in"], parameter["name"]])).toEqual([["path", "provider"]]);
+    expect(OidcProviderParamsSchema.safeParse({ provider: "my-idp2" }).success).toBe(true);
+    for (const provider of ["", "My-Idp", "a_b", "-a", "a-", "a--b", "a/b", "x".repeat(65)]) {
+      expect(OidcProviderParamsSchema.safeParse({ provider }).success, provider).toBe(false);
+    }
+    expect(OidcStartQuerySchema.safeParse({}).success).toBe(true);
+    expect(OidcStartQuerySchema.parse({}).intent).toBe("login");
+    for (const intent of ["login", "link", "reauth"]) {
+      expect(OidcStartQuerySchema.safeParse({ returnTo: "/go/docs", intent }).success, intent).toBe(true);
+    }
+    // The invitation intent arrives with its own operation.
+    for (const intent of ["invite", "delete", ""]) {
+      expect(OidcStartQuerySchema.safeParse({ intent }).success, intent).toBe(false);
+    }
+    expect(OidcStartQuerySchema.safeParse({ returnTo: "/go/docs", unknown: "x" }).success).toBe(false);
+    expect(OidcStartQuerySchema.safeParse({ returnTo: "x".repeat(2049) }).success).toBe(false);
+  });
+
+  it("answer 302 with a Location and a Set-Cookie header and no body, and problem+json for every client error", () => {
+    for (const operation of [start, callback]) {
+      const responses = responsesOf(operation);
+      expect(responses["302"]?.content).toBeUndefined();
+      expect(responses["302"]?.headers).toMatchObject({ Location: { required: true }, "Set-Cookie": { required: true } });
+      expect(Object.keys(responses).filter((status) => Number(status) < 400)).toEqual(["302"]);
+      for (const status of ["400", "422", "429"]) {
+        expect(Object.keys(responses[status]?.content ?? {}), status).toEqual(["application/problem+json"]);
+      }
+      expect(responses["429"]?.headers).toMatchObject({ "Retry-After": { required: true } });
+    }
   });
 });

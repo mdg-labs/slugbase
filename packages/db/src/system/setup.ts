@@ -1,4 +1,5 @@
 import type postgres from "postgres";
+import { enqueueInTransaction, type QueuedJob } from "./queue.ts";
 
 // The wrappers of the system operations behind first-run setup (doc 05 section
 // 3.3, doc 02 section 2.2): the one way product code reaches `instance_state`,
@@ -37,6 +38,8 @@ export interface CompleteSetup {
   readonly ipPrefix: string | null;
   /** Truncated to 256 characters by the database. */
   readonly userAgent: string | null;
+  /** Jobs queued in the same transaction, only when the setup completes (doc 01 section 8.1). */
+  readonly jobs?: readonly QueuedJob[];
 }
 
 export interface SetupStore {
@@ -51,7 +54,8 @@ export interface SetupStore {
   /**
    * Creates the first account as a verified instance admin, its workspace with the owner membership
    * and the settings row, and a full session whose active workspace is the new one, exactly once and
-   * all in one database call. Any other outcome leaves the database as it was.
+   * all in one transaction, with the jobs it carries queued in that transaction. Any other outcome, and a job
+   * that cannot be queued, leaves the database as it was.
    */
   completeSetup(setup: CompleteSetup): Promise<SetupOutcome>;
 }
@@ -107,29 +111,37 @@ export function bindSetupStore(client: postgres.Sql): SetupStore {
       if (setup.tokenHash !== null) {
         assertHash(setup.tokenHash, "tokenHash");
       }
-      const rows = await client<OutcomeRow[]>`
-        SELECT sys_complete_setup(
-          ${setup.accountId}::uuid,
-          ${setup.workspaceId}::uuid,
-          ${setup.sessionId}::uuid,
-          ${setup.email}::text,
-          ${setup.displayName}::text,
-          ${setup.passwordHash}::text,
-          ${setup.locale}::text,
-          ${setup.workspaceName}::text,
-          ${setup.tokenRequired}::boolean,
-          ${setup.tokenHash}::bytea,
-          ${setup.sessionTokenHash}::bytea,
-          ${setup.ipPrefix}::cidr,
-          ${setup.userAgent}::text) AS outcome`;
-      const row = rows[0];
-      if (rows.length !== 1 || row === undefined) {
-        throw new Error("sys_complete_setup did not return exactly one row");
-      }
-      if (!isOutcome(row.outcome)) {
-        throw new Error("sys_complete_setup returned an outcome outside completed, setup_completed and forbidden");
-      }
-      return row.outcome;
+      const { jobs = [] } = setup;
+      return client.begin(async (tx) => {
+        const rows = await tx<OutcomeRow[]>`
+          SELECT sys_complete_setup(
+            ${setup.accountId}::uuid,
+            ${setup.workspaceId}::uuid,
+            ${setup.sessionId}::uuid,
+            ${setup.email}::text,
+            ${setup.displayName}::text,
+            ${setup.passwordHash}::text,
+            ${setup.locale}::text,
+            ${setup.workspaceName}::text,
+            ${setup.tokenRequired}::boolean,
+            ${setup.tokenHash}::bytea,
+            ${setup.sessionTokenHash}::bytea,
+            ${setup.ipPrefix}::cidr,
+            ${setup.userAgent}::text) AS outcome`;
+        const row = rows[0];
+        if (rows.length !== 1 || row === undefined) {
+          throw new Error("sys_complete_setup did not return exactly one row");
+        }
+        if (!isOutcome(row.outcome)) {
+          throw new Error("sys_complete_setup returned an outcome outside completed, setup_completed and forbidden");
+        }
+        if (row.outcome === "completed") {
+          for (const job of jobs) {
+            await enqueueInTransaction(tx, job);
+          }
+        }
+        return row.outcome;
+      });
     },
   };
 }

@@ -289,8 +289,8 @@ function checkDeclaration(raw: unknown, index: number, seenIds: Set<string>, see
       }
       const headers = isRecord(response) ? response["headers"] : undefined;
       if (headers !== undefined) {
-        if (kind === "empty" || !isRecord(headers)) {
-          need(`response ${status} headers must be an object on a jsonResponse or a problemResponse`);
+        if (!isRecord(headers)) {
+          need(`response ${status} headers must be an object`);
         } else {
           for (const [name, header] of Object.entries(headers)) {
             if (!/^[A-Za-z0-9-]+$/.test(name)) {
@@ -411,7 +411,11 @@ function buildOperation(op: OperationDefinition, converter: Converter): JsonObje
       }
       responses[status] = built;
     } else {
-      responses[status] = { description: response.description };
+      const built: JsonObject = { description: response.description };
+      if (response.headers !== undefined) {
+        built["headers"] = buildHeaders(response.headers, converter);
+      }
+      responses[status] = built;
     }
   }
   entry["responses"] = responses;

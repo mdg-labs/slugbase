@@ -21,6 +21,11 @@
 -- run before this file is applied, so the plpgsql body resolves it when it runs;
 -- the grants it needs are in 150-api-tokens.sql.
 --
+-- oidc_login_states: past expires_at. A state that was consumed is already gone;
+-- sys_oidc_state_consume refuses an expired one from the moment it is, so
+-- deleting the row later changes no answer. The grants it needs are in
+-- 170-oidc.sql.
+--
 -- It takes no argument, so a caller cannot widen what it deletes, and it uses no
 -- dynamic SQL. It is entered in src/system/registry.ts. slugbase_system, the
 -- owner, already holds DELETE on sessions (060-accounts-sessions.sql) and holds
@@ -58,6 +63,16 @@ BEGIN
   );
   GET DIAGNOSTICS v_deleted = ROW_COUNT;
   RETURN QUERY SELECT 'api_tokens'::text, v_deleted;
+
+  DELETE FROM public.oidc_login_states
+  WHERE state_hash IN (
+    SELECT s.state_hash FROM public.oidc_login_states s
+    WHERE s.expires_at <= v_now
+    LIMIT c_batch
+    FOR UPDATE SKIP LOCKED
+  );
+  GET DIAGNOSTICS v_deleted = ROW_COUNT;
+  RETURN QUERY SELECT 'oidc_login_states'::text, v_deleted;
 END
 $$;
 

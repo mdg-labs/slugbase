@@ -21,6 +21,7 @@ import {
   type StageImplementations,
   type StageName,
 } from "./http/chain.ts";
+import { invalidSubscriber, registeredSubscriber, type EventSubscriber, type RegisteredSubscriber } from "./events/index.ts";
 import { createHookDispatcher, invalidHookRefusals, invalidHooks, type HookRefusals, type HookRegistration, type ServerHooks } from "./hooks/index.ts";
 import { ProblemError, responseStage } from "./http/problem.ts";
 import { validation } from "./http/validation.ts";
@@ -30,6 +31,7 @@ import { loadCommittedDocument } from "./routes/committed-document.ts";
 import { probeRoutes } from "./routes/health.ts";
 import { authContribution } from "./routes/auth/index.ts";
 import { apiTokenRoutes } from "./routes/me/api-tokens.ts";
+import { identityRoutes } from "./routes/me/identities.ts";
 import { mfaRoutes } from "./routes/me/mfa.ts";
 import { profileRoutes } from "./routes/me/profile.ts";
 import { apiConfigRoute } from "./routes/meta/config.ts";
@@ -85,6 +87,12 @@ export interface ModuleContribution {
    * credentials to the chain; they cannot change where authentication runs.
    */
   readonly authenticators?: readonly Authenticator[];
+  /**
+   * Bindings to the domain events of `@slugbase/core`, each handled by the worker after the change that emitted
+   * the event is committed. Delivery is at least once, so a handler is idempotent on `eventId`; an event
+   * never vetoes or changes the flow that emitted it (doc 01 section 7.1).
+   */
+  readonly subscribers?: readonly EventSubscriber[];
 }
 
 /**
@@ -191,6 +199,7 @@ export type CompositionErrorCode =
   | "invalid_module"
   | "duplicate_module"
   | "invalid_hook"
+  | "invalid_subscriber"
   | "module_failed"
   | "duplicate_route"
   | "invalid_route"
@@ -256,6 +265,8 @@ export interface Composition {
   readonly schedules: readonly ScheduleDefinition[];
   readonly migrations: readonly MigrationChain[];
   readonly authenticators: readonly Authenticator[];
+  /** The event subscribers of the modules, in the order the modules were composed. */
+  readonly subscribers: readonly RegisteredSubscriber[];
   /** The hooks of the modules, in the order the modules were composed. */
   readonly hooks: readonly HookRegistration[];
 }
@@ -308,6 +319,7 @@ export function compose(
   const schedules: ScheduleDefinition[] = [];
   const chains: MigrationChain[] = [...migrations];
   const authenticators: Authenticator[] = [];
+  const subscribers: RegisteredSubscriber[] = [];
   const hooks: HookRegistration[] = [];
 
   for (const module of modules) {
@@ -347,6 +359,18 @@ export function compose(
     schedules.push(...(contribution.schedules ?? []));
     chains.push(...(contribution.migrations ?? []));
     authenticators.push(...(contribution.authenticators ?? []));
+
+    const declared: unknown = contribution.subscribers ?? [];
+    if (!Array.isArray(declared)) {
+      throw new CompositionError("invalid_subscriber", `module ${module.name} registers invalid subscribers: subscribers must be a list`);
+    }
+    for (const subscriber of declared as unknown[]) {
+      const problem = invalidSubscriber(subscriber);
+      if (problem !== undefined) {
+        throw new CompositionError("invalid_subscriber", `module ${module.name} registers an invalid subscriber: ${problem}`);
+      }
+      subscribers.push(registeredSubscriber(module.name, subscriber as EventSubscriber));
+    }
   }
 
   for (const binding of routes) {
@@ -390,7 +414,7 @@ export function compose(
     }
   }
 
-  return { routes, jobs, schedules, migrations: chains, authenticators, hooks };
+  return { routes, jobs, schedules, migrations: chains, authenticators, subscribers, hooks };
 }
 
 /** Answers a request no operation matches, or leaves it to the next handler by returning undefined. */
@@ -439,6 +463,7 @@ export function createServer(options: CreateServerOptions): Server {
     passwordPolicy,
     mail: adapters.mail,
     secretBox: adapters.secretBox,
+    identity: adapters.identity,
     now: options.now ?? Date.now,
   });
   builtInRoutes.push(...(auth.routes ?? []));
@@ -466,6 +491,8 @@ export function createServer(options: CreateServerOptions): Server {
   builtInRoutes.push(...profileRoutes({ withTenant: context.withTenant }));
   // So are the account's personal API tokens: created, listed and revoked in an account-level transaction on the account's own rows.
   builtInRoutes.push(...apiTokenRoutes({ withTenant: context.withTenant, cursorSecret: config.SESSION_SECRET }));
+  // So are the identities linked to the account: listed in an account-level transaction, unlinked by a system operation that checks the account keeps another way to sign in.
+  builtInRoutes.push(...identityRoutes({ withTenant: context.withTenant, store: authStore, cursorSecret: config.SESSION_SECRET }));
   // So is the second factor's management: enrolment reads the account's email for the authenticator entry and writes the sealed secret;
   // regenerating the backup codes and turning the factor off check a code, and the latter the password too.
   builtInRoutes.push(
