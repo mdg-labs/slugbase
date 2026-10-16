@@ -131,7 +131,8 @@ async function throughProvider(world: World, intent: "login" | "reauth", subject
   const started = await world.server.fetch(new Request(new URL(`${START}?intent=${intent}`, world.origin), { headers: cookie }));
   const authorizationUrl = started.headers.get("location") ?? "";
   const preAuth = cookieValue(started, PREAUTH_COOKIE);
-  if (started.status !== 302 || !authorizationUrl.startsWith(ISSUER) || preAuth === undefined) {
+  const atIssuer = URL.canParse(authorizationUrl) && new URL(authorizationUrl).origin === new URL(ISSUER).origin;
+  if (started.status !== 302 || !atIssuer || preAuth === undefined) {
     throw new Error(`the handshake did not start: ${authorizationUrl}`);
   }
   const callbackUrl = world.fake.approve(authorizationUrl, { subject });
