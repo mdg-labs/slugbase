@@ -1,4 +1,6 @@
-postgres.js 3.4.9, connection.js, execute(): a query run on a connection whose socket is gone.
+postgres.js 3.4.9, two defects after a lost connection.
+
+1. connection.js, execute(): a query run on a connection whose socket is gone.
 
 When the connection closes, closed() sets the socket to null and calls onclose,
 which rejects the Promise.race in sql.begin with CONNECTION_CLOSED, so the
@@ -14,12 +16,53 @@ query that was accepted: its callers (the handler in index.js) take a falsy
 result to mean the connection is busy and move it to the full queue, which
 would take a closed connection out of reconnecting.
 
+2. connection.js, closed(): a server error left over from a lost connection.
+
+When a backend is terminated (57P01) while a query runs, ErrorResponse() keeps
+the error in errorResponse, because a query is running; only the
+ReadyForQuery() that ends that query hands it over, and none follows, because
+the server ends the connection instead. closed() rejects the running query
+with CONNECTION_CLOSED (or returns early, see below), but leaves errorResponse
+set. The next query that takes the connection (index.js connect(), also called
+from onclose for a waiting one) becomes its initial query. The ReadyForQuery
+that ends the startup of the new socket finds the old error and passes it to
+errored(), which rejects that initial query with the old PostgresError. The
+first query after the loss then fails with an error of the previous connection,
+although only the request that was running when the connection was lost should
+fail.
+
+This patch clears errorResponse in closed(), next to the socket.
+
+closed() leaves query set, so the ReadyForQuery that ends the startup of the
+next socket still settles the query that was running when the connection was
+lost. Without the stored error it resolves that query with the result it holds,
+which does nothing once closed() or the socket's error handler has rejected it
+with its own connection error.
+
+closed() returns early, before it rejects anything, when initial is set
+(reconnect(), src/connection.js:450). That includes a 57P01 during the fetch_types query
+that fetchArrayTypes() runs at startup, which is on by default. That query is
+then the running one, and it is never rejected with CONNECTION_CLOSED:
+ - Before the patch, the ReadyForQuery of the new socket rejected it with the
+   stored error and errored() rejected initial too, so the first query on the
+   connection failed with the old PostgresError. fetchArrayTypes() is not
+   awaited (ReadyForQuery() returns its promise), so the rejection of its
+   query was also an unhandled rejection.
+ - After the patch, that query resolves with the Result it holds: the rows
+   received before the connection was lost, empty if there were none.
+   fetchArrayTypes() passes them to addArrayType(), which registers the array
+   parsers and serializers of those rows. connected() has set needsTypes again
+   for the new socket, so the same ReadyForQuery goes on to start
+   fetchArrayTypes() once more, which fetches them all, and initial runs
+   after that. No array type stays unregistered, and the first query on the
+   connection succeeds.
+
 Upstream: no issue is linked yet; the defect is to be reported to
 https://github.com/porsager/postgres. Drop this patch when a release carries
 the fix.
 
 diff --git a/cjs/src/connection.js b/cjs/src/connection.js
-index 07f6716702ac888215c86ad6e0071aaf55ae519c..567b807b304eebd3d9f4e22f2a2652e733c85916 100644
+index 07f6716702ac888215c86ad6e0071aaf55ae519c..9af8512c45680f7a503cd45edf3048c8b31cb79c 100644
 --- a/cjs/src/connection.js
 +++ b/cjs/src/connection.js
 @@ -157,6 +157,11 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
@@ -34,8 +77,16 @@ index 07f6716702ac888215c86ad6e0071aaf55ae519c..567b807b304eebd3d9f4e22f2a2652e7
      if (stream)
        return queryError(q, Errors.generic('COPY_IN_PROGRESS', 'You cannot execute queries during copy'))
  
+@@ -446,6 +451,7 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+ 
+     socket.removeAllListeners()
+     socket = null
++    errorResponse = null
+ 
+     if (initial)
+       return reconnect()
 diff --git a/src/connection.js b/src/connection.js
-index 1b1cccde43b4570d5d071d6ffaab2669b3c2065a..6d06c481e5d6889abf207be32f0c5be82c95b308 100644
+index 1b1cccde43b4570d5d071d6ffaab2669b3c2065a..f661d4c52a89b1830686c1f6f5b4aed4c320f4f7 100644
 --- a/src/connection.js
 +++ b/src/connection.js
 @@ -157,6 +157,11 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
@@ -50,3 +101,11 @@ index 1b1cccde43b4570d5d071d6ffaab2669b3c2065a..6d06c481e5d6889abf207be32f0c5be8
      if (stream)
        return queryError(q, Errors.generic('COPY_IN_PROGRESS', 'You cannot execute queries during copy'))
  
+@@ -446,6 +451,7 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+ 
+     socket.removeAllListeners()
+     socket = null
++    errorResponse = null
+ 
+     if (initial)
+       return reconnect()

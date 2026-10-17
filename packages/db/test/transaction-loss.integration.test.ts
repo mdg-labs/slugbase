@@ -166,6 +166,45 @@ describe("withTenant", () => {
     expect(error).toBeDefined();
     expect(escapes.uncaught).toEqual([]);
   });
+
+  // The server's termination error reaches the client with no ReadyForQuery
+  // after it; only the request that was running fails, and the first query on
+  // the reconnected connection gets its own answer.
+  it("runs the next query on the same pool after the backend was terminated", async () => {
+    const client = pool(appUrl());
+    const { withTenant } = bindTenantDatabase(client);
+    await rejection(
+      withTenant(TENANT, async (tx) => {
+        await tenantHandle(tx).execute(sql`SELECT pg_terminate_backend(pg_backend_pid())`);
+      }),
+    );
+    expect(await client`SELECT 1 AS one`).toHaveLength(1);
+  });
+
+  it("runs the next withTenant transaction on the same pool after the backend was terminated", async () => {
+    const client = pool(appUrl());
+    const { withTenant } = bindTenantDatabase(client);
+    await rejection(
+      withTenant(TENANT, async (tx) => {
+        await tenantHandle(tx).execute(sql`SELECT pg_terminate_backend(pg_backend_pid())`);
+      }),
+    );
+    const answer = await withTenant(TENANT, async (tx) => tenantHandle(tx).execute(sql`SELECT 1 AS one`));
+    expect(answer).toHaveLength(1);
+  });
+
+  it("runs the next query on a pool whose relay delivered the termination error", async () => {
+    const started = await relay("loss_marker_terminated", true);
+    const client = pool(appUrl(started.port));
+    const { withTenant } = bindTenantDatabase(client);
+    await rejection(
+      withTenant(TENANT, async (tx) => {
+        await tenantHandle(tx).execute(sql`SELECT 'loss_marker_terminated'`);
+      }),
+    );
+    expect(started.dropped()).toBe(true);
+    expect(await client`SELECT 1 AS one`).toHaveLength(1);
+  });
 });
 
 describe("a system repository transaction", () => {
