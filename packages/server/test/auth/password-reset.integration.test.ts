@@ -605,6 +605,172 @@ describe("POST /api/v1/auth/password/reset", { timeout: TEST_TIMEOUT_MS }, () =>
   });
 });
 
+describe("the password changed notice of POST /api/v1/auth/password/reset", { timeout: TEST_TIMEOUT_MS }, () => {
+  async function setLocale(accountId: string, locale: "en" | "de"): Promise<void> {
+    await database().owner.begin(async (tx) => {
+      await tx`SELECT set_config('app.account_id', ${accountId}, true)`;
+      await tx`UPDATE accounts SET locale = ${locale} WHERE id = ${accountId}`;
+    });
+  }
+
+  it("queues one passwordChanged mail job for the account whose password was reset, and none for another", async () => {
+    const world = serve();
+    const owner = await ownerAccount();
+    const bystander = await ownerAccount();
+    const token = await issueToken(owner.id);
+
+    expect((await reset(world, { token: token.value, newPassword: NEW_PASSWORD })).status).toBe(200);
+
+    expect((await mailJobs()).map((job) => job.data)).toEqual([{ template: "passwordChanged", accountId: owner.id }]);
+    expect((await mailJobs()).map((job) => job.data["accountId"])).not.toContain(bystander.id);
+  });
+
+  it("queues one for an account with a second factor too, which answers next mfa", async () => {
+    const world = serve();
+    const owner = await ownerAccount();
+    await setSecondFactor(owner.id);
+    const token = await issueToken(owner.id);
+
+    expect(await (await reset(world, { token: token.value, newPassword: NEW_PASSWORD })).json()).toEqual({ next: "mfa" });
+
+    expect((await mailJobs()).map((job) => job.data["template"])).toEqual(["passwordChanged"]);
+  });
+
+  it("queues none for a token that is refused: used, expired, unknown, replaced, of an unverified account or of a disabled one", async () => {
+    const world = serve();
+    const owner = await ownerAccount();
+    const used = await issueToken(owner.id);
+    expect((await reset(world, { token: used.value, newPassword: NEW_PASSWORD })).status).toBe(200);
+    const stale = await issueToken(owner.id);
+    await ageToken(owner.id, HOUR_SECONDS + 1);
+    const older = await issueToken(owner.id);
+    await issueToken(owner.id);
+    const registrant = await seedAccount(database(), { password: OLD_PASSWORD });
+    const unverified = await issueToken(registrant.id);
+    const disabled = await ownerAccount();
+    const disabledToken = await issueToken(disabled.id);
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`UPDATE accounts SET disabled_at = now() WHERE id = ${disabled.id}`;
+    });
+    const before = (await mailJobs()).length;
+
+    for (const token of [used, stale, older, unverified, disabledToken, generateCredentialToken()]) {
+      expect((await reset(world, { token: token.value, newPassword: NEW_PASSWORD })).status).toBe(410);
+    }
+
+    expect(await mailJobs()).toHaveLength(before);
+  });
+
+  it("queues none for a weak password, which leaves the link usable for one notice afterwards", async () => {
+    const world = serve();
+    const owner = await ownerAccount();
+    const token = await issueToken(owner.id);
+
+    expect((await reset(world, { token: token.value, newPassword: "short" })).status).toBe(422);
+    expect(await mailJobs()).toEqual([]);
+
+    expect((await reset(world, { token: token.value, newPassword: NEW_PASSWORD })).status).toBe(200);
+    expect(await mailJobs()).toHaveLength(1);
+  });
+
+  it("queues exactly one when several submissions of one link race", async () => {
+    const world = serve();
+    const owner = await ownerAccount();
+    const token = await issueToken(owner.id);
+
+    await Promise.all(Array.from({ length: PARALLEL }, () => reset(world, { token: token.value, newPassword: NEW_PASSWORD })));
+
+    expect(await mailJobs()).toHaveLength(1);
+  });
+
+  it("queues nothing, and still resets, when the mail port cannot send", async () => {
+    const world = serve({ mail: { available: false, send: () => Promise.reject(new Error("no mail")) } });
+    const owner = await ownerAccount();
+    const token = await issueToken(owner.id);
+
+    expect((await reset(world, { token: token.value, newPassword: NEW_PASSWORD })).status).toBe(200);
+
+    expect(await mailJobs()).toEqual([]);
+    expect(await passwordIs(owner.id, NEW_PASSWORD)).toBe(true);
+  });
+
+  it("undoes the reset, the use of the link and every session when the job cannot be queued, and answers 5xx with no cookie", async () => {
+    const world = serve();
+    const owner = await ownerAccount();
+    const session = await signInAs(world, owner);
+    const token = await issueToken(owner.id);
+    await database().owner.unsafe(`
+      CREATE FUNCTION public.refuse_job() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'no job'; END $$;
+      CREATE TRIGGER refuse_job BEFORE INSERT ON pgboss.job FOR EACH ROW EXECUTE FUNCTION public.refuse_job();`);
+    try {
+      const failed = await reset(world, { token: token.value, newPassword: NEW_PASSWORD });
+      expect(failed.status).toBeGreaterThanOrEqual(500);
+      expect(failed.headers.get("set-cookie")).toBeNull();
+    } finally {
+      await database().owner.unsafe("DROP TRIGGER refuse_job ON pgboss.job; DROP FUNCTION public.refuse_job()");
+    }
+
+    expect(await mailJobs()).toEqual([]);
+    expect(await passwordIs(owner.id, OLD_PASSWORD)).toBe(true);
+    expect((await probe(world, session)).status).toBe(200);
+    expect((await credentialTokens()).map((row) => row.used_at)).toEqual([null]);
+    expect((await reset(world, { token: token.value, newPassword: NEW_PASSWORD })).status).toBe(200);
+    expect(await mailJobs()).toHaveLength(1);
+  });
+
+  describe("through the worker", () => {
+    const mail = new InMemoryMail();
+    let worker: RunningWorker | undefined;
+
+    beforeEach(() => {
+      mail.clear();
+    });
+
+    afterEach(async () => {
+      await worker?.shutdown();
+      worker = undefined;
+    });
+
+    async function startWorker(): Promise<void> {
+      const config = loadConfig("worker", { ...productionEnv(), NODE_ENV: "test", DATABASE_URL: appUrl(database()) }).config;
+      worker = await createWorker({
+        config,
+        adapters: { ...adapters(), mail },
+        modules: [],
+        logger: recordingLogger(),
+        database: tenantDatabase(database()),
+        pollingIntervalSeconds: POLL_SECONDS,
+        shutdownTimeoutMs: 500,
+      }).start();
+    }
+
+    async function until(check: () => boolean, what: string): Promise<void> {
+      const deadline = Date.now() + WAIT_MS;
+      while (!check()) {
+        if (Date.now() > deadline) {
+          throw new Error(`timed out waiting for ${what}`);
+        }
+        await sleep(50);
+      }
+    }
+
+    it("sends the existing password changed email once, in the language of the account", async () => {
+      const world = serve({ mail });
+      const owner = await ownerAccount();
+      await setLocale(owner.id, "de");
+      const token = await issueToken(owner.id);
+
+      expect((await reset(world, { token: token.value, newPassword: NEW_PASSWORD })).status).toBe(200);
+      await startWorker();
+      await until(() => mail.sent.length === 1, "the notice to reach the mail port");
+      await sleep(POLL_SECONDS * 2000);
+
+      expect(mail.sent).toEqual([{ template: "passwordChanged", to: owner.email, locale: "de", data: { displayName: "Test account" } }]);
+    });
+  });
+});
+
 describe("a reset requested before the owner verified the address (doc 02 section 2.6)", { timeout: TEST_TIMEOUT_MS }, () => {
   it("answers 410 token_expired once the owner has verified, and leaves the owner's password in force", async () => {
     const world = serve();

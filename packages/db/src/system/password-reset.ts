@@ -1,5 +1,6 @@
 import type postgres from "postgres";
 import { queueJobsForAddress, type AddressJobs } from "./address-jobs.ts";
+import { enqueueInTransaction, type QueuedJob } from "./queue.ts";
 
 // The wrappers behind `POST /auth/password/forgot` and `POST /auth/password/reset` (doc 05 section 3.3, doc 02
 // section 2.5, doc 04 sections 4.5 and 10.2, doc 10 T4, T8 and T17). They run on the pool of the auth store, as
@@ -24,6 +25,12 @@ export interface PasswordReset {
   readonly userAgent: string | null;
   /** SHA-256 of the token of the session cookie the request carried; that session ends. */
   readonly replacedTokenHash: Buffer | null;
+  /**
+   * The jobs queued for the account whose password was reset, built once the token is accepted; none when it
+   * is absent. They are queued in the transaction of the reset, so they exist exactly when the reset does: a
+   * job that cannot be queued undoes the reset, and a refused token queues none.
+   */
+  readonly jobsOnReset?: (accountId: string) => readonly QueuedJob[];
 }
 
 export interface ResetPasswordOutcome {
@@ -43,7 +50,7 @@ export interface PasswordResetStore {
   /**
    * Redeems a password-reset token once: replaces the password hash, deletes every session of the account and
    * creates the new session (partial when the account has a second factor), replacing the session of
-   * `replacedTokenHash`, all in one transaction. Undefined, with nothing changed but the token's use, for an
+   * `replacedTokenHash`, and queues the jobs of `jobsOnReset`, all in one transaction. Undefined, with nothing changed but the token's use, for an
    * unknown, used or expired token and for an account that is disabled or whose address was never verified,
    * which a caller does not tell apart.
    */
@@ -76,26 +83,31 @@ export function bindPasswordResetStore(client: postgres.Sql): PasswordResetStore
       if (reset.replacedTokenHash !== null) {
         assertHash(reset.replacedTokenHash, "replacedTokenHash");
       }
-      const rows = await client<ResetRow[]>`
-        SELECT reset_account_id, session_level FROM sys_password_reset(
-          ${reset.tokenHash}::bytea,
-          ${reset.passwordHash}::text,
-          ${reset.sessionId}::uuid,
-          ${reset.sessionTokenHash}::bytea,
-          ${reset.ipPrefix}::cidr,
-          ${reset.userAgent}::text,
-          ${reset.replacedTokenHash}::bytea)`;
-      if (rows.length > 1) {
-        throw new Error("sys_password_reset returned more than one row");
-      }
-      const row = rows[0];
-      if (row === undefined) {
-        return undefined;
-      }
-      if (row.session_level !== "partial" && row.session_level !== "full") {
-        throw new Error("sys_password_reset returned a level outside partial and full");
-      }
-      return { accountId: row.reset_account_id, next: row.session_level === "partial" ? "mfa" : "done" };
+      return client.begin(async (tx) => {
+        const rows = await tx<ResetRow[]>`
+          SELECT reset_account_id, session_level FROM sys_password_reset(
+            ${reset.tokenHash}::bytea,
+            ${reset.passwordHash}::text,
+            ${reset.sessionId}::uuid,
+            ${reset.sessionTokenHash}::bytea,
+            ${reset.ipPrefix}::cidr,
+            ${reset.userAgent}::text,
+            ${reset.replacedTokenHash}::bytea)`;
+        if (rows.length > 1) {
+          throw new Error("sys_password_reset returned more than one row");
+        }
+        const row = rows[0];
+        if (row === undefined) {
+          return undefined;
+        }
+        if (row.session_level !== "partial" && row.session_level !== "full") {
+          throw new Error("sys_password_reset returned a level outside partial and full");
+        }
+        for (const job of reset.jobsOnReset?.(row.reset_account_id) ?? []) {
+          await enqueueInTransaction(tx, job);
+        }
+        return { accountId: row.reset_account_id, next: row.session_level === "partial" ? "mfa" : "done" };
+      });
     },
   };
 }

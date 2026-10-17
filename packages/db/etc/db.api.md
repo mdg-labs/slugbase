@@ -666,6 +666,7 @@ export interface PasswordChange {
 // @public (undocumented)
 export interface PasswordReset {
     readonly ipPrefix: string | null;
+    readonly jobsOnReset?: (accountId: string) => readonly QueuedJob[];
     readonly passwordHash: string;
     readonly replacedTokenHash: Buffer | null;
     readonly sessionId: string;

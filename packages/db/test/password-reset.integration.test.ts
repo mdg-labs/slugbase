@@ -283,6 +283,126 @@ describe("resetPassword", () => {
   });
 });
 
+describe("resetPassword with jobs", () => {
+  function notice(accountId: string): QueuedJob {
+    return { id: freshId(), queue: MAIL_QUEUE, data: { template: "passwordChanged", accountId } };
+  }
+
+  function withNotice(tokenHash: Buffer, asked: string[] = []): PasswordReset {
+    return reset(tokenHash, {
+      jobsOnReset: (accountId) => {
+        asked.push(accountId);
+        return [notice(accountId)];
+      },
+    });
+  }
+
+  it("queues the jobs built for the account in the transaction of the reset, once", async () => {
+    const owner = await account();
+    const other = await account();
+    const asked: string[] = [];
+
+    expect(await store.resetPassword(withNotice(await issue(owner), asked))).toEqual({ accountId: owner, next: "done" });
+
+    expect(asked).toEqual([owner]);
+    expect((await queued()).map((job) => job.data)).toEqual([{ template: "passwordChanged", accountId: owner }]);
+    expect((await queued()).map((job) => job.data["accountId"])).not.toContain(other);
+  });
+
+  it("queues the jobs for an account with a second factor as well, whose session is partial", async () => {
+    const owner = await account({ mfa: true });
+
+    expect(await store.resetPassword(withNotice(await issue(owner)))).toEqual({ accountId: owner, next: "mfa" });
+
+    expect((await queued()).map((job) => job.data["accountId"])).toEqual([owner]);
+  });
+
+  it("queues nothing and builds nothing for an unknown, used, expired or foreign token", async () => {
+    const owner = await account();
+    const used = await issue(owner);
+    expect(await store.resetPassword(reset(used))).toBeDefined();
+    await db.owner`TRUNCATE pgboss.job`;
+    const stale = await issue(owner);
+    await asSystem(db, (tx) => tx`UPDATE credential_tokens SET expires_at = now() - interval '1 second' WHERE token_hash = ${stale}`);
+    const verification = await issue(owner, "email_verify");
+    const asked: string[] = [];
+
+    for (const hash of [used, stale, freshToken().hash, verification]) {
+      expect(await store.resetPassword(withNotice(hash, asked))).toBeUndefined();
+    }
+
+    expect(asked).toEqual([]);
+    expect(await queued()).toEqual([]);
+  });
+
+  it("queues nothing for an account whose address was never verified, and still uses up its token", async () => {
+    const owner = await account({ verified: false });
+
+    expect(await store.resetPassword(withNotice(await issue(owner)))).toBeUndefined();
+
+    expect(await queued()).toEqual([]);
+    expect(await tokenRows(owner)).toEqual([{ used: true }]);
+  });
+
+  it("queues nothing for an account that was disabled after the token was issued", async () => {
+    const owner = await account();
+    const token = await issue(owner);
+    await asSystem(db, (tx) => tx`UPDATE accounts SET disabled_at = now() WHERE id = ${owner}`);
+
+    expect(await store.resetPassword(withNotice(token))).toBeUndefined();
+
+    expect(await queued()).toEqual([]);
+  });
+
+  it("queues exactly one job when several redemptions of one token race", async () => {
+    const owner = await account();
+    const token = await issue(owner);
+
+    await Promise.all(Array.from({ length: PARALLEL_CALLS }, () => store.resetPassword(withNotice(token))));
+
+    expect(await queued()).toHaveLength(1);
+  });
+
+  it("undoes the new password, the deleted sessions, the use of the token and the jobs when a job cannot be queued, and rejects", async () => {
+    const owner = await account();
+    const kept = await session(owner);
+    const token = await issue(owner);
+    const missing: QueuedJob = { id: freshId(), queue: "no.such.queue", data: {} };
+
+    await expect(store.resetPassword(reset(token, { jobsOnReset: (accountId) => [notice(accountId), missing] }))).rejects.toThrow();
+
+    expect(await queued()).toEqual([]);
+    expect(await accountRow(owner)).toEqual({ password_hash: OLD_HASH, verified: true, password_changed: false });
+    expect((await sessionRows(db, owner)).map((row) => row.id)).toEqual([kept]);
+    expect(await tokenRows(owner)).toEqual([{ used: false }]);
+    expect(await store.resetPassword(withNotice(token))).toEqual({ accountId: owner, next: "done" });
+    expect(await queued()).toHaveLength(1);
+  });
+
+  it("queues no job when the session cannot be created", async () => {
+    const owner = await account();
+    const token = await issue(owner);
+    await db.owner.unsafe(`
+      CREATE FUNCTION public.refuse_session() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'no session'; END $$;
+      CREATE TRIGGER refuse_session BEFORE INSERT ON public.sessions FOR EACH ROW EXECUTE FUNCTION public.refuse_session();`);
+    try {
+      await expect(store.resetPassword(withNotice(token))).rejects.toThrow();
+    } finally {
+      await db.owner.unsafe("DROP TRIGGER refuse_session ON public.sessions; DROP FUNCTION public.refuse_session()");
+    }
+
+    expect(await queued()).toEqual([]);
+  });
+
+  it("queues nothing when the reset carries no jobs", async () => {
+    const owner = await account();
+
+    expect(await store.resetPassword(reset(await issue(owner)))).toEqual({ accountId: owner, next: "done" });
+
+    expect(await queued()).toEqual([]);
+  });
+});
+
 describe("requestPasswordReset", () => {
   function mail(accountId: string): QueuedJob {
     return { id: freshId(), queue: MAIL_QUEUE, data: { template: "passwordReset", accountId } };
