@@ -28,6 +28,7 @@ const authStore: AuthStore = {
   emailKey: unexpected,
   loginLookup: unexpected,
   createSession: unexpected,
+  signInAlertContext: unexpected,
   lookupSession: unexpected,
   lookupApiToken: unexpected,
   revokeSession: unexpected,

@@ -1144,7 +1144,7 @@ describe("sys_account_mfa_enabled", () => {
   });
 });
 
-describe("the jobs of activateMfa and disableMfa", () => {
+describe("the jobs of activateMfa, disableMfa and completeMfaSignIn", () => {
   const QUEUE = "probe.send";
 
   interface JobRow {
@@ -1266,5 +1266,32 @@ describe("the jobs of activateMfa and disableMfa", () => {
 
     expect(await queued([replayed.id, noSession.id])).toEqual([]);
     expect((await mfaRow(accountId)).enabled_at).toBeInstanceOf(Date);
+  });
+
+  it("queues the jobs of a sign-in completion in the transaction that makes the session full", async () => {
+    const { accountId, step } = await enrolled(700);
+    const { id } = await partialSignIn(accountId);
+    const job = { id: freshId(), queue: QUEUE, data: { template: "probe" } };
+    expect(await store.completeMfaSignIn({ accountId, sessionId: id, factor: { kind: "totp", step: step + 1 }, newTokenHash: freshToken().hash, jobs: [job] })).toBe("completed");
+    expect((await queued([job.id])).map((row) => row.id)).toEqual([job.id]);
+  });
+
+  it("queues no job of a sign-in completion for a replayed step or a session that is gone", async () => {
+    const { accountId, step } = await enrolled(800);
+    const { id } = await partialSignIn(accountId);
+    const job = { id: freshId(), queue: QUEUE, data: { template: "probe" } };
+    expect(await store.completeMfaSignIn({ accountId, sessionId: id, factor: { kind: "totp", step }, newTokenHash: freshToken().hash, jobs: [job] })).toBe("replayed");
+    expect(await store.completeMfaSignIn({ accountId, sessionId: freshId(), factor: { kind: "totp", step: step + 1 }, newTokenHash: freshToken().hash, jobs: [job] })).toBe("no_session");
+    expect(await queued([job.id])).toEqual([]);
+  });
+
+  it("leaves the session partial and the step unspent when a job of a sign-in completion cannot be queued, and rejects", async () => {
+    const { accountId, step } = await enrolled(900);
+    const { id, hash } = await partialSignIn(accountId);
+    const job = { id: freshId(), queue: "probe.missing", data: { template: "probe" } };
+    await expect(store.completeMfaSignIn({ accountId, sessionId: id, factor: { kind: "totp", step: step + 1 }, newTokenHash: freshToken().hash, jobs: [job] })).rejects.toThrow("probe.missing");
+    expect((await store.lookupSession(hash))?.level).toBe("partial");
+    expect((await mfaRow(accountId)).last_step).toBe(String(step));
+    expect(await queued([job.id])).toEqual([]);
   });
 });

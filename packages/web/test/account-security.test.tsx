@@ -45,13 +45,17 @@ interface ServerOptions {
   password?: (call: number) => Response | Promise<Response>;
   reauth?: (call: number) => Response | Promise<Response>;
   revoke?: () => Response | Promise<Response>;
+  /** The answer to `PATCH /me`, which otherwise applies the change to the account the server holds. */
+  update?: (call: number) => Response | Promise<Response>;
   hasPassword?: boolean;
+  signinAlerts?: boolean;
 }
 
 /** A server with a signed-in account whose sessions are `initial`, which revokes the sessions it is told to. */
-function stubServer({ sessions, password, reauth, revoke, hasPassword = true }: ServerOptions = {}, initial: readonly Session[] = [CURRENT, LAPTOP, PHONE]): Server {
+function stubServer({ sessions, password, reauth, revoke, update, hasPassword = true, signinAlerts = true }: ServerOptions = {}, initial: readonly Session[] = [CURRENT, LAPTOP, PHONE]): Server {
   let listed = [...initial];
   let ended = false;
+  let alerts = signinAlerts;
   const calls: Call[] = [];
   const fetch = vi.fn<Transport>(async (request) => {
     const { pathname, search } = new URL(request.url);
@@ -69,10 +73,19 @@ function stubServer({ sessions, password, reauth, revoke, hasPassword = true }: 
     if (ended && (pathname === ME_PATH || pathname === SESSION_PATH)) {
       return problem(401, "unauthenticated", "req-401");
     }
-    if (pathname === ME_PATH) {
-      return json({ ...(meBody() as { account: object }), account: { ...ACCOUNT_BODY, hasPassword } });
+    if (pathname === ME_PATH && request.method === "GET") {
+      const body = meBody() as { account: object };
+      return json({ ...body, account: { ...body.account, hasPassword, signinAlerts: alerts } });
     }
     calls.push(call);
+    if (pathname === ME_PATH && request.method === "PATCH") {
+      const answer = await update?.(calls.filter((entry) => entry.path === ME_PATH).length);
+      if (answer !== undefined) {
+        return answer;
+      }
+      alerts = (call.body as { signinAlerts: boolean }).signinAlerts;
+      return json({ ...ACCOUNT_BODY, hasPassword, signinAlerts: alerts });
+    }
     if (pathname === SESSION_PATH && request.method === "GET") {
       return search.includes("limit=1&") || search.endsWith("limit=1") ? json({ items: listed.slice(0, 1), nextCursor: null }) : (sessions?.() ?? json({ items: listed, nextCursor: null }));
     }
@@ -155,6 +168,80 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   document.documentElement.removeAttribute("lang");
+});
+
+describe("the sign-in alerts switch", () => {
+  it("shows the switch on, as the account has it, and turning it off sends exactly that change", async () => {
+    const server = stubServer();
+    await openSecurity();
+    const alerts = await screen.findByRole("switch", { name: "Email me when a new device signs in" });
+    expect(alerts.getAttribute("aria-checked")).toBe("true");
+
+    await act_(() => {
+      fireEvent.click(alerts);
+    });
+
+    await waitFor(() => {
+      expect(server.to("PATCH", ME_PATH).map((call) => call.body)).toEqual([{ signinAlerts: false }]);
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("switch", { name: "Email me when a new device signs in" }).getAttribute("aria-checked")).toBe("false");
+    });
+    expect(screen.queryByText("This change was not saved.")).toBeNull();
+  });
+
+  it("shows an account that has the alerts off as off, and turning them on sends that change", async () => {
+    const server = stubServer({ signinAlerts: false });
+    await openSecurity();
+    const alerts = await screen.findByRole("switch", { name: "Email me when a new device signs in" });
+    expect(alerts.getAttribute("aria-checked")).toBe("false");
+
+    await act_(() => {
+      fireEvent.click(alerts);
+    });
+
+    await waitFor(() => {
+      expect(server.to("PATCH", ME_PATH).map((call) => call.body)).toEqual([{ signinAlerts: true }]);
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("switch", { name: "Email me when a new device signs in" }).getAttribute("aria-checked")).toBe("true");
+    });
+  });
+
+  it("puts the switch back and says so when the server refuses the change", async () => {
+    const server = stubServer({ update: () => problem(503, "unavailable", "req-503") });
+    await openSecurity();
+    const alerts = await screen.findByRole("switch", { name: "Email me when a new device signs in" });
+
+    await act_(() => {
+      fireEvent.click(alerts);
+    });
+
+    expect(await screen.findByText("This change was not saved.")).toBeTruthy();
+    expect(server.to("PATCH", ME_PATH)).toHaveLength(1);
+    expect(screen.getByRole("switch", { name: "Email me when a new device signs in" }).getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("puts the switch back and says so when the request cannot be made", async () => {
+    stubServer({ update: () => Promise.reject(new TypeError("Failed to fetch")) });
+    await openSecurity();
+
+    await act_(() => {
+      fireEvent.click(screen.getByRole("switch", { name: "Email me when a new device signs in" }));
+    });
+
+    expect(await screen.findByText("This change was not saved.")).toBeTruthy();
+    expect(screen.getByRole("switch", { name: "Email me when a new device signs in" }).getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("is read in German", async () => {
+    vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["de-DE", "de"]);
+    stubServer();
+    window.history.replaceState(null, "", "/settings/account/security");
+    const App = createWebApp({ extensions: [] });
+    await renderApp(<App />);
+    expect(await screen.findByRole("switch", { name: "Per E-Mail benachrichtigen, wenn sich ein neues Gerät anmeldet" })).toBeTruthy();
+  });
 });
 
 describe("the security page", () => {

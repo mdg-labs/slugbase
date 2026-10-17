@@ -9,11 +9,12 @@ import { meQuery } from "./me.ts";
 import { LinkedSignInCard } from "./linked-sign-in-card.tsx";
 import { PasswordCard } from "./password-card.tsx";
 import { SessionsCard } from "./sessions-card.tsx";
+import { SignInAlertsCard } from "./signin-alerts-card.tsx";
 import { TwoFactorCard } from "./two-factor-card.tsx";
 
 const SECURITY_PATH = "/settings/account/security";
 
-/** `/settings/account/security` (doc 03 section 11.2): the password, two-factor authentication, sessions and linked sign-in methods of the signed-in account. */
+/** `/settings/account/security` (doc 03 section 11.2): the password, two-factor authentication, sign-in alerts, sessions and linked sign-in methods of the signed-in account. */
 export function AccountSecurityPage(): ReactElement {
   const { t } = useTranslation();
   const router = useRouter();
@@ -68,6 +69,7 @@ export function AccountSecurityPage(): ReactElement {
       ) : null}
       <SessionsCard />
       <LinkedSignInCard />
+      {me.data === undefined ? null : <SignInAlertsCard enabled={me.data.account.signinAlerts} key={`alerts-${me.data.account.id}`} />}
     </div>
   );
 }

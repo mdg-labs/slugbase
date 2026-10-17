@@ -83,6 +83,10 @@
             "$ref": "#/components/schemas/Onboarding",
             "description": "The stored state of the Getting started checklist"
           },
+          "signinAlerts": {
+            "description": "Whether an email is sent when a password sign-in comes from a device the account has not signed in from",
+            "type": "boolean"
+          },
           "singleKeyShortcuts": {
             "description": "Whether single-key shortcuts are on; modifier shortcuts always work",
             "type": "boolean"
@@ -106,6 +110,7 @@
           "accent",
           "defaultView",
           "singleKeyShortcuts",
+          "signinAlerts",
           "aiOptOut",
           "analyticsConsent",
           "onboarding",
@@ -1289,6 +1294,10 @@
           },
           "onboarding": {
             "$ref": "#/components/schemas/OnboardingChanges"
+          },
+          "signinAlerts": {
+            "description": "Whether an email is sent when a password sign-in comes from a device the account has not signed in from",
+            "type": "boolean"
           },
           "singleKeyShortcuts": {
             "description": "Whether single-key shortcuts are on; modifier shortcuts always work",

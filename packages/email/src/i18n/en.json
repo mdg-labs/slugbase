@@ -35,5 +35,19 @@
     "notYou": "If you did not register, you can ignore this email.",
     "action": "Verify email address",
     "footer": "You are receiving this email because this address was used to register a {appName} account."
+  },
+  "newSignIn": {
+    "subject": "New sign-in to your {appName} account",
+    "greeting": "Hi {name},",
+    "greetingAnonymous": "Hi,",
+    "body": "Your {appName} account was signed in to from a device or network it has not been used from before.",
+    "time": "Time",
+    "browser": "Browser",
+    "network": "Network",
+    "unknown": "Unknown",
+    "notYou": "If this was not you, change your password and sign out your other sessions right away.",
+    "action": "Review your sessions",
+    "turnOff": "You can turn these emails off in the security settings of your account.",
+    "footer": "You are receiving this email because a new device signed in to your {appName} account."
   }
 }

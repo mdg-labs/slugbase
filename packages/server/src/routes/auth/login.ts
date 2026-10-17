@@ -30,7 +30,7 @@ async function limitKey(store: AuthStore, email: string): Promise<string> {
     .digest("hex");
 }
 
-export function loginRoute({ store, passwords, cookie }: LoginRouteOptions): RouteBinding {
+export function loginRoute({ store, passwords, mail, cookie }: LoginRouteOptions): RouteBinding {
   return route(login).handle(async ({ body }, context) => {
     const takeEmailLimit = context.get("takeEmailLimit");
     if (takeEmailLimit === undefined) {
@@ -41,7 +41,7 @@ export function loginRoute({ store, passwords, cookie }: LoginRouteOptions): Rou
     const header = context.req.raw.headers.get("cookie");
     const carried = header === null ? undefined : readCookie(header, cookie.name);
     const signedIn = await signIn(
-      { store, passwords },
+      { store, passwords, mail },
       {
         email: body.email,
         password: body.password,

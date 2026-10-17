@@ -487,6 +487,8 @@ export interface components {
             mfaEnabled: boolean;
             /** @description The stored state of the Getting started checklist */
             onboarding: components["schemas"]["Onboarding"];
+            /** @description Whether an email is sent when a password sign-in comes from a device the account has not signed in from */
+            signinAlerts: boolean;
             /** @description Whether single-key shortcuts are on; modifier shortcuts always work */
             singleKeyShortcuts: boolean;
             /**
@@ -911,6 +913,8 @@ export interface components {
              */
             locale?: "en" | "de";
             onboarding?: components["schemas"]["OnboardingChanges"];
+            /** @description Whether an email is sent when a password sign-in comes from a device the account has not signed in from */
+            signinAlerts?: boolean;
             /** @description Whether single-key shortcuts are on; modifier shortcuts always work */
             singleKeyShortcuts?: boolean;
             /**

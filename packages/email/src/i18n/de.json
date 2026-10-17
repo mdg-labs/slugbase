@@ -35,5 +35,19 @@
     "notYou": "Falls du dich nicht registriert hast, kannst du diese E-Mail ignorieren.",
     "action": "E-Mail-Adresse bestätigen",
     "footer": "Du erhältst diese E-Mail, weil diese Adresse für die Registrierung eines {appName}-Kontos verwendet wurde."
+  },
+  "newSignIn": {
+    "subject": "Neue Anmeldung bei deinem {appName}-Konto",
+    "greeting": "Hallo {name},",
+    "greetingAnonymous": "Hallo,",
+    "body": "Dein {appName}-Konto wurde von einem Gerät oder Netzwerk angemeldet, von dem es bisher nicht genutzt wurde.",
+    "time": "Zeit",
+    "browser": "Browser",
+    "network": "Netzwerk",
+    "unknown": "Unbekannt",
+    "notYou": "Falls du das nicht warst, ändere sofort dein Passwort und melde deine anderen Sitzungen ab.",
+    "action": "Sitzungen prüfen",
+    "turnOff": "Du kannst diese E-Mails in den Sicherheitseinstellungen deines Kontos ausschalten.",
+    "footer": "Du erhältst diese E-Mail, weil sich ein neues Gerät bei deinem {appName}-Konto angemeldet hat."
   }
 }

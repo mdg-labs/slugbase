@@ -75,6 +75,7 @@ export function fakeAuthStore(overrides: Partial<AuthStore> = {}): AuthStore {
     emailKey: unexpected("emailKey"),
     loginLookup: unexpected("loginLookup"),
     createSession: unexpected("createSession"),
+    signInAlertContext: unexpected("signInAlertContext"),
     lookupSession: unexpected("lookupSession"),
     lookupApiToken: unexpected("lookupApiToken"),
     revokeSession: unexpected("revokeSession"),

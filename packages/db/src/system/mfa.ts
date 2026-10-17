@@ -70,6 +70,8 @@ export interface SignInCompletion {
   readonly factor: SecondFactor;
   /** SHA-256 of the 32-byte token the full session gets. */
   readonly newTokenHash: Buffer;
+  /** Jobs queued in the transaction that makes the session full (the "new sign-in" email); none when absent. */
+  readonly jobs?: readonly QueuedJob[];
 }
 
 export type SignInCompletionOutcome =
@@ -176,7 +178,8 @@ export interface MfaStore {
   /**
    * Accepts the factor (the time step, or the backup code, atomically, so one of them is accepted
    * once however many requests present it) and turns the partial session into a full one under the
-   * new token, in one transaction: all of it happens or none of it does.
+   * new token, in one transaction: all of it happens or none of it does. The jobs of the completion, if
+   * any, are queued in that transaction too, and a job that cannot be queued undoes the completion and rejects.
    */
   completeMfaSignIn(completion: SignInCompletion): Promise<SignInCompletionOutcome>;
   /**
@@ -365,7 +368,7 @@ export function bindMfaStore(client: postgres.Sql): MfaStore {
       return rows.map((row) => ({ id: row.id, hash: row.code_hash.toString("utf8") }));
     },
 
-    async completeMfaSignIn({ accountId, sessionId, factor, newTokenHash }) {
+    async completeMfaSignIn({ accountId, sessionId, factor, newTokenHash, jobs = [] }) {
       if (newTokenHash.length !== TOKEN_HASH_BYTES) {
         throw new RangeError(`newTokenHash must be a ${String(TOKEN_HASH_BYTES)}-byte SHA-256 digest`);
       }
@@ -385,6 +388,9 @@ export function bindMfaStore(client: postgres.Sql): MfaStore {
             ))
           ) {
             throw new NotCompleted("no_session");
+          }
+          for (const job of jobs) {
+            await enqueueInTransaction(tx, job);
           }
         });
       } catch (error) {

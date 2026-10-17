@@ -52,6 +52,7 @@ export type {
   PasswordChange,
   SessionRecord,
   SessionSummary,
+  SignInAlertContext,
 } from "./system/auth.ts";
 export type { CompleteSetup, SetupOutcome, SetupStore } from "./system/setup.ts";
 export type { NewRegistration, RegistrationStore } from "./system/registration.ts";

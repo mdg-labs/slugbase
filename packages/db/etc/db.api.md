@@ -62,6 +62,7 @@ export interface AccountProfile {
     readonly mfaEnabled: boolean;
     // (undocumented)
     readonly onboarding: Onboarding;
+    readonly signinAlerts: boolean;
     // (undocumented)
     readonly singleKeyShortcuts: boolean;
     // (undocumented)
@@ -84,6 +85,8 @@ export interface AccountProfileChanges {
     readonly locale?: "en" | "de";
     // (undocumented)
     readonly onboarding?: Partial<Onboarding>;
+    // (undocumented)
+    readonly signinAlerts?: boolean;
     // (undocumented)
     readonly singleKeyShortcuts?: boolean;
     // (undocumented)
@@ -173,6 +176,7 @@ export interface AuthStore extends SetupStore, MfaStore, OidcStore, Registration
     passwordHashOf(accountId: string): Promise<string | null>;
     revokeAllSessions(accountId: string, exceptSessionId: string | null): Promise<number>;
     revokeSession(sessionId: string, accountId: string): Promise<boolean>;
+    signInAlertContext(accountId: string, ipPrefix: string | null): Promise<SignInAlertContext | undefined>;
 }
 
 // @public (undocumented)
@@ -570,6 +574,7 @@ export interface NewSession {
     readonly accountId: string;
     readonly id: string;
     readonly ipPrefix: string | null;
+    readonly jobs?: readonly QueuedJob[];
     readonly level: "partial" | "full";
     readonly remember: boolean;
     readonly replacedTokenHash: Buffer | null;
@@ -801,12 +806,20 @@ export interface SetupStore {
     setupPending(): Promise<boolean>;
 }
 
+// @public
+export interface SignInAlertContext {
+    readonly alertsOn: boolean;
+    readonly signedInBefore: boolean;
+    readonly userAgentsOnNetwork: readonly (string | null)[];
+}
+
 // @public (undocumented)
 export interface SignInCompletion {
     // (undocumented)
     readonly accountId: string;
     // (undocumented)
     readonly factor: SecondFactor;
+    readonly jobs?: readonly QueuedJob[];
     readonly newTokenHash: Buffer;
     readonly sessionId: string;
 }

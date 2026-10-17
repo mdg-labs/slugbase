@@ -36,6 +36,7 @@ export const AccountSchema: z.ZodObject<{
         table: "table";
     }>;
     singleKeyShortcuts: z.ZodBoolean;
+    signinAlerts: z.ZodBoolean;
     aiOptOut: z.ZodBoolean;
     analyticsConsent: z.ZodEnum<{
         unset: "unset";
@@ -280,6 +281,7 @@ export interface ComponentTypes {
             locale: "en" | "de";
             mfaEnabled: boolean;
             onboarding: ComponentTypes["schemas"]["Onboarding"];
+            signinAlerts: boolean;
             singleKeyShortcuts: boolean;
             theme: "light" | "dark" | "system";
         };
@@ -485,6 +487,7 @@ export interface ComponentTypes {
             displayName?: string;
             locale?: "en" | "de";
             onboarding?: ComponentTypes["schemas"]["OnboardingChanges"];
+            signinAlerts?: boolean;
             singleKeyShortcuts?: boolean;
             theme?: "light" | "dark" | "system";
         };
@@ -774,6 +777,7 @@ export const getMe: {
         table: "table";
         }>;
         singleKeyShortcuts: z.ZodBoolean;
+        signinAlerts: z.ZodBoolean;
         aiOptOut: z.ZodBoolean;
         analyticsConsent: z.ZodEnum<{
         unset: "unset";
@@ -1187,6 +1191,7 @@ export const MeSchema: z.ZodObject<{
             table: "table";
         }>;
         singleKeyShortcuts: z.ZodBoolean;
+        signinAlerts: z.ZodBoolean;
         aiOptOut: z.ZodBoolean;
         analyticsConsent: z.ZodEnum<{
             unset: "unset";
@@ -4236,6 +4241,7 @@ export const UpdateAccountRequestSchema: z.ZodObject<{
         table: "table";
     }>>;
     singleKeyShortcuts: z.ZodOptional<z.ZodBoolean>;
+    signinAlerts: z.ZodOptional<z.ZodBoolean>;
     aiOptOut: z.ZodOptional<z.ZodBoolean>;
     analyticsConsent: z.ZodOptional<z.ZodEnum<{
         unset: "unset";
@@ -4283,6 +4289,7 @@ export const updateMe: {
                 table: "table";
             }>>;
             singleKeyShortcuts: z.ZodOptional<z.ZodBoolean>;
+            signinAlerts: z.ZodOptional<z.ZodBoolean>;
             aiOptOut: z.ZodOptional<z.ZodBoolean>;
             analyticsConsent: z.ZodOptional<z.ZodEnum<{
                 unset: "unset";
@@ -4323,6 +4330,7 @@ export const updateMe: {
         table: "table";
         }>;
         singleKeyShortcuts: z.ZodBoolean;
+        signinAlerts: z.ZodBoolean;
         aiOptOut: z.ZodBoolean;
         analyticsConsent: z.ZodEnum<{
         unset: "unset";
