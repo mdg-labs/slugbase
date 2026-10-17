@@ -137,6 +137,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/verify-email/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send the verification link of an unverified account again */
+        post: operations["resendVerifyEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -847,6 +864,13 @@ export interface components {
             /** @description The new account's password, 12 to 256 characters */
             password: string;
         };
+        ResendVerifyEmailRequest: {
+            /**
+             * Format: email
+             * @description The email address the verification link was to be sent to; case does not matter
+             */
+            email: string;
+        };
         Session: {
             /**
              * Format: date-time
@@ -1059,7 +1083,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself */
+            /** @description The request did not come from the application itself (cross_site_request); or the password is right but the deployment requires a verified email address and this account's was never verified (email_unverified), in which case no session is created and POST /auth/verify-email/resend sends the link again */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -1512,6 +1536,75 @@ export interface operations {
                 };
             };
             /** @description Too many attempts from this address; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    resendVerifyEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResendVerifyEmailRequest"];
+            };
+        };
+        responses: {
+            /** @description The request was accepted. The answer is the same, with no body, whether the email address belongs to an unverified account, to a verified one or to no account: only an unverified account receives a new verification email, whose link opens /verify-email#token=… and replaces the account's earlier unused link, and nothing else about the account is changed or sent */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests from this address or for this email address; Retry-After says when to try again */
             429: {
                 headers: {
                     /** @description Whole seconds to wait before the request can succeed */

@@ -15,6 +15,7 @@ const PARALLEL_CALLS = 8;
 const DAY_SECONDS = 86_400;
 const SUFFIX = "'s workspace";
 const QUEUE = "event.workspace.created";
+const MAIL_QUEUE = "mail.send";
 const OLD_HASH = "$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$b2xk";
 const NEW_HASH = "$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$bmV3";
 
@@ -44,7 +45,8 @@ beforeAll(async () => {
       id uuid PRIMARY KEY, name text NOT NULL, data jsonb, keep_until timestamptz NOT NULL, expire_seconds int NOT NULL,
       deletion_seconds int NOT NULL, retry_limit int NOT NULL, retry_delay int NOT NULL, retry_backoff boolean NOT NULL,
       retry_delay_max int, policy text NOT NULL, dead_letter text, heartbeat_seconds int);
-    INSERT INTO pgboss.queue VALUES ('${QUEUE}', 3600, 900, 3600, 3, 5, true, NULL, 'standard', NULL, NULL);`);
+    INSERT INTO pgboss.queue VALUES ('${QUEUE}', 3600, 900, 3600, 3, 5, true, NULL, 'standard', NULL, NULL);
+    INSERT INTO pgboss.queue VALUES ('${MAIL_QUEUE}', 3600, 900, 3600, 3, 5, true, NULL, 'standard', NULL, NULL);`);
 }, HOOK_TIMEOUT_MS);
 
 afterAll(async () => {
@@ -223,6 +225,7 @@ describe("the system operations", () => {
   it("are registered", () => {
     expect(systemOperations).toContain("sys_email_verify");
     expect(systemOperations).toContain("sys_create_personal_workspace");
+    expect(systemOperations).toContain("sys_account_email_verified");
   });
 });
 
@@ -600,5 +603,87 @@ describe("registerAccount with afterCreated", () => {
     const rows = await asSystem(db, (tx) => tx`SELECT count(*)::int AS n FROM accounts`);
     expect(rows[0]?.["n"]).toBe(0);
     expect(await workspacesOf(input.accountId)).toEqual([]);
+  });
+});
+
+describe("resendVerification", () => {
+  function mail(accountId: string): QueuedJob {
+    return { id: freshId(), queue: MAIL_QUEUE, data: { template: "verifyEmail", accountId } };
+  }
+
+  async function addressOf(accountId: string): Promise<string> {
+    const rows = await asSystem(db, (tx) => tx<{ email: string }[]>`SELECT email::text AS email FROM accounts WHERE id = ${accountId}`);
+    return rows[0]?.email ?? "";
+  }
+
+  it("queues the job built for the account that holds the address, in any case, whether or not it is verified", async () => {
+    const unverified = await account();
+    const verified = await account({ verified: true });
+    const jobFor = (accountId: string) => [mail(accountId)];
+    const unknown = [mail(freshId())];
+
+    for (const id of [unverified, verified]) {
+      await store.resendVerification({ email: (await addressOf(id)).toUpperCase(), onKnown: jobFor, onUnknown: unknown });
+    }
+
+    expect((await queued()).map((job) => job.data["accountId"]).sort()).toEqual([unverified, verified].sort());
+  });
+
+  it("queues the onUnknown jobs, and not the onKnown ones, for an address no account holds", async () => {
+    const stranger = freshId();
+    let asked = false;
+
+    await store.resendVerification({
+      email: "nobody@example.test",
+      onKnown: () => {
+        asked = true;
+        return [];
+      },
+      onUnknown: [mail(stranger)],
+    });
+
+    expect(asked).toBe(false);
+    expect((await queued()).map((job) => job.data["accountId"])).toEqual([stranger]);
+  });
+
+  it("creates and changes nothing but the job: no token, session, password or verification state", async () => {
+    const id = await account();
+    const snapshot = async () =>
+      asSystem(db, async (tx) => ({
+        account: (await tx`SELECT password_hash, email_verified_at, password_changed_at, updated_at FROM accounts WHERE id = ${id}`)[0],
+        tokens: (await tx<{ n: number }[]>`SELECT count(*)::int AS n FROM credential_tokens`)[0]?.n,
+        sessions: (await tx<{ n: number }[]>`SELECT count(*)::int AS n FROM sessions`)[0]?.n,
+      }));
+    const before = await snapshot();
+
+    await store.resendVerification({ email: await addressOf(id), onKnown: (accountId) => [mail(accountId)], onUnknown: [mail(freshId())] });
+
+    expect(await snapshot()).toEqual(before);
+    expect(await queued()).toHaveLength(1);
+  });
+
+  it("undoes the jobs already queued when a later one cannot be, and rejects", async () => {
+    const id = await account();
+    const missing: QueuedJob = { id: freshId(), queue: "no.such.queue", data: {} };
+
+    await expect(store.resendVerification({ email: await addressOf(id), onKnown: (accountId) => [mail(accountId), missing], onUnknown: [] })).rejects.toThrow();
+
+    expect(await queued()).toEqual([]);
+  });
+});
+
+describe("emailVerified", () => {
+  it("is true only for an account whose address was verified, and false for a missing account", async () => {
+    const unverified = await account();
+    const verified = await account({ verified: true });
+
+    expect(await store.emailVerified(unverified)).toBe(false);
+    expect(await store.emailVerified(verified)).toBe(true);
+    expect(await store.emailVerified(freshId())).toBe(false);
+  });
+
+  it("reads a disabled account as it is, without telling the caller anything else", async () => {
+    expect(await store.emailVerified(await account({ disabled: true }))).toBe(false);
+    expect(await store.emailVerified(await account({ disabled: true, verified: true }))).toBe(true);
   });
 });

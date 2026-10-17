@@ -1,9 +1,12 @@
 import type postgres from "postgres";
 import { bindPersonalWorkspaceWriter, type PersonalWorkspaceWriter } from "./personal-workspace.ts";
+import { enqueueInTransaction, type QueuedJob } from "./queue.ts";
 
 // The wrapper of the system operation behind `POST /auth/verify-email` (doc 05 section 3.3, doc 02 sections
 // 2.2 and 2.6, doc 10 T4 and T8): the one place a signup verification token is redeemed. It runs on the pool of
 // the auth store, as the application role, outside any tenant transaction: the token is the only credential.
+// The resend of the link (`POST /auth/verify-email/resend`) finds the account through sys_login_lookup and
+// queues the mail job in the same transaction; it issues no token itself, the job does.
 
 export interface EmailVerification {
   /** SHA-256 of the 32 bytes the token of the link encodes. */
@@ -38,6 +41,15 @@ export interface VerifiedEmail {
   readonly next: "done" | "mfa";
 }
 
+export interface VerificationResend {
+  /** Trimmed and NFKC-normalised by the caller; compared case-insensitively. */
+  readonly email: string;
+  /** The jobs queued when an account holds the address, built for that account's identifier. */
+  readonly onKnown: (accountId: string) => readonly QueuedJob[];
+  /** The jobs queued instead when no account holds it, so both outcomes write the same kinds of rows. */
+  readonly onUnknown: readonly QueuedJob[];
+}
+
 export interface EmailVerificationStore {
   /**
    * Redeems a signup verification token once. For an account whose address was never verified it replaces
@@ -48,6 +60,23 @@ export interface EmailVerificationStore {
    * does not tell apart.
    */
   verifyEmail(verification: EmailVerification): Promise<VerifiedEmail | undefined>;
+  /**
+   * Looks the address up and queues the jobs of `onKnown` for the account that holds it, or those of
+   * `onUnknown` when none does, in one transaction. It reads and writes nothing else: whether the account is
+   * verified, disabled or has a password is for the job to decide, so the three outcomes cost the same and
+   * the caller cannot tell them apart. A job that cannot be queued undoes the others and rejects.
+   */
+  resendVerification(resend: VerificationResend): Promise<void>;
+  /** Whether the address of the account was verified; false for an account that does not exist. */
+  emailVerified(accountId: string): Promise<boolean>;
+}
+
+interface VerifiedFlagRow {
+  verified: boolean;
+}
+
+interface LookupRow {
+  account_id: string;
 }
 
 interface VerifiedRow {
@@ -94,6 +123,28 @@ export function bindEmailVerificationStore(client: postgres.Sql): EmailVerificat
         }
         await verification.afterVerified(row.verified_account_id, bindPersonalWorkspaceWriter(tx));
         return { accountId: row.verified_account_id, next: row.session_level === "partial" ? "mfa" : "done" };
+      });
+    },
+
+    async emailVerified(accountId) {
+      const rows = await client<VerifiedFlagRow[]>`SELECT sys_account_email_verified(${accountId}::uuid) AS verified`;
+      const row = rows[0];
+      if (rows.length !== 1 || row === undefined) {
+        throw new Error("sys_account_email_verified did not return exactly one row");
+      }
+      return row.verified;
+    },
+
+    async resendVerification(resend) {
+      await client.begin(async (tx) => {
+        const rows = await tx<LookupRow[]>`SELECT account_id FROM sys_login_lookup(${resend.email}::text)`;
+        if (rows.length > 1) {
+          throw new Error("sys_login_lookup returned more than one account");
+        }
+        const row = rows[0];
+        for (const job of row === undefined ? resend.onUnknown : resend.onKnown(row.account_id)) {
+          await enqueueInTransaction(tx, job);
+        }
       });
     },
   };

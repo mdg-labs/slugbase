@@ -142,6 +142,7 @@ describe("the shipped chain", () => {
       "sys_signin_alert_context",
       "sys_email_verify",
       "sys_create_personal_workspace",
+      "sys_account_email_verified",
     ]);
     expect(checkRules).toContain(systemOperationsRule);
     const database = await scratch();

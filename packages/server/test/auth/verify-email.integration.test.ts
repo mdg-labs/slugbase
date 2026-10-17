@@ -363,7 +363,8 @@ describe("POST /api/v1/auth/verify-email", { timeout: TEST_TIMEOUT_MS }, () => {
   });
 
   it("closes the pre-registration takeover: the password of the owner works, the visitor's does not, and the visitor's session is gone", async () => {
-    const world = serve();
+    // The visitor can only hold a session of the unverified account where verification is optional.
+    const world = serve({ verificationRequired: false });
     const account = await register(world, PASSWORD_A);
     const visitorSession = await signInAs(world, account.email, PASSWORD_A);
     expect((await probe(world, visitorSession)).status).toBe(200);

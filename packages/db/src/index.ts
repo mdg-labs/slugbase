@@ -56,7 +56,7 @@ export type {
 } from "./system/auth.ts";
 export type { CompleteSetup, SetupOutcome, SetupStore } from "./system/setup.ts";
 export type { NewRegistration, RegistrationStore } from "./system/registration.ts";
-export type { EmailVerification, EmailVerificationStore, VerifiedEmail } from "./system/email-verification.ts";
+export type { EmailVerification, EmailVerificationStore, VerificationResend, VerifiedEmail } from "./system/email-verification.ts";
 export type { NewPersonalWorkspace, PersonalWorkspaceResult, PersonalWorkspaceWriter } from "./system/personal-workspace.ts";
 export type { IdentityLink, IdentityLinkOutcome, IdentityReauthentication, IdentitySignIn, IdentityUnlinkOutcome, NewOidcLoginState, OidcLoginState, OidcStore, SealedVerifier } from "./system/oidc.ts";
 export type {

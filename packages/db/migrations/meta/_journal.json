@@ -190,6 +190,13 @@
       "when": 1792270471724,
       "tag": "20261017205431_add_password_set_caller_note",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1792272274259,
+      "tag": "20261017212434_add_account_email_verified",
+      "breakpoints": true
     }
   ]
 }

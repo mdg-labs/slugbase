@@ -453,6 +453,9 @@ export interface ComponentTypes {
             email: string;
             password: string;
         };
+        ResendVerifyEmailRequest: {
+            email: string;
+        };
         Session: {
             createdAt: string;
             current: boolean;
@@ -2550,6 +2553,69 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    resendVerifyEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["ResendVerifyEmailRequest"];
+            };
+        };
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     revokeApiToken: {
         parameters: {
             query?: never;
@@ -3349,6 +3415,23 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/auth/verify-email/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["resendVerifyEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -4051,6 +4134,35 @@ export const RegisterRequestSchema: z.ZodObject<{
     displayName: z.ZodString;
     email: z.ZodEmail;
     password: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const resendVerifyEmail: {
+    readonly method: "post";
+    readonly path: "/api/v1/auth/verify-email/resend";
+    readonly operationId: "resendVerifyEmail";
+    readonly tag: "auth";
+    readonly summary: "Send the verification link of an unverified account again";
+    readonly auth: "anonymous";
+    readonly rate: "reset";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            email: z.ZodEmail;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 202: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const ResendVerifyEmailRequestSchema: z.ZodObject<{
+    email: z.ZodEmail;
 }, z.core.$strict>;
 
 // @public

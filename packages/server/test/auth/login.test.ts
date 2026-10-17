@@ -14,16 +14,24 @@ const CHROME = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like 
 const CHROME_OTHER_VERSION = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36";
 const FIREFOX = "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0";
 
-function setup(candidate: LoginCandidate | undefined, options: { created?: boolean; mfa?: MfaState; alerts?: SignInAlertContext | undefined } = {}) {
+function setup(
+  candidate: LoginCandidate | undefined,
+  options: { created?: boolean; mfa?: MfaState; alerts?: SignInAlertContext | undefined; required?: boolean; emailVerified?: boolean } = {},
+) {
   const looked: string[] = [];
   const contexts: { accountId: string; ipPrefix: string | null }[] = [];
   const created: NewSession[] = [];
   const asked: string[] = [];
+  const checked: string[] = [];
   const verified: { stored: string | null | undefined; password: string }[] = [];
   const store = {
     loginLookup: (email: string) => {
       looked.push(email);
       return Promise.resolve(candidate);
+    },
+    emailVerified: (accountId: string) => {
+      checked.push(accountId);
+      return Promise.resolve(options.emailVerified ?? false);
     },
     mfaStateOf: (accountId: string) => {
       asked.push(accountId);
@@ -44,7 +52,7 @@ function setup(candidate: LoginCandidate | undefined, options: { created?: boole
       return Promise.resolve(stored === "stored-hash" && password === PASSWORD);
     },
   };
-  return { store, passwords, mail: MAIL, looked, created, asked, verified, contexts };
+  return { store, passwords, mail: MAIL, registration: { emailVerificationRequired: options.required ?? false }, checked, looked, created, asked, verified, contexts };
 }
 
 const request: SignInRequest = {
@@ -136,17 +144,62 @@ describe("signIn", () => {
   it("does not turn a failing store into a failed or a successful sign-in", async () => {
     const world = setup(live);
     const store = { ...world.store, loginLookup: () => Promise.reject(new Error("database down")) } as unknown as AuthStore;
-    await expect(signIn({ store, passwords: world.passwords, mail: MAIL }, request)).rejects.toThrow("database down");
+    await expect(signIn({ ...world, store }, request)).rejects.toThrow("database down");
     const failingState = { ...world.store, mfaStateOf: () => Promise.reject(new Error("database down")) } as unknown as AuthStore;
-    await expect(signIn({ store: failingState, passwords: world.passwords, mail: MAIL }, request)).rejects.toThrow("database down");
+    await expect(signIn({ ...world, store: failingState }, request)).rejects.toThrow("database down");
     expect(world.created).toEqual([]);
     const failingCreate = { ...world.store, createSession: () => Promise.reject(new Error("database down")) } as unknown as AuthStore;
-    await expect(signIn({ store: failingCreate, passwords: world.passwords, mail: MAIL }, request)).rejects.toThrow("database down");
+    await expect(signIn({ ...world, store: failingCreate }, request)).rejects.toThrow("database down");
   });
 });
 
 // The "new sign-in" email (doc 02 section 12): a full session queues it exactly when the account has the alerts
 // on, has signed in before and has no live session of the same prefix and user-agent family.
+describe("signIn and an address that was never verified", () => {
+  const wrong = { ...request, password: "not the password" };
+
+  it("refuses the correct password with email_unverified where verification is required, before any second factor or session", async () => {
+    const world = setup(live, { required: true, emailVerified: false });
+    await expect(signIn(world, request)).rejects.toMatchObject({ code: "email_unverified" });
+    expect(world.checked).toEqual([ACCOUNT]);
+    expect(world.asked).toEqual([]);
+    expect(world.created).toEqual([]);
+  });
+
+  it("asks nothing about the address, and answers the generic failure, for a wrong password, an unknown address and a disabled account", async () => {
+    const worlds = [
+      [setup(live, { required: true }), wrong],
+      [setup(undefined, { required: true }), request],
+      [setup({ ...live, disabledAt: new Date("2026-01-01T00:00:00Z") }, { required: true }), request],
+    ] as const;
+    for (const [world, attempt] of worlds) {
+      expect(await signIn(world, attempt)).toBeUndefined();
+      expect(world.checked).toEqual([]);
+      expect(world.created).toEqual([]);
+    }
+  });
+
+  it("signs a verified account in where verification is required", async () => {
+    const world = setup(live, { required: true, emailVerified: true });
+    expect((await signIn(world, request))?.next).toBe("done");
+    expect(world.created).toHaveLength(1);
+  });
+
+  it("signs an unverified account in, without asking, where verification is optional", async () => {
+    const world = setup(live, { required: false, emailVerified: false });
+    expect((await signIn(world, request))?.next).toBe("done");
+    expect(world.checked).toEqual([]);
+    expect(world.created).toHaveLength(1);
+  });
+
+  it("does not turn a failing verification lookup into a sign-in", async () => {
+    const world = setup(live, { required: true });
+    const failing = { ...world, store: { ...world.store, emailVerified: () => Promise.reject(new Error("the database is down")) } as unknown as AuthStore };
+    await expect(signIn(failing, request)).rejects.toThrow("the database is down");
+    expect(world.created).toEqual([]);
+  });
+});
+
 describe("signIn and the new-device alert", () => {
   const known = (userAgentsOnNetwork: readonly (string | null)[], overrides: Partial<SignInAlertContext> = {}): SignInAlertContext => ({
     alertsOn: true,
@@ -224,7 +277,7 @@ describe("signIn and the new-device alert", () => {
   it("does not turn a failing context lookup into a sign-in without the check", async () => {
     const world = setup(live, { alerts: known([]) });
     const store = { ...world.store, signInAlertContext: () => Promise.reject(new Error("database down")) } as unknown as AuthStore;
-    await expect(signIn({ store, passwords: world.passwords, mail: MAIL }, request)).rejects.toThrow("database down");
+    await expect(signIn({ ...world, store }, request)).rejects.toThrow("database down");
     expect(world.created).toEqual([]);
   });
 });

@@ -48,6 +48,8 @@ const authStore: AuthStore = {
   completeSetup: unexpected,
   registerAccount: unexpected,
   verifyEmail: unexpected,
+  resendVerification: unexpected,
+  emailVerified: unexpected,
   close: () => Promise.resolve(),
 };
 

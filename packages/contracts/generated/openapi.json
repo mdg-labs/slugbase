@@ -1095,6 +1095,22 @@
         ],
         "type": "object"
       },
+      "ResendVerifyEmailRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "description": "The email address the verification link was to be sent to; case does not matter",
+            "format": "email",
+            "maxLength": 320,
+            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email"
+        ],
+        "type": "object"
+      },
       "Session": {
         "additionalProperties": false,
         "properties": {
@@ -1544,7 +1560,7 @@
                 }
               }
             },
-            "description": "The request did not come from the application itself"
+            "description": "The request did not come from the application itself (cross_site_request); or the password is right but the deployment requires a verified email address and this account's was never verified (email_unverified), in which case no session is created and POST /auth/verify-email/resend sends the link again"
           },
           "422": {
             "content": {
@@ -2213,6 +2229,93 @@
         ],
         "x-slugbase-auth": "anonymous",
         "x-slugbase-rate": "token_redeem"
+      }
+    },
+    "/api/v1/auth/verify-email/resend": {
+      "post": {
+        "operationId": "resendVerifyEmail",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResendVerifyEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "The request was accepted. The answer is the same, with no body, whether the email address belongs to an unverified account, to a verified one or to no account: only an unverified account receives a new verification email, whose link opens /verify-email#token=… and replaces the account's earlier unused link, and nothing else about the account is changed or sent"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body did not pass validation"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests from this address or for this email address; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Send the verification link of an unverified account again",
+        "tags": [
+          "auth"
+        ],
+        "x-slugbase-auth": "anonymous",
+        "x-slugbase-rate": "reset"
       }
     },
     "/api/v1/me": {

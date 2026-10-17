@@ -6,12 +6,14 @@ import {
   OidcProviderParamsSchema,
   OidcStartQuerySchema,
   RegisterRequestSchema,
+  ResendVerifyEmailRequestSchema,
   VerifyMfaRequestSchema,
   VerifyMfaResultSchema,
   completeOidcSignIn,
   login,
   logout,
   register,
+  resendVerifyEmail,
   startOidcSignIn,
   verifyMfa,
 } from "../src/operations/auth.ts";
@@ -26,6 +28,41 @@ const schemas = (document["components"] as { schemas: Record<string, Obj> }).sch
 function responsesOf(operation: Obj | undefined): Record<string, { content?: Obj; headers?: Obj }> {
   return operation?.["responses"] as Record<string, { content?: Obj; headers?: Obj }>;
 }
+
+describe("resendVerifyEmail", () => {
+  const operation = paths["/api/v1/auth/verify-email/resend"]?.["post"];
+
+  it("is anonymous in the reset bucket and is not token-callable", () => {
+    expect(resendVerifyEmail.path).toBe("/api/v1/auth/verify-email/resend");
+    expect(operation?.["operationId"]).toBe("resendVerifyEmail");
+    expect(operation?.["x-slugbase-auth"]).toBe("anonymous");
+    expect(operation?.["x-slugbase-rate"]).toBe("reset");
+    expect(operation?.["x-slugbase-scope"]).toBeUndefined();
+  });
+
+  it("takes a closed body of an email address", () => {
+    const body = schemas["ResendVerifyEmailRequest"] as { additionalProperties: unknown; properties: Obj; required: string[] };
+    expect(body.additionalProperties).toBe(false);
+    expect(Object.keys(body.properties)).toEqual(["email"]);
+    expect(body.required).toEqual(["email"]);
+    expect(ResendVerifyEmailRequestSchema.safeParse({ email: "a@example.test" }).success).toBe(true);
+    expect(ResendVerifyEmailRequestSchema.safeParse({ email: "not an address" }).success).toBe(false);
+    expect(ResendVerifyEmailRequestSchema.safeParse({ email: "a@example.test", extra: 1 }).success).toBe(false);
+  });
+
+  it("answers 202 with no body, and problem+json for every client error", () => {
+    const responses = responsesOf(operation);
+    expect(responses["202"]?.content).toBeUndefined();
+    for (const status of ["400", "403", "422", "503"]) {
+      expect(responses[status]?.content, status).toEqual({ "application/problem+json": { schema: { $ref: "#/components/schemas/Problem" } } });
+    }
+    expect(responses["429"]?.headers).toMatchObject({ "Retry-After": { required: true } });
+  });
+
+  it("is declared among the operations", () => {
+    expect(operations).toContain(resendVerifyEmail);
+  });
+});
 
 describe("login", () => {
   const operation = paths["/api/v1/auth/login"]?.["post"];

@@ -30,6 +30,12 @@ export const RegisterRequestSchema = z
   })
   .meta({ id: "RegisterRequest" });
 
+export const ResendVerifyEmailRequestSchema = z
+  .strictObject({
+    email: z.email().max(320).describe("The email address the verification link was to be sent to; case does not matter"),
+  })
+  .meta({ id: "ResendVerifyEmailRequest" });
+
 export const VerifyEmailRequestSchema = z
   .strictObject({
     token: z.string().min(1).max(256).describe("The token of the verification link, from the fragment of /verify-email#token=…"),
@@ -82,7 +88,9 @@ export const login = defineOperation({
     }),
     400: problemResponse("The request was malformed"),
     401: problemResponse("The email address or the password is wrong, or the account cannot sign in; all of them answer alike"),
-    403: problemResponse("The request did not come from the application itself"),
+    403: problemResponse(
+      "The request did not come from the application itself (cross_site_request); or the password is right but the deployment requires a verified email address and this account's was never verified (email_unverified), in which case no session is created and POST /auth/verify-email/resend sends the link again",
+    ),
     422: problemResponse("The body did not pass validation"),
     429: rateLimitedResponse("Too many sign-in attempts from this address or for this email address; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
@@ -141,6 +149,27 @@ export const verifyEmail = defineOperation({
     410: problemResponse("The token is unknown, expired (24 hours), already used or of another kind; all of them answer alike (token_expired), and nothing is changed"),
     422: problemResponse("The body did not pass validation, or the password is outside 12 to 256 characters or is on the breached list (weak_password). The token is not used"),
     429: rateLimitedResponse("Too many attempts from this address; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const resendVerifyEmail = defineOperation({
+  method: "post",
+  path: "/api/v1/auth/verify-email/resend",
+  operationId: "resendVerifyEmail",
+  tag: "auth",
+  summary: "Send the verification link of an unverified account again",
+  auth: "anonymous",
+  rate: "reset",
+  request: { body: ResendVerifyEmailRequestSchema },
+  responses: {
+    202: emptyResponse(
+      "The request was accepted. The answer is the same, with no body, whether the email address belongs to an unverified account, to a verified one or to no account: only an unverified account receives a new verification email, whose link opens /verify-email#token=… and replaces the account's earlier unused link, and nothing else about the account is changed or sent",
+    ),
+    400: problemResponse("The request was malformed"),
+    403: problemResponse("The request did not come from the application itself"),
+    422: problemResponse("The body did not pass validation"),
+    429: rateLimitedResponse("Too many requests from this address or for this email address; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },
 });

@@ -1,6 +1,7 @@
 -- The system operations behind verifying a registered address and the personal
--- workspace of the account (doc 05 section 3.3, doc 02 sections 2.2 and 2.6, doc
--- 04 section 10.2, doc 10 T4 and T8). Both are entered in src/system/registry.ts.
+-- workspace of the account, and the read that tells a sign-in whether the address
+-- was verified (doc 05 section 3.3, doc 02 sections 2.2, 2.3 and 2.6, doc 04
+-- section 10.2, doc 10 T4 and T8). All are entered in src/system/registry.ts.
 -- slugbase_owner creates each function and hands it to slugbase_system, which
 -- needs CREATE on the schema for the length of those statements.
 GRANT CREATE ON SCHEMA public TO slugbase_system;
@@ -140,11 +141,28 @@ BEGIN
 END
 $$;
 
+-- sys_account_email_verified(account_id): whether the address of the account was
+-- verified (email_verified_at is set), which is all a sign-in may learn of that
+-- column and is asked only once the password is known good. False for an
+-- account that does not exist, so a caller that requires verification never
+-- reads an absent row as a verified one.
+CREATE OR REPLACE FUNCTION public.sys_account_email_verified(p_account_id uuid) RETURNS boolean
+  LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path = pg_catalog, public, pg_temp
+  AS $$
+    SELECT coalesce(
+      (SELECT a.email_verified_at IS NOT NULL FROM public.accounts a WHERE a.id = p_account_id),
+      false)
+  $$;
+
 ALTER FUNCTION public.sys_email_verify(bytea, text, uuid, bytea, cidr, text, bytea) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_create_personal_workspace(uuid, uuid, text) OWNER TO slugbase_system;
+ALTER FUNCTION public.sys_account_email_verified(uuid) OWNER TO slugbase_system;
 REVOKE CREATE ON SCHEMA public FROM slugbase_system;
 
 REVOKE ALL ON FUNCTION public.sys_email_verify(bytea, text, uuid, bytea, cidr, text, bytea) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sys_create_personal_workspace(uuid, uuid, text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.sys_account_email_verified(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.sys_email_verify(bytea, text, uuid, bytea, cidr, text, bytea) TO slugbase_app;
 GRANT EXECUTE ON FUNCTION public.sys_create_personal_workspace(uuid, uuid, text) TO slugbase_app;
+GRANT EXECUTE ON FUNCTION public.sys_account_email_verified(uuid) TO slugbase_app;

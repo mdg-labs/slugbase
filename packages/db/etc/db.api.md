@@ -323,6 +323,8 @@ export interface EmailVerification {
 
 // @public (undocumented)
 export interface EmailVerificationStore {
+    emailVerified(accountId: string): Promise<boolean>;
+    resendVerification(resend: VerificationResend): Promise<void>;
     verifyEmail(verification: EmailVerification): Promise<VerifiedEmail | undefined>;
 }
 
@@ -905,6 +907,13 @@ export interface UnusedBackupCode {
 export type UpdateValues<T extends WorkspaceTable> = Partial<Omit<InferInsertModel<T>, "workspaceId">> & {
     workspaceId?: string;
 };
+
+// @public (undocumented)
+export interface VerificationResend {
+    readonly email: string;
+    readonly onKnown: (accountId: string) => readonly QueuedJob[];
+    readonly onUnknown: readonly QueuedJob[];
+}
 
 // @public (undocumented)
 export interface VerifiedEmail {

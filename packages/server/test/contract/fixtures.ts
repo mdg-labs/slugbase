@@ -36,6 +36,9 @@ export const FIXTURES: ContractFixtures = {
     body: { displayName: "Walker", email: "register-walker@example.test", password: "a password for the register walker" },
     status: 403,
   },
+  // An anonymous operation: it takes an email address and names no workspace or account identifier the caller could address; the answer is one 202 for
+  // every address, so the walker's valid request is the declared 202.
+  resendVerifyEmail: { body: { email: "resend-walker@example.test" }, status: 202 },
   // An anonymous operation: the token is its only credential and names no workspace or account the caller could address. The walker holds no
   // verification token, so the valid request is the declared 410; the verification itself is walked by the verify-email tests.
   verifyEmail: { body: { token: "A".repeat(43), password: "a password for the verify walker" }, status: 410 },
