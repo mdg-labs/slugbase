@@ -145,7 +145,8 @@ async function assertSession(db: Db, pid: number): Promise<void> {
 // `@slugbase/db` takes for the chains. It is polled rather than waited for in a
 // statement, so that a waiting run holds no snapshot which the index build of
 // the running one would wait for. The pool holds one connection, and the lock
-// lives in its session, which `assertSession` keeps checking.
+// lives in its session, which `assertSession` keeps checking. A failed statement
+// ends that connection and the next statement opens another, which holds no lock.
 async function takeMigrateLock(db: Db, pid: number): Promise<void> {
   const deadline = Date.now() + STATEMENT_TIMEOUT_MS;
   for (;;) {
@@ -335,7 +336,7 @@ async function upgrade(db: Db, pid: number, from: number, target: number): Promi
   try {
     await db.executeSql(transaction);
   } catch (error) {
-    // The transaction failed part-way through and is still open in this session.
+    // The pool ended the connection of the failed script, and its open transaction and the migrate lock went with it. The error is rethrown, so nothing else runs.
     await rollback(db, error);
     throw error;
   }
@@ -348,8 +349,8 @@ async function upgrade(db: Db, pid: number, from: number, target: number): Promi
 // Creates the queue of each job with the settings the worker applies to it, and leaves a queue that
 // exists alone: how a changed definition reaches an existing queue is the worker's updateQueue. A queue
 // is a row of pgboss.queue and no DDL (the queues are not partitioned), so this stays schema-only and
-// fast. pg-boss runs its create as one script that opens its own transaction, which a failure leaves
-// open in this session.
+// fast. pg-boss runs its create as one script that opens its own transaction; a failure ends the
+// connection that ran it, and the error is rethrown, so nothing else runs.
 async function createQueues(boss: PgBoss, db: Db, jobs: readonly JobDefinition[]): Promise<void> {
   for (const job of jobs) {
     try {
@@ -402,7 +403,7 @@ export async function installPgBoss(url: string, jobs: readonly JobDefinition[] 
     await pool.open();
     try {
       const db = boss.getDb();
-      const pid = await backendPid(db);
+      let pid = await backendPid(db);
       sessionKnown = true;
       await takeMigrateLock(db, pid);
       let changed = false;
@@ -411,11 +412,15 @@ export async function installPgBoss(url: string, jobs: readonly JobDefinition[] 
           await db.executeSql(getConstructionPlans(PGBOSS_SCHEMA, { createSchema: false }));
           changed = true;
         } catch (error) {
-          // The plan runs in one transaction and failed part-way through it.
+          // The plan ran in one transaction and failed part-way through it. The pool ended the connection
+          // of the failed script, with the migrate lock in its session, so a plan that finds the schema
+          // installed carries on in a new session that takes the lock again before anything else runs.
           await rollback(db, error);
           if (!(error instanceof Error) || !error.message.includes(ALREADY_INSTALLED)) {
             throw error;
           }
+          pid = await backendPid(db);
+          await takeMigrateLock(db, pid);
         }
       }
       const found = await boss.schemaVersion();
