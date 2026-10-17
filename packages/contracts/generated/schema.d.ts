@@ -120,6 +120,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/verify-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify the email address of a registered account and sign it in */
+        post: operations["verifyEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -923,6 +940,19 @@ export interface components {
              */
             theme?: "light" | "dark" | "system";
         };
+        VerifyEmailRequest: {
+            /** @description The password the account will sign in with, 12 to 256 characters. When the address was never verified it replaces the one the registration set, because whoever registered an address is not necessarily its owner; it is ignored for an account that is already verified */
+            password: string;
+            /** @description The token of the verification link, from the fragment of /verify-email#token=… */
+            token: string;
+        };
+        VerifyEmailResult: {
+            /**
+             * @description `done`: the address is verified and the account is signed in. `mfa`: the account's second factor is still to be given (POST /auth/mfa/verify); the session cookie is set either way, and a pending one expires after 5 minutes
+             * @enum {string}
+             */
+            next: "done" | "mfa";
+        };
         VerifyMfaRequest: {
             /** @description A code of the authenticator app: six digits, which may be grouped by a space */
             code: string;
@@ -1411,6 +1441,88 @@ export interface operations {
                 };
             };
             /** @description Email verification is required and no mail is configured (mail_unavailable), or the service is temporarily unavailable (unavailable). Nothing is written */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    verifyEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyEmailRequest"];
+            };
+        };
+        responses: {
+            /** @description The token is redeemed, once. The address is verified, the personal workspace exists (one, however often the request is repeated), and a new session cookie replaces any the request carried. For an account whose address was never verified the password is the one in the request, and every session, the second factor with its backup codes, every API token and every linked identity the account had is gone. The session is full when `next` is `done` and a partial one, good for POST /auth/mfa/verify, POST /auth/logout and GET /api/config only, when it is `mfa` */
+            200: {
+                headers: {
+                    /** @description The session cookie: HttpOnly, SameSite=Lax, Path=/, Secure and __Host- prefixed when the deployment is served over https */
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerifyEmailResult"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The token is unknown, expired (24 hours), already used or of another kind; all of them answer alike (token_expired), and nothing is changed */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation, or the password is outside 12 to 256 characters or is on the breached list (weak_password). The token is not used */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many attempts from this address; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
             503: {
                 headers: {
                     [name: string]: unknown;

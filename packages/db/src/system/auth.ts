@@ -1,4 +1,5 @@
 import postgres from "postgres";
+import { bindEmailVerificationStore, type EmailVerificationStore } from "./email-verification.ts";
 import { bindMfaStore, type MfaStore } from "./mfa.ts";
 import { bindOidcStore, type OidcStore } from "./oidc.ts";
 import { enqueueInTransaction, type QueuedJob } from "./queue.ts";
@@ -103,7 +104,7 @@ export interface SessionSummary {
   readonly userAgent: string | null;
 }
 
-export interface AuthStore extends SetupStore, MfaStore, OidcStore, RegistrationStore {
+export interface AuthStore extends SetupStore, MfaStore, OidcStore, RegistrationStore, EmailVerificationStore {
   /**
    * The address folded the way the database compares emails: two addresses that name one account
    * (`loginLookup` finds the same row) fold to one string, and no two others do. For what counts
@@ -254,6 +255,7 @@ export function bindAuthStore(client: postgres.Sql): Omit<AuthStore, "close"> {
     ...bindMfaStore(client),
     ...bindOidcStore(client),
     ...bindRegistrationStore(client),
+    ...bindEmailVerificationStore(client),
 
     async emailKey(email) {
       // The `email` column is citext, which compares lower(a) = lower(b) in the database's default

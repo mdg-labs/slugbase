@@ -163,7 +163,7 @@ export function apiTokenRepository(tx: TenantTx): ApiTokenRepository;
 export type ApiTokenScope = "read" | "read-write";
 
 // @public (undocumented)
-export interface AuthStore extends SetupStore, MfaStore, OidcStore, RegistrationStore {
+export interface AuthStore extends SetupStore, MfaStore, OidcStore, RegistrationStore, EmailVerificationStore {
     changePassword(change: PasswordChange): Promise<boolean>;
     close(): Promise<void>;
     createSession(session: NewSession): Promise<boolean>;
@@ -308,6 +308,23 @@ export interface DatabaseOptions {
 
 // @public
 export function defineScopedRepository<T extends WorkspaceTable>(name: string, table: T): ScopedRepositoryDefinition<T>;
+
+// @public (undocumented)
+export interface EmailVerification {
+    readonly afterVerified: (accountId: string, workspaces: PersonalWorkspaceWriter) => Promise<void>;
+    readonly ipPrefix: string | null;
+    readonly passwordHash: string;
+    readonly replacedTokenHash: Buffer | null;
+    readonly sessionId: string;
+    readonly sessionTokenHash: Buffer;
+    readonly tokenHash: Buffer;
+    readonly userAgent: string | null;
+}
+
+// @public (undocumented)
+export interface EmailVerificationStore {
+    verifyEmail(verification: EmailVerification): Promise<VerifiedEmail | undefined>;
+}
 
 // @public
 export interface IdentityLink {
@@ -556,8 +573,18 @@ export interface NewOidcLoginState {
 }
 
 // @public (undocumented)
+export interface NewPersonalWorkspace {
+    // (undocumented)
+    readonly accountId: string;
+    readonly jobs: readonly QueuedJob[];
+    readonly nameSuffix: string;
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
 export interface NewRegistration {
     readonly accountId: string;
+    readonly afterCreated?: (accountId: string, workspaces: PersonalWorkspaceWriter) => Promise<void>;
     // (undocumented)
     readonly displayName: string;
     readonly email: string;
@@ -625,6 +652,14 @@ export interface PasswordChange {
     readonly newTokenHash: Buffer;
     readonly passwordHash: string;
     readonly sessionId: string;
+}
+
+// @public
+export type PersonalWorkspaceResult = "created" | "exists" | "unavailable";
+
+// @public (undocumented)
+export interface PersonalWorkspaceWriter {
+    create(workspace: NewPersonalWorkspace): Promise<PersonalWorkspaceResult>;
 }
 
 // @public (undocumented)
@@ -870,6 +905,13 @@ export interface UnusedBackupCode {
 export type UpdateValues<T extends WorkspaceTable> = Partial<Omit<InferInsertModel<T>, "workspaceId">> & {
     workspaceId?: string;
 };
+
+// @public (undocumented)
+export interface VerifiedEmail {
+    // (undocumented)
+    readonly accountId: string;
+    readonly next: "done" | "mfa";
+}
 
 // @public
 export type WorkspaceTable = PgTable & {

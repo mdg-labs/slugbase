@@ -214,6 +214,14 @@ export const DOMAIN_EVENTS: {
             readonly values: readonly ["self-registration", "invitation", "oidc", "setup"];
         };
     };
+    readonly "workspace.created": {
+        readonly workspaceId: {
+            readonly type: "uuid";
+        };
+        readonly accountId: {
+            readonly type: "uuid";
+        };
+    };
 };
 
 // @public
@@ -353,6 +361,9 @@ export function generateTotpSecret(): Uint8Array;
 
 // @public
 export function hashApiToken(value: string): Buffer;
+
+// @public
+export function hashCredentialToken(value: string): Buffer | undefined;
 
 // @public
 export function hashOidcState(state: string): Buffer | undefined;
@@ -554,6 +565,39 @@ export interface PasswordPolicyOptions {
 export type PasswordProblem = "too_short" | "too_long" | "breached";
 
 // @public
+export const PERSONAL_WORKSPACE_NAME_SUFFIX = "'s workspace";
+
+// @public (undocumented)
+export interface PersonalWorkspaceDependencies {
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: PersonalWorkspaceStore;
+}
+
+// @public
+export type PersonalWorkspaceOutcome = "created" | "exists";
+
+// @public (undocumented)
+export interface PersonalWorkspaceRequest {
+    // (undocumented)
+    readonly accountId: string;
+    readonly events: readonly DomainEvent<"workspace.created">[];
+    // (undocumented)
+    readonly nameSuffix: string;
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface PersonalWorkspaceStore {
+    create(request: PersonalWorkspaceRequest): Promise<PersonalWorkspaceOutcome | undefined>;
+}
+
+// @public
+export class PersonalWorkspaceUnavailableError extends Error {
+    constructor();
+}
+
+// @public
 export interface Port {
     readonly available: boolean;
 }
@@ -569,6 +613,9 @@ export class PortUnavailable extends Error {
 
 // @public
 export type PortUnavailableCode = Extract<ProblemCode, "unavailable" | "mail_unavailable" | "ai_unavailable">;
+
+// @public
+export function provisionPersonalWorkspace(input: PersonalWorkspaceDependencies, accountId: string): Promise<PersonalWorkspaceOutcome>;
 
 // @public (undocumented)
 export interface RateLimitDecision {

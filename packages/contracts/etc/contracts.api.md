@@ -491,6 +491,13 @@ export interface ComponentTypes {
             singleKeyShortcuts?: boolean;
             theme?: "light" | "dark" | "system";
         };
+        VerifyEmailRequest: {
+            password: string;
+            token: string;
+        };
+        VerifyEmailResult: {
+            next: "done" | "mfa";
+        };
         VerifyMfaRequest: {
             code: string;
         } | {
@@ -3051,6 +3058,80 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    verifyEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["VerifyEmailRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["VerifyEmailResult"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     verifyMfa: {
         parameters: {
             query?: never;
@@ -3244,6 +3325,23 @@ export interface paths {
         get?: never;
         put?: never;
         post: OperationTypes["register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/auth/verify-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["verifyEmail"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4354,6 +4452,56 @@ export const updateMe: {
         readonly 503: ProblemResponse;
     };
 };
+
+// @public (undocumented)
+export const verifyEmail: {
+    readonly method: "post";
+    readonly path: "/api/v1/auth/verify-email";
+    readonly operationId: "verifyEmail";
+    readonly tag: "auth";
+    readonly summary: "Verify the email address of a registered account and sign it in";
+    readonly auth: "anonymous";
+    readonly rate: "token_redeem";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            token: z.ZodString;
+            password: z.ZodString;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        next: z.ZodEnum<{
+        mfa: "mfa";
+        done: "done";
+        }>;
+        }, z.core.$strict>, {
+        "Set-Cookie": {
+        description: string;
+        schema: z.ZodString;
+        };
+        }>;
+        readonly 400: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 410: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const VerifyEmailRequestSchema: z.ZodObject<{
+    token: z.ZodString;
+    password: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const VerifyEmailResultSchema: z.ZodObject<{
+    next: z.ZodEnum<{
+        mfa: "mfa";
+        done: "done";
+    }>;
+}, z.core.$strict>;
 
 // @public (undocumented)
 export const verifyMfa: {

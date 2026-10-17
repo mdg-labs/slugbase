@@ -30,6 +30,25 @@ export const RegisterRequestSchema = z
   })
   .meta({ id: "RegisterRequest" });
 
+export const VerifyEmailRequestSchema = z
+  .strictObject({
+    token: z.string().min(1).max(256).describe("The token of the verification link, from the fragment of /verify-email#token=…"),
+    password: z
+      .string()
+      .describe(
+        "The password the account will sign in with, 12 to 256 characters. When the address was never verified it replaces the one the registration set, because whoever registered an address is not necessarily its owner; it is ignored for an account that is already verified",
+      ),
+  })
+  .meta({ id: "VerifyEmailRequest" });
+
+export const VerifyEmailResultSchema = z
+  .strictObject({
+    next: z
+      .enum(["done", "mfa"])
+      .describe("`done`: the address is verified and the account is signed in. `mfa`: the account's second factor is still to be given (POST /auth/mfa/verify); the session cookie is set either way, and a pending one expires after 5 minutes"),
+  })
+  .meta({ id: "VerifyEmailResult" });
+
 export const VerifyMfaRequestSchema = z
   .union([
     z.strictObject({ code: z.string().min(1).max(16).describe("A code of the authenticator app: six digits, which may be grouped by a space") }),
@@ -92,6 +111,37 @@ export const register = defineOperation({
     503: problemResponse(
       "Email verification is required and no mail is configured (mail_unavailable), or the service is temporarily unavailable (unavailable). Nothing is written",
     ),
+  },
+});
+
+export const verifyEmail = defineOperation({
+  method: "post",
+  path: "/api/v1/auth/verify-email",
+  operationId: "verifyEmail",
+  tag: "auth",
+  summary: "Verify the email address of a registered account and sign it in",
+  auth: "anonymous",
+  rate: "token_redeem",
+  request: { body: VerifyEmailRequestSchema },
+  responses: {
+    200: jsonResponse(
+      "The token is redeemed, once. The address is verified, the personal workspace exists (one, however often the request is repeated), and a new session cookie replaces any the request carried. For an account whose address was never verified the password is the one in the request, and every session, the second factor with its backup codes, every API token and every linked identity the account had is gone. The session is full when `next` is `done` and a partial one, good for POST /auth/mfa/verify, POST /auth/logout and GET /api/config only, when it is `mfa`",
+      VerifyEmailResultSchema,
+      {
+        headers: {
+          "Set-Cookie": {
+            description: "The session cookie: HttpOnly, SameSite=Lax, Path=/, Secure and __Host- prefixed when the deployment is served over https",
+            schema: z.string(),
+          },
+        },
+      },
+    ),
+    400: problemResponse("The request was malformed"),
+    403: problemResponse("The request did not come from the application itself"),
+    410: problemResponse("The token is unknown, expired (24 hours), already used or of another kind; all of them answer alike (token_expired), and nothing is changed"),
+    422: problemResponse("The body did not pass validation, or the password is outside 12 to 256 characters or is on the breached list (weak_password). The token is not used"),
+    429: rateLimitedResponse("Too many attempts from this address; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
   },
 });
 

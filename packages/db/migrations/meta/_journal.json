@@ -176,6 +176,13 @@
       "when": 1792259494142,
       "tag": "20261017175134_add_signin_alerts",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792269005069,
+      "tag": "20261017203005_add_email_verification",
+      "breakpoints": true
     }
   ]
 }

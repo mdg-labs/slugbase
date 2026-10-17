@@ -55,7 +55,8 @@ beforeAll(async () => {
 beforeEach(async () => {
   hashings.mockClear();
   await database().owner`TRUNCATE accounts CASCADE`;
-  await database().owner`DELETE FROM pgboss.job WHERE name IN ('mail.send', 'event.account.created')`;
+  await database().owner`DELETE FROM pgboss.job WHERE name IN ('mail.send', 'event.account.created', 'event.workspace.created')`;
+  await database().owner`TRUNCATE workspaces CASCADE`;
 });
 
 afterAll(async () => {
@@ -185,6 +186,20 @@ async function answerOf(response: Response) {
   };
 }
 
+async function workspacesOf(accountId: string | undefined): Promise<{ name: string; role: string }[]> {
+  const rows = await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    return tx<{ name: string; role: string }[]>`
+      SELECT w.name, m.role::text AS role FROM workspaces w JOIN workspace_members m ON m.workspace_id = w.id WHERE m.account_id = ${accountId ?? null}`;
+  });
+  return [...rows];
+}
+
+async function workspaceEvents(): Promise<Record<string, unknown>[]> {
+  const rows = await database().app<{ data: Record<string, unknown> }[]>`SELECT data FROM pgboss.job WHERE name = 'event.workspace.created' ORDER BY created_on, id`;
+  return rows.map((row) => row.data);
+}
+
 async function untouched(): Promise<void> {
   expect(await accounts()).toEqual([]);
   expect(await jobs()).toEqual([]);
@@ -219,6 +234,38 @@ describe("POST /api/v1/auth/register", { timeout: TEST_TIMEOUT_MS }, () => {
     expect(mail.map((job) => job.data)).toEqual([{ template: "verifyEmail", accountId: account?.id }]);
     expect(event.map((job) => ({ accountId: job.data["accountId"], path: job.data["path"] }))).toEqual([{ accountId: account?.id, path: "self-registration" }]);
     expect(await credentialTokens()).toEqual([]);
+  });
+
+  it("gives the account its personal workspace and announces it in the same transaction when verification is not required", async () => {
+    const world = serve({ mail: new InMemoryMail(), env: { EMAIL_VERIFICATION_REQUIRED: "false" } });
+
+    expect((await register(world, body({ displayName: "Ada Lovelace" }))).status).toBe(202);
+
+    const [account] = await accounts();
+    expect(await workspacesOf(account?.id)).toEqual([{ name: "Ada Lovelace's workspace", role: "owner" }]);
+    expect((await workspaceEvents()).map((event) => event["accountId"])).toEqual([account?.id]);
+  });
+
+  it("creates no workspace at registration when verification is required, leaving it to the verification", async () => {
+    const world = serve({ mail: new InMemoryMail(), env: { EMAIL_VERIFICATION_REQUIRED: "true" } });
+
+    expect((await register(world, body())).status).toBe(202);
+
+    const [account] = await accounts();
+    expect(await workspacesOf(account?.id)).toEqual([]);
+    expect(await workspaceEvents()).toEqual([]);
+  });
+
+  it("creates no workspace for an address that already has an account, and leaves the account's one workspace alone", async () => {
+    const world = serve({ mail: new InMemoryMail(), env: { EMAIL_VERIFICATION_REQUIRED: "false" } });
+    expect((await register(world, body({ email: "grace@example.test" }))).status).toBe(202);
+    const [account] = await accounts();
+
+    expect((await register(world, body({ email: "GRACE@example.test", displayName: "Mallory" }))).status).toBe(202);
+
+    expect(await accounts()).toHaveLength(1);
+    expect(await workspacesOf(account?.id)).toEqual([{ name: "Ada Lovelace's workspace", role: "owner" }]);
+    expect(await workspaceEvents()).toHaveLength(1);
   });
 
   it("gives the account English when the browser asks for no language the interface has", async () => {

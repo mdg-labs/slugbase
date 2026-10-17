@@ -1,4 +1,5 @@
 import type postgres from "postgres";
+import { bindPersonalWorkspaceWriter, type PersonalWorkspaceWriter } from "./personal-workspace.ts";
 import { enqueueInTransaction, type QueuedJob } from "./queue.ts";
 
 // The wrapper of the system operation behind self-registration (doc 05 section 3.3, doc 02 section 2.2, doc 04
@@ -18,13 +19,19 @@ export interface NewRegistration {
   readonly onCreated: readonly QueuedJob[];
   /** Jobs queued instead when the address already has an account, so both outcomes write the same kinds of rows. */
   readonly onTaken: readonly QueuedJob[];
+  /**
+   * Runs in the transaction that creates the account, after it and before it commits, only when the account is
+   * created: what it writes (the personal workspace of a deployment that does not require verification) exists
+   * exactly when the account does. A rejection undoes the account.
+   */
+  readonly afterCreated?: (accountId: string, workspaces: PersonalWorkspaceWriter) => Promise<void>;
 }
 
 export interface RegistrationStore {
   /**
    * Creates an unverified account, with the jobs of `onCreated` queued in the same transaction, and answers true.
    * When the address (compared case-insensitively) or the identifier is taken it creates nothing, queues the jobs
-   * of `onTaken` and answers false. A job that cannot be queued undoes the account and rejects.
+   * of `onTaken` and answers false. A job that cannot be queued, or an `afterCreated` that rejects, undoes the account and rejects.
    */
   registerAccount(registration: NewRegistration): Promise<boolean>;
 }
@@ -49,6 +56,9 @@ export function bindRegistrationStore(client: postgres.Sql): RegistrationStore {
         const row = rows[0];
         if (rows.length !== 1 || row === undefined) {
           throw new Error("sys_create_account did not return exactly one row");
+        }
+        if (row.created) {
+          await registration.afterCreated?.(registration.accountId, bindPersonalWorkspaceWriter(tx));
         }
         for (const job of row.created ? registration.onCreated : registration.onTaken) {
           await enqueueInTransaction(tx, job);

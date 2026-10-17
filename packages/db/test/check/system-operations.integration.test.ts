@@ -140,6 +140,8 @@ describe("the shipped chain", () => {
       "sys_credential_token_issue",
       "sys_credential_token_consume",
       "sys_signin_alert_context",
+      "sys_email_verify",
+      "sys_create_personal_workspace",
     ]);
     expect(checkRules).toContain(systemOperationsRule);
     const database = await scratch();

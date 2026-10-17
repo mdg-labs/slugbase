@@ -11,6 +11,7 @@ import { logoutRoute } from "./logout.ts";
 import { oidcRoutes } from "./oidc.ts";
 import { registerRoute } from "./register.ts";
 import { verifyMfaRoute } from "./mfa.ts";
+import { verifyEmailRoute } from "./verify-email.ts";
 
 export interface AuthRoutesOptions {
   readonly store: AuthStore;
@@ -38,7 +39,7 @@ export interface AuthRoutesOptions {
 
 /**
  * What sign-in contributes (doc 04 sections 10.2 and 10.3): the login,
- * registration and logout routes, the start and callback of OIDC sign-in, the routes that list and revoke the account's sessions,
+ * registration, email verification and logout routes, the start and callback of OIDC sign-in, the routes that list and revoke the account's sessions,
  * the routes that re-authenticate and change the password, and the authenticators
  * that turn the session cookie and the bearer API token into a principal at stage
  * 4 of the chain.
@@ -58,7 +59,7 @@ export function authContribution({
 }: AuthRoutesOptions): ModuleContribution {
   const cookie = sessionCookieSpec(appOrigin);
   return {
-    routes: [loginRoute({ store, passwords, mail, cookie }), registerRoute({ store, settings: registration, mail, passwordPolicy, hashPassword }), ...oidcRoutes({ store, identity, secretBox, appOrigin, sessionSecret, sessionCookie: cookie, now }), verifyMfaRoute({ store, mail, secretBox, verifyCode: verifyHash, now, cookie }), logoutRoute({ store, cookie }), ...sessionRoutes({ store, cookie, cursorSecret: sessionSecret }),
+    routes: [loginRoute({ store, passwords, mail, cookie }), registerRoute({ store, settings: registration, mail, passwordPolicy, hashPassword }), verifyEmailRoute({ store, passwordPolicy, hashPassword, cookie }), ...oidcRoutes({ store, identity, secretBox, appOrigin, sessionSecret, sessionCookie: cookie, now }), verifyMfaRoute({ store, mail, secretBox, verifyCode: verifyHash, now, cookie }), logoutRoute({ store, cookie }), ...sessionRoutes({ store, cookie, cursorSecret: sessionSecret }),
       ...securityRoutes({ store, passwords, passwordPolicy, hashPassword, cookie, mail, secretBox, verifyCode: verifyHash, now }),
     ],
     authenticators: [createSessionAuthenticator({ store, cookie }), createApiTokenAuthenticator({ store })],

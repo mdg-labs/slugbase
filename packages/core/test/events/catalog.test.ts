@@ -12,10 +12,17 @@ import {
 const ACCOUNT = "0192f3a0-bbbb-7000-8000-000000000001";
 
 describe("the domain event catalog", () => {
-  it("starts with account.created, announcing the account and how it came to exist", () => {
-    expect(DOMAIN_EVENT_NAMES).toEqual(["account.created"]);
+  it("announces account.created with the account and how it came to exist", () => {
+    expect(DOMAIN_EVENT_NAMES).toEqual(["account.created", "workspace.created"]);
     expect(Object.keys(DOMAIN_EVENTS["account.created"])).toEqual(["accountId", "path"]);
     expect(ACCOUNT_CREATION_PATHS).toEqual(["self-registration", "invitation", "oidc", "setup"]);
+  });
+
+  it("announces workspace.created with the workspace and the account it was created for", () => {
+    expect(Object.keys(DOMAIN_EVENTS["workspace.created"])).toEqual(["workspaceId", "accountId"]);
+    expect(parseDomainEventPayload("workspace.created", { workspaceId: ACCOUNT, accountId: ACCOUNT })).toEqual({ workspaceId: ACCOUNT, accountId: ACCOUNT });
+    expect(() => parseDomainEventPayload("workspace.created", { workspaceId: ACCOUNT, accountId: ACCOUNT, name: "Ada's workspace" })).toThrow(DomainEventPayloadError);
+    expect(() => parseDomainEventPayload("workspace.created", { workspaceId: ACCOUNT })).toThrow(DomainEventPayloadError);
   });
 
   it("holds no field that could carry personal data", () => {
@@ -37,7 +44,7 @@ describe("the domain event catalog", () => {
 describe("parseDomainEventPayload", () => {
   it("accepts the payload of each path", () => {
     for (const path of ACCOUNT_CREATION_PATHS) {
-      const payload = { accountId: ACCOUNT, path } satisfies DomainEventPayload;
+      const payload = { accountId: ACCOUNT, path } satisfies DomainEventPayload<"account.created">;
       expect(parseDomainEventPayload("account.created", payload)).toEqual({ accountId: ACCOUNT, path });
     }
   });
