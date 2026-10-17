@@ -183,6 +183,13 @@
       "when": 1792269005069,
       "tag": "20261017203005_add_email_verification",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792270471724,
+      "tag": "20261017205431_add_password_set_caller_note",
+      "breakpoints": true
     }
   ]
 }
