@@ -12,6 +12,8 @@ import { urlOf, useMigratableDatabase } from "./support.ts";
 
 const database = useMigratableDatabase();
 
+// The simple Query message of a bare ROLLBACK: type, length, text and its terminator.
+const ROLLBACK_QUERY = Buffer.concat([Buffer.from("Q"), Buffer.from([0, 0, 0, 13]), Buffer.from("ROLLBACK\0")]);
 const PLAN_MARKER = "CREATE TYPE pgboss.job_state";
 
 interface Statement {
@@ -24,6 +26,8 @@ interface Relay {
   url: string;
   /** The queries the step sent on any connection after the construction plan was let fail, in order. */
   after: Statement[];
+  /** How many ROLLBACK statements the relay ended the connection under. */
+  rollbacksDropped: () => number;
   close: () => Promise<void>;
 }
 
@@ -81,11 +85,15 @@ async function installBeforeThePlan(): Promise<void> {
   }
 }
 
-async function relayRacingTheInstall(): Promise<Relay> {
+// With `failFirstRollback`, the connection that receives the first ROLLBACK
+// after the plan is ended instead of answering it, as a new connection that
+// fails would.
+async function relayRacingTheInstall(options: { failFirstRollback?: boolean } = {}): Promise<Relay> {
   const target = new URL(urlOf(database().owner));
   const sockets = new Set<Socket>();
   const after: Statement[] = [];
   let planSeen = false;
+  let rollbacksDropped = 0;
   const listener: Server = createServer((client) => {
     const upstream = connect({ host: target.hostname, port: Number(target.port) });
     const backend = backendOf(upstream);
@@ -104,6 +112,11 @@ async function relayRacingTheInstall(): Promise<Relay> {
         } else if (planSeen && chunk.toString("latin1").startsWith("Q")) {
           const pid = backend();
           after.push({ text: chunk.toString("latin1"), locked: pid !== undefined && (await holdsMigrateLock(pid)) });
+          if (options.failFirstRollback === true && rollbacksDropped === 0 && chunk.equals(ROLLBACK_QUERY)) {
+            rollbacksDropped += 1;
+            dropBoth();
+            return;
+          }
         }
         upstream.write(chunk);
       });
@@ -125,6 +138,7 @@ async function relayRacingTheInstall(): Promise<Relay> {
   return {
     url: url.href,
     after,
+    rollbacksDropped: () => rollbacksDropped,
     close: async () => {
       for (const socket of sockets) {
         socket.destroy();
@@ -155,5 +169,24 @@ describe("the pg-boss step of migrate after its construction plan finds the sche
     expect(
       await database().owner`SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory' AND database = (SELECT oid FROM pg_database WHERE datname = current_database())`,
     ).toEqual([{ n: 0 }]);
+  }, 60_000);
+
+  it("carries on and retakes the lock when the ROLLBACK after the failed plan cannot run", async () => {
+    // The first test installed the schema; this one starts from the empty schema the migrations leave.
+    await database().owner.unsafe("DROP SCHEMA pgboss CASCADE");
+    await database().owner.unsafe("CREATE SCHEMA pgboss AUTHORIZATION slugbase_owner");
+    const relay = await relayRacingTheInstall({ failFirstRollback: true });
+    try {
+      const installed = await installPgBoss(relay.url);
+
+      expect(installed).toBeUndefined();
+    } finally {
+      await relay.close();
+    }
+
+    expect(relay.rollbacksDropped()).toBe(1);
+    const onSchema = relay.after.filter((statement) => statement.text.includes("pgboss"));
+    expect(onSchema.some((statement) => statement.text.includes("pgboss.version"))).toBe(true);
+    expect(onSchema.filter((statement) => !statement.locked)).toEqual([]);
   }, 60_000);
 });

@@ -128,10 +128,13 @@ function isConnectionLoss(error: unknown): boolean {
 // The pool ends the connection of any failed statement, so the ROLLBACK that
 // follows a failed script runs on a new connection. After a lost connection
 // that new connection may not open at all (a server shutting down refuses it),
-// and its error would replace the loss.
+// and its error would replace the loss. A ROLLBACK that fails is ignored too:
+// its error must not replace the one the caller rethrows or checks.
 async function rollback(db: Db, error: unknown): Promise<void> {
   if (!isConnectionLoss(error)) {
-    await db.executeSql("ROLLBACK");
+    // Nothing is left to undo: a failed statement ended its connection and any transaction on it, and a
+    // call that failed before or after its script left none open.
+    await db.executeSql("ROLLBACK").catch(() => undefined);
   }
 }
 
