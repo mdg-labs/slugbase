@@ -8,6 +8,11 @@ overrides:
   '@esbuild-kit/core-utils>esbuild': ^0.25.0
   '@ai-sdk/provider-utils': ^4.0.33
 
+patchedDependencies:
+  postgres@3.4.9:
+    hash: 0552a4956901943b9f33d2a0a32609be308605a4ab633fcc0ccba46e923958b1
+    path: patches/postgres@3.4.9.patch
+
 importers:
 
   .:
@@ -186,10 +191,10 @@ importers:
         version: link:../core
       drizzle-orm:
         specifier: 0.45.4
-        version: 0.45.4(@opentelemetry/api@1.9.1)(pg@8.23.1)(postgres@3.4.9)
+        version: 0.45.4(@opentelemetry/api@1.9.1)(pg@8.23.1)(postgres@3.4.9(patch_hash=0552a4956901943b9f33d2a0a32609be308605a4ab633fcc0ccba46e923958b1))
       postgres:
         specifier: ^3.4.9
-        version: 3.4.9
+        version: 3.4.9(patch_hash=0552a4956901943b9f33d2a0a32609be308605a4ab633fcc0ccba46e923958b1)
     devDependencies:
       drizzle-kit:
         specifier: 0.31.11
@@ -8331,11 +8336,11 @@ snapshots:
       esbuild: 0.25.12
       tsx: 4.23.15
 
-  drizzle-orm@0.45.4(@opentelemetry/api@1.9.1)(pg@8.23.1)(postgres@3.4.9):
+  drizzle-orm@0.45.4(@opentelemetry/api@1.9.1)(pg@8.23.1)(postgres@3.4.9(patch_hash=0552a4956901943b9f33d2a0a32609be308605a4ab633fcc0ccba46e923958b1)):
     optionalDependencies:
       '@opentelemetry/api': 1.9.1
       pg: 8.23.1
-      postgres: 3.4.9
+      postgres: 3.4.9(patch_hash=0552a4956901943b9f33d2a0a32609be308605a4ab633fcc0ccba46e923958b1)
 
   dunder-proto@1.0.1:
     dependencies:
@@ -10339,7 +10344,7 @@ snapshots:
     dependencies:
       xtend: 4.0.2
 
-  postgres@3.4.9: {}
+  postgres@3.4.9(patch_hash=0552a4956901943b9f33d2a0a32609be308605a4ab633fcc0ccba46e923958b1): {}
 
   prelude-ls@1.2.1: {}
 

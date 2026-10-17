@@ -58,6 +58,9 @@
     "overrides": {
       "@esbuild-kit/core-utils>esbuild": "^0.25.0",
       "@ai-sdk/provider-utils": "^4.0.33"
+    },
+    "patchedDependencies": {
+      "postgres@3.4.9": "patches/postgres@3.4.9.patch"
     }
   }
 }

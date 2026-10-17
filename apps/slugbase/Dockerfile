@@ -29,9 +29,10 @@ FROM node:24-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7
 RUN npm install --global --ignore-scripts pnpm@10.34.6
 WORKDIR /app
 
-# Fetching from the lockfile alone keeps this layer until the dependencies change.
+# Fetching from the lockfile and the dependency patches alone keeps this layer until the dependencies change.
 FROM toolchain AS build
 COPY pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY patches ./patches
 RUN pnpm fetch
 COPY . .
 RUN pnpm install --frozen-lockfile --offline

@@ -1,0 +1,52 @@
+postgres.js 3.4.9, connection.js, execute(): a query run on a connection whose socket is gone.
+
+When the connection closes, closed() sets the socket to null and calls onclose,
+which rejects the Promise.race in sql.begin with CONNECTION_CLOSED, so the
+transaction rejects to its caller. A ROLLBACK that scope() issues after that,
+or any other query run on the closed connection, is still accepted by
+execute(): write() schedules nextWrite() with setImmediate, and nextWrite()
+throws "Cannot read properties of null (reading 'write')" outside any promise
+chain, which ends the process.
+
+This patch rejects such a query with CONNECTION_CLOSED instead, so nothing
+is written and the process keeps running. execute() returns true, as for a
+query that was accepted: its callers (the handler in index.js) take a falsy
+result to mean the connection is busy and move it to the full queue, which
+would take a closed connection out of reconnecting.
+
+Upstream: no issue is linked yet; the defect is to be reported to
+https://github.com/porsager/postgres. Drop this patch when a release carries
+the fix.
+
+diff --git a/cjs/src/connection.js b/cjs/src/connection.js
+index 07f6716702ac888215c86ad6e0071aaf55ae519c..567b807b304eebd3d9f4e22f2a2652e733c85916 100644
+--- a/cjs/src/connection.js
++++ b/cjs/src/connection.js
+@@ -157,6 +157,11 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+     if (terminated)
+       return queryError(q, Errors.connection('CONNECTION_DESTROYED', options))
+ 
++    if (socket === null) {
++      queryError(q, Errors.connection('CONNECTION_CLOSED', options, socket))
++      return true
++    }
++
+     if (stream)
+       return queryError(q, Errors.generic('COPY_IN_PROGRESS', 'You cannot execute queries during copy'))
+ 
+diff --git a/src/connection.js b/src/connection.js
+index 1b1cccde43b4570d5d071d6ffaab2669b3c2065a..6d06c481e5d6889abf207be32f0c5be82c95b308 100644
+--- a/src/connection.js
++++ b/src/connection.js
+@@ -157,6 +157,11 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+     if (terminated)
+       return queryError(q, Errors.connection('CONNECTION_DESTROYED', options))
+ 
++    if (socket === null) {
++      queryError(q, Errors.connection('CONNECTION_CLOSED', options, socket))
++      return true
++    }
++
+     if (stream)
+       return queryError(q, Errors.generic('COPY_IN_PROGRESS', 'You cannot execute queries during copy'))
+ 
