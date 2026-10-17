@@ -163,7 +163,12 @@ function redact(text: string, secrets: readonly string[]): string {
   return result;
 }
 
-function sanitize(error: unknown, connection: ConnectionSecrets, context?: string): MigrationError {
+function sanitize(
+  error: unknown,
+  connection: ConnectionSecrets,
+  context?: string,
+  connectionLost = false,
+): MigrationError {
   let message = "unknown error";
   let code: string | undefined;
   if (error instanceof Error) {
@@ -173,6 +178,9 @@ function sanitize(error: unknown, connection: ConnectionSecrets, context?: strin
     if (message === "") {
       message = code ?? error.name;
     }
+  }
+  if (connectionLost) {
+    message = SESSION_REPLACED;
   }
   const text = redact(context === undefined ? message : `${context}: ${message}`, connection.secrets);
   return new MigrationError(text, code === undefined ? undefined : redact(code, connection.secrets));
@@ -349,6 +357,45 @@ class StepFailure extends Error {
 const SESSION_REPLACED =
   "the database connection was replaced during the run, so the advisory lock and the session settings are gone";
 
+// The ways the driver and the server report a session that is gone: the
+// driver's own codes, the server's shutdown and connection-exception
+// SQLSTATEs (57P01 to 57P03, class 08) and the socket errors of a dropped peer.
+const CONNECTION_LOSS_CODES = new Set([
+  "CONNECTION_CLOSED",
+  "CONNECTION_ENDED",
+  "CONNECTION_DESTROYED",
+  "57P01",
+  "57P02",
+  "57P03",
+  "ECONNRESET",
+  "EPIPE",
+]);
+const CONNECTION_EXCEPTION_CLASS = /^08[0-9A-Z]{3}$/;
+
+function isConnectionLoss(error: unknown): boolean {
+  const code = error instanceof Error ? (error as { code?: unknown }).code : undefined;
+  return typeof code === "string" && (CONNECTION_LOSS_CODES.has(code) || CONNECTION_EXCEPTION_CLASS.test(code));
+}
+
+// postgres.js writes the ROLLBACK of a failed `sql.begin` even when the failure
+// was the loss of the connection, and that write throws from a timer callback
+// no caller can catch. The transaction is therefore run on the one connection
+// directly, and a lost connection, which ended the transaction with the session,
+// is not rolled back.
+async function inTransaction<T>(sql: Pick<postgres.Sql, "unsafe">, work: () => Promise<T>): Promise<T> {
+  await sql.unsafe("BEGIN");
+  try {
+    const result = await work();
+    await sql.unsafe("COMMIT");
+    return result;
+  } catch (error) {
+    if (!isConnectionLoss(error)) {
+      await sql.unsafe("ROLLBACK").catch(() => undefined);
+    }
+    throw error;
+  }
+}
+
 async function assertSession(sql: Pick<postgres.Sql, "unsafe">, pid: number): Promise<void> {
   const rows = await sql.unsafe<{ pid: number }[]>("SELECT pg_backend_pid() AS pid");
   if (rows[0]?.pid !== pid) {
@@ -443,20 +490,20 @@ async function applyMigration(sql: postgres.Sql, pid: number, chain: MigrationCh
     await sql.unsafe(record, values);
     return;
   }
-  await sql.begin(async (tx) => {
-    await assertSession(tx, pid);
+  await inTransaction(sql, async () => {
+    await assertSession(sql, pid);
     for (const statement of migration.statements) {
-      await tx.unsafe(statement);
+      await sql.unsafe(statement);
     }
-    await tx.unsafe(record, values);
+    await sql.unsafe(record, values);
   });
 }
 
 async function applyChain(sql: postgres.Sql, pid: number, loaded: LoadedChain): Promise<string[]> {
   const { chain, migrations } = loaded;
-  await sql.begin(async (tx) => {
-    await tx.unsafe(`CREATE SCHEMA IF NOT EXISTS ${quoteIdentifier(BOOKKEEPING_SCHEMA)}`);
-    await tx.unsafe(
+  await inTransaction(sql, async () => {
+    await sql.unsafe(`CREATE SCHEMA IF NOT EXISTS ${quoteIdentifier(BOOKKEEPING_SCHEMA)}`);
+    await sql.unsafe(
       `CREATE TABLE IF NOT EXISTS ${bookkeepingName(chain)} (
          id serial PRIMARY KEY,
          hash text NOT NULL,
@@ -464,8 +511,8 @@ async function applyChain(sql: postgres.Sql, pid: number, loaded: LoadedChain): 
        )`,
     );
     // The server reads the level for readiness as slugbase_app (doc 05 section 5.3).
-    await tx.unsafe(`GRANT USAGE ON SCHEMA ${quoteIdentifier(BOOKKEEPING_SCHEMA)} TO ${APP_ROLE}`);
-    await tx.unsafe(`GRANT SELECT ON ${bookkeepingName(chain)} TO ${APP_ROLE}`);
+    await sql.unsafe(`GRANT USAGE ON SCHEMA ${quoteIdentifier(BOOKKEEPING_SCHEMA)} TO ${APP_ROLE}`);
+    await sql.unsafe(`GRANT SELECT ON ${bookkeepingName(chain)} TO ${APP_ROLE}`);
   });
   const recorded = (await readRecorded(sql, chain)) ?? [];
   const applied: string[] = [];
@@ -506,12 +553,17 @@ export async function migrate(options: MigrateOptions): Promise<MigrateResult> {
     throw sanitize(error, connection);
   }
   const sql = connect(connection, "slugbase-migrate");
+  // Set once the backend is known and cleared again before the lock is given
+  // back: a connection lost in between is a replaced session, and the loss of
+  // the final unlock, after every step committed, is reported as it comes.
+  let sessionKnown = false;
   try {
     const pidRows = await sql<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`;
     const pid = pidRows[0]?.pid;
     if (pid === undefined) {
       throw new MigrationError("the database did not report its backend process");
     }
+    sessionKnown = true;
     await sql.unsafe(`SET statement_timeout = '${STATEMENT_TIMEOUT}'`);
     // A build whose client closed its connection is cancelled, leaving an INVALID
     // index, rather than finished and never recorded.
@@ -550,13 +602,14 @@ export async function migrate(options: MigrateOptions): Promise<MigrateResult> {
         applied.push({ chain: chain.chain.name, tag });
       }
     }
+    sessionKnown = false;
     await sql`SELECT pg_advisory_unlock(hashtext('slugbase.migrate'))`;
     return { applied };
   } catch (error) {
     if (error instanceof StepFailure) {
-      throw sanitize(error.original, connection, error.step);
+      throw sanitize(error.original, connection, error.step, sessionKnown && isConnectionLoss(error.original));
     }
-    throw sanitize(error, connection);
+    throw sanitize(error, connection, undefined, sessionKnown && isConnectionLoss(error));
   } finally {
     await sql.end({ timeout: 5 });
   }
