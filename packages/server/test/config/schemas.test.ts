@@ -47,6 +47,32 @@ describe("process schemas", () => {
     });
   });
 
+  it("leaves PUBLIC_REGISTRATION and EMAIL_VERIFICATION_REQUIRED unset by default and when empty: the composition root supplies their defaults", () => {
+    const { config } = loadConfig("server", development);
+    expect(config.PUBLIC_REGISTRATION).toBeUndefined();
+    expect(config.EMAIL_VERIFICATION_REQUIRED).toBeUndefined();
+    const empty = loadConfig("server", { ...development, PUBLIC_REGISTRATION: "", EMAIL_VERIFICATION_REQUIRED: "" }).config;
+    expect(empty.PUBLIC_REGISTRATION).toBeUndefined();
+    expect(empty.EMAIL_VERIFICATION_REQUIRED).toBeUndefined();
+  });
+
+  it.each([
+    ["true", true],
+    ["1", true],
+    ["false", false],
+    ["0", false],
+  ])("parses PUBLIC_REGISTRATION and EMAIL_VERIFICATION_REQUIRED %j as %j", (value, expected) => {
+    const { config } = loadConfig("server", { ...development, PUBLIC_REGISTRATION: value, EMAIL_VERIFICATION_REQUIRED: value });
+    expect(config.PUBLIC_REGISTRATION).toBe(expected);
+    expect(config.EMAIL_VERIFICATION_REQUIRED).toBe(expected);
+  });
+
+  it("does not give the registration keys to the worker", () => {
+    const config = loadConfig("worker", { ...development, PUBLIC_REGISTRATION: "true" }).config;
+    expect(config).not.toHaveProperty("PUBLIC_REGISTRATION");
+    expect(config).not.toHaveProperty("EMAIL_VERIFICATION_REQUIRED");
+  });
+
   it("parses explicit values", () => {
     const { config } = loadConfig("server", {
       ...development,
@@ -164,6 +190,8 @@ describe("process schemas", () => {
     ["API_DOCS_ENABLED", "yes"],
     ["SETUP_ENABLED", "yes"],
     ["SETUP_TOKEN_REQUIRED", ""],
+    ["PUBLIC_REGISTRATION", "yes"],
+    ["EMAIL_VERIFICATION_REQUIRED", "True"],
     ["BREACHED_PASSWORD_CHECK", "nope"],
   ])("names %s for the malformed value %j", (key, value) => {
     expect(failure(() => loadConfig("server", { ...development, [key]: value })).issues.map((issue) => issue.key)).toContain(key);

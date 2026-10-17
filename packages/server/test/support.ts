@@ -102,6 +102,7 @@ export function fakeAuthStore(overrides: Partial<AuthStore> = {}): AuthStore {
     setupPending: () => Promise.resolve(false),
     setSetupToken: unexpected("setSetupToken"),
     completeSetup: unexpected("completeSetup"),
+    registerAccount: unexpected("registerAccount"),
     close: () => Promise.resolve(),
     ...overrides,
   };

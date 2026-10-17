@@ -55,6 +55,7 @@ const authStore: AuthStore = {
   setupPending: () => Promise.resolve(false),
   setSetupToken: unexpected,
   completeSetup: unexpected,
+  registerAccount: unexpected,
   close: () => Promise.resolve(),
 };
 
@@ -123,7 +124,7 @@ describe("identity in the composition root", () => {
     const response = await server.fetch(new Request("https://bookmarks.example.com/api/config"));
     expect(response.status).toBe(200);
     const text = await response.text();
-    expect((JSON.parse(text) as { signIn: unknown }).signIn).toEqual({ oidc: [] });
+    expect((JSON.parse(text) as { signIn: unknown }).signIn).toEqual({ registration: false, oidc: [] });
     expect(text).not.toContain("client-secret-qx89");
     expect(unavailableLines()).toHaveLength(1);
   });

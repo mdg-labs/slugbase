@@ -45,6 +45,7 @@ const authStore: AuthStore = {
   setupPending: () => Promise.resolve(false),
   setSetupToken: unexpected,
   completeSetup: unexpected,
+  registerAccount: unexpected,
   close: () => Promise.resolve(),
 };
 

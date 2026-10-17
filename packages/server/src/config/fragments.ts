@@ -163,6 +163,19 @@ export const setupFragment = envFragment({
 });
 
 /**
+ * Public registration (doc 02 section 2.2), for the server. Neither key has a default here: what an unset key
+ * means is the composition root's to say (the `registrationDefaults` option of `createServer`; doc 01 section 11), because
+ * the Community Edition and SlugBase Cloud differ in it and no edition flag decides it (D4). An unset or
+ * empty key is "not set", and an explicit value always wins over the composition's default.
+ */
+export const registrationFragment = envFragment({
+  shape: {
+    PUBLIC_REGISTRATION: optional(envBoolean()),
+    EMAIL_VERIFICATION_REQUIRED: optional(envBoolean()),
+  },
+});
+
+/**
  * The password policy (doc 02 section 2.5, Q15), for the server. `BREACHED_PASSWORD_CHECK=false` turns off
  * the check against the breached-password dataset shipped with the image; the length rules always apply.
  */

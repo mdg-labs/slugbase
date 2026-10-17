@@ -30,6 +30,12 @@ export const FIXTURES: ContractFixtures = {
   // session is a complete one, which has no second factor to give, so the valid request is the declared 422; the pending session is walked by the sign-in tests.
   verifyMfa: { body: { code: "000000" }, status: 422 },
   logout: {},
+  // An anonymous operation: no identifier of any account is part of it. The walker's server leaves registration at its closed default, so the
+  // valid request is the declared 403; the registration itself is walked by the register tests.
+  register: {
+    body: { displayName: "Walker", email: "register-walker@example.test", password: "a password for the register walker" },
+    status: 403,
+  },
   // Anonymous operations: the provider's slug is the only identifier, it names a deployment-wide setting and no workspace or account, and there is
   // nothing of another account's to name. The walker's server has no provider, so both answer the declared 302 to /login with the failure code;
   // the handshake itself is walked by the OIDC sign-in tests.

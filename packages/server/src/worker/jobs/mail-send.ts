@@ -1,6 +1,7 @@
-import { ACCOUNT_NOTIFICATIONS, accountNotification } from "@slugbase/core";
-import { accountProfileRepository, type QueuedJob } from "@slugbase/db";
+import { ACCOUNT_NOTIFICATIONS, CREDENTIAL_TOKEN_TTL_SECONDS, accountNotification, generateCredentialToken, type MailMessage } from "@slugbase/core";
+import { accountProfileRepository, credentialTokenRepository, type QueuedJob } from "@slugbase/db";
 import { z } from "zod";
+import { uuidv7 } from "../../auth/uuidv7.ts";
 import type { JobDefinition } from "../job.ts";
 import { defineJob } from "../job.ts";
 
@@ -10,6 +11,12 @@ import { defineJob } from "../job.ts";
 // holds neither an address nor a message body, and neither does a log line or an
 // error report of a failed attempt (doc 10 T7). A request never waits for it: it
 // queues the job in its own transaction and answers.
+//
+// The verification email carries a one-time token (doc 02 section 2.6). The job
+// makes it when it runs, stores only its hash and puts the value into the message
+// that goes straight to the mail port, so it is in no queued payload, log line or
+// error report. It sends nothing to an account that is gone, disabled or already
+// verified; a retry makes a new token, which replaces the earlier unused one.
 
 export const MAIL_SEND_JOB = "mail.send";
 
@@ -22,13 +29,36 @@ export const mailSendJob = defineJob({
   // Delivery is at least once: a retry after an attempt that failed past the point the relay took the
   // message sends it again, and nothing here can tell the two apart.
   handle: async ({ template, accountId }, context) => {
-    const profile = await context.withTenant({ accountId, requestId: JOB_REQUEST_ID }, (tx) => accountProfileRepository(tx).profile());
-    if (profile === undefined) {
-      // The account is gone since the job was queued; there is nobody to tell and a retry would find the same.
-      context.logger.warn("Mail not sent; the account no longer exists", { template });
-      return;
+    const message = await context.withTenant({ accountId, requestId: JOB_REQUEST_ID }, async (tx): Promise<MailMessage | undefined> => {
+      const profile = await accountProfileRepository(tx).profile();
+      if (profile === undefined) {
+        // The account is gone since the job was queued; there is nobody to tell and a retry would find the same.
+        context.logger.warn("Mail not sent; the account no longer exists", { template });
+        return undefined;
+      }
+      if (template !== "verifyEmail") {
+        return accountNotification(template, profile);
+      }
+      if (profile.emailVerified) {
+        return undefined;
+      }
+      const token = generateCredentialToken();
+      const issued = await credentialTokenRepository(tx).issue({
+        id: uuidv7(),
+        purpose: "email_verify",
+        tokenHash: token.hash,
+        targetEmail: null,
+        ttlSeconds: CREDENTIAL_TOKEN_TTL_SECONDS.email_verify,
+      });
+      if (!issued) {
+        context.logger.warn("Mail not sent; the account cannot receive a verification token", { template });
+        return undefined;
+      }
+      return accountNotification(template, profile, { token: token.value });
+    });
+    if (message !== undefined) {
+      await context.adapters.mail.send(message);
     }
-    await context.adapters.mail.send(accountNotification(template, profile));
   },
 });
 

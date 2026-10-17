@@ -47,7 +47,7 @@ describe("GET /api/config", () => {
       defaultLocale: "en",
       docsBaseUrl: "https://docs.example.org/help",
       features: { mail: false, ai: false },
-      signIn: { oidc: [] },
+      signIn: { registration: false, oidc: [] },
       setupRequired: false,
       setupTokenRequired: false,
     });
@@ -80,6 +80,54 @@ describe("GET /api/config", () => {
     const response = await get(start({}, { authStore: down }), "/api/config");
     expect(response.status).toBe(500);
     expect(response.headers.get("cache-control")).toBe("no-store");
+  });
+
+  describe("signIn.registration", () => {
+    const registration = async (env: Record<string, string>, given: Adapters = adapters(), defaults?: { publicRegistration: boolean; emailVerificationRequired: boolean }) => {
+      const server = createServer({
+        config: serverConfig(env),
+        adapters: given,
+        modules: [],
+        migrations: [],
+        logger: recordingLogger(),
+        database: fakeDatabase(),
+        authStore: fakeAuthStore(),
+        buildInfo: BUILD,
+        ...(defaults === undefined ? {} : { registrationDefaults: defaults }),
+      });
+      return ((await (await get(server, "/api/config")).json()) as { signIn: { registration: boolean } }).signIn.registration;
+    };
+    const withMail = (): Adapters => {
+      const ports = adapters();
+      return { ...ports, mail: { ...ports.mail, available: true } };
+    };
+
+    it("is false by default: the composition leaves registration closed unless it says otherwise", async () => {
+      expect(await registration({})).toBe(false);
+      expect(await registration({ PUBLIC_REGISTRATION: "" })).toBe(false);
+    });
+
+    it("is true when public registration is on and verification is not required, with or without mail", async () => {
+      expect(await registration({ PUBLIC_REGISTRATION: "true" })).toBe(true);
+      expect(await registration({ PUBLIC_REGISTRATION: "true", EMAIL_VERIFICATION_REQUIRED: "false" }, withMail())).toBe(true);
+    });
+
+    it("is false when public registration is on and verification is required but no mail can be sent: the operation would refuse", async () => {
+      expect(await registration({ PUBLIC_REGISTRATION: "true", EMAIL_VERIFICATION_REQUIRED: "true" })).toBe(false);
+      expect(await registration({ PUBLIC_REGISTRATION: "true", EMAIL_VERIFICATION_REQUIRED: "true" }, withMail())).toBe(true);
+    });
+
+    it("is false whenever public registration is off, mail or not", async () => {
+      expect(await registration({ PUBLIC_REGISTRATION: "false", EMAIL_VERIFICATION_REQUIRED: "false" }, withMail())).toBe(false);
+    });
+
+    it("takes the composition's defaults for the keys the operator left unset, and the operator's key over them", async () => {
+      const cloud = { publicRegistration: true, emailVerificationRequired: true };
+      expect(await registration({}, withMail(), cloud)).toBe(true);
+      expect(await registration({}, adapters(), cloud)).toBe(false);
+      expect(await registration({ PUBLIC_REGISTRATION: "false" }, withMail(), cloud)).toBe(false);
+      expect(await registration({ EMAIL_VERIFICATION_REQUIRED: "false" }, adapters(), cloud)).toBe(true);
+    });
   });
 
   it("reports whether a port is configured, per port", async () => {
@@ -118,6 +166,7 @@ describe("GET /api/config", () => {
       );
       expect(response.status).toBe(200);
       expect(body.signIn).toEqual({
+        registration: false,
         oidc: [
           { slug: "google", name: "Google" },
           { slug: "company-sso", name: "Company SSO" },
@@ -133,7 +182,7 @@ describe("GET /api/config", () => {
           return Promise.resolve([{ id: "google", displayName: "Google" }]);
         }, false),
       );
-      expect(body.signIn).toEqual({ oidc: [] });
+      expect(body.signIn).toEqual({ registration: false, oidc: [] });
       expect(asked).toBe(0);
     });
 
@@ -159,7 +208,7 @@ describe("GET /api/config", () => {
         logger,
       );
       expect(response.status).toBe(200);
-      expect(body.signIn).toEqual({ oidc: [] });
+      expect(body.signIn).toEqual({ registration: false, oidc: [] });
       expect(logger.entries.filter((entry) => entry.level === "warn")).toEqual([
         { level: "warn", message: "The OIDC providers could not be listed", fields: { error: "TypeError" } },
       ]);

@@ -11,8 +11,14 @@ describe("accountNotification", () => {
     });
   });
 
-  it("names the password and the second-factor notifications", () => {
-    expect(ACCOUNT_NOTIFICATIONS).toEqual(["passwordChanged", "mfaEnabled", "mfaDisabled"]);
+  it("carries the data a template needs beside the name, and the name cannot be overridden by it", () => {
+    expect(
+      accountNotification("verifyEmail", { email: "ada@example.test", locale: "en", displayName: "Ada" }, { token: "abc", displayName: "Mallory" }),
+    ).toEqual({ template: "verifyEmail", to: "ada@example.test", locale: "en", data: { token: "abc", displayName: "Ada" } });
+  });
+
+  it("names the password, the second-factor and the verification notifications", () => {
+    expect(ACCOUNT_NOTIFICATIONS).toEqual(["passwordChanged", "mfaEnabled", "mfaDisabled", "verifyEmail"]);
   });
 
   it("names every notification by the template of the same name", () => {

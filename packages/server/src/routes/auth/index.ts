@@ -1,4 +1,4 @@
-import { sessionCookieSpec, type IdentityPort, type MailPort, type PasswordPolicy, type SecretBoxPort } from "@slugbase/core";
+import { sessionCookieSpec, type IdentityPort, type MailPort, type PasswordPolicy, type RegistrationSettings, type SecretBoxPort } from "@slugbase/core";
 import type { AuthStore } from "@slugbase/db";
 import { createApiTokenAuthenticator } from "../../auth/api-tokens.ts";
 import { createSessionAuthenticator } from "../../auth/authenticator.ts";
@@ -9,6 +9,7 @@ import { sessionRoutes } from "../me/sessions.ts";
 import { loginRoute } from "./login.ts";
 import { logoutRoute } from "./logout.ts";
 import { oidcRoutes } from "./oidc.ts";
+import { registerRoute } from "./register.ts";
 import { verifyMfaRoute } from "./mfa.ts";
 
 export interface AuthRoutesOptions {
@@ -21,6 +22,8 @@ export interface AuthRoutesOptions {
   readonly passwordPolicy: PasswordPolicy;
   /** The mail port: a password change queues its email only when the port can send. */
   readonly mail: Pick<MailPort, "available">;
+  /** The settings in force for public registration. */
+  readonly registration: RegistrationSettings;
   /** Defaults to argon2id verification. */
   readonly passwords?: PasswordVerifier;
   /** Defaults to argon2id hashing. */
@@ -34,8 +37,8 @@ export interface AuthRoutesOptions {
 }
 
 /**
- * What sign-in contributes (doc 04 sections 10.2 and 10.3): the login
- * and logout routes, the start and callback of OIDC sign-in, the routes that list and revoke the account's sessions,
+ * What sign-in contributes (doc 04 sections 10.2 and 10.3): the login,
+ * registration and logout routes, the start and callback of OIDC sign-in, the routes that list and revoke the account's sessions,
  * the routes that re-authenticate and change the password, and the authenticators
  * that turn the session cookie and the bearer API token into a principal at stage
  * 4 of the chain.
@@ -46,6 +49,7 @@ export function authContribution({
   sessionSecret,
   passwordPolicy,
   mail,
+  registration,
   passwords = createPasswordVerifier(),
   hashPassword = hashArgon2id,
   secretBox,
@@ -54,7 +58,7 @@ export function authContribution({
 }: AuthRoutesOptions): ModuleContribution {
   const cookie = sessionCookieSpec(appOrigin);
   return {
-    routes: [loginRoute({ store, passwords, cookie }), ...oidcRoutes({ store, identity, secretBox, appOrigin, sessionSecret, sessionCookie: cookie, now }), verifyMfaRoute({ store, secretBox, verifyCode: verifyHash, now, cookie }), logoutRoute({ store, cookie }), ...sessionRoutes({ store, cookie, cursorSecret: sessionSecret }),
+    routes: [loginRoute({ store, passwords, cookie }), registerRoute({ store, settings: registration, mail, passwordPolicy, hashPassword }), ...oidcRoutes({ store, identity, secretBox, appOrigin, sessionSecret, sessionCookie: cookie, now }), verifyMfaRoute({ store, secretBox, verifyCode: verifyHash, now, cookie }), logoutRoute({ store, cookie }), ...sessionRoutes({ store, cookie, cursorSecret: sessionSecret }),
       ...securityRoutes({ store, passwords, passwordPolicy, hashPassword, cookie, mail, secretBox, verifyCode: verifyHash, now }),
     ],
     authenticators: [createSessionAuthenticator({ store, cookie }), createApiTokenAuthenticator({ store })],

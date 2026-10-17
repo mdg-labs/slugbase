@@ -39,6 +39,11 @@ export const ApiConfigSchema = z
     }),
     signIn: z
       .strictObject({
+        registration: z
+          .boolean()
+          .describe(
+            "Whether POST /auth/register takes registrations now: public registration is on (PUBLIC_REGISTRATION, with the default the deployment's composition supplies) and, when email verification is required, mail is configured",
+          ),
         oidc: z
           .array(
             z.strictObject({

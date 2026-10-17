@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
+import { DisplayNameSchema } from "./me.ts";
 
 // The auth tag of doc 04 section 10.2. The sign-in operations are anonymous (the
 // credential is the request) and are called from the SPA, so they carry the
@@ -20,6 +21,14 @@ export const LoginResultSchema = z
       .describe("`done`: the sign-in is complete. `mfa`: the password is right and the account's second factor is still to be given (POST /auth/mfa/verify); the session cookie is set either way, and a pending one expires after 5 minutes"),
   })
   .meta({ id: "LoginResult" });
+
+export const RegisterRequestSchema = z
+  .strictObject({
+    displayName: DisplayNameSchema.describe("The new account's display name; surrounding whitespace is removed"),
+    email: z.email().max(320).describe("The new account's email address; case does not matter"),
+    password: z.string().describe("The new account's password, 12 to 256 characters"),
+  })
+  .meta({ id: "RegisterRequest" });
 
 export const VerifyMfaRequestSchema = z
   .union([
@@ -58,6 +67,31 @@ export const login = defineOperation({
     422: problemResponse("The body did not pass validation"),
     429: rateLimitedResponse("Too many sign-in attempts from this address or for this email address; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const register = defineOperation({
+  method: "post",
+  path: "/api/v1/auth/register",
+  operationId: "register",
+  tag: "auth",
+  summary: "Register an account when public registration is open",
+  auth: "anonymous",
+  rate: "register",
+  request: { body: RegisterRequestSchema },
+  responses: {
+    202: emptyResponse(
+      "The request was accepted. The answer is the same, with no body, whether or not the email address already has an account and whatever the account's state: a new account is created unverified, and when the deployment can send mail it receives a verification email whose link opens /verify-email#token=…; an address that has an account is left untouched and nothing is sent to it",
+    ),
+    400: problemResponse("The request was malformed"),
+    403: problemResponse(
+      "The request did not come from the application itself (cross_site_request); public registration is off (registration_closed); or the deployment's registration policy refused the address (registration_refused, one answer for every reason). Nothing is written",
+    ),
+    422: problemResponse("The body did not pass validation, or the password is outside 12 to 256 characters or is on the breached list (weak_password)"),
+    429: rateLimitedResponse("Too many registrations from this address; Retry-After says when to try again"),
+    503: problemResponse(
+      "Email verification is required and no mail is configured (mail_unavailable), or the service is temporarily unavailable (unavailable). Nothing is written",
+    ),
   },
 });
 

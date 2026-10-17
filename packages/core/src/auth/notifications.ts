@@ -7,7 +7,7 @@ import type { MailMessage } from "../ports/mail.ts";
 // the one the message goes to (doc 05 section 2.10).
 
 /** The templates an account notification can name; each one is also a template of `@slugbase/email`. */
-export const ACCOUNT_NOTIFICATIONS = ["passwordChanged", "mfaEnabled", "mfaDisabled"] as const;
+export const ACCOUNT_NOTIFICATIONS = ["passwordChanged", "mfaEnabled", "mfaDisabled", "verifyEmail"] as const;
 
 export type AccountNotification = (typeof ACCOUNT_NOTIFICATIONS)[number];
 
@@ -19,12 +19,20 @@ export interface NotificationRecipient {
   readonly displayName: string;
 }
 
-/** The message `template` names, addressed to the account in its own language. */
-export function accountNotification(template: AccountNotification, recipient: NotificationRecipient): MailMessage {
+/**
+ * The message `template` names, addressed to the account in its own language. `data` is what the template
+ * needs beyond the account: the one-time token of the verification email, which exists only for the length of
+ * the send and is never part of a queued job.
+ */
+export function accountNotification(
+  template: AccountNotification,
+  recipient: NotificationRecipient,
+  data: Readonly<Record<string, string>> = {},
+): MailMessage {
   return {
     template,
     to: recipient.email,
     locale: recipient.locale,
-    data: { displayName: recipient.displayName },
+    data: { ...data, displayName: recipient.displayName },
   };
 }

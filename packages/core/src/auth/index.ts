@@ -9,6 +9,13 @@ export {
   hashApiToken,
 } from "./api-tokens.ts";
 export type { ApiToken } from "./api-tokens.ts";
+export {
+  CREDENTIAL_TOKEN_BYTES,
+  CREDENTIAL_TOKEN_PURPOSES,
+  CREDENTIAL_TOKEN_TTL_SECONDS,
+  generateCredentialToken,
+} from "./credential-tokens.ts";
+export type { CredentialToken, CredentialTokenPurpose } from "./credential-tokens.ts";
 export { BreachedDatasetError, createBreachedPasswords, loadBreachedPasswords } from "./breached/index.ts";
 export type { BreachedPasswords } from "./breached/index.ts";
 export { normalizeEmail } from "./email.ts";
@@ -24,6 +31,8 @@ export {
   safeReturnTo,
 } from "./federated.ts";
 export type { OidcHandshake, OidcPreAuthCookieSpec } from "./federated.ts";
+export { registrationLocale, registrationUnavailable } from "./registration.ts";
+export type { RegistrationLocale, RegistrationSettings, RegistrationUnavailable } from "./registration.ts";
 export { ACCOUNT_NOTIFICATIONS, accountNotification } from "./notifications.ts";
 export type { AccountNotification, NotificationRecipient } from "./notifications.ts";
 export {

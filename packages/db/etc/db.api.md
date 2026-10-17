@@ -4,6 +4,7 @@
 
 ```ts
 
+import type { CredentialTokenPurpose } from '@slugbase/core';
 import { InferInsertModel } from 'drizzle-orm';
 import { InferSelectModel } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
@@ -159,7 +160,7 @@ export function apiTokenRepository(tx: TenantTx): ApiTokenRepository;
 export type ApiTokenScope = "read" | "read-write";
 
 // @public (undocumented)
-export interface AuthStore extends SetupStore, MfaStore, OidcStore {
+export interface AuthStore extends SetupStore, MfaStore, OidcStore, RegistrationStore {
     changePassword(change: PasswordChange): Promise<boolean>;
     close(): Promise<void>;
     createSession(session: NewSession): Promise<boolean>;
@@ -280,6 +281,14 @@ export function createRateLimitStore(options: RateLimitStoreOptions): RateLimitS
 
 // @public
 export function createRetentionStore(options: RetentionStoreOptions): RetentionStore;
+
+// @public (undocumented)
+export interface CredentialTokenRepository {
+    issue(token: NewCredentialToken): Promise<boolean>;
+}
+
+// @public (undocumented)
+export function credentialTokenRepository(tx: TenantTx): CredentialTokenRepository;
 
 // @public
 export interface Database {
@@ -518,6 +527,16 @@ export interface NewApiToken {
     readonly workspaceId: string;
 }
 
+// @public (undocumented)
+export interface NewCredentialToken {
+    readonly id: string;
+    // (undocumented)
+    readonly purpose: CredentialTokenPurpose;
+    readonly targetEmail: string | null;
+    readonly tokenHash: Buffer;
+    readonly ttlSeconds: number;
+}
+
 // @public
 export interface NewOidcLoginState {
     // (undocumented)
@@ -530,6 +549,19 @@ export interface NewOidcLoginState {
     readonly provider: string;
     readonly returnTo: string;
     readonly stateHash: Buffer;
+}
+
+// @public (undocumented)
+export interface NewRegistration {
+    readonly accountId: string;
+    // (undocumented)
+    readonly displayName: string;
+    readonly email: string;
+    // (undocumented)
+    readonly locale: string;
+    readonly onCreated: readonly QueuedJob[];
+    readonly onTaken: readonly QueuedJob[];
+    readonly passwordHash: string;
 }
 
 // @public (undocumented)
@@ -632,6 +664,11 @@ export interface RateLimitTaken {
     readonly allowed: boolean;
     readonly remaining: number;
     readonly retryAfterSeconds: number;
+}
+
+// @public (undocumented)
+export interface RegistrationStore {
+    registerAccount(registration: NewRegistration): Promise<boolean>;
 }
 
 // @public

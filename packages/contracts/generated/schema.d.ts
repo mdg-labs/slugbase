@@ -103,6 +103,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register an account when public registration is open */
+        post: operations["register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -523,6 +540,8 @@ export interface components {
                     /** @description The provider's slug, which names it in the sign-in routes */
                     slug: string;
                 }[];
+                /** @description Whether POST /auth/register takes registrations now: public registration is on (PUBLIC_REGISTRATION, with the default the deployment's composition supplies) and, when email verification is required, mail is configured */
+                registration: boolean;
             };
         };
         ApiToken: {
@@ -797,6 +816,17 @@ export interface components {
         RegenerateBackupCodesRequest: {
             /** @description The current six-digit code of the authenticator app; spaces between the digits are ignored. A backup code is not accepted here */
             code: string;
+        };
+        RegisterRequest: {
+            /** @description The new account's display name; surrounding whitespace is removed */
+            displayName: string;
+            /**
+             * Format: email
+             * @description The new account's email address; case does not matter
+             */
+            email: string;
+            /** @description The new account's password, 12 to 256 characters */
+            password: string;
         };
         Session: {
             /**
@@ -1308,6 +1338,75 @@ export interface operations {
                 };
             };
             /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    register: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterRequest"];
+            };
+        };
+        responses: {
+            /** @description The request was accepted. The answer is the same, with no body, whether or not the email address already has an account and whatever the account's state: a new account is created unverified, and when the deployment can send mail it receives a verification email whose link opens /verify-email#token=…; an address that has an account is left untouched and nothing is sent to it */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request); public registration is off (registration_closed); or the deployment's registration policy refused the address (registration_refused, one answer for every reason). Nothing is written */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation, or the password is outside 12 to 256 characters or is on the breached list (weak_password) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many registrations from this address; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Email verification is required and no mail is configured (mail_unavailable), or the service is temporarily unavailable (unavailable). Nothing is written */
             503: {
                 headers: {
                     [name: string]: unknown;

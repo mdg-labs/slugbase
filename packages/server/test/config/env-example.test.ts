@@ -69,6 +69,10 @@ describe(".env.example", () => {
     expect(example.get("ERROR_REPORT_DSN")).toBe("");
     expect(config.ERROR_REPORT_DSN).toBeUndefined();
     expect(config.METRICS_PORT).toBeUndefined();
+    expect(example.get("PUBLIC_REGISTRATION")).toBe("");
+    expect(example.get("EMAIL_VERIFICATION_REQUIRED")).toBe("");
+    expect(config.PUBLIC_REGISTRATION).toBeUndefined();
+    expect(config.EMAIL_VERIFICATION_REQUIRED).toBeUndefined();
     expect(config).toMatchObject({
       PORT: Number(example.get("PORT")),
       TRUSTED_PROXY_HOPS: Number(example.get("TRUSTED_PROXY_HOPS")),

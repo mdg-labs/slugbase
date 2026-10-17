@@ -25,5 +25,15 @@
     "body": "Two-factor authentication was turned off for your {appName} account. Signing in now asks for your password only, and your backup codes no longer work.",
     "notYou": "If you did not make this change, contact the administrator of this {appName} instance right away.",
     "action": "Review your account security"
+  },
+  "verifyEmail": {
+    "subject": "Verify your {appName} email address",
+    "greeting": "Hi {name},",
+    "greetingAnonymous": "Hi,",
+    "body": "Someone registered a {appName} account with this email address. Confirm that it is yours to finish creating the account.",
+    "expiry": "The link works once and for 24 hours.",
+    "notYou": "If you did not register, you can ignore this email.",
+    "action": "Verify email address",
+    "footer": "You are receiving this email because this address was used to register a {appName} account."
   }
 }

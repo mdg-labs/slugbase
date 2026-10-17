@@ -9,13 +9,15 @@ import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 // Retention (doc 05 section 6): sys_retention_purge() deletes what has outlived
 // its retention, a batch of 5 000 rows per table per call, and answers how many
 // it deleted per table. The rules so far: expired sessions, API tokens that
-// were revoked or expired more than 30 days ago, and OIDC login states past their expiry.
+// were revoked or expired more than 30 days ago, OIDC login states past their expiry, and credential
+// tokens that were used or expired more than 7 days ago.
 
 const HOOK_TIMEOUT_MS = 300_000;
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 const BATCH = 5_000;
 const TOKEN_RETENTION_DAYS = 30;
+const CREDENTIAL_TOKEN_RETENTION_DAYS = 7;
 const FUNCTION = "public.sys_retention_purge()";
 
 let db: TestDatabase;
@@ -72,12 +74,13 @@ async function seedSession(session: SeedSession): Promise<string> {
   return id;
 }
 
-/** What a purge answers when it deleted `sessions` sessions, `apiTokens` API tokens and `loginStates` OIDC login states, in the order of doc 05 section 6. */
-function counts(sessions: number, apiTokens = 0, loginStates = 0): { table: string; deleted: number }[] {
+/** What a purge answers when it deleted `sessions` sessions, `apiTokens` API tokens, `loginStates` OIDC login states and `credentialTokens` credential tokens, in the order of doc 05 section 6. */
+function counts(sessions: number, apiTokens = 0, loginStates = 0, credentialTokens = 0): { table: string; deleted: number }[] {
   return [
     { table: "sessions", deleted: sessions },
     { table: "api_tokens", deleted: apiTokens },
     { table: "oidc_login_states", deleted: loginStates },
+    { table: "credential_tokens", deleted: credentialTokens },
   ];
 }
 
@@ -378,6 +381,75 @@ describe("purging expired OIDC login states", () => {
 
   it("gives slugbase_app no DELETE on oidc_login_states: the purge and the consume are the only ways a state is removed", async () => {
     await expect(db.app.unsafe("DELETE FROM public.oidc_login_states")).rejects.toMatchObject({ code: "42501" });
+  });
+});
+
+describe("purging used and expired credential tokens", () => {
+  interface SeedCredentialToken {
+    /** Offsets from now in milliseconds; negative is in the past. */
+    readonly expiresIn: number;
+    readonly usedIn?: number;
+  }
+
+  async function seedCredentialToken(owner: string, token: SeedCredentialToken): Promise<string> {
+    const id = freshId();
+    const { hash } = freshToken();
+    await asSystem(db, (tx) => tx`
+      INSERT INTO credential_tokens (id, purpose, account_id, token_hash, expires_at, used_at)
+      VALUES (${id}, 'email_verify', ${owner}, ${hash}, now() + ${token.expiresIn} * interval '1 millisecond',
+              now() + ${token.usedIn ?? null}::bigint * interval '1 millisecond')`);
+    return id;
+  }
+
+  async function remainingCredentialTokens(): Promise<string[]> {
+    const rows = await asSystem(db, (tx) => tx<{ id: string }[]>`SELECT id FROM credential_tokens`);
+    return rows.map((row) => row.id).sort();
+  }
+
+  async function clearCredentialTokens(): Promise<void> {
+    await asSystem(db, (tx) => tx`DELETE FROM credential_tokens`);
+  }
+
+  it("deletes a token used or expired more than 7 days ago and keeps every other, counting what it deleted", async () => {
+    await clearSessions();
+    await clearCredentialTokens();
+    const owner = await account();
+    const past = CREDENTIAL_TOKEN_RETENTION_DAYS * DAY_MS;
+    const gone = [
+      await seedCredentialToken(owner, { expiresIn: -past - HOUR_MS }),
+      await seedCredentialToken(owner, { expiresIn: DAY_MS, usedIn: -past - HOUR_MS }),
+      await seedCredentialToken(owner, { expiresIn: -past - HOUR_MS, usedIn: -past - 2 * HOUR_MS }),
+    ];
+    const kept = [
+      await seedCredentialToken(owner, { expiresIn: DAY_MS }),
+      await seedCredentialToken(owner, { expiresIn: -past + HOUR_MS }),
+      await seedCredentialToken(owner, { expiresIn: DAY_MS, usedIn: -past + HOUR_MS }),
+    ];
+
+    expect(await store.purge()).toEqual(counts(0, 0, 0, gone.length));
+    expect(await remainingCredentialTokens()).toEqual(kept.sort());
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0));
+  });
+
+  it("deletes at most one batch per call and finishes the rest on the next", async () => {
+    await clearCredentialTokens();
+    const owner = await account();
+    const extra = 3;
+    await asSystem(db, async (tx) => {
+      await tx`
+        INSERT INTO credential_tokens (id, purpose, account_id, token_hash, expires_at)
+        SELECT ('0192f3a0-dddd-7000-8000-' || lpad(to_hex(n), 12, '0'))::uuid, 'email_verify', ${owner},
+               sha256(('batch' || n)::bytea), now() - interval '8 days'
+        FROM generate_series(1, ${BATCH + extra}::int) AS n`;
+    });
+
+    expect(await store.purge()).toEqual(counts(0, 0, 0, BATCH));
+    expect(await store.purge()).toEqual(counts(0, 0, 0, extra));
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0));
+  });
+
+  it("gives slugbase_app no DELETE on credential_tokens: the purge is the only way it removes one", async () => {
+    await expect(db.app.unsafe("DELETE FROM public.credential_tokens")).rejects.toMatchObject({ code: "42501" });
   });
 });
 

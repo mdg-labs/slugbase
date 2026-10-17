@@ -77,6 +77,7 @@ export const ApiConfigSchema: z.ZodObject<{
         ai: z.ZodBoolean;
     }, z.core.$strict>;
     signIn: z.ZodOptional<z.ZodObject<{
+        registration: z.ZodBoolean;
         oidc: z.ZodArray<z.ZodObject<{
             slug: z.ZodString;
             name: z.ZodString;
@@ -303,6 +304,7 @@ export interface ComponentTypes {
                     name: string;
                     slug: string;
                 }[];
+                registration: boolean;
             };
         };
         ApiToken: {
@@ -443,6 +445,11 @@ export interface ComponentTypes {
         };
         RegenerateBackupCodesRequest: {
             code: string;
+        };
+        RegisterRequest: {
+            displayName: string;
+            email: string;
+            password: string;
         };
         Session: {
             createdAt: string;
@@ -694,6 +701,7 @@ export const getApiConfig: {
         ai: z.ZodBoolean;
         }, z.core.$strict>;
         signIn: z.ZodOptional<z.ZodObject<{
+        registration: z.ZodBoolean;
         oidc: z.ZodArray<z.ZodObject<{
         slug: z.ZodString;
         name: z.ZodString;
@@ -2467,6 +2475,69 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    register: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["RegisterRequest"];
+            };
+        };
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     revokeApiToken: {
         parameters: {
             query?: never;
@@ -3158,6 +3229,23 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -3828,6 +3916,39 @@ export const regenerateMfaBackupCodes: {
         readonly 503: ProblemResponse;
     };
 };
+
+// @public (undocumented)
+export const register: {
+    readonly method: "post";
+    readonly path: "/api/v1/auth/register";
+    readonly operationId: "register";
+    readonly tag: "auth";
+    readonly summary: "Register an account when public registration is open";
+    readonly auth: "anonymous";
+    readonly rate: "register";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            displayName: z.ZodString;
+            email: z.ZodEmail;
+            password: z.ZodString;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 202: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const RegisterRequestSchema: z.ZodObject<{
+    displayName: z.ZodString;
+    email: z.ZodEmail;
+    password: z.ZodString;
+}, z.core.$strict>;
 
 // @public
 export interface ResponseHeader {

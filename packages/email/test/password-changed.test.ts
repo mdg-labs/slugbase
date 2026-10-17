@@ -96,7 +96,7 @@ describe("the password changed template", () => {
 
 describe("createMailTemplates", () => {
   it("names the template the core sends", () => {
-    expect(Object.keys(templates)).toEqual(["passwordChanged", "mfaEnabled", "mfaDisabled"]);
+    expect(Object.keys(templates)).toEqual(["passwordChanged", "mfaEnabled", "mfaDisabled", "verifyEmail"]);
   });
 
   it("refuses an origin that is not http or https", () => {

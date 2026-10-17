@@ -1,4 +1,4 @@
 {
-  "sha256": "7df046098f4e65b8eeea1d196f1ccb37b9647874f7dfc9114ac0ac8013948a68",
-  "migration": "20261015202136_add_identity_management"
+  "sha256": "17f6d710be6070591c00c198fd4377356b1c9bf75ed8f17f8f173c0fdefa3f44",
+  "migration": "20261017162052_add_credential_tokens"
 }
