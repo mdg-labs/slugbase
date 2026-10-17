@@ -356,6 +356,9 @@ export interface ComponentTypes {
             backupCode: string;
             password?: string;
         };
+        ForgotPasswordRequest: {
+            email: string;
+        };
         HealthStatus: {
             status: "ok";
         };
@@ -455,6 +458,13 @@ export interface ComponentTypes {
         };
         ResendVerifyEmailRequest: {
             email: string;
+        };
+        ResetPasswordRequest: {
+            newPassword: string;
+            token: string;
+        };
+        ResetPasswordResult: {
+            next: "done" | "mfa";
         };
         Session: {
             createdAt: string;
@@ -688,6 +698,35 @@ export interface EmptyResponse<H extends ResponseHeaders = ResponseHeaders> {
 
 // @public
 export function emptyResponse<H extends ResponseHeaders = ResponseHeaders>(description: string, options?: JsonResponseOptions<H>): EmptyResponse<H>;
+
+// @public (undocumented)
+export const forgotPassword: {
+    readonly method: "post";
+    readonly path: "/api/v1/auth/password/forgot";
+    readonly operationId: "forgotPassword";
+    readonly tag: "auth";
+    readonly summary: "Ask for a link to reset the password of an account";
+    readonly auth: "anonymous";
+    readonly rate: "reset";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            email: z.ZodEmail;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 202: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const ForgotPasswordRequestSchema: z.ZodObject<{
+    email: z.ZodEmail;
+}, z.core.$strict>;
 
 // @public (undocumented)
 export const getApiConfig: {
@@ -1758,6 +1797,69 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    forgotPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["ForgotPasswordRequest"];
+            };
+        };
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     getApiConfig: {
         parameters: {
             query?: never;
@@ -2616,6 +2718,80 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    resetPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["ResetPasswordRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["ResetPasswordResult"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     revokeApiToken: {
         parameters: {
             query?: never;
@@ -3374,6 +3550,40 @@ export interface paths {
         get: OperationTypes["startOidcSignIn"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/auth/password/forgot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["forgotPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/auth/password/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["resetPassword"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4163,6 +4373,56 @@ export const resendVerifyEmail: {
 // @public (undocumented)
 export const ResendVerifyEmailRequestSchema: z.ZodObject<{
     email: z.ZodEmail;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const resetPassword: {
+    readonly method: "post";
+    readonly path: "/api/v1/auth/password/reset";
+    readonly operationId: "resetPassword";
+    readonly tag: "auth";
+    readonly summary: "Set a new password with the token of a reset link and sign in";
+    readonly auth: "anonymous";
+    readonly rate: "token_redeem";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            token: z.ZodString;
+            newPassword: z.ZodString;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        next: z.ZodEnum<{
+        mfa: "mfa";
+        done: "done";
+        }>;
+        }, z.core.$strict>, {
+        "Set-Cookie": {
+        description: string;
+        schema: z.ZodString;
+        };
+        }>;
+        readonly 400: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 410: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const ResetPasswordRequestSchema: z.ZodObject<{
+    token: z.ZodString;
+    newPassword: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const ResetPasswordResultSchema: z.ZodObject<{
+    next: z.ZodEnum<{
+        mfa: "mfa";
+        done: "done";
+    }>;
 }, z.core.$strict>;
 
 // @public

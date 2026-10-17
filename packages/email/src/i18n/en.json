@@ -49,5 +49,15 @@
     "action": "Review your sessions",
     "turnOff": "You can turn these emails off in the security settings of your account.",
     "footer": "You are receiving this email because a new device signed in to your {appName} account."
+  },
+  "passwordReset": {
+    "subject": "Reset your {appName} password",
+    "greeting": "Hi {name},",
+    "greetingAnonymous": "Hi,",
+    "body": "Someone asked to reset the password of your {appName} account. Choose a new password to sign in again. Every device that is signed in will be signed out.",
+    "expiry": "The link works once and for 1 hour.",
+    "notYou": "If you did not ask for this, you can ignore this email; your password stays as it is.",
+    "action": "Choose a new password",
+    "footer": "You are receiving this email because a password reset was requested for your {appName} account."
   }
 }

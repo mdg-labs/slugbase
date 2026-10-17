@@ -20,6 +20,15 @@ describe("the mail.send job", () => {
     });
   });
 
+  it("queues the password-reset template with the account's identifier only: the token is made when the job runs", () => {
+    expect(queueMailSend(JOB_ID, "passwordReset", ACCOUNT)).toEqual({
+      id: JOB_ID,
+      queue: "mail.send",
+      data: { template: "passwordReset", accountId: ACCOUNT },
+    });
+    expect(() => mailSendJob.parse({ template: "passwordReset", accountId: ACCOUNT, token: "x".repeat(43) })).toThrow();
+  });
+
   it("queues the time, browser family and network prefix a new sign-in email shows beside the template and the account, and nothing else", () => {
     expect(queueMailSend(JOB_ID, "newSignIn", ACCOUNT, { signedInAt: SIGNED_IN_AT, browser: "Chrome", network: "203.0.0.0/16" })).toEqual({
       id: JOB_ID,

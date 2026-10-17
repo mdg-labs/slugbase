@@ -378,6 +378,30 @@ describe("verifyEmail", () => {
     expect(await footholds(owner)).toEqual(ALL);
   });
 
+  it("deletes the unused password-reset tokens of an account nobody had verified, so a reset requested before the owner verified cannot be redeemed after", async () => {
+    const owner = await account();
+    const reset = await issue(owner, { purpose: "password_reset" });
+    const verify = await issue(owner);
+
+    expect(await store.verifyEmail(verification(verify))).toEqual({ accountId: owner, next: "done" });
+
+    expect(await tokenRows(owner)).toEqual([{ used: true }]);
+    expect(await store.resetPassword({ tokenHash: reset, passwordHash: OLD_HASH, sessionId: freshId(), sessionTokenHash: freshToken().hash, ipPrefix: null, userAgent: null, replacedTokenHash: null })).toBeUndefined();
+    expect((await accountRow(owner))?.password_hash).toBe(NEW_HASH);
+  });
+
+  it("keeps the unused password-reset tokens of an account that is already verified, and of every other account", async () => {
+    const verified = await account({ verified: true });
+    const bystander = await account();
+    await issue(verified, { purpose: "password_reset" });
+    await issue(bystander, { purpose: "password_reset" });
+
+    await store.verifyEmail(verification(await issue(verified)));
+
+    expect(await tokenRows(verified)).toEqual([{ used: false }, { used: true }]);
+    expect(await tokenRows(bystander)).toEqual([{ used: false }]);
+  });
+
   it("keeps everything the visitor planted when afterVerified rejects", async () => {
     const owner = await account();
     await plantFootholds(owner);

@@ -10,7 +10,7 @@ import type { ProblemCode } from '@slugbase/contracts';
 export const ACCOUNT_CREATION_PATHS: readonly ["self-registration", "invitation", "oidc", "setup"];
 
 // @public
-export const ACCOUNT_NOTIFICATIONS: readonly ["passwordChanged", "mfaEnabled", "mfaDisabled", "verifyEmail", "newSignIn"];
+export const ACCOUNT_NOTIFICATIONS: readonly ["passwordChanged", "mfaEnabled", "mfaDisabled", "verifyEmail", "newSignIn", "passwordReset"];
 
 // @public (undocumented)
 export type AccountCreationPath = (typeof ACCOUNT_CREATION_PATHS)[number];

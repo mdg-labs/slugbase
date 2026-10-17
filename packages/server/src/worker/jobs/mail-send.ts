@@ -18,6 +18,12 @@ import { defineJob } from "../job.ts";
 // error report. It sends nothing to an account that is gone, disabled or already
 // verified; a retry makes a new token, which replaces the earlier unused one.
 //
+// The password-reset email (doc 02 section 2.5) is made the same way, with a token that works for 1 hour. It
+// is sent to an account that has a password and whose address was verified, and to nobody else: the request
+// that queued it answered alike for every address, so the decision is the job's. An account nobody verified
+// may have been set up by whoever registered the address first, and the verification link, which is what takes
+// that setup away, is the way into it.
+//
 // The "new sign-in" email (doc 02 section 12) carries what it shows, taken when the sign-in happened: the
 // time, the browser family and the coarse network prefix, none of which is a secret. The alert was queued
 // while the account's switch was on, so it is sent whatever becomes of the session or the switch before the
@@ -65,6 +71,24 @@ export const mailSendJob = defineJob({
           ...(browser === undefined ? {} : { browser }),
           ...(network === undefined ? {} : { network }),
         });
+      }
+      if (template === "passwordReset") {
+        if (!profile.hasPassword || !profile.emailVerified) {
+          return undefined;
+        }
+        const token = generateCredentialToken();
+        const issued = await credentialTokenRepository(tx).issue({
+          id: uuidv7(),
+          purpose: "password_reset",
+          tokenHash: token.hash,
+          targetEmail: null,
+          ttlSeconds: CREDENTIAL_TOKEN_TTL_SECONDS.password_reset,
+        });
+        if (!issued) {
+          context.logger.warn("Mail not sent; the account cannot receive a password-reset token", { template });
+          return undefined;
+        }
+        return accountNotification(template, profile, { token: token.value });
       }
       if (template !== "verifyEmail") {
         return accountNotification(template, profile);

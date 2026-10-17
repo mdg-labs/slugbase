@@ -6,12 +6,14 @@ import { createPasswordVerifier, hashPassword as hashArgon2id, verifyHash, type 
 import type { ModuleContribution } from "../../create-server.ts";
 import { securityRoutes } from "../me/security.ts";
 import { sessionRoutes } from "../me/sessions.ts";
+import { forgotPasswordRoute } from "./forgot-password.ts";
 import { loginRoute } from "./login.ts";
 import { logoutRoute } from "./logout.ts";
 import { oidcRoutes } from "./oidc.ts";
 import { registerRoute } from "./register.ts";
 import { verifyMfaRoute } from "./mfa.ts";
 import { resendVerificationRoute } from "./resend-verification.ts";
+import { resetPasswordRoute } from "./reset-password.ts";
 import { verifyEmailRoute } from "./verify-email.ts";
 
 export interface AuthRoutesOptions {
@@ -40,7 +42,7 @@ export interface AuthRoutesOptions {
 
 /**
  * What sign-in contributes (doc 04 sections 10.2 and 10.3): the login,
- * registration, email verification (and the resend of its link) and logout routes, the start and callback of OIDC sign-in, the routes that list and revoke the account's sessions,
+ * registration, email verification (and the resend of its link), password reset (the request for a link and its redemption) and logout routes, the start and callback of OIDC sign-in, the routes that list and revoke the account's sessions,
  * the routes that re-authenticate and change the password, and the authenticators
  * that turn the session cookie and the bearer API token into a principal at stage
  * 4 of the chain.
@@ -60,7 +62,7 @@ export function authContribution({
 }: AuthRoutesOptions): ModuleContribution {
   const cookie = sessionCookieSpec(appOrigin);
   return {
-    routes: [loginRoute({ store, passwords, mail, registration, cookie }), registerRoute({ store, settings: registration, mail, passwordPolicy, hashPassword }), verifyEmailRoute({ store, passwordPolicy, hashPassword, cookie }), resendVerificationRoute({ store, mail }), ...oidcRoutes({ store, identity, secretBox, appOrigin, sessionSecret, sessionCookie: cookie, now }), verifyMfaRoute({ store, mail, secretBox, verifyCode: verifyHash, now, cookie }), logoutRoute({ store, cookie }), ...sessionRoutes({ store, cookie, cursorSecret: sessionSecret }),
+    routes: [loginRoute({ store, passwords, mail, registration, cookie }), registerRoute({ store, settings: registration, mail, passwordPolicy, hashPassword }), verifyEmailRoute({ store, passwordPolicy, hashPassword, cookie }), resendVerificationRoute({ store, mail }), forgotPasswordRoute({ store, mail }), resetPasswordRoute({ store, passwordPolicy, hashPassword, cookie }), ...oidcRoutes({ store, identity, secretBox, appOrigin, sessionSecret, sessionCookie: cookie, now }), verifyMfaRoute({ store, mail, secretBox, verifyCode: verifyHash, now, cookie }), logoutRoute({ store, cookie }), ...sessionRoutes({ store, cookie, cursorSecret: sessionSecret }),
       ...securityRoutes({ store, passwords, passwordPolicy, hashPassword, cookie, mail, secretBox, verifyCode: verifyHash, now }),
     ],
     authenticators: [createSessionAuthenticator({ store, cookie }), createApiTokenAuthenticator({ store })],

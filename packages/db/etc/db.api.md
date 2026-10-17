@@ -103,6 +103,13 @@ export interface AccountProfileRepository {
 export function accountProfileRepository(tx: TenantTx): AccountProfileRepository;
 
 // @public (undocumented)
+export interface AddressJobs {
+    readonly email: string;
+    readonly onKnown: (accountId: string) => readonly QueuedJob[];
+    readonly onUnknown: readonly QueuedJob[];
+}
+
+// @public (undocumented)
 export type AnalyticsConsent = "unset" | "granted" | "denied";
 
 // @public (undocumented)
@@ -163,7 +170,7 @@ export function apiTokenRepository(tx: TenantTx): ApiTokenRepository;
 export type ApiTokenScope = "read" | "read-write";
 
 // @public (undocumented)
-export interface AuthStore extends SetupStore, MfaStore, OidcStore, RegistrationStore, EmailVerificationStore {
+export interface AuthStore extends SetupStore, MfaStore, OidcStore, RegistrationStore, EmailVerificationStore, PasswordResetStore {
     changePassword(change: PasswordChange): Promise<boolean>;
     close(): Promise<void>;
     createSession(session: NewSession): Promise<boolean>;
@@ -656,6 +663,26 @@ export interface PasswordChange {
     readonly sessionId: string;
 }
 
+// @public (undocumented)
+export interface PasswordReset {
+    readonly ipPrefix: string | null;
+    readonly passwordHash: string;
+    readonly replacedTokenHash: Buffer | null;
+    readonly sessionId: string;
+    readonly sessionTokenHash: Buffer;
+    readonly tokenHash: Buffer;
+    readonly userAgent: string | null;
+}
+
+// @public (undocumented)
+export type PasswordResetRequest = AddressJobs;
+
+// @public (undocumented)
+export interface PasswordResetStore {
+    requestPasswordReset(request: PasswordResetRequest): Promise<void>;
+    resetPassword(reset: PasswordReset): Promise<ResetPasswordOutcome | undefined>;
+}
+
 // @public
 export type PersonalWorkspaceResult = "created" | "exists" | "unavailable";
 
@@ -730,6 +757,13 @@ export interface RepositoryMethodEntry {
     readonly method: ScopedMethod;
     readonly repository: string;
     readonly table: string;
+}
+
+// @public (undocumented)
+export interface ResetPasswordOutcome {
+    // (undocumented)
+    readonly accountId: string;
+    readonly next: "done" | "mfa";
 }
 
 // @public
@@ -909,11 +943,7 @@ export type UpdateValues<T extends WorkspaceTable> = Partial<Omit<InferInsertMod
 };
 
 // @public (undocumented)
-export interface VerificationResend {
-    readonly email: string;
-    readonly onKnown: (accountId: string) => readonly QueuedJob[];
-    readonly onUnknown: readonly QueuedJob[];
-}
+export type VerificationResend = AddressJobs;
 
 // @public (undocumented)
 export interface VerifiedEmail {

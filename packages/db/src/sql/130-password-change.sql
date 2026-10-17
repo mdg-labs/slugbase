@@ -46,8 +46,9 @@ $$;
 -- with invalid_parameter_value. It does not check the lengths of the salt or
 -- the hash, nor that the hash decodes: the application's hasher is the only
 -- writer (this function is called only through AuthStore.changePassword, and
--- through AuthStore.verifyEmail by way of sys_email_verify) and sets those. Answers false, and changes nothing, for an unknown or disabled
--- account.
+-- through AuthStore.verifyEmail and AuthStore.resetPassword by way of
+-- sys_email_verify and sys_password_reset) and sets those. Answers false, and
+-- changes nothing, for an unknown or disabled account.
 CREATE OR REPLACE FUNCTION public.sys_password_set(p_account_id uuid, p_hash text) RETURNS boolean
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
   SET search_path = pg_catalog, public, pg_temp

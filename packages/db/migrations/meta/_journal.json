@@ -197,6 +197,13 @@
       "when": 1792272274259,
       "tag": "20261017212434_add_account_email_verified",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1792275374933,
+      "tag": "20261017221614_add_password_reset",
+      "breakpoints": true
     }
   ]
 }

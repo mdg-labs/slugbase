@@ -55,4 +55,5 @@ export const systemOperations: readonly string[] = [
   "sys_email_verify",
   "sys_create_personal_workspace",
   "sys_account_email_verified",
+  "sys_password_reset",
 ];

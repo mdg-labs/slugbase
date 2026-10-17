@@ -1,6 +1,6 @@
 import type postgres from "postgres";
+import { queueJobsForAddress, type AddressJobs } from "./address-jobs.ts";
 import { bindPersonalWorkspaceWriter, type PersonalWorkspaceWriter } from "./personal-workspace.ts";
-import { enqueueInTransaction, type QueuedJob } from "./queue.ts";
 
 // The wrapper of the system operation behind `POST /auth/verify-email` (doc 05 section 3.3, doc 02 sections
 // 2.2 and 2.6, doc 10 T4 and T8): the one place a signup verification token is redeemed. It runs on the pool of
@@ -41,14 +41,7 @@ export interface VerifiedEmail {
   readonly next: "done" | "mfa";
 }
 
-export interface VerificationResend {
-  /** Trimmed and NFKC-normalised by the caller; compared case-insensitively. */
-  readonly email: string;
-  /** The jobs queued when an account holds the address, built for that account's identifier. */
-  readonly onKnown: (accountId: string) => readonly QueuedJob[];
-  /** The jobs queued instead when no account holds it, so both outcomes write the same kinds of rows. */
-  readonly onUnknown: readonly QueuedJob[];
-}
+export type VerificationResend = AddressJobs;
 
 export interface EmailVerificationStore {
   /**
@@ -73,10 +66,6 @@ export interface EmailVerificationStore {
 
 interface VerifiedFlagRow {
   verified: boolean;
-}
-
-interface LookupRow {
-  account_id: string;
 }
 
 interface VerifiedRow {
@@ -136,16 +125,7 @@ export function bindEmailVerificationStore(client: postgres.Sql): EmailVerificat
     },
 
     async resendVerification(resend) {
-      await client.begin(async (tx) => {
-        const rows = await tx<LookupRow[]>`SELECT account_id FROM sys_login_lookup(${resend.email}::text)`;
-        if (rows.length > 1) {
-          throw new Error("sys_login_lookup returned more than one account");
-        }
-        const row = rows[0];
-        for (const job of row === undefined ? resend.onUnknown : resend.onKnown(row.account_id)) {
-          await enqueueInTransaction(tx, job);
-        }
-      });
+      await queueJobsForAddress(client, resend);
     },
   };
 }

@@ -106,6 +106,8 @@ export function fakeAuthStore(overrides: Partial<AuthStore> = {}): AuthStore {
     registerAccount: unexpected("registerAccount"),
     verifyEmail: unexpected("verifyEmail"),
     resendVerification: unexpected("resendVerification"),
+    requestPasswordReset: unexpected("requestPasswordReset"),
+    resetPassword: unexpected("resetPassword"),
     emailVerified: unexpected("emailVerified"),
     close: () => Promise.resolve(),
     ...overrides,

@@ -49,5 +49,15 @@
     "action": "Sitzungen prüfen",
     "turnOff": "Du kannst diese E-Mails in den Sicherheitseinstellungen deines Kontos ausschalten.",
     "footer": "Du erhältst diese E-Mail, weil sich ein neues Gerät bei deinem {appName}-Konto angemeldet hat."
+  },
+  "passwordReset": {
+    "subject": "Setze dein {appName}-Passwort zurück",
+    "greeting": "Hallo {name},",
+    "greetingAnonymous": "Hallo,",
+    "body": "Jemand hat darum gebeten, das Passwort deines {appName}-Kontos zurückzusetzen. Wähle ein neues Passwort, um dich wieder anzumelden. Alle angemeldeten Geräte werden abgemeldet.",
+    "expiry": "Der Link funktioniert einmal und 1 Stunde lang.",
+    "notYou": "Falls du das nicht angefordert hast, kannst du diese E-Mail ignorieren; dein Passwort bleibt unverändert.",
+    "action": "Neues Passwort wählen",
+    "footer": "Du erhältst diese E-Mail, weil für dein {appName}-Konto ein Zurücksetzen des Passworts angefordert wurde."
   }
 }

@@ -19,8 +19,9 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- the account is deleted, and everything else the visitor could have set up
 -- while signed in is removed with it: the second factor (a pending enrolment
 -- included) and its backup codes, the API tokens, the linked identities and
--- the pending handshakes that would link one. Only then is the address marked
--- verified. An account that is already verified keeps all of it. The
+-- the pending handshakes that would link one, and every unused password-reset
+-- token, since a reset requested before the owner verified is not the owner's.
+-- Only then is the address marked verified. An account that is already verified keeps all of it. The
 -- session is partial for an account whose second factor is on and full
 -- otherwise, and replaces the session of the token the request carried. The
 -- account row is locked before anything is changed, so two redemptions of
@@ -79,6 +80,7 @@ BEGIN
     DELETE FROM public.api_tokens WHERE account_id = v_account;
     DELETE FROM public.account_identities WHERE account_id = v_account;
     DELETE FROM public.oidc_login_states WHERE link_account_id = v_account;
+    DELETE FROM public.credential_tokens WHERE account_id = v_account AND purpose = 'password_reset' AND used_at IS NULL;
     UPDATE public.accounts SET email_verified_at = clock_timestamp() WHERE id = v_account;
   END IF;
 
