@@ -2,6 +2,7 @@ import postgres from "postgres";
 import { bindMfaStore, type MfaStore } from "./mfa.ts";
 import { bindOidcStore, type OidcStore } from "./oidc.ts";
 import { enqueueInTransaction, type QueuedJob } from "./queue.ts";
+import { bindRegistrationStore, type RegistrationStore } from "./registration.ts";
 import { bindSetupStore, type SetupStore } from "./setup.ts";
 
 // The wrappers of the system operations behind sign-in and the session cookie
@@ -37,6 +38,21 @@ export interface NewSession {
   readonly tokenHash: Buffer;
   /** SHA-256 of the token of the session cookie the request carried; that session is deleted with the new one's creation. */
   readonly replacedTokenHash: Buffer | null;
+  /** Jobs put on their queues in the same transaction: they exist exactly when the session is created. */
+  readonly jobs?: readonly QueuedJob[];
+}
+
+/** What a password sign-in needs to know to decide whether to alert the account (doc 02 section 12). */
+export interface SignInAlertContext {
+  /** The account's `signin_alerts` flag. */
+  readonly alertsOn: boolean;
+  /** Whether the account has had a full session before; false for its first. */
+  readonly signedInBefore: boolean;
+  /**
+   * The user agent of every live session of the account created from the same stored IP prefix, each once;
+   * null for a session that had none. The caller compares families, which the database does not know.
+   */
+  readonly userAgentsOnNetwork: readonly (string | null)[];
 }
 
 /** What a password change writes, in one transaction. */
@@ -87,7 +103,7 @@ export interface SessionSummary {
   readonly userAgent: string | null;
 }
 
-export interface AuthStore extends SetupStore, MfaStore, OidcStore {
+export interface AuthStore extends SetupStore, MfaStore, OidcStore, RegistrationStore {
   /**
    * The address folded the way the database compares emails: two addresses that name one account
    * (`loginLookup` finds the same row) fold to one string, and no two others do. For what counts
@@ -97,11 +113,17 @@ export interface AuthStore extends SetupStore, MfaStore, OidcStore {
   /** The account with this email, compared case-insensitively; undefined for an unknown address. */
   loginLookup(email: string): Promise<LoginCandidate | undefined>;
   /**
-   * Creates a session and deletes the one named by `replacedTokenHash`, in one database call.
-   * False, with nothing changed, when the account does not exist or is disabled, or the level does
-   * not fit the account's second factor.
+   * Creates a session and deletes the one named by `replacedTokenHash`, in one database call, and puts
+   * `jobs` on their queues in the same transaction: a job that cannot be queued undoes the session and
+   * rejects. False, with nothing changed and no job queued, when the account does not exist or is
+   * disabled, or the level does not fit the account's second factor.
    */
   createSession(session: NewSession): Promise<boolean>;
+  /**
+   * What the sign-in of the account from `ipPrefix` needs to decide on an alert, read before its session is
+   * created; undefined for an account that does not exist or is disabled.
+   */
+  signInAlertContext(accountId: string, ipPrefix: string | null): Promise<SignInAlertContext | undefined>;
   /**
    * The session behind a token hash, when it exists, has not expired, its account is not disabled
    * and it was not created before the account's password change; undefined otherwise. A session
@@ -176,6 +198,12 @@ interface ApiTokenRow {
   scope: string;
 }
 
+interface AlertContextRow {
+  alerts_on: boolean;
+  signed_in_before: boolean;
+  user_agents: string[];
+}
+
 interface KeyRow {
   key: string;
 }
@@ -225,6 +253,7 @@ export function bindAuthStore(client: postgres.Sql): Omit<AuthStore, "close"> {
     ...bindSetupStore(client),
     ...bindMfaStore(client),
     ...bindOidcStore(client),
+    ...bindRegistrationStore(client),
 
     async emailKey(email) {
       // The `email` column is citext, which compares lower(a) = lower(b) in the database's default
@@ -254,21 +283,49 @@ export function bindAuthStore(client: postgres.Sql): Omit<AuthStore, "close"> {
       if (session.replacedTokenHash !== null) {
         assertTokenHash(session.replacedTokenHash, "replacedTokenHash");
       }
-      const rows = await client<CreatedRow[]>`
-        SELECT sys_session_create(
-          ${session.id}::uuid,
-          ${session.accountId}::uuid,
-          ${session.level}::text,
-          ${session.remember}::boolean,
-          ${session.ipPrefix}::cidr,
-          ${session.userAgent}::text,
-          ${session.tokenHash}::bytea,
-          ${session.replacedTokenHash}::bytea) AS created`;
-      const row = rows[0];
-      if (rows.length !== 1 || row === undefined) {
-        throw new Error("sys_session_create did not return exactly one row");
+      const create = async (connection: postgres.Sql | postgres.TransactionSql): Promise<boolean> => {
+        const rows = await connection<CreatedRow[]>`
+          SELECT sys_session_create(
+            ${session.id}::uuid,
+            ${session.accountId}::uuid,
+            ${session.level}::text,
+            ${session.remember}::boolean,
+            ${session.ipPrefix}::cidr,
+            ${session.userAgent}::text,
+            ${session.tokenHash}::bytea,
+            ${session.replacedTokenHash}::bytea) AS created`;
+        const row = rows[0];
+        if (rows.length !== 1 || row === undefined) {
+          throw new Error("sys_session_create did not return exactly one row");
+        }
+        return row.created;
+      };
+      const jobs = session.jobs ?? [];
+      if (jobs.length === 0) {
+        return create(client);
       }
-      return row.created;
+      return client.begin(async (tx) => {
+        const created = await create(tx);
+        if (created) {
+          for (const job of jobs) {
+            await enqueueInTransaction(tx, job);
+          }
+        }
+        return created;
+      });
+    },
+
+    async signInAlertContext(accountId, ipPrefix) {
+      const rows = await client<AlertContextRow[]>`
+        SELECT alerts_on, signed_in_before, user_agents
+        FROM sys_signin_alert_context(${accountId}::uuid, ${ipPrefix}::cidr)`;
+      if (rows.length > 1) {
+        throw new Error("sys_signin_alert_context returned more than one row");
+      }
+      const row = rows[0];
+      return row === undefined
+        ? undefined
+        : { alertsOn: row.alerts_on, signedInBefore: row.signed_in_before, userAgentsOnNetwork: row.user_agents.map((userAgent) => (userAgent === "" ? null : userAgent)) };
     },
 
     async lookupSession(tokenHash) {

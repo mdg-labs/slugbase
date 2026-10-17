@@ -1,9 +1,10 @@
 import { verifyMfa } from "@slugbase/contracts";
-import type { SessionCookieSpec } from "@slugbase/core";
+import { truncateUserAgent, type SessionCookieSpec } from "@slugbase/core";
 import { setSessionCookie } from "../../auth/cookie.ts";
 import { verifySecondFactor, type SecondFactorDependencies } from "../../auth/mfa.ts";
 import type { RouteBinding } from "../../http/chain.ts";
 import { ProblemError } from "../../http/problem.ts";
+import { networkPrefixOf } from "../../http/trusted-proxy.ts";
 import { route } from "../register.ts";
 
 // POST /api/v1/auth/mfa/verify (doc 04 sections 4.3 and 10.2, doc 02 section
@@ -34,6 +35,7 @@ export function verifyMfaRoute({ cookie, ...dependencies }: VerifyMfaRouteOption
       accountId: principal.accountId,
       sessionId: principal.sessionId,
       given: "code" in body ? { kind: "code", code: body.code } : { kind: "backup", code: body.backupCode },
+      device: { ipPrefix: networkPrefixOf(context.get("clientIp")) ?? null, userAgent: truncateUserAgent(context.req.raw.headers.get("user-agent")) },
     });
     switch (outcome.kind) {
       case "signed_in":

@@ -106,6 +106,38 @@ async function backendPid(db: Db): Promise<number> {
 const SESSION_REPLACED =
   "the database connection was replaced during the run, so the advisory lock and the session settings are gone";
 
+// The ways the driver and the server report a session that is gone: the
+// server's shutdown and connection-exception SQLSTATEs (57P01 to 57P03, class
+// 08), the socket errors of a dropped peer and, without a code, the two
+// messages node-postgres gives a connection that ends under a statement.
+const CONNECTION_LOSS_CODES = new Set(["57P01", "57P02", "57P03", "ECONNRESET", "EPIPE"]);
+const CONNECTION_EXCEPTION_CLASS = /^08[0-9A-Z]{3}$/;
+const CONNECTION_LOSS_MESSAGES = new Set(["Connection terminated unexpectedly", "Connection terminated"]);
+
+function isConnectionLoss(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  const code = (error as { code?: unknown }).code;
+  if (typeof code === "string") {
+    return CONNECTION_LOSS_CODES.has(code) || CONNECTION_EXCEPTION_CLASS.test(code);
+  }
+  return CONNECTION_LOSS_MESSAGES.has(error.message);
+}
+
+// The pool ends the connection of any failed statement, so the ROLLBACK that
+// follows a failed script runs on a new connection. After a lost connection
+// that new connection may not open at all (a server shutting down refuses it),
+// and its error would replace the loss. A ROLLBACK that fails is ignored too:
+// its error must not replace the one the caller rethrows or checks.
+async function rollback(db: Db, error: unknown): Promise<void> {
+  if (!isConnectionLoss(error)) {
+    // Nothing is left to undo: a failed statement ended its connection and any transaction on it, and a
+    // call that failed before or after its script left none open.
+    await db.executeSql("ROLLBACK").catch(() => undefined);
+  }
+}
+
 async function assertSession(db: Db, pid: number): Promise<void> {
   if ((await backendPid(db)) !== pid) {
     throw new MigrationError(SESSION_REPLACED);
@@ -116,10 +148,10 @@ async function assertSession(db: Db, pid: number): Promise<void> {
 // `@slugbase/db` takes for the chains. It is polled rather than waited for in a
 // statement, so that a waiting run holds no snapshot which the index build of
 // the running one would wait for. The pool holds one connection, and the lock
-// lives in its session, which `assertSession` keeps checking.
-async function takeMigrateLock(db: Db): Promise<number> {
+// lives in its session, which `assertSession` keeps checking. A failed statement
+// ends that connection and the next statement opens another, which holds no lock.
+async function takeMigrateLock(db: Db, pid: number): Promise<void> {
   const deadline = Date.now() + STATEMENT_TIMEOUT_MS;
-  const pid = await backendPid(db);
   for (;;) {
     const [lock] = await select<{ locked: boolean; pid: number }>(
       db,
@@ -129,7 +161,7 @@ async function takeMigrateLock(db: Db): Promise<number> {
       throw new MigrationError(SESSION_REPLACED);
     }
     if (lock.locked) {
-      return pid;
+      return;
     }
     if (Date.now() >= deadline) {
       throw new MigrationError("the migration lock was not obtained in time: another migrate is still running");
@@ -307,8 +339,8 @@ async function upgrade(db: Db, pid: number, from: number, target: number): Promi
   try {
     await db.executeSql(transaction);
   } catch (error) {
-    // The transaction failed part-way through and is still open in this session.
-    await db.executeSql("ROLLBACK");
+    // The pool ended the connection of the failed script, and its open transaction and the migrate lock went with it. The error is rethrown, so nothing else runs.
+    await rollback(db, error);
     throw error;
   }
   const pending = builds.length > 0 ? await readPending(db) : undefined;
@@ -320,14 +352,14 @@ async function upgrade(db: Db, pid: number, from: number, target: number): Promi
 // Creates the queue of each job with the settings the worker applies to it, and leaves a queue that
 // exists alone: how a changed definition reaches an existing queue is the worker's updateQueue. A queue
 // is a row of pgboss.queue and no DDL (the queues are not partitioned), so this stays schema-only and
-// fast. pg-boss runs its create as one script that opens its own transaction, which a failure leaves
-// open in this session.
+// fast. pg-boss runs its create as one script that opens its own transaction; a failure ends the
+// connection that ran it, and the error is rethrown, so nothing else runs.
 async function createQueues(boss: PgBoss, db: Db, jobs: readonly JobDefinition[]): Promise<void> {
   for (const job of jobs) {
     try {
       await boss.createQueue(job.name, queueSettings(job));
     } catch (error) {
-      await db.executeSql("ROLLBACK");
+      await rollback(db, error);
       throw error;
     }
   }
@@ -350,6 +382,9 @@ async function createQueues(boss: PgBoss, db: Db, jobs: readonly JobDefinition[]
  */
 export async function installPgBoss(url: string, jobs: readonly JobDefinition[] = []): Promise<number | undefined> {
   const secrets = connectionSecrets(url);
+  // Set once the backend is known and cleared again when the work is done: a
+  // connection lost in between is a replaced session, however it first shows.
+  let sessionKnown = false;
   try {
     const expected = expectedVersion();
     const boss = new PgBoss({
@@ -371,18 +406,24 @@ export async function installPgBoss(url: string, jobs: readonly JobDefinition[] 
     await pool.open();
     try {
       const db = boss.getDb();
-      const pid = await takeMigrateLock(db);
+      let pid = await backendPid(db);
+      sessionKnown = true;
+      await takeMigrateLock(db, pid);
       let changed = false;
       if (!(await boss.isInstalled())) {
         try {
           await db.executeSql(getConstructionPlans(PGBOSS_SCHEMA, { createSchema: false }));
           changed = true;
         } catch (error) {
-          // The plan runs in one transaction and failed part-way through it.
-          await db.executeSql("ROLLBACK");
+          // The plan ran in one transaction and failed part-way through it. The pool ended the connection
+          // of the failed script, with the migrate lock in its session, so a plan that finds the schema
+          // installed carries on in a new session that takes the lock again before anything else runs.
+          await rollback(db, error);
           if (!(error instanceof Error) || !error.message.includes(ALREADY_INSTALLED)) {
             throw error;
           }
+          pid = await backendPid(db);
+          await takeMigrateLock(db, pid);
         }
       }
       const found = await boss.schemaVersion();
@@ -415,6 +456,7 @@ export async function installPgBoss(url: string, jobs: readonly JobDefinition[] 
         );
       }
       await createQueues(boss, db, jobs);
+      sessionKnown = false;
       return changed ? expected : undefined;
     } finally {
       await pool.close();
@@ -424,7 +466,12 @@ export async function installPgBoss(url: string, jobs: readonly JobDefinition[] 
       throw new MigrationError(redact(error.message, secrets), error.code);
     }
     const code = (error as { code?: unknown } | null)?.code;
-    const message = error instanceof Error && error.message !== "" ? error.message : "unknown error";
+    const message =
+      sessionKnown && isConnectionLoss(error)
+        ? SESSION_REPLACED
+        : error instanceof Error && error.message !== ""
+          ? error.message
+          : "unknown error";
     throw new MigrationError(
       redact(`the pg-boss schema or its queues could not be set up: ${message}`, secrets),
       typeof code === "string" ? redact(code, secrets) : undefined,

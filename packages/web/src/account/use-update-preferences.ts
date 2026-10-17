@@ -2,7 +2,7 @@ import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-q
 import { useRouter } from "@tanstack/react-router";
 import { ME_QUERY_KEY, withAccount, type Account, type Me, type PreferenceChanges } from "./me.ts";
 
-const PREFERENCE_KEYS = ["theme", "accent", "defaultView", "singleKeyShortcuts", "aiOptOut", "analyticsConsent", "onboarding"] as const;
+const PREFERENCE_KEYS = ["theme", "accent", "defaultView", "singleKeyShortcuts", "signinAlerts", "aiOptOut", "analyticsConsent", "onboarding"] as const;
 
 /** The account as it looks once the changes are saved; the onboarding keys given are merged into the stored ones. */
 function applied(account: Account, changes: PreferenceChanges): Account {

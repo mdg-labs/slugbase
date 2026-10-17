@@ -31,6 +31,7 @@ it("mounts the app on #root and shows the product name that /api/config answers 
       accent: null,
       defaultView: "grid",
       singleKeyShortcuts: true,
+      signinAlerts: true,
       aiOptOut: false,
       analyticsConsent: "unset",
       onboarding: { browserSetupDone: false, importDone: false, checklistDismissed: false },

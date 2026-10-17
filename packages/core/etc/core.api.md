@@ -10,7 +10,7 @@ import type { ProblemCode } from '@slugbase/contracts';
 export const ACCOUNT_CREATION_PATHS: readonly ["self-registration", "invitation", "oidc", "setup"];
 
 // @public
-export const ACCOUNT_NOTIFICATIONS: readonly ["passwordChanged", "mfaEnabled", "mfaDisabled"];
+export const ACCOUNT_NOTIFICATIONS: readonly ["passwordChanged", "mfaEnabled", "mfaDisabled", "verifyEmail", "newSignIn"];
 
 // @public (undocumented)
 export type AccountCreationPath = (typeof ACCOUNT_CREATION_PATHS)[number];
@@ -19,7 +19,7 @@ export type AccountCreationPath = (typeof ACCOUNT_CREATION_PATHS)[number];
 export type AccountNotification = (typeof ACCOUNT_NOTIFICATIONS)[number];
 
 // @public
-export function accountNotification(template: AccountNotification, recipient: NotificationRecipient): MailMessage;
+export function accountNotification(template: AccountNotification, recipient: NotificationRecipient, data?: Readonly<Record<string, string>>): MailMessage;
 
 // @public
 export interface Adapters {
@@ -177,6 +177,29 @@ export function createBreachedPasswords(records: Uint8Array): BreachedPasswords;
 // @public (undocumented)
 export function createPasswordPolicy(input?: PasswordPolicyOptions): PasswordPolicy;
 
+// @public
+export const CREDENTIAL_TOKEN_BYTES = 32;
+
+// @public
+export const CREDENTIAL_TOKEN_PURPOSES: readonly ["email_verify", "email_change", "email_change_cancel", "password_reset"];
+
+// @public
+export const CREDENTIAL_TOKEN_TTL_SECONDS: {
+    readonly email_verify: number;
+    readonly email_change: number;
+    readonly email_change_cancel: number;
+    readonly password_reset: number;
+};
+
+// @public (undocumented)
+export interface CredentialToken {
+    readonly hash: Buffer;
+    readonly value: string;
+}
+
+// @public (undocumented)
+export type CredentialTokenPurpose = (typeof CREDENTIAL_TOKEN_PURPOSES)[number];
+
 // @public (undocumented)
 export const DOMAIN_EVENT_NAMES: readonly DomainEventName[];
 
@@ -321,6 +344,9 @@ export function generateApiToken(): ApiToken;
 
 // @public
 export function generateBackupCodes(count?: number): string[];
+
+// @public
+export function generateCredentialToken(): CredentialToken;
 
 // @public
 export function generateTotpSecret(): Uint8Array;
@@ -575,6 +601,24 @@ export const REAUTH_WINDOW_MS: number;
 
 // @public
 export function reauthenticatedRecently(reauthAt: Date | undefined, nowMs: number): boolean;
+
+// @public
+export type RegistrationLocale = "en" | "de";
+
+// @public
+export function registrationLocale(acceptLanguage: string | null): RegistrationLocale;
+
+// @public
+export interface RegistrationSettings {
+    readonly emailVerificationRequired: boolean;
+    readonly publicRegistration: boolean;
+}
+
+// @public
+export type RegistrationUnavailable = "registration_closed" | "mail_unavailable";
+
+// @public
+export function registrationUnavailable(settings: RegistrationSettings, mailAvailable: boolean): RegistrationUnavailable | undefined;
 
 // @public
 export function safeReturnTo(value: string | undefined): string;

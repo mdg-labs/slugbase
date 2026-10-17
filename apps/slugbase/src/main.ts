@@ -18,6 +18,7 @@ import {
   type EgressPort,
   type IdentityPort,
   type MailPort,
+  type RegistrationSettings,
 } from "@slugbase/core";
 import { createRateLimitStore, type MigrationChain } from "@slugbase/db";
 import { createMailTemplates } from "@slugbase/email";
@@ -141,6 +142,11 @@ const WEB_ROOT = fileURLToPath(new URL("./web", import.meta.url));
 // sets are the ones `migrate` and the server's migrate-on-start both apply.
 const MIGRATIONS: readonly MigrationChain[] = [];
 
+// What PUBLIC_REGISTRATION and EMAIL_VERIFICATION_REQUIRED mean when the operator leaves them unset (doc 02
+// section 2.2, doc 01 section 11): CE opens no registration, and verifies an address only when mail can
+// carry the link. A key the operator sets wins.
+const REGISTRATION_DEFAULTS: RegistrationSettings = { publicRegistration: false, emailVerificationRequired: false };
+
 const RATE_LIMIT_POOL_SIZE = 4;
 
 // The templates are the ones of `@slugbase/email`, with every link on the deployment's own origin. A
@@ -241,6 +247,7 @@ async function runServer(config: ServerConfig, trap: SignalTrap): Promise<void> 
     adapters: composeAdapters(config, logger),
     modules: [],
     migrations: MIGRATIONS,
+    registrationDefaults: REGISTRATION_DEFAULTS,
     logger,
     buildInfo: loadBuildInfo(BUILD_INFO_FILE),
     ...(serveWeb ? { webRoot: WEB_ROOT } : {}),

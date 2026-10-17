@@ -23,6 +23,7 @@ const ACCOUNT: Account = {
   accent: null,
   defaultView: "grid",
   singleKeyShortcuts: true,
+  signinAlerts: true,
   aiOptOut: false,
   analyticsConsent: "unset",
   onboarding: { browserSetupDone: false, importDone: false, checklistDismissed: false },

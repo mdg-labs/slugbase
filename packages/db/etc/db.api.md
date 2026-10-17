@@ -4,6 +4,7 @@
 
 ```ts
 
+import type { CredentialTokenPurpose } from '@slugbase/core';
 import { InferInsertModel } from 'drizzle-orm';
 import { InferSelectModel } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
@@ -61,6 +62,7 @@ export interface AccountProfile {
     readonly mfaEnabled: boolean;
     // (undocumented)
     readonly onboarding: Onboarding;
+    readonly signinAlerts: boolean;
     // (undocumented)
     readonly singleKeyShortcuts: boolean;
     // (undocumented)
@@ -83,6 +85,8 @@ export interface AccountProfileChanges {
     readonly locale?: "en" | "de";
     // (undocumented)
     readonly onboarding?: Partial<Onboarding>;
+    // (undocumented)
+    readonly signinAlerts?: boolean;
     // (undocumented)
     readonly singleKeyShortcuts?: boolean;
     // (undocumented)
@@ -159,7 +163,7 @@ export function apiTokenRepository(tx: TenantTx): ApiTokenRepository;
 export type ApiTokenScope = "read" | "read-write";
 
 // @public (undocumented)
-export interface AuthStore extends SetupStore, MfaStore, OidcStore {
+export interface AuthStore extends SetupStore, MfaStore, OidcStore, RegistrationStore {
     changePassword(change: PasswordChange): Promise<boolean>;
     close(): Promise<void>;
     createSession(session: NewSession): Promise<boolean>;
@@ -172,6 +176,7 @@ export interface AuthStore extends SetupStore, MfaStore, OidcStore {
     passwordHashOf(accountId: string): Promise<string | null>;
     revokeAllSessions(accountId: string, exceptSessionId: string | null): Promise<number>;
     revokeSession(sessionId: string, accountId: string): Promise<boolean>;
+    signInAlertContext(accountId: string, ipPrefix: string | null): Promise<SignInAlertContext | undefined>;
 }
 
 // @public (undocumented)
@@ -280,6 +285,14 @@ export function createRateLimitStore(options: RateLimitStoreOptions): RateLimitS
 
 // @public
 export function createRetentionStore(options: RetentionStoreOptions): RetentionStore;
+
+// @public (undocumented)
+export interface CredentialTokenRepository {
+    issue(token: NewCredentialToken): Promise<boolean>;
+}
+
+// @public (undocumented)
+export function credentialTokenRepository(tx: TenantTx): CredentialTokenRepository;
 
 // @public
 export interface Database {
@@ -518,6 +531,16 @@ export interface NewApiToken {
     readonly workspaceId: string;
 }
 
+// @public (undocumented)
+export interface NewCredentialToken {
+    readonly id: string;
+    // (undocumented)
+    readonly purpose: CredentialTokenPurpose;
+    readonly targetEmail: string | null;
+    readonly tokenHash: Buffer;
+    readonly ttlSeconds: number;
+}
+
 // @public
 export interface NewOidcLoginState {
     // (undocumented)
@@ -533,11 +556,25 @@ export interface NewOidcLoginState {
 }
 
 // @public (undocumented)
+export interface NewRegistration {
+    readonly accountId: string;
+    // (undocumented)
+    readonly displayName: string;
+    readonly email: string;
+    // (undocumented)
+    readonly locale: string;
+    readonly onCreated: readonly QueuedJob[];
+    readonly onTaken: readonly QueuedJob[];
+    readonly passwordHash: string;
+}
+
+// @public (undocumented)
 export interface NewSession {
     // (undocumented)
     readonly accountId: string;
     readonly id: string;
     readonly ipPrefix: string | null;
+    readonly jobs?: readonly QueuedJob[];
     readonly level: "partial" | "full";
     readonly remember: boolean;
     readonly replacedTokenHash: Buffer | null;
@@ -632,6 +669,11 @@ export interface RateLimitTaken {
     readonly allowed: boolean;
     readonly remaining: number;
     readonly retryAfterSeconds: number;
+}
+
+// @public (undocumented)
+export interface RegistrationStore {
+    registerAccount(registration: NewRegistration): Promise<boolean>;
 }
 
 // @public
@@ -764,12 +806,20 @@ export interface SetupStore {
     setupPending(): Promise<boolean>;
 }
 
+// @public
+export interface SignInAlertContext {
+    readonly alertsOn: boolean;
+    readonly signedInBefore: boolean;
+    readonly userAgentsOnNetwork: readonly (string | null)[];
+}
+
 // @public (undocumented)
 export interface SignInCompletion {
     // (undocumented)
     readonly accountId: string;
     // (undocumented)
     readonly factor: SecondFactor;
+    readonly jobs?: readonly QueuedJob[];
     readonly newTokenHash: Buffer;
     readonly sessionId: string;
 }

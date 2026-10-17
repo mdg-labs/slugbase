@@ -1,6 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createServer, connect, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -108,6 +109,85 @@ async function rejection(run: Promise<unknown>): Promise<MigrationError> {
     return error as MigrationError;
   }
   throw new Error("expected the promise to reject");
+}
+
+// The server's answer to a terminated backend, as the wire protocol carries it.
+function terminationResponse(): Buffer {
+  const fields = ["SFATAL", "VFATAL", "C57P01", "Mterminating connection due to administrator command"];
+  const body = Buffer.concat([...fields.map((field) => Buffer.from(`${field}\0`)), Buffer.from("\0")]);
+  const header = Buffer.alloc(5);
+  header.write("E");
+  header.writeInt32BE(body.length + 4, 1);
+  return Buffer.concat([header, body]);
+}
+
+// A relay between a client and the development Postgres that, instead of
+// forwarding a client write, ends the connection: the first write containing
+// the given statement text, or the one `writesAfter` writes later (the driver
+// sends a prepared statement's text once). The client then loses its connection
+// at a known point, with that write in flight. By default both sockets are
+// closed at once; with `terminated` the client first gets the server's
+// termination error and the sockets close 100 ms later, the way a terminated
+// backend shows to a client.
+interface Relay {
+  url: (database: string) => string;
+  close: () => Promise<void>;
+}
+
+async function relayDroppingAt(statement: string, writesAfter = 0, terminated = false): Promise<Relay> {
+  const sockets = new Set<Socket>();
+  let matched = false;
+  let wait = writesAfter;
+  const listener: Server = createServer((client) => {
+    const upstream = connect({ host: server.hostname, port: Number(server.port) });
+    sockets.add(client);
+    sockets.add(upstream);
+    let dropping = false;
+    const dropBoth = (): void => {
+      client.destroy();
+      upstream.destroy();
+    };
+    client.on("data", (chunk: Buffer) => {
+      if (dropping) {
+        return;
+      }
+      matched ||= chunk.includes(statement);
+      if (matched && wait-- === 0) {
+        dropping = true;
+        if (terminated) {
+          client.write(terminationResponse());
+          setTimeout(dropBoth, 100);
+        } else {
+          dropBoth();
+        }
+        return;
+      }
+      upstream.write(chunk);
+    });
+    upstream.on("data", (chunk: Buffer) => client.write(chunk));
+    client.on("error", dropBoth);
+    upstream.on("error", dropBoth);
+    client.on("close", dropBoth);
+    upstream.on("close", dropBoth);
+  });
+  await new Promise<void>((resolve) => {
+    listener.listen(0, "127.0.0.1", resolve);
+  });
+  const { port } = listener.address() as { port: number };
+  return {
+    url: (database) =>
+      `postgres://slugbase_migrator:${encodeURIComponent(MIGRATOR_PASSWORD)}@127.0.0.1:${String(port)}/${database}`,
+    close: async () => {
+      for (const socket of sockets) {
+        socket.destroy();
+      }
+      await new Promise<void>((resolve) => {
+        listener.close(() => {
+          resolve();
+        });
+      });
+    },
+  };
 }
 
 async function recordedRows(owner: postgres.Sql, table: string): Promise<number> {
@@ -282,7 +362,8 @@ describe("the session of a run", () => {
       for (let attempt = 0; attempt < 100 && terminated === 0; attempt++) {
         const rows = await admin<{ n: number }[]>`
           SELECT count(pg_terminate_backend(pid))::int AS n FROM pg_stat_activity
-          WHERE datname = ${name} AND application_name = 'slugbase-migrate' AND state = 'idle'`;
+          WHERE datname = ${name} AND application_name = 'slugbase-migrate' AND state = 'idle'
+            AND query LIKE '%pg_try_advisory_lock%'`;
         terminated = rows[0]?.n ?? 0;
         if (terminated === 0) {
           await sleep(100);
@@ -296,6 +377,76 @@ describe("the session of a run", () => {
     const error = await run;
 
     expect(error.message).toContain("connection was replaced");
+  }, 60_000);
+
+  it("fails when a lock poll is written to a connection that has just closed", async () => {
+    const { name } = await createDatabase();
+    const holder = superuser(name);
+    await holder`SELECT pg_advisory_lock(hashtext('slugbase.migrate'))`;
+    const relay = await relayDroppingAt("pg_try_advisory_lock", 1);
+    try {
+      const error = await rejection(migrate({ url: relay.url(name) }));
+
+      expect(error.message).toContain("connection was replaced");
+      expect(error.code).toBe("CONNECTION_CLOSED");
+    } finally {
+      await holder`SELECT pg_advisory_unlock(hashtext('slugbase.migrate'))`;
+      await relay.close();
+    }
+  }, 60_000);
+
+  it.each([
+    {
+      kind: "transactional",
+      statement: "CREATE TABLE session_probe",
+      terminated: true,
+      tag: "20300101000001_record_session",
+      codes: ["57P01", "CONNECTION_CLOSED"],
+      recorded: 0,
+    },
+    {
+      kind: "non-transactional",
+      statement: "INDEX CONCURRENTLY",
+      terminated: false,
+      tag: "20300101000002_index_session_probe",
+      codes: ["CONNECTION_CLOSED"],
+      recorded: 1,
+    },
+  ])("names the step when the connection is lost during a $kind step", async ({ statement, terminated, tag, codes, recorded }) => {
+    const { name, owner } = await createDatabase();
+    const relay = await relayDroppingAt(statement, 0, terminated);
+    try {
+      const error = await rejection(migrate({ url: relay.url(name), chains: [fixture("session")] }));
+
+      expect(error.message).toContain(`migration ${tag} of chain "session" failed`);
+      expect(error.message).toContain("connection was replaced");
+      expect(codes).toContain(error.code);
+    } finally {
+      await relay.close();
+    }
+    expect(await recordedRows(owner, "migrations_session")).toBe(recorded);
+  }, 60_000);
+
+  it("names the step when the server terminates the backend while a build waits", async () => {
+    const { name } = await createDatabase();
+    const release = await holdSnapshot(name);
+    const run = rejection(migrate({ url: migratorUrl(name), chains: [fixture("snapshot")] }));
+    run.catch(() => undefined);
+    try {
+      await waitForBlockedIndexBuild(name);
+      const rows = await admin<{ n: number }[]>`
+        SELECT count(pg_terminate_backend(pid))::int AS n FROM pg_stat_activity
+        WHERE datname = ${name} AND application_name = 'slugbase-migrate'`;
+      expect(rows[0]?.n).toBe(1);
+    } finally {
+      await release();
+    }
+
+    const error = await run;
+
+    expect(error.message).toContain('migration 20300101000002_index_snapshot_target of chain "snapshot" failed');
+    expect(error.message).toContain("connection was replaced");
+    expect(["57P01", "CONNECTION_CLOSED"]).toContain(error.code);
   }, 60_000);
 });
 

@@ -28,6 +28,8 @@ export interface AccountProfile {
   readonly accent: AccentPreset | null;
   readonly defaultBookmarkView: "grid" | "table";
   readonly singleKeyShortcuts: boolean;
+  /** Whether a sign-in from a new device is announced by email (doc 02 section 12). */
+  readonly signinAlerts: boolean;
   readonly aiOptOut: boolean;
   readonly analyticsConsent: AnalyticsConsent;
   readonly onboarding: Onboarding;
@@ -57,6 +59,7 @@ export interface AccountProfileChanges {
   readonly accent?: AccentPreset;
   readonly defaultBookmarkView?: "grid" | "table";
   readonly singleKeyShortcuts?: boolean;
+  readonly signinAlerts?: boolean;
   readonly aiOptOut?: boolean;
   readonly analyticsConsent?: AnalyticsConsent;
   readonly onboarding?: Partial<Onboarding>;
@@ -95,6 +98,7 @@ export function accountProfileRepository(tx: TenantTx): AccountProfileRepository
           accent: accounts.accent,
           defaultBookmarkView: accounts.defaultBookmarkView,
           singleKeyShortcuts: accounts.singleKeyShortcuts,
+          signinAlerts: accounts.signinAlerts,
           aiOptOut: accounts.aiOptOut,
           analyticsConsent: accounts.analyticsConsent,
           onboarding: accounts.onboarding,
@@ -123,6 +127,7 @@ export function accountProfileRepository(tx: TenantTx): AccountProfileRepository
         accent: row.accent === null ? null : oneOf("accent", row.accent, ACCENT_PRESETS),
         defaultBookmarkView: oneOf("default_bookmark_view", row.defaultBookmarkView, ["grid", "table"]),
         singleKeyShortcuts: row.singleKeyShortcuts,
+        signinAlerts: row.signinAlerts,
         aiOptOut: row.aiOptOut,
         analyticsConsent: oneOf("analytics_consent", row.analyticsConsent, ["unset", "granted", "denied"]),
         onboarding: onboardingOf(row.onboarding),

@@ -8,7 +8,7 @@
 -- operations return (140-mfa.sql). It
 -- may update display_name, locale and the preference columns of the profile
 -- operation (theme, accent, default_bookmark_view, single_key_shortcuts,
--- ai_opt_out, analytics_consent, consent_at, onboarding), and
+-- signin_alerts, ai_opt_out, analytics_consent, consent_at, onboarding), and
 -- only on its own row: the policy's WITH CHECK keeps the id, and no other
 -- column is granted. It holds no INSERT or DELETE. slugbase_system gets the table
 -- privileges its functions need (it bypasses row-level security).
@@ -25,8 +25,8 @@ GRANT SELECT (
   onboarding, is_instance_admin, disabled_at, last_sign_in_at, created_at, updated_at
 ) ON TABLE public.accounts TO slugbase_app;
 GRANT UPDATE (
-  display_name, locale, theme, accent, default_bookmark_view, single_key_shortcuts, ai_opt_out, analytics_consent, consent_at,
-  onboarding
+  display_name, locale, theme, accent, default_bookmark_view, single_key_shortcuts, signin_alerts, ai_opt_out, analytics_consent,
+  consent_at, onboarding
 ) ON TABLE public.accounts TO slugbase_app;
 GRANT SELECT, UPDATE ON TABLE public.accounts TO slugbase_system;
 

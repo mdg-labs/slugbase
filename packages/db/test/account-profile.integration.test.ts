@@ -130,10 +130,22 @@ describe("updateProfile preferences", () => {
       accent: null,
       defaultBookmarkView: "grid",
       singleKeyShortcuts: true,
+      signinAlerts: true,
       aiOptOut: false,
       analyticsConsent: "unset",
       onboarding: { browserSetupDone: false, importDone: false, checklistDismissed: false },
     });
+  });
+
+  it("turns the sign-in alerts off and on again, and leaves the other preferences alone", async () => {
+    const id = await account();
+    const before = await preferences(id);
+    const off = await tenant(id, (tx) => accountProfileRepository(tx).updateProfile({ signinAlerts: false }));
+    expect(off?.signinAlerts).toBe(false);
+    expect(await preferences(id)).toEqual({ ...before, signin_alerts: false });
+    const on = await tenant(id, (tx) => accountProfileRepository(tx).updateProfile({ signinAlerts: true }));
+    expect(on?.signinAlerts).toBe(true);
+    expect(await preferences(id)).toEqual(before);
   });
 
   it("writes every preference and answers them", async () => {
@@ -227,6 +239,7 @@ describe("the application role's update privilege on accounts", () => {
       "accent",
       "default_bookmark_view",
       "single_key_shortcuts",
+      "signin_alerts",
       "ai_opt_out",
       "analytics_consent",
       "consent_at",
@@ -239,7 +252,7 @@ describe("the application role's update privilege on accounts", () => {
   it("refuses a statement that sets the email, the instance admin flag or the password hash", async () => {
     const id = await account();
     const before = await row(id);
-    for (const column of ["email = 'taken@example.test'", "is_instance_admin = true", "password_hash = 'x'", "disabled_at = now()", "id = gen_random_uuid()", "signin_alerts = false", "last_sign_in_at = now()"]) {
+    for (const column of ["email = 'taken@example.test'", "is_instance_admin = true", "password_hash = 'x'", "disabled_at = now()", "id = gen_random_uuid()", "last_sign_in_at = now()"]) {
       await expect(
         db.app.begin(async (tx) => {
           await tx`SELECT set_config('app.account_id', ${id}, true)`;

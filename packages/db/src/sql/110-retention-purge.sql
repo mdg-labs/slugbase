@@ -26,6 +26,13 @@
 -- deleting the row later changes no answer. The grants it needs are in
 -- 170-oidc.sql.
 --
+-- credential_tokens: used_at or expires_at more than 7 days in the past, whichever
+-- of the two is set and whatever the other says (a token used before its expiry,
+-- one that expired unused). A token that is unused and unexpired, and one used or
+-- expired less than 7 days ago, stay; sys_credential_token_consume refuses a used
+-- or expired token from the moment it is one, so deleting the row later changes
+-- no answer. The grants it needs are in 190-credential-tokens.sql.
+--
 -- It takes no argument, so a caller cannot widen what it deletes, and it uses no
 -- dynamic SQL. It is entered in src/system/registry.ts. slugbase_system, the
 -- owner, already holds DELETE on sessions (060-accounts-sessions.sql) and holds
@@ -42,6 +49,7 @@ DECLARE
   c_batch CONSTANT integer := 5000;
   v_now timestamptz := clock_timestamp();
   c_token_retention CONSTANT interval := interval '30 days';
+  c_credential_token_retention CONSTANT interval := interval '7 days';
   v_deleted bigint;
 BEGIN
   DELETE FROM public.sessions
@@ -73,6 +81,16 @@ BEGIN
   );
   GET DIAGNOSTICS v_deleted = ROW_COUNT;
   RETURN QUERY SELECT 'oidc_login_states'::text, v_deleted;
+
+  DELETE FROM public.credential_tokens
+  WHERE id IN (
+    SELECT t.id FROM public.credential_tokens t
+    WHERE t.used_at <= v_now - c_credential_token_retention OR t.expires_at <= v_now - c_credential_token_retention
+    LIMIT c_batch
+    FOR UPDATE SKIP LOCKED
+  );
+  GET DIAGNOSTICS v_deleted = ROW_COUNT;
+  RETURN QUERY SELECT 'credential_tokens'::text, v_deleted;
 END
 $$;
 

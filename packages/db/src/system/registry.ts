@@ -49,4 +49,7 @@ export const systemOperations: readonly string[] = [
   "sys_identity_unlink",
   "sys_identity_reauth",
   "sys_password_set_initial",
+  "sys_credential_token_issue",
+  "sys_credential_token_consume",
+  "sys_signin_alert_context",
 ];

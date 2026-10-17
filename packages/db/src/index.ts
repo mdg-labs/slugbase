@@ -30,6 +30,8 @@ export { accountIdentityRepository } from "./repositories/account-identities.ts"
 export type { AccountIdentity, AccountIdentityRepository } from "./repositories/account-identities.ts";
 export { apiTokenRepository } from "./repositories/api-tokens.ts";
 export type { ApiTokenCreation, ApiTokenRecord, ApiTokenRepository, ApiTokenScope, NewApiToken } from "./repositories/api-tokens.ts";
+export { credentialTokenRepository } from "./repositories/credential-tokens.ts";
+export type { CredentialTokenRepository, NewCredentialToken } from "./repositories/credential-tokens.ts";
 export { membershipRepository } from "./repositories/memberships.ts";
 export type { Membership, MembershipRepository } from "./repositories/memberships.ts";
 export type { MemberRole } from "./schema/workspaces.ts";
@@ -50,8 +52,10 @@ export type {
   PasswordChange,
   SessionRecord,
   SessionSummary,
+  SignInAlertContext,
 } from "./system/auth.ts";
 export type { CompleteSetup, SetupOutcome, SetupStore } from "./system/setup.ts";
+export type { NewRegistration, RegistrationStore } from "./system/registration.ts";
 export type { IdentityLink, IdentityLinkOutcome, IdentityReauthentication, IdentitySignIn, IdentityUnlinkOutcome, NewOidcLoginState, OidcLoginState, OidcStore, SealedVerifier } from "./system/oidc.ts";
 export type {
   BackupCodeRecord,

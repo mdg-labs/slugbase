@@ -1,5 +1,5 @@
 import { getApiConfig } from "@slugbase/contracts";
-import type { Adapters, IdentityPort } from "@slugbase/core";
+import { registrationUnavailable, type Adapters, type IdentityPort, type RegistrationSettings } from "@slugbase/core";
 import type { SetupStore } from "@slugbase/db";
 import type { BuildInfo } from "../../build-info.ts";
 import type { ServerConfig } from "../../config/index.ts";
@@ -25,6 +25,8 @@ export interface ApiConfigOptions {
   readonly buildInfo: BuildInfo;
   /** `features` reports whether a port is configured, never an entitlement. */
   readonly adapters: Pick<Adapters, "mail" | "ai" | "identity">;
+  /** The settings in force for public registration: `signIn.registration` is whether they let a registration through now. */
+  readonly registration: RegistrationSettings;
   readonly logger: Pick<Logger, "warn">;
 }
 
@@ -43,7 +45,7 @@ async function oidcProviders(identity: IdentityPort, logger: Pick<Logger, "warn"
   }
 }
 
-export function apiConfigRoute({ config, store, buildInfo, adapters, logger }: ApiConfigOptions): RouteBinding {
+export function apiConfigRoute({ config, store, buildInfo, adapters, registration, logger }: ApiConfigOptions): RouteBinding {
   return route(getApiConfig).handle(async () => ({
     status: 200,
     headers: { "Cache-Control": CACHE_CONTROL },
@@ -55,7 +57,10 @@ export function apiConfigRoute({ config, store, buildInfo, adapters, logger }: A
       defaultLocale: LOCALES[0],
       docsBaseUrl: config.DOCS_BASE_URL,
       features: { mail: adapters.mail.available, ai: adapters.ai.available },
-      signIn: { oidc: await oidcProviders(adapters.identity, logger) },
+      signIn: {
+        registration: registrationUnavailable(registration, adapters.mail.available) === undefined,
+        oidc: await oidcProviders(adapters.identity, logger),
+      },
       ...(await setupStatus({ config, store })),
     },
   }));

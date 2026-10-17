@@ -74,6 +74,19 @@ function freePort(): Promise<number> {
 }
 
 function get(port: number, path: string): Promise<string> {
+  return send(port, `GET ${path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n`);
+}
+
+// A same-origin JSON POST, as the SPA sends one.
+function post(port: number, path: string, body: unknown): Promise<string> {
+  const text = JSON.stringify(body);
+  return send(
+    port,
+    `POST ${path} HTTP/1.1\r\nHost: localhost\r\nOrigin: ${valid.APP_ORIGIN}\r\nContent-Type: application/json\r\nContent-Length: ${String(Buffer.byteLength(text))}\r\nConnection: close\r\n\r\n${text}`,
+  );
+}
+
+function send(port: number, request: string): Promise<string> {
   return new Promise((resolveBody) => {
     const chunks: Buffer[] = [];
     const socket = connect({ port, host: "127.0.0.1" });
@@ -82,7 +95,7 @@ function get(port: number, path: string): Promise<string> {
       resolveBody(Buffer.concat(chunks).toString("utf8"));
     });
     socket.on("error", () => undefined);
-    socket.write(`GET ${path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n`);
+    socket.write(request);
   });
 }
 
@@ -215,11 +228,13 @@ interface ServerRun {
   output: string;
   /** The answer to GET /ready, when the server got as far as listening. */
   ready: string;
+  /** What `whenReady` returned. */
+  observed?: string;
 }
 
 // Starts the server command and waits until it listens or exits. A listening
 // server is asked for /ready, sent SIGTERM and waited for.
-async function runServer(env: Record<string, string>): Promise<ServerRun> {
+async function runServer(env: Record<string, string>, whenReady?: (port: number) => Promise<string>): Promise<ServerRun> {
   const port = await freePort();
   const child = spawn(process.execPath, ["src/main.ts", "server"], {
     cwd: APP,
@@ -247,6 +262,7 @@ async function runServer(env: Record<string, string>): Promise<ServerRun> {
   const timer = setTimeout(() => child.kill("SIGKILL"), 30_000);
   try {
     let ready = "";
+    let observed: string | undefined;
     if (await listening) {
       // Listening comes first, and the server answers /ready 503 until its migration is done.
       for (const deadline = Date.now() + 20_000; Date.now() < deadline; ) {
@@ -256,9 +272,12 @@ async function runServer(env: Record<string, string>): Promise<ServerRun> {
         }
         await new Promise((resolveWait) => setTimeout(resolveWait, 200));
       }
+      if (ready.startsWith("HTTP/1.1 200 ")) {
+        observed = await whenReady?.(port);
+      }
     }
     child.kill("SIGTERM");
-    return { status: await exited, output, ready };
+    return { status: await exited, output, ready, ...(observed === undefined ? {} : { observed }) };
   } finally {
     clearTimeout(timer);
     child.kill("SIGKILL");
@@ -342,6 +361,78 @@ describe("apps/slugbase main server with MIGRATE_ON_START", () => {
     } finally {
       await other.drop();
     }
+  }, 60_000);
+});
+
+describe("apps/slugbase main server and public registration", () => {
+  let database: TestDatabase;
+
+  beforeAll(async () => {
+    database = await createTestDatabase();
+  }, 300_000);
+
+  afterAll(async () => {
+    await database.drop();
+  }, 300_000);
+
+  const env = (extra: Record<string, string> = {}): Record<string, string> => ({
+    NODE_ENV: "test",
+    DATABASE_URL: databaseUrl(database),
+    DATABASE_MIGRATE_URL: databaseUrl(database, "owner"),
+    ...extra,
+  });
+  const body = { displayName: "Ada", email: "ada@example.test", password: "a long enough password for ada" };
+
+  async function accountCount(): Promise<number> {
+    const rows = await database.owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      return tx<{ count: string }[]>`SELECT count(*) FROM accounts`;
+    });
+    return Number(rows[0]?.count);
+  }
+
+  it("composes the CE defaults: registration is closed and the operation answers 403 registration_closed when the keys are unset", async () => {
+    const { status, output, observed } = await runServer(env(), async (port) => `${await get(port, "/api/config")}\n${await post(port, "/api/v1/auth/register", body)}`);
+    expect(status, output).toBe(0);
+    expect(observed).toContain('"registration":false');
+    expect(observed).toMatch(/HTTP\/1\.1 403 /);
+    expect(observed).toContain('"code":"registration_closed"');
+    expect(await accountCount()).toBe(0);
+  }, 60_000);
+
+  it("opens the operation with PUBLIC_REGISTRATION=true: /api/config reports it and POST /auth/register creates an unverified account", async () => {
+    const { status, output, observed } = await runServer(
+      env({ PUBLIC_REGISTRATION: "true" }),
+      async (port) => `${await get(port, "/api/config")}\n${await post(port, "/api/v1/auth/register", body)}`,
+    );
+    expect(status, output).toBe(0);
+    expect(observed).toContain('"registration":true');
+    expect(observed).toMatch(/HTTP\/1\.1 202 /);
+    const rows = await database.owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      return tx<{ email: string; verified: boolean }[]>`SELECT email, email_verified_at IS NOT NULL AS verified FROM accounts`;
+    });
+    expect([...rows]).toEqual([{ email: "ada@example.test", verified: false }]);
+  }, 60_000);
+
+  it("keeps an unset EMAIL_VERIFICATION_REQUIRED off in the CE: registration works without a mail adapter", async () => {
+    const { observed } = await runServer(
+      env({ PUBLIC_REGISTRATION: "true" }),
+      async (port) => post(port, "/api/v1/auth/register", { ...body, email: "grace@example.test" }),
+    );
+    expect(observed).toMatch(/HTTP\/1\.1 202 /);
+  }, 60_000);
+
+  it("answers 503 mail_unavailable when EMAIL_VERIFICATION_REQUIRED=true and no mail is configured, and creates nothing more", async () => {
+    const before = await accountCount();
+    const { observed } = await runServer(
+      env({ PUBLIC_REGISTRATION: "true", EMAIL_VERIFICATION_REQUIRED: "true" }),
+      async (port) => `${await get(port, "/api/config")}\n${await post(port, "/api/v1/auth/register", { ...body, email: "hopper@example.test" })}`,
+    );
+    expect(observed).toContain('"registration":false');
+    expect(observed).toMatch(/HTTP\/1\.1 503 /);
+    expect(observed).toContain('"code":"mail_unavailable"');
+    expect(await accountCount()).toBe(before);
   }, 60_000);
 });
 

@@ -31,6 +31,7 @@ export {
   migrateFragment,
   originFragment,
   passwordPolicyFragment,
+  registrationFragment,
   runtimeFragment,
   secretsFragment,
   serverMigrationFragment,

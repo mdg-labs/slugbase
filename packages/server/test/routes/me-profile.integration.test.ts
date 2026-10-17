@@ -148,6 +148,7 @@ describe("PATCH /api/v1/me", () => {
       accent: null,
       defaultView: "grid",
       singleKeyShortcuts: true,
+      signinAlerts: true,
       aiOptOut: false,
       analyticsConsent: "unset",
       onboarding: { browserSetupDone: false, importDone: false, checklistDismissed: false },
@@ -208,7 +209,6 @@ describe("PATCH /api/v1/me", () => {
     ["the instance admin flag", { isInstanceAdmin: true }],
     ["the account id", { id: "0192f3a0-0000-7000-8000-0000000000a1" }],
     ["the password hash", { passwordHash: "x" }],
-    ["the sign-in alerts flag, which has its own operation", { signinAlerts: false }],
     ["the time of the consent choice", { consentAt: "2026-01-01T00:00:00Z" }],
     ["an unknown field beside a valid one", { displayName: "Valid", unknown: 1 }],
   ])("refuses a body that names %s with 422 validation_failed and changes nothing", async (_name, body) => {
@@ -236,6 +236,8 @@ describe("PATCH /api/v1/me", () => {
     ["a null accent", { accent: null }],
     ["a default view outside grid and table", { defaultView: "list" }],
     ["a single-key shortcuts flag that is not a boolean", { singleKeyShortcuts: "off" }],
+    ["a sign-in alerts flag that is not a boolean", { signinAlerts: "off" }],
+    ["a null sign-in alerts flag", { signinAlerts: null }],
     ["an AI opt-out that is not a boolean", { aiOptOut: 1 }],
     ["an analytics consent outside unset, granted and denied", { analyticsConsent: "maybe" }],
     ["an onboarding state with a key of its own", { onboarding: { importDone: true, anything: true } }],
@@ -284,6 +286,35 @@ describe("PATCH /api/v1/me", () => {
       analytics_consent: "granted",
       consent_at: expect.any(Date) as Date,
     });
+  });
+
+  it("turns the sign-in alerts off and on, answers the flag, shows it on the next read and changes nothing else", async () => {
+    const world = serve();
+    const ada = await seedAccount(database());
+    const browser = await signIn(world, ada);
+    expect((await me(world, browser)).account["signinAlerts"]).toBe(true);
+    const before = await snapshot(ada.id);
+
+    const off = await patch(world, { as: browser, body: { signinAlerts: false } });
+    expect(off.status).toBe(200);
+    expect(await off.json()).toMatchObject({ signinAlerts: false });
+    expect((await me(world, browser)).account["signinAlerts"]).toBe(false);
+    expect(await snapshot(ada.id)).toEqual({ ...before, signin_alerts: false, updated_at: expect.any(Date) as Date });
+
+    expect(await (await patch(world, { as: browser, body: { signinAlerts: true } })).json()).toMatchObject({ signinAlerts: true });
+    expect((await snapshot(ada.id))["signin_alerts"]).toBe(true);
+  });
+
+  it("changes the sign-in alerts of the caller only", async () => {
+    const world = serve();
+    const ada = await seedAccount(database());
+    const grace = await seedAccount(database());
+    const adas = await signIn(world, ada);
+    const before = await snapshot(grace.id);
+
+    expect((await patch(world, { as: adas, body: { signinAlerts: false } })).status).toBe(200);
+
+    expect(await snapshot(grace.id)).toEqual(before);
   });
 
   it("stores the consent choice with its time, and clears the time when the choice goes back to unset", async () => {

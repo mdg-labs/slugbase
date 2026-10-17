@@ -311,6 +311,17 @@
           "unavailable": "Das hat nicht geklappt. Versuche es gleich noch einmal."
         }
       },
+      "alerts": {
+        "title": "Anmeldewarnungen",
+        "description": "Erhalte eine E-Mail, wenn dein Konto von einem Gerät angemeldet wird, das du noch nicht benutzt hast.",
+        "switch": {
+          "label": "Per E-Mail benachrichtigen, wenn sich ein neues Gerät anmeldet",
+          "description": "Die E-Mail nennt Zeit, Browser und Netzwerk der Anmeldung, nie eine vollständige Adresse."
+        },
+        "error": {
+          "saveFailed": "Diese Änderung wurde nicht gespeichert."
+        }
+      },
       "identities": {
         "title": "Verknüpfte Anmeldemethoden",
         "description": "Die Anbieter, mit denen du dich anmelden kannst. Es bleibt immer mindestens eine Möglichkeit zur Anmeldung.",

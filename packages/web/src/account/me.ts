@@ -30,5 +30,5 @@ export function withAccount(me: Me | undefined, account: Account): Me | undefine
 /** The preferences `PATCH /me` changes besides the profile. */
 export type PreferenceChanges = Pick<
   UpdateAccountRequest,
-  "theme" | "accent" | "defaultView" | "singleKeyShortcuts" | "aiOptOut" | "analyticsConsent" | "onboarding"
+  "theme" | "accent" | "defaultView" | "singleKeyShortcuts" | "signinAlerts" | "aiOptOut" | "analyticsConsent" | "onboarding"
 >;

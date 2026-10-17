@@ -5,11 +5,13 @@ import {
   LoginResultSchema,
   OidcProviderParamsSchema,
   OidcStartQuerySchema,
+  RegisterRequestSchema,
   VerifyMfaRequestSchema,
   VerifyMfaResultSchema,
   completeOidcSignIn,
   login,
   logout,
+  register,
   startOidcSignIn,
   verifyMfa,
 } from "../src/operations/auth.ts";
@@ -62,6 +64,45 @@ describe("login", () => {
     for (const status of ["400", "401", "403", "422", "429"]) {
       expect(Object.keys(responses[status]?.content ?? {}), status).toEqual(["application/problem+json"]);
     }
+  });
+});
+
+describe("register", () => {
+  const operation = paths["/api/v1/auth/register"]?.["post"];
+
+  it("is anonymous in the register bucket and is not token-callable", () => {
+    expect(register.path).toBe("/api/v1/auth/register");
+    expect(operation?.["operationId"]).toBe("register");
+    expect(operation?.["x-slugbase-auth"]).toBe("anonymous");
+    expect(operation?.["x-slugbase-rate"]).toBe("register");
+    expect(operation?.["x-slugbase-scope"]).toBeUndefined();
+    expect(operation?.["x-slugbase-reauth"]).toBeUndefined();
+  });
+
+  it("takes a closed body of displayName, email and password, all required", () => {
+    expect(operation?.["requestBody"]).toMatchObject({
+      required: true,
+      content: { "application/json": { schema: { $ref: "#/components/schemas/RegisterRequest" } } },
+    });
+    const body = schemas["RegisterRequest"] as { additionalProperties: unknown; properties: Obj; required: string[] };
+    expect(body.additionalProperties).toBe(false);
+    expect(Object.keys(body.properties).sort()).toEqual(["displayName", "email", "password"]);
+    expect([...body.required].sort()).toEqual(["displayName", "email", "password"]);
+    const valid = { displayName: "Ada", email: "ada@example.test", password: "a long enough password" };
+    expect(RegisterRequestSchema.parse({ ...valid, displayName: "  Ada  " }).displayName).toBe("Ada");
+    expect(RegisterRequestSchema.safeParse({ ...valid, extra: 1 }).success).toBe(false);
+    expect(RegisterRequestSchema.safeParse({ ...valid, displayName: "   " }).success).toBe(false);
+    expect(RegisterRequestSchema.safeParse({ ...valid, email: "not an address" }).success).toBe(false);
+  });
+
+  it("answers 202 with no body, and problem+json for every client error and the 503", () => {
+    const responses = responsesOf(operation);
+    expect(responses["202"]?.content).toBeUndefined();
+    for (const status of ["400", "403", "422", "429", "503"]) {
+      expect(Object.keys(responses[status]?.content ?? {}), status).toEqual(["application/problem+json"]);
+    }
+    expect(responses["429"]?.headers).toMatchObject({ "Retry-After": { required: true } });
+    expect(Object.keys(responses).sort()).toEqual(["202", "400", "403", "422", "429", "503"]);
   });
 });
 

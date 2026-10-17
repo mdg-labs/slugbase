@@ -11,7 +11,7 @@ import { route } from "../register.ts";
 // session's alone: it is not asked for on behalf of an API token.
 //
 // PATCH /api/v1/me changes the profile (display name, language) and the
-// preferences (theme, accent, default view, single-key shortcuts, AI opt-out,
+// preferences (theme, accent, default view, single-key shortcuts, sign-in alerts, AI opt-out,
 // analytics consent, onboarding state) of the account the session belongs to and
 // answers the account afterwards, applying every change in one statement. The account is the
 // principal's, never a value of the request, and the body is a closed object, so
@@ -31,6 +31,7 @@ function accountBody(profile: AccountProfile) {
     accent: profile.accent,
     defaultView: profile.defaultBookmarkView,
     singleKeyShortcuts: profile.singleKeyShortcuts,
+    signinAlerts: profile.signinAlerts,
     aiOptOut: profile.aiOptOut,
     analyticsConsent: profile.analyticsConsent,
     onboarding: profile.onboarding,
@@ -80,6 +81,7 @@ export function profileRoutes({ withTenant }: ProfileRoutesOptions): RouteBindin
           ...(body.accent === undefined ? {} : { accent: body.accent }),
           ...(body.defaultView === undefined ? {} : { defaultBookmarkView: body.defaultView }),
           ...(body.singleKeyShortcuts === undefined ? {} : { singleKeyShortcuts: body.singleKeyShortcuts }),
+          ...(body.signinAlerts === undefined ? {} : { signinAlerts: body.signinAlerts }),
           ...(body.aiOptOut === undefined ? {} : { aiOptOut: body.aiOptOut }),
           ...(body.analyticsConsent === undefined ? {} : { analyticsConsent: body.analyticsConsent }),
           ...(body.onboarding === undefined ? {} : { onboarding: body.onboarding }),

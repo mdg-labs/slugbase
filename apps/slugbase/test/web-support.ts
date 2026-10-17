@@ -18,6 +18,7 @@ const authStore: AuthStore = {
   emailKey: unexpected,
   loginLookup: unexpected,
   createSession: unexpected,
+  signInAlertContext: unexpected,
   lookupSession: unexpected,
   lookupApiToken: unexpected,
   revokeSession: unexpected,
@@ -45,6 +46,7 @@ const authStore: AuthStore = {
   setupPending: () => Promise.resolve(false),
   setSetupToken: unexpected,
   completeSetup: unexpected,
+  registerAccount: unexpected,
   close: () => Promise.resolve(),
 };
 

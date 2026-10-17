@@ -311,6 +311,17 @@
           "unavailable": "That did not work. Try again in a moment."
         }
       },
+      "alerts": {
+        "title": "Sign-in alerts",
+        "description": "Get an email when your account is signed in to from a device you have not used before.",
+        "switch": {
+          "label": "Email me when a new device signs in",
+          "description": "The email shows the time, the browser and the network of the sign-in, never a full address."
+        },
+        "error": {
+          "saveFailed": "This change was not saved."
+        }
+      },
       "identities": {
         "title": "Linked sign-in methods",
         "description": "The providers you can sign in with. You always keep at least one way to sign in.",

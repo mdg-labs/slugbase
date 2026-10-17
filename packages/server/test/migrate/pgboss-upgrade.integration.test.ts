@@ -274,8 +274,13 @@ async function indexState(name: string): Promise<{ oid: number; valid: boolean }
   return found[0];
 }
 
+// Creating the second database and waiting for the decoy to show in `pg_stat_activity` take as long as the cluster is loaded by the other integration
+// suites of a full run, so the wait is bounded by the condition it waits for, with room for that, and the test by that wait plus the setup and teardown.
+const DECOY_VISIBLE_TIMEOUT_MS = 60_000;
+const DECOY_TEST_TIMEOUT_MS = 120_000;
+
 describe("the lookup of the index build of an upgrade", () => {
-  it("ignores the same step running in another database", async () => {
+  it("ignores the same step running in another database", { timeout: DECOY_TEST_TIMEOUT_MS }, async () => {
     await withTestDatabase(async (other) => {
       const decoy = await other.owner.reserve();
       let sleeping: Promise<unknown> | undefined;
@@ -300,7 +305,7 @@ describe("the lookup of the index build of an upgrade", () => {
             );
             return found.length === 1;
           });
-        await expect.poll(visible, { interval: 20, timeout: 10_000 }).toBe(true);
+        await expect.poll(visible, { interval: 20, timeout: DECOY_VISIBLE_TIMEOUT_MS }).toBe(true);
         expect(other.name).not.toBe(database().name);
 
         expect(await buildBackend()).toBeUndefined();

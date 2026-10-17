@@ -408,6 +408,7 @@ describe("the account profile repository", () => {
       accent: "violet",
       defaultBookmarkView: "grid",
       singleKeyShortcuts: true,
+      signinAlerts: true,
       aiOptOut: true,
       analyticsConsent: "unset",
       onboarding: { browserSetupDone: false, importDone: false, checklistDismissed: false },

@@ -1,12 +1,13 @@
 import { setTimeout as sleep } from "node:timers/promises";
 import { createAdaptorServer, type ServerType } from "@hono/node-server";
 import { getHealth, getReady, getVersion } from "@slugbase/contracts";
-import { createPasswordPolicy, loadBreachedPasswords, sessionCookieSpec, type Adapters } from "@slugbase/core";
+import { createPasswordPolicy, loadBreachedPasswords, sessionCookieSpec, type Adapters, type RegistrationSettings } from "@slugbase/core";
 import { createAuthStore, createDatabase, type AuthStore, type Database, type MigrationChain } from "@slugbase/db";
 import { Hono } from "hono";
 import { DEVELOPMENT_BUILD_INFO, type BuildInfo } from "./build-info.ts";
 import { renderQrSvg } from "./auth/qr.ts";
 import { createPasswordVerifier, hashPassword, verifyHash } from "./auth/password.ts";
+import { DEFAULT_REGISTRATION, registrationSettings } from "./auth/registration-settings.ts";
 import { ensureSetupToken } from "./auth/setup-token.ts";
 import { createMembershipTenantResolver, defersToMembershipResolver } from "./auth/tenant-resolver.ts";
 import { createRateLimitRegistry, type ServerConfig, type WorkerConfig } from "./config/index.ts";
@@ -143,6 +144,12 @@ export interface CreateServerOptions {
    * The server closes it on shutdown, like the tenant database.
    */
   readonly authStore?: AuthStore;
+  /**
+   * What `PUBLIC_REGISTRATION` and `EMAIL_VERIFICATION_REQUIRED` mean when the operator left them unset
+   * (doc 01 section 11): the composition root's choice, never an edition flag (D4). By default registration
+   * is closed and verification is not required, the Community Edition's.
+   */
+  readonly registrationDefaults?: RegistrationSettings;
   /**
    * The instant, in milliseconds, the re-authentication window of doc 04 section 4.4 is measured against;
    * by default the system clock. A test passes a clock it moves.
@@ -447,9 +454,10 @@ export function createServer(options: CreateServerOptions): Server {
   // starting without it would accept every listed password while the check reads as on.
   const passwordPolicy = createPasswordPolicy({ breached: config.BREACHED_PASSWORD_CHECK ? loadBreachedPasswords() : undefined });
   const authStore = options.authStore ?? createAuthStore({ url: config.DATABASE_URL, poolSize: DEFAULT_AUTH_POOL_SIZE });
+  const registration = registrationSettings(config, options.registrationDefaults ?? DEFAULT_REGISTRATION);
   const builtInRoutes: RouteBinding[] = [
     ...probeRoutes({ buildInfo, databaseUrl: config.DATABASE_URL, chains: () => migrationSets, logger, migrating: () => progress.migrating }),
-    apiConfigRoute({ config, store: authStore, buildInfo, adapters, logger }),
+    apiConfigRoute({ config, store: authStore, buildInfo, adapters, registration, logger }),
     openApiRoute({ enabled: config.API_DOCS_ENABLED, document: options.openApiDocument }),
   ];
   // One verifier serves sign-in, re-authentication and the second factor's password check, so its dummy hash is made once.
@@ -462,6 +470,7 @@ export function createServer(options: CreateServerOptions): Server {
     sessionSecret: config.SESSION_SECRET,
     passwordPolicy,
     mail: adapters.mail,
+    registration,
     secretBox: adapters.secretBox,
     identity: adapters.identity,
     now: options.now ?? Date.now,

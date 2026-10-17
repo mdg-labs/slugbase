@@ -59,8 +59,9 @@ describe("getApiConfig", () => {
     expect(api.properties["setupTokenRequired"]).toMatchObject({ type: "boolean" });
     const signIn = api.properties["signIn"] as { additionalProperties: unknown; properties: Obj; required: string[] };
     expect(signIn.additionalProperties).toBe(false);
-    expect(Object.keys(signIn.properties)).toEqual(["oidc"]);
-    expect(signIn.required).toEqual(["oidc"]);
+    expect(Object.keys(signIn.properties).sort()).toEqual(["oidc", "registration"]);
+    expect([...signIn.required].sort()).toEqual(["oidc", "registration"]);
+    expect(signIn.properties["registration"]).toMatchObject({ type: "boolean" });
     const provider = (signIn.properties["oidc"] as { type: string; items: { additionalProperties: unknown; properties: Obj; required: string[] } });
     expect(provider.type).toBe("array");
     expect(provider.items.additionalProperties).toBe(false);
@@ -84,12 +85,18 @@ describe("ApiConfigSchema", () => {
   });
 
   it("accepts signIn.oidc as a list of slug and name, and leaves it out of a document that does not state it", () => {
-    const signIn = { oidc: [{ slug: "google", name: "Google" }] };
+    const signIn = { registration: false, oidc: [{ slug: "google", name: "Google" }] };
     expect(ApiConfigSchema.parse({ ...config, signIn })).toEqual({ ...config, signIn });
-    expect(ApiConfigSchema.parse({ ...config, signIn: { oidc: [] } })).toEqual({ ...config, signIn: { oidc: [] } });
-    expect(ApiConfigSchema.safeParse({ ...config, signIn: { oidc: [{ slug: "google", name: "Google", issuerUrl: "https://x.example.com" }] } }).success).toBe(false);
-    expect(ApiConfigSchema.safeParse({ ...config, signIn: { oidc: [{ slug: "google" }] } }).success).toBe(false);
+    expect(ApiConfigSchema.parse({ ...config, signIn: { registration: false, oidc: [] } })).toEqual({ ...config, signIn: { registration: false, oidc: [] } });
+    expect(ApiConfigSchema.safeParse({ ...config, signIn: { registration: false, oidc: [{ slug: "google", name: "Google", issuerUrl: "https://x.example.com" }] } }).success).toBe(false);
+    expect(ApiConfigSchema.safeParse({ ...config, signIn: { registration: false, oidc: [{ slug: "google" }] } }).success).toBe(false);
     expect(ApiConfigSchema.safeParse({ ...config, signIn: {} }).success).toBe(false);
+  });
+
+  it("accepts signIn.registration as a boolean and requires it beside signIn.oidc", () => {
+    expect(ApiConfigSchema.parse({ ...config, signIn: { registration: true, oidc: [] } })).toEqual({ ...config, signIn: { registration: true, oidc: [] } });
+    expect(ApiConfigSchema.safeParse({ ...config, signIn: { registration: "yes", oidc: [] } }).success).toBe(false);
+    expect(ApiConfigSchema.safeParse({ ...config, signIn: { oidc: [] } }).success).toBe(false);
   });
 
   it("accepts setupRequired as a boolean, and leaves it out of a document that does not state it", () => {

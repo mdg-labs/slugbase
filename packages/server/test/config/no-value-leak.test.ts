@@ -31,6 +31,8 @@ const REFUSED: readonly { key: string; value: string }[] = [
   { key: "MIGRATE_ON_START", value: "maybe-qx54" },
   { key: "SETUP_ENABLED", value: "maybe-qx90" },
   { key: "SETUP_TOKEN_REQUIRED", value: "maybe-qx91" },
+  { key: "PUBLIC_REGISTRATION", value: "maybe-qx94" },
+  { key: "EMAIL_VERIFICATION_REQUIRED", value: "maybe-qx95" },
   { key: "BREACHED_PASSWORD_CHECK", value: "maybe-qx92" },
   { key: "TOTP_ISSUER", value: "qx93:issuer" },
   { key: "SLUGBASE_ALLOW_OWNER_CONNECTION", value: "maybe-qx55" },

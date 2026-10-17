@@ -192,6 +192,7 @@ describe("GET /api/v1/me", () => {
         accent: null,
         defaultView: "grid",
         singleKeyShortcuts: true,
+        signinAlerts: true,
         aiOptOut: false,
         analyticsConsent: "unset",
         onboarding: { browserSetupDone: false, importDone: false, checklistDismissed: false },

@@ -1,4 +1,4 @@
-import type { AuthStore, LoginCandidate, MfaState, NewSession } from "@slugbase/db";
+import type { AuthStore, LoginCandidate, MfaState, NewSession, SignInAlertContext } from "@slugbase/db";
 import { describe, expect, it } from "vitest";
 import { signIn, type SignInRequest } from "../../src/auth/login.ts";
 import type { PasswordVerifier } from "../../src/auth/password.ts";
@@ -9,8 +9,14 @@ import type { PasswordVerifier } from "../../src/auth/password.ts";
 const ACCOUNT = "0192f3a0-0000-7000-8000-000000000001";
 const PASSWORD = "correct horse battery staple";
 
-function setup(candidate: LoginCandidate | undefined, options: { created?: boolean; mfa?: MfaState } = {}) {
+const MAIL = { available: true };
+const CHROME = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36";
+const CHROME_OTHER_VERSION = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36";
+const FIREFOX = "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0";
+
+function setup(candidate: LoginCandidate | undefined, options: { created?: boolean; mfa?: MfaState; alerts?: SignInAlertContext | undefined } = {}) {
   const looked: string[] = [];
+  const contexts: { accountId: string; ipPrefix: string | null }[] = [];
   const created: NewSession[] = [];
   const asked: string[] = [];
   const verified: { stored: string | null | undefined; password: string }[] = [];
@@ -23,6 +29,10 @@ function setup(candidate: LoginCandidate | undefined, options: { created?: boole
       asked.push(accountId);
       return Promise.resolve(options.mfa);
     },
+    signInAlertContext: (accountId: string, ipPrefix: string | null) => {
+      contexts.push({ accountId, ipPrefix });
+      return Promise.resolve(options.alerts);
+    },
     createSession: (session: NewSession) => {
       created.push(session);
       return Promise.resolve(options.created ?? true);
@@ -34,7 +44,7 @@ function setup(candidate: LoginCandidate | undefined, options: { created?: boole
       return Promise.resolve(stored === "stored-hash" && password === PASSWORD);
     },
   };
-  return { store, passwords, looked, created, asked, verified };
+  return { store, passwords, mail: MAIL, looked, created, asked, verified, contexts };
 }
 
 const request: SignInRequest = {
@@ -126,11 +136,95 @@ describe("signIn", () => {
   it("does not turn a failing store into a failed or a successful sign-in", async () => {
     const world = setup(live);
     const store = { ...world.store, loginLookup: () => Promise.reject(new Error("database down")) } as unknown as AuthStore;
-    await expect(signIn({ store, passwords: world.passwords }, request)).rejects.toThrow("database down");
+    await expect(signIn({ store, passwords: world.passwords, mail: MAIL }, request)).rejects.toThrow("database down");
     const failingState = { ...world.store, mfaStateOf: () => Promise.reject(new Error("database down")) } as unknown as AuthStore;
-    await expect(signIn({ store: failingState, passwords: world.passwords }, request)).rejects.toThrow("database down");
+    await expect(signIn({ store: failingState, passwords: world.passwords, mail: MAIL }, request)).rejects.toThrow("database down");
     expect(world.created).toEqual([]);
     const failingCreate = { ...world.store, createSession: () => Promise.reject(new Error("database down")) } as unknown as AuthStore;
-    await expect(signIn({ store: failingCreate, passwords: world.passwords }, request)).rejects.toThrow("database down");
+    await expect(signIn({ store: failingCreate, passwords: world.passwords, mail: MAIL }, request)).rejects.toThrow("database down");
+  });
+});
+
+// The "new sign-in" email (doc 02 section 12): a full session queues it exactly when the account has the alerts
+// on, has signed in before and has no live session of the same prefix and user-agent family.
+describe("signIn and the new-device alert", () => {
+  const known = (userAgentsOnNetwork: readonly (string | null)[], overrides: Partial<SignInAlertContext> = {}): SignInAlertContext => ({
+    alertsOn: true,
+    signedInBefore: true,
+    userAgentsOnNetwork,
+    ...overrides,
+  });
+  const queued = (world: ReturnType<typeof setup>) => world.created[0]?.jobs ?? [];
+
+  it("queues one mail.send job carrying the time, the browser family and the network prefix when no live session on the network has the browser family", async () => {
+    const world = setup(live, { alerts: known([FIREFOX]) });
+    await signIn(world, { ...request, userAgent: CHROME });
+    expect(world.contexts).toEqual([{ accountId: ACCOUNT, ipPrefix: "203.0.0.0/16" }]);
+    expect(queued(world)).toHaveLength(1);
+    expect(queued(world)[0]).toMatchObject({
+      queue: "mail.send",
+      data: { template: "newSignIn", accountId: ACCOUNT, signedInAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/) as string, browser: "Chrome", network: "203.0.0.0/16" },
+    });
+    expect(Object.keys(queued(world)[0]?.data ?? {}).sort()).toEqual(["accountId", "browser", "network", "signedInAt", "template"]);
+  });
+
+  it("queues nothing for a browser family a live session on the same network has, whatever its version or system", async () => {
+    const world = setup(live, { alerts: known([CHROME_OTHER_VERSION]) });
+    await signIn(world, { ...request, userAgent: CHROME });
+    expect(queued(world)).toEqual([]);
+  });
+
+  it("queues the job when no live session is on the network, but not for the first session of the account", async () => {
+    const away = setup(live, { alerts: known([]) });
+    await signIn(away, { ...request, userAgent: CHROME });
+    expect(queued(away)).toHaveLength(1);
+    const first = setup(live, { alerts: known([], { signedInBefore: false }) });
+    await signIn(first, { ...request, userAgent: CHROME });
+    expect(queued(first)).toEqual([]);
+  });
+
+  it("queues nothing when the account turned the alerts off", async () => {
+    const world = setup(live, { alerts: known([], { alertsOn: false }) });
+    await signIn(world, { ...request, userAgent: CHROME });
+    expect(queued(world)).toEqual([]);
+  });
+
+  it("treats two sessions without a user agent as one device", async () => {
+    const same = setup(live, { alerts: known([null]) });
+    await signIn(same, { ...request, userAgent: null });
+    expect(queued(same)).toEqual([]);
+    const different = setup(live, { alerts: known([FIREFOX]) });
+    await signIn(different, { ...request, userAgent: null });
+    expect(queued(different)).toHaveLength(1);
+  });
+
+  it("asks and queues nothing for a partial session, which is not a sign-in yet", async () => {
+    const world = setup(live, {
+      alerts: known([]),
+      mfa: { secret: { ciphertext: new Uint8Array(40), keyId: "key-1" }, enabledAt: new Date("2026-01-01T00:00:00Z"), lastStep: 5 },
+    });
+    await signIn(world, { ...request, userAgent: CHROME });
+    expect(world.contexts).toEqual([]);
+    expect(queued(world)).toEqual([]);
+  });
+
+  it("asks and queues nothing when the mail port cannot send", async () => {
+    const world = setup(live, { alerts: known([]) });
+    await signIn({ ...world, mail: { available: false } }, { ...request, userAgent: CHROME });
+    expect(world.contexts).toEqual([]);
+    expect(queued(world)).toEqual([]);
+  });
+
+  it("asks nothing before the password is verified", async () => {
+    const world = setup(live, { alerts: known([]) });
+    await signIn(world, { ...request, password: "not the password", userAgent: CHROME });
+    expect(world.contexts).toEqual([]);
+  });
+
+  it("does not turn a failing context lookup into a sign-in without the check", async () => {
+    const world = setup(live, { alerts: known([]) });
+    const store = { ...world.store, signInAlertContext: () => Promise.reject(new Error("database down")) } as unknown as AuthStore;
+    await expect(signIn({ store, passwords: world.passwords, mail: MAIL }, request)).rejects.toThrow("database down");
+    expect(world.created).toEqual([]);
   });
 });

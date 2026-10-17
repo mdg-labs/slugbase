@@ -21,6 +21,7 @@ import { OperationDefinition } from '@slugbase/contracts';
 import { Problem } from '@slugbase/contracts';
 import { ProblemCode } from '@slugbase/contracts';
 import type { QueuedJob } from '@slugbase/db';
+import { RegistrationSettings } from '@slugbase/core';
 import type { TenantPrincipal } from '@slugbase/core';
 import type { TenantResolver } from '@slugbase/core';
 import type { TenantTx } from '@slugbase/db';
@@ -173,6 +174,7 @@ export interface CreateServerOptions {
     readonly modules: readonly ServerModule[];
     readonly now?: () => number;
     readonly openApiDocument?: ContractDocument;
+    readonly registrationDefaults?: RegistrationSettings;
     readonly shutdownTimeoutMs?: number;
     readonly webRoot?: string;
 }
@@ -326,6 +328,9 @@ export const envSchemas: {
     } & {
         SETUP_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
         SETUP_TOKEN_REQUIRED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+    } & {
+        PUBLIC_REGISTRATION: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>, unknown>;
+        EMAIL_VERIFICATION_REQUIRED: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>, unknown>;
     } & {
         BREACHED_PASSWORD_CHECK: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
     } & {
@@ -869,6 +874,12 @@ export interface RefineContext {
 export const REGISTRATION_REFUSAL_CODE: "registration_refused";
 
 // @public
+export const registrationFragment: EnvFragment<    {
+PUBLIC_REGISTRATION: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>, unknown>;
+EMAIL_VERIFICATION_REQUIRED: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>, unknown>;
+}, object>;
+
+// @public
 export type RegistrationPath = "self-registration" | "invitation" | "oidc";
 
 // @public (undocumented)
@@ -1115,6 +1126,9 @@ export const serverEnvSchema: EnvSchema<{
     SETUP_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
     SETUP_TOKEN_REQUIRED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 } & {
+    PUBLIC_REGISTRATION: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>, unknown>;
+    EMAIL_VERIFICATION_REQUIRED: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>, unknown>;
+} & {
     BREACHED_PASSWORD_CHECK: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 } & {
     TOTP_ISSUER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
@@ -1174,6 +1188,9 @@ DOCS_BASE_URL: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<string, string
 }, object>, EnvFragment<    {
 SETUP_ENABLED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 SETUP_TOKEN_REQUIRED: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+}, object>, EnvFragment<    {
+PUBLIC_REGISTRATION: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>, unknown>;
+EMAIL_VERIFICATION_REQUIRED: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>, unknown>;
 }, object>, EnvFragment<    {
 BREACHED_PASSWORD_CHECK: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 }, object>, EnvFragment<    {

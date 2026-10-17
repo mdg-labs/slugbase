@@ -4,6 +4,7 @@ import {
   base32Encode,
   otpauthUri,
   verifyTotp,
+  type MailPort,
   type SecretBoxOptions,
   type SecretBoxPort,
 } from "@slugbase/core";
@@ -11,6 +12,7 @@ import type { AuthStore, QueuedJob, SecondFactor } from "@slugbase/db";
 import { passwordMatches } from "./reauth.ts";
 import type { PasswordVerifier } from "./password.ts";
 import { newSessionToken } from "./session-token.ts";
+import { newSignInJobs, type SignInDevice } from "./sign-in-alert.ts";
 import { uuidv7 } from "./uuidv7.ts";
 
 // Enrolling the second factor, signing in with it, regenerating its backup
@@ -172,7 +174,9 @@ export interface FactorCheckDependencies {
 }
 
 export interface SecondFactorDependencies extends FactorCheckDependencies {
-  readonly store: Pick<AuthStore, "mfaStateOf" | "resealMfaSecret" | "unusedBackupCodes" | "completeMfaSignIn" | "recordMfaFailure">;
+  readonly store: Pick<AuthStore, "mfaStateOf" | "resealMfaSecret" | "unusedBackupCodes" | "completeMfaSignIn" | "recordMfaFailure" | "signInAlertContext">;
+  /** The mail port: the "new sign-in" email is queued only when it can send. */
+  readonly mail: Pick<MailPort, "available">;
 }
 
 /** What the person typed to finish signing in. */
@@ -183,6 +187,8 @@ export interface SecondFactorRequest {
   /** The partial session the code is given for. */
   readonly sessionId: string;
   readonly given: SecondFactorGiven;
+  /** The device the code is given from, which the "new sign-in" email is judged and worded by. */
+  readonly device: SignInDevice;
 }
 
 export type SecondFactorOutcome =
@@ -245,7 +251,8 @@ export async function matchingFactor(
  * 04 section 4.3, doc 10 T17). The factor is verified first; then one store transaction accepts it (a
  * time step newer than the last accepted one, or an unused backup code, each atomically, so two
  * requests presenting one code never both succeed) and turns the session into a full one under a new
- * token. A code that does not verify, or whose step or backup code was already used, is one outcome and
+ * token; the "new sign-in" email of a device the account has not signed in from is queued in that
+ * transaction too (doc 02 section 12). A code that does not verify, or whose step or backup code was already used, is one outcome and
  * is counted against the session, which the fifth refusal deletes. A secret, a code and a backup code
  * are never logged or kept past the call.
  */
@@ -261,7 +268,9 @@ export async function verifySecondFactor(dependencies: SecondFactorDependencies,
     return refused();
   }
   const token = newSessionToken();
-  const outcome = await store.completeMfaSignIn({ accountId: request.accountId, sessionId: request.sessionId, factor, newTokenHash: token.hash });
+  // Read before the session becomes full: the account's last sign-in time is set by the promotion.
+  const jobs = dependencies.mail.available ? await newSignInJobs(store, request.accountId, request.device, new Date(dependencies.now())) : [];
+  const outcome = await store.completeMfaSignIn({ accountId: request.accountId, sessionId: request.sessionId, factor, newTokenHash: token.hash, jobs });
   switch (outcome) {
     case "completed":
       return { kind: "signed_in", token: token.value };

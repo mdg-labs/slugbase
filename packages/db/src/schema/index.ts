@@ -3,6 +3,7 @@ export { sessions } from "./sessions.ts";
 export { mfaBackupCodes } from "./mfa.ts";
 export { apiTokens } from "./api-tokens.ts";
 export { accountIdentities, oidcLoginStates } from "./identities.ts";
+export { credentialTokens } from "./credential-tokens.ts";
 export { instanceState } from "./instance.ts";
 export { memberRole, workspaceMembers, workspaceSettings, workspaces } from "./workspaces.ts";
 export type { MemberRole } from "./workspaces.ts";

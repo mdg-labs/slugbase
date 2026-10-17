@@ -83,6 +83,10 @@
             "$ref": "#/components/schemas/Onboarding",
             "description": "The stored state of the Getting started checklist"
           },
+          "signinAlerts": {
+            "description": "Whether an email is sent when a password sign-in comes from a device the account has not signed in from",
+            "type": "boolean"
+          },
           "singleKeyShortcuts": {
             "description": "Whether single-key shortcuts are on; modifier shortcuts always work",
             "type": "boolean"
@@ -106,6 +110,7 @@
           "accent",
           "defaultView",
           "singleKeyShortcuts",
+          "signinAlerts",
           "aiOptOut",
           "analyticsConsent",
           "onboarding",
@@ -214,9 +219,14 @@
                   "type": "object"
                 },
                 "type": "array"
+              },
+              "registration": {
+                "description": "Whether POST /auth/register takes registrations now: public registration is on (PUBLIC_REGISTRATION, with the default the deployment's composition supplies) and, when email verification is required, mail is configured",
+                "type": "boolean"
               }
             },
             "required": [
+              "registration",
               "oidc"
             ],
             "type": "object"
@@ -1057,6 +1067,34 @@
         ],
         "type": "object"
       },
+      "RegisterRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "displayName": {
+            "description": "The new account's display name; surrounding whitespace is removed",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
+          "email": {
+            "description": "The new account's email address; case does not matter",
+            "format": "email",
+            "maxLength": 320,
+            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$",
+            "type": "string"
+          },
+          "password": {
+            "description": "The new account's password, 12 to 256 characters",
+            "type": "string"
+          }
+        },
+        "required": [
+          "displayName",
+          "email",
+          "password"
+        ],
+        "type": "object"
+      },
       "Session": {
         "additionalProperties": false,
         "properties": {
@@ -1256,6 +1294,10 @@
           },
           "onboarding": {
             "$ref": "#/components/schemas/OnboardingChanges"
+          },
+          "signinAlerts": {
+            "description": "Whether an email is sent when a password sign-in comes from a device the account has not signed in from",
+            "type": "boolean"
           },
           "singleKeyShortcuts": {
             "description": "Whether single-key shortcuts are on; modifier shortcuts always work",
@@ -1934,6 +1976,93 @@
         ],
         "x-slugbase-auth": "anonymous",
         "x-slugbase-rate": "login"
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "operationId": "register",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "The request was accepted. The answer is the same, with no body, whether or not the email address already has an account and whatever the account's state: a new account is created unverified, and when the deployment can send mail it receives a verification email whose link opens /verify-email#token=…; an address that has an account is left untouched and nothing is sent to it"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request); public registration is off (registration_closed); or the deployment's registration policy refused the address (registration_refused, one answer for every reason). Nothing is written"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body did not pass validation, or the password is outside 12 to 256 characters or is on the breached list (weak_password)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many registrations from this address; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Email verification is required and no mail is configured (mail_unavailable), or the service is temporarily unavailable (unavailable). Nothing is written"
+          }
+        },
+        "summary": "Register an account when public registration is open",
+        "tags": [
+          "auth"
+        ],
+        "x-slugbase-auth": "anonymous",
+        "x-slugbase-rate": "register"
       }
     },
     "/api/v1/me": {

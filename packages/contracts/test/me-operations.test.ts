@@ -122,7 +122,7 @@ describe("the account operation", () => {
     const account = schemas["Account"] as { additionalProperties: unknown; properties: Obj; required: string[] };
     expect(account.additionalProperties).toBe(false);
     expect(Object.keys(account.properties).sort()).toEqual([
-      "accent", "aiOptOut", "analyticsConsent", "defaultView", "displayName", "email", "emailVerified", "hasPassword", "id", "locale", "mfaEnabled", "onboarding", "singleKeyShortcuts", "theme",
+      "accent", "aiOptOut", "analyticsConsent", "defaultView", "displayName", "email", "emailVerified", "hasPassword", "id", "locale", "mfaEnabled", "onboarding", "signinAlerts", "singleKeyShortcuts", "theme",
     ]);
     expect([...account.required].sort()).toEqual(Object.keys(account.properties).sort());
     const membership = schemas["Membership"] as { additionalProperties: unknown; properties: Obj; required: string[] };
@@ -140,6 +140,7 @@ describe("the account operation", () => {
       accent: null,
       defaultView: "table",
       singleKeyShortcuts: true,
+      signinAlerts: true,
       aiOptOut: false,
       analyticsConsent: "unset",
       onboarding: { browserSetupDone: false, importDone: true, checklistDismissed: false },
@@ -191,7 +192,7 @@ describe("the profile and preferences operation", () => {
     const request = schemas["UpdateAccountRequest"] as { additionalProperties: unknown; properties: Record<string, Obj>; required?: string[] };
     expect(request.additionalProperties).toBe(false);
     expect(Object.keys(request.properties).sort()).toEqual([
-      "accent", "aiOptOut", "analyticsConsent", "defaultView", "displayName", "locale", "onboarding", "singleKeyShortcuts", "theme",
+      "accent", "aiOptOut", "analyticsConsent", "defaultView", "displayName", "locale", "onboarding", "signinAlerts", "singleKeyShortcuts", "theme",
     ]);
     expect(request.required).toBeUndefined();
     expect(request.properties["displayName"]).toMatchObject({ type: "string", minLength: 1, maxLength: 100 });
@@ -201,6 +202,7 @@ describe("the profile and preferences operation", () => {
     expect(request.properties["defaultView"]).toMatchObject({ enum: ["grid", "table"] });
     expect(request.properties["analyticsConsent"]).toMatchObject({ enum: ["unset", "granted", "denied"] });
     expect(request.properties["singleKeyShortcuts"]).toMatchObject({ type: "boolean" });
+    expect(request.properties["signinAlerts"]).toMatchObject({ type: "boolean" });
     expect(request.properties["aiOptOut"]).toMatchObject({ type: "boolean" });
     const onboarding = schemas["OnboardingChanges"] as { additionalProperties: unknown; properties: Obj; required?: string[] };
     expect(onboarding.additionalProperties).toBe(false);
@@ -249,7 +251,9 @@ describe("the profile and preferences operation", () => {
     [{ onboarding: { extra: true } }, false],
     [{ onboarding: { importDone: "yes" } }, false],
     [{ onboarding: null }, false],
-    [{ signinAlerts: false }, false],
+    [{ signinAlerts: false }, true],
+    [{ signinAlerts: "no" }, false],
+    [{ signinAlerts: null }, false],
     [{ consentAt: "2026-01-01T00:00:00Z" }, false],
   ])("%j is accepted: %s", (body, accepted) => {
     expect(UpdateAccountRequestSchema.safeParse(body).success).toBe(accepted);
