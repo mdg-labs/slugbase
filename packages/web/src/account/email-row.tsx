@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useState, type ReactElement, type SyntheticEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { useConfig } from "../config/config-context.tsx";
 import {
   cancelPendingEmailChange,
   emailChangeFailureOf,
@@ -108,13 +109,16 @@ function ChangeEmailForm({ account, onClose }: { account: Account; onClose: () =
 /**
  * The email row of the profile (doc 03 section 11.1): the current address, a button that opens the change form and,
  * while a change is pending, the "Pending verification" badge with Resend and Cancel. Resend asks for the pending
- * address again, which replaces the earlier request and its links (doc 02 section 2.6).
+ * address again, which replaces the earlier request and its links (doc 02 section 2.6). A server that cannot send email
+ * would record the address and send no link (doc 04 section 10.3), so the row offers neither Change nor Resend then and
+ * says to ask the instance admin; Cancel stays, so a change asked for before mail went away can still be dropped.
  */
 export function EmailRow({ account }: { account: Account }): ReactElement {
   const { t } = useTranslation();
   const router = useRouter();
   const queryClient = useQueryClient();
   const failureMessage = useEmailChangeFailureMessage();
+  const { features } = useConfig();
   const [changing, setChanging] = useState(false);
   const pendingEmail = account.pendingEmail;
 
@@ -149,18 +153,22 @@ export function EmailRow({ account }: { account: Account }): ReactElement {
       <FormField description={t("settings.account.email.description")} label={t("settings.account.email.label")} name="email">
         <Input readOnly type="email" value={account.email} />
       </FormField>
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          onClick={() => {
-            setChanging(true);
-          }}
-          size="sm"
-          type="button"
-          variant="outline"
-        >
-          {t("settings.account.email.change")}
-        </Button>
-      </div>
+      {features.mail ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            onClick={() => {
+              setChanging(true);
+            }}
+            size="sm"
+            type="button"
+            variant="outline"
+          >
+            {t("settings.account.email.change")}
+          </Button>
+        </div>
+      ) : (
+        <p className="text-muted-foreground text-sm">{t("settings.account.email.noMail")}</p>
+      )}
       {pendingEmail === null ? null : (
         <div className="flex flex-col gap-2">
           <div>
@@ -168,18 +176,20 @@ export function EmailRow({ account }: { account: Account }): ReactElement {
           </div>
           <p className="text-muted-foreground text-sm">{t("settings.account.email.pending.description", { email: pendingEmail })}</p>
           <div className="flex flex-wrap gap-2">
-            <Button
-              disabled={cancel.isPending}
-              loading={resend.isPending}
-              onClick={() => {
-                resend.mutate(pendingEmail);
-              }}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              {t("settings.account.email.pending.resend")}
-            </Button>
+            {features.mail ? (
+              <Button
+                disabled={cancel.isPending}
+                loading={resend.isPending}
+                onClick={() => {
+                  resend.mutate(pendingEmail);
+                }}
+                size="sm"
+                type="button"
+                variant="outline"
+              >
+                {t("settings.account.email.pending.resend")}
+              </Button>
+            ) : null}
             <Button
               disabled={resend.isPending}
               loading={cancel.isPending}
@@ -195,7 +205,7 @@ export function EmailRow({ account }: { account: Account }): ReactElement {
           </div>
         </div>
       )}
-      {changing ? (
+      {changing && features.mail ? (
         <ChangeEmailForm
           account={account}
           onClose={() => {

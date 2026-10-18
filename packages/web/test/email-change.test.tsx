@@ -5,8 +5,9 @@ import { ACCOUNT_BODY, CONFIG_BODY, ME_PATH, SESSION_BODY, SESSION_PATH, json, p
 
 // The email row of /settings/account and the two pages the emailed links open (doc 03 sections 1.7 and 11.1, doc 02
 // section 2.6) over a stubbed transport. The failure scenarios are a link that is redeemed twice, an answer that tells
-// whether an address is taken, a change that stays "pending" after it was cancelled, and a browser that still looks
-// signed in after the "this wasn't me" link ended every session.
+// whether an address is taken, a change that stays "pending" after it was cancelled, a browser that still looks
+// signed in after the "this wasn't me" link ended every session, and a change asked for on a server that cannot send
+// the link.
 
 const REQUEST_PATH = "/api/v1/me/email";
 const CONFIRM_PATH = "/api/v1/me/email/confirm";
@@ -32,6 +33,8 @@ interface Server {
 
 interface ServerOptions {
   readonly pending?: string | null;
+  /** Whether the server can send email (`features.mail`); on unless a test says otherwise. */
+  readonly mail?: boolean;
   readonly request?: (call: number) => Response | Promise<Response>;
   readonly cancelPending?: Transport;
   readonly confirm?: (call: number) => Response | Promise<Response>;
@@ -56,7 +59,7 @@ function rateLimited(seconds: number): Response {
 }
 
 /** A server with a signed-in account that holds the pending address it was asked for; the "this wasn't me" link ends the session. */
-function stubServer({ pending = null, request, cancelPending, confirm, cancel }: ServerOptions = {}): Server {
+function stubServer({ pending = null, mail = true, request, cancelPending, confirm, cancel }: ServerOptions = {}): Server {
   let held = pending;
   let signedOut = false;
   let gate: Promise<void> | undefined;
@@ -70,7 +73,7 @@ function stubServer({ pending = null, request, cancelPending, confirm, cancel }:
     const count = calls.filter((call) => call.path === pathname).length;
     switch (pathname) {
       case "/api/config":
-        return json(CONFIG_BODY);
+        return json({ ...CONFIG_BODY, features: { ...CONFIG_BODY.features, mail } });
       case SESSION_PATH:
         return signedOut ? problem(401, "unauthenticated", "req-session") : json(SESSION_BODY);
       case ME_PATH:
@@ -305,6 +308,16 @@ describe("the email row of the profile", () => {
     expect(document.body.textContent).not.toMatch(/taken|in use|already (has|exists)|exists/i);
   });
 
+  it("offers no change, and tells the member to ask the instance admin, when the server cannot send email", async () => {
+    const server = stubServer({ mail: false });
+    await openProfile();
+
+    expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Email" }).value).toBe("ada@example.org");
+    expect(screen.getByText("Changing your email needs a confirmation link, and this server cannot send email. Ask your instance admin to set up email.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Change email" })).toBeNull();
+    expect(server.to("POST", REQUEST_PATH)).toEqual([]);
+  });
+
   it("works at phone width", async () => {
     stubMatchMedia(true);
     const server = stubServer();
@@ -326,6 +339,23 @@ describe("the email row of the profile", () => {
       expect(screen.getByText(/A confirmation link was requested for ada@new\.example\./)).toBeTruthy();
       expect(screen.getByRole("button", { name: "Resend link" })).toBeTruthy();
       expect(screen.getByRole("button", { name: "Cancel change" })).toBeTruthy();
+    });
+
+    it("offers only Cancel, and says why, when the server cannot send email", async () => {
+      const server = stubServer({ pending: "ada@new.example", mail: false });
+      await openProfile();
+
+      expect(await screen.findByText("Pending verification")).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Resend link" })).toBeNull();
+      expect(screen.queryByRole("button", { name: "Change email" })).toBeNull();
+      expect(screen.getByText(/this server cannot send email/)).toBeTruthy();
+
+      fireEvent.click(screen.getByRole("button", { name: "Cancel change" }));
+
+      await waitFor(() => {
+        expect(screen.queryByText("Pending verification")).toBeNull();
+      });
+      expect(server.to("DELETE", PENDING_PATH)).toHaveLength(1);
     });
 
     it("sends the pending address again on Resend, with the shared prompt for the password", async () => {

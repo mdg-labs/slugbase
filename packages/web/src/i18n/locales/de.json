@@ -62,6 +62,7 @@
         "label": "E-Mail",
         "description": "Die Adresse, mit der du dich anmeldest.",
         "change": "E-Mail ändern",
+        "noMail": "Zum Ändern deiner E-Mail-Adresse ist ein Bestätigungslink nötig, und dieser Server kann keine E-Mails versenden. Bitte deine Instanz-Administration, den E-Mail-Versand einzurichten.",
         "pending": {
           "badge": "Bestätigung ausstehend",
           "description": "Für {email} wurde ein Bestätigungslink angefordert. Deine Adresse bleibt unverändert, bis sie bestätigt ist.",

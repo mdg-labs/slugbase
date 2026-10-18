@@ -62,6 +62,7 @@
         "label": "Email",
         "description": "The address you sign in with.",
         "change": "Change email",
+        "noMail": "Changing your email needs a confirmation link, and this server cannot send email. Ask your instance admin to set up email.",
         "pending": {
           "badge": "Pending verification",
           "description": "A confirmation link was requested for {email}. Your address stays as it is until it is confirmed.",
