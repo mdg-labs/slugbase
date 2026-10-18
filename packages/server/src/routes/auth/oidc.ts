@@ -16,6 +16,7 @@ import {
   truncateUserAgent,
   PortUnavailable,
   type IdentityClaims,
+  type IdentityCompleteRequest,
   type IdentityPort,
   type IdentityProviderConfig,
   type OidcPreAuthCookieSpec,
@@ -59,19 +60,31 @@ import { route } from "../register.ts";
 // as for a linked identity: the provider is trusted for the second factor. Everything that can go wrong
 // ends on `/login` with the same failure code and nothing in the answer says which step refused, so the answer
 // reveals neither whether an account exists nor why a handshake failed; the reason goes to the log as a fixed word.
+// The PKCE verifier is sealed together with the instant the handshake began. A callback that cannot open it (its
+// secret-box key was removed meanwhile) ends like any other failure. A `reauth` callback hands that instant to
+// the identity port, which refuses an ID token that was authenticated before it (doc 04 section 4.5).
 
 type NewFederatedAccount = NonNullable<NonNullable<Parameters<AuthStore["signInWithIdentity"]>[0]["firstLogin"]>["create"]>;
 
 const SUBKEY_BYTES = 32;
 const FAILURE_LOCATION = `/login?error=${OIDC_FAILURE_CODE}`;
 const MAX_CODE_LENGTH = 2048;
+// What is sealed in `oidc_login_states.code_verifier`: the instant the handshake began in milliseconds, a colon
+// and the PKCE verifier.
+const SEALED_VERIFIER = /^(\d{1,16}):([A-Za-z0-9_-]{1,128})$/;
 
 export interface OidcRoutesOptions {
   readonly store: Pick<
     AuthStore,
     "createOidcLoginState" | "consumeOidcLoginState" | "signInWithIdentity" | "linkIdentity" | "reauthenticateWithIdentity"
   >;
-  readonly identity: Pick<IdentityPort, "begin" | "complete">;
+  readonly identity: Pick<IdentityPort, "begin"> & {
+    /**
+     * `authenticatedSince` is set for a `reauth` callback: the instant, in milliseconds, the handshake began by this
+     * server's clock. The adapter compares it with the provider's `auth_time` allowing the clock skew between them.
+     */
+    complete(request: IdentityCompleteRequest & { readonly authenticatedSince?: number }): Promise<IdentityClaims>;
+  };
   /** Seals the PKCE verifier while the handshake is in flight, and opens it at the callback. */
   readonly secretBox: Pick<SecretBoxPort, "seal" | "open">;
   /** The providers of the operator, for what each allows a first login to do. A provider not listed allows no account to be created. */
@@ -96,6 +109,7 @@ type Refusal =
   | "unknown_state"
   | "unsupported_intent"
   | "exchange_failed"
+  | "verifier_unreadable"
   | "invalid_token"
   | "unknown_identity"
   | "unverified_email"
@@ -241,7 +255,7 @@ export function oidcRoutes({
       refused(context, params.provider, describeFailure(error));
       return failure;
     }
-    const sealed = await secretBox.seal(new TextEncoder().encode(handshake.codeVerifier), oidcCodeVerifierOptions(handshake.stateHash));
+    const sealed = await secretBox.seal(new TextEncoder().encode(`${String(now())}:${handshake.codeVerifier}`), oidcCodeVerifierOptions(handshake.stateHash));
     await store.createOidcLoginState({
       stateHash: handshake.stateHash,
       provider: params.provider,
@@ -302,7 +316,20 @@ export function oidcRoutes({
       return fail(query.has("error") ? "provider_error" : "malformed_callback");
     }
 
-    const verifier = await secretBox.open(record.codeVerifier, oidcCodeVerifierOptions(stateHash));
+    // The key that sealed the verifier may be gone by now, and a record from before the instant was sealed with
+    // it does not read: either way the handshake cannot be finished, and ends like the others.
+    let sealed: { readonly startedAt: number; readonly codeVerifier: string } | undefined;
+    try {
+      const opened = await secretBox.open(record.codeVerifier, oidcCodeVerifierOptions(stateHash));
+      const match = SEALED_VERIFIER.exec(new TextDecoder().decode(opened));
+      opened.fill(0);
+      sealed = match?.[1] === undefined || match[2] === undefined ? undefined : { startedAt: Number(match[1]), codeVerifier: match[2] };
+    } catch {
+      sealed = undefined;
+    }
+    if (sealed === undefined) {
+      return fail("verifier_unreadable");
+    }
     let claims;
     try {
       claims = await identity.complete({
@@ -310,12 +337,11 @@ export function oidcRoutes({
         redirectUri: redirectUriOf(params.provider),
         code,
         nonce: record.nonce,
-        codeVerifier: new TextDecoder().decode(verifier),
+        codeVerifier: sealed.codeVerifier,
+        ...(record.intent === "reauth" ? { authenticatedSince: sealed.startedAt } : {}),
       });
     } catch (error) {
       return fail(describeFailure(error));
-    } finally {
-      verifier.fill(0);
     }
     if (claims.providerId !== params.provider) {
       return fail("invalid_token");

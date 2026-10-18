@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { oidcCodeVerifierOptions, type IdentityCompleteRequest, type SecretBoxPort } from "@slugbase/core";
 import { FakeIdentity, type FakeIdentityGrant } from "@slugbase/testing";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -48,9 +49,11 @@ interface World {
   readonly origin: string;
   readonly fake: FakeIdentity;
   readonly logs: ReturnType<typeof recordingLogger>;
+  /** What the server asked the identity port to complete, in order. */
+  readonly completed: (IdentityCompleteRequest & { readonly authenticatedSince?: number })[];
 }
 
-function serve(env: Record<string, string> = {}, identity?: FakeIdentity): World {
+function serve(env: Record<string, string> = {}, identity?: FakeIdentity, secretBox: SecretBoxPort = testSecretBox(testKey("oidc-1"))): World {
   const config = serverConfig({
     NODE_ENV: "test",
     DATABASE_URL: appUrl(database()),
@@ -60,14 +63,23 @@ function serve(env: Record<string, string> = {}, identity?: FakeIdentity): World
   });
   const fake = identity ?? new FakeIdentity({ providers: [{ id: "idp", displayName: "Example IdP", issuer: ISSUER, clientId: CLIENT_ID }] });
   const logs = recordingLogger();
+  const completed: World["completed"] = [];
   const server = createServer({
     config,
     adapters: {
       ...adapters(config),
       rateLimit: memoryRateLimiter(createRateLimitRegistry(config)),
       tenantResolver: createAccountOnlyTenantResolver(),
-      secretBox: testSecretBox(testKey("oidc-1")),
-      identity: { available: true, listProviders: () => fake.listProviders(), begin: (request) => fake.begin(request), complete: (request) => fake.complete(request) },
+      secretBox,
+      identity: {
+        available: true,
+        listProviders: () => fake.listProviders(),
+        begin: (request) => fake.begin(request),
+        complete: (request) => {
+          completed.push(request);
+          return fake.complete(request);
+        },
+      },
     },
     modules: [],
     migrations: [],
@@ -75,7 +87,7 @@ function serve(env: Record<string, string> = {}, identity?: FakeIdentity): World
     database: tenantDatabase(database()),
     authStore: store,
   });
-  return { server, origin: config.APP_ORIGIN, fake, logs };
+  return { server, origin: config.APP_ORIGIN, fake, logs, completed };
 }
 
 let linkedNumber = 0;
@@ -160,6 +172,16 @@ async function stateCount(): Promise<number> {
   return Number(rows[0]?.n);
 }
 
+/** Replaces the sealed verifier of a stored handshake with the text given, sealed the way the start seals it. */
+async function sealVerifier(box: SecretBoxPort, state: string, text: string): Promise<void> {
+  const stateHash = sha256(Buffer.from(state));
+  const sealed = await box.seal(new TextEncoder().encode(text), oidcCodeVerifierOptions(stateHash));
+  await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    await tx`UPDATE oidc_login_states SET code_verifier = ${Buffer.from(sealed.ciphertext)}, code_verifier_key_id = ${sealed.keyId} WHERE state_hash = ${stateHash}`;
+  });
+}
+
 function expectFailed(response: Response): void {
   expect(response.status).toBe(302);
   expect(response.headers.get("location")).toBe(FAILED);
@@ -204,8 +226,9 @@ describe("GET /api/v1/auth/oidc/{provider}/start", () => {
     const row = rows[0];
     expect(row).toMatchObject({ provider: "idp", intent: "login", code_verifier_key_id: "oidc-1", return_to: "/go/docs?a=b", link_account_id: null });
     expect(row?.nonce).toMatch(/^[A-Za-z0-9_-]{43}$/);
-    // A sealed 43-character verifier is the IV, the encrypted bytes and the tag.
-    expect(row?.code_verifier).toHaveLength(12 + 43 + 16);
+    // The sealed text is the instant the handshake began, a colon and the 43-character verifier: the IV, the encrypted bytes and the tag.
+    expect(row?.code_verifier.length).toBeGreaterThanOrEqual(12 + 13 + 1 + 43 + 16);
+    expect(row?.code_verifier.length).toBeLessThanOrEqual(12 + 16 + 1 + 43 + 16);
     expect(Number(row?.minutes)).toBeGreaterThan(9.5);
     expect(Number(row?.minutes)).toBeLessThanOrEqual(10);
   });
@@ -500,10 +523,106 @@ describe("GET /api/v1/auth/oidc/{provider}/callback", () => {
       expect(world.logs.entries.at(-1)).toMatchObject({ fields: { reason: "exchange_failed" } });
     });
 
+    describe("when the sealed PKCE verifier cannot be used", () => {
+      it("for a verifier whose secret-box key was removed during the handshake: the generic redirect and the cleared cookie, not a 500, and the state used up", async () => {
+        const sessionSecret = { SESSION_SECRET: randomBytes(32).toString("hex") };
+        const starter = serve(sessionSecret);
+        const later = serve(sessionSecret, starter.fake, testSecretBox(testKey("oidc-2")));
+        const { account, subject } = await linkedAccount();
+        const flow = await approved(starter, { subject });
+
+        expectFailed(await callback(later, flow.callbackUrl, flow.preAuth));
+
+        expect(later.completed).toEqual([]);
+        expect(later.logs.entries.at(-1)).toMatchObject({ message: "An OIDC sign-in ended without a session", fields: { provider: "idp", reason: "verifier_unreadable" } });
+        expect(await sessionCount(account.id)).toBe(0);
+        expectFailed(await callback(starter, flow.callbackUrl, flow.preAuth));
+        expect(starter.logs.entries.at(-1)).toMatchObject({ fields: { reason: "unknown_state" } });
+      });
+
+      it("for a verifier sealed without the instant the handshake began, as a record from before it was added", async () => {
+        const box = testSecretBox(testKey("oidc-1"));
+        const world = serve({}, undefined, box);
+        const { account, subject } = await linkedAccount();
+        const flow = await approved(world, { subject });
+        await sealVerifier(box, flow.state, "x".repeat(43));
+
+        expectFailed(await callback(world, flow.callbackUrl, flow.preAuth));
+
+        expect(world.completed).toEqual([]);
+        expect(world.logs.entries.at(-1)).toMatchObject({ fields: { reason: "verifier_unreadable" } });
+        expect(await sessionCount(account.id)).toBe(0);
+      });
+
+      it("for a verifier that does not fit the challenge the provider was given: the provider refuses the code and nothing is signed in", async () => {
+        const box = testSecretBox(testKey("oidc-1"));
+        const world = serve({}, undefined, box);
+        const { account, subject } = await linkedAccount();
+        const flow = await approved(world, { subject });
+        await sealVerifier(box, flow.state, `${String(Date.now())}:${"x".repeat(43)}`);
+
+        expectFailed(await callback(world, flow.callbackUrl, flow.preAuth));
+
+        expect(world.completed).toHaveLength(1);
+        expect(world.logs.entries.at(-1)).toMatchObject({ fields: { reason: "exchange_failed" } });
+        expect(await sessionCount(account.id)).toBe(0);
+      });
+    });
+
     it("for a provider the server does not have, and when none is configured", async () => {
       const world = serve();
       expectFailed(await callback(world, `${world.origin}/api/v1/auth/oidc/unknown/callback?code=c&state=${"A".repeat(43)}`, "x".repeat(43)));
     });
+  });
+
+  it("sends the browser on to a path of this application only, whatever returnTo the handshake began with (T12)", async () => {
+    const world = serve();
+    const probes: [string, string][] = [
+      ["/go/docs?a=b", "/go/docs?a=b"],
+      ["https://evil.example/", "/"],
+      ["http:evil.example", "/"],
+      ["//evil.example", "/"],
+      ["///evil.example", "/"],
+      ["/\\evil.example", "/"],
+      ["/\tevil.example", "/"],
+      ["/\t/evil.example", "/"],
+      ["javascript:alert(1)", "/"],
+      ["data:text/html,x", "/"],
+      ["/%2f/evil.example", "/"],
+      ["/%2F%2Fevil.example", "/"],
+      ["/%5cevil.example", "/"],
+      ["/%5Cevil.example", "/"],
+      ["%2F%2Fevil.example", "/"],
+      ["%2f%2fevil.example", "/"],
+      ["https%3A%2F%2Fevil.example", "/"],
+      ["/.//evil.example", "/"],
+      ["/..//evil.example", "/"],
+      ["/go/../..//evil.example", "/"],
+      ["/go/docs\r\nSet-Cookie: a=b", "/"],
+      [`/${"a".repeat(2047)}`, `/${"a".repeat(2047)}`],
+      ["", "/"],
+    ];
+    for (const [given, expected] of probes) {
+      const { subject } = await linkedAccount();
+      const flow = await approved(world, { subject }, `?returnTo=${encodeURIComponent(given)}`);
+
+      const response = await callback(world, flow.callbackUrl, flow.preAuth);
+
+      const location = response.headers.get("location") ?? "";
+      expect(location, given).toBe(expected);
+      expect(new URL(location, world.origin).origin, given).toBe(world.origin);
+      expect(location.startsWith("//"), given).toBe(false);
+    }
+  });
+
+  it("asks the identity port for the instant the handshake began only on a re-authentication: a sign-in sends none", async () => {
+    const world = serve();
+    const { subject } = await linkedAccount();
+    const flow = await approved(world, { subject });
+    await callback(world, flow.callbackUrl, flow.preAuth);
+
+    expect(world.completed).toHaveLength(1);
+    expect(world.completed[0]).not.toHaveProperty("authenticatedSince");
   });
 
   it("does not put a state, a code, a subject or a token in the log", async () => {
@@ -781,6 +900,17 @@ describe("GET /api/v1/auth/oidc/{provider}/callback with the link intent", () =>
     expect(await sessionCount(account.id)).toBe(1);
   });
 
+  it("sends the identity port no instant to hold the token's authentication against: only a re-authentication needs one", async () => {
+    const world = serve();
+    const { account, subject } = await linkedAccount();
+    const token = await freshToken(world, account, subject);
+    const flow = await approved(world, { subject: "second-subject" }, "?intent=link", { cookie: sessionCookie(token) });
+
+    await callback(world, flow.callbackUrl, flow.preAuth, { cookie: sessionCookie(token) });
+
+    expect(world.completed.at(-1)).not.toHaveProperty("authenticatedSince");
+  });
+
   it("takes the identity from no one: an identity another account holds is refused with the generic failure, and stays where it is", async () => {
     const world = serve();
     const mine = await linkedAccount();
@@ -902,6 +1032,23 @@ describe("GET /api/v1/auth/oidc/{provider}/callback with the reauth intent", () 
     expect(response.headers.getSetCookie()).toHaveLength(1);
     expect((await reauthAtOf(token))?.getTime()).toBeGreaterThan(Date.now() - 60_000);
     expect(await sessionCount(account.id)).toBe(1);
+  });
+
+  it("tells the identity port the instant the handshake began, so that it can refuse an authentication older than that", async () => {
+    const world = serve();
+    const { account, subject } = await linkedAccount();
+    const token = await signedInToken(world, account, subject);
+    const completedBefore = world.completed.length;
+    const startedAfter = Date.now();
+    const flow = await approved(world, { subject }, "?intent=reauth", { cookie: sessionCookie(token) });
+    const startedBefore = Date.now();
+
+    await callback(world, flow.callbackUrl, flow.preAuth, { cookie: sessionCookie(token) });
+
+    expect(world.completed).toHaveLength(completedBefore + 1);
+    const since = world.completed.at(-1)?.authenticatedSince;
+    expect(since).toBeGreaterThanOrEqual(startedAfter);
+    expect(since).toBeLessThanOrEqual(startedBefore);
   });
 
   it("is no proof when the provider asserts an identity the account does not hold, however valid the token", async () => {

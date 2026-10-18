@@ -40,6 +40,7 @@ const rsa = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const ec = generateKeyPairSync("ec", { namedCurve: "P-256" });
 const ed = generateKeyPairSync("ed25519");
 const strangerRsa = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const rotatedRsa = generateKeyPairSync("rsa", { modulusLength: 2048 });
 
 const jwk = (key: KeyObject, kid: string, extra: Record<string, unknown> = {}): Record<string, unknown> => ({ ...key.export({ format: "jwk" }), kid, ...extra });
 
@@ -112,6 +113,7 @@ class ScriptedEgress implements EgressPort {
   readonly requests: EgressRequest[] = [];
   token: Answer | Error = json({ id_token: signToken(claims()), token_type: "Bearer" });
   discovery: Record<string, unknown> = discovery();
+  keys: Answer | Error = json(KEYS);
 
   request(request: EgressRequest): Promise<EgressResponse> {
     this.requests.push(request);
@@ -119,7 +121,7 @@ class ScriptedEgress implements EgressPort {
     if (request.url === `${ISSUER}/.well-known/openid-configuration`) {
       answer = json(this.discovery);
     } else if (request.url === `${ISSUER}/keys`) {
-      answer = json(KEYS);
+      answer = this.keys;
     } else if (request.url === TOKEN_URL) {
       answer = this.token;
     } else {
@@ -134,13 +136,30 @@ class ScriptedEgress implements EgressPort {
   get exchanges(): EgressRequest[] {
     return this.requests.filter((request) => request.url === TOKEN_URL);
   }
+
+  get keyFetches(): EgressRequest[] {
+    return this.requests.filter((request) => request.url === `${ISSUER}/keys`);
+  }
 }
 
-function setup(options: { egress?: ScriptedEgress; provider?: IdentityProviderConfig } = {}): { identity: OidcIdentity; egress: ScriptedEgress; lines: { message: string; fields: Readonly<Record<string, unknown>> | undefined }[] } {
+function setup(options: { egress?: ScriptedEgress; provider?: IdentityProviderConfig } = {}): {
+  identity: OidcIdentity;
+  egress: ScriptedEgress;
+  lines: { message: string; fields: Readonly<Record<string, unknown>> | undefined }[];
+  advance: (ms: number) => void;
+} {
   const egress = options.egress ?? new ScriptedEgress();
   const lines: { message: string; fields: Readonly<Record<string, unknown>> | undefined }[] = [];
   const logger: OidcIdentityLogger = { warn: (message, fields) => void lines.push({ message, fields }) };
-  return { identity: createOidcIdentity({ providers: [options.provider ?? config()], egress, logger, now: () => NOW }), egress, lines };
+  let clock = NOW;
+  return {
+    identity: createOidcIdentity({ providers: [options.provider ?? config()], egress, logger, now: () => clock }),
+    egress,
+    lines,
+    advance: (ms) => {
+      clock += ms;
+    },
+  };
 }
 
 const request = (overrides: Partial<IdentityCompleteRequest> = {}): IdentityCompleteRequest => ({
@@ -170,12 +189,15 @@ describe("begin", () => {
     });
   });
 
-  it("asks the provider for the credentials again only for a re-authentication", async () => {
+  it("asks the provider for the credentials again, and for no session older than now, only for a re-authentication", async () => {
     const { identity } = setup();
     const request = { providerId: "idp", redirectUri: REDIRECT, state: "s", nonce: "n", codeChallenge: "c" };
-    expect(new URL((await identity.begin(request)).authorizationUrl).searchParams.has("prompt")).toBe(false);
-    expect(new URL((await identity.begin({ ...request, reauthenticate: false })).authorizationUrl).searchParams.has("prompt")).toBe(false);
-    expect(new URL((await identity.begin({ ...request, reauthenticate: true })).authorizationUrl).searchParams.get("prompt")).toBe("login");
+    for (const plain of [request, { ...request, reauthenticate: false }]) {
+      const { searchParams } = new URL((await identity.begin(plain)).authorizationUrl);
+      expect([searchParams.has("prompt"), searchParams.has("max_age")]).toEqual([false, false]);
+    }
+    const { searchParams } = new URL((await identity.begin({ ...request, reauthenticate: true })).authorizationUrl);
+    expect([searchParams.get("prompt"), searchParams.get("max_age")]).toEqual(["login", "0"]);
   });
 
   it("asks for the openid scope even when the operator's scopes leave it out, and keeps the query of the endpoint", async () => {
@@ -373,5 +395,175 @@ describe("the verifier challenge", () => {
     expect(url.searchParams.get("code_challenge")).toBe(challenge);
     await identity.complete(request({ codeVerifier: verifier }));
     expect(new URLSearchParams(new TextDecoder().decode(egress.exchanges[0]?.body)).get("code_verifier")).toBe(verifier);
+  });
+});
+
+describe("an email that is not asserted as verified", () => {
+  it("is returned as unverified when the token has no email_verified claim, or one that is not true", async () => {
+    const { identity, egress } = setup();
+    for (const overrides of [{ email_verified: undefined }, { email_verified: "false" }, { email_verified: 1 }, { email_verified: null }]) {
+      egress.token = json({ id_token: signToken(claims(overrides)) });
+      expect(await identity.complete(request())).toMatchObject({ email: "person@example.test", emailVerified: false });
+    }
+  });
+});
+
+describe("a re-authentication", () => {
+  const since = (offsetMs = 0): Partial<IdentityCompleteRequest> & { authenticatedSince: number } => ({ authenticatedSince: NOW + offsetMs });
+
+  it("accepts an ID token whose auth_time is at or after the second the handshake began, or within the clock skew before it", async () => {
+    const { identity, egress } = setup();
+    for (const authTime of [NOW_SECONDS - 5, NOW_SECONDS - 60, NOW_SECONDS, NOW_SECONDS + 20]) {
+      egress.token = json({ id_token: signToken(claims({ auth_time: authTime })) });
+      expect(await identity.complete({ ...request(), ...since(400) })).toMatchObject({ subject: "subject-1" });
+    }
+  });
+
+  it("refuses an ID token whose auth_time is older than the handshake's start by more than the clock skew, with the auth_time reason", async () => {
+    const { identity, egress, lines } = setup();
+    egress.token = json({ id_token: signToken(claims({ auth_time: NOW_SECONDS - 61 })) });
+    await expect(identity.complete({ ...request(), ...since(400) })).rejects.toMatchObject({ name: "IdentityError", reason: "invalid_token" });
+    expect(lines.at(-1)).toEqual({ message: "An OIDC sign-in was refused", fields: { provider: "idp", reason: "auth_time" } });
+  });
+
+  it("refuses an auth_time that is not a number", async () => {
+    const { identity, egress, lines } = setup();
+    for (const authTime of ["1700000000", null, {}]) {
+      egress.token = json({ id_token: signToken(claims({ auth_time: authTime })) });
+      await expect(identity.complete({ ...request(), ...since() })).rejects.toMatchObject({ reason: "invalid_token" });
+      expect(lines.at(-1)?.fields).toEqual({ provider: "idp", reason: "malformed" });
+    }
+  });
+
+  it("accepts a provider that omits auth_time: prompt=login alone vouches for it", async () => {
+    const { identity, egress } = setup();
+    egress.token = json({ id_token: signToken(claims()) });
+    expect(await identity.complete({ ...request(), ...since() })).toMatchObject({ subject: "subject-1" });
+  });
+
+  it("looks at auth_time only when the caller names the handshake's start: a plain sign-in keeps its token however old the authentication", async () => {
+    const { identity, egress } = setup();
+    egress.token = json({ id_token: signToken(claims({ auth_time: NOW_SECONDS - 86_400 })) });
+    expect(await identity.complete(request())).toMatchObject({ subject: "subject-1" });
+  });
+});
+
+describe("a provider that rotates its signing keys", () => {
+  const rotated = (extra: readonly Record<string, unknown>[] = KEYS.keys): Answer => json({ keys: [...extra, jwk(rotatedRsa.publicKey, "rsa-2", { use: "sig" })] });
+  const newToken = (options: Parameters<typeof signToken>[1] = {}): Answer => json({ id_token: signToken(claims(), { kid: "rsa-2", key: rotatedRsa.privateKey, ...options }) });
+
+  it("fetches the key set once more for a token signed with an unknown key id, and accepts it when the key is there", async () => {
+    const { identity, egress } = setup();
+    await identity.complete(request());
+    expect(egress.keyFetches).toHaveLength(1);
+    egress.keys = rotated();
+    egress.token = newToken();
+
+    expect(await identity.complete(request())).toMatchObject({ subject: "subject-1" });
+    expect(egress.keyFetches).toHaveLength(2);
+    expect(egress.keyFetches[1]).toMatchObject({ timeoutMs: 5_000, maxBytes: 262_144, acceptContentTypes: ["application/json", "application/jwk-set+json"] });
+
+    await identity.complete(request());
+    expect(egress.keyFetches).toHaveLength(2);
+  });
+
+  it("keeps the refetched keys as the provider's keys, so a key the provider dropped no longer verifies", async () => {
+    const { identity, egress, advance } = setup();
+    await identity.complete(request());
+    egress.keys = json({ keys: [jwk(rotatedRsa.publicKey, "rsa-2", { use: "sig" })] });
+    egress.token = newToken();
+    await identity.complete(request());
+
+    advance(61_000);
+    egress.token = json({ id_token: signToken(claims()) });
+    await expect(identity.complete(request())).rejects.toMatchObject({ reason: "invalid_token" });
+  });
+
+  it("refuses a key id the refetched set does not hold, and refuses a second unknown one within the bound without another fetch", async () => {
+    const { identity, egress, advance, lines } = setup();
+    await identity.complete(request());
+    egress.token = json({ id_token: signToken(claims(), { kid: "unknown-1" }) });
+
+    await expect(identity.complete(request())).rejects.toMatchObject({ reason: "invalid_token" });
+    expect(egress.keyFetches).toHaveLength(2);
+    expect(lines.at(-1)?.fields).toEqual({ provider: "idp", reason: "key" });
+
+    egress.token = json({ id_token: signToken(claims(), { kid: "unknown-2" }) });
+    advance(59_000);
+    await expect(identity.complete(request())).rejects.toMatchObject({ reason: "invalid_token" });
+    expect(egress.keyFetches).toHaveLength(2);
+
+    advance(1_000);
+    await expect(identity.complete(request())).rejects.toMatchObject({ reason: "invalid_token" });
+    expect(egress.keyFetches).toHaveLength(3);
+  });
+
+  it("does not fetch the keys for a token whose key id the set holds but whose signature, algorithm or key fails, or for one with no key id", async () => {
+    const { identity, egress } = setup();
+    await identity.complete(request());
+    const attempts: Parameters<typeof signToken>[1][] = [
+      { key: strangerRsa.privateKey },
+      { alg: "ES256", kid: "rsa-1", key: ec.privateKey },
+      { kid: null, key: strangerRsa.privateKey },
+    ];
+    for (const options of attempts) {
+      egress.token = json({ id_token: signToken(claims(), options) });
+      await expect(identity.complete(request())).rejects.toMatchObject({ reason: "invalid_token" });
+    }
+    expect(egress.keyFetches).toHaveLength(1);
+  });
+
+  it.each<[string, Answer | Error]>([
+    ["cannot be fetched", new EgressError("egress_timeout", "The request timed out")],
+    ["does not answer 200", json({}, 503)],
+    ["is not a set of keys", json({ keys: [] })],
+  ])("refuses the token, keeps the keys it had and logs a fixed reason when the refetch %s", async (_name, answer) => {
+    const { identity, egress, lines, advance } = setup();
+    await identity.complete(request());
+    egress.keys = answer;
+    egress.token = newToken();
+
+    await expect(identity.complete(request())).rejects.toMatchObject({ name: "IdentityError", reason: "invalid_token" });
+    expect(egress.keyFetches).toHaveLength(2);
+    const refetchLines = lines.filter((line) => line.message === "An OIDC provider's keys could not be fetched again");
+    expect(refetchLines).toHaveLength(1);
+    expect(refetchLines[0]?.fields?.["provider"]).toBe("idp");
+    expect(["keys_failed", "invalid_keys"]).toContain(refetchLines[0]?.fields?.["reason"]);
+
+    advance(1_000);
+    egress.token = json({ id_token: signToken(claims()) });
+    expect(await identity.complete(request())).toMatchObject({ subject: "subject-1" });
+    expect(egress.keyFetches).toHaveLength(2);
+  });
+
+  it("shares one refetch between sign-ins that meet the new key id together", async () => {
+    const { identity, egress } = setup();
+    await identity.complete(request());
+    egress.keys = rotated();
+    egress.token = newToken();
+
+    const results = await Promise.all([identity.complete(request({ code: "c1" })), identity.complete(request({ code: "c2" })), identity.complete(request({ code: "c3" }))]);
+
+    expect(results.map((claimed) => claimed.subject)).toEqual(["subject-1", "subject-1", "subject-1"]);
+    expect(egress.keyFetches).toHaveLength(2);
+  });
+
+  it("serves a sign-in that arrives after another one refetched from the keys it fetched, inside the bound", async () => {
+    const { identity, egress } = setup();
+    await identity.complete(request());
+    egress.keys = rotated();
+    egress.token = newToken();
+    await identity.complete(request());
+
+    expect(await identity.complete(request({ code: "late" }))).toMatchObject({ subject: "subject-1" });
+    expect(egress.keyFetches).toHaveLength(2);
+  });
+
+  it("still refuses a token with the right new key id and a signature of another key", async () => {
+    const { identity, egress } = setup();
+    await identity.complete(request());
+    egress.keys = rotated();
+    egress.token = newToken({ key: strangerRsa.privateKey });
+    await expect(identity.complete(request())).rejects.toMatchObject({ reason: "invalid_token" });
   });
 });

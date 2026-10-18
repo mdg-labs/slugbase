@@ -1,3 +1,5 @@
+import { randomBytes } from "node:crypto";
+import type { SecretBoxPort } from "@slugbase/core";
 import { FakeIdentity, type FakeIdentityGrant } from "@slugbase/testing";
 import { useTestDatabase } from "@slugbase/testing/db";
 import type { AuthStore } from "@slugbase/db";
@@ -65,14 +67,18 @@ function provider(keys: Record<string, string> = {}): Record<string, string> {
   };
 }
 
-function serve(env: Record<string, string> = provider(), modules: readonly ServerModule[] = []): World {
+function serve(
+  env: Record<string, string> = provider(),
+  modules: readonly ServerModule[] = [],
+  options: { readonly fake?: FakeIdentity; readonly secretBox?: SecretBoxPort } = {},
+): World {
   const config = serverConfig({
     NODE_ENV: "test",
     DATABASE_URL: appUrl(database()),
     RATE_LIMIT_LOGIN_IP: "1000/min",
     ...env,
   });
-  const fake = new FakeIdentity({ providers: [{ id: "idp", displayName: "Example IdP", issuer: ISSUER, clientId: "client-id-1" }] });
+  const fake = options.fake ?? new FakeIdentity({ providers: [{ id: "idp", displayName: "Example IdP", issuer: ISSUER, clientId: "client-id-1" }] });
   const logs = recordingLogger();
   const server = createServer({
     config,
@@ -80,7 +86,7 @@ function serve(env: Record<string, string> = provider(), modules: readonly Serve
       ...adapters(config),
       rateLimit: memoryRateLimiter(createRateLimitRegistry(config)),
       tenantResolver: createAccountOnlyTenantResolver(),
-      secretBox: testSecretBox(testKey("oidc-1")),
+      secretBox: options.secretBox ?? testSecretBox(testKey("oidc-1")),
       identity: { available: true, listProviders: () => fake.listProviders(), begin: (request) => fake.begin(request), complete: (request) => fake.complete(request) },
     },
     modules,
@@ -102,15 +108,24 @@ function cookieValue(response: Response, name: string): string | undefined {
   return undefined;
 }
 
-/** Runs a first login to its callback: starts the handshake, plays the person approving it, and follows the redirect. */
-async function login(world: World, grant: FakeIdentityGrant, headers: Record<string, string> = {}): Promise<Response> {
+/** Starts a handshake and plays the person approving it: the address the provider sends the browser back to, and the pre-auth cookie of the browser that started it. */
+async function approved(world: World, grant: FakeIdentityGrant): Promise<{ readonly callbackUrl: string; readonly preAuth: string; readonly state: string }> {
   const started = await world.server.fetch(new Request(new URL(`${START}?returnTo=/go/docs`, world.origin)));
   const authorizationUrl = started.headers.get("location") ?? "";
   const preAuth = cookieValue(started, PREAUTH_COOKIE);
   if (started.status !== 302 || preAuth === undefined) {
     throw new Error(`the handshake did not start: ${String(started.status)}`);
   }
-  const callbackUrl = world.fake.approve(authorizationUrl, grant);
+  return { callbackUrl: world.fake.approve(authorizationUrl, grant), preAuth, state: new URL(authorizationUrl).searchParams.get("state") ?? "" };
+}
+
+function callbackWith(world: World, callbackUrl: string, preAuth: string | undefined): Promise<Response> {
+  return world.server.fetch(new Request(callbackUrl, { headers: preAuth === undefined ? {} : { cookie: `${PREAUTH_COOKIE}=${preAuth}` } }));
+}
+
+/** Runs a first login to its callback: starts the handshake, plays the person approving it, and follows the redirect. */
+async function login(world: World, grant: FakeIdentityGrant, headers: Record<string, string> = {}): Promise<Response> {
+  const { callbackUrl, preAuth } = await approved(world, grant);
   const request = new Headers(headers);
   request.set("cookie", `${PREAUTH_COOKIE}=${preAuth}`);
   return world.server.fetch(new Request(callbackUrl, { headers: request }));
@@ -323,6 +338,91 @@ describe("a first login by verified email", () => {
       expect(await identityRows()).toEqual([]);
       expect(await sessionRows(database(), victim.id)).toEqual([]);
     });
+  });
+});
+
+describe("a handshake that does not hold up links nothing and creates nothing, even where the provider creates accounts", () => {
+  const ASSERTS = [
+    ["the address of a verified account", "victim@example.test"],
+    ["an address nobody holds", "newcomer@example.test"],
+  ] as const;
+
+  async function expectNothingChanged(victim: SeededAccount): Promise<void> {
+    expect(await identityRows()).toEqual([]);
+    expect((await accountRows()).map((row) => row.id)).toEqual([victim.id]);
+    expect(await sessionsOfEveryone()).toBe(0);
+    expect(await eventsQueued()).toEqual([]);
+  }
+
+  describe("whatever address the provider asserts as verified", () => {
+    it.each<[string, Partial<FakeIdentityGrant>]>([
+      ["a nonce of another request", { nonce: "the-nonce-of-another-request" }],
+      ["another audience", { audience: "another-client" }],
+      ["another issuer", { issuer: "https://evil.example.test" }],
+      ["an expired token", { expiresInSeconds: -5 }],
+    ])("for an ID token with %s", async (_name, fault) => {
+      const world = serve(provider({ OIDC_IDP_AUTO_CREATE: "true" }));
+      const victim = await verifiedAccount("victim@example.test");
+
+      for (const [, email] of ASSERTS) {
+        expectFailed(await login(world, { subject: `subject-of-${email}`, email, emailVerified: true, ...fault }));
+      }
+
+      await expectNothingChanged(victim);
+    });
+
+    it.each<[string, (world: World, flow: Awaited<ReturnType<typeof approved>>) => Promise<Response>]>([
+      ["a callback from a browser without the pre-auth cookie", (world, flow) => callbackWith(world, flow.callbackUrl, undefined)],
+      ["a callback with the pre-auth cookie of another handshake", async (world, flow) => callbackWith(world, flow.callbackUrl, (await approved(world, { subject: "other" })).preAuth)],
+      ["a code the provider did not issue", (world, flow) => callbackWith(world, flow.callbackUrl.replace(/code=[^&]+/, "code=forged-code"), flow.preAuth)],
+      [
+        "a state that expired",
+        async (world, flow) => {
+          await database().owner.begin(async (tx) => {
+            await tx`SET LOCAL ROLE slugbase_system`;
+            await tx`UPDATE oidc_login_states SET expires_at = now() - interval '1 second'`;
+          });
+          return callbackWith(world, flow.callbackUrl, flow.preAuth);
+        },
+      ],
+      ["a refusal by the provider", (world, flow) => callbackWith(world, `${world.origin}/api/v1/auth/oidc/idp/callback?error=access_denied&state=${flow.state}`, flow.preAuth)],
+    ])("for %s", async (_name, play) => {
+      const world = serve(provider({ OIDC_IDP_AUTO_CREATE: "true" }));
+      const victim = await verifiedAccount("victim@example.test");
+
+      for (const [, email] of ASSERTS) {
+        const flow = await approved(world, { subject: `subject-of-${email}`, email, emailVerified: true });
+        expectFailed(await play(world, flow));
+      }
+
+      await expectNothingChanged(victim);
+    });
+
+    it("for a callback whose sealed verifier can no longer be opened", async () => {
+      const sessionSecret = { SESSION_SECRET: randomBytes(32).toString("hex") };
+      const starter = serve(provider({ OIDC_IDP_AUTO_CREATE: "true", ...sessionSecret }));
+      const later = serve(provider({ OIDC_IDP_AUTO_CREATE: "true", ...sessionSecret }), [], { fake: starter.fake, secretBox: testSecretBox(testKey("oidc-2")) });
+      const victim = await verifiedAccount("victim@example.test");
+
+      for (const [, email] of ASSERTS) {
+        const flow = await approved(starter, { subject: `subject-of-${email}`, email, emailVerified: true });
+        expectFailed(await callbackWith(later, flow.callbackUrl, flow.preAuth));
+      }
+
+      await expectNothingChanged(victim);
+    });
+  });
+
+  it("for a replay of the callback that created the account: the account is created once, by the first callback only", async () => {
+    const world = serve(provider({ OIDC_IDP_AUTO_CREATE: "true" }));
+    const flow = await approved(world, { subject: "new-subject", email: "newcomer@example.test", emailVerified: true });
+
+    expect((await callbackWith(world, flow.callbackUrl, flow.preAuth)).headers.get("location")).toBe("/go/docs");
+    expectFailed(await callbackWith(world, flow.callbackUrl, flow.preAuth));
+
+    expect(await accountRows()).toHaveLength(1);
+    expect(await identityRows()).toHaveLength(1);
+    expect(await sessionsOfEveryone()).toBe(1);
   });
 });
 
