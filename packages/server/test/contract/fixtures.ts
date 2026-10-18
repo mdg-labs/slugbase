@@ -47,6 +47,14 @@ export const FIXTURES: ContractFixtures = {
   // request is the declared 410, and the reset itself is walked by the password-reset tests.
   forgotPassword: { body: { email: "forgot-walker@example.test" }, status: 202 },
   resetPassword: { body: { token: "A".repeat(43), newPassword: "a password for the reset walker" }, status: 410 },
+  // Account-level operations: no workspace or other account's identifier is part of them, and the account they act on is the walker's own. The
+  // walker's session has just re-authenticated, so the request is valid and answers the one 202 every address gets; the pending change is the
+  // walker's own to cancel. The two redemptions are anonymous: the token is the only credential and names no workspace or account the caller could
+  // address. The walker holds no email-change token, so their valid request is the declared 410; the redemptions are walked by the email-change tests.
+  requestEmailChange: { body: { email: "email-change-walker@example.test" }, status: 202 },
+  cancelPendingEmailChange: {},
+  confirmEmailChange: { body: { token: "A".repeat(43) }, status: 410 },
+  cancelEmailChange: { body: { token: "A".repeat(43) }, status: 410 },
   // Anonymous operations: the provider's slug is the only identifier, it names a deployment-wide setting and no workspace or account, and there is
   // nothing of another account's to name. The walker's server has no provider, so both answer the declared 302 to /login with the failure code;
   // the handshake itself is walked by the OIDC sign-in tests.

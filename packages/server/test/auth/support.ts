@@ -257,7 +257,7 @@ export interface AuthWorld {
 
 export interface ServeOptions {
   readonly env?: Record<string, string>;
-  /** Raises the login, second-factor and reset limits so a test that is not about them signs in freely; the limit suites turn it off to run the shipped defaults. */
+  /** Raises the login, second-factor, reset and token-redemption limits so a test that is not about them signs in freely; the limit suites turn it off to run the shipped defaults. */
   readonly openLimits?: boolean;
 }
 
@@ -266,7 +266,7 @@ export function serveAuth(database: TestDatabase, store: AuthStore, { env = {}, 
   const config = serverConfig({
     NODE_ENV: "test",
     DATABASE_URL: appUrl(database),
-    ...(openLimits ? { RATE_LIMIT_LOGIN_IP: "1000/min", RATE_LIMIT_LOGIN_EMAIL: "1000/hour", RATE_LIMIT_MFA_IP: "1000/min", RATE_LIMIT_MFA_ACCOUNT: "1000/hour", RATE_LIMIT_RESET_IP: "1000/hour", RATE_LIMIT_RESET_EMAIL: "1000/hour" } : {}),
+    ...(openLimits ? { RATE_LIMIT_LOGIN_IP: "1000/min", RATE_LIMIT_LOGIN_EMAIL: "1000/hour", RATE_LIMIT_MFA_IP: "1000/min", RATE_LIMIT_MFA_ACCOUNT: "1000/hour", RATE_LIMIT_RESET_IP: "1000/hour", RATE_LIMIT_RESET_EMAIL: "1000/hour", RATE_LIMIT_TOKEN_REDEEM_IP: "1000/hour" } : {}),
     ...env,
   });
   const limiter = memoryRateLimiter(createRateLimitRegistry(config));

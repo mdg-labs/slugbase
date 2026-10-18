@@ -211,6 +211,13 @@
       "when": 1792319861721,
       "tag": "20261018103741_add_token_redemption_lock_order",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1792331439193,
+      "tag": "20261018135039_add_email_change",
+      "breakpoints": true
     }
   ]
 }

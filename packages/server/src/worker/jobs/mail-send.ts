@@ -1,5 +1,5 @@
 import { ACCOUNT_NOTIFICATIONS, CREDENTIAL_TOKEN_TTL_SECONDS, accountNotification, generateCredentialToken, type MailMessage } from "@slugbase/core";
-import { accountProfileRepository, credentialTokenRepository, type QueuedJob } from "@slugbase/db";
+import { accountProfileRepository, credentialTokenRepository, emailChangeRepository, type QueuedJob } from "@slugbase/db";
 import { z } from "zod";
 import { uuidv7 } from "../../auth/uuidv7.ts";
 import type { JobDefinition } from "../job.ts";
@@ -24,12 +24,28 @@ import { defineJob } from "../job.ts";
 // may have been set up by whoever registered the address first, and the verification link, which is what takes
 // that setup away, is the way into it.
 //
+// The two emails of an email change (doc 02 section 2.6) are made the same way by one job, with tokens that work
+// for 1 hour: the notice with the "this wasn't me" link, mailed to the account's current address, and then the
+// confirmation, mailed to the address the account asked to move to. The confirmation is sent only after the
+// notice was handed to the mail port, so no confirmation link exists outside this process before the owner's
+// address has been told; a failed send of either runs the whole job again, which makes new tokens that replace
+// the unused ones; a run that finds the address taken issues no confirmation and deletes the unused one an
+// earlier run issued. The request that queued the job answered alike for every address, so the decision is the job's:
+// a token is issued, and the mail sent, only when the account has a verified address and a change is still
+// pending, and the confirmation only to an address that is free, so nothing is mailed to another account. A
+// change cancelled before the worker runs sends nothing.
+//
 // The "new sign-in" email (doc 02 section 12) carries what it shows, taken when the sign-in happened: the
 // time, the browser family and the coarse network prefix, none of which is a secret. The alert was queued
 // while the account's switch was on, so it is sent whatever becomes of the session or the switch before the
 // worker runs, or between attempts.
 
 export const MAIL_SEND_JOB = "mail.send";
+
+/** The templates a job can name: the notice of an email change goes out in the job of its confirmation. */
+const MAIL_JOB_TEMPLATES = z.enum(ACCOUNT_NOTIFICATIONS).exclude(["emailChangeNotice"]);
+
+export type MailJobTemplate = z.infer<typeof MAIL_JOB_TEMPLATES>;
 
 /** What the "new sign-in" email shows of the sign-in; the browser and the network are absent when unknown. */
 export interface NewSignInDetails {
@@ -45,7 +61,7 @@ const JOB_REQUEST_ID = MAIL_SEND_JOB;
 export const mailSendJob = defineJob({
   name: MAIL_SEND_JOB,
   payload: z.object({
-    template: z.enum(ACCOUNT_NOTIFICATIONS),
+    template: MAIL_JOB_TEMPLATES,
     accountId: z.uuid(),
     signedInAt: z.iso.datetime().optional(),
     browser: z.string().min(1).max(64).optional(),
@@ -54,27 +70,29 @@ export const mailSendJob = defineJob({
   // Delivery is at least once: a retry after an attempt that failed past the point the relay took the
   // message sends it again, and nothing here can tell the two apart.
   handle: async ({ template, accountId, signedInAt, browser, network }, context) => {
-    const message = await context.withTenant({ accountId, requestId: JOB_REQUEST_ID }, async (tx): Promise<MailMessage | undefined> => {
+    const messages = await context.withTenant({ accountId, requestId: JOB_REQUEST_ID }, async (tx): Promise<readonly MailMessage[]> => {
       const profile = await accountProfileRepository(tx).profile();
       if (profile === undefined) {
         // The account is gone since the job was queued; there is nobody to tell and a retry would find the same.
         context.logger.warn("Mail not sent; the account no longer exists", { template });
-        return undefined;
+        return [];
       }
       if (template === "newSignIn") {
         if (signedInAt === undefined) {
           context.logger.warn("Mail not sent; the sign-in alert names no sign-in", { template });
-          return undefined;
+          return [];
         }
-        return accountNotification(template, profile, {
-          signedInAt,
-          ...(browser === undefined ? {} : { browser }),
-          ...(network === undefined ? {} : { network }),
-        });
+        return [
+          accountNotification(template, profile, {
+            signedInAt,
+            ...(browser === undefined ? {} : { browser }),
+            ...(network === undefined ? {} : { network }),
+          }),
+        ];
       }
       if (template === "passwordReset") {
         if (!profile.hasPassword || !profile.emailVerified) {
-          return undefined;
+          return [];
         }
         const token = generateCredentialToken();
         const issued = await credentialTokenRepository(tx).issue({
@@ -86,15 +104,39 @@ export const mailSendJob = defineJob({
         });
         if (!issued) {
           context.logger.warn("Mail not sent; the account cannot receive a password-reset token", { template });
-          return undefined;
+          return [];
         }
-        return accountNotification(template, profile, { token: token.value });
+        return [accountNotification(template, profile, { token: token.value })];
+      }
+      if (template === "emailChange") {
+        if (!profile.emailVerified) {
+          return [];
+        }
+        const cancel = generateCredentialToken();
+        const noticed = await emailChangeRepository(tx).issue({
+          id: uuidv7(),
+          purpose: "email_change_cancel",
+          tokenHash: cancel.hash,
+          ttlSeconds: CREDENTIAL_TOKEN_TTL_SECONDS.email_change_cancel,
+        });
+        if (noticed === undefined) {
+          return [];
+        }
+        const confirmation = generateCredentialToken();
+        const pending = await emailChangeRepository(tx).issue({
+          id: uuidv7(),
+          purpose: "email_change",
+          tokenHash: confirmation.hash,
+          ttlSeconds: CREDENTIAL_TOKEN_TTL_SECONDS.email_change,
+        });
+        const notice = accountNotification("emailChangeNotice", profile, { token: cancel.value });
+        return pending === undefined ? [notice] : [notice, accountNotification("emailChange", { ...profile, email: pending }, { token: confirmation.value })];
       }
       if (template !== "verifyEmail") {
-        return accountNotification(template, profile);
+        return [accountNotification(template, profile)];
       }
       if (profile.emailVerified) {
-        return undefined;
+        return [];
       }
       const token = generateCredentialToken();
       const issued = await credentialTokenRepository(tx).issue({
@@ -106,11 +148,11 @@ export const mailSendJob = defineJob({
       });
       if (!issued) {
         context.logger.warn("Mail not sent; the account cannot receive a verification token", { template });
-        return undefined;
+        return [];
       }
-      return accountNotification(template, profile, { token: token.value });
+      return [accountNotification(template, profile, { token: token.value })];
     });
-    if (message !== undefined) {
+    for (const message of messages) {
       await context.adapters.mail.send(message);
     }
   },
@@ -120,7 +162,7 @@ export const mailSendJob = defineJob({
  * The job that sends `template` to the account, validated against the payload schema; for a transaction that
  * queues it. `signIn` is what a "new sign-in" email shows.
  */
-export function queueMailSend(id: string, template: (typeof ACCOUNT_NOTIFICATIONS)[number], accountId: string, signIn?: NewSignInDetails): QueuedJob {
+export function queueMailSend(id: string, template: MailJobTemplate, accountId: string, signIn?: NewSignInDetails): QueuedJob {
   const payload = mailSendJob.parse({ template, accountId, ...signIn });
   return {
     id,

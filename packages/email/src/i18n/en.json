@@ -59,5 +59,26 @@
     "notYou": "If you did not ask for this, you can ignore this email; your password stays as it is.",
     "action": "Choose a new password",
     "footer": "You are receiving this email because a password reset was requested for your {appName} account."
+  },
+  "emailChange": {
+    "subject": "Confirm your new {appName} email address",
+    "greeting": "Hi {name},",
+    "greetingAnonymous": "Hi,",
+    "body": "Someone asked to use this email address for a {appName} account. Confirm that it is yours to finish the change.",
+    "expiry": "The link works once and for 1 hour.",
+    "notYou": "If you did not ask for this, you can ignore this email; nothing changes.",
+    "action": "Confirm email address",
+    "footer": "You are receiving this email because this address was given as the new email address of a {appName} account."
+  },
+  "emailChangeNotice": {
+    "subject": "A new email address was requested for your {appName} account",
+    "greeting": "Hi {name},",
+    "greetingAnonymous": "Hi,",
+    "body": "Someone asked to change the email address of your {appName} account. The change takes effect only once the new address has been confirmed, and until then you sign in as before.",
+    "notYou": "If this was not you, use the button below. It cancels the change and signs out every device, so you can sign in again and secure your account.",
+    "action": "This wasn't me",
+    "expiry": "The link works once and for 1 hour.",
+    "itWasYou": "If this was you, you do not need to do anything.",
+    "footer": "You are receiving this email because a change of the email address of your {appName} account was requested."
   }
 }

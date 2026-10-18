@@ -306,6 +306,109 @@ export const changePassword = defineOperation({
   },
 });
 
+export const RequestEmailChangeRequestSchema = z
+  .strictObject({
+    email: z.email().max(320).describe("The email address the account is to move to; case does not matter"),
+  })
+  .meta({ id: "RequestEmailChangeRequest" });
+
+export const ConfirmEmailChangeRequestSchema = z
+  .strictObject({
+    token: z.string().min(1).max(256).describe("The token of the confirmation link mailed to the new address, from the fragment of /email-change/confirm#token=…"),
+  })
+  .meta({ id: "ConfirmEmailChangeRequest" });
+
+export const CancelEmailChangeRequestSchema = z
+  .strictObject({
+    token: z.string().min(1).max(256).describe("The token of the \"this wasn't me\" link mailed to the old address, from the fragment of /email-change/cancel#token=…"),
+  })
+  .meta({ id: "CancelEmailChangeRequest" });
+
+export const requestEmailChange = defineOperation({
+  method: "post",
+  path: "/api/v1/me/email",
+  operationId: "requestEmailChange",
+  tag: "me",
+  summary: "Ask to change the account's email address",
+  auth: "account",
+  rate: "reset",
+  reauth: true,
+  request: { body: RequestEmailChangeRequestSchema },
+  responses: {
+    202: emptyResponse(
+      "The request was accepted. The answer is the same, with no body, whether the address is free, is the account's own or belongs to another account. The address is recorded as the pending one and the links of an earlier request stop working; the account's current address is sent the notice with the \"this wasn't me\" link, and the new address is sent the confirmation link, which opens /email-change/confirm#token=…, only when it is free, so nothing is sent to another account. Nothing is sent to an account whose address was never verified, and a deployment without mail sends nothing and answers alike. The email switches only when the confirmation link is redeemed (POST /me/email/confirm)",
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"),
+    403: problemResponse("The request did not come from the application itself, or the credential is an API token"),
+    422: problemResponse("The body did not pass validation"),
+    429: rateLimitedResponse("Too many requests from this account, this address or for this new email address; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const confirmEmailChange = defineOperation({
+  method: "post",
+  path: "/api/v1/me/email/confirm",
+  operationId: "confirmEmailChange",
+  tag: "me",
+  summary: "Confirm the new email address with the token of the link mailed to it",
+  auth: "anonymous",
+  rate: "token_redeem",
+  request: { body: ConfirmEmailChangeRequestSchema },
+  responses: {
+    204: emptyResponse("The token is redeemed, once, and the account's email is the address the link was mailed to. No session ends"),
+    400: problemResponse("The request was malformed"),
+    403: problemResponse("The request did not come from the application itself"),
+    410: problemResponse(
+      "The token is unknown, expired (1 hour), already used, replaced by a newer one, of another kind or of a change that was cancelled; or its account is disabled or was never verified; or the address belongs to another account by now; all of them answer alike (token_expired) and nothing is changed",
+    ),
+    422: problemResponse("The body did not pass validation"),
+    429: rateLimitedResponse("Too many attempts from this address; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const cancelEmailChange = defineOperation({
+  method: "post",
+  path: "/api/v1/me/email/cancel",
+  operationId: "cancelEmailChange",
+  tag: "me",
+  summary: "Cancel an email change and sign out everywhere with the \"this wasn't me\" link",
+  auth: "anonymous",
+  rate: "token_redeem",
+  request: { body: CancelEmailChangeRequestSchema },
+  responses: {
+    204: emptyResponse(
+      "The token is redeemed, once. The pending change and its unused links are gone and every session of the account is deleted. It works after the change was confirmed too: the address then stays as it is and every session still ends",
+    ),
+    400: problemResponse("The request was malformed"),
+    403: problemResponse("The request did not come from the application itself"),
+    410: problemResponse("The token is unknown, expired (1 hour), already used, replaced by a newer one, of another kind, cancelled with its change or of a disabled account; all of them answer alike (token_expired) and nothing is changed"),
+    422: problemResponse("The body did not pass validation"),
+    429: rateLimitedResponse("Too many attempts from this address; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const cancelPendingEmailChange = defineOperation({
+  method: "delete",
+  path: "/api/v1/me/email/pending",
+  operationId: "cancelPendingEmailChange",
+  tag: "me",
+  summary: "Cancel the account's pending email change",
+  auth: "account",
+  rate: "write",
+  responses: {
+    204: emptyResponse("The pending address is cleared and the links of the change stop working, whether or not a change was pending; no session ends"),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    403: problemResponse("The request did not come from the application itself, or the credential is an API token"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
 export const MfaEnrollmentSchema = z
   .strictObject({
     secret: z.string().describe("The text key an authenticator app takes when it cannot scan the code: the secret in base32, shown only in this response"),

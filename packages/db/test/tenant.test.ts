@@ -80,6 +80,7 @@ describe("the package entry point", () => {
         "createRetentionStore",
         "credentialTokenRepository",
         "defineScopedRepository",
+        "emailChangeRepository",
         "listRepositoryMethods",
         "membershipRepository",
         "migrate",

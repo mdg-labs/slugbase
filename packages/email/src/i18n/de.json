@@ -59,5 +59,26 @@
     "notYou": "Falls du das nicht angefordert hast, kannst du diese E-Mail ignorieren; dein Passwort bleibt unverändert.",
     "action": "Neues Passwort wählen",
     "footer": "Du erhältst diese E-Mail, weil für dein {appName}-Konto ein Zurücksetzen des Passworts angefordert wurde."
+  },
+  "emailChange": {
+    "subject": "Bestätige deine neue E-Mail-Adresse für {appName}",
+    "greeting": "Hallo {name},",
+    "greetingAnonymous": "Hallo,",
+    "body": "Jemand hat darum gebeten, diese E-Mail-Adresse für ein {appName}-Konto zu verwenden. Bestätige, dass sie dir gehört, um die Änderung abzuschließen.",
+    "expiry": "Der Link funktioniert einmal und 1 Stunde lang.",
+    "notYou": "Falls du das nicht angefordert hast, kannst du diese E-Mail ignorieren; es ändert sich nichts.",
+    "action": "E-Mail-Adresse bestätigen",
+    "footer": "Du erhältst diese E-Mail, weil diese Adresse als neue E-Mail-Adresse eines {appName}-Kontos angegeben wurde."
+  },
+  "emailChangeNotice": {
+    "subject": "Für dein {appName}-Konto wurde eine neue E-Mail-Adresse angefordert",
+    "greeting": "Hallo {name},",
+    "greetingAnonymous": "Hallo,",
+    "body": "Jemand hat darum gebeten, die E-Mail-Adresse deines {appName}-Kontos zu ändern. Die Änderung gilt erst, wenn die neue Adresse bestätigt wurde; bis dahin meldest du dich wie gewohnt an.",
+    "notYou": "Falls du das nicht warst, nutze die Schaltfläche unten. Sie bricht die Änderung ab und meldet alle Geräte ab, damit du dich neu anmelden und dein Konto absichern kannst.",
+    "action": "Das war ich nicht",
+    "expiry": "Der Link funktioniert einmal und 1 Stunde lang.",
+    "itWasYou": "Falls du das warst, musst du nichts tun.",
+    "footer": "Du erhältst diese E-Mail, weil eine Änderung der E-Mail-Adresse deines {appName}-Kontos angefordert wurde."
   }
 }

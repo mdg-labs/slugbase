@@ -390,6 +390,39 @@ describe("verifyEmail", () => {
     expect((await accountRow(owner))?.password_hash).toBe(NEW_HASH);
   });
 
+  it("clears the pending change of email and deletes its unused confirmation and cancel tokens of an account nobody had verified, so a change started before the owner verified cannot complete after", async () => {
+    const owner = await account();
+    await asSystem(db, (tx) => tx`UPDATE accounts SET pending_email = 'registrant@example.test' WHERE id = ${owner}`);
+    const confirm = await issue(owner, { purpose: "email_change" });
+    const cancel = await issue(owner, { purpose: "email_change_cancel" });
+    const verify = await issue(owner);
+
+    expect(await store.verifyEmail(verification(verify))).toEqual({ accountId: owner, next: "done" });
+
+    expect(await tokenRows(owner)).toEqual([{ used: true }]);
+    expect(await store.confirmEmailChange(confirm)).toBeUndefined();
+    expect(await store.cancelEmailChange(cancel)).toBeUndefined();
+    const [row] = await asSystem(db, (tx) => tx<{ email: string; pending_email: string | null }[]>`SELECT email, pending_email FROM accounts WHERE id = ${owner}`);
+    expect(row?.pending_email).toBeNull();
+    expect(row?.email).not.toBe("registrant@example.test");
+  });
+
+  it("keeps the pending change of email and its tokens of an account that is already verified, and of every other account", async () => {
+    const verified = await account({ verified: true });
+    const bystander = await account();
+    await asSystem(db, (tx) => tx`UPDATE accounts SET pending_email = 'pending@example.test' WHERE id IN (${verified}, ${bystander})`);
+    await issue(verified, { purpose: "email_change" });
+    await issue(verified, { purpose: "email_change_cancel" });
+    await issue(bystander, { purpose: "email_change" });
+
+    await store.verifyEmail(verification(await issue(verified)));
+
+    expect(await tokenRows(verified)).toEqual([{ used: false }, { used: false }, { used: true }]);
+    expect(await tokenRows(bystander)).toEqual([{ used: false }]);
+    const rows = await asSystem(db, (tx) => tx<{ pending_email: string | null }[]>`SELECT pending_email FROM accounts WHERE id IN (${verified}, ${bystander})`);
+    expect(rows.map((row) => row.pending_email)).toEqual(["pending@example.test", "pending@example.test"]);
+  });
+
   it("keeps the unused password-reset tokens of an account that is already verified, and of every other account", async () => {
     const verified = await account({ verified: true });
     const bystander = await account();
