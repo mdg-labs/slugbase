@@ -83,6 +83,13 @@
             "$ref": "#/components/schemas/Onboarding",
             "description": "The stored state of the Getting started checklist"
           },
+          "pendingEmail": {
+            "description": "The address an email change was requested for and not yet confirmed, as stored; null when no change is pending",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "signinAlerts": {
             "description": "Whether an email is sent when a password sign-in comes from a device the account has not signed in from",
             "type": "boolean"
@@ -116,7 +123,8 @@
           "onboarding",
           "emailVerified",
           "hasPassword",
-          "mfaEnabled"
+          "mfaEnabled",
+          "pendingEmail"
         ],
         "type": "object"
       },

@@ -51,6 +51,7 @@ export const AccountSchema: z.ZodObject<{
     emailVerified: z.ZodBoolean;
     hasPassword: z.ZodBoolean;
     mfaEnabled: z.ZodBoolean;
+    pendingEmail: z.ZodNullable<z.ZodString>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -330,6 +331,7 @@ export interface ComponentTypes {
             locale: "en" | "de";
             mfaEnabled: boolean;
             onboarding: ComponentTypes["schemas"]["Onboarding"];
+            pendingEmail: string | null;
             signinAlerts: boolean;
             singleKeyShortcuts: boolean;
             theme: "light" | "dark" | "system";
@@ -929,6 +931,7 @@ export const getMe: {
         emailVerified: z.ZodBoolean;
         hasPassword: z.ZodBoolean;
         mfaEnabled: z.ZodBoolean;
+        pendingEmail: z.ZodNullable<z.ZodString>;
         }, z.core.$strict>;
         memberships: z.ZodArray<z.ZodObject<{
         workspaceId: z.ZodUUID;
@@ -1343,6 +1346,7 @@ export const MeSchema: z.ZodObject<{
         emailVerified: z.ZodBoolean;
         hasPassword: z.ZodBoolean;
         mfaEnabled: z.ZodBoolean;
+        pendingEmail: z.ZodNullable<z.ZodString>;
     }, z.core.$strict>;
     memberships: z.ZodArray<z.ZodObject<{
         workspaceId: z.ZodUUID;
@@ -5274,6 +5278,7 @@ export const updateMe: {
         emailVerified: z.ZodBoolean;
         hasPassword: z.ZodBoolean;
         mfaEnabled: z.ZodBoolean;
+        pendingEmail: z.ZodNullable<z.ZodString>;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;

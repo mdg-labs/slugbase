@@ -36,6 +36,8 @@ export interface AccountProfile {
   readonly emailVerified: boolean;
   readonly hasPassword: boolean;
   readonly mfaEnabled: boolean;
+  /** The address an email change was requested for and not yet confirmed, as stored (doc 02 section 2.6); null when none is pending. */
+  readonly pendingEmail: string | null;
 }
 
 // The columns hold these values by their CHECK constraints (doc 05 section 2.1); a value outside them is a schema drift.
@@ -92,6 +94,7 @@ export function accountProfileRepository(tx: TenantTx): AccountProfileRepository
           id: accounts.id,
           email: accounts.email,
           emailVerifiedAt: accounts.emailVerifiedAt,
+          pendingEmail: accounts.pendingEmail,
           displayName: accounts.displayName,
           locale: accounts.locale,
           theme: accounts.theme,
@@ -134,6 +137,7 @@ export function accountProfileRepository(tx: TenantTx): AccountProfileRepository
         emailVerified: row.emailVerifiedAt !== null,
         hasPassword,
         mfaEnabled,
+        pendingEmail: row.pendingEmail,
       };
     },
     async updateProfile(changes) {

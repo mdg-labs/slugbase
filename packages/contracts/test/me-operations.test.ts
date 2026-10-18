@@ -122,7 +122,7 @@ describe("the account operation", () => {
     const account = schemas["Account"] as { additionalProperties: unknown; properties: Obj; required: string[] };
     expect(account.additionalProperties).toBe(false);
     expect(Object.keys(account.properties).sort()).toEqual([
-      "accent", "aiOptOut", "analyticsConsent", "defaultView", "displayName", "email", "emailVerified", "hasPassword", "id", "locale", "mfaEnabled", "onboarding", "signinAlerts", "singleKeyShortcuts", "theme",
+      "accent", "aiOptOut", "analyticsConsent", "defaultView", "displayName", "email", "emailVerified", "hasPassword", "id", "locale", "mfaEnabled", "onboarding", "pendingEmail", "signinAlerts", "singleKeyShortcuts", "theme",
     ]);
     expect([...account.required].sort()).toEqual(Object.keys(account.properties).sort());
     const membership = schemas["Membership"] as { additionalProperties: unknown; properties: Obj; required: string[] };
@@ -147,6 +147,7 @@ describe("the account operation", () => {
       emailVerified: true,
       hasPassword: false,
       mfaEnabled: false,
+      pendingEmail: null,
     };
     const membership = { workspaceId: "0192f3a0-0000-7000-8000-0000000000b1", name: "Notes", role: "admin" };
     expect(MeSchema.safeParse({ account, memberships: [membership], activeWorkspaceId: null }).success).toBe(true);

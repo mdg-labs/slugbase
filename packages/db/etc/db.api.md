@@ -62,6 +62,7 @@ export interface AccountProfile {
     readonly mfaEnabled: boolean;
     // (undocumented)
     readonly onboarding: Onboarding;
+    readonly pendingEmail: string | null;
     readonly signinAlerts: boolean;
     // (undocumented)
     readonly singleKeyShortcuts: boolean;

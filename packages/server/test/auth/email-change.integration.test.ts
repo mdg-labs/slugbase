@@ -127,6 +127,13 @@ function cancelPending(world: World, cookie: string): Promise<Response> {
   return world.server.fetch(new Request(new URL(PENDING, world.origin), { method: "DELETE", headers: { origin: world.origin, "content-type": "application/json", cookie } }));
 }
 
+/** The `account` of `GET /me` as the session sees it. */
+async function accountOf(world: World, cookie: string): Promise<Record<string, unknown>> {
+  const response = await probe(world, cookie);
+  expect(response.status).toBe(200);
+  return ((await response.json()) as { account: Record<string, unknown> }).account;
+}
+
 function probe(world: World, cookie: string): Promise<Response> {
   return world.server.fetch(new Request(new URL(ME, world.origin), { headers: { cookie } }));
 }
@@ -303,6 +310,43 @@ describe("POST /api/v1/me/email", { timeout: TEST_TIMEOUT_MS }, () => {
     expect(denied.status).toBe(429);
     expect(Number(denied.headers.get("retry-after"))).toBeGreaterThan(0);
     expect((await requestChange(world, cookies[1], "another@example.test")).status).toBe(202);
+  });
+});
+
+describe("GET /api/v1/me pendingEmail", { timeout: TEST_TIMEOUT_MS }, () => {
+  it("is null until a change is requested, then the address as stored, then the newer address after a newer request, then null after DELETE /me/email/pending", async () => {
+    const world = serve();
+    const account = await owner();
+    const cookie = await signIn(world, account, true);
+    expect((await accountOf(world, cookie))["pendingEmail"]).toBeNull();
+
+    expect((await requestChange(world, cookie, "New.Address@Example.test")).status).toBe(202);
+    expect((await accountOf(world, cookie))["pendingEmail"]).toBe("New.Address@Example.test");
+    expect((await accountOf(world, cookie))["email"]).toBe(account.email);
+
+    expect((await requestChange(world, cookie, "newer@example.test")).status).toBe(202);
+    expect((await accountOf(world, cookie))["pendingEmail"]).toBe("newer@example.test");
+
+    expect((await cancelPending(world, cookie)).status).toBe(204);
+    expect((await accountOf(world, cookie))["pendingEmail"]).toBeNull();
+  });
+
+  it("shows the requested address as stored whether it is free, the account's own or another account's, so the account tells nothing about who holds an address", async () => {
+    const world = serve({ env: { TRUSTED_PROXY_HOPS: "1" } });
+    const account = await owner();
+    const other = await owner({ email: "Held.Elsewhere@Example.test" });
+    const cookie = await signIn(world, account, true);
+    const free = await accountOf(world, cookie);
+
+    let hop = 0;
+    for (const email of ["free@example.test", account.email, other.email, other.email.toLowerCase()]) {
+      hop += 1;
+      expect((await requestChange(world, cookie, email, { forwardedFor: `198.51.100.${String(hop)}` })).status).toBe(202);
+      const shown = await accountOf(world, cookie);
+      expect(shown["pendingEmail"]).toBe(email);
+      expect({ ...shown, pendingEmail: null }).toEqual({ ...free, pendingEmail: null });
+    }
+    expect((await pendingEmail(other.id)).pending).toBeNull();
   });
 });
 
@@ -510,6 +554,23 @@ describe("the confirmation and the cancel link", { timeout: TEST_TIMEOUT_MS }, (
     }
     expect(JSON.parse(answers[0]?.body ?? "{}")).toMatchObject({ code: "token_expired" });
     expect(await pendingEmail(third.id)).toMatchObject({ email: "late@example.test" });
+  });
+
+  it("shows null once the change is confirmed, and null after the cancel link, with the address the account then holds", async () => {
+    const world = serve({ mail });
+    const account = await owner({ email: "shown.old@example.test" });
+    const other = await owner({ email: "shown.other@example.test" });
+    await startWorker();
+    const cookie = await requested(world, account, "shown.new@example.test");
+    expect((await accountOf(world, cookie))["pendingEmail"]).toBe("shown.new@example.test");
+
+    expect((await redeem(world, CONFIRM, tokenOf("emailChange", "shown.new@example.test"))).status).toBe(204);
+    expect(await accountOf(world, cookie)).toMatchObject({ email: "shown.new@example.test", pendingEmail: null });
+
+    const second = await requested(world, other, "shown.elsewhere@example.test", 2);
+    expect((await accountOf(world, second))["pendingEmail"]).toBe("shown.elsewhere@example.test");
+    expect((await redeem(world, CANCEL, tokenOf("emailChangeNotice", "shown.other@example.test"))).status).toBe(204);
+    expect(await accountOf(world, await signIn(world, other, false))).toMatchObject({ email: "shown.other@example.test", pendingEmail: null });
   });
 
   it("deletes every session of the account when the \"this wasn't me\" link is used, cancels the change, and answers the link once", async () => {

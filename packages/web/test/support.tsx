@@ -65,6 +65,7 @@ export const ACCOUNT_BODY = {
   emailVerified: true,
   hasPassword: true,
   mfaEnabled: false,
+  pendingEmail: null,
 } as const;
 
 /** The signed-in account of a test server. It chose the language of the browser, so a test that opens the app in German sees German. */

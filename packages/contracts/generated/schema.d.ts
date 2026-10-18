@@ -623,6 +623,8 @@ export interface components {
             mfaEnabled: boolean;
             /** @description The stored state of the Getting started checklist */
             onboarding: components["schemas"]["Onboarding"];
+            /** @description The address an email change was requested for and not yet confirmed, as stored; null when no change is pending */
+            pendingEmail: string | null;
             /** @description Whether an email is sent when a password sign-in comes from a device the account has not signed in from */
             signinAlerts: boolean;
             /** @description Whether single-key shortcuts are on; modifier shortcuts always work */
