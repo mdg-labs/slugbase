@@ -129,3 +129,28 @@ export function safeReturnTo(value: string | undefined): string {
   const path = `${resolved.pathname}${resolved.search}${resolved.hash}`;
   return path.startsWith("//") ? fallback : path;
 }
+
+const EMAIL_MAX_LENGTH = 320;
+const DISPLAY_NAME_MAX_LENGTH = 100;
+
+/**
+ * Whether an account may be created for a verified `email` the provider asserted: a plain `local@domain` address
+ * of at most 320 characters whose domain, lower-cased, is one of `allowedDomains` (exact names, no subdomain
+ * of a listed one), or any domain when the list is empty (doc 02 section 2.8). An address that is not of that
+ * shape is refused whatever the list holds.
+ */
+export function autoCreateAllowed(email: string, allowedDomains: readonly string[]): boolean {
+  if (email.length > EMAIL_MAX_LENGTH || !/^[^\s@\p{Cc}]+@[^\s@\p{Cc}]+$/u.test(email)) {
+    return false;
+  }
+  return allowedDomains.length === 0 || allowedDomains.includes(email.slice(email.lastIndexOf("@") + 1).toLowerCase());
+}
+
+/**
+ * The display name of an account created from a provider's claims: the `name` claim with control characters
+ * removed, cut at 100 characters, or the part of the address before the `@` when the claim is absent or empty. The address is one `autoCreateAllowed` accepted.
+ */
+export function federatedDisplayName(name: string | undefined, email: string): string {
+  const clean = (value: string): string => Array.from(value.replace(/\p{Cc}/gu, "").trim()).slice(0, DISPLAY_NAME_MAX_LENGTH).join("").trim();
+  return clean(name ?? "") || clean(email.slice(0, email.lastIndexOf("@"))) || clean(email);
+}

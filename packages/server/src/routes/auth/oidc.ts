@@ -1,26 +1,36 @@
 import { completeOidcSignIn, startOidcSignIn } from "@slugbase/contracts";
 import {
   OIDC_FAILURE_CODE,
+  autoCreateAllowed,
   bindOidcState,
+  federatedDisplayName,
   hashOidcState,
   newOidcHandshake,
+  normalizeEmail,
   oidcCodeVerifierOptions,
   oidcPreAuthCookieSpec,
   oidcStateIsBound,
   reauthenticatedRecently,
+  registrationLocale,
   safeReturnTo,
   truncateUserAgent,
   PortUnavailable,
+  type IdentityClaims,
   type IdentityPort,
+  type IdentityProviderConfig,
   type OidcPreAuthCookieSpec,
+  type RegistrationSettings,
   type SecretBoxPort,
   type SessionCookieSpec,
 } from "@slugbase/core";
 import type { AuthStore } from "@slugbase/db";
 import { hkdfSync } from "node:crypto";
 import { readCookie, setSessionCookie } from "../../auth/cookie.ts";
+import { provisionWorkspaceIn } from "../../auth/personal-workspace.ts";
+import { assertRegistrationAllowed } from "../../auth/registration-gate.ts";
 import { hashSessionToken, newSessionToken } from "../../auth/session-token.ts";
 import { uuidv7 } from "../../auth/uuidv7.ts";
+import { queueDomainEvent } from "../../events/publish.ts";
 import type { ChainContext, RouteBinding } from "../../http/chain.ts";
 import { ProblemError } from "../../http/problem.ts";
 import { networkPrefixOf } from "../../http/trusted-proxy.ts";
@@ -40,9 +50,17 @@ import { route } from "../register.ts";
 // revocation of every session: the start answers a session that has not re-authenticated within the window
 // with the `401 reauth_required` problem, the one answer the application's own page can act on, and the
 // callback checks the same window again, because up to ten minutes pass between the two. `reauth` needs
-// none, since it is how a session gets one. Everything that can go wrong
+// none, since it is how a session gets one.
+// A `login` with an identity nobody has linked is a first login (doc 02 sections 2.2 and 2.8, doc 10 T17 and T20). It
+// does something only when the provider asserted an address as verified: the identity is then linked to the enabled
+// account that holds the address verified, and, when none does, an account is created for it if the provider allows
+// that (`AUTO_CREATE`), the address passes its `ALLOWED_DOMAINS` and the registration policy of the composed modules
+// (path `oidc`) allows it. An address nobody verified links nothing and creates nothing. The session is a full one,
+// as for a linked identity: the provider is trusted for the second factor. Everything that can go wrong
 // ends on `/login` with the same failure code and nothing in the answer says which step refused, so the answer
 // reveals neither whether an account exists nor why a handshake failed; the reason goes to the log as a fixed word.
+
+type NewFederatedAccount = NonNullable<NonNullable<Parameters<AuthStore["signInWithIdentity"]>[0]["firstLogin"]>["create"]>;
 
 const SUBKEY_BYTES = 32;
 const FAILURE_LOCATION = `/login?error=${OIDC_FAILURE_CODE}`;
@@ -56,6 +74,10 @@ export interface OidcRoutesOptions {
   readonly identity: Pick<IdentityPort, "begin" | "complete">;
   /** Seals the PKCE verifier while the handshake is in flight, and opens it at the callback. */
   readonly secretBox: Pick<SecretBoxPort, "seal" | "open">;
+  /** The providers of the operator, for what each allows a first login to do. A provider not listed allows no account to be created. */
+  readonly providers: readonly Pick<IdentityProviderConfig, "slug" | "autoCreate" | "allowedDomains">[];
+  /** The settings in force for public registration: an account created for an identity gets a personal workspace when it is open. */
+  readonly registration: RegistrationSettings;
   /** `APP_ORIGIN`: the callback address registered with the providers, and the scheme of the cookies. */
   readonly appOrigin: string;
   /** `SESSION_SECRET`: the pre-auth cookie is a keyed hash made with a key derived from it. */
@@ -76,6 +98,9 @@ type Refusal =
   | "exchange_failed"
   | "invalid_token"
   | "unknown_identity"
+  | "unverified_email"
+  | "registration_refused"
+  | "first_login_refused"
   | "no_session"
   | "cross_site_start"
   | "session_mismatch"
@@ -132,12 +157,53 @@ function refused(context: ChainContext, provider: string, reason: Refusal): void
   context.get("logger")?.warn("An OIDC sign-in ended without a session", { provider, reason });
 }
 
-export function oidcRoutes({ store, identity, secretBox, appOrigin, sessionSecret, sessionCookie, now = Date.now }: OidcRoutesOptions): RouteBinding[] {
+export function oidcRoutes({
+  store,
+  identity,
+  secretBox,
+  providers,
+  registration,
+  appOrigin,
+  sessionSecret,
+  sessionCookie,
+  now = Date.now,
+}: OidcRoutesOptions): RouteBinding[] {
   const preAuth = oidcPreAuthCookieSpec(appOrigin);
   const origin = new URL(appOrigin).origin;
   const bindingKey = Buffer.from(hkdfSync("sha256", sessionSecret, "", "slugbase:oidc:pre-auth", SUBKEY_BYTES));
   const redirectUriOf = (provider: string): string => `${origin}/api/v1/auth/oidc/${provider}/callback`;
   const failure = { status: 302, headers: { Location: FAILURE_LOCATION, "Set-Cookie": clearPreAuthCookie(preAuth) } } as const;
+
+  // The account to create for a first login whose address is verified, or undefined when the provider does not create
+  // accounts, the address is outside its domains, or the registration policy refuses it. The policy is asked only here,
+  // when creating is the one thing left to do, so linking an account that exists is never a registration.
+  const accountFor = async (context: ChainContext, provider: string, claims: IdentityClaims, email: string): Promise<NewFederatedAccount | undefined> => {
+    const policy = providers.find((candidate) => candidate.slug === provider);
+    if (policy?.autoCreate !== true || !autoCreateAllowed(email, policy.allowedDomains)) {
+      return undefined;
+    }
+    const hooks = context.get("hooks");
+    if (hooks === undefined) {
+      throw new Error("the OIDC callback was reached without the hook dispatcher");
+    }
+    try {
+      await assertRegistrationAllowed(hooks, { email, path: "oidc" });
+    } catch (error) {
+      if (error instanceof ProblemError && error.code === "registration_refused") {
+        refused(context, provider, "registration_refused");
+        return undefined;
+      }
+      throw error;
+    }
+    const accountId = uuidv7();
+    return {
+      accountId,
+      displayName: federatedDisplayName(claims.displayName, email),
+      locale: registrationLocale(context.req.raw.headers.get("accept-language")),
+      onCreated: [queueDomainEvent(uuidv7(), "account.created", { accountId, path: "oidc" })],
+      ...(registration.publicRegistration ? { afterCreated: provisionWorkspaceIn } : {}),
+    };
+  };
 
   const start = route(startOidcSignIn).handle(async ({ params, query }, context) => {
     const intent = query.intent;
@@ -285,7 +351,7 @@ export function oidcRoutes({ store, identity, secretBox, appOrigin, sessionSecre
 
     const token = newSessionToken();
     const carried = cookieHeader === null ? undefined : readCookie(cookieHeader, sessionCookie.name);
-    const signedIn = await store.signInWithIdentity({
+    const signIn = {
       provider: params.provider,
       subject: claims.subject,
       sessionId: uuidv7(),
@@ -293,9 +359,24 @@ export function oidcRoutes({ store, identity, secretBox, appOrigin, sessionSecre
       userAgent: truncateUserAgent(context.req.raw.headers.get("user-agent")),
       tokenHash: token.hash,
       replacedTokenHash: carried === undefined ? null : (hashSessionToken(carried) ?? null),
-    });
-    if (!signedIn) {
-      return fail("unknown_identity");
+    };
+    let outcome = await store.signInWithIdentity(signIn);
+    if (outcome === "refused") {
+      // An identity nobody linked: only an address the provider asserted as verified does anything (T20).
+      const email = claims.emailVerified ? normalizeEmail(claims.email) : "";
+      if (email === "") {
+        return fail("unverified_email");
+      }
+      outcome = await store.signInWithIdentity({ ...signIn, firstLogin: { identityId: uuidv7(), email } });
+      if (outcome === "refused") {
+        const create = await accountFor(context, params.provider, claims, email);
+        if (create !== undefined) {
+          outcome = await store.signInWithIdentity({ ...signIn, firstLogin: { identityId: uuidv7(), email, create } });
+        }
+      }
+      if (outcome === "refused") {
+        return fail("first_login_refused");
+      }
     }
     return { status: 302, headers: { Location: safeReturnTo(record.returnTo), "Set-Cookie": setSessionCookie(sessionCookie, token.value) } };
   });

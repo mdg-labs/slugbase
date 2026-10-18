@@ -398,6 +398,17 @@ export interface IdentityReauthentication {
 
 // @public
 export interface IdentitySignIn {
+    readonly firstLogin?: {
+        readonly identityId: string;
+        readonly email: string;
+        readonly create?: {
+            readonly accountId: string;
+            readonly displayName: string;
+            readonly locale: string;
+            readonly onCreated: readonly QueuedJob[];
+            readonly afterCreated?: (accountId: string, workspaces: PersonalWorkspaceWriter) => Promise<void>;
+        };
+    };
     readonly ipPrefix: string | null;
     readonly provider: string;
     readonly replacedTokenHash: Buffer | null;
@@ -675,7 +686,7 @@ export interface OidcStore {
     createOidcLoginState(state: NewOidcLoginState): Promise<void>;
     linkIdentity(link: IdentityLink): Promise<IdentityLinkOutcome>;
     reauthenticateWithIdentity(reauthentication: IdentityReauthentication): Promise<boolean>;
-    signInWithIdentity(signIn: IdentitySignIn): Promise<boolean>;
+    signInWithIdentity(signIn: IdentitySignIn): Promise<"signed_in" | "linked" | "created" | "refused">;
     unlinkIdentity(accountId: string, identityId: string): Promise<IdentityUnlinkOutcome>;
 }
 

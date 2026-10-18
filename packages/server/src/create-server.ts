@@ -474,6 +474,7 @@ export function createServer(options: CreateServerOptions): Server {
     registration,
     secretBox: adapters.secretBox,
     identity: adapters.identity,
+    oidcProviders: config.OIDC_PROVIDERS,
     now: options.now ?? Date.now,
   });
   builtInRoutes.push(...(auth.routes ?? []));

@@ -118,6 +118,9 @@ export interface ApiToken {
 }
 
 // @public
+export function autoCreateAllowed(email: string, allowedDomains: readonly string[]): boolean;
+
+// @public
 export const BACKUP_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 // @public (undocumented)
@@ -346,6 +349,9 @@ export interface ErrorReportPort extends Port {
     // (undocumented)
     capture(error: unknown, context?: ErrorReportContext): Promise<void>;
 }
+
+// @public
+export function federatedDisplayName(name: string | undefined, email: string): string;
 
 // @public
 export function generateApiToken(): ApiToken;

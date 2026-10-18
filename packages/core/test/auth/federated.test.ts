@@ -1,7 +1,9 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
+  autoCreateAllowed,
   bindOidcState,
+  federatedDisplayName,
   hashOidcState,
   newOidcHandshake,
   oidcCodeVerifierOptions,
@@ -118,5 +120,34 @@ describe("safeReturnTo", () => {
     for (const value of refused) {
       expect(safeReturnTo(value), String(value)).toBe("/");
     }
+  });
+});
+
+describe("autoCreateAllowed", () => {
+  it("allows any domain when the provider lists none, and only an exact listed domain otherwise, whatever case the address is in", () => {
+    expect(autoCreateAllowed("ada@example.test", [])).toBe(true);
+    expect(autoCreateAllowed("ada@example.test", ["example.test"])).toBe(true);
+    expect(autoCreateAllowed("Ada@EXAMPLE.test", ["example.test"])).toBe(true);
+    expect(autoCreateAllowed("ada@other.test", ["example.test"])).toBe(false);
+    expect(autoCreateAllowed("ada@mail.example.test", ["example.test"])).toBe(false);
+    expect(autoCreateAllowed("ada@example.test.evil.test", ["example.test"])).toBe(false);
+    expect(autoCreateAllowed("ada@evil.test@example.test", ["example.test"])).toBe(false);
+  });
+
+  it("refuses an address that is not a plain local@domain, with or without a list", () => {
+    for (const address of ["", "ada", "@example.test", "ada@", "a da@example.test", "ada@exa mple.test", "ada\u0000@example.test", `${"a".repeat(320)}@example.test`]) {
+      expect(autoCreateAllowed(address, []), address).toBe(false);
+    }
+  });
+});
+
+describe("federatedDisplayName", () => {
+  it("uses the name claim without control characters, cut at 100 characters, else the part of the address before the at sign", () => {
+    expect(federatedDisplayName("  Ada Lovelace ", "ada@example.test")).toBe("Ada Lovelace");
+    expect(federatedDisplayName("Ada\u0000\nLovelace", "ada@example.test")).toBe("AdaLovelace");
+    expect(Array.from(federatedDisplayName("x".repeat(150), "ada@example.test"))).toHaveLength(100);
+    expect(Array.from(federatedDisplayName("\u{1F600}".repeat(150), "ada@example.test"))).toHaveLength(100);
+    expect(federatedDisplayName(undefined, "ada.l@example.test")).toBe("ada.l");
+    expect(federatedDisplayName("  \u0000 ", "ada@example.test")).toBe("ada");
   });
 });

@@ -23,7 +23,9 @@ export { normalizeEmail } from "./email.ts";
 export {
   OIDC_FAILURE_CODE,
   OIDC_HANDSHAKE_SECONDS,
+  autoCreateAllowed,
   bindOidcState,
+  federatedDisplayName,
   hashOidcState,
   newOidcHandshake,
   oidcCodeVerifierOptions,

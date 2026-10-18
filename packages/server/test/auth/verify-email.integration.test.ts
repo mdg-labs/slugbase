@@ -158,15 +158,15 @@ function withBearer(world: World, token: string): Promise<Response> {
   return world.server.fetch(new Request(new URL(ME, world.origin), { headers: { authorization: `Bearer ${token}` } }));
 }
 
-/** Signs in through the provider as the identity of `SUBJECT`; the answer is the callback's. */
-async function oidcSignIn(world: World, email: string): Promise<Response> {
+/** Signs in through the provider as the identity of `SUBJECT`, which asserts `email` as verified or not; the answer is the callback's. */
+async function oidcSignIn(world: World, email: string, emailVerified = true): Promise<Response> {
   const started = await world.server.fetch(new Request(new URL(OIDC_START, world.origin)));
   const authorizationUrl = started.headers.get("location") ?? "";
   const preAuth = started.headers.getSetCookie().map((header) => new RegExp(`^${PREAUTH_COOKIE}=([^;]+);`).exec(header)?.[1]).find((value) => value !== undefined);
   if (started.status !== 302 || preAuth === undefined) {
     throw new Error(`the handshake did not start: ${String(started.status)}`);
   }
-  const callbackUrl = world.fake.approve(authorizationUrl, { subject: SUBJECT, email, emailVerified: true });
+  const callbackUrl = world.fake.approve(authorizationUrl, { subject: SUBJECT, email, emailVerified });
   return world.server.fetch(new Request(callbackUrl, { headers: { cookie: `${PREAUTH_COOKIE}=${preAuth}` } }));
 }
 
@@ -456,7 +456,9 @@ describe("POST /api/v1/auth/verify-email", { timeout: TEST_TIMEOUT_MS }, () => {
     expect(await response.json()).toEqual({ next: "done" });
     expect(await footholdCounts(account.id)).toEqual({ mfa: false, backupCodes: 0, apiTokens: 0, identities: 0, pendingLinks: 0 });
     expect((await withBearer(world, apiToken)).status).toBe(401);
-    const after = await oidcSignIn(world, account.email);
+    // The link is gone: an identity that links an account is one the provider vouches for with a verified address, which
+    // this assertion does not make (a verified one is a first login by verified email, tested in oidc-first-login).
+    const after = await oidcSignIn(world, account.email, false);
     expect(after.status).toBe(302);
     expect(after.headers.get("location")).toBe("/login?error=oidc_failed");
     expect(issuedToken(after)).toBeUndefined();
