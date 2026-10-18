@@ -626,6 +626,94 @@ describe("the confirmation and the cancel link", { timeout: TEST_TIMEOUT_MS }, (
     expect((await credentialTokens()).filter((token) => token.used_at === null)).toEqual([]);
   });
 
+  it("keeps the old address's link working after the account requests another change with POST /me/email, beside the notice of that request, and either one ends every session", async () => {
+    const world = serve({ mail });
+    const account = await owner({ email: "again.victim@example.test" });
+    await startWorker();
+    const attacker = await requested(world, account, "again.attacker@example.test");
+    expect((await redeem(world, CONFIRM, tokenOf("emailChange", "again.attacker@example.test"))).status).toBe(204);
+    const undo = tokenOf("emailChangeNotice", "again.victim@example.test");
+    mail.clear();
+
+    expect((await requestChange(world, attacker, "again.next@example.test")).status).toBe(202);
+    await mailJobsDone(2);
+    const newer = tokenOf("emailChangeNotice", "again.attacker@example.test");
+
+    expect((await credentialTokens()).filter((token) => token.purpose === "email_change_cancel" && token.used_at === null).map((token) => token.target_email).sort()).toEqual([
+      "again.attacker@example.test",
+      "again.victim@example.test",
+    ]);
+    expect((await redeem(world, CANCEL, newer)).status).toBe(204);
+    expect((await probe(world, attacker)).status).toBe(401);
+    expect((await redeem(world, CANCEL, undo)).status).toBe(204);
+    expect(await pendingEmail(account.id)).toEqual({ email: "again.victim@example.test", pending: null });
+  });
+
+  it("keeps the old address's link working after the account cancels with DELETE /me/email/pending, and the link restores the old address", async () => {
+    const world = serve({ mail });
+    const account = await owner({ email: "dropped.victim@example.test" });
+    await startWorker();
+    const attacker = await requested(world, account, "dropped.attacker@example.test");
+    expect((await redeem(world, CONFIRM, tokenOf("emailChange", "dropped.attacker@example.test"))).status).toBe(204);
+    const undo = tokenOf("emailChangeNotice", "dropped.victim@example.test");
+    mail.clear();
+    expect((await requestChange(world, attacker, "dropped.next@example.test")).status).toBe(202);
+    await mailJobsDone(2);
+
+    expect((await cancelPending(world, attacker)).status).toBe(204);
+    expect((await cancelPending(world, attacker)).status).toBe(204);
+
+    expect((await credentialTokens()).filter((token) => token.used_at === null).map((token) => [token.purpose, token.target_email])).toEqual([
+      ["email_change_cancel", "dropped.victim@example.test"],
+    ]);
+    expect((await redeem(world, CANCEL, undo)).status).toBe(204);
+    expect((await probe(world, attacker)).status).toBe(401);
+    expect(await pendingEmail(account.id)).toEqual({ email: "dropped.victim@example.test", pending: null });
+  });
+
+  it("keeps the owner's link working when the link to a later address is redeemed, after the account moved on twice, and the link restores the owner's address", async () => {
+    const world = serve({ mail });
+    const account = await owner({ email: "twice.victim@example.test" });
+    await startWorker();
+    const attacker = await requested(world, account, "twice.first@example.test");
+    expect((await redeem(world, CONFIRM, tokenOf("emailChange", "twice.first@example.test"))).status).toBe(204);
+    const undo = tokenOf("emailChangeNotice", "twice.victim@example.test");
+    mail.clear();
+    expect((await requestChange(world, attacker, "twice.second@example.test")).status).toBe(202);
+    await mailJobsDone(2);
+    const later = tokenOf("emailChangeNotice", "twice.first@example.test");
+    expect((await redeem(world, CONFIRM, tokenOf("emailChange", "twice.second@example.test"))).status).toBe(204);
+
+    expect((await redeem(world, CANCEL, later)).status).toBe(204);
+
+    expect(await pendingEmail(account.id)).toEqual({ email: "twice.first@example.test", pending: null });
+    expect((await probe(world, attacker)).status).toBe(401);
+    expect((await credentialTokens()).filter((token) => token.purpose === "email_change_cancel" && token.used_at === null).map((token) => token.target_email)).toEqual([
+      "twice.victim@example.test",
+    ]);
+    expect((await redeem(world, CANCEL, undo)).status).toBe(204);
+    expect(await pendingEmail(account.id)).toEqual({ email: "twice.victim@example.test", pending: null });
+  });
+
+  it("ends the link to a later address when the owner's link is redeemed first, so the address the account left is not put back", async () => {
+    const world = serve({ mail });
+    const account = await owner({ email: "first.victim@example.test" });
+    await startWorker();
+    const attacker = await requested(world, account, "first.attacker@example.test");
+    expect((await redeem(world, CONFIRM, tokenOf("emailChange", "first.attacker@example.test"))).status).toBe(204);
+    const undo = tokenOf("emailChangeNotice", "first.victim@example.test");
+    mail.clear();
+    expect((await requestChange(world, attacker, "first.next@example.test")).status).toBe(202);
+    await mailJobsDone(2);
+    const later = tokenOf("emailChangeNotice", "first.attacker@example.test");
+    expect((await redeem(world, CONFIRM, tokenOf("emailChange", "first.next@example.test"))).status).toBe(204);
+
+    expect((await redeem(world, CANCEL, undo)).status).toBe(204);
+    expect((await redeem(world, CANCEL, later)).status).toBe(410);
+
+    expect(await pendingEmail(account.id)).toEqual({ email: "first.victim@example.test", pending: null });
+  });
+
   it("keeps the account's address and answers 204 all the same when another account holds the old one by now, ending every session", async () => {
     const world = serve({ mail });
     const account = await owner({ email: "held.victim@example.test" });

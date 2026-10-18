@@ -225,6 +225,13 @@
       "when": 1792337258816,
       "tag": "20261018152738_add_email_change_restore",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1792340623771,
+      "tag": "20261018162343_add_email_change_undo",
+      "breakpoints": true
     }
   ]
 }

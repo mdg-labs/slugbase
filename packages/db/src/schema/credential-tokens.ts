@@ -11,8 +11,9 @@ import { bytea, citext } from "./types.ts";
 /**
  * A single-use token that was emailed to an address, found by the SHA-256 of the value in the link; the
  * value itself is never stored. Issuing a token of a purpose deletes the account's older unused ones of
- * that purpose. A token is redeemed once, before `expiresAt`; a used or expired row stays for 7 days and
- * is then purged (doc 05 section 6). The purposes are those of `CREDENTIAL_TOKEN_PURPOSES` in `@slugbase/core`.
+ * that purpose, except that a new `email_change_cancel` token leaves the unused ones that target an
+ * earlier address (the undo link of a confirmed change). A token is redeemed once, before `expiresAt`; a
+ * used or expired row stays for 7 days and is then purged (doc 05 section 6). The purposes are those of `CREDENTIAL_TOKEN_PURPOSES` in `@slugbase/core`.
  */
 export const credentialTokens = pgTable(
   "credential_tokens",

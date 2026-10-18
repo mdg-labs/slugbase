@@ -142,6 +142,25 @@ async function confirmed(from: string, to: string): Promise<{ owner: string; can
   return { owner, cancel };
 }
 
+/** A further confirmed change of an account: its notice's cancel token, which records the address the change replaced. */
+async function movedOn(owner: string, to: string): Promise<Buffer> {
+  await request(owner, to);
+  const cancel = await notice(owner);
+  expect(await store.confirmEmailChange(await confirmation(owner))).toEqual({ accountId: owner });
+  return cancel;
+}
+
+/** A cancel token the way a row issued before the token recorded an address looks: no target. */
+async function legacyNotice(accountId: string): Promise<Buffer> {
+  const { hash } = freshToken();
+  await asSystem(
+    db,
+    (tx) =>
+      tx`INSERT INTO credential_tokens (id, purpose, account_id, token_hash, expires_at) VALUES (${freshId()}, 'email_change_cancel', ${accountId}, ${hash}, now() + interval '1 hour')`,
+  );
+  return hash;
+}
+
 interface AccountRow {
   email: string;
   pending_email: string | null;
@@ -206,8 +225,8 @@ describe("requestEmailChange", () => {
     expect(await accountRow(other)).toMatchObject({ email: "taken@example.test", pending_email: null });
   });
 
-  it("deletes the unused tokens of an earlier request, of both purposes, and keeps a used one and another account's", async () => {
-    const owner = await account();
+  it("deletes the unused tokens of an earlier request, of both purposes, and keeps a used one, the undo link of the change confirmed meanwhile and another account's", async () => {
+    const owner = await account({ email: "earlier.owner@example.test" });
     const bystander = await account();
     await request(owner, "first@example.test");
     const used = await confirmation(owner);
@@ -220,8 +239,28 @@ describe("requestEmailChange", () => {
     await notice(owner);
     await request(owner, "third@example.test");
 
-    expect(await tokenRows(owner)).toEqual([{ purpose: "email_change", used: true, target_email: "first@example.test" }]);
+    expect(await tokenRows(owner)).toEqual([
+      { purpose: "email_change", used: true, target_email: "first@example.test" },
+      { purpose: "email_change_cancel", used: false, target_email: "earlier.owner@example.test" },
+    ]);
     expect(await tokenRows(bystander)).toEqual([{ purpose: "email_change", used: false, target_email: "bystander-new@example.test" }]);
+  });
+
+  it("keeps the undo link of a confirmed change, whose address is no longer the account's, and deletes the unused tokens that target the address it holds", async () => {
+    const { owner, cancel } = await confirmed("undo.old@example.test", "undo.new@example.test");
+    await request(owner, "undo.next@example.test");
+    const confirm = await confirmation(owner);
+    const heldNotice = await notice(owner);
+    const legacy = await legacyNotice(owner);
+
+    expect(await request(owner, "undo.last@example.test")).toBe(true);
+
+    expect((await tokenRows(owner)).filter((row) => !row.used)).toEqual([{ purpose: "email_change_cancel", used: false, target_email: "undo.old@example.test" }]);
+    expect(await store.confirmEmailChange(confirm)).toBeUndefined();
+    expect(await store.cancelEmailChange(heldNotice)).toBeUndefined();
+    expect(await store.cancelEmailChange(legacy)).toBeUndefined();
+    expect(await store.cancelEmailChange(cancel)).toEqual({ accountId: owner });
+    expect(await accountRow(owner)).toEqual({ email: "undo.old@example.test", pending_email: null, verified: true });
   });
 
   it("answers false, changing nothing and queueing nothing, for a disabled account and an unknown one", async () => {
@@ -307,6 +346,51 @@ describe("the token issue", () => {
 
     expect(await store.confirmEmailChange(older)).toBeUndefined();
     expect(await store.confirmEmailChange(newer)).toEqual({ accountId: owner });
+  });
+
+  it("issues the notice of a newer request beside the undo link of a confirmed change, and a repeated issue replaces only the notice", async () => {
+    const { owner, cancel } = await confirmed("beside.old@example.test", "beside.new@example.test");
+    await request(owner, "beside.next@example.test");
+
+    const first = await notice(owner);
+    const second = await notice(owner);
+
+    expect((await tokenRows(owner)).filter((row) => !row.used)).toEqual([
+      { purpose: "email_change_cancel", used: false, target_email: "beside.old@example.test" },
+      { purpose: "email_change_cancel", used: false, target_email: "beside.new@example.test" },
+    ]);
+    expect(await store.cancelEmailChange(first)).toBeUndefined();
+    expect(await store.cancelEmailChange(second)).toEqual({ accountId: owner });
+    expect(await accountRow(owner)).toMatchObject({ email: "beside.new@example.test", pending_email: null });
+    expect(await store.cancelEmailChange(cancel)).toEqual({ accountId: owner });
+    expect(await accountRow(owner)).toMatchObject({ email: "beside.old@example.test" });
+  });
+
+  it("replaces a cancel token that records no address when a notice is issued", async () => {
+    const owner = await account();
+    await request(owner, "new@example.test");
+    const legacy = await legacyNotice(owner);
+
+    const issued = await notice(owner);
+
+    expect(await store.cancelEmailChange(legacy)).toBeUndefined();
+    expect(await store.cancelEmailChange(issued)).toEqual({ accountId: owner });
+  });
+
+  it("ends every session when either the undo link or the newer notice is redeemed, and the other keeps working", async () => {
+    const { owner, cancel } = await confirmed("either.old@example.test", "either.new@example.test");
+    await request(owner, "either.next@example.test");
+    const newer = await notice(owner);
+    await session(owner);
+
+    expect(await store.cancelEmailChange(newer)).toEqual({ accountId: owner });
+    expect(await sessionRows(db, owner)).toEqual([]);
+    expect(await accountRow(owner)).toMatchObject({ email: "either.new@example.test", pending_email: null });
+    await session(owner);
+
+    expect(await store.cancelEmailChange(cancel)).toEqual({ accountId: owner });
+    expect(await sessionRows(db, owner)).toEqual([]);
+    expect(await accountRow(owner)).toMatchObject({ email: "either.old@example.test" });
   });
 
   it("refuses a purpose that is not an email change", async () => {
@@ -458,6 +542,25 @@ describe("cancelPendingEmailChange", () => {
     expect(await tokenRows(other)).toHaveLength(1);
   });
 
+  it("keeps the undo link of a confirmed change, deletes the tokens that target the address the account holds, and leaves the same state when repeated", async () => {
+    const { owner, cancel } = await confirmed("clear.old@example.test", "clear.new@example.test");
+    await request(owner, "clear.next@example.test");
+    const confirm = await confirmation(owner);
+    const heldNotice = await notice(owner);
+    const legacy = await legacyNotice(owner);
+
+    expect(await store.cancelPendingEmailChange(owner)).toBe(true);
+    expect(await store.cancelPendingEmailChange(owner)).toBe(true);
+
+    expect(await accountRow(owner)).toMatchObject({ email: "clear.new@example.test", pending_email: null });
+    expect((await tokenRows(owner)).filter((row) => !row.used)).toEqual([{ purpose: "email_change_cancel", used: false, target_email: "clear.old@example.test" }]);
+    expect(await store.confirmEmailChange(confirm)).toBeUndefined();
+    expect(await store.cancelEmailChange(heldNotice)).toBeUndefined();
+    expect(await store.cancelEmailChange(legacy)).toBeUndefined();
+    expect(await store.cancelEmailChange(cancel)).toEqual({ accountId: owner });
+    expect(await accountRow(owner)).toMatchObject({ email: "clear.old@example.test" });
+  });
+
   it("is a repeat that changes nothing, and answers false for a disabled account and an unknown one", async () => {
     const owner = await account();
     const disabled = await account({ disabled: true });
@@ -493,6 +596,50 @@ describe("cancelEmailChange", () => {
     expect((await tokenRows(owner)).filter((row) => !row.used)).toEqual([]);
     expect(await db.app`SELECT * FROM sys_credential_token_consume('password_reset', ${reset}::bytea)`).toHaveLength(0);
     expect(await store.cancelEmailChange(cancel)).toBeUndefined();
+  });
+
+  it("keeps the link to an earlier address when the link to a later one is redeemed, and that link restores its address afterwards", async () => {
+    const { owner, cancel: oldest } = await confirmed("chain.a@example.test", "chain.b@example.test");
+    const newest = await movedOn(owner, "chain.c@example.test");
+    await session(owner);
+
+    expect(await store.cancelEmailChange(newest)).toEqual({ accountId: owner });
+
+    expect(await accountRow(owner)).toEqual({ email: "chain.b@example.test", pending_email: null, verified: true });
+    expect(await sessionRows(db, owner)).toEqual([]);
+    expect((await tokenRows(owner)).filter((row) => !row.used)).toEqual([{ purpose: "email_change_cancel", used: false, target_email: "chain.a@example.test" }]);
+    await session(owner);
+
+    expect(await store.cancelEmailChange(oldest)).toEqual({ accountId: owner });
+
+    expect(await accountRow(owner)).toEqual({ email: "chain.a@example.test", pending_email: null, verified: true });
+    expect(await sessionRows(db, owner)).toEqual([]);
+  });
+
+  it("ends the links to later addresses when the link to an earlier one is redeemed, so no address it moved away from can be put back", async () => {
+    const { owner, cancel: oldest } = await confirmed("back.a@example.test", "back.b@example.test");
+    const newest = await movedOn(owner, "back.c@example.test");
+
+    expect(await store.cancelEmailChange(oldest)).toEqual({ accountId: owner });
+
+    expect(await accountRow(owner)).toMatchObject({ email: "back.a@example.test", pending_email: null });
+    expect((await tokenRows(owner)).filter((row) => !row.used)).toEqual([]);
+    expect(await store.cancelEmailChange(newest)).toBeUndefined();
+    expect(await accountRow(owner)).toMatchObject({ email: "back.a@example.test" });
+  });
+
+  it("deletes only the links issued after the one redeemed, whatever the chain of confirmed changes, and the oldest link works at the end", async () => {
+    const { owner, cancel: first } = await confirmed("many.a@example.test", "many.b@example.test");
+    const second = await movedOn(owner, "many.c@example.test");
+    const third = await movedOn(owner, "many.d@example.test");
+
+    expect(await store.cancelEmailChange(second)).toEqual({ accountId: owner });
+
+    expect(await accountRow(owner)).toMatchObject({ email: "many.b@example.test" });
+    expect(await store.cancelEmailChange(third)).toBeUndefined();
+    expect((await tokenRows(owner)).filter((row) => !row.used)).toEqual([{ purpose: "email_change_cancel", used: false, target_email: "many.a@example.test" }]);
+    expect(await store.cancelEmailChange(first)).toEqual({ accountId: owner });
+    expect(await accountRow(owner)).toMatchObject({ email: "many.a@example.test" });
   });
 
   it("makes a password reset requested to the address the change moved to unredeemable once the link restored the old one", async () => {

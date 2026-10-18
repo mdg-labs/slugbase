@@ -21,7 +21,7 @@ import { route } from "../register.ts";
 //
 // Both redemptions are anonymous: the emailed token is the credential. The confirmation moves the account to
 // the address, and the "this wasn't me" link cancels the change and deletes every session of the account; used
-// after the confirmation it also puts the old address back. An unknown, used, expired, replaced or foreign token, and an address that another account holds by the time
+// after the confirmation it also puts the old address back, and that link outlives a later request or cancellation of the account. An unknown, used, expired, replaced or foreign token, and an address that another account holds by the time
 // of the confirmation, are one answer.
 
 const UNAUTHENTICATED = "Authentication is required.";

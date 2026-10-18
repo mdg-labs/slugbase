@@ -9,14 +9,25 @@
 -- one, the "this wasn't me" link). The request stores the first and drops the
 -- unused tokens of an earlier request; the mail job issues the tokens, so whether
 -- the new address is free is decided where no caller sees it (sys_email_change_token_issue).
+-- A cancel token records the address the account held when it was issued. Once the
+-- change is confirmed, that address is no longer the account's: the token is then the
+-- undo link of the confirmed change, and neither a later request nor a later
+-- cancellation of the account deletes it, nor does a later notice replace it. Only
+-- redeeming a cancel token (sys_email_change_cancel) ends it, and that ends the cancel
+-- tokens issued after the redeemed one, which record addresses the account held later,
+-- never the ones issued before it: the oldest address's link outlives every other
+-- redemption. A cancel token that records no address, issued before the token recorded
+-- one, is treated as one that targets the account's current address.
 -- Every function that touches an account locks its row first and the tokens after,
 -- the order sys_credential_token_issue takes them in, so two calls for one account
 -- queue and do not wait on each other.
 GRANT CREATE ON SCHEMA public TO slugbase_system;
 
 -- sys_email_change_request(account_id, email): records the address the account asked
--- to move to and deletes the account's unused email-change tokens of both purposes,
--- so a link of an earlier request stops working. Nothing about the address is read:
+-- to move to and deletes the account's unused email_change tokens and its unused
+-- cancel tokens that target the address it holds (or none), so a link of an earlier
+-- request stops working; the cancel token of a confirmed change, which targets the
+-- address that change replaced, stays. Nothing about the address is read:
 -- whether it is the account's own or another account's is for the token issue to
 -- decide, so every request does the same work. False, changing nothing, for an
 -- account that does not exist or is disabled; an argument that is no address-sized
@@ -25,44 +36,51 @@ CREATE OR REPLACE FUNCTION public.sys_email_change_request(p_account_id uuid, p_
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
   SET search_path = pg_catalog, public, pg_temp
   AS $$
+DECLARE
+  v_email public.citext;
 BEGIN
   IF NOT coalesce(p_account_id IS NOT NULL AND char_length(p_email) BETWEEN 3 AND 320, false) THEN
     RAISE EXCEPTION 'sys_email_change_request needs an account and an address of 3 to 320 characters'
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
 
-  PERFORM 1 FROM public.accounts WHERE id = p_account_id AND disabled_at IS NULL FOR UPDATE;
+  SELECT a.email INTO v_email FROM public.accounts a WHERE a.id = p_account_id AND a.disabled_at IS NULL FOR UPDATE;
   IF NOT FOUND THEN
     RETURN false;
   END IF;
 
   DELETE FROM public.credential_tokens
-  WHERE account_id = p_account_id AND purpose IN ('email_change', 'email_change_cancel') AND used_at IS NULL;
+  WHERE account_id = p_account_id AND used_at IS NULL
+    AND (purpose = 'email_change' OR (purpose = 'email_change_cancel' AND (target_email IS NULL OR target_email = v_email)));
   UPDATE public.accounts SET pending_email = p_email::public.citext WHERE id = p_account_id;
   RETURN true;
 END
 $$;
 
 -- sys_email_change_clear(account_id): cancels the account's pending change: the
--- pending address is cleared and the unused email-change tokens of both purposes are
--- deleted. Repeating it, or calling it for an account with no pending change, leaves
+-- pending address is cleared and the unused email_change tokens and the unused cancel
+-- tokens that target the address the account holds (or none) are deleted; the cancel
+-- token of a confirmed change stays, as in sys_email_change_request. Repeating it, or calling it for an account with no pending change, leaves
 -- the same state. False for an account that does not exist or is disabled.
 CREATE OR REPLACE FUNCTION public.sys_email_change_clear(p_account_id uuid) RETURNS boolean
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
   SET search_path = pg_catalog, public, pg_temp
   AS $$
+DECLARE
+  v_email public.citext;
 BEGIN
   IF p_account_id IS NULL THEN
     RAISE EXCEPTION 'sys_email_change_clear needs an account' USING ERRCODE = 'invalid_parameter_value';
   END IF;
 
-  PERFORM 1 FROM public.accounts WHERE id = p_account_id AND disabled_at IS NULL FOR UPDATE;
+  SELECT a.email INTO v_email FROM public.accounts a WHERE a.id = p_account_id AND a.disabled_at IS NULL FOR UPDATE;
   IF NOT FOUND THEN
     RETURN false;
   END IF;
 
   DELETE FROM public.credential_tokens
-  WHERE account_id = p_account_id AND purpose IN ('email_change', 'email_change_cancel') AND used_at IS NULL;
+  WHERE account_id = p_account_id AND used_at IS NULL
+    AND (purpose = 'email_change' OR (purpose = 'email_change_cancel' AND (target_email IS NULL OR target_email = v_email)));
   UPDATE public.accounts SET pending_email = NULL WHERE id = p_account_id AND pending_email IS NOT NULL;
   RETURN true;
 END
@@ -78,8 +96,13 @@ $$;
 -- nobody, and the caller of the request is told nothing of it. The email_change token
 -- records the address it moves to (credential_tokens.target_email); the cancel token
 -- records the account's current address, the one a confirmed change replaces and the
--- cancel link puts back. An older unused token of the purpose is replaced (sys_credential_token_issue),
--- and when the confirmation is declined for an address that is not free, the account's
+-- cancel link puts back. An older unused token of the purpose is replaced; for the
+-- cancel purpose that is the account's unused cancel tokens that target the address it
+-- holds (or none), so the cancel token of a confirmed change, which targets the
+-- address that change replaced, is not replaced by the notice of a newer request and
+-- both links work. A confirmation is stored by sys_credential_token_issue, a cancel
+-- token by the insert below, in the same transaction and under the same account lock.
+-- When the confirmation is declined for an address that is not free, the account's
 -- unused confirmation tokens are deleted, so a link mailed by an earlier run of the job
 -- does not outlive the run that found the address taken.
 CREATE OR REPLACE FUNCTION public.sys_email_change_token_issue(
@@ -121,12 +144,16 @@ BEGIN
     RETURN NULL;
   END IF;
 
-  IF NOT public.sys_credential_token_issue(
-    p_id, p_purpose, p_account_id, p_token_hash,
-    CASE WHEN p_purpose = 'email_change' THEN v_pending::text ELSE v_email::text END,
-    p_ttl_seconds
-  ) THEN
-    RETURN NULL;
+  IF p_purpose = 'email_change' THEN
+    IF NOT public.sys_credential_token_issue(p_id, p_purpose, p_account_id, p_token_hash, v_pending::text, p_ttl_seconds) THEN
+      RETURN NULL;
+    END IF;
+  ELSE
+    DELETE FROM public.credential_tokens
+    WHERE account_id = p_account_id AND purpose = 'email_change_cancel' AND used_at IS NULL
+      AND (target_email IS NULL OR target_email = v_email);
+    INSERT INTO public.credential_tokens (id, purpose, account_id, token_hash, target_email, expires_at, created_at)
+    VALUES (p_id, p_purpose, p_account_id, p_token_hash, v_email, clock_timestamp() + p_ttl_seconds * interval '1 second', clock_timestamp());
   END IF;
   RETURN v_pending::text;
 END
@@ -145,7 +172,8 @@ $$;
 -- cases. The address becomes the account's email and the pending address is cleared;
 -- the verified time stays, since the token proved the new address, and no session ends.
 -- The account's other unused confirmation tokens are deleted; its cancel token stays,
--- so the "this wasn't me" link of the notice still works after the change.
+-- so the "this wasn't me" link of the notice still works after the change, and it keeps
+-- working when the account requests or cancels another change afterwards.
 CREATE OR REPLACE FUNCTION public.sys_email_change_confirm(p_token_hash bytea) RETURNS uuid
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
   SET search_path = pg_catalog, public, pg_temp
@@ -196,8 +224,13 @@ $$;
 -- expired ones included. The token records the address the account had when it was
 -- issued. When the change was confirmed since, the account no longer holds that
 -- address: it is put back as the account's email, the verified time stays, and the
--- account's unused password-reset, email-change and cancel tokens are deleted, so no
--- link issued to the address the change moved to outlives the undo. An address that
+-- account's unused password-reset and email-change tokens are deleted, and so are its
+-- unused cancel tokens issued after the redeemed one (or recording no address): they
+-- record the addresses the account held after the one put back, so no link issued to
+-- an address the undo moved away from outlives it, and one issued before the redeemed
+-- one, which records an earlier address, stays: the oldest address's link still works
+-- whatever order the others are redeemed in, and no redemption deletes a link to an
+-- address older than the one it restores. An address that
 -- another account holds by now (taken before the call or by a registration that
 -- commits while it runs) is not taken over: the account keeps its current address and
 -- the rest happens all the same. NULL comes back, which a caller does not tell apart,
@@ -210,6 +243,7 @@ DECLARE
   v_account uuid;
   v_target public.citext;
   v_email public.citext;
+  v_issued timestamptz;
 BEGIN
   IF octet_length(p_token_hash) IS DISTINCT FROM 32 THEN
     RAISE EXCEPTION 'sys_email_change_cancel needs a 32-byte token hash' USING ERRCODE = 'invalid_parameter_value';
@@ -239,8 +273,11 @@ BEGIN
         NULL;
       END;
     END IF;
+    SELECT t.created_at INTO v_issued FROM public.credential_tokens t WHERE t.purpose = 'email_change_cancel' AND t.token_hash = p_token_hash;
     DELETE FROM public.credential_tokens
-    WHERE account_id = v_account AND purpose IN ('password_reset', 'email_change', 'email_change_cancel') AND used_at IS NULL;
+    WHERE account_id = v_account AND used_at IS NULL
+      AND (purpose IN ('password_reset', 'email_change')
+        OR (purpose = 'email_change_cancel' AND (target_email IS NULL OR created_at > v_issued)));
   ELSE
     DELETE FROM public.credential_tokens WHERE account_id = v_account AND purpose = 'email_change' AND used_at IS NULL;
   END IF;

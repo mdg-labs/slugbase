@@ -238,7 +238,7 @@ For accounts with no membership: create a workspace (where allowed) or "Waiting 
 
 ### 1.7 `/email-change/confirm`, `/email-change/cancel` — Email-change links
 
-The two pages the emailed links open (doc 02 §2.6). Each reads its token from the URL fragment, calls its operation once and shows a result card: *confirm* (sent to the new address) switches the email and says so, *cancel* (the "this wasn't me" link sent to the old address) cancels the pending change and states that every session was signed out. A used, expired or unknown token shows one generic explanation with a link to `/login`; no copy ever says whether an address is taken.
+The two pages the emailed links open (doc 02 §2.6). Each reads its token from the URL fragment, calls its operation once and shows a result card: *confirm* (sent to the new address) switches the email and says so, *cancel* (the "this wasn't me" link sent to the old address) cancels the pending change and states that every session was signed out. The card is the same whether the change was still pending or had already been confirmed; after a confirmed change the operation also puts the earlier address back as the account's email (doc 02 §2.6), so the sign-in the card links to takes that address, and the card never tells whether it could be restored. The link keeps working after the account asked for or cancelled another change since, and after the account moved on to further addresses (it is ended only by the use of a link to an earlier address, doc 02 §2.6). A used, expired or unknown token shows one generic explanation with a link to `/login`; no copy ever says whether an address is taken.
 
 **Components:** authentication card; `banner` for the failure state; `empty-state` for success.
 

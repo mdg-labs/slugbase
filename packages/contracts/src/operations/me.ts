@@ -337,7 +337,7 @@ export const requestEmailChange = defineOperation({
   request: { body: RequestEmailChangeRequestSchema },
   responses: {
     202: emptyResponse(
-      "The request was accepted. The answer is the same, with no body, whether the address is free, is the account's own or belongs to another account. The address is recorded as the pending one and the links of an earlier request stop working; the account's current address is sent the notice with the \"this wasn't me\" link, and the new address is sent the confirmation link, which opens /email-change/confirm#token=…, only when it is free, so nothing is sent to another account. Nothing is sent to an account whose address was never verified, and a deployment without mail sends nothing and answers alike. The email switches only when the confirmation link is redeemed (POST /me/email/confirm)",
+      "The request was accepted. The answer is the same, with no body, whether the address is free, is the account's own or belongs to another account. The address is recorded as the pending one and the links of an earlier request stop working, except the \"this wasn't me\" link of a change that was already confirmed, which keeps working until it expires or until a link to an earlier address is used; the account's current address is sent the notice with the \"this wasn't me\" link, and the new address is sent the confirmation link, which opens /email-change/confirm#token=…, only when it is free, so nothing is sent to another account. Nothing is sent to an account whose address was never verified, and a deployment without mail sends nothing and answers alike. The email switches only when the confirmation link is redeemed (POST /me/email/confirm)",
     ),
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"),
@@ -381,7 +381,7 @@ export const cancelEmailChange = defineOperation({
   request: { body: CancelEmailChangeRequestSchema },
   responses: {
     204: emptyResponse(
-      "The token is redeemed, once. The pending change and its unused links are gone and every session of the account is deleted. It works after the change was confirmed too: the address then stays as it is and every session still ends",
+      "The token is redeemed, once. The pending change and its unused links are gone and every session of the account is deleted. It works after the change was confirmed too, also when the account has asked for or cancelled another change since: the address the change replaced is then the account's email again, still verified, and every session still ends; the links to addresses the account held later stop working, and a link to an earlier address does not; if another account holds that address by now, the account keeps its current address",
     ),
     400: problemResponse("The request was malformed"),
     403: problemResponse("The request did not come from the application itself"),
@@ -401,7 +401,7 @@ export const cancelPendingEmailChange = defineOperation({
   auth: "account",
   rate: "write",
   responses: {
-    204: emptyResponse("The pending address is cleared and the links of the change stop working, whether or not a change was pending; no session ends"),
+    204: emptyResponse("The pending address is cleared and the links of the change stop working, whether or not a change was pending; the \"this wasn't me\" link of a change that was already confirmed keeps working until it expires or until a link to an earlier address is used; no session ends"),
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse("The request did not come from the application itself, or the credential is an API token"),
