@@ -11,7 +11,9 @@
 import { Route as rootRouteImport } from "./routes/__root.tsx";
 import { Route as AppRouteImport } from "./routes/_app.tsx";
 import { Route as LoginRouteImport } from "./routes/login.tsx";
+import { Route as RegisterRouteImport } from "./routes/register.tsx";
 import { Route as SetupRouteImport } from "./routes/setup.tsx";
+import { Route as VerifyEmailRouteImport } from "./routes/verify-email.tsx";
 import { Route as AppIndexRouteImport } from "./routes/_app/index.tsx";
 import { Route as AppSplatRouteImport } from "./routes/_app/$.tsx";
 import { Route as App403RouteImport } from "./routes/_app/403.tsx";
@@ -32,9 +34,19 @@ const LoginRoute = LoginRouteImport.update({
   path: "/login",
   getParentRoute: () => rootRouteImport,
 } as any);
+const RegisterRoute = RegisterRouteImport.update({
+  id: "/register",
+  path: "/register",
+  getParentRoute: () => rootRouteImport,
+} as any);
 const SetupRoute = SetupRouteImport.update({
   id: "/setup",
   path: "/setup",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const VerifyEmailRoute = VerifyEmailRouteImport.update({
+  id: "/verify-email",
+  path: "/verify-email",
   getParentRoute: () => rootRouteImport,
 } as any);
 const AppIndexRoute = AppIndexRouteImport.update({
@@ -94,7 +106,9 @@ const AppSettingsAccountTokensRoute =
 export interface FileRoutesByFullPath {
   "/": typeof AppIndexRoute;
   "/login": typeof LoginRoute;
+  "/register": typeof RegisterRoute;
   "/setup": typeof SetupRoute;
+  "/verify-email": typeof VerifyEmailRoute;
   "/$": typeof AppSplatRoute;
   "/403": typeof App403Route;
   "/settings": typeof AppSettingsRouteWithChildren;
@@ -107,7 +121,9 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   "/login": typeof LoginRoute;
+  "/register": typeof RegisterRoute;
   "/setup": typeof SetupRoute;
+  "/verify-email": typeof VerifyEmailRoute;
   "/$": typeof AppSplatRoute;
   "/403": typeof App403Route;
   "/login/mfa": typeof LoginMfaRoute;
@@ -122,7 +138,9 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport;
   "/_app": typeof AppRouteWithChildren;
   "/login": typeof LoginRoute;
+  "/register": typeof RegisterRoute;
   "/setup": typeof SetupRoute;
+  "/verify-email": typeof VerifyEmailRoute;
   "/_app/$": typeof AppSplatRoute;
   "/_app/403": typeof App403Route;
   "/_app/settings": typeof AppSettingsRouteWithChildren;
@@ -139,7 +157,9 @@ export interface FileRouteTypes {
   fullPaths:
     | "/"
     | "/login"
+    | "/register"
     | "/setup"
+    | "/verify-email"
     | "/$"
     | "/403"
     | "/settings"
@@ -152,7 +172,9 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo;
   to:
     | "/login"
+    | "/register"
     | "/setup"
+    | "/verify-email"
     | "/$"
     | "/403"
     | "/login/mfa"
@@ -166,7 +188,9 @@ export interface FileRouteTypes {
     | "__root__"
     | "/_app"
     | "/login"
+    | "/register"
     | "/setup"
+    | "/verify-email"
     | "/_app/$"
     | "/_app/403"
     | "/_app/settings"
@@ -182,7 +206,9 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren;
   LoginRoute: typeof LoginRoute;
+  RegisterRoute: typeof RegisterRoute;
   SetupRoute: typeof SetupRoute;
+  VerifyEmailRoute: typeof VerifyEmailRoute;
   LoginMfaRoute: typeof LoginMfaRoute;
 }
 
@@ -202,11 +228,25 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof LoginRouteImport;
       parentRoute: typeof rootRouteImport;
     };
+    "/register": {
+      id: "/register";
+      path: "/register";
+      fullPath: "/register";
+      preLoaderRoute: typeof RegisterRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
     "/setup": {
       id: "/setup";
       path: "/setup";
       fullPath: "/setup";
       preLoaderRoute: typeof SetupRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/verify-email": {
+      id: "/verify-email";
+      path: "/verify-email";
+      fullPath: "/verify-email";
+      preLoaderRoute: typeof VerifyEmailRouteImport;
       parentRoute: typeof rootRouteImport;
     };
     "/_app/": {
@@ -321,7 +361,9 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren);
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
+  RegisterRoute: RegisterRoute,
   SetupRoute: SetupRoute,
+  VerifyEmailRoute: VerifyEmailRoute,
   LoginMfaRoute: LoginMfaRoute,
 };
 export const routeTree = rootRouteImport

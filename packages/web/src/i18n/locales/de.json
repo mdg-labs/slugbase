@@ -20,7 +20,11 @@
     "signOut": "Abmelden",
     "settings": "Einstellungen",
     "accountSettings": "Kontoeinstellungen",
-    "security": "Sicherheit"
+    "security": "Sicherheit",
+    "emailUnverified": {
+      "title": "Deine E-Mail-Adresse ist nicht bestätigt",
+      "description": "Wir haben einen Link an {email} geschickt. Öffne ihn, um die Adresse zu bestätigen, oder fordere einen neuen an."
+    }
   },
   "home": {
     "empty": {
@@ -514,7 +518,12 @@
       "oidcFailed": "Die Anmeldung mit diesem Anbieter hat nicht funktioniert. Versuche es erneut oder melde dich mit E-Mail-Adresse und Passwort an."
     },
     "or": "oder",
-    "provider": "Weiter mit {name}"
+    "provider": "Weiter mit {name}",
+    "register": "Konto erstellen",
+    "unverified": {
+      "title": "Bestätige deine E-Mail-Adresse",
+      "description": "Deine E-Mail-Adresse ist noch nicht bestätigt. Öffne den Link, den wir dir geschickt haben, oder fordere einen neuen an."
+    }
   },
   "loginMfa": {
     "title": "Zweistufige Bestätigung",
@@ -540,6 +549,94 @@
       "invalidCode": "Dieser Code ist nicht gültig. Prüfe ihn und versuche es erneut.",
       "unavailable": "Der Code konnte gerade nicht geprüft werden. Versuche es gleich noch einmal.",
       "backUnavailable": "Der Weg zurück zur Anmeldung hat nicht geklappt. Versuche es erneut."
+    }
+  },
+  "register": {
+    "title": "Konto erstellen",
+    "description": "Erstelle ein Konto für {name}.",
+    "name": {
+      "label": "Name",
+      "required": "Gib deinen Namen ein.",
+      "invalid": "Prüfe deinen Namen."
+    },
+    "email": {
+      "label": "E-Mail",
+      "required": "Gib deine E-Mail-Adresse ein.",
+      "invalid": "Prüfe die E-Mail-Adresse."
+    },
+    "submit": "Konto erstellen",
+    "signIn": "Du hast schon ein Konto? Anmelden",
+    "error": {
+      "refused": "Mit dieser E-Mail-Adresse lässt sich kein Konto erstellen.",
+      "mailUnavailable": "Für die Registrierung braucht es E-Mail, und dieser Server kann gerade keine senden. Wende dich an deine Administration.",
+      "invalid": "Prüfe deine Eingaben und versuche es erneut.",
+      "unavailable": "Die Registrierung ist gerade nicht möglich. Versuche es gleich noch einmal.",
+      "rateLimited": {
+        "unknown": "Zu viele Registrierungen. Versuche es später erneut.",
+        "seconds": "Zu viele Registrierungen. Versuche es in {count, plural, one {# Sekunde} other {# Sekunden}} erneut.",
+        "minutes": "Zu viele Registrierungen. Versuche es in {count, plural, one {# Minute} other {# Minuten}} erneut."
+      }
+    },
+    "closed": {
+      "title": "Die Registrierung ist geschlossen",
+      "description": "Bitte deine Administration um eine Einladung.",
+      "signIn": "Zurück zur Anmeldung"
+    },
+    "checkEmail": {
+      "title": "Prüfe dein E-Mail-Postfach",
+      "description": "Wenn wir {email} verwenden können, ist ein Link zur Bestätigung unterwegs. Öffne ihn, um dein Konto fertig zu erstellen.",
+      "hint": "Der Link ist 24 Stunden gültig. Kommt er nicht an, sieh in deinem Spam-Ordner nach."
+    }
+  },
+  "newPassword": {
+    "label": "Passwort",
+    "description": "Verwende mindestens 12 Zeichen. Ein langer Satz eignet sich gut.",
+    "show": "Passwort anzeigen",
+    "hide": "Passwort verbergen",
+    "required": "Gib ein Passwort ein.",
+    "tooShort": "Verwende mindestens 12 Zeichen.",
+    "tooLong": "Verwende höchstens 256 Zeichen.",
+    "breached": "Dieses Passwort steht auf einer Liste gestohlener Passwörter. Wähle ein anderes.",
+    "weak": "Wähle ein stärkeres Passwort.",
+    "strength": {
+      "label": "Passwortstärke",
+      "score": {
+        "0": "Sehr schwach",
+        "1": "Schwach",
+        "2": "Mittel",
+        "3": "Gut",
+        "4": "Stark"
+      }
+    }
+  },
+  "resend": {
+    "action": "Link erneut senden",
+    "wait": "Erneut senden in {time}",
+    "sent": "Wenn zu dieser Adresse ein Konto auf Bestätigung wartet, ist ein neuer Link unterwegs.",
+    "invalid": "Prüfe die E-Mail-Adresse.",
+    "failed": "Der Link konnte gerade nicht gesendet werden. Versuche es gleich noch einmal.",
+    "rateLimited": "Zu viele Anfragen. Warte, bevor du erneut fragst.",
+    "email": {
+      "label": "E-Mail",
+      "required": "Gib deine E-Mail-Adresse ein."
+    }
+  },
+  "verifyEmail": {
+    "title": "Bestätige deine E-Mail-Adresse",
+    "description": "Wähle ein Passwort, um deine Adresse zu bestätigen und dich bei {name} anzumelden.",
+    "submit": "Bestätigen und anmelden",
+    "error": {
+      "invalid": "Prüfe deine Eingaben und versuche es erneut.",
+      "unavailable": "Deine Adresse konnte gerade nicht bestätigt werden. Versuche es gleich noch einmal.",
+      "rateLimited": {
+        "unknown": "Zu viele Versuche. Versuche es später noch einmal.",
+        "seconds": "Zu viele Versuche. Versuche es in {count, plural, one {# Sekunde} other {# Sekunden}} noch einmal.",
+        "minutes": "Zu viele Versuche. Versuche es in {count, plural, one {# Minute} other {# Minuten}} noch einmal."
+      }
+    },
+    "expired": {
+      "title": "Dieser Link ist ungültig oder abgelaufen",
+      "description": "Ein Link funktioniert einmal und 24 Stunden lang. Gib deine E-Mail-Adresse ein, um einen neuen zu erhalten."
     }
   },
   "signOut": {

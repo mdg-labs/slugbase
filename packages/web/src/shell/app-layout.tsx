@@ -17,6 +17,7 @@ import { useSignOut } from "../auth/sign-out.ts";
 import { useConfig } from "../config/config-context.tsx";
 import { Slot, useExtensions } from "../extensions/index.ts";
 import { docsUrl } from "./docs-url.ts";
+import { EmailUnverifiedBanner } from "./banners.tsx";
 import { OfflineBanner } from "./offline-banner.tsx";
 
 function AppLayoutShell(): ReactElement {
@@ -121,6 +122,7 @@ function AppLayoutShell(): ReactElement {
       productName={product.name}
     >
       <OfflineBanner />
+      <EmailUnverifiedBanner />
       <Slot name="banner.entitlement" />
       <Outlet />
     </AppShell>

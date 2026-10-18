@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { ApiProblemError } from "../api/client.ts";
 import { mfaPath } from "./mfa.ts";
 import { safeNextPath } from "./next-path.ts";
+import { ResendButton, ResendStatus, useResendVerification } from "./resend-verification.tsx";
 
 type FieldName = "email" | "password";
 type FieldErrors = Partial<Record<FieldName, "required" | "invalid">>;
@@ -14,6 +15,7 @@ type FieldErrors = Partial<Record<FieldName, "required" | "invalid">>;
 /** Why a sign-in did not go through, as far as the form tells the visitor. */
 type Failure =
   | { readonly kind: "credentials" }
+  | { readonly kind: "unverified" }
   | { readonly kind: "rateLimited"; readonly seconds: number | undefined }
   | { readonly kind: "invalid" }
   | { readonly kind: "unavailable" };
@@ -36,6 +38,9 @@ function failureOf(error: unknown): { failure: Failure; fields: FieldErrors } {
     if (error.status === 401 && error.code === "unauthenticated") {
       return { failure: { kind: "credentials" }, fields: {} };
     }
+    if (error.status === 403 && error.code === "email_unverified") {
+      return { failure: { kind: "unverified" }, fields: {} };
+    }
     if (error.status === 429) {
       return { failure: { kind: "rateLimited", seconds: error.retryAfterSeconds }, fields: {} };
     }
@@ -44,6 +49,25 @@ function failureOf(error: unknown): { failure: Failure; fields: FieldErrors } {
     }
   }
   return { failure: { kind: "unavailable" }, fields: {} };
+}
+
+/** What an account that has not verified its address is told at sign-in (doc 03 section 1.2): to verify, with the way to get the link again. */
+function UnverifiedBanner({ email }: { email: string }): ReactElement {
+  const { t } = useTranslation();
+  const resend = useResendVerification();
+  return (
+    <Banner
+      action={<ResendButton email={email} resend={resend} />}
+      description={
+        <>
+          <p>{t("login.unverified.description")}</p>
+          <ResendStatus resend={resend} />
+        </>
+      }
+      title={t("login.unverified.title")}
+      variant="warning"
+    />
+  );
 }
 
 /** The sign-in form: email, password and "Remember me". On success it goes to `next` when that is a path of this origin, otherwise home. */
@@ -56,6 +80,8 @@ export function LoginForm({ next }: { next: string | undefined }): ReactElement 
   const [remember, setRemember] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
   const [failure, setFailure] = useState<Failure | undefined>(undefined);
+  // The address the failed sign-in was made with, which the verification link is sent to again.
+  const [attempted, setAttempted] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const emailInput = useRef<HTMLInputElement>(null);
   const passwordInput = useRef<HTMLInputElement>(null);
@@ -83,6 +109,8 @@ export function LoginForm({ next }: { next: string | undefined }): ReactElement 
     switch (value.kind) {
       case "credentials":
         return t("login.error.credentials");
+      case "unverified":
+        return t("login.unverified.title");
       case "invalid":
         return t("login.error.invalid");
       case "unavailable":
@@ -131,6 +159,7 @@ export function LoginForm({ next }: { next: string | undefined }): ReactElement 
         return;
       }
       const { failure: reason, fields } = failureOf(caught);
+      setAttempted(address);
       setFailure(reason);
       setFieldErrors(fields);
       setSubmitting(false);
@@ -152,7 +181,11 @@ export function LoginForm({ next }: { next: string | undefined }): ReactElement 
         void submit(event);
       }}
     >
-      {failure === undefined ? null : <Banner title={failureMessage(failure)} variant="error" />}
+      {failure === undefined ? null : failure.kind === "unverified" ? (
+        <UnverifiedBanner email={attempted} />
+      ) : (
+        <Banner title={failureMessage(failure)} variant="error" />
+      )}
       <FormField error={emailError} label={t("login.email.label")} name="email">
         <Input
           autoComplete="username"

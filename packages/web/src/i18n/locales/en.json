@@ -20,7 +20,11 @@
     "signOut": "Sign out",
     "settings": "Settings",
     "accountSettings": "Account settings",
-    "security": "Security"
+    "security": "Security",
+    "emailUnverified": {
+      "title": "Your email address is not verified",
+      "description": "We sent a link to {email}. Open it to verify the address, or ask for a new one."
+    }
   },
   "home": {
     "empty": {
@@ -514,7 +518,12 @@
       "oidcFailed": "Signing in with that provider did not work. Try again, or sign in with your email address and password."
     },
     "or": "or",
-    "provider": "Continue with {name}"
+    "provider": "Continue with {name}",
+    "register": "Create an account",
+    "unverified": {
+      "title": "Verify your email",
+      "description": "Your email address is not verified yet. Open the link we sent you, or ask for a new one."
+    }
   },
   "loginMfa": {
     "title": "Two-step verification",
@@ -540,6 +549,94 @@
       "invalidCode": "That code is not valid. Check it and try again.",
       "unavailable": "The code could not be checked right now. Try again in a moment.",
       "backUnavailable": "Going back to sign in did not work. Try again."
+    }
+  },
+  "register": {
+    "title": "Create an account",
+    "description": "Create an account for {name}.",
+    "name": {
+      "label": "Name",
+      "required": "Enter your name.",
+      "invalid": "Check your name."
+    },
+    "email": {
+      "label": "Email",
+      "required": "Enter your email address.",
+      "invalid": "Check the email address."
+    },
+    "submit": "Create account",
+    "signIn": "Already have an account? Sign in",
+    "error": {
+      "refused": "An account cannot be created with that email address.",
+      "mailUnavailable": "Registration needs email, and this server cannot send any right now. Ask an administrator.",
+      "invalid": "Check your entries and try again.",
+      "unavailable": "Registration is not possible right now. Try again in a moment.",
+      "rateLimited": {
+        "unknown": "Too many registrations. Try again later.",
+        "seconds": "Too many registrations. Try again in {count, plural, one {# second} other {# seconds}}.",
+        "minutes": "Too many registrations. Try again in {count, plural, one {# minute} other {# minutes}}."
+      }
+    },
+    "closed": {
+      "title": "Registration is closed",
+      "description": "Ask an admin for an invitation.",
+      "signIn": "Back to sign in"
+    },
+    "checkEmail": {
+      "title": "Check your email",
+      "description": "If we can use {email}, a link to verify it is on its way. Open it to finish creating your account.",
+      "hint": "The link works for 24 hours. If it does not arrive, check your spam folder."
+    }
+  },
+  "newPassword": {
+    "label": "Password",
+    "description": "Use at least 12 characters. A long phrase works well.",
+    "show": "Show password",
+    "hide": "Hide password",
+    "required": "Enter a password.",
+    "tooShort": "Use at least 12 characters.",
+    "tooLong": "Use at most 256 characters.",
+    "breached": "This password appears in a list of breached passwords. Choose a different one.",
+    "weak": "Choose a stronger password.",
+    "strength": {
+      "label": "Password strength",
+      "score": {
+        "0": "Very weak",
+        "1": "Weak",
+        "2": "Fair",
+        "3": "Good",
+        "4": "Strong"
+      }
+    }
+  },
+  "resend": {
+    "action": "Send the link again",
+    "wait": "Send again in {time}",
+    "sent": "If this address has an account waiting for verification, a new link is on its way.",
+    "invalid": "Check the email address.",
+    "failed": "The link could not be sent right now. Try again in a moment.",
+    "rateLimited": "Too many requests. Wait before asking again.",
+    "email": {
+      "label": "Email",
+      "required": "Enter your email address."
+    }
+  },
+  "verifyEmail": {
+    "title": "Verify your email",
+    "description": "Choose a password to verify your address and sign in to {name}.",
+    "submit": "Verify and sign in",
+    "error": {
+      "invalid": "Check your entries and try again.",
+      "unavailable": "Your address could not be verified right now. Try again in a moment.",
+      "rateLimited": {
+        "unknown": "Too many attempts. Try again later.",
+        "seconds": "Too many attempts. Try again in {count, plural, one {# second} other {# seconds}}.",
+        "minutes": "Too many attempts. Try again in {count, plural, one {# minute} other {# minutes}}."
+      }
+    },
+    "expired": {
+      "title": "This link is not valid or has expired",
+      "description": "A link works once and for 24 hours. Enter your email address to get a new one."
     }
   },
   "signOut": {
