@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { generateApiToken } from "@slugbase/core";
+import { generateApiToken, type MailPort } from "@slugbase/core";
 import { apiTokenRepository, createAuthStore, type AuthStore } from "@slugbase/db";
 import type { TestDatabase } from "@slugbase/testing/db";
 import { hashPassword } from "../../src/auth/password.ts";
@@ -259,10 +259,12 @@ export interface ServeOptions {
   readonly env?: Record<string, string>;
   /** Raises the login, second-factor, reset and token-redemption limits so a test that is not about them signs in freely; the limit suites turn it off to run the shipped defaults. */
   readonly openLimits?: boolean;
+  /** The mail port the server queues and checks `features.mail` against; the unconfigured one when absent. */
+  readonly mail?: MailPort;
 }
 
 /** The whole chain over the migrated database, as the sign-in suites run it. */
-export function serveAuth(database: TestDatabase, store: AuthStore, { env = {}, openLimits = true }: ServeOptions = {}): AuthWorld {
+export function serveAuth(database: TestDatabase, store: AuthStore, { env = {}, openLimits = true, mail }: ServeOptions = {}): AuthWorld {
   const config = serverConfig({
     NODE_ENV: "test",
     DATABASE_URL: appUrl(database),
@@ -273,7 +275,7 @@ export function serveAuth(database: TestDatabase, store: AuthStore, { env = {}, 
   const logs = recordingLogger();
   const server = createServer({
     config,
-    adapters: { ...adapters(config), rateLimit: limiter, tenantResolver: createAccountOnlyTenantResolver() },
+    adapters: { ...adapters(config), rateLimit: limiter, tenantResolver: createAccountOnlyTenantResolver(), ...(mail === undefined ? {} : { mail }) },
     modules: [],
     migrations: [],
     logger: logs,
@@ -335,6 +337,21 @@ export async function signInAs(world: AuthWorld, database: TestDatabase, account
     throw new Error("the session row is missing");
   }
   return { token, sessionId: row.id };
+}
+
+/** A session cookie of the account, signed in now and re-authenticated with its password, as the routes that change a credential need. */
+export async function freshSessionCookie(world: AuthWorld, account: SeededAccount, forwardedFor?: string): Promise<string> {
+  const response = await signInAttempt(world, account, forwardedFor === undefined ? {} : { forwardedFor });
+  const token = issuedToken(response);
+  if (response.status !== 200 || token === undefined) {
+    throw new Error(`could not sign in: ${String(response.status)}`);
+  }
+  const cookie = `${SESSION_COOKIE}=${token}`;
+  const reauth = await world.server.fetch(postJson(world.origin, "/api/v1/me/reauth", { password: account.password }, { cookie, ...(forwardedFor === undefined ? {} : { forwardedFor }) }));
+  if (reauth.status !== 204) {
+    throw new Error(`could not re-authenticate: ${String(reauth.status)}`);
+  }
+  return cookie;
 }
 
 /** A GET of a route that needs a session, with the cookie of `token` under `name`. */

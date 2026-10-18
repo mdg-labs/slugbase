@@ -1,24 +1,32 @@
 import { verify } from "@node-rs/argon2";
+import { InMemoryMail } from "@slugbase/testing";
 import { useTestDatabase } from "@slugbase/testing/db";
 import type { AuthStore } from "@slugbase/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { HEAVY_TEST_TIMEOUT_MS } from "../../../../vitest.shared.ts";
+import { runMigrations } from "../../src/migrate/index.ts";
+import { urlOf } from "../migrate/support.ts";
+import { CREDENTIAL_ENV, requestFlows, type RequestFlow } from "./credential-flows.ts";
 import {
   attemptLogin,
+  freshSessionCookie,
   medianLatencyRatio,
   seedAccount,
   serveAuth,
   signInAttempt,
   storeFor,
   type Attempt,
+  type AuthWorld,
   type SeededAccount,
 } from "./support.ts";
 
 // The auth/enumeration suite of doc 08 section 3.5 (doc 10 T8, doc 02 section
 // 2.3): the login endpoint gives no signal, in status, body, headers or time,
 // that tells an account that exists from one that does not, or an account that
-// is disabled or has no password from a live one. Later epics add the endpoints
-// they own (reset, registration, invitation) to this file.
+// is disabled or has no password from a live one, and the four requests that ask
+// for an emailed link (register, resend, forgot, change email) give none that tells
+// an address with an account, verified or not, from one without. Later epics add
+// the endpoints they own (invitation) to this file.
 //
 // Already asserted in login.integration ("one answer for every way to fail"),
 // and not repeated here: the same 401 unauthenticated, body shape, header names
@@ -42,9 +50,11 @@ const verifications = vi.mocked(verify);
 const database = useTestDatabase();
 let store: AuthStore;
 
-beforeAll(() => {
+beforeAll(async () => {
   store = storeFor(database());
-});
+  // The credential flows queue their mail through pg-boss, whose schema the image entrypoint creates before the server starts.
+  await runMigrations({ url: urlOf(database().owner) });
+}, 120_000);
 
 afterAll(async () => {
   await store.close();
@@ -86,6 +96,9 @@ async function scenarios(): Promise<readonly Scenario[]> {
 
 /** A body with the one field that differs by request taken out. */
 function withoutRequestId(text: string): string {
+  if (text === "") {
+    return text;
+  }
   const body = JSON.parse(text) as Record<string, unknown>;
   return JSON.stringify(Object.fromEntries(Object.entries(body).filter(([name]) => name !== "requestId")));
 }
@@ -175,5 +188,98 @@ describe("POST /api/v1/auth/login (T8)", () => {
       expect(answer).toEqual(first);
     }
     expect(verifications).toHaveBeenCalledTimes(emails.length * 2);
+  });
+});
+
+// The credential flows. A request for an emailed link answers alike for an address that has a verified account,
+// one that has an unverified account and one that has none (doc 04 section 10.2, doc 02 section 2.3): the status,
+// the headers and the body agree, each path queues the one mail job, and none is faster than another. What the
+// worker then sends, and to whom, is its decision and not visible to the requester.
+describe("the requests for an emailed link (T8)", () => {
+  const mail = new InMemoryMail();
+  let tag = 0;
+
+  async function mailJobCount(): Promise<number> {
+    const rows = await database().app<{ count: number }[]>`SELECT count(*)::int AS count FROM pgboss.job WHERE name = 'mail.send'`;
+    return rows[0]?.count ?? -1;
+  }
+
+  interface Target {
+    readonly name: string;
+    readonly email: string;
+  }
+
+  /** An address of every kind a request can name, each of its own, so that the per-address count in the limit headers reads the same. */
+  async function targets(): Promise<readonly Target[]> {
+    tag += 1;
+    const suffix = String(tag);
+    const verified = await seedAccount(database(), { emailVerified: true, email: `Verified.Person.${suffix}@Example.test` });
+    const verifiedShouting = await seedAccount(database(), { emailVerified: true, email: `VERIFIED.SHOUTING.${suffix}@EXAMPLE.TEST` });
+    const unverified = await seedAccount(database(), { email: `Unverified.Person.${suffix}@Example.test` });
+    const unverifiedQuiet = await seedAccount(database(), { email: `unverified.quiet.${suffix}@example.test` });
+    return [
+      { name: "a verified account", email: verified.email },
+      { name: "a verified account in capitals", email: verifiedShouting.email },
+      { name: "an unverified account", email: unverified.email },
+      { name: "an unverified account in lower case", email: unverifiedQuiet.email },
+      { name: "an unknown address", email: `nobody.${suffix}@example.test` },
+      { name: "an unknown address in capitals", email: `NOBODY.ELSE.${suffix}@EXAMPLE.TEST` },
+    ];
+  }
+
+  /** The session the flow that needs one is asked with: an account of its own, signed in and re-authenticated. */
+  async function sessionFor(world: AuthWorld, flow: RequestFlow): Promise<string | undefined> {
+    if (!flow.authenticated) {
+      return undefined;
+    }
+    const requester = await seedAccount(database(), { emailVerified: true });
+    return freshSessionCookie(world, requester, "198.51.100.250");
+  }
+
+  describe.each(requestFlows.map((flow) => [flow.name, flow] as const))("%s", (_name, flow) => {
+    it("answers an address with a verified account, an unverified one and an unknown one with the same status, headers and body, and queues the one mail job on every path", async () => {
+      const world = serveAuth(database(), store, { env: { ...CREDENTIAL_ENV, TRUSTED_PROXY_HOPS: "1", RATE_LIMIT_REGISTER_IP: "1000/hour" }, mail });
+      const cookie = await sessionFor(world, flow);
+      const answers: { name: string; answer: Awaited<ReturnType<typeof answerOf>> }[] = [];
+      let hop = 0;
+      for (const { name, email } of await targets()) {
+        hop += 1;
+        const before = await mailJobCount();
+        // Each request comes from its own address, so the rate-limit headers, which count per address, read the same too.
+        const response = await flow.call(world, email, { forwardedFor: `198.51.100.${String(hop)}` }, cookie);
+        expect(response.headers.get("set-cookie"), name).toBeNull();
+        answers.push({ name, answer: await answerOf(response) });
+        expect(await mailJobCount(), name).toBe(before + 1);
+      }
+      const [first, ...rest] = answers;
+      expect(first?.answer.status).toBe(202);
+      expect(first?.answer.body).toBe("");
+      expect(first?.answer.headers.map(([name]) => name)).toContain("ratelimit");
+      for (const { name, answer } of rest) {
+        expect(answer, name).toEqual(first?.answer);
+      }
+    });
+
+    it(
+      "falls in one latency class for an address with a verified account and one with an unverified account as for an unknown one",
+      { timeout: HEAVY_TEST_TIMEOUT_MS },
+      async () => {
+        const world = serveAuth(database(), store, { env: { ...CREDENTIAL_ENV, RATE_LIMIT_REGISTER_IP: "1000/hour" }, mail });
+        const cookie = await sessionFor(world, flow);
+        const [verified, , unverified] = await targets();
+        let unknown = 0;
+        const reference = () => {
+          unknown += 1;
+          return flow.call(world, `latency.unknown.${String(tag)}.${String(unknown)}@example.test`, {}, cookie);
+        };
+        // A path that skipped the account lookup or the hashing would answer in a small fraction of the time: the
+        // bounds are far wider than the noise of a loaded runner, and the ratio is a median over many back-to-back pairs.
+        for (const known of [verified, unverified]) {
+          const ratio = await medianLatencyRatio(reference, () => flow.call(world, known?.email ?? "", {}, cookie));
+          expect(ratio, known?.name).toBeGreaterThan(0.5);
+          expect(ratio, known?.name).toBeLessThan(2);
+        }
+      },
+    );
   });
 });

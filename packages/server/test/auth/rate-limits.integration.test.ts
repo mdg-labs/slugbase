@@ -1,7 +1,11 @@
+import { InMemoryMail } from "@slugbase/testing";
 import { useTestDatabase } from "@slugbase/testing/db";
 import type { AuthStore } from "@slugbase/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { attemptLogin, postJson, serveAuth, storeFor, type AuthWorld } from "./support.ts";
+import { runMigrations } from "../../src/migrate/index.ts";
+import { urlOf } from "../migrate/support.ts";
+import { CREDENTIAL_ENV, redeemFlows, requestFlows, type RequestFlow } from "./credential-flows.ts";
+import { attemptLogin, freshSessionCookie, postJson, seedAccount, serveAuth, storeFor, type AuthWorld } from "./support.ts";
 
 // The auth/rate-limits suite of doc 08 section 3.5 (doc 10 T9, doc 02 section
 // 16, doc 04 section 7), over the shipped defaults and the whole chain: the
@@ -27,9 +31,11 @@ import { attemptLogin, postJson, serveAuth, storeFor, type AuthWorld } from "./s
 const database = useTestDatabase();
 let store: AuthStore;
 
-beforeAll(() => {
+beforeAll(async () => {
   store = storeFor(database());
-});
+  // The credential flows queue their mail through pg-boss, whose schema the image entrypoint creates before the server starts.
+  await runMigrations({ url: urlOf(database().owner) });
+}, 120_000);
 
 afterAll(async () => {
   await store.close();
@@ -213,5 +219,175 @@ describe("the IP bucket of an IPv6 address is its /64, and an IPv4-mapped one is
 
   it("counts an IPv4-mapped address with the IPv4 address it maps", async () => {
     expect(await limitedAfterThree(["::ffff:198.51.100.7", "198.51.100.7", "::ffff:c633:6407", "0:0:0:0:0:ffff:198.51.100.7", "198.51.100.8"])).toEqual([401, 401, 401, 429, 401]);
+  });
+});
+
+const mail = new InMemoryMail();
+const clientAddress = (client: 1 | 2): string => `198.51.100.${String(client)}`;
+let addressNumber = 0;
+
+/** An address nobody has, so that no account is looked up and only the counts move. */
+function freshEmail(): string {
+  addressNumber += 1;
+  return `flood.${String(addressNumber)}@example.test`;
+}
+
+function credentialWorld(env: Record<string, string> = {}): AuthWorld {
+  return serveAuth(database(), store, { env: { ...CREDENTIAL_ENV, TRUSTED_PROXY_HOPS: "1", ...env }, openLimits: false, mail });
+}
+
+async function mailJobCount(): Promise<number> {
+  const rows = await database().app<{ count: number }[]>`SELECT count(*)::int AS count FROM pgboss.job WHERE name = 'mail.send'`;
+  return rows[0]?.count ?? -1;
+}
+
+/** The session the flow that needs one is asked with: an account of its own, signed in and re-authenticated. */
+async function sessionFor(world: AuthWorld, flow: RequestFlow): Promise<string | undefined> {
+  if (!flow.authenticated) {
+    return undefined;
+  }
+  return freshSessionCookie(world, await seedAccount(database(), { emailVerified: true }), "198.51.100.250");
+}
+
+describe("the register limit as shipped (T9)", () => {
+  const [register] = requestFlows;
+  if (register === undefined) {
+    throw new Error("the register flow is missing");
+  }
+
+  it("allows 5 registrations an hour per IP, answers the 6th with 429 and a Retry-After that works, creates nothing for the denied ones, and leaves another IP alone", async () => {
+    const world = credentialWorld();
+    const accounts = await accountCount();
+    const jobs = await mailJobCount();
+    const retryAfter = await exhaust(5, (client) => register.call(world, freshEmail(), { forwardedFor: clientAddress(client) }), '"register";q=5;w=3600', 3600, 202);
+    // Only the ten that were let through left anything behind.
+    expect(await accountCount()).toBe(accounts + 10);
+    expect(await mailJobCount()).toBe(jobs + 10);
+
+    expect((await register.call(world, freshEmail(), { forwardedFor: "198.51.100.9" })).status).toBe(202);
+    world.limiter.advance(retryAfter - 1);
+    expect((await register.call(world, freshEmail(), { forwardedFor: clientAddress(2) })).status).toBe(429);
+    world.limiter.advance(1);
+    expect((await register.call(world, freshEmail(), { forwardedFor: clientAddress(1) })).status).toBe(202);
+  });
+
+  it("has no limit per email: one address registered from six addresses is six 202s, so a repeat tells nothing about the account", async () => {
+    const world = credentialWorld();
+    const email = freshEmail();
+    for (let attempt = 1; attempt <= 6; attempt += 1) {
+      expect((await register.call(world, email, { forwardedFor: `198.51.100.${String(attempt)}` })).status, `attempt ${String(attempt)}`).toBe(202);
+    }
+  });
+});
+
+describe("the reset limits as shipped (T9)", () => {
+  const resetFlows = requestFlows.filter((flow) => flow.bucket === "reset");
+
+  it.each(resetFlows.map((flow) => [flow.name, flow] as const))(
+    "%s: allows 5 requests an hour per IP, answers the 6th with 429 and a Retry-After that works, queues nothing for the denied ones, and leaves another IP alone",
+    async (_name, flow) => {
+      const world = credentialWorld();
+      const cookie = await sessionFor(world, flow);
+      const jobs = await mailJobCount();
+      const retryAfter = await exhaust(5, (client) => flow.call(world, freshEmail(), { forwardedFor: clientAddress(client) }, cookie), '"reset";q=5;w=3600', 3600, 202);
+      expect(await mailJobCount()).toBe(jobs + 10);
+
+      expect((await flow.call(world, freshEmail(), { forwardedFor: "198.51.100.9" }, cookie)).status).toBe(202);
+      world.limiter.advance(retryAfter - 1);
+      expect((await flow.call(world, freshEmail(), { forwardedFor: clientAddress(2) }, cookie)).status).toBe(429);
+      world.limiter.advance(1);
+      expect((await flow.call(world, freshEmail(), { forwardedFor: clientAddress(1) }, cookie)).status).toBe(202);
+    },
+  );
+
+  it.each(resetFlows.map((flow) => [flow.name, flow] as const))(
+    "%s: allows 3 requests an hour per target email in any spelling and from any IP, answers the 4th with 429 and a Retry-After that works, queues nothing for it, and leaves another email alone",
+    async (_name, flow) => {
+      const world = credentialWorld();
+      const cookie = await sessionFor(world, flow);
+      const targets = [`Target.One.${String(++addressNumber)}@Example.test`, `target.two.${String(++addressNumber)}@example.test`];
+      const spellings = [(email: string) => email, (email: string) => email.toLowerCase(), (email: string) => email.toUpperCase()];
+      let address = 0;
+      const next = (): string => {
+        address += 1;
+        return `198.51.100.${String(address)}`;
+      };
+      let attempts = 0;
+      const jobs = await mailJobCount();
+      const retryAfter = await exhaust(
+        3,
+        (client) => {
+          const email = targets[client - 1] ?? "";
+          attempts += 1;
+          // The attempts name the address in all three spellings, which are one bucket.
+          const spelling = spellings[attempts % 3] ?? spellings[0];
+          return flow.call(world, spelling?.(email) ?? email, { forwardedFor: next() }, cookie);
+        },
+        '"reset:email";q=3;w=3600',
+        3600,
+        202,
+      );
+      expect(await mailJobCount()).toBe(jobs + 6);
+
+      expect((await flow.call(world, freshEmail(), { forwardedFor: next() }, cookie)).status).toBe(202);
+      world.limiter.advance(retryAfter - 1);
+      expect((await flow.call(world, targets[1] ?? "", { forwardedFor: next() }, cookie)).status).toBe(429);
+      world.limiter.advance(1);
+      expect((await flow.call(world, targets[0] ?? "", { forwardedFor: next() }, cookie)).status).toBe(202);
+    },
+  );
+
+  it("counts the three requests in one per-IP bucket and one per-email bucket", async () => {
+    const world = credentialWorld();
+    const cookies = await Promise.all(resetFlows.map((flow) => sessionFor(world, flow)));
+    const call = (index: number, email: string, forwardedFor: string) => resetFlows[index]?.call(world, email, { forwardedFor }, cookies[index]) ?? Promise.reject(new Error("no such flow"));
+
+    // Five requests from one address, two of them the same flow, then each of the three is over the limit.
+    for (const index of [0, 1, 2, 0, 1]) {
+      expect((await call(index, freshEmail(), "198.51.100.1")).status).toBe(202);
+    }
+    for (const index of [0, 1, 2]) {
+      expect((await call(index, freshEmail(), "198.51.100.1")).status, resetFlows[index]?.name).toBe(429);
+    }
+    // Three requests for one email, one of each flow, from three addresses, then each of the three is over the limit.
+    const email = freshEmail();
+    for (const index of [0, 1, 2]) {
+      expect((await call(index, email, `198.51.100.${String(index + 20)}`)).status, resetFlows[index]?.name).toBe(202);
+    }
+    for (const index of [0, 1, 2]) {
+      expect((await call(index, email, `198.51.100.${String(index + 30)}`)).status, resetFlows[index]?.name).toBe(429);
+    }
+  });
+});
+
+describe("the token_redeem limit as shipped (T9)", () => {
+  const unknownToken = "A".repeat(43);
+
+  it.each(redeemFlows.map((flow) => [flow.name, flow] as const))(
+    "%s: allows 10 redemptions an hour per IP, wrong ones included, answers the 11th with 429 and a Retry-After that works, and leaves another IP alone",
+    async (_name, flow) => {
+      const world = credentialWorld();
+      const retryAfter = await exhaust(10, (client) => flow.call(world, unknownToken, { forwardedFor: clientAddress(client) }), '"token_redeem";q=10;w=3600', 3600, 410);
+
+      expect((await flow.call(world, unknownToken, { forwardedFor: "198.51.100.9" })).status).toBe(410);
+      world.limiter.advance(retryAfter - 1);
+      expect((await flow.call(world, unknownToken, { forwardedFor: clientAddress(2) })).status).toBe(429);
+      world.limiter.advance(1);
+      expect((await flow.call(world, unknownToken, { forwardedFor: clientAddress(1) })).status).toBe(410);
+    },
+  );
+
+  it("counts the four redemptions in one bucket, and leaves the request limits of the same address alone", async () => {
+    const world = credentialWorld();
+    const [verify, reset, confirm, cancel] = redeemFlows;
+    const from = { forwardedFor: "198.51.100.1" };
+    for (const flow of [verify, verify, verify, reset, reset, reset, confirm, confirm, cancel, cancel]) {
+      expect((await flow?.call(world, unknownToken, from))?.status).toBe(410);
+    }
+    for (const flow of redeemFlows) {
+      expect((await flow.call(world, unknownToken, from)).status, flow.name).toBe(429);
+    }
+    const [, , forgot] = requestFlows;
+    expect((await forgot?.call(world, freshEmail(), from))?.status).toBe(202);
   });
 });
