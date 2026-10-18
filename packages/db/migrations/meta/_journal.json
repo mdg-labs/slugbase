@@ -253,6 +253,13 @@
       "when": 1792357652904,
       "tag": "20261018210732_add_audit_events",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1792364830002,
+      "tag": "20261018230710_add_session_active_workspace",
+      "breakpoints": true
     }
   ]
 }

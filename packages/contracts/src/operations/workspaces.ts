@@ -1,10 +1,10 @@
 import { z } from "zod";
-import { defineOperation, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
+import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
 import { WORKSPACE_ROLES } from "./me.ts";
 
 // The workspaces tag of doc 04 section 10.4, so far the account-level operations: listing the workspaces
-// the signed-in account belongs to and creating one. Both act on the session's own account; neither names
-// a workspace, and neither changes the active one (switching is its own operation).
+// the signed-in account belongs to, creating one and switching the session's active one. They act on the
+// session's own account; only the switch names a workspace, and listing and creating leave the active one alone.
 
 /** The longest workspace name, in characters (doc 02 section 3.1). */
 export const WORKSPACE_NAME_MAX_LENGTH = 64;
@@ -41,6 +41,10 @@ export const WorkspaceNameSchema = z
 
 export const CreateWorkspaceRequestSchema = z.strictObject({ name: WorkspaceNameSchema }).meta({ id: "CreateWorkspaceRequest" });
 
+export const SetActiveWorkspaceRequestSchema = z
+  .strictObject({ workspaceId: z.uuid().describe("The workspace the session acts in from its next request on; one the account is a member of") })
+  .meta({ id: "SetActiveWorkspaceRequest" });
+
 export const listWorkspaces = defineOperation({
   method: "get",
   path: "/api/v1/workspaces",
@@ -75,6 +79,29 @@ export const createWorkspace = defineOperation({
       "The request did not come from the application itself (cross_site_request), the credential is an API token, the deployment does not let accounts create workspaces (forbidden), or the account's email address is not verified (email_unverified). Nothing is written",
     ),
     422: problemResponse("The body did not pass validation (a name that is blank or outside 1 to 64 characters, or a field the operation does not declare)"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const setActiveWorkspace = defineOperation({
+  method: "put",
+  path: "/api/v1/session/active-workspace",
+  operationId: "setActiveWorkspace",
+  tag: "workspaces",
+  summary: "Switch the session's active workspace",
+  auth: "account",
+  rate: "write",
+  request: { body: SetActiveWorkspaceRequestSchema },
+  responses: {
+    204: emptyResponse("The session acts in the workspace from its next request on"),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    403: problemResponse("The request did not come from the application itself (cross_site_request), or the credential is an API token, which cannot switch workspaces (forbidden)"),
+    404: problemResponse(
+      "The account is not a member of the workspace, or it does not exist or is being deleted; the answer is the same for each and the session keeps its active workspace",
+    ),
+    422: problemResponse("The body did not pass validation (a workspace identifier that is not a UUID, or a field the operation does not declare)"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },

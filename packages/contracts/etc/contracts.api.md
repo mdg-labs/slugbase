@@ -541,6 +541,9 @@ export interface ComponentTypes {
             items: ComponentTypes["schemas"]["Session"][];
             nextCursor: string | null;
         };
+        SetActiveWorkspaceRequest: {
+            workspaceId: string;
+        };
         SetupRequest: {
             displayName: string;
             email: string;
@@ -3587,6 +3590,85 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    setActiveWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["SetActiveWorkspaceRequest"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     startMfaEnrollment: {
         parameters: {
             query?: never;
@@ -4520,6 +4602,23 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/session/active-workspace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: OperationTypes["setActiveWorkspace"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/api/v1/setup": {
         parameters: {
             query?: never;
@@ -5250,6 +5349,37 @@ export const SessionSchema: z.ZodObject<{
     userAgentFamily: z.ZodNullable<z.ZodString>;
     ipPrefix: z.ZodNullable<z.ZodString>;
     current: z.ZodBoolean;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const setActiveWorkspace: {
+    readonly method: "put";
+    readonly path: "/api/v1/session/active-workspace";
+    readonly operationId: "setActiveWorkspace";
+    readonly tag: "workspaces";
+    readonly summary: "Switch the session's active workspace";
+    readonly auth: "account";
+    readonly rate: "write";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            workspaceId: z.ZodUUID;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 204: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const SetActiveWorkspaceRequestSchema: z.ZodObject<{
+    workspaceId: z.ZodUUID;
 }, z.core.$strict>;
 
 // @public (undocumented)

@@ -1,4 +1,4 @@
-import { createWorkspace as createWorkspaceOperation, listWorkspaces } from "@slugbase/contracts";
+import { createWorkspace as createWorkspaceOperation, listWorkspaces, setActiveWorkspace } from "@slugbase/contracts";
 import { canCreateWorkspace, createAuditWriter, createWorkspace, type WorkspaceStore } from "@slugbase/core";
 import { accountProfileRepository, auditEventRepository, workspaceRepository, type Database, type TenantTx } from "@slugbase/db";
 import { uuidv7 } from "../../auth/uuidv7.ts";
@@ -16,9 +16,17 @@ import { route } from "../register.ts";
 // the `workspace.created` event job and the audit event are one transaction, so a failure of any of them
 // leaves none. The operations declare no token scope, so an API token is refused before the handler runs,
 // and neither changes the session's active workspace.
+//
+// PUT /api/v1/session/active-workspace moves the session to a workspace the account is a member of through
+// `sys_session_set_active_workspace`, which judges the membership in the statement that writes the session;
+// a workspace the account does not belong to, does not exist or is being deleted is one and the same
+// `404 not_found`, and the session keeps the workspace it had (doc 10 T1). It needs a session (the operation
+// declares no token scope, so an API token is refused before the handler runs). The resolver of stage 7
+// re-derives a workspace the account can no longer reach on the next request, so nothing here repairs it.
 
 const UNAUTHENTICATED = "Authentication is required.";
 const NOT_ALLOWED = "This deployment does not let accounts create workspaces.";
+const NO_SUCH_WORKSPACE = "There is no such workspace.";
 const UNVERIFIED = "Verify your email address before you create a workspace.";
 
 export interface WorkspaceRoutesOptions {
@@ -30,12 +38,16 @@ export interface WorkspaceRoutesOptions {
   readonly creationAllowed: boolean;
 }
 
-function accountOf(context: ChainContext): string {
+function sessionOf(context: ChainContext): { readonly sessionId: string; readonly accountId: string } {
   const principal = context.get("principal");
   if (principal?.kind !== "session") {
     throw new ProblemError("unauthenticated", UNAUTHENTICATED);
   }
-  return principal.accountId;
+  return principal;
+}
+
+function accountOf(context: ChainContext): string {
+  return sessionOf(context).accountId;
 }
 
 /** The core store over the repository of the open transaction; the workspace is always made for the transaction's own account. */
@@ -94,6 +106,15 @@ export function workspaceRoutes({ withTenant, creationAllowed }: WorkspaceRoutes
         case "unavailable":
           throw new ProblemError("unauthenticated", UNAUTHENTICATED);
       }
+    }),
+
+    route(setActiveWorkspace).handle(async ({ body }, context) => {
+      const { sessionId, accountId } = sessionOf(context);
+      const switched = await withTenant({ accountId, requestId: requestIdOf(context) }, (tx) => workspaceRepository(tx).setActive(sessionId, body.workspaceId));
+      if (!switched) {
+        throw new ProblemError("not_found", NO_SUCH_WORKSPACE);
+      }
+      return { status: 204 };
     }),
   ];
 }

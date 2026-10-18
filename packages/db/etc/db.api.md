@@ -1027,6 +1027,7 @@ export interface VerifiedEmail {
 export interface WorkspaceRepository {
     create(workspace: NewWorkspace): Promise<boolean>;
     list(): Promise<readonly WorkspaceSummary[]>;
+    setActive(sessionId: string, workspaceId: string): Promise<boolean>;
 }
 
 // @public (undocumented)

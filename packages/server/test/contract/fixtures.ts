@@ -10,7 +10,7 @@ export const WALKER_ACCOUNT = { email: "walker@example.test", password: "a passw
 /** A session id no account holds: the walker's request to revoke it is the declared 404. */
 export const UNKNOWN_SESSION_ID = "0192f3a0-cccc-7000-8000-000000000001";
 
-/** The workspace the walker that creates an API token is a member of. */
+/** The workspace the walker that creates an API token, or switches its active workspace, is a member of. */
 export const WALKER_WORKSPACE_ID = "0192f3a0-cccc-7000-8000-0000000000f1";
 
 /** A token id no account holds: the walker's request to revoke it is the declared 404. */
@@ -93,6 +93,10 @@ export const FIXTURES: ContractFixtures = {
   // by the workspace route tests.
   listWorkspaces: {},
   createWorkspace: { body: { name: "Walker workspace" }, status: 403 },
+  // An account-level operation: the workspace it names must be one the account belongs to, and a workspace of another account answers the declared
+  // 404 whoever holds it (the session tests walk that). The walker that switches is a member of the workspace it names (the contract test seeds
+  // it), so the valid request is the declared 204.
+  setActiveWorkspace: { body: { workspaceId: WALKER_WORKSPACE_ID } },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

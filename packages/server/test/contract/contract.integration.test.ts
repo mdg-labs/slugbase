@@ -79,7 +79,7 @@ describe("the walker over the committed document", () => {
     const signIn = async (email: string, reauthenticate: boolean, member = false): Promise<string> => {
       const account = await seedAccount(database(), { email, password: WALKER_ACCOUNT.password });
       if (member) {
-        // A token is bound to a workspace of the account, so the walker that creates one is a member of its own.
+        // A token is bound to a workspace of the account, and a session is switched to one, so the walker that does either is a member of its own.
         await database().owner.begin(async (tx) => {
           await tx`SET LOCAL ROLE slugbase_system`;
           await tx`INSERT INTO workspaces (id, name) VALUES (${WALKER_WORKSPACE_ID}, 'Walker workspace') ON CONFLICT DO NOTHING`;
@@ -118,7 +118,7 @@ describe("the walker over the committed document", () => {
         continue;
       }
       const email = `walker-${operationId}@example.test`.toLowerCase();
-      cookies.set(operationId, await signIn(email, needsReauth.has(operationId), operationId === "createApiToken"));
+      cookies.set(operationId, await signIn(email, needsReauth.has(operationId), operationId === "createApiToken" || operationId === "setActiveWorkspace"));
       if (needsReauth.has(operationId)) {
         // Its own account: the valid request of the operation ends the sessions of the account it is made for.
         stale.set(operationId, await signIn(`walker-${operationId}-stale@example.test`.toLowerCase(), false));
@@ -149,9 +149,9 @@ describe("the walker over the committed document", () => {
     expect(report.failures).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each anonymous operation and for the sign-in; each of the twenty-two operations that need a session
+    // One valid request for each anonymous operation and for the sign-in; each of the twenty-three operations that need a session
     // also answers 401 without one, and each of the seven that declare re-authentication answers 401 reauth_required without it.
-    expect(report.calls).toBe(operations.length + 29);
+    expect(report.calls).toBe(operations.length + 30);
   }, WALK_TIMEOUT_MS);
 });
 

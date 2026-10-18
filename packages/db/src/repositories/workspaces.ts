@@ -42,6 +42,15 @@ export interface WorkspaceRepository {
    * disabled.
    */
   create(workspace: NewWorkspace): Promise<boolean>;
+  /**
+   * Points the full session `sessionId` of the account of the transaction at a workspace that account is a
+   * member of and that is not being deleted, through `sys_session_set_active_workspace`, which judges the
+   * membership in the statement that writes the session. False, with the session unchanged, for a workspace the
+   * account does not belong to or one being deleted (which a caller must not tell apart), a session of another
+   * account, a session still waiting for its second factor and a session that does not exist. Works in an
+   * account-level transaction.
+   */
+  setActive(sessionId: string, workspaceId: string): Promise<boolean>;
 }
 
 interface ListedRow extends Record<string, unknown> {
@@ -53,6 +62,10 @@ interface ListedRow extends Record<string, unknown> {
 
 interface CreatedRow extends Record<string, unknown> {
   created: boolean;
+}
+
+interface SwitchedRow extends Record<string, unknown> {
+  switched: boolean;
 }
 
 function roleOf(value: string): MemberRole {
@@ -90,6 +103,16 @@ export function workspaceRepository(tx: TenantTx): WorkspaceRepository {
         await enqueueInTenantTransaction(tx, job);
       }
       return true;
+    },
+
+    async setActive(sessionId, workspaceId) {
+      const rows = await tenantHandle(tx).execute<SwitchedRow>(sql`
+        SELECT public.sys_session_set_active_workspace(${sessionId}::uuid, ${tx.accountId}::uuid, ${workspaceId}::uuid) AS switched`);
+      const row = rows[0];
+      if (rows.length !== 1 || row === undefined) {
+        throw new Error("sys_session_set_active_workspace did not return exactly one row");
+      }
+      return row.switched;
     },
   };
 }
