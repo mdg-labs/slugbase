@@ -49,7 +49,7 @@ describe("the email-change notice template", () => {
   ])("offers the link as the \"this wasn't me\" action and says it cancels the change and ends every session (%s)", async (locale, action, signOut, pending) => {
     const rendered = await render(locale);
     expect(rendered.text).toContain(`${action}: ${LINK}`);
-    expect(rendered.html).toContain(`>${action.replace("'", "&#39;")}</a>`);
+    expect(rendered.html).toContain(`>${action.replaceAll("'", "&#39;")}</a>`);
     expect(rendered.text).toContain(signOut);
     expect(rendered.text).toContain(pending);
   });
