@@ -77,7 +77,8 @@ $$;
 -- the account's own or belongs to another account: the confirmation is then mailed to
 -- nobody, and the caller of the request is told nothing of it. The email_change token
 -- records the address it moves to (credential_tokens.target_email); the cancel token
--- records none. An older unused token of the purpose is replaced (sys_credential_token_issue),
+-- records the account's current address, the one a confirmed change replaces and the
+-- cancel link puts back. An older unused token of the purpose is replaced (sys_credential_token_issue),
 -- and when the confirmation is declined for an address that is not free, the account's
 -- unused confirmation tokens are deleted, so a link mailed by an earlier run of the job
 -- does not outlive the run that found the address taken.
@@ -122,7 +123,7 @@ BEGIN
 
   IF NOT public.sys_credential_token_issue(
     p_id, p_purpose, p_account_id, p_token_hash,
-    CASE WHEN p_purpose = 'email_change' THEN v_pending::text END,
+    CASE WHEN p_purpose = 'email_change' THEN v_pending::text ELSE v_email::text END,
     p_ttl_seconds
   ) THEN
     RETURN NULL;
@@ -192,16 +193,23 @@ $$;
 -- old address. The row of the account is locked first and the token consumed after
 -- that (purpose email_change_cancel). The pending change is cancelled, the unused
 -- email-change tokens are deleted and every session of the account ends, partial and
--- expired ones included. The link works whether the change is still pending or was
--- confirmed since: the address stays as it is, but no session survives. NULL comes
--- back, which a caller does not tell apart, for an unknown, used, expired, replaced or
--- foreign token and for a disabled account.
+-- expired ones included. The token records the address the account had when it was
+-- issued. When the change was confirmed since, the account no longer holds that
+-- address: it is put back as the account's email, the verified time stays, and the
+-- account's unused password-reset, email-change and cancel tokens are deleted, so no
+-- link issued to the address the change moved to outlives the undo. An address that
+-- another account holds by now (taken before the call or by a registration that
+-- commits while it runs) is not taken over: the account keeps its current address and
+-- the rest happens all the same. NULL comes back, which a caller does not tell apart,
+-- for an unknown, used, expired, replaced or foreign token and for a disabled account.
 CREATE OR REPLACE FUNCTION public.sys_email_change_cancel(p_token_hash bytea) RETURNS uuid
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
   SET search_path = pg_catalog, public, pg_temp
   AS $$
 DECLARE
   v_account uuid;
+  v_target public.citext;
+  v_email public.citext;
 BEGIN
   IF octet_length(p_token_hash) IS DISTINCT FROM 32 THEN
     RAISE EXCEPTION 'sys_email_change_cancel needs a 32-byte token hash' USING ERRCODE = 'invalid_parameter_value';
@@ -211,18 +219,31 @@ BEGIN
   WHERE a.id = (SELECT t.account_id FROM public.credential_tokens t WHERE t.purpose = 'email_change_cancel' AND t.token_hash = p_token_hash)
   FOR UPDATE;
 
-  SELECT t.account_id INTO v_account FROM public.sys_credential_token_consume('email_change_cancel', p_token_hash) t;
+  SELECT t.account_id, t.target_email INTO v_account, v_target
+  FROM public.sys_credential_token_consume('email_change_cancel', p_token_hash) t;
   IF v_account IS NULL THEN
     RETURN NULL;
   END IF;
 
-  PERFORM 1 FROM public.accounts a WHERE a.id = v_account AND a.disabled_at IS NULL FOR UPDATE;
+  SELECT a.email INTO v_email FROM public.accounts a WHERE a.id = v_account AND a.disabled_at IS NULL FOR UPDATE;
   IF NOT FOUND THEN
     RETURN NULL;
   END IF;
 
   UPDATE public.accounts SET pending_email = NULL WHERE id = v_account AND pending_email IS NOT NULL;
-  DELETE FROM public.credential_tokens WHERE account_id = v_account AND purpose = 'email_change' AND used_at IS NULL;
+  IF v_target IS NOT NULL AND v_email <> v_target THEN
+    IF NOT EXISTS (SELECT 1 FROM public.accounts o WHERE o.email = v_target AND o.id <> v_account) THEN
+      BEGIN
+        UPDATE public.accounts SET email = v_target WHERE id = v_account;
+      EXCEPTION WHEN unique_violation THEN
+        NULL;
+      END;
+    END IF;
+    DELETE FROM public.credential_tokens
+    WHERE account_id = v_account AND purpose IN ('password_reset', 'email_change', 'email_change_cancel') AND used_at IS NULL;
+  ELSE
+    DELETE FROM public.credential_tokens WHERE account_id = v_account AND purpose = 'email_change' AND used_at IS NULL;
+  END IF;
   PERFORM public.sys_session_revoke_all(v_account, NULL);
   RETURN v_account;
 END

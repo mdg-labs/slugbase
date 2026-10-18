@@ -14,6 +14,9 @@ const HOOK_TIMEOUT_MS = 300_000;
 const PARALLEL_CALLS = 8;
 const HOUR_SECONDS = 3_600;
 const MAIL_QUEUE = "mail.send";
+const WAIT_DEADLINE_MS = 10_000;
+const WAIT_POLL_MS = 25;
+const RACE_TEST_TIMEOUT_MS = 30_000;
 
 let db: TestDatabase;
 let store: AuthStore;
@@ -122,6 +125,23 @@ async function notice(accountId: string): Promise<Buffer> {
   return issued.hash;
 }
 
+async function resetToken(accountId: string): Promise<Buffer> {
+  const { hash } = freshToken();
+  const rows = await db.app`
+    SELECT sys_credential_token_issue(${freshId()}::uuid, 'password_reset'::text, ${accountId}::uuid, ${hash}::bytea, NULL::text, ${HOUR_SECONDS}::integer) AS issued`;
+  expect(rows[0]?.["issued"]).toBe(true);
+  return hash;
+}
+
+/** An account whose change to `to` was started and confirmed, and the notice's cancel token it was issued before that. */
+async function confirmed(from: string, to: string): Promise<{ owner: string; cancel: Buffer }> {
+  const owner = await account({ email: from });
+  await request(owner, to);
+  const cancel = await notice(owner);
+  expect(await store.confirmEmailChange(await confirmation(owner))).toEqual({ accountId: owner });
+  return { owner, cancel };
+}
+
 interface AccountRow {
   email: string;
   pending_email: string | null;
@@ -224,8 +244,8 @@ describe("requestEmailChange", () => {
 });
 
 describe("the token issue", () => {
-  it("issues a confirmation for a free address, recording the address it moves to, and a cancel token recording none", async () => {
-    const owner = await account();
+  it("issues a confirmation for a free address, recording the address it moves to, and a cancel token recording the address the account holds", async () => {
+    const owner = await account({ email: "held@example.test" });
     await request(owner, "new@example.test");
 
     expect((await issueAs(owner, "email_change")).pending).toBe("new@example.test");
@@ -233,7 +253,7 @@ describe("the token issue", () => {
 
     expect(await tokenRows(owner)).toEqual([
       { purpose: "email_change", used: false, target_email: "new@example.test" },
-      { purpose: "email_change_cancel", used: false, target_email: null },
+      { purpose: "email_change_cancel", used: false, target_email: "held@example.test" },
     ]);
   });
 
@@ -450,6 +470,123 @@ describe("cancelPendingEmailChange", () => {
 });
 
 describe("cancelEmailChange", () => {
+  it("puts the address the change replaced back after the change was confirmed, keeps it verified, deletes every session and the unused reset, email-change and cancel tokens", async () => {
+    const { owner, cancel } = await confirmed("restore.old@example.test", "restore.new@example.test");
+    const bystander = await account();
+    const bystanderSession = await session(bystander);
+    await session(owner);
+    await session(owner, "partial");
+    const reset = await resetToken(owner);
+    for (const purpose of ["email_change", "email_change_cancel"]) {
+      await asSystem(
+        db,
+        (tx) => tx`INSERT INTO credential_tokens (id, purpose, account_id, token_hash, expires_at) VALUES (${freshId()}, ${purpose}, ${owner}, ${freshToken().hash}, now() + interval '1 hour')`,
+      );
+    }
+    expect((await tokenRows(owner)).filter((row) => !row.used)).toHaveLength(4);
+
+    expect(await store.cancelEmailChange(cancel)).toEqual({ accountId: owner });
+
+    expect(await accountRow(owner)).toEqual({ email: "restore.old@example.test", pending_email: null, verified: true });
+    expect(await sessionRows(db, owner)).toEqual([]);
+    expect((await sessionRows(db, bystander)).map((row) => row.id)).toEqual([bystanderSession]);
+    expect((await tokenRows(owner)).filter((row) => !row.used)).toEqual([]);
+    expect(await db.app`SELECT * FROM sys_credential_token_consume('password_reset', ${reset}::bytea)`).toHaveLength(0);
+    expect(await store.cancelEmailChange(cancel)).toBeUndefined();
+  });
+
+  it("makes a password reset requested to the address the change moved to unredeemable once the link restored the old one", async () => {
+    const { owner, cancel } = await confirmed("scenario.old@example.test", "scenario.new@example.test");
+    const reset = await resetToken(owner);
+
+    expect(await store.cancelEmailChange(cancel)).toEqual({ accountId: owner });
+
+    expect(await db.app`SELECT * FROM sys_credential_token_consume('password_reset', ${reset}::bytea)`).toHaveLength(0);
+  });
+
+  it("restores the address whatever the case of the spelling it replaced, and leaves the verified time alone", async () => {
+    const { owner, cancel } = await confirmed("Mixed.Case@Example.test", "mixed.new@example.test");
+    const before = await asSystem(db, (tx) => tx`SELECT email_verified_at FROM accounts WHERE id = ${owner}`);
+
+    expect(await store.cancelEmailChange(cancel)).toEqual({ accountId: owner });
+
+    expect((await accountRow(owner))?.email).toBe("Mixed.Case@Example.test");
+    expect(await asSystem(db, (tx) => tx`SELECT email_verified_at FROM accounts WHERE id = ${owner}`)).toEqual(before);
+  });
+
+  it("keeps the account's current address when another account holds the old one by now, ends every session and answers as for a restore", async () => {
+    const { owner, cancel } = await confirmed("taken.old@example.test", "taken.new@example.test");
+    const holder = await account({ email: "Taken.Old@example.test" });
+    await session(owner);
+    const reset = await resetToken(owner);
+
+    expect(await store.cancelEmailChange(cancel)).toEqual({ accountId: owner });
+
+    expect(await accountRow(owner)).toMatchObject({ email: "taken.new@example.test", pending_email: null, verified: true });
+    expect(await accountRow(holder)).toMatchObject({ email: "Taken.Old@example.test" });
+    expect(await sessionRows(db, owner)).toEqual([]);
+    expect(await db.app`SELECT * FROM sys_credential_token_consume('password_reset', ${reset}::bytea)`).toHaveLength(0);
+    expect((await tokenRows(owner)).filter((row) => !row.used)).toEqual([]);
+  });
+
+  it("does not take over an address a registration commits while the restore runs: the account keeps its current address and every session still ends", async () => {
+    const { owner, cancel } = await confirmed("race.old@example.test", "race.new@example.test");
+    await session(owner);
+    const registering = freshId();
+    let redeeming: ReturnType<typeof store.cancelEmailChange> | undefined;
+
+    await db.owner.begin(async (tx) => {
+      await tx`SELECT set_config('app.account_id', ${registering}, true)`;
+      await tx`INSERT INTO accounts (id, email, display_name) VALUES (${registering}, 'race.old@example.test', 'Registering')`;
+      redeeming = store.cancelEmailChange(cancel);
+      const deadline = Date.now() + WAIT_DEADLINE_MS;
+      for (;;) {
+        const waiting = await db.owner<{ waiting: string }[]>`
+          SELECT count(*)::text AS waiting FROM pg_locks l JOIN pg_stat_activity s ON s.pid = l.pid
+          WHERE NOT l.granted AND s.datname = current_database()`;
+        if (Number(waiting[0]?.waiting ?? 0) > 0) {
+          break;
+        }
+        if (Date.now() > deadline) {
+          throw new Error("the restore never waited for the registration");
+        }
+        await new Promise((resolve) => setTimeout(resolve, WAIT_POLL_MS));
+      }
+    });
+
+    expect(await redeeming).toEqual({ accountId: owner });
+    expect(await accountRow(owner)).toMatchObject({ email: "race.new@example.test", pending_email: null });
+    expect(await accountRow(registering)).toMatchObject({ email: "race.old@example.test" });
+    expect(await sessionRows(db, owner)).toEqual([]);
+  }, RACE_TEST_TIMEOUT_MS);
+
+  it("answers a replay of the restoring token as an invalid one and changes nothing", async () => {
+    const { owner, cancel } = await confirmed("replay.old@example.test", "replay.new@example.test");
+    expect(await store.cancelEmailChange(cancel)).toEqual({ accountId: owner });
+    await asSystem(db, (tx) => tx`UPDATE accounts SET email = 'replay.later@example.test' WHERE id = ${owner}`);
+    const later = await session(owner);
+
+    expect(await store.cancelEmailChange(cancel)).toBeUndefined();
+
+    expect((await accountRow(owner))?.email).toBe("replay.later@example.test");
+    expect((await sessionRows(db, owner)).map((row) => row.id)).toEqual([later]);
+  });
+
+  it("leaves the address and the account's reset tokens alone when the change was not confirmed", async () => {
+    const owner = await account({ email: "pending.old@example.test" });
+    await request(owner, "pending.new@example.test");
+    const cancel = await notice(owner);
+    const confirm = await confirmation(owner);
+    const reset = await resetToken(owner);
+
+    expect(await store.cancelEmailChange(cancel)).toEqual({ accountId: owner });
+
+    expect(await accountRow(owner)).toMatchObject({ email: "pending.old@example.test", pending_email: null });
+    expect(await store.confirmEmailChange(confirm)).toBeUndefined();
+    expect(await tokenRows(owner)).toContainEqual({ purpose: "password_reset", used: false, target_email: null });
+    expect(await db.app`SELECT * FROM sys_credential_token_consume('password_reset', ${reset}::bytea)`).toHaveLength(1);
+  });
+
   it("cancels the pending change and deletes every session of the account, partial ones included, and no other account's", async () => {
     const owner = await account();
     const bystander = await account();

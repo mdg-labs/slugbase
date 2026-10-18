@@ -41,8 +41,11 @@ export interface EmailChangeStore {
   confirmEmailChange(tokenHash: Buffer): Promise<{ readonly accountId: string } | undefined>;
   /**
    * Redeems the "this wasn't me" token mailed to the old address once: cancels the pending change and
-   * deletes every session of the account, in one transaction. The account id, or undefined for an unknown,
-   * used, expired, replaced or foreign token and for a disabled account, which a caller does not tell apart.
+   * deletes every session of the account, in one transaction. When the change was confirmed since, the
+   * address it replaced becomes the account's email again (unless another account holds it by now, in which
+   * case the account keeps its address) and the account's unused reset, email-change and cancel tokens are
+   * deleted. The account id, or undefined for an unknown, used, expired, replaced or foreign token and for
+   * a disabled account, which a caller does not tell apart.
    */
   cancelEmailChange(tokenHash: Buffer): Promise<{ readonly accountId: string } | undefined>;
 }

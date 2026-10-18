@@ -24,7 +24,7 @@ export const credentialTokens = pgTable(
       .references(() => accounts.id, { onDelete: "cascade" }),
     /** SHA-256 of the token as the link carries it. */
     tokenHash: bytea().notNull().unique("credential_tokens_token_hash_key"),
-    /** The address an `email_change` token moves the account to. */
+    /** The address an `email_change` token moves the account to, and the one an `email_change_cancel` token puts back. */
     targetEmail: citext(),
     expiresAt: timestamp({ withTimezone: true }).notNull(),
     usedAt: timestamp({ withTimezone: true }),

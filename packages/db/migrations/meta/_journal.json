@@ -218,6 +218,13 @@
       "when": 1792331439193,
       "tag": "20261018135039_add_email_change",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1792337258816,
+      "tag": "20261018152738_add_email_change_restore",
+      "breakpoints": true
     }
   ]
 }

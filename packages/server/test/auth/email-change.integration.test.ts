@@ -30,6 +30,8 @@ const REAUTH = "/api/v1/me/reauth";
 const EMAIL = "/api/v1/me/email";
 const CONFIRM = "/api/v1/me/email/confirm";
 const CANCEL = "/api/v1/me/email/cancel";
+const FORGOT = "/api/v1/auth/password/forgot";
+const RESET = "/api/v1/auth/password/reset";
 const PENDING = "/api/v1/me/email/pending";
 const ME = "/api/v1/me";
 const LOGIN = "/api/v1/auth/login";
@@ -425,7 +427,7 @@ describe("the confirmation and the cancel link", { timeout: TEST_TIMEOUT_MS }, (
     expect(stored.map((row) => [row.purpose, row.target_email, row.used_at])).toEqual(
       expect.arrayContaining([
         ["email_change", "new.address@example.test", null],
-        ["email_change_cancel", null, null],
+        ["email_change_cancel", "old.address@example.test", null],
       ]),
     );
     const bytes = (value: string) => createHash("sha256").update(Buffer.from(value, "base64url")).digest();
@@ -482,7 +484,7 @@ describe("the confirmation and the cancel link", { timeout: TEST_TIMEOUT_MS }, (
     expect((await redeem(world, CONFIRM, tokenOf("emailChange", "attacker.chosen@example.test"))).status).toBe(204);
     expect((await redeem(world, CANCEL, tokenOf("emailChangeNotice", "owner.told@example.test"))).status).toBe(204);
     expect((await probe(world, attacker)).status).toBe(401);
-    expect((await pendingEmail(account.id)).email).toBe("attacker.chosen@example.test");
+    expect((await pendingEmail(account.id)).email).toBe("owner.told@example.test");
   });
 
   it("mails nothing to the account that holds the requested address, and the notice still goes to the requester's own address", async () => {
@@ -602,18 +604,40 @@ describe("the confirmation and the cancel link", { timeout: TEST_TIMEOUT_MS }, (
     expect(await replay.json()).toMatchObject({ code: "token_expired" });
   });
 
-  it("ends every session with the link after the change was confirmed too, and leaves the address as it then is", async () => {
+  it("puts the old address back with the link after the change was confirmed, ends every session, and refuses a password reset requested to the new address before the undo", async () => {
     const world = serve({ mail });
     const account = await owner({ email: "late.victim@example.test" });
     await startWorker();
     const attacker = await requested(world, account, "late.attacker@example.test");
     expect((await redeem(world, CONFIRM, tokenOf("emailChange", "late.attacker@example.test"))).status).toBe(204);
     expect((await probe(world, attacker)).status).toBe(200);
+    expect((await world.server.fetch(postJson(world.origin, FORGOT, { email: "late.attacker@example.test" }))).status).toBe(202);
+    await mailJobsDone(2);
+    const reset = tokenOf("passwordReset", "late.attacker@example.test");
 
     expect((await redeem(world, CANCEL, tokenOf("emailChangeNotice", "late.victim@example.test"))).status).toBe(204);
 
     expect((await probe(world, attacker)).status).toBe(401);
-    expect((await pendingEmail(account.id)).email).toBe("late.attacker@example.test");
+    expect(await pendingEmail(account.id)).toEqual({ email: "late.victim@example.test", pending: null });
+    const refused = await world.server.fetch(postJson(world.origin, RESET, { token: reset, newPassword: "the password an attacker would choose" }));
+    expect(refused.status).toBe(410);
+    expect(await refused.json()).toMatchObject({ code: "token_expired" });
+    expect((await world.server.fetch(postJson(world.origin, LOGIN, { email: "late.victim@example.test", password: PASSWORD, remember: false }))).status).toBe(200);
+    expect((await credentialTokens()).filter((token) => token.used_at === null)).toEqual([]);
+  });
+
+  it("keeps the account's address and answers 204 all the same when another account holds the old one by now, ending every session", async () => {
+    const world = serve({ mail });
+    const account = await owner({ email: "held.victim@example.test" });
+    await startWorker();
+    const attacker = await requested(world, account, "held.attacker@example.test");
+    expect((await redeem(world, CONFIRM, tokenOf("emailChange", "held.attacker@example.test"))).status).toBe(204);
+    await owner({ email: "held.victim@example.test" });
+
+    expect((await redeem(world, CANCEL, tokenOf("emailChangeNotice", "held.victim@example.test"))).status).toBe(204);
+
+    expect((await probe(world, attacker)).status).toBe(401);
+    expect(await pendingEmail(account.id)).toEqual({ email: "held.attacker@example.test", pending: null });
   });
 
   it("cancels a pending change with DELETE /me/email/pending: its links stop working, the session stays, and repeating it is a 204", async () => {
