@@ -45,6 +45,13 @@ export interface IdentityCompleteRequest {
   readonly code: string;
   readonly nonce: string;
   readonly codeVerifier: string;
+  /**
+   * Set for a re-authentication: the instant, in milliseconds since the epoch and by this server's clock, the
+   * handshake began. `complete` refuses an ID token whose `auth_time` (the provider's clock, in seconds) is older
+   * than that by more than the clock skew it allows for the token's other times; a token without `auth_time` is
+   * accepted, since the handshake asked the provider for the credentials again. Absent for a sign-in and for linking.
+   */
+  readonly authenticatedSince?: number;
 }
 
 /**

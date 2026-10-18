@@ -50,7 +50,7 @@ interface World {
   readonly fake: FakeIdentity;
   readonly logs: ReturnType<typeof recordingLogger>;
   /** What the server asked the identity port to complete, in order. */
-  readonly completed: (IdentityCompleteRequest & { readonly authenticatedSince?: number })[];
+  readonly completed: IdentityCompleteRequest[];
 }
 
 function serve(env: Record<string, string> = {}, identity?: FakeIdentity, secretBox: SecretBoxPort = testSecretBox(testKey("oidc-1"))): World {
@@ -1049,6 +1049,36 @@ describe("GET /api/v1/auth/oidc/{provider}/callback with the reauth intent", () 
     const since = world.completed.at(-1)?.authenticatedSince;
     expect(since).toBeGreaterThanOrEqual(startedAfter);
     expect(since).toBeLessThanOrEqual(startedBefore);
+  });
+
+  it("sets nothing when the ID token was authenticated before the handshake began, and accepts one authenticated after it or none at all", async () => {
+    const world = serve();
+    const { account, subject } = await linkedAccount();
+    const token = await signedInToken(world, account, subject);
+    const headers = { cookie: sessionCookie(token) };
+    const nowSeconds = (): number => Math.floor(Date.now() / 1000);
+
+    for (const authTime of [nowSeconds() - 3600, nowSeconds() - 61]) {
+      const stale = await approved(world, { subject, authTime }, "?intent=reauth", headers);
+      expectFailed(await callback(world, stale.callbackUrl, stale.preAuth, headers));
+      expect(world.logs.entries.at(-1)).toMatchObject({ fields: { reason: "invalid_token" } });
+      expect(await reauthAtOf(token)).toBeNull();
+    }
+
+    const fresh = await approved(world, { subject, authTime: nowSeconds() }, "?intent=reauth", headers);
+    expect((await callback(world, fresh.callbackUrl, fresh.preAuth, headers)).headers.get("location")).toBe("/");
+    expect(await reauthAtOf(token)).not.toBeNull();
+  });
+
+  it("accepts an ID token without auth_time on a re-authentication", async () => {
+    const world = serve();
+    const { account, subject } = await linkedAccount();
+    const token = await signedInToken(world, account, subject);
+    const headers = { cookie: sessionCookie(token) };
+    const flow = await approved(world, { subject }, "?intent=reauth", headers);
+
+    expect((await callback(world, flow.callbackUrl, flow.preAuth, headers)).headers.get("location")).toBe("/");
+    expect(await reauthAtOf(token)).not.toBeNull();
   });
 
   it("is no proof when the provider asserts an identity the account does not hold, however valid the token", async () => {

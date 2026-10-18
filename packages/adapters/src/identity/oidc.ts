@@ -58,17 +58,7 @@ export interface CreateOidcIdentityOptions {
   readonly now?: () => number;
 }
 
-/**
- * What the OIDC adapter's `complete` takes beyond the port's request: for a re-authentication, the instant (in
- * milliseconds since the epoch, by this server's clock) the handshake began. An ID token whose `auth_time` is
- * older than that by more than the clock skew allowed for `exp`, `iat` and `nbf` is refused; one without `auth_time` is not, since the handshake asked for the credentials again (`prompt=login`).
- */
-export interface OidcCompleteRequest extends IdentityCompleteRequest {
-  readonly authenticatedSince?: number;
-}
-
 export interface OidcIdentity extends IdentityPort {
-  complete(request: OidcCompleteRequest): Promise<IdentityClaims>;
   /** The metadata of an available provider, or `undefined` when the slug is unknown or the provider is unavailable. Never rejects. */
   metadata(providerId: string): Promise<OidcProviderMetadata | undefined>;
 }
@@ -382,7 +372,7 @@ export function createOidcIdentity(options: CreateOidcIdentityOptions): OidcIden
       }
       return { authorizationUrl: url.href };
     },
-    async complete(request: OidcCompleteRequest): Promise<IdentityClaims> {
+    async complete(request: IdentityCompleteRequest): Promise<IdentityClaims> {
       const entry = bySlug.get(request.providerId);
       const metadata = entry === undefined ? undefined : await load(entry);
       if (entry === undefined || metadata === undefined) {

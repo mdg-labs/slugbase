@@ -130,6 +130,8 @@ export interface FakeIdentityClaims {
 // @public (undocumented)
 export interface FakeIdentityCompleteRequest {
     // (undocumented)
+    readonly authenticatedSince?: number;
+    // (undocumented)
     readonly code: string;
     // (undocumented)
     readonly codeVerifier: string;
@@ -154,6 +156,7 @@ export type FakeIdentityFailureReason = "provider_unavailable" | "exchange_faile
 // @public
 export interface FakeIdentityGrant {
     readonly audience?: string;
+    readonly authTime?: number;
     // (undocumented)
     readonly displayName?: string;
     // (undocumented)

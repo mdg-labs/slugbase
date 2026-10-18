@@ -8,8 +8,6 @@ import { EgressPort } from '@slugbase/core';
 import { EgressRequest } from '@slugbase/core';
 import { EgressResponse } from '@slugbase/core';
 import type { ErrorReportPort } from '@slugbase/core';
-import { IdentityClaims } from '@slugbase/core';
-import { IdentityCompleteRequest } from '@slugbase/core';
 import { IdentityPort } from '@slugbase/core';
 import { IdentityProviderConfig } from '@slugbase/core';
 import type { MailMessage } from '@slugbase/core';
@@ -153,16 +151,8 @@ export interface MailTemplateInput {
 // @public
 export type MailTemplates = Readonly<Record<string, MailTemplate>>;
 
-// @public
-export interface OidcCompleteRequest extends IdentityCompleteRequest {
-    // (undocumented)
-    readonly authenticatedSince?: number;
-}
-
 // @public (undocumented)
 export interface OidcIdentity extends IdentityPort {
-    // (undocumented)
-    complete(request: OidcCompleteRequest): Promise<IdentityClaims>;
     metadata(providerId: string): Promise<OidcProviderMetadata | undefined>;
 }
 

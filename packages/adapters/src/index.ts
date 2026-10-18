@@ -20,7 +20,6 @@ export type {
 export { createOidcIdentity } from "./identity/index.ts";
 export type {
   CreateOidcIdentityOptions,
-  OidcCompleteRequest,
   OidcIdentity,
   OidcIdentityLogger,
   OidcProviderMetadata,

@@ -404,6 +404,7 @@ export interface IdentityClaims {
 
 // @public (undocumented)
 export interface IdentityCompleteRequest {
+    readonly authenticatedSince?: number;
     // (undocumented)
     readonly code: string;
     // (undocumented)

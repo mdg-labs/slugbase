@@ -16,7 +16,6 @@ import {
   truncateUserAgent,
   PortUnavailable,
   type IdentityClaims,
-  type IdentityCompleteRequest,
   type IdentityPort,
   type IdentityProviderConfig,
   type OidcPreAuthCookieSpec,
@@ -78,13 +77,7 @@ export interface OidcRoutesOptions {
     AuthStore,
     "createOidcLoginState" | "consumeOidcLoginState" | "signInWithIdentity" | "linkIdentity" | "reauthenticateWithIdentity"
   >;
-  readonly identity: Pick<IdentityPort, "begin"> & {
-    /**
-     * `authenticatedSince` is set for a `reauth` callback: the instant, in milliseconds, the handshake began by this
-     * server's clock. The adapter compares it with the provider's `auth_time` allowing the clock skew between them.
-     */
-    complete(request: IdentityCompleteRequest & { readonly authenticatedSince?: number }): Promise<IdentityClaims>;
-  };
+  readonly identity: Pick<IdentityPort, "begin" | "complete">;
   /** Seals the PKCE verifier while the handshake is in flight, and opens it at the callback. */
   readonly secretBox: Pick<SecretBoxPort, "seal" | "open">;
   /** The providers of the operator, for what each allows a first login to do. A provider not listed allows no account to be created. */
