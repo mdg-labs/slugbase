@@ -50,6 +50,7 @@ existing line by adding its PR number.
 - **lock wait snapshot** — waiting for a lock inside a statement holds a snapshot that the lock holder's own work waits for, so the two deadlock — PR 365
 - **non-atomic group** — several durable steps share one unit that is recorded only when all succeed, so a part-failure leaves finished steps that make every retry fail — PR 365
 - **cleanup replaces the error** — a cleanup step in a catch block (a ROLLBACK on a new connection) can itself reject, so its error replaces the one the caller rethrows or skips the recovery check that follows — PR 491
+- **lock order** — two functions lock the same pair of rows in opposite orders (a child row through an `UPDATE`, then its parent `FOR UPDATE`, against parent first, then a `DELETE` of its children), so concurrent calls for one parent deadlock and one aborts — PR 494
 
 ## Tests
 
