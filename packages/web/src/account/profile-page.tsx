@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { ApiProblemError } from "../api/client.ts";
 import type { Locale } from "../i18n/locales.ts";
 import { supportedLocale } from "../i18n/resolve-language.ts";
+import { EmailRow } from "./email-row.tsx";
 import { ME_QUERY_KEY, meQuery, withAccount, type Account, type Me, type UpdateAccountRequest } from "./me.ts";
 
 const NAME_MAX_LENGTH = 100;
@@ -122,9 +123,7 @@ function ProfileForm({ account }: { account: Account }): ReactElement {
               value={name}
             />
           </FormField>
-          <FormField description={t("settings.account.email.description")} label={t("settings.account.email.label")} name="email">
-            <Input readOnly type="email" value={account.email} />
-          </FormField>
+          <EmailRow account={account} />
           <SelectField
             description={t("settings.account.language.description")}
             disabled={save.isPending}

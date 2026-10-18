@@ -20,6 +20,8 @@ import { Route as AppIndexRouteImport } from "./routes/_app/index.tsx";
 import { Route as AppSplatRouteImport } from "./routes/_app/$.tsx";
 import { Route as App403RouteImport } from "./routes/_app/403.tsx";
 import { Route as AppSettingsRouteImport } from "./routes/_app/settings.tsx";
+import { Route as EmailChangeCancelRouteImport } from "./routes/email-change.cancel.tsx";
+import { Route as EmailChangeConfirmRouteImport } from "./routes/email-change.confirm.tsx";
 import { Route as LoginMfaRouteImport } from "./routes/login_.mfa.tsx";
 import { Route as AppSettingsIndexRouteImport } from "./routes/_app/settings/index.tsx";
 import { Route as AppSettingsAccountIndexRouteImport } from "./routes/_app/settings/account/index.tsx";
@@ -81,6 +83,16 @@ const AppSettingsRoute = AppSettingsRouteImport.update({
   path: "/settings",
   getParentRoute: () => AppRoute,
 } as any);
+const EmailChangeCancelRoute = EmailChangeCancelRouteImport.update({
+  id: "/email-change/cancel",
+  path: "/email-change/cancel",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const EmailChangeConfirmRoute = EmailChangeConfirmRouteImport.update({
+  id: "/email-change/confirm",
+  path: "/email-change/confirm",
+  getParentRoute: () => rootRouteImport,
+} as any);
 const LoginMfaRoute = LoginMfaRouteImport.update({
   id: "/login_/mfa",
   path: "/login/mfa",
@@ -126,6 +138,8 @@ export interface FileRoutesByFullPath {
   "/$": typeof AppSplatRoute;
   "/403": typeof App403Route;
   "/settings": typeof AppSettingsRouteWithChildren;
+  "/email-change/cancel": typeof EmailChangeCancelRoute;
+  "/email-change/confirm": typeof EmailChangeConfirmRoute;
   "/login/mfa": typeof LoginMfaRoute;
   "/settings/": typeof AppSettingsIndexRoute;
   "/settings/account/preferences": typeof AppSettingsAccountPreferencesRoute;
@@ -142,6 +156,8 @@ export interface FileRoutesByTo {
   "/verify-email": typeof VerifyEmailRoute;
   "/$": typeof AppSplatRoute;
   "/403": typeof App403Route;
+  "/email-change/cancel": typeof EmailChangeCancelRoute;
+  "/email-change/confirm": typeof EmailChangeConfirmRoute;
   "/login/mfa": typeof LoginMfaRoute;
   "/": typeof AppIndexRoute;
   "/settings": typeof AppSettingsIndexRoute;
@@ -162,6 +178,8 @@ export interface FileRoutesById {
   "/_app/$": typeof AppSplatRoute;
   "/_app/403": typeof App403Route;
   "/_app/settings": typeof AppSettingsRouteWithChildren;
+  "/email-change/cancel": typeof EmailChangeCancelRoute;
+  "/email-change/confirm": typeof EmailChangeConfirmRoute;
   "/login_/mfa": typeof LoginMfaRoute;
   "/_app/": typeof AppIndexRoute;
   "/_app/settings/": typeof AppSettingsIndexRoute;
@@ -183,6 +201,8 @@ export interface FileRouteTypes {
     | "/$"
     | "/403"
     | "/settings"
+    | "/email-change/cancel"
+    | "/email-change/confirm"
     | "/login/mfa"
     | "/settings/"
     | "/settings/account/preferences"
@@ -199,6 +219,8 @@ export interface FileRouteTypes {
     | "/verify-email"
     | "/$"
     | "/403"
+    | "/email-change/cancel"
+    | "/email-change/confirm"
     | "/login/mfa"
     | "/"
     | "/settings"
@@ -218,6 +240,8 @@ export interface FileRouteTypes {
     | "/_app/$"
     | "/_app/403"
     | "/_app/settings"
+    | "/email-change/cancel"
+    | "/email-change/confirm"
     | "/login_/mfa"
     | "/_app/"
     | "/_app/settings/"
@@ -235,6 +259,8 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute;
   SetupRoute: typeof SetupRoute;
   VerifyEmailRoute: typeof VerifyEmailRoute;
+  EmailChangeCancelRoute: typeof EmailChangeCancelRoute;
+  EmailChangeConfirmRoute: typeof EmailChangeConfirmRoute;
   LoginMfaRoute: typeof LoginMfaRoute;
 }
 
@@ -316,6 +342,20 @@ declare module "@tanstack/react-router" {
       fullPath: "/settings";
       preLoaderRoute: typeof AppSettingsRouteImport;
       parentRoute: typeof AppRoute;
+    };
+    "/email-change/cancel": {
+      id: "/email-change/cancel";
+      path: "/email-change/cancel";
+      fullPath: "/email-change/cancel";
+      preLoaderRoute: typeof EmailChangeCancelRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/email-change/confirm": {
+      id: "/email-change/confirm";
+      path: "/email-change/confirm";
+      fullPath: "/email-change/confirm";
+      preLoaderRoute: typeof EmailChangeConfirmRouteImport;
+      parentRoute: typeof rootRouteImport;
     };
     "/login_/mfa": {
       id: "/login_/mfa";
@@ -406,6 +446,8 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   SetupRoute: SetupRoute,
   VerifyEmailRoute: VerifyEmailRoute,
+  EmailChangeCancelRoute: EmailChangeCancelRoute,
+  EmailChangeConfirmRoute: EmailChangeConfirmRoute,
   LoginMfaRoute: LoginMfaRoute,
 };
 export const routeTree = rootRouteImport

@@ -60,7 +60,36 @@
       },
       "email": {
         "label": "E-Mail",
-        "description": "Die Adresse, mit der du dich anmeldest."
+        "description": "Die Adresse, mit der du dich anmeldest.",
+        "change": "E-Mail ändern",
+        "pending": {
+          "badge": "Bestätigung ausstehend",
+          "description": "Für {email} wurde ein Bestätigungslink angefordert. Deine Adresse bleibt unverändert, bis sie bestätigt ist.",
+          "resend": "Link erneut senden",
+          "cancel": "Änderung abbrechen",
+          "cancelled": "E-Mail-Änderung abgebrochen"
+        },
+        "form": {
+          "title": "E-Mail-Adresse ändern",
+          "description": "Wir senden einen Bestätigungslink an die neue Adresse. Deine E-Mail ändert sich, sobald du ihn öffnest.",
+          "label": "Neue E-Mail-Adresse",
+          "submit": "Bestätigungslink senden",
+          "cancel": "Abbrechen",
+          "close": "Schließen"
+        },
+        "requested": "Sieh in {email} nach dem Bestätigungslink.",
+        "error": {
+          "required": "Gib die neue E-Mail-Adresse ein.",
+          "invalid": "Gib eine gültige E-Mail-Adresse ein.",
+          "same": "Das ist bereits deine E-Mail-Adresse.",
+          "reauthRequired": "Bestätige, dass du es bist, um fortzufahren.",
+          "unavailable": "Das hat nicht geklappt. Versuche es gleich noch einmal.",
+          "rateLimited": {
+            "unknown": "Zu viele Versuche. Versuche es später noch einmal.",
+            "seconds": "Zu viele Versuche. Versuche es in {count, plural, one {# Sekunde} other {# Sekunden}} noch einmal.",
+            "minutes": "Zu viele Versuche. Versuche es in {count, plural, one {# Minute} other {# Minuten}} noch einmal."
+          }
+        }
       },
       "language": {
         "label": "Sprache",
@@ -688,6 +717,41 @@
       "title": "Dieser Link ist ungültig oder abgelaufen",
       "description": "Ein Link funktioniert einmal und 1 Stunde lang. Fordere einen neuen an.",
       "action": "Neuen Link anfordern"
+    }
+  },
+  "emailChange": {
+    "working": "Wird bearbeitet",
+    "confirm": {
+      "title": "Bestätige deine neue E-Mail-Adresse",
+      "description": "Der Link, den du geöffnet hast, bestätigt die Adresse, die du angegeben hast.",
+      "success": {
+        "title": "Deine E-Mail-Adresse wurde geändert",
+        "description": "Verwende beim nächsten Anmelden deine neue Adresse.",
+        "action": "App öffnen"
+      }
+    },
+    "cancel": {
+      "title": "E-Mail-Änderung abbrechen",
+      "description": "Der Link, den du geöffnet hast, gehört zu einer E-Mail-Änderung, die du nicht angefordert hast.",
+      "success": {
+        "title": "Die Änderung wurde abgebrochen und du wurdest überall abgemeldet",
+        "description": "Alle Geräte deines Kontos sind abgemeldet. Melde dich neu an und ändere dein Passwort, wenn du das nicht angefordert hast.",
+        "action": "Anmelden"
+      }
+    },
+    "expired": {
+      "title": "Dieser Link ist ungültig oder abgelaufen",
+      "description": "Ein Link funktioniert einmal und nur begrenzte Zeit. Melde dich an, um in den Kontoeinstellungen neu zu beginnen.",
+      "action": "Zur Anmeldung"
+    },
+    "error": {
+      "unavailable": "Das konnte gerade nicht abgeschlossen werden. Versuche es gleich noch einmal.",
+      "rateLimited": {
+        "unknown": "Zu viele Versuche. Versuche es später noch einmal.",
+        "seconds": "Zu viele Versuche. Versuche es in {count, plural, one {# Sekunde} other {# Sekunden}} noch einmal.",
+        "minutes": "Zu viele Versuche. Versuche es in {count, plural, one {# Minute} other {# Minuten}} noch einmal."
+      },
+      "retry": "Erneut versuchen"
     }
   },
   "signOut": {
