@@ -4,6 +4,7 @@
 
 ```ts
 
+import type { AuditRecord } from '@slugbase/core';
 import type { CredentialTokenPurpose } from '@slugbase/core';
 import { InferInsertModel } from 'drizzle-orm';
 import { InferSelectModel } from 'drizzle-orm';
@@ -171,6 +172,14 @@ export function apiTokenRepository(tx: TenantTx): ApiTokenRepository;
 export type ApiTokenScope = "read" | "read-write";
 
 // @public (undocumented)
+export interface AuditEventRepository {
+    insert(record: AuditRecord): Promise<void>;
+}
+
+// @public (undocumented)
+export function auditEventRepository(tx: TenantTx): AuditEventRepository;
+
+// @public (undocumented)
 export interface AuthStore extends SetupStore, MfaStore, OidcStore, RegistrationStore, EmailVerificationStore, PasswordResetStore, EmailChangeStore {
     changePassword(change: PasswordChange): Promise<boolean>;
     close(): Promise<void>;
@@ -240,6 +249,7 @@ export type CodeReauthenticationOutcome =
 // @public (undocumented)
 export interface CompleteSetup {
     readonly accountId: string;
+    readonly audit?: readonly AuditRecord[];
     // (undocumented)
     readonly displayName: string;
     readonly email: string;
@@ -633,6 +643,10 @@ export interface NewOidcLoginState {
 export interface NewPersonalWorkspace {
     // (undocumented)
     readonly accountId: string;
+    readonly audit?: (created: {
+        readonly name: string;
+        readonly displayName: string;
+    }) => AuditRecord;
     readonly jobs: readonly QueuedJob[];
     readonly nameSuffix: string;
     readonly workspaceId: string;
@@ -664,6 +678,13 @@ export interface NewSession {
     readonly replacedTokenHash: Buffer | null;
     readonly tokenHash: Buffer;
     readonly userAgent: string | null;
+}
+
+// @public (undocumented)
+export interface NewWorkspace {
+    readonly id: string;
+    readonly jobs: readonly QueuedJob[];
+    readonly name: string;
 }
 
 // @public
@@ -829,6 +850,7 @@ export interface RetentionStore {
 
 // @public (undocumented)
 export interface RetentionStoreOptions {
+    auditRetentionDays?: number;
     poolSize?: number;
     url: string;
 }
@@ -999,6 +1021,26 @@ export interface VerifiedEmail {
     // (undocumented)
     readonly accountId: string;
     readonly next: "done" | "mfa";
+}
+
+// @public (undocumented)
+export interface WorkspaceRepository {
+    create(workspace: NewWorkspace): Promise<boolean>;
+    list(): Promise<readonly WorkspaceSummary[]>;
+}
+
+// @public (undocumented)
+export function workspaceRepository(tx: TenantTx): WorkspaceRepository;
+
+// @public
+export interface WorkspaceSummary {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly memberCount: number;
+    // (undocumented)
+    readonly name: string;
+    readonly role: MemberRole;
 }
 
 // @public

@@ -99,7 +99,7 @@ export function createWorker(options: CreateWorkerOptions): Worker {
   // as the role of DATABASE_URL; it connects on first use.
   const maintenanceStores = {
     rateLimit: createRateLimitStore({ url: config.DATABASE_URL, poolSize: MAINTENANCE_POOL_SIZE }),
-    retention: createRetentionStore({ url: config.DATABASE_URL, poolSize: MAINTENANCE_POOL_SIZE }),
+    retention: createRetentionStore({ url: config.DATABASE_URL, poolSize: MAINTENANCE_POOL_SIZE, auditRetentionDays: config.AUDIT_RETENTION_DAYS }),
   };
   const closeMaintenanceStores = async (): Promise<void> => {
     try {

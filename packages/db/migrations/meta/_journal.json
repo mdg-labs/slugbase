@@ -246,6 +246,13 @@
       "when": 1792347139524,
       "tag": "20261018181219_add_oidc_first_login",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1792357652904,
+      "tag": "20261018210732_add_audit_events",
+      "breakpoints": true
     }
   ]
 }

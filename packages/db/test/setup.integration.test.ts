@@ -1,3 +1,4 @@
+import type { AuditRecord } from "@slugbase/core";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createAuthStore, type AuthStore, type CompleteSetup } from "../src/index.ts";
 import { systemOperations } from "../src/system/registry.ts";
@@ -537,5 +538,72 @@ describe("the jobs of a setup", () => {
 
     expect(await counts()).toEqual(NOTHING);
     expect(await queued()).toEqual([]);
+  });
+});
+
+describe("the audit events of a setup", () => {
+  function eventFor(setup: CompleteSetup, overrides: Partial<AuditRecord> = {}): AuditRecord {
+    return {
+      id: freshId(),
+      workspaceId: setup.workspaceId,
+      actorType: "account",
+      actorAccountId: setup.accountId,
+      actorLabel: setup.displayName,
+      actorTokenId: null,
+      action: "workspace.created",
+      entityType: "workspace",
+      entityId: setup.workspaceId,
+      metadata: { name: setup.workspaceName },
+      ipPrefix: setup.ipPrefix,
+      ...overrides,
+    };
+  }
+
+  async function auditRows(): Promise<{ id: string; workspace_id: string; actor_account_id: string | null; action: string; metadata: unknown }[]> {
+    return asSystem(db, (tx) => tx`SELECT id, workspace_id, actor_account_id, action, metadata FROM audit_events ORDER BY id`);
+  }
+
+  it("writes the events it carries in the transaction that creates the workspace", async () => {
+    const setup = request();
+    const event = eventFor(setup);
+
+    expect(await store.completeSetup({ ...setup, audit: [event] })).toBe("completed");
+
+    expect(await auditRows()).toEqual([
+      { id: event.id, workspace_id: setup.workspaceId, actor_account_id: setup.accountId, action: "workspace.created", metadata: { name: "First workspace" } },
+    ]);
+  });
+
+  it("writes none when setup is already completed, and none when the token is wrong", async () => {
+    expect(await store.completeSetup(request({ audit: [] }))).toBe("completed");
+    const second = request();
+    expect(await store.completeSetup({ ...second, audit: [eventFor(second)] })).toBe("setup_completed");
+    expect(await auditRows()).toEqual([]);
+
+    await db.owner`TRUNCATE accounts, workspaces, instance_state CASCADE`;
+    const guarded = request({ tokenRequired: true, tokenHash: freshToken().hash });
+    expect(await store.completeSetup({ ...guarded, audit: [eventFor(guarded)] })).toBe("forbidden");
+    expect(await auditRows()).toEqual([]);
+  });
+
+  it("leaves no account when an event names another workspace than the one the setup creates", async () => {
+    const setup = request();
+    const foreign = eventFor(setup, { workspaceId: freshId() });
+
+    await expect(store.completeSetup({ ...setup, audit: [foreign] })).rejects.toBeInstanceOf(RangeError);
+
+    expect(await counts()).toEqual(NOTHING);
+    expect(await auditRows()).toEqual([]);
+  });
+
+  it("leaves no account, workspace or session when an event cannot be written", async () => {
+    const setup = request();
+    const invalid = eventFor(setup, { action: "x".repeat(65) as AuditRecord["action"] });
+
+    await expect(store.completeSetup({ ...setup, audit: [invalid] })).rejects.toMatchObject({ code: "23514" });
+
+    expect(await counts()).toEqual(NOTHING);
+    expect(await auditRows()).toEqual([]);
+    expect(await store.setupPending()).toBe(true);
   });
 });

@@ -1,4 +1,6 @@
+import { sql } from "drizzle-orm";
 import type postgres from "postgres";
+import { tenantHandle, type TenantTx } from "../tenant.ts";
 
 // Puts a job on a pg-boss queue from inside a transaction of its own, so that the
 // job exists exactly when the change it announces is committed (doc 01 section
@@ -47,6 +49,29 @@ export async function enqueueInTransaction(tx: postgres.TransactionSql, job: Que
     FROM pgboss.queue q
     WHERE q.name = ${job.queue}
     RETURNING id`;
+  if (rows.length !== 1) {
+    throw new QueueMissingError(job.queue);
+  }
+}
+
+/**
+ * Inserts the job in the open tenant transaction `tx`, with the settings of `enqueueInTransaction`; it is
+ * visible to the worker when that transaction commits, and never otherwise.
+ */
+export async function enqueueInTenantTransaction(tx: TenantTx, job: QueuedJob): Promise<void> {
+  if (!UUID.test(job.id)) {
+    throw new RangeError("the id of a job must be a UUID");
+  }
+  const rows = await tenantHandle(tx).execute<InsertedRow & Record<string, unknown>>(sql`
+    INSERT INTO pgboss.job (
+      id, name, data, keep_until, expire_seconds, deletion_seconds,
+      retry_limit, retry_delay, retry_backoff, retry_delay_max, policy, dead_letter, heartbeat_seconds)
+    SELECT ${job.id}::uuid, q.name, ${JSON.stringify(job.data)}::text::jsonb,
+           now() + q.retention_seconds * interval '1 second', q.expire_seconds, q.deletion_seconds,
+           q.retry_limit, q.retry_delay, q.retry_backoff, q.retry_delay_max, q.policy, q.dead_letter, q.heartbeat_seconds
+    FROM pgboss.queue q
+    WHERE q.name = ${job.queue}
+    RETURNING id`);
   if (rows.length !== 1) {
     throw new QueueMissingError(job.queue);
   }

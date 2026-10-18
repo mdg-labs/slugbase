@@ -1,3 +1,4 @@
+import { prepareAuditRecord, type AuditRecord } from "../audit/writer.ts";
 import type { DomainEvent } from "../events/catalog.ts";
 
 // The personal workspace of an account that registered itself (doc 02 section 2.2): "<display name>'s
@@ -19,11 +20,16 @@ export interface PersonalWorkspaceRequest {
   readonly nameSuffix: string;
   /** Announced in the transaction that creates the workspace, and only when it does. */
   readonly events: readonly DomainEvent<"workspace.created">[];
+  /**
+   * Builds the `workspace.created` audit event of the workspace once the store has created it and knows the name it
+   * got; the store writes it in the same transaction, and only when it creates the workspace.
+   */
+  readonly audit: (created: { readonly name: string; readonly displayName: string }) => AuditRecord;
 }
 
 export interface PersonalWorkspaceStore {
   /**
-   * Creates the workspace, its owner membership and its settings, and records the events, in the transaction
+   * Creates the workspace, its owner membership and its settings, and records the events and the audit event, in the transaction
    * the store is bound to, unless the account already owns a workspace. Resolves to undefined, with nothing
    * written, for an account that does not exist or is disabled.
    */
@@ -59,6 +65,18 @@ export async function provisionPersonalWorkspace(
     workspaceId,
     nameSuffix: PERSONAL_WORKSPACE_NAME_SUFFIX,
     events: [{ eventId: newId(), name: "workspace.created", payload: { workspaceId, accountId } }],
+    audit: ({ name, displayName }) =>
+      prepareAuditRecord(
+        {
+          action: "workspace.created",
+          workspaceId,
+          actor: { type: "account", accountId, label: displayName },
+          entity: { type: "workspace", id: workspaceId },
+          metadata: { name },
+          ipPrefix: null,
+        },
+        newId,
+      ),
   });
   if (outcome === undefined) {
     throw new PersonalWorkspaceUnavailableError();

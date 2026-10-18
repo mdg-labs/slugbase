@@ -174,6 +174,16 @@ async function workspaceCountOf(accountId: string): Promise<number> {
   return Number(rows[0]?.n);
 }
 
+/** The workspace.created audit events, read as the table owner acting as slugbase_system. */
+async function workspaceAudit(): Promise<{ actor_account_id: string | null; actor_label: string; action: string; metadata: unknown }[]> {
+  const rows = await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    return tx<{ actor_account_id: string | null; actor_label: string; action: string; metadata: unknown }[]>`
+      SELECT actor_account_id, actor_label, action, metadata FROM audit_events ORDER BY created_at, id`;
+  });
+  return [...rows];
+}
+
 async function eventsQueued(): Promise<{ accountId: unknown; path: unknown }[]> {
   const rows = await database().owner<{ data: Record<string, unknown> }[]>`SELECT data FROM pgboss.job WHERE name = 'event.account.created' ORDER BY id`;
   return rows.map((row) => ({ accountId: row.data["accountId"], path: row.data["path"] }));
@@ -461,6 +471,9 @@ describe("a first login that creates an account", () => {
     expect(await identityRows()).toEqual([{ account_id: accountId, provider: "idp", subject: "created-subject", email_at_link: "Newcomer@Example.test" }]);
     expect((await sessionRows(database(), accountId)).map((row) => row.level)).toEqual(["full"]);
     expect(await workspaceCountOf(accountId)).toBe(1);
+    expect(await workspaceAudit()).toEqual([
+      { actor_account_id: accountId, actor_label: "Ada Lovelace", action: "workspace.created", metadata: { name: "Ada Lovelace's workspace" } },
+    ]);
     expect(await eventsQueued()).toEqual([{ accountId, path: "oidc" }]);
     expect((await world.server.fetch(new Request(new URL("/api/v1/me/sessions", world.origin), { headers: { cookie: `${SESSION_COOKIE}=${token ?? ""}` } }))).status).toBe(200);
   });
@@ -473,6 +486,7 @@ describe("a first login that creates an account", () => {
     expect(response.headers.get("location")).toBe("/go/docs");
     const accountId = (await accountRows())[0]?.id ?? "";
     expect(await workspaceCountOf(accountId)).toBe(0);
+    expect(await workspaceAudit()).toEqual([]);
     expect(await eventsQueued()).toEqual([{ accountId, path: "oidc" }]);
     expect(await sessionRows(database(), accountId)).toHaveLength(1);
   });

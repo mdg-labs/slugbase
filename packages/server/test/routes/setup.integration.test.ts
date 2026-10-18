@@ -305,6 +305,95 @@ describe("POST /api/v1/setup", () => {
     expect(await counts()).toEqual(ONE_OF_EACH);
   });
 
+  describe("announces and records the workspace it creates", () => {
+    interface AuditRow {
+      workspace_id: string;
+      actor_type: string;
+      actor_account_id: string | null;
+      actor_label: string;
+      action: string;
+      entity_type: string | null;
+      entity_id: string | null;
+      metadata: unknown;
+      ip_prefix: string | null;
+    }
+
+    async function auditRows(): Promise<AuditRow[]> {
+      const rows = await database().owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        return tx<AuditRow[]>`
+          SELECT workspace_id, actor_type, actor_account_id, actor_label, action, entity_type, entity_id, metadata, host(ip_prefix) AS ip_prefix
+          FROM audit_events ORDER BY created_at, id`;
+      });
+      return [...rows];
+    }
+
+    async function workspaceJobs(): Promise<Record<string, unknown>[]> {
+      const rows = await database().app<{ data: Record<string, unknown> }[]>`SELECT data FROM pgboss.job WHERE name = 'event.workspace.created' ORDER BY created_on, id`;
+      return rows.map((row) => row.data);
+    }
+
+    beforeEach(async () => {
+      await database().owner`DELETE FROM pgboss.job WHERE name IN ('event.account.created', 'event.workspace.created')`;
+    });
+
+    it("writes the workspace.created audit event and queues the workspace.created event for the workspace, in the setup's transaction", async () => {
+      const served = serve({ SETUP_TOKEN_REQUIRED: "false", TRUSTED_PROXY_HOPS: "1" });
+      const response = await setup(served, { body: { ...BODY, workspaceName: "  Home  " }, forwardedFor: "203.0.113.9" });
+      expect(response.status).toBe(201);
+      const { workspaceId } = (await response.json()) as { workspaceId: string };
+      const accountId = (await database().owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        return tx<{ id: string }[]>`SELECT id FROM accounts`;
+      }))[0]?.id;
+
+      const audit = await auditRows();
+      expect(audit).toEqual([
+        {
+          workspace_id: workspaceId,
+          actor_type: "account",
+          actor_account_id: accountId,
+          actor_label: "First Admin",
+          action: "workspace.created",
+          entity_type: "workspace",
+          entity_id: workspaceId,
+          metadata: { name: "Home" },
+          ip_prefix: "203.0.0.0",
+        },
+      ]);
+      expect(await workspaceJobs()).toEqual([{ eventId: expect.stringMatching(/^[0-9a-f-]{36}$/) as string, workspaceId, accountId }]);
+    });
+
+    it("holds no secret: not the password, its hash, the session token or the setup token", async () => {
+      const served = serve({ SETUP_TOKEN_REQUIRED: "false" });
+      expect((await setup(served, { body: { ...BODY, setupToken: "a setup token that must not be recorded" } })).status).toBe(201);
+
+      const text = JSON.stringify(await auditRows()) + JSON.stringify(await workspaceJobs());
+      for (const secret of [BODY.password, "$argon2id$", "a setup token that must not be recorded", "admin@example.test"]) {
+        expect(text).not.toContain(secret);
+      }
+    });
+
+    it("writes and queues nothing when setup is already completed", async () => {
+      const served = serve({ SETUP_TOKEN_REQUIRED: "false" });
+      expect((await setup(served)).status).toBe(201);
+      const before = { audit: await auditRows(), jobs: await workspaceJobs() };
+
+      expect((await setup(served)).status).toBe(403);
+
+      expect({ audit: await auditRows(), jobs: await workspaceJobs() }).toEqual(before);
+    });
+
+    it("writes and queues nothing for a wrong setup token", async () => {
+      const served = serve({ SETUP_TOKEN_REQUIRED: "true" });
+
+      expect((await setup(served, { body: { ...BODY, setupToken: "wrong" } })).status).toBe(403);
+
+      expect(await auditRows()).toEqual([]);
+      expect(await workspaceJobs()).toEqual([]);
+    });
+  });
+
   it("leaves an account that can sign in with the password it was created with, and with no other", async () => {
     const served = serve({ SETUP_TOKEN_REQUIRED: "false" });
     expect((await setup(served)).status).toBe(201);

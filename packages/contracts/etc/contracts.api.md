@@ -394,6 +394,9 @@ export interface ComponentTypes {
             scope: "read" | "read-write";
             workspaceId?: string;
         };
+        CreateWorkspaceRequest: {
+            name: string;
+        };
         CreatedApiToken: {
             createdAt: string;
             expiresAt: string | null;
@@ -585,6 +588,16 @@ export interface ComponentTypes {
             name: string;
             version: string;
         };
+        WorkspaceList: {
+            canCreate: boolean;
+            items: ComponentTypes["schemas"]["WorkspaceSummary"][];
+        };
+        WorkspaceSummary: {
+            id: string;
+            memberCount: number;
+            name: string;
+            role: "owner" | "admin" | "member";
+        };
     };
 }
 
@@ -729,6 +742,45 @@ export const CreatedApiTokenSchema: z.ZodObject<{
     lastUsedAt: z.ZodNullable<z.ZodISODateTime>;
     expiresAt: z.ZodNullable<z.ZodISODateTime>;
     token: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const createWorkspace: {
+    readonly method: "post";
+    readonly path: "/api/v1/workspaces";
+    readonly operationId: "createWorkspace";
+    readonly tag: "workspaces";
+    readonly summary: "Create a workspace";
+    readonly auth: "account";
+    readonly rate: "write";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            name: z.ZodString;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 201: JsonResponse<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        role: z.ZodEnum<{
+        member: "member";
+        admin: "admin";
+        owner: "owner";
+        }>;
+        memberCount: z.ZodNumber;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const CreateWorkspaceRequestSchema: z.ZodObject<{
+    name: z.ZodString;
 }, z.core.$strict>;
 
 // @public
@@ -1216,6 +1268,36 @@ export const listSessions: {
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;
         readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const listWorkspaces: {
+    readonly method: "get";
+    readonly path: "/api/v1/workspaces";
+    readonly operationId: "listWorkspaces";
+    readonly tag: "workspaces";
+    readonly summary: "List the account's workspaces";
+    readonly auth: "account";
+    readonly rate: "read";
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        role: z.ZodEnum<{
+        member: "member";
+        admin: "admin";
+        owner: "owner";
+        }>;
+        memberCount: z.ZodNumber;
+        }, z.core.$strict>>;
+        canCreate: z.ZodBoolean;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
         readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
     };
@@ -2019,6 +2101,79 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    createWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["CreateWorkspaceRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["WorkspaceSummary"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     disableMfa: {
         parameters: {
             query?: never;
@@ -2581,6 +2736,59 @@ export interface OperationTypes {
                 };
             };
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    listWorkspaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["WorkspaceList"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4346,6 +4554,23 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["listWorkspaces"];
+        put?: never;
+        post: OperationTypes["createWorkspace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/health": {
         parameters: {
             query?: never;
@@ -5393,8 +5618,41 @@ export const VersionInfoSchema: z.ZodObject<{
     builtAt: z.ZodString;
 }, z.core.$strict>;
 
+// @public
+export const WORKSPACE_NAME_MAX_LENGTH = 64;
+
 // @public (undocumented)
 export const WORKSPACE_ROLES: readonly ["owner", "admin", "member"];
+
+// @public (undocumented)
+export const WorkspaceListSchema: z.ZodObject<{
+    items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        role: z.ZodEnum<{
+            member: "member";
+            admin: "admin";
+            owner: "owner";
+        }>;
+        memberCount: z.ZodNumber;
+    }, z.core.$strict>>;
+    canCreate: z.ZodBoolean;
+}, z.core.$strict>;
+
+// @public
+export const WorkspaceNameSchema: z.ZodString;
+
+// @public (undocumented)
+export const WorkspaceSummarySchema: z.ZodObject<{
+    id: z.ZodUUID;
+    name: z.ZodString;
+    role: z.ZodEnum<{
+        member: "member";
+        admin: "admin";
+        owner: "owner";
+    }>;
+    memberCount: z.ZodNumber;
+}, z.core.$strict>;
 
 // (No @packageDocumentation comment for this package)
 

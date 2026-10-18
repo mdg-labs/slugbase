@@ -88,6 +88,11 @@ export const FIXTURES: ContractFixtures = {
   // The walker has none, so a valid unlink names an identity that is not its own, which is the declared 404 whoever holds it.
   listIdentities: {},
   unlinkIdentity: { path: { id: UNKNOWN_IDENTITY_ID }, status: 404 },
+  // Account-level operations: no workspace or other account's identifier is part of them, and the workspaces they act on are the walker's own.
+  // The walker's server leaves workspace creation at its closed default, so the valid creation is the declared 403; the creation itself is walked
+  // by the workspace route tests.
+  listWorkspaces: {},
+  createWorkspace: { body: { name: "Walker workspace" }, status: 403 },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

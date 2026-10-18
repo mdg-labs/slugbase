@@ -24,6 +24,7 @@ import { walkContract } from "./walker.ts";
 // no operation that needs a principal yet.
 
 const HOOK_TIMEOUT_MS = 300_000;
+const WALK_TIMEOUT_MS = 60_000;
 
 const database = useTestDatabase();
 let probe: Probe;
@@ -137,6 +138,7 @@ describe("the walker over the committed document", () => {
     };
   }
 
+  // Each session the walker holds is a real sign-in with the production password hash, so the walk grows with every account-level operation.
   it("calls every operation of openapi.json and finds it as declared", async () => {
     const operations = classifyOperations(committed).operations;
     expect(Object.keys(FIXTURES).sort()).toEqual(operations.map((operation) => operation.operationId).sort());
@@ -147,10 +149,10 @@ describe("the walker over the committed document", () => {
     expect(report.failures).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each anonymous operation and for the sign-in; each of the twenty operations that need a session
+    // One valid request for each anonymous operation and for the sign-in; each of the twenty-two operations that need a session
     // also answers 401 without one, and each of the seven that declare re-authentication answers 401 reauth_required without it.
-    expect(report.calls).toBe(operations.length + 27);
-  });
+    expect(report.calls).toBe(operations.length + 29);
+  }, WALK_TIMEOUT_MS);
 });
 
 describe("the hooks over a test module", () => {

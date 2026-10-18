@@ -1,3 +1,4 @@
+import type { AuditRecord } from "@slugbase/core";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createAuthStore, type AuthStore, type EmailVerification, type NewRegistration, type QueuedJob } from "../src/index.ts";
 import { systemOperations } from "../src/system/registry.ts";
@@ -107,6 +108,28 @@ function workspaceCreated(accountId: string, workspaceId: string): QueuedJob {
   return { id: freshId(), queue: QUEUE, data: { eventId: freshId(), workspaceId, accountId } };
 }
 
+/** The audit event of a personal workspace, built from the name the database gave it, as the application's core service does. */
+function workspaceAudit(accountId: string, workspaceId: string, overrides: Partial<AuditRecord> = {}) {
+  return ({ name, displayName }: { name: string; displayName: string }): AuditRecord => ({
+    id: freshId(),
+    workspaceId,
+    actorType: "account",
+    actorAccountId: accountId,
+    actorLabel: displayName,
+    actorTokenId: null,
+    action: "workspace.created",
+    entityType: "workspace",
+    entityId: workspaceId,
+    metadata: { name },
+    ipPrefix: null,
+    ...overrides,
+  });
+}
+
+async function auditRows(): Promise<{ workspace_id: string; actor_account_id: string | null; actor_label: string; action: string; metadata: unknown }[]> {
+  return asSystem(db, (tx) => tx`SELECT workspace_id, actor_account_id, actor_label, action, metadata FROM audit_events ORDER BY created_at, id`);
+}
+
 /** A verification whose `afterVerified` provisions the personal workspace, as the application's does. */
 function verification(tokenHash: Buffer, overrides: Partial<EmailVerification> = {}): EmailVerification {
   return {
@@ -119,7 +142,13 @@ function verification(tokenHash: Buffer, overrides: Partial<EmailVerification> =
     replacedTokenHash: null,
     afterVerified: async (accountId, workspaces) => {
       const workspaceId = freshId();
-      await workspaces.create({ accountId, workspaceId, nameSuffix: SUFFIX, jobs: [workspaceCreated(accountId, workspaceId)] });
+      await workspaces.create({
+        accountId,
+        workspaceId,
+        nameSuffix: SUFFIX,
+        jobs: [workspaceCreated(accountId, workspaceId)],
+        audit: workspaceAudit(accountId, workspaceId),
+      });
     },
     ...overrides,
   };
@@ -259,6 +288,84 @@ describe("verifyEmail", () => {
     expect(events).toHaveLength(1);
     expect(events[0]?.name).toBe(QUEUE);
     expect(events[0]?.data).toMatchObject({ workspaceId: workspace?.id, accountId: owner });
+  });
+
+  it("writes the workspace.created audit event of the personal workspace in the same transaction, named from what the database made", async () => {
+    const owner = await account({ displayName: "Ada Lovelace" });
+
+    await store.verifyEmail(verification(await issue(owner)));
+
+    const [workspace] = await workspacesOf(owner);
+    expect(await auditRows()).toEqual([
+      { workspace_id: workspace?.id, actor_account_id: owner, actor_label: "Ada Lovelace", action: "workspace.created", metadata: { name: "Ada Lovelace's workspace" } },
+    ]);
+  });
+
+  it("writes one audit event however often the link is used, and none for an account that already owns a workspace", async () => {
+    const owner = await account();
+    const token = await issue(owner);
+    await store.verifyEmail(verification(token));
+    await store.verifyEmail(verification(token));
+    expect(await auditRows()).toHaveLength(1);
+
+    const second = await account();
+    const existing = freshId();
+    await db.app`SELECT sys_create_workspace(${second}::uuid, ${existing}::uuid, 'Already here'::text)`;
+    await store.verifyEmail(verification(await issue(second)));
+
+    expect((await workspacesOf(second)).map((workspace) => workspace.name)).toEqual(["Already here"]);
+    expect(await auditRows()).toHaveLength(1);
+  });
+
+  it("undoes the verification, the workspace and its event when the audit event cannot be written", async () => {
+    const owner = await account();
+    const token = await issue(owner);
+
+    await expect(
+      store.verifyEmail(
+        verification(token, {
+          afterVerified: async (accountId, workspaces) => {
+            const workspaceId = freshId();
+            await workspaces.create({
+              accountId,
+              workspaceId,
+              nameSuffix: SUFFIX,
+              jobs: [workspaceCreated(accountId, workspaceId)],
+              audit: workspaceAudit(accountId, workspaceId, { action: "x".repeat(65) as AuditRecord["action"] }),
+            });
+          },
+        }),
+      ),
+    ).rejects.toMatchObject({ code: "23514" });
+
+    expect(await accountRow(owner)).toEqual({ password_hash: OLD_HASH, verified: false, password_changed: false });
+    expect(await workspacesOf(owner)).toEqual([]);
+    expect(await queued()).toEqual([]);
+    expect(await auditRows()).toEqual([]);
+  });
+
+  it("refuses an audit event that names another workspace than the one it made, and leaves nothing", async () => {
+    const owner = await account();
+    const token = await issue(owner);
+
+    await expect(
+      store.verifyEmail(
+        verification(token, {
+          afterVerified: async (accountId, workspaces) => {
+            await workspaces.create({
+              accountId,
+              workspaceId: freshId(),
+              nameSuffix: SUFFIX,
+              jobs: [],
+              audit: workspaceAudit(accountId, freshId()),
+            });
+          },
+        }),
+      ),
+    ).rejects.toBeInstanceOf(RangeError);
+
+    expect(await workspacesOf(owner)).toEqual([]);
+    expect(await auditRows()).toEqual([]);
   });
 
   it("answers nothing for the same token the second time, and a replay changes no password, no session and no workspace", async () => {

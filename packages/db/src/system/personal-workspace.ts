@@ -1,4 +1,6 @@
+import type { AuditRecord } from "@slugbase/core";
 import type postgres from "postgres";
+import { actingAsInTransaction, insertAuditRecords } from "./audit.ts";
 import { enqueueInTransaction, type QueuedJob } from "./queue.ts";
 
 // The wrapper of the system operation behind the personal workspace of a registered account (doc 05 section
@@ -13,6 +15,11 @@ export interface NewPersonalWorkspace {
   readonly nameSuffix: string;
   /** Jobs queued in the same transaction, only when the workspace is created. */
   readonly jobs: readonly QueuedJob[];
+  /**
+   * The audit event of the creation, built once the workspace exists, from the name the database gave it and the
+   * account's display name; written in the same transaction, only when the workspace is created.
+   */
+  readonly audit?: (created: { readonly name: string; readonly displayName: string }) => AuditRecord;
 }
 
 /** `created`; `exists` when the account already owns a workspace; `unavailable` for an account that does not exist or is disabled. */
@@ -51,6 +58,16 @@ export function bindPersonalWorkspaceWriter(tx: postgres.TransactionSql): Person
         throw new Error("sys_create_personal_workspace returned an outcome outside created, exists and unavailable");
       }
       if (row.outcome === "created") {
+        if (workspace.audit !== undefined) {
+          const acting = { accountId: workspace.accountId, workspaceId: workspace.workspaceId };
+          const named = await actingAsInTransaction(tx, acting, () => tx<{ name: string; display_name: string }[]>`
+            SELECT w.name, a.display_name FROM workspaces w, accounts a WHERE w.id = ${workspace.workspaceId}::uuid AND a.id = ${workspace.accountId}::uuid`);
+          const found = named[0];
+          if (named.length !== 1 || found === undefined) {
+            throw new Error("the personal workspace just created could not be read back for its audit event");
+          }
+          await insertAuditRecords(tx, acting, [workspace.audit({ name: found.name, displayName: found.display_name })]);
+        }
         for (const job of workspace.jobs) {
           await enqueueInTransaction(tx, job);
         }

@@ -117,6 +117,132 @@ export interface ApiToken {
     readonly value: string;
 }
 
+// @public (undocumented)
+export const AUDIT_ACTION_NAMES: readonly AuditAction[];
+
+// @public (undocumented)
+export const AUDIT_ACTIONS: {
+    readonly "workspace.created": {
+        readonly category: "workspace";
+        readonly metadata: {
+            readonly name: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
+    };
+};
+
+// @public
+export const AUDIT_CATEGORIES: readonly ["workspace"];
+
+// @public (undocumented)
+export type AuditAction = keyof typeof AUDIT_ACTIONS;
+
+// @public (undocumented)
+export interface AuditActionDefinition {
+    // (undocumented)
+    readonly category: AuditCategory;
+    // (undocumented)
+    readonly metadata: Readonly<Record<string, AuditMetadataField>>;
+}
+
+// @public
+export type AuditActor = {
+    readonly type: "account";
+    readonly accountId: string;
+    readonly label: string;
+} | {
+    readonly type: "api_token";
+    readonly accountId: string;
+    readonly tokenId: string;
+    readonly label: string;
+} | {
+    readonly type: "system";
+    readonly label: string;
+};
+
+// @public (undocumented)
+export type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
+
+// @public (undocumented)
+export interface AuditEventInput<Name extends AuditAction = AuditAction> {
+    // (undocumented)
+    readonly action: Name;
+    // (undocumented)
+    readonly actor: AuditActor;
+    readonly entity?: {
+        readonly type: string;
+        readonly id: string;
+    };
+    readonly ipPrefix: string | null;
+    // (undocumented)
+    readonly metadata: AuditMetadata<Name>;
+    readonly workspaceId: string;
+}
+
+// @public
+export type AuditMetadata<Name extends AuditAction = AuditAction> = {
+    readonly [Key in keyof (typeof AUDIT_ACTIONS)[Name]["metadata"]]: string;
+};
+
+// @public
+export class AuditMetadataError extends Error {
+    constructor(problem: string);
+}
+
+// @public
+export type AuditMetadataField = {
+    readonly type: "text";
+    readonly minLength: number;
+    readonly maxLength: number;
+} | {
+    readonly type: "uuid";
+};
+
+// @public
+export interface AuditRecord {
+    // (undocumented)
+    readonly action: AuditAction;
+    // (undocumented)
+    readonly actorAccountId: string | null;
+    // (undocumented)
+    readonly actorLabel: string;
+    // (undocumented)
+    readonly actorTokenId: string | null;
+    // (undocumented)
+    readonly actorType: AuditActor["type"];
+    // (undocumented)
+    readonly entityId: string | null;
+    // (undocumented)
+    readonly entityType: string | null;
+    readonly id: string;
+    // (undocumented)
+    readonly ipPrefix: string | null;
+    // (undocumented)
+    readonly metadata: Readonly<Record<string, string>>;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface AuditStore {
+    insert(record: AuditRecord): Promise<void>;
+}
+
+// @public (undocumented)
+export interface AuditWriter {
+    write<Name extends AuditAction>(event: AuditEventInput<Name>): Promise<void>;
+}
+
+// @public (undocumented)
+export interface AuditWriterDependencies {
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: AuditStore;
+}
+
 // @public
 export function autoCreateAllowed(email: string, allowedDomains: readonly string[]): boolean;
 
@@ -150,6 +276,9 @@ export interface BreachedPasswords {
 }
 
 // @public
+export function canCreateWorkspace(input: WorkspaceCreationPolicy): boolean;
+
+// @public
 export interface ChallengePort extends Port {
     // (undocumented)
     verify(solution: string | undefined): Promise<ChallengeVerdict>;
@@ -174,11 +303,17 @@ export interface ClientErrorReportRequest {
     readonly workspaceId: string | undefined;
 }
 
+// @public (undocumented)
+export function createAuditWriter(input: AuditWriterDependencies): AuditWriter;
+
 // @public
 export function createBreachedPasswords(records: Uint8Array): BreachedPasswords;
 
 // @public (undocumented)
 export function createPasswordPolicy(input?: PasswordPolicyOptions): PasswordPolicy;
+
+// @public
+export function createWorkspace(input: WorkspaceCreationDependencies, ask: WorkspaceCreationAsk): Promise<WorkspaceCreationOutcome>;
 
 // @public
 export const CREDENTIAL_TOKEN_BYTES = 32;
@@ -465,6 +600,9 @@ export interface IdentityProviderInfo {
 }
 
 // @public (undocumented)
+export function isAuditAction(value: unknown): value is AuditAction;
+
+// @public (undocumented)
 export function isDomainEventName(value: unknown): value is DomainEventName;
 
 // @public
@@ -550,6 +688,9 @@ export interface OtpauthOptions {
 export function otpauthUri(input: OtpauthOptions): string;
 
 // @public
+export function parseAuditMetadata<Name extends AuditAction>(name: Name, value: unknown): AuditMetadata<Name>;
+
+// @public
 export function parseDomainEventPayload<Name extends DomainEventName>(name: Name, value: unknown): DomainEventPayload<Name>;
 
 // @public
@@ -588,6 +729,10 @@ export type PersonalWorkspaceOutcome = "created" | "exists";
 export interface PersonalWorkspaceRequest {
     // (undocumented)
     readonly accountId: string;
+    readonly audit: (created: {
+        readonly name: string;
+        readonly displayName: string;
+    }) => AuditRecord;
     readonly events: readonly DomainEvent<"workspace.created">[];
     // (undocumented)
     readonly nameSuffix: string;
@@ -620,6 +765,9 @@ export class PortUnavailable extends Error {
 
 // @public
 export type PortUnavailableCode = Extract<ProblemCode, "unavailable" | "mail_unavailable" | "ai_unavailable">;
+
+// @public
+export function prepareAuditRecord<Name extends AuditAction>(event: AuditEventInput<Name>, newId: () => string): AuditRecord;
 
 // @public
 export function provisionPersonalWorkspace(input: PersonalWorkspaceDependencies, accountId: string): Promise<PersonalWorkspaceOutcome>;
@@ -778,8 +926,66 @@ export const USER_AGENT_MAX_LENGTH = 256;
 // @public
 export function verifyTotp(secret: Uint8Array, code: string, nowMs: number): number | undefined;
 
+// @public
+export const WORKSPACE_NAME_MAX_LENGTH = 64;
+
+// @public (undocumented)
+export interface WorkspaceCreationAsk extends WorkspaceCreationPolicy {
+    // (undocumented)
+    readonly accountId: string;
+    readonly displayName: string;
+    readonly ipPrefix: string | null;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public (undocumented)
+export interface WorkspaceCreationDependencies {
+    readonly audit: AuditWriter;
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: WorkspaceStore;
+}
+
+// @public (undocumented)
+export type WorkspaceCreationOutcome = {
+    readonly kind: "created";
+    readonly workspaceId: string;
+}
+/** The deployment does not let accounts create workspaces. */
+| {
+    readonly kind: "not_allowed";
+} | {
+    readonly kind: "unverified";
+}
+/** The account does not exist or is disabled. */
+| {
+    readonly kind: "unavailable";
+};
+
+// @public (undocumented)
+export interface WorkspaceCreationPolicy {
+    readonly creationAllowed: boolean;
+    // (undocumented)
+    readonly emailVerified: boolean;
+}
+
+// @public (undocumented)
+export interface WorkspaceCreationRequest {
+    readonly accountId: string;
+    readonly events: readonly DomainEvent<"workspace.created">[];
+    // (undocumented)
+    readonly name: string;
+    readonly workspaceId: string;
+}
+
 // @public (undocumented)
 export type WorkspaceRole = "owner" | "admin" | "member";
+
+// @public (undocumented)
+export interface WorkspaceStore {
+    create(request: WorkspaceCreationRequest): Promise<boolean>;
+}
 
 // (No @packageDocumentation comment for this package)
 

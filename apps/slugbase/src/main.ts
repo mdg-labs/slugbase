@@ -147,6 +147,10 @@ const MIGRATIONS: readonly MigrationChain[] = [];
 // carry the link. A key the operator sets wins.
 const REGISTRATION_DEFAULTS: RegistrationSettings = { publicRegistration: false, emailVerificationRequired: false };
 
+// Whether ordinary accounts may create workspaces (doc 02 section 3.2): CE leaves it to the instance admin, who
+// creates them from the admin area; the managed composition passes true. No edition flag decides it (D4).
+const ALLOW_WORKSPACE_CREATION = false;
+
 const RATE_LIMIT_POOL_SIZE = 4;
 
 // The templates are the ones of `@slugbase/email`, with every link on the deployment's own origin. A
@@ -248,6 +252,7 @@ async function runServer(config: ServerConfig, trap: SignalTrap): Promise<void> 
     modules: [],
     migrations: MIGRATIONS,
     registrationDefaults: REGISTRATION_DEFAULTS,
+    allowWorkspaceCreation: ALLOW_WORKSPACE_CREATION,
     logger,
     buildInfo: loadBuildInfo(BUILD_INFO_FILE),
     ...(serveWeb ? { webRoot: WEB_ROOT } : {}),

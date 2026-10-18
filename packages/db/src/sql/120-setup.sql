@@ -65,7 +65,11 @@ $$;
 -- row, in one call, so a workspace never exists without an owner or without
 -- settings. The new workspace is not the account's active one yet, so no tenant
 -- context could create it. The caller names the account it authenticated.
--- Answers false, and changes nothing, for an unknown or disabled account.
+-- Answers false, and changes nothing, for an unknown or disabled account, and for an account other
+-- than the one a tenant transaction acts for: when app_account_id() names an account, p_account_id
+-- must be that account, so a transaction cannot make a workspace owned by somebody else. The
+-- anonymous flows that create the first workspace of an account (setup, registration, verification)
+-- run with no account set and name the account they just made.
 CREATE OR REPLACE FUNCTION public.sys_create_workspace(p_account_id uuid, p_workspace_id uuid, p_name text)
   RETURNS boolean
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -75,6 +79,9 @@ BEGIN
   IF NOT coalesce(p_account_id IS NOT NULL AND p_workspace_id IS NOT NULL AND p_name IS NOT NULL, false) THEN
     RAISE EXCEPTION 'sys_create_workspace needs an account, a workspace id and a name'
       USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  IF public.app_account_id() IS NOT NULL AND p_account_id <> public.app_account_id() THEN
+    RETURN false;
   END IF;
   IF NOT EXISTS (SELECT 1 FROM public.accounts a WHERE a.id = p_account_id AND a.disabled_at IS NULL) THEN
     RETURN false;

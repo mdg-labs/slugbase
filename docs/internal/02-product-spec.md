@@ -111,7 +111,7 @@ A workspace has a name (1–64 characters), a generated colour and monogram, an 
 
 - An instance admin creates workspaces from the admin area (§11) on any deployment.
 - Whether *ordinary* accounts may create their own workspaces is the instance setting `allow_workspace_creation`. Its default is supplied by the composition root, never by an edition flag (D4, Q94): off in the CE composition, on in the Cloud composition. Once an instance admin sets it, the stored value overrides the default on the very next request.
-- Where creation is allowed, any verified account can create a workspace from the workspace switcher, subject to `workspaces.ownMax` (Cloud Free: one owned workspace). The creator becomes owner. Hitting the limit shows the upgrade path (doc 06), not an error; the workspace list reports whether the account can create one, so the UI hides or replaces the action.
+- Where creation is allowed, any verified account can create a workspace from the workspace switcher, subject to `workspaces.ownMax` (Cloud Free: one owned workspace). The creator becomes owner, the creation is recorded as the `workspace.created` audit event of the new workspace, and the active workspace does not change. Hitting the limit shows the upgrade path (doc 06), not an error; the workspace list reports whether the account can create one (`canCreate`: creation is allowed and the address is verified), so the UI hides or replaces the action.
 
 ### 3.3 Roles
 

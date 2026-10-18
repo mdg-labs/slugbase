@@ -211,6 +211,24 @@ describe("process schemas", () => {
     expect(loadConfig("worker", { ...development, TOTP_ISSUER: "ignored" }).config).not.toHaveProperty("TOTP_ISSUER");
   });
 
+  it.each(["server", "worker"] as const)("keeps audit events for 365 days on the %s unless AUDIT_RETENTION_DAYS says otherwise", (type) => {
+    expect(loadConfig(type, development).config.AUDIT_RETENTION_DAYS).toBe(365);
+  });
+
+  it.each([
+    ["0", 0],
+    ["30", 30],
+    ["36500", 36_500],
+  ])("parses AUDIT_RETENTION_DAYS %j as %j", (value, expected) => {
+    expect(loadConfig("worker", { ...development, AUDIT_RETENTION_DAYS: value }).config.AUDIT_RETENTION_DAYS).toBe(expected);
+  });
+
+  it.each([["-1"], ["36501"], ["1.5"], ["a year"], ["1e3"], [" 30"]])("names AUDIT_RETENTION_DAYS for the value %j without quoting it", (value) => {
+    const error = failure(() => loadConfig("worker", { ...development, AUDIT_RETENTION_DAYS: value }));
+    expect(error.issues.map((issue) => issue.key)).toContain("AUDIT_RETENTION_DAYS");
+    expect(error.message).not.toContain(value.trim());
+  });
+
   it("removes a trailing slash from DOCS_BASE_URL so links join it without doubling", () => {
     const docsBase = (value: string) => loadConfig("server", { ...development, DOCS_BASE_URL: value }).config.DOCS_BASE_URL;
     expect(docsBase("https://docs.example.com/docs/")).toBe("https://docs.example.com/docs");

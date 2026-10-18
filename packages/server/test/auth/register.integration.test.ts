@@ -200,6 +200,16 @@ async function workspaceEvents(): Promise<Record<string, unknown>[]> {
   return rows.map((row) => row.data);
 }
 
+/** The workspace.created audit events, read as the table owner acting as slugbase_system. */
+async function workspaceAudit(): Promise<{ actor_account_id: string | null; actor_label: string; action: string; metadata: unknown }[]> {
+  const rows = await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    return tx<{ actor_account_id: string | null; actor_label: string; action: string; metadata: unknown }[]>`
+      SELECT actor_account_id, actor_label, action, metadata FROM audit_events ORDER BY created_at, id`;
+  });
+  return [...rows];
+}
+
 async function untouched(): Promise<void> {
   expect(await accounts()).toEqual([]);
   expect(await jobs()).toEqual([]);
@@ -244,6 +254,9 @@ describe("POST /api/v1/auth/register", { timeout: TEST_TIMEOUT_MS }, () => {
     const [account] = await accounts();
     expect(await workspacesOf(account?.id)).toEqual([{ name: "Ada Lovelace's workspace", role: "owner" }]);
     expect((await workspaceEvents()).map((event) => event["accountId"])).toEqual([account?.id]);
+    expect(await workspaceAudit()).toEqual([
+      { actor_account_id: account?.id, actor_label: "Ada Lovelace", action: "workspace.created", metadata: { name: "Ada Lovelace's workspace" } },
+    ]);
   });
 
   it("creates no workspace at registration when verification is required, leaving it to the verification", async () => {
@@ -254,6 +267,7 @@ describe("POST /api/v1/auth/register", { timeout: TEST_TIMEOUT_MS }, () => {
     const [account] = await accounts();
     expect(await workspacesOf(account?.id)).toEqual([]);
     expect(await workspaceEvents()).toEqual([]);
+    expect(await workspaceAudit()).toEqual([]);
   });
 
   it("creates no workspace for an address that already has an account, and leaves the account's one workspace alone", async () => {
@@ -266,6 +280,7 @@ describe("POST /api/v1/auth/register", { timeout: TEST_TIMEOUT_MS }, () => {
     expect(await accounts()).toHaveLength(1);
     expect(await workspacesOf(account?.id)).toEqual([{ name: "Ada Lovelace's workspace", role: "owner" }]);
     expect(await workspaceEvents()).toHaveLength(1);
+    expect(await workspaceAudit()).toHaveLength(1);
   });
 
   it("gives the account English when the browser asks for no language the interface has", async () => {

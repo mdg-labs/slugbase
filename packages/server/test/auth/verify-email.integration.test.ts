@@ -249,6 +249,16 @@ async function workspaceEvents(): Promise<Record<string, unknown>[]> {
   return rows.map((row) => row.data);
 }
 
+/** The workspace.created audit events, read as the table owner acting as slugbase_system. */
+async function workspaceAudit(): Promise<{ actor_account_id: string | null; actor_label: string; action: string; metadata: unknown }[]> {
+  const rows = await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    return tx<{ actor_account_id: string | null; actor_label: string; action: string; metadata: unknown }[]>`
+      SELECT actor_account_id, actor_label, action, metadata FROM audit_events ORDER BY created_at, id`;
+  });
+  return [...rows];
+}
+
 async function ageToken(accountId: string, seconds: number): Promise<void> {
   await database().owner.begin(async (tx) => {
     await tx`SET LOCAL ROLE slugbase_system`;
@@ -280,6 +290,9 @@ describe("POST /api/v1/auth/verify-email", { timeout: TEST_TIMEOUT_MS }, () => {
     expect((await accountRow(account.id)).verified).toBe(true);
     expect(await workspaceNames(account.id)).toEqual([{ name: "Ada Lovelace's workspace", role: "owner" }]);
     expect(await workspaceEvents()).toMatchObject([{ accountId: account.id }]);
+    expect(await workspaceAudit()).toEqual([
+      { actor_account_id: account.id, actor_label: "Ada Lovelace", action: "workspace.created", metadata: { name: "Ada Lovelace's workspace" } },
+    ]);
     expect((await probe(world, cookie ?? null)).status).toBe(200);
   });
 
@@ -298,6 +311,7 @@ describe("POST /api/v1/auth/verify-email", { timeout: TEST_TIMEOUT_MS }, () => {
     expect(replay.headers.get("set-cookie")).toBeNull();
     expect(await workspaceNames(account.id)).toHaveLength(1);
     expect(await workspaceEvents()).toHaveLength(1);
+    expect(await workspaceAudit()).toHaveLength(1);
     expect(await sessionRows(database(), account.id)).toEqual(sessionsBefore);
     expect(await passwordIs(await accountRow(account.id), PASSWORD_B)).toBe(true);
   });
