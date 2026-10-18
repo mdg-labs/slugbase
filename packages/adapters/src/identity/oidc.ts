@@ -9,7 +9,7 @@ import {
   type IdentityProviderConfig,
   type IdentityProviderInfo,
 } from "@slugbase/core";
-import { IdTokenError, verifyIdToken } from "./id-token.ts";
+import { IdTokenError, verifyIdToken, type VerifiedIdToken } from "./id-token.ts";
 
 // The OIDC providers of the operator (doc 02 section 2.8) behind the identity port. Discovery and the signing
 // keys of each provider are fetched only through the egress port (T6): it resolves and validates the address
@@ -18,7 +18,10 @@ import { IdTokenError, verifyIdToken } from "./id-token.ts";
 // configured string (T20). A provider that cannot be used is left out and logged; the others stay (D22).
 // The authorization-code handshake is the same adapter: `begin` builds the authorization URL with the PKCE
 // challenge, the state and the nonce, and `complete` exchanges the code at the token endpoint through egress
-// and returns the claims of the ID token only after id-token.ts has verified it.
+// and returns the claims of the ID token only after id-token.ts has verified it. A token signed with a key id the
+// cached key set does not hold makes the adapter fetch the provider's key set once more, at most once a minute
+// for a provider, before it refuses the token, so a provider that rotated its keys does not fail sign-ins until
+// the cache expires.
 
 /** Why a provider is unavailable; the fixed words of the log line. */
 export type OidcUnavailableReason = "discovery_failed" | "issuer_mismatch" | "invalid_discovery" | "keys_failed" | "invalid_keys";
@@ -62,6 +65,8 @@ export interface OidcIdentity extends IdentityPort {
 
 export const DEFAULT_CACHE_TTL_MS = 3_600_000;
 export const DEFAULT_FAILURE_TTL_MS = 60_000;
+/** The shortest time between two fetches of a provider's key set that a token with an unknown key id causes. */
+export const KEYS_REFETCH_INTERVAL_MS = 60_000;
 
 const REQUEST_TIMEOUT_MS = 5_000;
 const DISCOVERY_MAX_BYTES = 65_536;
@@ -132,10 +137,15 @@ interface Settled {
   readonly metadata: OidcProviderMetadata | undefined;
 }
 
+type JsonWebKeys = OidcProviderMetadata["keys"];
+
 interface Entry {
   readonly config: IdentityProviderConfig;
   settled?: Settled;
   inflight?: Promise<OidcProviderMetadata | undefined>;
+  /** When a token with an unknown key id last made the adapter fetch the key set. */
+  keysRefetchedAt?: number;
+  keysRefetch?: Promise<OidcProviderMetadata | undefined>;
 }
 
 /** A form value as RFC 6749 appendix B writes it, which HTTP Basic credentials are too. */
@@ -196,20 +206,17 @@ export function createOidcIdentity(options: CreateOidcIdentityOptions): OidcIden
     if (authorizationEndpoint === undefined || tokenEndpoint === undefined || jwksUri === undefined || tokenAuthMethod === undefined) {
       throw new Unavailable("invalid_discovery");
     }
+    return { issuer: config.issuerUrl, authorizationEndpoint, tokenEndpoint, jwksUri, tokenAuthMethod, keys: await fetchKeys(jwksUri) };
+  }
+
+  async function fetchKeys(jwksUri: string): Promise<JsonWebKeys> {
     const set = asObject(await fetchJson(jwksUri, KEYS_MAX_BYTES, KEYS_CONTENT_TYPES, "keys_failed", "invalid_keys"));
     const listed = set?.["keys"];
     const keys = Array.isArray(listed) ? (listed as unknown[]).map(asObject) : [];
     if (keys.length === 0 || keys.some((key) => typeof key?.["kty"] !== "string")) {
       throw new Unavailable("invalid_keys");
     }
-    return {
-      issuer: config.issuerUrl,
-      authorizationEndpoint,
-      tokenEndpoint,
-      jwksUri,
-      tokenAuthMethod,
-      keys: keys.flatMap((key) => (key === undefined ? [] : [key])),
-    };
+    return keys.flatMap((key) => (key === undefined ? [] : [key]));
   }
 
   // Never rejects: a failure is logged and kept as the answer for the failure TTL.
@@ -234,6 +241,46 @@ export function createOidcIdentity(options: CreateOidcIdentityOptions): OidcIden
       delete entry.inflight;
     });
     return entry.inflight;
+  }
+
+  // The provider's key set, fetched again for a token that names a key id the cached set does not hold. A
+  // refetch by anyone since the caller read its metadata is used as it is; otherwise the provider's key set is
+  // fetched, but not before KEYS_REFETCH_INTERVAL_MS after the last fetch this made, whether that succeeded or
+  // not. Callers that meet an unknown key id together share one fetch. A failed or invalid answer keeps the keys
+  // the adapter had, is logged with fixed words, and leaves the token refused.
+  async function keysAfterUnknownKeyId(entry: Entry, seen: OidcProviderMetadata): Promise<JsonWebKeys | undefined> {
+    const current = await load(entry);
+    if (current === undefined) {
+      return undefined;
+    }
+    if (current.keys !== seen.keys) {
+      return current.keys;
+    }
+    if (entry.keysRefetch === undefined) {
+      if (entry.keysRefetchedAt !== undefined && now() - entry.keysRefetchedAt < KEYS_REFETCH_INTERVAL_MS) {
+        return undefined;
+      }
+      entry.keysRefetchedAt = now();
+      entry.keysRefetch = refetchKeys(entry, current).finally(() => {
+        delete entry.keysRefetch;
+      });
+    }
+    return (await entry.keysRefetch)?.keys;
+  }
+
+  // Never rejects.
+  async function refetchKeys(entry: Entry, metadata: OidcProviderMetadata): Promise<OidcProviderMetadata | undefined> {
+    try {
+      const updated = { ...metadata, keys: await fetchKeys(metadata.jwksUri) };
+      if (entry.settled?.metadata === metadata) {
+        entry.settled = { until: entry.settled.until, metadata: updated };
+      }
+      return updated;
+    } catch (error) {
+      const detail = error instanceof Unavailable ? { reason: error.reason, ...error.detail } : { reason: "keys_failed", ...describeFailure(error) };
+      logger.warn("An OIDC provider's keys could not be fetched again", { provider: entry.config.slug, ...detail });
+      return undefined;
+    }
   }
 
   // The code is exchanged at the token endpoint the verified document named, through egress, with the PKCE
@@ -317,8 +364,11 @@ export function createOidcIdentity(options: CreateOidcIdentityOptions): OidcIden
       url.searchParams.set("nonce", request.nonce);
       url.searchParams.set("code_challenge", request.codeChallenge);
       url.searchParams.set("code_challenge_method", "S256");
+      // A re-authentication asks for the credentials again (`prompt=login`) and for no authentication older than
+      // the request (`max_age=0`), which also makes the provider put `auth_time` in the ID token.
       if (request.reauthenticate === true) {
         url.searchParams.set("prompt", "login");
+        url.searchParams.set("max_age", "0");
       }
       return { authorizationUrl: url.href };
     },
@@ -330,8 +380,29 @@ export function createOidcIdentity(options: CreateOidcIdentityOptions): OidcIden
       }
       const { config } = entry;
       const idToken = await exchangeCode(config, metadata, request);
+      const verify = (keys: JsonWebKeys): VerifiedIdToken =>
+        verifyIdToken(idToken, {
+          issuer: config.issuerUrl,
+          clientId: config.clientId,
+          nonce: request.nonce,
+          keys,
+          now: now(),
+          ...(request.authenticatedSince === undefined ? {} : { authenticatedSince: request.authenticatedSince }),
+        });
       try {
-        const verified = verifyIdToken(idToken, { issuer: config.issuerUrl, clientId: config.clientId, nonce: request.nonce, keys: metadata.keys, now: now() });
+        let verified: VerifiedIdToken;
+        try {
+          verified = verify(metadata.keys);
+        } catch (error) {
+          if (!(error instanceof IdTokenError) || !error.unknownKeyId) {
+            throw error;
+          }
+          const keys = await keysAfterUnknownKeyId(entry, metadata);
+          if (keys === undefined) {
+            throw error;
+          }
+          verified = verify(keys);
+        }
         return {
           providerId: config.slug,
           subject: verified.subject,

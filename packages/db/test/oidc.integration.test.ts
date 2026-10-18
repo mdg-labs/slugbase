@@ -90,7 +90,7 @@ function signIn(overrides: Partial<Parameters<AuthStore["signInWithIdentity"]>[0
 describe("the OIDC system operations", () => {
   it("are registered", () => {
     expect(systemOperations).toEqual(
-      expect.arrayContaining(["sys_oidc_state_create", "sys_oidc_state_consume", "sys_identity_sign_in", "sys_identity_link", "sys_identity_unlink", "sys_identity_reauth", "sys_password_set_initial"]),
+      expect.arrayContaining(["sys_oidc_state_create", "sys_oidc_state_consume", "sys_identity_sign_in", "sys_identity_link", "sys_identity_link_by_email", "sys_identity_unlink", "sys_identity_reauth", "sys_password_set_initial"]),
     );
   });
 });
@@ -174,7 +174,7 @@ describe("signing in with a linked identity", () => {
     const identityId = await link(holder);
     const request = signIn();
 
-    expect(await store.signInWithIdentity(request)).toBe(true);
+    expect(await store.signInWithIdentity(request)).toBe("signed_in");
 
     const sessions = await sessionRows(db, holder);
     expect(sessions).toHaveLength(1);
@@ -197,7 +197,7 @@ describe("signing in with a linked identity", () => {
     await link(holder, "idp", "mfa-subject");
     const request = signIn({ subject: "mfa-subject" });
 
-    expect(await store.signInWithIdentity(request)).toBe(true);
+    expect(await store.signInWithIdentity(request)).toBe("signed_in");
     expect((await sessionRows(db, holder)).map((row) => row.level)).toEqual(["full"]);
     expect(await store.createSession({ ...request, id: freshId(), accountId: holder, level: "full", remember: false, tokenHash: freshToken().hash })).toBe(false);
   });
@@ -210,7 +210,7 @@ describe("signing in with a linked identity", () => {
       INSERT INTO sessions (id, token_hash, account_id, level, remember, expires_at, absolute_expires_at)
       VALUES (${freshId()}, ${old.hash}, ${holder}, 'full', false, now() + interval '1 day', now() + interval '1 day')`);
 
-    expect(await store.signInWithIdentity(signIn({ subject: "replace-subject", replacedTokenHash: old.hash }))).toBe(true);
+    expect(await store.signInWithIdentity(signIn({ subject: "replace-subject", replacedTokenHash: old.hash }))).toBe("signed_in");
     expect(await sessionRows(db, holder)).toHaveLength(1);
     expect(await store.lookupSession(old.hash)).toBeUndefined();
   });
@@ -221,9 +221,9 @@ describe("signing in with a linked identity", () => {
     const disabled = await account({ disabled: true });
     await link(disabled, "idp", "disabled-subject");
 
-    expect(await store.signInWithIdentity(signIn({ subject: "unknown" }))).toBe(false);
-    expect(await store.signInWithIdentity(signIn({ provider: "other", subject: "known" }))).toBe(false);
-    expect(await store.signInWithIdentity(signIn({ subject: "disabled-subject" }))).toBe(false);
+    expect(await store.signInWithIdentity(signIn({ subject: "unknown" }))).toBe("refused");
+    expect(await store.signInWithIdentity(signIn({ provider: "other", subject: "known" }))).toBe("refused");
+    expect(await store.signInWithIdentity(signIn({ subject: "disabled-subject" }))).toBe("refused");
     expect(await sessionRows(db, holder)).toEqual([]);
     expect(await sessionRows(db, disabled)).toEqual([]);
   });
@@ -232,7 +232,7 @@ describe("signing in with a linked identity", () => {
     const holder = await account();
     const identityId = await link(holder, "idp", "clash-subject");
     const taken = freshToken();
-    expect(await store.signInWithIdentity(signIn({ subject: "clash-subject", tokenHash: taken.hash }))).toBe(true);
+    expect(await store.signInWithIdentity(signIn({ subject: "clash-subject", tokenHash: taken.hash }))).toBe("signed_in");
     const survivor = freshToken();
     await asSystem(db, (tx) => tx`
       INSERT INTO sessions (id, token_hash, account_id, level, remember, expires_at, absolute_expires_at)

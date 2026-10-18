@@ -1,4 +1,4 @@
-import { sessionCookieSpec, type IdentityPort, type MailPort, type PasswordPolicy, type RegistrationSettings, type SecretBoxPort } from "@slugbase/core";
+import { sessionCookieSpec, type IdentityPort, type IdentityProviderConfig, type MailPort, type PasswordPolicy, type RegistrationSettings, type SecretBoxPort } from "@slugbase/core";
 import type { AuthStore } from "@slugbase/db";
 import { createApiTokenAuthenticator } from "../../auth/api-tokens.ts";
 import { createSessionAuthenticator } from "../../auth/authenticator.ts";
@@ -36,6 +36,8 @@ export interface AuthRoutesOptions {
   readonly secretBox: Pick<SecretBoxPort, "seal" | "open" | "needsRotation" | "reseal">;
   /** The OIDC providers of the operator: the sign-in routes answer a failed handshake alike when there are none. */
   readonly identity: Pick<IdentityPort, "begin" | "complete">;
+  /** The providers' first-login settings: what each allows an identity nobody linked to do. */
+  readonly oidcProviders: readonly Pick<IdentityProviderConfig, "slug" | "autoCreate" | "allowedDomains">[];
   /** The instant a code is checked at, in milliseconds; defaults to the system clock. */
   readonly now?: () => number;
 }
@@ -58,11 +60,12 @@ export function authContribution({
   hashPassword = hashArgon2id,
   secretBox,
   identity,
+  oidcProviders,
   now = Date.now,
 }: AuthRoutesOptions): ModuleContribution {
   const cookie = sessionCookieSpec(appOrigin);
   return {
-    routes: [loginRoute({ store, passwords, mail, registration, cookie }), registerRoute({ store, settings: registration, mail, passwordPolicy, hashPassword }), verifyEmailRoute({ store, passwordPolicy, hashPassword, cookie }), resendVerificationRoute({ store, mail }), forgotPasswordRoute({ store, mail }), resetPasswordRoute({ store, passwordPolicy, hashPassword, cookie, mail }), ...oidcRoutes({ store, identity, secretBox, appOrigin, sessionSecret, sessionCookie: cookie, now }), verifyMfaRoute({ store, mail, secretBox, verifyCode: verifyHash, now, cookie }), logoutRoute({ store, cookie }), ...sessionRoutes({ store, cookie, cursorSecret: sessionSecret }),
+    routes: [loginRoute({ store, passwords, mail, registration, cookie }), registerRoute({ store, settings: registration, mail, passwordPolicy, hashPassword }), verifyEmailRoute({ store, passwordPolicy, hashPassword, cookie }), resendVerificationRoute({ store, mail }), forgotPasswordRoute({ store, mail }), resetPasswordRoute({ store, passwordPolicy, hashPassword, cookie, mail }), ...oidcRoutes({ store, identity, secretBox, providers: oidcProviders, registration, appOrigin, sessionSecret, sessionCookie: cookie, now }), verifyMfaRoute({ store, mail, secretBox, verifyCode: verifyHash, now, cookie }), logoutRoute({ store, cookie }), ...sessionRoutes({ store, cookie, cursorSecret: sessionSecret }),
       ...securityRoutes({ store, passwords, passwordPolicy, hashPassword, cookie, mail, secretBox, verifyCode: verifyHash, now }),
     ],
     authenticators: [createSessionAuthenticator({ store, cookie }), createApiTokenAuthenticator({ store })],

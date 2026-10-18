@@ -17,15 +17,19 @@ export type IdTokenRefusal =
   | "nonce"
   | "expired"
   | "not_yet_valid"
+  | "auth_time"
   | "subject";
 
 export class IdTokenError extends Error {
   readonly refusal: IdTokenRefusal;
+  /** True when the refusal is that the token names a key id the key set does not hold: the provider may have rotated its keys. */
+  readonly unknownKeyId: boolean;
 
-  constructor(refusal: IdTokenRefusal) {
+  constructor(refusal: IdTokenRefusal, unknownKeyId = false) {
     super(refusal);
     this.name = "IdTokenError";
     this.refusal = refusal;
+    this.unknownKeyId = unknownKeyId;
   }
 }
 
@@ -40,6 +44,12 @@ export interface IdTokenExpectation {
   readonly keys: readonly Readonly<Record<string, unknown>>[];
   /** The instant of the check, in milliseconds since the epoch. */
   readonly now: number;
+  /**
+   * For a re-authentication: the instant, in milliseconds since the epoch, the handshake began, by this server's
+   * clock. A token whose `auth_time` (the provider's clock) falls more than the clock skew before the second it
+   * began in is refused; a token without `auth_time` is not.
+   */
+  readonly authenticatedSince?: number;
 }
 
 /** What a verified token asserts. */
@@ -161,7 +171,7 @@ function seconds(claim: unknown): number | undefined {
  * Verifies the compact serialisation of an ID token and returns the claims the sign-in uses. Throws an
  * `IdTokenError` for a token that is malformed, signed with an algorithm or key it may not be, not signed by a
  * key of the provider, from another issuer, for another client, for another request (nonce), expired or not
- * yet valid, or without a subject.
+ * yet valid, without a subject, or, for a re-authentication, authenticated before the handshake began.
  */
 export function verifyIdToken(token: string, expected: IdTokenExpectation): VerifiedIdToken {
   const parts = token.split(".");
@@ -185,7 +195,8 @@ export function verifyIdToken(token: string, expected: IdTokenExpectation): Veri
   const signature = decodeSegment(encodedSignature);
   const candidates = candidateKeys(expected.keys, header, name, algorithm);
   if (candidates.length === 0) {
-    throw new IdTokenError("key");
+    const kid = header["kid"];
+    throw new IdTokenError("key", typeof kid === "string" && !expected.keys.some((key) => key["kid"] === kid));
   }
   if (!candidates.some((key) => signatureHolds(`${encodedHeader}.${encodedPayload}`, signature, key, algorithm))) {
     throw new IdTokenError("signature");
@@ -212,6 +223,18 @@ export function verifyIdToken(token: string, expected: IdTokenExpectation): Veri
   }
   if ((iat !== undefined && iat > nowSeconds + CLOCK_SKEW_SECONDS) || (nbf !== undefined && nbf > nowSeconds + CLOCK_SKEW_SECONDS)) {
     throw new IdTokenError("not_yet_valid");
+  }
+  if (expected.authenticatedSince !== undefined && claims["auth_time"] !== undefined) {
+    const authTime = seconds(claims["auth_time"]);
+    if (authTime === undefined) {
+      throw new IdTokenError("malformed");
+    }
+    // `auth_time` is whole seconds from the provider's clock and the start instant is from this server's, so the
+    // same skew `exp`, `iat` and `nbf` allow applies: a fast login at a provider whose clock runs behind is not
+    // refused.
+    if (authTime < Math.floor(expected.authenticatedSince / 1000) - CLOCK_SKEW_SECONDS) {
+      throw new IdTokenError("auth_time");
+    }
   }
   const subject = claims["sub"];
   if (typeof subject !== "string" || subject === "" || subject.length > SUBJECT_MAX_LENGTH) {

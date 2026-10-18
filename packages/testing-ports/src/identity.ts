@@ -44,6 +44,7 @@ export interface FakeIdentityCompleteRequest {
   readonly code: string;
   readonly nonce: string;
   readonly codeVerifier: string;
+  readonly authenticatedSince?: number;
 }
 
 export interface FakeIdentityClaims {
@@ -68,6 +69,11 @@ export interface FakeIdentityGrant {
   readonly issuer?: string;
   /** Seconds from now until the ID token expires; negative for one that already has. Five minutes by default. */
   readonly expiresInSeconds?: number;
+  /**
+   * The `auth_time` of the ID token: the second, by the provider's clock, the person last authenticated there.
+   * Left out, the token has no `auth_time`, as with a provider that does not send one.
+   */
+  readonly authTime?: number;
 }
 
 export type FakeIdentityFailureReason = "provider_unavailable" | "exchange_failed" | "invalid_token";
@@ -92,6 +98,9 @@ export interface FakeIdentityOptions {
 interface Authorization extends FakeIdentityBeginRequest {
   readonly grant?: FakeIdentityGrant;
 }
+
+// The adapter's allowance, in seconds, between the provider's clock and this server's for `exp`, `iat`, `nbf` and `auth_time`.
+const CLOCK_SKEW_SECONDS = 60;
 
 const BASE64URL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
@@ -191,6 +200,12 @@ export class FakeIdentity {
     };
     if (token.iss !== provider.issuer || token.aud !== provider.clientId || token.nonce !== request.nonce || token.exp <= this.#now()) {
       throw new FakeIdentityError("invalid_token");
+    }
+    // Only a re-authentication names the handshake's start; a token without `auth_time` is accepted, as `prompt=login` vouches for it.
+    if (request.authenticatedSince !== undefined && grant.authTime !== undefined) {
+      if (!Number.isFinite(grant.authTime) || grant.authTime < Math.floor(request.authenticatedSince / 1000) - CLOCK_SKEW_SECONDS) {
+        throw new FakeIdentityError("invalid_token");
+      }
     }
     return {
       providerId: provider.id,

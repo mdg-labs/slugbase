@@ -106,6 +106,35 @@ describe("FakeIdentity", () => {
     expect(new URL((await identity.begin({ ...request, reauthenticate: true })).authorizationUrl).searchParams.get("prompt")).toBe("login");
   });
 
+  describe("auth_time of a re-authentication", () => {
+    const SINCE = 1_700_000_000_000;
+    const SINCE_SECONDS = SINCE / 1000;
+
+    it.each([SINCE_SECONDS - 60, SINCE_SECONDS - 5, SINCE_SECONDS, SINCE_SECONDS + 20])("accepts an auth_time of %i, at or after the start less the clock skew", async (authTime) => {
+      const identity = fake(SINCE);
+      const code = codeOf(identity.approve(await authorize(identity), { subject: "sub-1", authTime }));
+      await expect(complete(identity, code, { authenticatedSince: SINCE })).resolves.toMatchObject({ subject: "sub-1" });
+    });
+
+    it.each([SINCE_SECONDS - 61, SINCE_SECONDS - 86_400, Number.NaN])("refuses an auth_time of %d, older than the start by more than the clock skew", async (authTime) => {
+      const identity = fake(SINCE);
+      const code = codeOf(identity.approve(await authorize(identity), { subject: "sub-1", authTime }));
+      await expect(complete(identity, code, { authenticatedSince: SINCE })).rejects.toMatchObject({ name: "IdentityError", reason: "invalid_token" });
+    });
+
+    it("accepts a token without auth_time, whatever the start", async () => {
+      const identity = fake(SINCE);
+      const code = codeOf(identity.approve(await authorize(identity), { subject: "sub-1" }));
+      await expect(complete(identity, code, { authenticatedSince: SINCE })).resolves.toMatchObject({ subject: "sub-1" });
+    });
+
+    it("looks at auth_time only when the caller names the start", async () => {
+      const identity = fake(SINCE);
+      const code = codeOf(identity.approve(await authorize(identity), { subject: "sub-1", authTime: SINCE_SECONDS - 86_400 }));
+      await expect(complete(identity, code)).resolves.toMatchObject({ subject: "sub-1" });
+    });
+  });
+
   it("will not approve a request it did not see", () => {
     expect(() => fake().approve(`${ISSUER}/authorize?state=unknown`, { subject: "s" })).toThrow("not made by this FakeIdentity");
   });
