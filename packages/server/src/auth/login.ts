@@ -1,5 +1,6 @@
-import { normalizeEmail, type MailPort } from "@slugbase/core";
+import { normalizeEmail, type MailPort, type RegistrationSettings } from "@slugbase/core";
 import type { AuthStore } from "@slugbase/db";
+import { ProblemError } from "../http/problem.ts";
 import { uuidv7 } from "./uuidv7.ts";
 import type { PasswordVerifier } from "./password.ts";
 import { newSessionToken } from "./session-token.ts";
@@ -13,6 +14,8 @@ import { newSignInJobs } from "./sign-in-alert.ts";
 // A full session from a device the account has not signed in from queues the "new sign-in" email in the
 // transaction that creates the session (doc 02 section 12). A partial session queues none: the email for
 // an account with a second factor is queued when the code completes the sign-in (mfa.ts).
+
+const UNVERIFIED = "The email address has not been verified. Use the link in the verification email, or ask for a new one.";
 
 export interface SignInRequest {
   /** As the person typed it. */
@@ -41,6 +44,8 @@ export interface SignInDependencies {
   readonly passwords: PasswordVerifier;
   /** The mail port: the alert is queued only when it can send. */
   readonly mail: Pick<MailPort, "available">;
+  /** Whether a correct password is enough for an account whose address was never verified. */
+  readonly registration: Pick<RegistrationSettings, "emailVerificationRequired">;
 }
 
 /**
@@ -53,10 +58,13 @@ export interface SignInDependencies {
  * database call, so a sign-in never leaves a session that the browser has
  * dropped, and a failed one deletes nothing. The alert for a new device is asked
  * for only once the password and the account are known good, and a session that
- * is not created queues none.
+ * is not created queues none. Where the deployment requires a verified address, a correct password for an
+ * account whose address was never verified throws `403 email_unverified` and creates no session; it is
+ * asked only once the password and the account are known good, so it says nothing to someone who does not
+ * know the password.
  */
 export async function signIn(
-  { store, passwords, mail }: SignInDependencies,
+  { store, passwords, mail, registration }: SignInDependencies,
   request: SignInRequest,
 ): Promise<SignedIn | undefined> {
   const candidate = await store.loginLookup(normalizeEmail(request.email));
@@ -66,6 +74,9 @@ export async function signIn(
   }
 
   // Asked only once the password is right, so the answer says nothing to someone who does not know it.
+  if (registration.emailVerificationRequired && !(await store.emailVerified(candidate.accountId))) {
+    throw new ProblemError("email_unverified", UNVERIFIED);
+  }
   const second = await store.mfaStateOf(candidate.accountId);
   const next = second !== undefined && second.enabledAt !== null ? "mfa" : "done";
   const token = newSessionToken();

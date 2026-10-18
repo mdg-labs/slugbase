@@ -30,6 +30,52 @@ export const RegisterRequestSchema = z
   })
   .meta({ id: "RegisterRequest" });
 
+export const ResendVerifyEmailRequestSchema = z
+  .strictObject({
+    email: z.email().max(320).describe("The email address the verification link was to be sent to; case does not matter"),
+  })
+  .meta({ id: "ResendVerifyEmailRequest" });
+
+export const VerifyEmailRequestSchema = z
+  .strictObject({
+    token: z.string().min(1).max(256).describe("The token of the verification link, from the fragment of /verify-email#token=…"),
+    password: z
+      .string()
+      .describe(
+        "The password the account will sign in with, 12 to 256 characters. When the address was never verified it replaces the one the registration set, because whoever registered an address is not necessarily its owner; it is ignored for an account that is already verified",
+      ),
+  })
+  .meta({ id: "VerifyEmailRequest" });
+
+export const VerifyEmailResultSchema = z
+  .strictObject({
+    next: z
+      .enum(["done", "mfa"])
+      .describe("`done`: the address is verified and the account is signed in. `mfa`: the account's second factor is still to be given (POST /auth/mfa/verify); the session cookie is set either way, and a pending one expires after 5 minutes"),
+  })
+  .meta({ id: "VerifyEmailResult" });
+
+export const ForgotPasswordRequestSchema = z
+  .strictObject({
+    email: z.email().max(320).describe("The email address of the account whose password is to be reset; case does not matter"),
+  })
+  .meta({ id: "ForgotPasswordRequest" });
+
+export const ResetPasswordRequestSchema = z
+  .strictObject({
+    token: z.string().min(1).max(256).describe("The token of the reset link, from the fragment of /reset-password#token=…"),
+    newPassword: z.string().describe("The account's new password, 12 to 256 characters"),
+  })
+  .meta({ id: "ResetPasswordRequest" });
+
+export const ResetPasswordResultSchema = z
+  .strictObject({
+    next: z
+      .enum(["done", "mfa"])
+      .describe("`done`: the password is set and the account is signed in. `mfa`: the account's second factor is still to be given (POST /auth/mfa/verify); the session cookie is set either way, and a pending one expires after 5 minutes"),
+  })
+  .meta({ id: "ResetPasswordResult" });
+
 export const VerifyMfaRequestSchema = z
   .union([
     z.strictObject({ code: z.string().min(1).max(16).describe("A code of the authenticator app: six digits, which may be grouped by a space") }),
@@ -63,7 +109,9 @@ export const login = defineOperation({
     }),
     400: problemResponse("The request was malformed"),
     401: problemResponse("The email address or the password is wrong, or the account cannot sign in; all of them answer alike"),
-    403: problemResponse("The request did not come from the application itself"),
+    403: problemResponse(
+      "The request did not come from the application itself (cross_site_request); or the password is right but the deployment requires a verified email address and this account's was never verified (email_unverified), in which case no session is created and POST /auth/verify-email/resend sends the link again",
+    ),
     422: problemResponse("The body did not pass validation"),
     429: rateLimitedResponse("Too many sign-in attempts from this address or for this email address; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
@@ -92,6 +140,112 @@ export const register = defineOperation({
     503: problemResponse(
       "Email verification is required and no mail is configured (mail_unavailable), or the service is temporarily unavailable (unavailable). Nothing is written",
     ),
+  },
+});
+
+export const verifyEmail = defineOperation({
+  method: "post",
+  path: "/api/v1/auth/verify-email",
+  operationId: "verifyEmail",
+  tag: "auth",
+  summary: "Verify the email address of a registered account and sign it in",
+  auth: "anonymous",
+  rate: "token_redeem",
+  request: { body: VerifyEmailRequestSchema },
+  responses: {
+    200: jsonResponse(
+      "The token is redeemed, once. The address is verified, the personal workspace exists (one, however often the request is repeated), and a new session cookie replaces any the request carried. For an account whose address was never verified the password is the one in the request, and every session, the second factor with its backup codes, every API token and every linked identity the account had is gone. The session is full when `next` is `done` and a partial one, good for POST /auth/mfa/verify, POST /auth/logout and GET /api/config only, when it is `mfa`",
+      VerifyEmailResultSchema,
+      {
+        headers: {
+          "Set-Cookie": {
+            description: "The session cookie: HttpOnly, SameSite=Lax, Path=/, Secure and __Host- prefixed when the deployment is served over https",
+            schema: z.string(),
+          },
+        },
+      },
+    ),
+    400: problemResponse("The request was malformed"),
+    403: problemResponse("The request did not come from the application itself"),
+    410: problemResponse("The token is unknown, expired (24 hours), already used or of another kind; all of them answer alike (token_expired), and nothing is changed"),
+    422: problemResponse("The body did not pass validation, or the password is outside 12 to 256 characters or is on the breached list (weak_password). The token is not used"),
+    429: rateLimitedResponse("Too many attempts from this address; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const resendVerifyEmail = defineOperation({
+  method: "post",
+  path: "/api/v1/auth/verify-email/resend",
+  operationId: "resendVerifyEmail",
+  tag: "auth",
+  summary: "Send the verification link of an unverified account again",
+  auth: "anonymous",
+  rate: "reset",
+  request: { body: ResendVerifyEmailRequestSchema },
+  responses: {
+    202: emptyResponse(
+      "The request was accepted. The answer is the same, with no body, whether the email address belongs to an unverified account, to a verified one or to no account: only an unverified account receives a new verification email, whose link opens /verify-email#token=… and replaces the account's earlier unused link, and nothing else about the account is changed or sent",
+    ),
+    400: problemResponse("The request was malformed"),
+    403: problemResponse("The request did not come from the application itself"),
+    422: problemResponse("The body did not pass validation"),
+    429: rateLimitedResponse("Too many requests from this address or for this email address; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const forgotPassword = defineOperation({
+  method: "post",
+  path: "/api/v1/auth/password/forgot",
+  operationId: "forgotPassword",
+  tag: "auth",
+  summary: "Ask for a link to reset the password of an account",
+  auth: "anonymous",
+  rate: "reset",
+  request: { body: ForgotPasswordRequestSchema },
+  responses: {
+    202: emptyResponse(
+      "The request was accepted. The answer is the same, with no body, whether the email address belongs to an account with a password, to one without, or to none: only an account that has a password and whose address was verified receives a reset email, whose link opens /reset-password#token=… and replaces the account's earlier unused link; nothing else about the account is changed or sent. A deployment without mail sends nothing and answers alike (GET /api/config reports features.mail)",
+    ),
+    400: problemResponse("The request was malformed"),
+    403: problemResponse("The request did not come from the application itself"),
+    422: problemResponse("The body did not pass validation"),
+    429: rateLimitedResponse("Too many requests from this address or for this email address; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const resetPassword = defineOperation({
+  method: "post",
+  path: "/api/v1/auth/password/reset",
+  operationId: "resetPassword",
+  tag: "auth",
+  summary: "Set a new password with the token of a reset link and sign in",
+  auth: "anonymous",
+  rate: "token_redeem",
+  request: { body: ResetPasswordRequestSchema },
+  responses: {
+    200: jsonResponse(
+      "The token is redeemed, once. The password is the one in the request, every session the account had is gone, and a new session cookie replaces any the request carried. The session is full when `next` is `done` and a partial one, good for POST /auth/mfa/verify, POST /auth/logout and GET /api/config only, when it is `mfa`, so the mailbox alone does not replace the second factor",
+      ResetPasswordResultSchema,
+      {
+        headers: {
+          "Set-Cookie": {
+            description: "The session cookie: HttpOnly, SameSite=Lax, Path=/, Secure and __Host- prefixed when the deployment is served over https",
+            schema: z.string(),
+          },
+        },
+      },
+    ),
+    400: problemResponse("The request was malformed"),
+    403: problemResponse("The request did not come from the application itself"),
+    410: problemResponse(
+      "The token is unknown, expired (1 hour), already used, replaced by a newer one or of another kind, or its account cannot reset a password (disabled, or its address never verified); all of them answer alike (token_expired). Neither the password nor any session changes; the token of a disabled account or of one whose address was never verified is used up",
+    ),
+    422: problemResponse("The body did not pass validation, or the password is outside 12 to 256 characters or is on the breached list (weak_password). The token is not used"),
+    429: rateLimitedResponse("Too many attempts from this address; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
   },
 });
 

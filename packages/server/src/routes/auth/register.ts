@@ -1,6 +1,7 @@
 import { register } from "@slugbase/contracts";
 import { normalizeEmail, registrationLocale, registrationUnavailable, type MailPort, type PasswordPolicy, type RegistrationSettings } from "@slugbase/core";
 import type { RegistrationStore } from "@slugbase/db";
+import { provisionWorkspaceIn } from "../../auth/personal-workspace.ts";
 import { assertRegistrationAllowed } from "../../auth/registration-gate.ts";
 import { uuidv7 } from "../../auth/uuidv7.ts";
 import { queueDomainEvent } from "../../events/publish.ts";
@@ -16,7 +17,10 @@ import { route } from "../register.ts";
 // finds. Both outcomes hash the password, write in one transaction and queue one `mail.send` job for the
 // account identifier this request generated. Only a created account has it, so for an address that already
 // has an account the job finds nobody and sends nothing: a registration cannot make mail reach another
-// account's owner, nor reissue that account's verification token.
+// account's owner, nor reissue that account's verification token. A deployment that does not require
+// verification has no verification step to wait for, so a created account also gets its personal workspace
+// in that transaction (doc 02 section 2.2); the difference between the two outcomes is rows of that
+// transaction, which the timing of the answer does not carry, since the password hash dominates it.
 
 const CLOSED = "Public registration is not open on this instance.";
 const MAIL_UNAVAILABLE = "Email delivery is not available on this instance.";
@@ -70,6 +74,8 @@ export function registerRoute({ store, settings, mail, passwordPolicy, hashPassw
       locale: registrationLocale(context.req.raw.headers.get("accept-language")),
       onCreated: [...mailJobs, queueDomainEvent(uuidv7(), "account.created", { accountId, path: "self-registration" })],
       onTaken: mailJobs,
+      // With no verification to wait for, the personal workspace is made with the account (doc 02 section 2.2).
+      ...(settings.emailVerificationRequired ? {} : { afterCreated: provisionWorkspaceIn }),
     });
     return { status: 202 };
   });

@@ -1,6 +1,7 @@
 import { MFA_DISABLED_TEMPLATE, MFA_ENABLED_TEMPLATE, mfaDisabled, mfaEnabled } from "./templates/mfa.ts";
 import { NEW_SIGN_IN_TEMPLATE, newSignIn } from "./templates/new-sign-in.ts";
 import { PASSWORD_CHANGED_TEMPLATE, passwordChanged } from "./templates/password-changed.ts";
+import { PASSWORD_RESET_TEMPLATE, passwordReset } from "./templates/password-reset.ts";
 import { VERIFY_EMAIL_TEMPLATE, verifyEmail } from "./templates/verify-email.ts";
 import type { MailTemplates } from "./types.ts";
 
@@ -31,5 +32,6 @@ export function createMailTemplates({ appOrigin }: MailTemplateOptions): MailTem
     [MFA_DISABLED_TEMPLATE]: mfaDisabled(options),
     [VERIFY_EMAIL_TEMPLATE]: verifyEmail(options),
     [NEW_SIGN_IN_TEMPLATE]: newSignIn(options),
+    [PASSWORD_RESET_TEMPLATE]: passwordReset(options),
   };
 }

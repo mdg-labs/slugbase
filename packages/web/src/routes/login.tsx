@@ -1,6 +1,6 @@
 import { Separator } from "@slugbase/ui";
 import { Banner } from "@slugbase/ui/patterns";
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { AuthPage } from "../auth/auth-page.tsx";
@@ -38,6 +38,13 @@ function LoginPage(): ReactElement {
             />
           </>
         )}
+        {config.signIn?.registration === true ? (
+          <p className="text-center text-muted-foreground text-sm">
+            <Link className="underline underline-offset-4" to="/register">
+              {t("login.register")}
+            </Link>
+          </p>
+        ) : null}
       </div>
     </AuthPage>
   );

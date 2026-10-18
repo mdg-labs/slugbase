@@ -246,6 +246,7 @@ createServer({
 - **Domain events** are the notification points inside core flows: `account.created`, `workspace.created`, `workspace.deleted`, `member.joined`, `member.left`, `bookmark.created`, `account.deleted`, … Cloud's billing module subscribes (e.g. `member.joined` → seat recount) instead of core calling billing. Events cannot veto or change a flow; the five hooks that can (a seat check, a deletion veto, an archive operation, a client error-report source and a registration policy) are defined in §13.
   - The catalog is in `@slugbase/core` (`events/catalog.ts`); a payload holds scalar identifiers and enumerated values only, never an email address or other personal data. A module subscribes through `subscribers` in its contribution, a list of `{ event, handle }` bindings; `handle` receives `{ eventId, name, payload }`.
   - `account.created` carries `{ accountId, path }`, where `path` is `self-registration`, `invitation`, `oidc` or `setup`; every path that creates an account emits it, including first-run setup, which skips the registration policy (§13.5).
+  - `workspace.created` carries `{ workspaceId, accountId }`, the account being the owner the workspace was created for; the personal workspace of a registered account emits it (doc 02 §2.2).
   - Delivery: the flow queues the event's job `event.<name>` in the transaction that makes the change, so it is delivered at least once by the worker after commit, subscribers are idempotent on `eventId`, and an event never vetoes the flow.
 
 ### 7.2 Web

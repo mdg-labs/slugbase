@@ -55,6 +55,11 @@ const authStore: AuthStore = {
   setSetupToken: unexpected,
   completeSetup: unexpected,
   registerAccount: unexpected,
+  verifyEmail: unexpected,
+  resendVerification: unexpected,
+  requestPasswordReset: unexpected,
+  resetPassword: unexpected,
+  emailVerified: unexpected,
   close: () => Promise.resolve(),
 };
 

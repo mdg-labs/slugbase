@@ -6,12 +6,18 @@ import {
   OidcProviderParamsSchema,
   OidcStartQuerySchema,
   RegisterRequestSchema,
+  ForgotPasswordRequestSchema,
+  ResendVerifyEmailRequestSchema,
+  ResetPasswordRequestSchema,
   VerifyMfaRequestSchema,
   VerifyMfaResultSchema,
   completeOidcSignIn,
+  forgotPassword,
   login,
   logout,
   register,
+  resendVerifyEmail,
+  resetPassword,
   startOidcSignIn,
   verifyMfa,
 } from "../src/operations/auth.ts";
@@ -26,6 +32,113 @@ const schemas = (document["components"] as { schemas: Record<string, Obj> }).sch
 function responsesOf(operation: Obj | undefined): Record<string, { content?: Obj; headers?: Obj }> {
   return operation?.["responses"] as Record<string, { content?: Obj; headers?: Obj }>;
 }
+
+describe("resendVerifyEmail", () => {
+  const operation = paths["/api/v1/auth/verify-email/resend"]?.["post"];
+
+  it("is anonymous in the reset bucket and is not token-callable", () => {
+    expect(resendVerifyEmail.path).toBe("/api/v1/auth/verify-email/resend");
+    expect(operation?.["operationId"]).toBe("resendVerifyEmail");
+    expect(operation?.["x-slugbase-auth"]).toBe("anonymous");
+    expect(operation?.["x-slugbase-rate"]).toBe("reset");
+    expect(operation?.["x-slugbase-scope"]).toBeUndefined();
+  });
+
+  it("takes a closed body of an email address", () => {
+    const body = schemas["ResendVerifyEmailRequest"] as { additionalProperties: unknown; properties: Obj; required: string[] };
+    expect(body.additionalProperties).toBe(false);
+    expect(Object.keys(body.properties)).toEqual(["email"]);
+    expect(body.required).toEqual(["email"]);
+    expect(ResendVerifyEmailRequestSchema.safeParse({ email: "a@example.test" }).success).toBe(true);
+    expect(ResendVerifyEmailRequestSchema.safeParse({ email: "not an address" }).success).toBe(false);
+    expect(ResendVerifyEmailRequestSchema.safeParse({ email: "a@example.test", extra: 1 }).success).toBe(false);
+  });
+
+  it("answers 202 with no body, and problem+json for every client error", () => {
+    const responses = responsesOf(operation);
+    expect(responses["202"]?.content).toBeUndefined();
+    for (const status of ["400", "403", "422", "503"]) {
+      expect(responses[status]?.content, status).toEqual({ "application/problem+json": { schema: { $ref: "#/components/schemas/Problem" } } });
+    }
+    expect(responses["429"]?.headers).toMatchObject({ "Retry-After": { required: true } });
+  });
+
+  it("is declared among the operations", () => {
+    expect(operations).toContain(resendVerifyEmail);
+  });
+});
+
+describe("forgotPassword", () => {
+  const operation = paths["/api/v1/auth/password/forgot"]?.["post"];
+
+  it("is anonymous in the reset bucket and is not token-callable", () => {
+    expect(forgotPassword.path).toBe("/api/v1/auth/password/forgot");
+    expect(operation?.["operationId"]).toBe("forgotPassword");
+    expect(operation?.["x-slugbase-auth"]).toBe("anonymous");
+    expect(operation?.["x-slugbase-rate"]).toBe("reset");
+    expect(operation?.["x-slugbase-scope"]).toBeUndefined();
+  });
+
+  it("takes a closed body of an email address", () => {
+    const body = schemas["ForgotPasswordRequest"] as { additionalProperties: unknown; properties: Obj; required: string[] };
+    expect(body.additionalProperties).toBe(false);
+    expect(Object.keys(body.properties)).toEqual(["email"]);
+    expect(body.required).toEqual(["email"]);
+    expect(ForgotPasswordRequestSchema.safeParse({ email: "a@example.test" }).success).toBe(true);
+    expect(ForgotPasswordRequestSchema.safeParse({ email: "not an address" }).success).toBe(false);
+    expect(ForgotPasswordRequestSchema.safeParse({ email: "a@example.test", extra: 1 }).success).toBe(false);
+  });
+
+  it("answers 202 with no body, and problem+json for every client error", () => {
+    const responses = responsesOf(operation);
+    expect(responses["202"]?.content).toBeUndefined();
+    for (const status of ["400", "403", "422", "503"]) {
+      expect(responses[status]?.content, status).toEqual({ "application/problem+json": { schema: { $ref: "#/components/schemas/Problem" } } });
+    }
+    expect(responses["429"]?.headers).toMatchObject({ "Retry-After": { required: true } });
+  });
+
+  it("is declared among the operations", () => {
+    expect(operations).toContain(forgotPassword);
+  });
+});
+
+describe("resetPassword", () => {
+  const operation = paths["/api/v1/auth/password/reset"]?.["post"];
+
+  it("is anonymous in the token_redeem bucket and is not token-callable", () => {
+    expect(resetPassword.path).toBe("/api/v1/auth/password/reset");
+    expect(operation?.["operationId"]).toBe("resetPassword");
+    expect(operation?.["x-slugbase-auth"]).toBe("anonymous");
+    expect(operation?.["x-slugbase-rate"]).toBe("token_redeem");
+    expect(operation?.["x-slugbase-scope"]).toBeUndefined();
+  });
+
+  it("takes a closed body of the token and the new password", () => {
+    const body = schemas["ResetPasswordRequest"] as { additionalProperties: unknown; properties: Obj; required: string[] };
+    expect(body.additionalProperties).toBe(false);
+    expect(Object.keys(body.properties).sort()).toEqual(["newPassword", "token"]);
+    expect([...body.required].sort()).toEqual(["newPassword", "token"]);
+    expect(ResetPasswordRequestSchema.safeParse({ token: "t", newPassword: "p" }).success).toBe(true);
+    expect(ResetPasswordRequestSchema.safeParse({ token: "", newPassword: "p" }).success).toBe(false);
+    expect(ResetPasswordRequestSchema.safeParse({ token: "t", newPassword: "p", extra: 1 }).success).toBe(false);
+  });
+
+  it("answers 200 with the next step and the session cookie, 410 for a refused token, and problem+json for every client error", () => {
+    const responses = responsesOf(operation);
+    expect(responses["200"]?.content).toBeDefined();
+    expect(responses["200"]?.headers).toHaveProperty("Set-Cookie");
+    expect(schemas["ResetPasswordResult"]).toMatchObject({ properties: { next: { enum: ["done", "mfa"] } } });
+    for (const status of ["400", "403", "410", "422", "503"]) {
+      expect(responses[status]?.content, status).toEqual({ "application/problem+json": { schema: { $ref: "#/components/schemas/Problem" } } });
+    }
+    expect(responses["429"]?.headers).toMatchObject({ "Retry-After": { required: true } });
+  });
+
+  it("is declared among the operations", () => {
+    expect(operations).toContain(resetPassword);
+  });
+});
 
 describe("login", () => {
   const operation = paths["/api/v1/auth/login"]?.["post"];

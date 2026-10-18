@@ -176,6 +176,41 @@
       "when": 1792259494142,
       "tag": "20261017175134_add_signin_alerts",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792269005069,
+      "tag": "20261017203005_add_email_verification",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792270471724,
+      "tag": "20261017205431_add_password_set_caller_note",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1792272274259,
+      "tag": "20261017212434_add_account_email_verified",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1792275374933,
+      "tag": "20261017221614_add_password_reset",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1792319861721,
+      "tag": "20261018103741_add_token_redemption_lock_order",
+      "breakpoints": true
     }
   ]
 }

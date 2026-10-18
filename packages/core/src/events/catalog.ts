@@ -23,6 +23,11 @@ export const DOMAIN_EVENTS = {
     accountId: { type: "uuid" },
     path: { type: "enum", values: ACCOUNT_CREATION_PATHS },
   },
+  "workspace.created": {
+    workspaceId: { type: "uuid" },
+    /** The account the workspace was created for, which is its owner. */
+    accountId: { type: "uuid" },
+  },
 } as const satisfies Record<string, Readonly<Record<string, DomainEventField>>>;
 
 export type DomainEventName = keyof typeof DOMAIN_EVENTS;

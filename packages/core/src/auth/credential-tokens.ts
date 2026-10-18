@@ -32,3 +32,19 @@ export function generateCredentialToken(): CredentialToken {
   const bytes = randomBytes(CREDENTIAL_TOKEN_BYTES);
   return { value: bytes.toString("base64url"), hash: createHash("sha256").update(bytes).digest() };
 }
+
+/**
+ * The hash of the token a link carries, or undefined for a value that is not exactly the encoding of 32
+ * bytes this module writes (wrong length, a character outside the base64url alphabet, a non-canonical
+ * spelling of the same bytes). A caller answers undefined as it answers a token nobody issued.
+ */
+export function hashCredentialToken(value: string): Buffer | undefined {
+  if (value.length !== Math.ceil((CREDENTIAL_TOKEN_BYTES * 4) / 3)) {
+    return undefined;
+  }
+  const bytes = Buffer.from(value, "base64url");
+  if (bytes.length !== CREDENTIAL_TOKEN_BYTES || bytes.toString("base64url") !== value) {
+    return undefined;
+  }
+  return createHash("sha256").update(bytes).digest();
+}

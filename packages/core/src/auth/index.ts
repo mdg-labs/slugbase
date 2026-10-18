@@ -14,6 +14,7 @@ export {
   CREDENTIAL_TOKEN_PURPOSES,
   CREDENTIAL_TOKEN_TTL_SECONDS,
   generateCredentialToken,
+  hashCredentialToken,
 } from "./credential-tokens.ts";
 export type { CredentialToken, CredentialTokenPurpose } from "./credential-tokens.ts";
 export { BreachedDatasetError, createBreachedPasswords, loadBreachedPasswords } from "./breached/index.ts";

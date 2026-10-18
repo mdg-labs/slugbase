@@ -36,6 +36,17 @@ export const FIXTURES: ContractFixtures = {
     body: { displayName: "Walker", email: "register-walker@example.test", password: "a password for the register walker" },
     status: 403,
   },
+  // An anonymous operation: it takes an email address and names no workspace or account identifier the caller could address; the answer is one 202 for
+  // every address, so the walker's valid request is the declared 202.
+  resendVerifyEmail: { body: { email: "resend-walker@example.test" }, status: 202 },
+  // An anonymous operation: the token is its only credential and names no workspace or account the caller could address. The walker holds no
+  // verification token, so the valid request is the declared 410; the verification itself is walked by the verify-email tests.
+  verifyEmail: { body: { token: "A".repeat(43), password: "a password for the verify walker" }, status: 410 },
+  // Anonymous operations: an email address, or the token that is the only credential, and nothing that names a workspace or an account the caller
+  // could address. The answer to the request for a link is one 202 for every address; the walker holds no reset token, so the redemption's valid
+  // request is the declared 410, and the reset itself is walked by the password-reset tests.
+  forgotPassword: { body: { email: "forgot-walker@example.test" }, status: 202 },
+  resetPassword: { body: { token: "A".repeat(43), newPassword: "a password for the reset walker" }, status: 410 },
   // Anonymous operations: the provider's slug is the only identifier, it names a deployment-wide setting and no workspace or account, and there is
   // nothing of another account's to name. The walker's server has no provider, so both answer the declared 302 to /login with the failure code;
   // the handshake itself is walked by the OIDC sign-in tests.
