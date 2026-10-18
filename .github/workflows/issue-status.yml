@@ -131,6 +131,14 @@ jobs:
                 const winner = want === 'status:new' ? others[0] : want;
                 for (const n of after.filter(n => n !== winner)) await remove(n);
                 core.info(`#${issue_number}: raced (${after.join(', ')}) → kept ${winner}`);
+              } else if (after[0] !== want) {
+                // A racing writer replaced ours with its own. Settle it the
+                // way two statuses are settled above.
+                if (want !== 'status:new') {
+                  await github.rest.issues.addLabels({ ...context.repo, issue_number, labels: [want] });
+                  await remove(after[0]);
+                }
+                core.info(`#${issue_number}: raced (${after[0]}) → kept ${want === 'status:new' ? after[0] : want}`);
               } else {
                 core.info(`#${issue_number}: ${statuses.join(', ') || 'none'} → ${want}`);
               }
