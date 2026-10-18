@@ -8,10 +8,9 @@
 # whole label set in one PATCH instead: non-status labels are preserved,
 # every status:* is dropped, the requested one is added.
 #
-# Reads over repository-scoped REST via gh-rest.sh, not
-# a GraphQL-backed `gh issue view` — the Claude Code cloud session's egress
-# proxy refuses GraphQL outright, which would otherwise make every status
-# transition die before it ever reaches the PATCH below.
+# Reads through gh-rest.sh, scoped to workflow.json's repo: `gh`'s own issue
+# commands infer the repository from the working directory, which in an
+# orchestrate scratch clone (origin is a local path) is wrong or missing.
 set -euo pipefail
 
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)

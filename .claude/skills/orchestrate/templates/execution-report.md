@@ -21,6 +21,8 @@ to report blocked:}}
 
 **Checks run:** {{every check actually run inside WORKSPACE for this item, with its result — and every applicable check that could NOT run on this machine, with why}}
 
+**Proves after landing:** {{each workflow job whose acceptance only a real run can show, and why act could not — or "none"}}
+
 **Dependencies:** {{packages added or changed, with the resolved versions — or "none"}}
 
 **Generated output changed:** {{goldens / generated code and why — or "none"}}

@@ -30,6 +30,8 @@ export { accountIdentityRepository } from "./repositories/account-identities.ts"
 export type { AccountIdentity, AccountIdentityRepository } from "./repositories/account-identities.ts";
 export { apiTokenRepository } from "./repositories/api-tokens.ts";
 export type { ApiTokenCreation, ApiTokenRecord, ApiTokenRepository, ApiTokenScope, NewApiToken } from "./repositories/api-tokens.ts";
+export { emailChangeRepository } from "./repositories/email-change.ts";
+export type { EmailChangeRepository, NewEmailChangeToken } from "./repositories/email-change.ts";
 export { credentialTokenRepository } from "./repositories/credential-tokens.ts";
 export type { CredentialTokenRepository, NewCredentialToken } from "./repositories/credential-tokens.ts";
 export { membershipRepository } from "./repositories/memberships.ts";
@@ -58,6 +60,7 @@ export type { CompleteSetup, SetupOutcome, SetupStore } from "./system/setup.ts"
 export type { NewRegistration, RegistrationStore } from "./system/registration.ts";
 export type { AddressJobs } from "./system/address-jobs.ts";
 export type { EmailVerification, EmailVerificationStore, VerificationResend, VerifiedEmail } from "./system/email-verification.ts";
+export type { EmailChangeRequest, EmailChangeStore } from "./system/email-change.ts";
 export type { PasswordReset, PasswordResetRequest, PasswordResetStore, ResetPasswordOutcome } from "./system/password-reset.ts";
 export type { NewPersonalWorkspace, PersonalWorkspaceResult, PersonalWorkspaceWriter } from "./system/personal-workspace.ts";
 export type { IdentityLink, IdentityLinkOutcome, IdentityReauthentication, IdentitySignIn, IdentityUnlinkOutcome, NewOidcLoginState, OidcLoginState, OidcStore, SealedVerifier } from "./system/oidc.ts";

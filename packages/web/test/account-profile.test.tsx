@@ -30,6 +30,7 @@ const ACCOUNT: Account = {
   emailVerified: true,
   hasPassword: true,
   mfaEnabled: false,
+  pendingEmail: null,
 };
 
 function me(account: Account): ComponentTypes["schemas"]["Me"] {

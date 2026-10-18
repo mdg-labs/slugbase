@@ -415,11 +415,21 @@ describe("the account profile repository", () => {
       emailVerified: true,
       hasPassword: true,
       mfaEnabled: false,
+      pendingEmail: null,
     });
     expect(JSON.stringify(profile)).not.toContain("argon2");
 
     const bare = await tenant(withoutPassword, undefined, (tx) => accountProfileRepository(tx).profile());
     expect(bare).toMatchObject({ emailVerified: false, hasPassword: false, accent: null });
+  });
+
+  it("reports the address of a pending email change as stored, and null when none is pending", async () => {
+    const changing = await account();
+    const settled = await account();
+    await asSystem(db, (tx) => tx`UPDATE accounts SET pending_email = 'Pending.Address@Example.test' WHERE id = ${changing}`);
+
+    expect(await tenant(changing, undefined, (tx) => accountProfileRepository(tx).profile())).toMatchObject({ pendingEmail: "Pending.Address@Example.test" });
+    expect(await tenant(settled, undefined, (tx) => accountProfileRepository(tx).profile())).toMatchObject({ pendingEmail: null });
   });
 
   it("reports the second factor as on only for an account whose MFA is confirmed, and for no other", async () => {

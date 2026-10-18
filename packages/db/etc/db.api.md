@@ -62,6 +62,7 @@ export interface AccountProfile {
     readonly mfaEnabled: boolean;
     // (undocumented)
     readonly onboarding: Onboarding;
+    readonly pendingEmail: string | null;
     readonly signinAlerts: boolean;
     // (undocumented)
     readonly singleKeyShortcuts: boolean;
@@ -170,7 +171,7 @@ export function apiTokenRepository(tx: TenantTx): ApiTokenRepository;
 export type ApiTokenScope = "read" | "read-write";
 
 // @public (undocumented)
-export interface AuthStore extends SetupStore, MfaStore, OidcStore, RegistrationStore, EmailVerificationStore, PasswordResetStore {
+export interface AuthStore extends SetupStore, MfaStore, OidcStore, RegistrationStore, EmailVerificationStore, PasswordResetStore, EmailChangeStore {
     changePassword(change: PasswordChange): Promise<boolean>;
     close(): Promise<void>;
     createSession(session: NewSession): Promise<boolean>;
@@ -315,6 +316,34 @@ export interface DatabaseOptions {
 
 // @public
 export function defineScopedRepository<T extends WorkspaceTable>(name: string, table: T): ScopedRepositoryDefinition<T>;
+
+// @public (undocumented)
+export interface EmailChangeRepository {
+    issue(token: NewEmailChangeToken): Promise<string | undefined>;
+}
+
+// @public (undocumented)
+export function emailChangeRepository(tx: TenantTx): EmailChangeRepository;
+
+// @public (undocumented)
+export interface EmailChangeRequest {
+    // (undocumented)
+    readonly accountId: string;
+    readonly email: string;
+    readonly jobs: readonly QueuedJob[];
+}
+
+// @public (undocumented)
+export interface EmailChangeStore {
+    cancelEmailChange(tokenHash: Buffer): Promise<{
+        readonly accountId: string;
+    } | undefined>;
+    cancelPendingEmailChange(accountId: string): Promise<boolean>;
+    confirmEmailChange(tokenHash: Buffer): Promise<{
+        readonly accountId: string;
+    } | undefined>;
+    requestEmailChange(request: EmailChangeRequest): Promise<boolean>;
+}
 
 // @public (undocumented)
 export interface EmailVerification {
@@ -563,6 +592,14 @@ export interface NewCredentialToken {
     // (undocumented)
     readonly purpose: CredentialTokenPurpose;
     readonly targetEmail: string | null;
+    readonly tokenHash: Buffer;
+    readonly ttlSeconds: number;
+}
+
+// @public (undocumented)
+export interface NewEmailChangeToken {
+    readonly id: string;
+    readonly purpose: Extract<CredentialTokenPurpose, "email_change" | "email_change_cancel">;
     readonly tokenHash: Buffer;
     readonly ttlSeconds: number;
 }

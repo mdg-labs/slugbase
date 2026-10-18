@@ -14,7 +14,9 @@
       "Bash(pnpm turbo run:*)",
       "Bash(pnpm i18n:check)",
       "Bash(actionlint:*)",
-      "Bash(shellcheck:*)"
+      "Bash(shellcheck:*)",
+      "Bash(.claude/scripts/security-route.sh:*)",
+      "Bash(.claude/scripts/act-run.sh:*)"
     ],
     "deny": [
       "Bash(git push --force:*)",

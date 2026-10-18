@@ -156,6 +156,6 @@ per unit.
    `.claude/scripts/gh-rest.sh pr-edit <n> --title "…" --body-file <tmp>`.
 10. **Report** the PR URL, the closed-item list and the CI status, then stop:
     no merge, no review request, no further action. The next step is the
-    review round: `/cr-review <PR number>`. A promotion PR gets exactly one
-    CodeRabbit round. After its fixes are pushed, the merge gate is the
+    review round: `/pr-review <PR number>`. A promotion PR gets exactly one
+    review round. After its fixes are pushed, the merge gate is the
     required checks on the new head, not a second review.

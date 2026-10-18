@@ -18,6 +18,10 @@
 ### Checks run
 {{the exact commands executed and their outcome, and any applicable check that could not run on this machine, with why}}
 
+{{ — only if there are any, otherwise omit this whole section: }}
+### Proves after landing
+- {{workflow file / job — what only a real run can show (a deploy, a secret, a `schedule`, a production-branch-only trigger), and what to watch for}}
+
 {{ — only on a fix round, otherwise omit this whole section: }}
 ### Previous blocking findings
 1. **{{short title}}** — {{closed ✅ | still open ❌}} — {{the evidence}}

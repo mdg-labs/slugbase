@@ -1,4 +1,4 @@
-import { getResponse } from "msw";
+import { getResponse, type RequestHandler } from "msw";
 import { describe, expect, it } from "vitest";
 import { createHandlers, handlerPath, listOperations, parseDocument, scenarioFromSearch, SCENARIOS, type Scenario } from "../src/msw.ts";
 import { readOpenApiDocument } from "../src/msw/node.ts";
@@ -55,8 +55,15 @@ function url(operation: Declared): string {
   return `${BASE}${operation.path.replaceAll(/\{[^}]+\}/g, "sample")}`;
 }
 
-async function answer(operation: Declared, scenario?: Scenario): Promise<Response> {
-  const handlers = createHandlers(document, { baseUrl: BASE, ...(scenario === undefined ? {} : { scenario }) });
+function build(scenario?: Scenario): RequestHandler[] {
+  return createHandlers(document, { baseUrl: BASE, ...(scenario === undefined ? {} : { scenario }) });
+}
+
+// Building the handlers walks the whole document, so each scenario is built once
+// and every operation is answered from that one set.
+let defaultHandlers: RequestHandler[] | undefined;
+
+async function answer(operation: Declared, handlers: RequestHandler[] = (defaultHandlers ??= build())): Promise<Response> {
   const response = await getResponse(handlers, new Request(url(operation), { method: operation.method.toUpperCase() }));
   if (response === undefined) {
     throw new Error(`no handler answered ${operation.method} ${operation.path}`);
@@ -119,17 +126,21 @@ describe("the generated handlers", () => {
   });
 
   it("answer the same bytes every time", async () => {
+    const first = build();
+    const second = build();
     for (const operation of operations) {
-      expect(await (await answer(operation)).text(), operation.operationId).toBe(await (await answer(operation)).text());
+      expect(await (await answer(operation, first)).text(), operation.operationId).toBe(await (await answer(operation, second)).text());
     }
   });
 
   it("answer a declared error with application/problem+json that is valid against its schema", async () => {
     let problems = 0;
-    for (const operation of operations) {
-      for (const status of operation.statuses.filter((candidate) => candidate >= 400)) {
-        const scenario: Scenario = { name: "forced", statuses: { [operation.operationId]: status } };
-        const response = await answer(operation, scenario);
+    const errorStatuses = [...new Set(operations.flatMap((operation) => operation.statuses.filter((candidate) => candidate >= 400)))];
+    for (const status of errorStatuses) {
+      const forcing = operations.filter((operation) => operation.statuses.includes(status));
+      const handlers = build({ name: "forced", statuses: Object.fromEntries(forcing.map((operation) => [operation.operationId, status])) });
+      for (const operation of forcing) {
+        const response = await answer(operation, handlers);
         expect(response.status, `${operation.operationId} ${String(status)}`).toBe(status);
         const schema = operation.schemas.get(status);
         if (schema !== undefined && response.headers.get("content-type") === "application/problem+json") {
@@ -146,9 +157,11 @@ describe("the generated handlers", () => {
 
   it("send a numeric Retry-After with every generated 429", async () => {
     let limited = 0;
-    for (const operation of operations.filter((candidate) => candidate.statuses.includes(429))) {
+    const rateLimited = operations.filter((candidate) => candidate.statuses.includes(429));
+    const handlers = build({ name: "limited", statuses: Object.fromEntries(rateLimited.map((operation) => [operation.operationId, 429])) });
+    for (const operation of rateLimited) {
       limited += 1;
-      const response = await answer(operation, { name: "limited", statuses: { [operation.operationId]: 429 } });
+      const response = await answer(operation, handlers);
       expect(response.status, operation.operationId).toBe(429);
       expect(response.headers.get("retry-after"), operation.operationId).toMatch(/^[1-9][0-9]*$/);
     }
@@ -168,7 +181,7 @@ describe("the generated handlers", () => {
     };
     const version = operations.find((operation) => operation.operationId === "getVersion");
     expect(version).toBeDefined();
-    expect(await (await answer(version as Declared, scenario)).json()).toMatchObject({ name: "Custom" });
+    expect(await (await answer(version as Declared, build(scenario))).json()).toMatchObject({ name: "Custom" });
   });
 
   it("serve the committed document itself for the OpenAPI operation", async () => {

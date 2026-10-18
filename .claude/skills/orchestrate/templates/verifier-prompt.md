@@ -94,18 +94,42 @@ The message ends in `Refs: {{ADVISORY_ID}}` and carries no `Fixes` line;
 anything else is blocking too. Quoting a blocking finding in your return,
 name the line and the kind of detail, not the detail itself.
 {{END IF}}
-{{IF CI_RUN:}}
-## A real CI run of this commit
+{{IF ACT:}}
+## Run the changed workflows yourself, with act
 
-The orchestrator ran the workflow(s) this unit changes on a throwaway branch:
-{{CI_RUN_URL}} (run id `{{CI_RUN_ID}}`). Read its result and logs
-(`gh run view {{CI_RUN_ID}} --repo {{REPO}} --log-failed`) as layer-1
-evidence, instead of guessing how the workflow behaves.
-{{END IF}}
-{{IF CI_NOT_RUNNABLE:}}
-The workflow(s) this unit changes cannot be run before landing
-({{CI_NOT_RUNNABLE_REASON}}). Judge them by reading them, plus `actionlint`
-if installed, and say in layer 1 that no real run backs the verdict.
+This unit changes GitHub Actions workflows. Under layer 1, run each job the
+diff changes — or that uses a changed composite action or reusable workflow —
+locally, yourself, with the event its acceptance is about:
+
+```
+{{TOOLS_ROOT}}/.claude/scripts/act-run.sh {{WORKSPACE_PATH}} <workflow file> <job id> [event]
+```
+
+Pass the Bash tool's `timeout` above {{ACT_TIMEOUT}} s. The script copies the
+workspace into the container and never writes to it, so it is within your
+read-only rules. Its exit status decides, not the executor's report:
+
+- **0:** the job passed under act. That is evidence about the steps, not
+  about runners01 or GitHub: say in layer 1 that the verdict is act-backed.
+- **Any other failure** of a changed job is **blocking**, unless you can name
+  the act limitation that causes it — a step that needs a secret, OIDC or the
+  GitHub API, or a feature act does not support. Then it is a note naming
+  that step, and the step is unproven.
+- **2:** a usage error on your side; fix the call.
+- **3:** act cannot run here (disabled, not installed, no Docker, or the run
+  lock was busy too long). Say so in layer 1 and judge the workflow by
+  reading it, plus `actionlint` if installed.
+- **4:** the job, or a job it needs, may never run locally (`act.neverRun`).
+  Never run it any other way. Judge it by reading it.
+- **5:** act exited cleanly but the job never ran — its `if:` skipped it on
+  that event. That proves nothing: pick the event its acceptance is about,
+  or judge it by reading it and say so in layer 1.
+
+**What only a real run can show** — a deploy or release, a step that needs a
+secret, a `schedule`, anything only true once it lands on the production
+branch — is never a FAIL for lacking a run. Name it in the verdict's
+**Proves after landing** section: the workflow, the job, and what to watch
+for.
 {{END IF}}
 
 ## How to read a commit

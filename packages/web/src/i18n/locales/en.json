@@ -60,7 +60,37 @@
       },
       "email": {
         "label": "Email",
-        "description": "The address you sign in with."
+        "description": "The address you sign in with.",
+        "change": "Change email",
+        "noMail": "Changing your email needs a confirmation link, and this server cannot send email. Ask your instance admin to set up email.",
+        "pending": {
+          "badge": "Pending verification",
+          "description": "A confirmation link was requested for {email}. Your address stays as it is until it is confirmed.",
+          "resend": "Resend link",
+          "cancel": "Cancel change",
+          "cancelled": "Email change cancelled"
+        },
+        "form": {
+          "title": "Change your email address",
+          "description": "We send a confirmation link to the new address. Your email changes once you open it.",
+          "label": "New email address",
+          "submit": "Send confirmation link",
+          "cancel": "Cancel",
+          "close": "Close"
+        },
+        "requested": "Check {email} for the confirmation link.",
+        "error": {
+          "required": "Enter the new email address.",
+          "invalid": "Enter a valid email address.",
+          "same": "That is already your email address.",
+          "reauthRequired": "Confirm it is you to continue.",
+          "unavailable": "That did not work. Try again in a moment.",
+          "rateLimited": {
+            "unknown": "Too many attempts. Try again later.",
+            "seconds": "Too many attempts. Try again in {count, plural, one {# second} other {# seconds}}.",
+            "minutes": "Too many attempts. Try again in {count, plural, one {# minute} other {# minutes}}."
+          }
+        }
       },
       "language": {
         "label": "Language",
@@ -688,6 +718,41 @@
       "title": "This link is not valid or has expired",
       "description": "A link works once and for 1 hour. Ask for a new one.",
       "action": "Request a new link"
+    }
+  },
+  "emailChange": {
+    "working": "Working on it",
+    "confirm": {
+      "title": "Confirm your new email address",
+      "description": "The link you opened confirms the address you asked for.",
+      "success": {
+        "title": "Your email address was changed",
+        "description": "Use your new address the next time you sign in.",
+        "action": "Open the app"
+      }
+    },
+    "cancel": {
+      "title": "Cancel an email change",
+      "description": "The link you opened is for an email change you did not ask for.",
+      "success": {
+        "title": "The change was cancelled and you were signed out everywhere",
+        "description": "Every device of your account is signed out. Sign in again, and change your password if you did not ask for this.",
+        "action": "Sign in"
+      }
+    },
+    "expired": {
+      "title": "This link is not valid or has expired",
+      "description": "A link works once and for a limited time. Sign in to start again from your account settings.",
+      "action": "Go to sign in"
+    },
+    "error": {
+      "unavailable": "This could not be completed right now. Try again in a moment.",
+      "rateLimited": {
+        "unknown": "Too many attempts. Try again later.",
+        "seconds": "Too many attempts. Try again in {count, plural, one {# second} other {# seconds}}.",
+        "minutes": "Too many attempts. Try again in {count, plural, one {# minute} other {# minutes}}."
+      },
+      "retry": "Try again"
     }
   },
   "signOut": {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildOpenApiDocument, serializeOpenApiDocument } from "../src/openapi/generate.ts";
-import { ACCENT_PRESETS, AccountSchema, ApiTokenIdParamsSchema, ApiTokenListQuerySchema, ApiTokenListSchema, ApiTokenSchema, CreateApiTokenRequestSchema, CreatedApiTokenSchema, ChangePasswordRequestSchema, DisableMfaRequestSchema, IdentityIdParamsSchema, IdentityListQuerySchema, IdentityListSchema, IdentitySchema, ReauthRequestSchema, RegenerateBackupCodesRequestSchema, MembershipSchema, MeSchema, RevokeSessionsQuerySchema, SessionIdParamsSchema, SessionListQuerySchema, SessionListSchema, SessionSchema, UpdateAccountRequestSchema } from "../src/operations/me.ts";
+import { ACCENT_PRESETS, AccountSchema, ApiTokenIdParamsSchema, CancelEmailChangeRequestSchema, ConfirmEmailChangeRequestSchema, RequestEmailChangeRequestSchema, cancelEmailChange, cancelPendingEmailChange, confirmEmailChange, requestEmailChange, ApiTokenListQuerySchema, ApiTokenListSchema, ApiTokenSchema, CreateApiTokenRequestSchema, CreatedApiTokenSchema, ChangePasswordRequestSchema, DisableMfaRequestSchema, IdentityIdParamsSchema, IdentityListQuerySchema, IdentityListSchema, IdentitySchema, ReauthRequestSchema, RegenerateBackupCodesRequestSchema, MembershipSchema, MeSchema, RevokeSessionsQuerySchema, SessionIdParamsSchema, SessionListQuerySchema, SessionListSchema, SessionSchema, UpdateAccountRequestSchema } from "../src/operations/me.ts";
 import { operations } from "../src/operations/index.ts";
 
 type Obj = Record<string, unknown>;
@@ -9,8 +9,8 @@ const document = JSON.parse(serializeOpenApiDocument(buildOpenApiDocument(operat
 const paths = document["paths"] as Record<string, Record<string, Obj>>;
 const schemas = (document["components"] as { schemas: Record<string, Obj> }).schemas;
 
-function responsesOf(operation: Obj | undefined): Record<string, { content?: Obj }> {
-  return operation?.["responses"] as Record<string, { content?: Obj }>;
+function responsesOf(operation: Obj | undefined): Record<string, { content?: Obj; headers?: Obj }> {
+  return operation?.["responses"] as Record<string, { content?: Obj; headers?: Obj }>;
 }
 
 describe("the session operations", () => {
@@ -122,7 +122,7 @@ describe("the account operation", () => {
     const account = schemas["Account"] as { additionalProperties: unknown; properties: Obj; required: string[] };
     expect(account.additionalProperties).toBe(false);
     expect(Object.keys(account.properties).sort()).toEqual([
-      "accent", "aiOptOut", "analyticsConsent", "defaultView", "displayName", "email", "emailVerified", "hasPassword", "id", "locale", "mfaEnabled", "onboarding", "signinAlerts", "singleKeyShortcuts", "theme",
+      "accent", "aiOptOut", "analyticsConsent", "defaultView", "displayName", "email", "emailVerified", "hasPassword", "id", "locale", "mfaEnabled", "onboarding", "pendingEmail", "signinAlerts", "singleKeyShortcuts", "theme",
     ]);
     expect([...account.required].sort()).toEqual(Object.keys(account.properties).sort());
     const membership = schemas["Membership"] as { additionalProperties: unknown; properties: Obj; required: string[] };
@@ -147,6 +147,7 @@ describe("the account operation", () => {
       emailVerified: true,
       hasPassword: false,
       mfaEnabled: false,
+      pendingEmail: null,
     };
     const membership = { workspaceId: "0192f3a0-0000-7000-8000-0000000000b1", name: "Notes", role: "admin" };
     expect(MeSchema.safeParse({ account, memberships: [membership], activeWorkspaceId: null }).success).toBe(true);
@@ -540,5 +541,86 @@ describe("the identity operations", () => {
     expect(IdentityListQuerySchema.safeParse({ offset: "1" }).success).toBe(false);
     expect(IdentityIdParamsSchema.safeParse({ id: IDENTITY.id }).success).toBe(true);
     expect(IdentityIdParamsSchema.safeParse({ id: "not-a-uuid" }).success).toBe(false);
+  });
+});
+
+describe("the email change operations", () => {
+  const PROBLEM = { "application/problem+json": { schema: { $ref: "#/components/schemas/Problem" } } };
+
+  it("asks for the change as an account operation that needs a fresh re-authentication, in the reset bucket, no API token may call", () => {
+    const operation = paths["/api/v1/me/email"]?.["post"];
+    expect(requestEmailChange.operationId).toBe("requestEmailChange");
+    expect(operation?.["operationId"]).toBe("requestEmailChange");
+    expect(operation?.["x-slugbase-auth"]).toBe("account");
+    expect(operation?.["x-slugbase-rate"]).toBe("reset");
+    expect(operation?.["x-slugbase-reauth"]).toBe(true);
+    expect(operation?.["x-slugbase-scope"]).toBeUndefined();
+  });
+
+  it("answers the request with a 202 that has no body, and problem+json for every client error", () => {
+    const responses = responsesOf(paths["/api/v1/me/email"]?.["post"]);
+    expect(responses["202"]?.content).toBeUndefined();
+    for (const status of ["400", "401", "403", "422", "503"]) {
+      expect(responses[status]?.content, status).toEqual(PROBLEM);
+    }
+    expect(responses["429"]?.headers).toMatchObject({ "Retry-After": { required: true } });
+    expect(Object.keys(responses)).not.toContain("409");
+  });
+
+  it.each([
+    ["post", "/api/v1/me/email/confirm", "confirmEmailChange", "ConfirmEmailChangeRequest", ConfirmEmailChangeRequestSchema],
+    ["post", "/api/v1/me/email/cancel", "cancelEmailChange", "CancelEmailChangeRequest", CancelEmailChangeRequestSchema],
+  ] as const)("%s %s is %s: anonymous, in the token_redeem bucket, with a closed body of the token and 410 for a refused one", (method, path, operationId, schemaName, schema) => {
+    const operation = paths[path]?.[method];
+    expect(operation?.["operationId"]).toBe(operationId);
+    expect(operation?.["x-slugbase-auth"]).toBe("anonymous");
+    expect(operation?.["x-slugbase-rate"]).toBe("token_redeem");
+    expect(operation?.["x-slugbase-scope"]).toBeUndefined();
+    expect(operation?.["x-slugbase-reauth"]).toBeUndefined();
+    const body = schemas[schemaName] as { additionalProperties: unknown; properties: Obj; required: string[] };
+    expect(body.additionalProperties).toBe(false);
+    expect(Object.keys(body.properties)).toEqual(["token"]);
+    expect(body.required).toEqual(["token"]);
+    expect(schema.safeParse({ token: "t" }).success).toBe(true);
+    expect(schema.safeParse({ token: "" }).success).toBe(false);
+    expect(schema.safeParse({ token: "t", extra: 1 }).success).toBe(false);
+    const responses = responsesOf(operation);
+    expect(responses["204"]?.content).toBeUndefined();
+    for (const status of ["400", "403", "410", "422", "503"]) {
+      expect(responses[status]?.content, status).toEqual(PROBLEM);
+    }
+    expect(responses["429"]?.headers).toMatchObject({ "Retry-After": { required: true } });
+  });
+
+  it("cancels the pending change as an account operation in the write bucket with no body and a 204", () => {
+    const operation = paths["/api/v1/me/email/pending"]?.["delete"];
+    expect(cancelPendingEmailChange.operationId).toBe("cancelPendingEmailChange");
+    expect(operation?.["operationId"]).toBe("cancelPendingEmailChange");
+    expect(operation?.["x-slugbase-auth"]).toBe("account");
+    expect(operation?.["x-slugbase-rate"]).toBe("write");
+    expect(operation?.["x-slugbase-reauth"]).toBeUndefined();
+    expect(operation?.["x-slugbase-scope"]).toBeUndefined();
+    expect(operation?.["requestBody"]).toBeUndefined();
+    const responses = responsesOf(operation);
+    expect(responses["204"]?.content).toBeUndefined();
+    for (const status of ["400", "401", "403", "503"]) {
+      expect(responses[status]?.content, status).toEqual(PROBLEM);
+    }
+  });
+
+  it("takes a closed body of an email address for the request", () => {
+    const body = schemas["RequestEmailChangeRequest"] as { additionalProperties: unknown; properties: Obj; required: string[] };
+    expect(body.additionalProperties).toBe(false);
+    expect(Object.keys(body.properties)).toEqual(["email"]);
+    expect(body.required).toEqual(["email"]);
+    expect(RequestEmailChangeRequestSchema.safeParse({ email: "a@example.test" }).success).toBe(true);
+    expect(RequestEmailChangeRequestSchema.safeParse({ email: "not an address" }).success).toBe(false);
+    expect(RequestEmailChangeRequestSchema.safeParse({ email: "a@example.test", extra: 1 }).success).toBe(false);
+  });
+
+  it("declares all four among the operations", () => {
+    for (const operation of [requestEmailChange, confirmEmailChange, cancelEmailChange, cancelPendingEmailChange]) {
+      expect(operations).toContain(operation);
+    }
   });
 });

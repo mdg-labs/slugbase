@@ -1,12 +1,8 @@
 # Tracker: GitHub issues
 
-The issues on `workflow.json` `repo` are the whole plan. Every call goes through `.claude/scripts/gh-rest.sh`. It uses repository-scoped REST and pages results itself. That is because a Claude Code cloud session's egress proxy refuses three things outright:
+The issues on `workflow.json` `repo` are the whole plan. Every call goes through `.claude/scripts/gh-rest.sh`, which scopes it to that repository instead of whatever `gh` infers from the working directory (in orchestrate's scratch clones `origin` is a local path). It uses REST, and GraphQL where REST lacks the data (review threads and their resolved state).
 
-- GraphQL, which is how `gh issue …`, `gh pr …`, `gh repo view`, `gh label list` and `gh release list` work underneath
-- `search/issues`
-- the `repositories/{id}` links that `--paginate` follows
-
-`.claude/scripts/check-gh-rest.sh` fails the lint if any of those patterns comes back. `gh-rest.sh help` lists every subcommand.
+`.claude/scripts/check-gh-rest.sh` fails the lint on a direct `gh` call outside the vendored scripts. `gh-rest.sh help` lists every subcommand.
 
 ## Labels
 
@@ -51,7 +47,7 @@ Write the body to a file first, then:
 .claude/scripts/issue-status.sh <n> ready
 ```
 
-The `issue-status.yml` workflow sets `status:new` on a new issue and assigns the maintainer. When triage sets `ready` straight away, the workflow notices that and keeps `ready`.
+The `issue-status.yml` workflow sets `status:new` on a new issue and assigns the maintainer. When triage sets `ready` straight away, the workflow notices that and keeps `ready`. On a reopen it sets `status:new`, unless an agent has already set a status other than `closed` or `cancelled`. It only adds or removes the `status:*` labels that change, so a label someone adds while it runs survives.
 
 ## Edit
 
@@ -79,8 +75,9 @@ Never read a status label back to confirm your own change; `issue-status.sh` alr
 ## Forbidden
 
 - Closing or reopening an issue by hand. Issues close only when their `Fixes #n` commit reaches the production branch.
-- Any GraphQL-backed `gh` subcommand, `gh api graphql`, `gh search`, `search/` paths, or `--paginate`.
+- Any direct `gh` call outside `.claude/scripts/`: a `gh issue`/`gh pr` subcommand, `gh api graphql`, `gh search`, a `search/` path, or `--paginate`. Add a `gh-rest.sh` subcommand instead.
 - Setting `status:closed`, `status:cancelled` or `status:new`.
+- Applying a maintainer-applied label: `labels.maintainerOnly`, or a `labels.extra` entry with `maintainerApplied`. Only the maintainer applies it, because a CI gate or skill reads it as the maintainer's approval. `gh-rest.sh` refuses to add one, but removing it is allowed. Propose the label to the maintainer instead.
 - Writing dependencies or epic membership as body prose instead of native links.
 
 ## In dispatch prompts

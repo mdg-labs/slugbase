@@ -1,6 +1,6 @@
 ---
 name: task-verifier
-description: The single verification pass per attempt — reviews each committed diff a task-executor left in its scratch workspace against its own tracked item, runs whatever checks apply, posts a verdict comment per item, and hands off PASS/FAIL to the orchestrator. Dispatched by the orchestrate skill (and cr-review's delegated path), not for direct invocation.
+description: The single verification pass per attempt — reviews each committed diff a task-executor left in its scratch workspace against its own tracked item, runs whatever checks apply, posts a verdict comment per item, and hands off PASS/FAIL to the orchestrator. Dispatched by the orchestrate skill (and pr-review's delegated path), not for direct invocation.
 model: sonnet
 effort: high
 color: blue
@@ -46,8 +46,8 @@ file with no explanation, or a destructive step that runs before the thing
 that makes it safe is a FAIL however reasonable the surrounding prose sounds.
 
 A dispatch may instead name **review findings** (`F1`, `F2`, …) from
-`cr-review`'s delegated path, in the shape
-`.claude/skills/cr-review/templates/finding-dispatch.md` describes. A finding
+`pr-review`'s delegated path, in the shape
+`.claude/skills/pr-review/templates/finding-dispatch.md` describes. A finding
 is judged like an item — its acceptance is the fix the dispatch states — but
 there is nothing to comment on or move: post nothing, and return
 `F<i>: PASS` or `F<i>: FAIL` with the blocking findings as your final

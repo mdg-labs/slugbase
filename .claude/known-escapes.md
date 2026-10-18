@@ -3,7 +3,7 @@
 Defect patterns that passed a `task-verifier` PASS and were later confirmed
 real in review (CodeRabbit on a promotion or unit PR). `task-executor` checks
 its change against this list before committing; `task-verifier` checks each
-commit against it under layers 6 and 7. `cr-review` appends a line whenever it
+commit against it under layers 6 and 7. `pr-review` appends a line whenever it
 fixes a confirmed finding whose pattern is not here yet.
 
 One line per pattern: **category** — what goes wrong — where it was seen.
@@ -51,6 +51,7 @@ existing line by adding its PR number.
 - **non-atomic group** — several durable steps share one unit that is recorded only when all succeed, so a part-failure leaves finished steps that make every retry fail — PR 365
 - **cleanup replaces the error** — a cleanup step in a catch block (a ROLLBACK on a new connection) can itself reject, so its error replaces the one the caller rethrows or skips the recovery check that follows — PR 491
 - **lock order** — two functions lock the same pair of rows in opposite orders (a child row through an `UPDATE`, then its parent `FOR UPDATE`, against parent first, then a `DELETE` of its children), so concurrent calls for one parent deadlock and one aborts — PR 494
+- **race settled in one shape only** — a re-read after racing writes reconciles the case where both writers' values are present but not the case where the racer replaced ours, so the racer's value stands and the log reports ours as applied — PR 500
 
 ## Tests
 
@@ -61,3 +62,7 @@ existing line by adding its PR number.
 - **leaked starting state** — a test asserts a starting state that persisted browser state (saved localStorage) or a late emulation decides, instead of setting it before the page loads — PR 457
 - **ignored declaration key** — a test fixture declares a field under a key the consuming type does not read (a top-level `body` where the stage reads `request.body`), the extra key compiles, and the declared check never runs — PR 479
 - **URL by prefix** — a check that a URL points at an expected host tests a string prefix (`startsWith(issuer)`) instead of the parsed origin, so a look-alike host (`https://idp.example.test.evil/`) passes — PR 484
+
+## Web UI
+
+- **degraded capability not gated** — a screen offers a flow whose server side silently does nothing when an optional capability is off (mail), instead of reading the feature flag the API publishes for it, so the user waits for a result that never comes — PR 500

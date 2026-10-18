@@ -51,6 +51,7 @@ export const AccountSchema: z.ZodObject<{
     emailVerified: z.ZodBoolean;
     hasPassword: z.ZodBoolean;
     mfaEnabled: z.ZodBoolean;
+    pendingEmail: z.ZodNullable<z.ZodString>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -153,6 +154,55 @@ export type AuthPolicy = (typeof AUTH_POLICIES)[number];
 
 // @public (undocumented)
 export const BOOKMARK_VIEWS: readonly ["grid", "table"];
+
+// @public (undocumented)
+export const cancelEmailChange: {
+    readonly method: "post";
+    readonly path: "/api/v1/me/email/cancel";
+    readonly operationId: "cancelEmailChange";
+    readonly tag: "me";
+    readonly summary: "Cancel an email change and sign out everywhere with the \"this wasn't me\" link";
+    readonly auth: "anonymous";
+    readonly rate: "token_redeem";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            token: z.ZodString;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 204: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 410: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const CancelEmailChangeRequestSchema: z.ZodObject<{
+    token: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const cancelPendingEmailChange: {
+    readonly method: "delete";
+    readonly path: "/api/v1/me/email/pending";
+    readonly operationId: "cancelPendingEmailChange";
+    readonly tag: "me";
+    readonly summary: "Cancel the account's pending email change";
+    readonly auth: "account";
+    readonly rate: "write";
+    readonly responses: {
+        readonly 204: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
 
 // @public (undocumented)
 export const changePassword: {
@@ -281,6 +331,7 @@ export interface ComponentTypes {
             locale: "en" | "de";
             mfaEnabled: boolean;
             onboarding: ComponentTypes["schemas"]["Onboarding"];
+            pendingEmail: string | null;
             signinAlerts: boolean;
             singleKeyShortcuts: boolean;
             theme: "light" | "dark" | "system";
@@ -324,9 +375,15 @@ export interface ComponentTypes {
             items: ComponentTypes["schemas"]["ApiToken"][];
             nextCursor: string | null;
         };
+        CancelEmailChangeRequest: {
+            token: string;
+        };
         ChangePasswordRequest: {
             currentPassword?: string;
             newPassword: string;
+        };
+        ConfirmEmailChangeRequest: {
+            token: string;
         };
         ConfirmMfaEnrollmentRequest: {
             code: string;
@@ -456,6 +513,9 @@ export interface ComponentTypes {
             email: string;
             password: string;
         };
+        RequestEmailChangeRequest: {
+            email: string;
+        };
         ResendVerifyEmailRequest: {
             email: string;
         };
@@ -527,6 +587,36 @@ export interface ComponentTypes {
         };
     };
 }
+
+// @public (undocumented)
+export const confirmEmailChange: {
+    readonly method: "post";
+    readonly path: "/api/v1/me/email/confirm";
+    readonly operationId: "confirmEmailChange";
+    readonly tag: "me";
+    readonly summary: "Confirm the new email address with the token of the link mailed to it";
+    readonly auth: "anonymous";
+    readonly rate: "token_redeem";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            token: z.ZodString;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 204: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 410: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const ConfirmEmailChangeRequestSchema: z.ZodObject<{
+    token: z.ZodString;
+}, z.core.$strict>;
 
 // @public (undocumented)
 export const confirmMfaEnrollment: {
@@ -841,6 +931,7 @@ export const getMe: {
         emailVerified: z.ZodBoolean;
         hasPassword: z.ZodBoolean;
         mfaEnabled: z.ZodBoolean;
+        pendingEmail: z.ZodNullable<z.ZodString>;
         }, z.core.$strict>;
         memberships: z.ZodArray<z.ZodObject<{
         workspaceId: z.ZodUUID;
@@ -1255,6 +1346,7 @@ export const MeSchema: z.ZodObject<{
         emailVerified: z.ZodBoolean;
         hasPassword: z.ZodBoolean;
         mfaEnabled: z.ZodBoolean;
+        pendingEmail: z.ZodNullable<z.ZodString>;
     }, z.core.$strict>;
     memberships: z.ZodArray<z.ZodObject<{
         workspaceId: z.ZodUUID;
@@ -1370,6 +1462,136 @@ export const operations: readonly OperationDefinition[];
 
 // @public (undocumented)
 export interface OperationTypes {
+    // (undocumented)
+    cancelEmailChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["CancelEmailChangeRequest"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    cancelPendingEmailChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     // (undocumented)
     changePassword: {
         parameters: {
@@ -1528,6 +1750,77 @@ export interface OperationTypes {
                 };
             };
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    confirmEmailChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["ConfirmEmailChangeRequest"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            410: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2655,6 +2948,77 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    requestEmailChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["RequestEmailChangeRequest"];
+            };
+        };
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     resendVerifyEmail: {
         parameters: {
             query?: never;
@@ -3693,6 +4057,74 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/me/email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["requestEmailChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/me/email/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["cancelEmailChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/me/email/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["confirmEmailChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/me/email/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: OperationTypes["cancelPendingEmailChange"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/api/v1/me/identities": {
         parameters: {
             query?: never;
@@ -4347,6 +4779,37 @@ export const RegisterRequestSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
+export const requestEmailChange: {
+    readonly method: "post";
+    readonly path: "/api/v1/me/email";
+    readonly operationId: "requestEmailChange";
+    readonly tag: "me";
+    readonly summary: "Ask to change the account's email address";
+    readonly auth: "account";
+    readonly rate: "reset";
+    readonly reauth: true;
+    readonly request: {
+        readonly body: z.ZodObject<{
+            email: z.ZodEmail;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 202: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const RequestEmailChangeRequestSchema: z.ZodObject<{
+    email: z.ZodEmail;
+}, z.core.$strict>;
+
+// @public (undocumented)
 export const resendVerifyEmail: {
     readonly method: "post";
     readonly path: "/api/v1/auth/verify-email/resend";
@@ -4815,6 +5278,7 @@ export const updateMe: {
         emailVerified: z.ZodBoolean;
         hasPassword: z.ZodBoolean;
         mfaEnabled: z.ZodBoolean;
+        pendingEmail: z.ZodNullable<z.ZodString>;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;

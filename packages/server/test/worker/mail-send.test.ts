@@ -29,6 +29,16 @@ describe("the mail.send job", () => {
     expect(() => mailSendJob.parse({ template: "passwordReset", accountId: ACCOUNT, token: "x".repeat(43) })).toThrow();
   });
 
+  it("queues the emailChange template with the account's identifier only: the address it concerns is read and the tokens made when the job runs", () => {
+    expect(queueMailSend(JOB_ID, "emailChange", ACCOUNT)).toEqual({ id: JOB_ID, queue: "mail.send", data: { template: "emailChange", accountId: ACCOUNT } });
+    expect(() => mailSendJob.parse({ template: "emailChange", accountId: ACCOUNT, token: "x".repeat(43) })).toThrow();
+    expect(() => mailSendJob.parse({ template: "emailChange", accountId: ACCOUNT, email: "new@example.test" })).toThrow();
+  });
+
+  it("has no job of its own for the email-change notice: it goes out in the job of the confirmation", () => {
+    expect(() => mailSendJob.parse({ template: "emailChangeNotice", accountId: ACCOUNT })).toThrow();
+  });
+
   it("queues the time, browser family and network prefix a new sign-in email shows beside the template and the account, and nothing else", () => {
     expect(queueMailSend(JOB_ID, "newSignIn", ACCOUNT, { signedInAt: SIGNED_IN_AT, browser: "Chrome", network: "203.0.0.0/16" })).toEqual({
       id: JOB_ID,

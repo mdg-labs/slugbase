@@ -38,6 +38,7 @@ function accountBody(profile: AccountProfile) {
     emailVerified: profile.emailVerified,
     hasPassword: profile.hasPassword,
     mfaEnabled: profile.mfaEnabled,
+    pendingEmail: profile.pendingEmail,
   };
 }
 

@@ -32,6 +32,7 @@ import { loadCommittedDocument } from "./routes/committed-document.ts";
 import { probeRoutes } from "./routes/health.ts";
 import { authContribution } from "./routes/auth/index.ts";
 import { apiTokenRoutes } from "./routes/me/api-tokens.ts";
+import { emailChangeRoutes } from "./routes/me/email.ts";
 import { identityRoutes } from "./routes/me/identities.ts";
 import { mfaRoutes } from "./routes/me/mfa.ts";
 import { profileRoutes } from "./routes/me/profile.ts";
@@ -498,6 +499,8 @@ export function createServer(options: CreateServerOptions): Server {
   });
   // The signed-in account is part of the server like its sign-in: it reads the account's own rows and memberships.
   builtInRoutes.push(...profileRoutes({ withTenant: context.withTenant }));
+  // So is the change of the account's email address: the request records the address and queues its two mails, and the two links redeem anonymously.
+  builtInRoutes.push(...emailChangeRoutes({ store: authStore, mail: adapters.mail }));
   // So are the account's personal API tokens: created, listed and revoked in an account-level transaction on the account's own rows.
   builtInRoutes.push(...apiTokenRoutes({ withTenant: context.withTenant, cursorSecret: config.SESSION_SECRET }));
   // So are the identities linked to the account: listed in an account-level transaction, unlinked by a system operation that checks the account keeps another way to sign in.

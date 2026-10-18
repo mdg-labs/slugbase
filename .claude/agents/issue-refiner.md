@@ -32,8 +32,8 @@ You read files and run read-only commands inside your clone only: no build,
 test, lab, VM, Docker, package install or `sudo`, no edit to any repository,
 no commit, no push. Your `Write` tool is for files under the dispatch's
 `OUT_DIR` only. All tracker reads go through the forms the dispatch names —
-for GitHub, `.claude/scripts/gh-rest.sh`, never a GraphQL-backed `gh`
-subcommand. In apply mode, your only tracker write is the one body edit the
+for GitHub, `.claude/scripts/gh-rest.sh`, never a `gh` call of your
+own. In apply mode, your only tracker write is the one body edit the
 dispatch names, on an item you were given, for a `refined` verdict: body and
 type/area/extra labels, never status. You never create, close, cancel or
 comment on an item, and you never wire relationships — you report them in

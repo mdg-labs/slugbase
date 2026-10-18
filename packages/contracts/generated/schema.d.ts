@@ -241,6 +241,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ask to change the account's email address */
+        post: operations["requestEmailChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/email/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel an email change and sign out everywhere with the "this wasn't me" link */
+        post: operations["cancelEmailChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/email/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm the new email address with the token of the link mailed to it */
+        post: operations["confirmEmailChange"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/email/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Cancel the account's pending email change */
+        delete: operations["cancelPendingEmailChange"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/identities": {
         parameters: {
             query?: never;
@@ -555,6 +623,8 @@ export interface components {
             mfaEnabled: boolean;
             /** @description The stored state of the Getting started checklist */
             onboarding: components["schemas"]["Onboarding"];
+            /** @description The address an email change was requested for and not yet confirmed, as stored; null when no change is pending */
+            pendingEmail: string | null;
             /** @description Whether an email is sent when a password sign-in comes from a device the account has not signed in from */
             signinAlerts: boolean;
             /** @description Whether single-key shortcuts are on; modifier shortcuts always work */
@@ -652,11 +722,19 @@ export interface components {
             /** @description Passed as `cursor` to get the next page; null on the last page */
             nextCursor: string | null;
         };
+        CancelEmailChangeRequest: {
+            /** @description The token of the "this wasn't me" link mailed to the old address, from the fragment of /email-change/cancel#token=… */
+            token: string;
+        };
         ChangePasswordRequest: {
             /** @description The account's current password. Left out only to set the first password of an account that has none, which needs a re-authentication within the last ten minutes; an account that has a password is refused without it */
             currentPassword?: string;
             /** @description The new password, 12 to 256 characters and not on the breached list */
             newPassword: string;
+        };
+        ConfirmEmailChangeRequest: {
+            /** @description The token of the confirmation link mailed to the new address, from the fragment of /email-change/confirm#token=… */
+            token: string;
         };
         ConfirmMfaEnrollmentRequest: {
             /** @description The current six-digit code of the authenticator app; spaces between the digits are ignored */
@@ -904,6 +982,13 @@ export interface components {
             email: string;
             /** @description The new account's password, 12 to 256 characters */
             password: string;
+        };
+        RequestEmailChangeRequest: {
+            /**
+             * Format: email
+             * @description The email address the account is to move to; case does not matter
+             */
+            email: string;
         };
         ResendVerifyEmailRequest: {
             /**
@@ -2193,6 +2278,305 @@ export interface operations {
             };
             /** @description The identifier did not pass validation */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    requestEmailChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestEmailChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description The request was accepted. The answer is the same, with no body, whether the address is free, is the account's own or belongs to another account. The address is recorded as the pending one and the links of an earlier request stop working, except the "this wasn't me" link of a change that was already confirmed, which keeps working until it expires or until a link to an earlier address is used; the account's current address is sent the notice with the "this wasn't me" link, and the new address is sent the confirmation link, which opens /email-change/confirm#token=…, only when it is free, so nothing is sent to another account. Nothing is sent to an account whose address was never verified, and a deployment without mail sends nothing and answers alike. The email switches only when the confirmation link is redeemed (POST /me/email/confirm) */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself, or the credential is an API token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests from this account, this address or for this new email address; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    cancelEmailChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelEmailChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description The token is redeemed, once. The pending change and its unused links are gone and every session of the account is deleted. It works after the change was confirmed too, also when the account has asked for or cancelled another change since: the address the change replaced is then the account's email again, still verified, and every session still ends; the links to addresses the account held later stop working, and a link to an earlier address does not; if another account holds that address by now, the account keeps its current address */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The token is unknown, expired (1 hour), already used, replaced by a newer one, of another kind, cancelled with its change or of a disabled account; all of them answer alike (token_expired) and nothing is changed */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many attempts from this address; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    confirmEmailChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmEmailChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description The token is redeemed, once, and the account's email is the address the link was mailed to. No session ends */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The token is unknown, expired (1 hour), already used, replaced by a newer one, of another kind or of a change that was cancelled; or its account is disabled or was never verified; or the address belongs to another account by now; all of them answer alike (token_expired) and nothing is changed */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many attempts from this address; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    cancelPendingEmailChange: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The pending address is cleared and the links of the change stop working, whether or not a change was pending; the "this wasn't me" link of a change that was already confirmed keeps working until it expires or until a link to an earlier address is used; no session ends */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself, or the credential is an API token */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -26,7 +26,7 @@
       "type": "string"
     },
     "githubRunner": {
-      "description": "The `runs-on` value for GitHub Actions jobs setup renders (the issue-status workflow), as written in YAML: a label (\"ubuntu-latest\") or a label list (\"[self-hosted, coolify]\"). Private repos use the self-hosted runners. Default \"ubuntu-latest\".",
+      "description": "The `runs-on` value for GitHub Actions jobs setup renders (the issue-status workflow), as written in YAML: a label (\"ubuntu-latest\") or a label list (\"[self-hosted, runners01]\"). Private repos use the self-hosted runners. Default \"ubuntu-latest\".",
       "type": "string"
     },
     "tracker": {
@@ -104,8 +104,27 @@
       ],
       "minimum": 1
     },
+    "review": {
+      "description": "The review bots pr-review works with. A round collects the findings of every listed bot that completed a review of the PR's head, and needs at least one; a listed bot that skipped or was rate limited is reported, not treated as clean. CodeQL is not listed: pr-review reads code scanning alerts on every repository that has an analysis.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "reviewers": {
+          "description": "Default [\"kodus\", \"coderabbit\"]. pr-review never requests a review from either; the maintainer does (`@kody start-review`, `@coderabbitai review`).",
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "kodus",
+              "coderabbit"
+            ]
+          }
+        }
+      }
+    },
     "gate": {
-      "description": "The full gate: must pass before anything is pushed or lands (executor, verifier, cr-review). Per-path checks go in `checks`.",
+      "description": "The full gate: must pass before anything is pushed or lands (executor, verifier, pr-review). Per-path checks go in `checks`.",
       "type": "string"
     },
     "threatModel": {
@@ -114,6 +133,17 @@
         "string",
         "null"
       ]
+    },
+    "security": {
+      "description": "Where security findings go.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "privateRepoIssues": {
+          "description": "While the repository is private, file every security finding, Critical and High included, as an ordinary item labelled security instead of a draft private security advisory. GitHub offers no security advisories or private vulnerability reporting on a private repository. Absent: follows the repository's visibility, so a private repository files issues. false is an error while the repository is private (security-route.sh exits 2), since GitHub offers a private repository no advisories. On a public repository findings always go to advisories, whatever this says. .claude/scripts/security-route.sh reads the visibility live and prints the result (issues or advisories). Commit messages for security fixes stay neutral either way.",
+          "type": "boolean"
+        }
+      }
     },
     "securityAudit": {
       "description": "security-audit settings. The review units themselves live in CLAUDE.md '### Security units'.",
@@ -149,13 +179,13 @@
           "$ref": "#/$defs/label"
         },
         "maintainerOnly": {
-          "description": "Label for work only the maintainer may run (e.g. needs-sudo); orchestrate prepares it instead of dispatching it.",
+          "description": "Label for work only the maintainer may run (e.g. needs-sudo); orchestrate prepares it instead of dispatching it. Maintainer-applied: gh-rest.sh refuses to add it.",
           "$ref": "#/$defs/label"
         },
         "extra": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/label"
+            "$ref": "#/$defs/extraLabel"
           }
         },
         "spike": {
@@ -324,7 +354,7 @@
         "inSessionFindings": {
           "type": "integer",
           "minimum": 0,
-          "description": "cr-review fixes a round in-session when it has at most this many small, non-risk findings; otherwise it delegates to executor/verifier agents. Default 5."
+          "description": "pr-review fixes a round in-session when it has at most this many small, non-risk findings; otherwise it delegates to executor/verifier agents. Default 5."
         }
       }
     },
@@ -339,21 +369,32 @@
         }
       }
     },
-    "ci": {
-      "description": "Units whose acceptance only a real GitHub Actions run can show are pushed to a throwaway branch and run there before verification. null disables it (such units are reported instead).",
+    "act": {
+      "description": "Lets the executor and verifier run the GitHub Actions jobs a unit changes locally with nektos/act, through .claude/scripts/act-run.sh. null disables it (changed workflows are then judged by reading them, plus actionlint).",
       "type": [
         "object",
         "null"
       ],
       "additionalProperties": false,
       "properties": {
-        "branchPrefix": {
-          "type": "string",
-          "description": "Default ci/."
+        "platforms": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "runs-on label \u2192 container image, passed to act as -P. Name every label the repo's workflows use, e.g. ubuntu-latest and runners01."
         },
-        "watchTimeout": {
+        "neverRun": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Job-id globs never run locally, also when another job needs them: deploys, migrations, releases, publishing, secret syncs."
+        },
+        "timeout": {
           "type": "integer",
-          "description": "Seconds for gh run watch. Default 5400."
+          "minimum": 1,
+          "description": "Seconds for one run, and for waiting on another lane's run. Default 1800."
         }
       }
     },
@@ -467,6 +508,29 @@
         },
         "description": {
           "type": "string"
+        }
+      }
+    },
+    "extraLabel": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "color": {
+          "type": "string",
+          "pattern": "^[0-9a-fA-F]{6}$"
+        },
+        "description": {
+          "type": "string"
+        },
+        "maintainerApplied": {
+          "description": "Only the maintainer applies this label, because a CI gate or a skill reads it as the maintainer's approval (e.g. migration:contract). gh-rest.sh issue-create and issue-edit refuse to add it; removing it stays possible. A guard against accidents, not a security boundary: an agent calling the API directly with the same credential can still apply it.",
+          "type": "boolean"
         }
       }
     }

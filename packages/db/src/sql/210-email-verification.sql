@@ -23,8 +23,10 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- else the visitor could have set up while signed in is removed with it: the
 -- second factor (a pending enrolment included) and its backup codes, the API
 -- tokens, the linked identities and the pending handshakes that would link one,
--- and every unused password-reset token, since a reset requested before the
--- owner verified is not the owner's. Only then is the address marked verified.
+-- every unused password-reset token, since a reset requested before the
+-- owner verified is not the owner's, and the pending change of email with its
+-- unused confirmation and cancel tokens, since a change started before the owner
+-- verified is not the owner's either. Only then is the address marked verified.
 -- An account that is already verified keeps all of it. The
 -- session is partial for an account whose second factor is on and full
 -- otherwise, and replaces the session of the token the request carried. The
@@ -81,14 +83,15 @@ BEGIN
     END IF;
     PERFORM public.sys_session_revoke_all(v_account, NULL);
     UPDATE public.accounts
-    SET mfa_secret = NULL, mfa_secret_key_id = NULL, mfa_enabled_at = NULL, mfa_last_step = NULL
+    SET mfa_secret = NULL, mfa_secret_key_id = NULL, mfa_enabled_at = NULL, mfa_last_step = NULL, pending_email = NULL
     WHERE id = v_account;
     v_mfa := false;
     DELETE FROM public.mfa_backup_codes WHERE account_id = v_account;
     DELETE FROM public.api_tokens WHERE account_id = v_account;
     DELETE FROM public.account_identities WHERE account_id = v_account;
     DELETE FROM public.oidc_login_states WHERE link_account_id = v_account;
-    DELETE FROM public.credential_tokens WHERE account_id = v_account AND purpose = 'password_reset' AND used_at IS NULL;
+    DELETE FROM public.credential_tokens
+    WHERE account_id = v_account AND purpose IN ('password_reset', 'email_change', 'email_change_cancel') AND used_at IS NULL;
     UPDATE public.accounts SET email_verified_at = clock_timestamp() WHERE id = v_account;
   END IF;
 

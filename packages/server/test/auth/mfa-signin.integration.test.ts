@@ -281,7 +281,7 @@ describe("what a partial session may call", () => {
     const allowed = new Set(["verifyMfa", "logout"]);
     // An anonymous operation never looks at the session, so it answers whoever holds a cookie.
     const anonymous = operations.filter((operation) => operation.auth === "anonymous" || operation.auth === "machine").map((operation) => operation.operationId).sort();
-    expect(anonymous).toEqual(["completeOidcSignIn", "completeSetup", "forgotPassword", "getApiConfig", "getHealth", "getOpenApiDocument", "getReady", "getSetupStatus", "getVersion", "login", "register", "resendVerifyEmail", "resetPassword", "startOidcSignIn", "verifyEmail"]);
+    expect(anonymous).toEqual(["cancelEmailChange", "completeOidcSignIn", "completeSetup", "confirmEmailChange", "forgotPassword", "getApiConfig", "getHealth", "getOpenApiDocument", "getReady", "getSetupStatus", "getVersion", "login", "register", "resendVerifyEmail", "resetPassword", "startOidcSignIn", "verifyEmail"]);
     expect(operations.filter((operation) => operation.auth === "partial").map((operation) => operation.operationId).sort()).toEqual(["logout", "verifyMfa"]);
 
     const refused: string[] = [];

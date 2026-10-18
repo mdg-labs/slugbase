@@ -1,3 +1,5 @@
+import { EMAIL_CHANGE_NOTICE_TEMPLATE, emailChangeNotice } from "./templates/email-change-notice.ts";
+import { EMAIL_CHANGE_TEMPLATE, emailChange } from "./templates/email-change.ts";
 import { MFA_DISABLED_TEMPLATE, MFA_ENABLED_TEMPLATE, mfaDisabled, mfaEnabled } from "./templates/mfa.ts";
 import { NEW_SIGN_IN_TEMPLATE, newSignIn } from "./templates/new-sign-in.ts";
 import { PASSWORD_CHANGED_TEMPLATE, passwordChanged } from "./templates/password-changed.ts";
@@ -33,5 +35,7 @@ export function createMailTemplates({ appOrigin }: MailTemplateOptions): MailTem
     [VERIFY_EMAIL_TEMPLATE]: verifyEmail(options),
     [NEW_SIGN_IN_TEMPLATE]: newSignIn(options),
     [PASSWORD_RESET_TEMPLATE]: passwordReset(options),
+    [EMAIL_CHANGE_TEMPLATE]: emailChange(options),
+    [EMAIL_CHANGE_NOTICE_TEMPLATE]: emailChangeNotice(options),
   };
 }

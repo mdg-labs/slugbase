@@ -199,6 +199,7 @@ describe("GET /api/v1/me", () => {
         emailVerified: true,
         hasPassword: true,
         mfaEnabled: false,
+        pendingEmail: null,
       },
       memberships: [],
       activeWorkspaceId: null,

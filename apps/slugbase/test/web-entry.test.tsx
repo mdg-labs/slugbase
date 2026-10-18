@@ -38,6 +38,7 @@ it("mounts the app on #root and shows the product name that /api/config answers 
       emailVerified: true,
       hasPassword: true,
       mfaEnabled: false,
+      pendingEmail: null,
     },
     memberships: [],
     activeWorkspaceId: null,

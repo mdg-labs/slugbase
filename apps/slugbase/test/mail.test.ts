@@ -59,6 +59,10 @@ const authStore: AuthStore = {
   resendVerification: unexpected,
   requestPasswordReset: unexpected,
   resetPassword: unexpected,
+  requestEmailChange: unexpected,
+  cancelPendingEmailChange: unexpected,
+  confirmEmailChange: unexpected,
+  cancelEmailChange: unexpected,
   emailVerified: unexpected,
   close: () => Promise.resolve(),
 };
