@@ -262,6 +262,7 @@ describe("the worker", { timeout: 60_000 }, () => {
     expect(response.status).toBe(201);
     await until(() => captured.length > 0, "the failure to be reported");
     expect(captured[0]?.route).toBe(QUEUE);
+    await until(async () => (await eventJobs())[0]?.state === "retry", "the job to be queued for a retry");
     const [job] = await eventJobs();
     expect(delivered).toEqual([job?.id]);
     expect(job?.state).toBe("retry");
