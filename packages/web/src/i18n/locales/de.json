@@ -495,6 +495,7 @@
       "hide": "Passwort verbergen"
     },
     "remember": "Angemeldet bleiben",
+    "forgot": "Passwort vergessen?",
     "submit": "Anmelden",
     "field": {
       "email": {
@@ -642,6 +643,51 @@
     "expired": {
       "title": "Dieser Link ist ungültig oder abgelaufen",
       "description": "Ein Link funktioniert einmal und 24 Stunden lang. Gib deine E-Mail-Adresse ein, um einen neuen zu erhalten."
+    }
+  },
+  "forgotPassword": {
+    "title": "Passwort vergessen?",
+    "description": "Gib deine E-Mail-Adresse ein, dann schicken wir dir einen Link, um ein neues Passwort zu wählen.",
+    "email": {
+      "label": "E-Mail",
+      "required": "Gib deine E-Mail-Adresse ein."
+    },
+    "submit": "Link senden",
+    "signIn": "Zurück zur Anmeldung",
+    "sent": "Falls zu dieser Adresse ein Konto existiert, haben wir einen Link geschickt.",
+    "sentHint": "Der Link gilt 1 Stunde lang. Kommt er nicht an, sieh in deinem Spam-Ordner nach.",
+    "noMail": {
+      "title": "Bitte deine Instanz-Administration, dir einen Link zum Zurücksetzen zu schicken",
+      "description": "Dieser Server kann keine E-Mails versenden und deshalb den Link nicht selbst schicken."
+    },
+    "error": {
+      "invalid": "Prüfe die E-Mail-Adresse.",
+      "unavailable": "Der Link konnte gerade nicht angefordert werden. Versuche es gleich noch einmal.",
+      "rateLimited": {
+        "unknown": "Zu viele Anfragen. Versuche es später noch einmal.",
+        "seconds": "Zu viele Anfragen. Versuche es in {count, plural, one {# Sekunde} other {# Sekunden}} noch einmal.",
+        "minutes": "Zu viele Anfragen. Versuche es in {count, plural, one {# Minute} other {# Minuten}} noch einmal."
+      }
+    }
+  },
+  "resetPassword": {
+    "title": "Neues Passwort wählen",
+    "description": "Wähle ein neues Passwort für dein {name}-Konto.",
+    "sessions": "Wenn du es speicherst, wirst du in allen anderen Sitzungen dieses Kontos abgemeldet.",
+    "submit": "Passwort speichern und anmelden",
+    "error": {
+      "invalid": "Prüfe deine Eingaben und versuche es erneut.",
+      "unavailable": "Dein Passwort konnte gerade nicht zurückgesetzt werden. Versuche es gleich noch einmal.",
+      "rateLimited": {
+        "unknown": "Zu viele Versuche. Versuche es später noch einmal.",
+        "seconds": "Zu viele Versuche. Versuche es in {count, plural, one {# Sekunde} other {# Sekunden}} noch einmal.",
+        "minutes": "Zu viele Versuche. Versuche es in {count, plural, one {# Minute} other {# Minuten}} noch einmal."
+      }
+    },
+    "expired": {
+      "title": "Dieser Link ist ungültig oder abgelaufen",
+      "description": "Ein Link funktioniert einmal und 1 Stunde lang. Fordere einen neuen an.",
+      "action": "Neuen Link anfordern"
     }
   },
   "signOut": {

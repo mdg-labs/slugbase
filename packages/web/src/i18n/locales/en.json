@@ -495,6 +495,7 @@
       "hide": "Hide password"
     },
     "remember": "Remember me",
+    "forgot": "Forgot password?",
     "submit": "Sign in",
     "field": {
       "email": {
@@ -642,6 +643,51 @@
     "expired": {
       "title": "This link is not valid or has expired",
       "description": "A link works once and for 24 hours. Enter your email address to get a new one."
+    }
+  },
+  "forgotPassword": {
+    "title": "Forgot your password?",
+    "description": "Enter your email address and we will send you a link to choose a new one.",
+    "email": {
+      "label": "Email",
+      "required": "Enter your email address."
+    },
+    "submit": "Send the link",
+    "signIn": "Back to sign in",
+    "sent": "If an account exists for that address, we sent a link.",
+    "sentHint": "The link works for 1 hour. If it does not arrive, check your spam folder.",
+    "noMail": {
+      "title": "Ask your instance admin to send you a reset link",
+      "description": "This server cannot send email, so it cannot send the link itself."
+    },
+    "error": {
+      "invalid": "Check the email address.",
+      "unavailable": "The link could not be requested right now. Try again in a moment.",
+      "rateLimited": {
+        "unknown": "Too many requests. Try again later.",
+        "seconds": "Too many requests. Try again in {count, plural, one {# second} other {# seconds}}.",
+        "minutes": "Too many requests. Try again in {count, plural, one {# minute} other {# minutes}}."
+      }
+    }
+  },
+  "resetPassword": {
+    "title": "Choose a new password",
+    "description": "Choose a new password for your {name} account.",
+    "sessions": "Saving it signs you out of every other session of this account.",
+    "submit": "Save password and sign in",
+    "error": {
+      "invalid": "Check your entries and try again.",
+      "unavailable": "Your password could not be reset right now. Try again in a moment.",
+      "rateLimited": {
+        "unknown": "Too many attempts. Try again later.",
+        "seconds": "Too many attempts. Try again in {count, plural, one {# second} other {# seconds}}.",
+        "minutes": "Too many attempts. Try again in {count, plural, one {# minute} other {# minutes}}."
+      }
+    },
+    "expired": {
+      "title": "This link is not valid or has expired",
+      "description": "A link works once and for 1 hour. Ask for a new one.",
+      "action": "Request a new link"
     }
   },
   "signOut": {

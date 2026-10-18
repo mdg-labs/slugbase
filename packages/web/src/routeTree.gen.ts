@@ -10,8 +10,10 @@
 
 import { Route as rootRouteImport } from "./routes/__root.tsx";
 import { Route as AppRouteImport } from "./routes/_app.tsx";
+import { Route as ForgotPasswordRouteImport } from "./routes/forgot-password.tsx";
 import { Route as LoginRouteImport } from "./routes/login.tsx";
 import { Route as RegisterRouteImport } from "./routes/register.tsx";
+import { Route as ResetPasswordRouteImport } from "./routes/reset-password.tsx";
 import { Route as SetupRouteImport } from "./routes/setup.tsx";
 import { Route as VerifyEmailRouteImport } from "./routes/verify-email.tsx";
 import { Route as AppIndexRouteImport } from "./routes/_app/index.tsx";
@@ -29,6 +31,11 @@ const AppRoute = AppRouteImport.update({
   id: "/_app",
   getParentRoute: () => rootRouteImport,
 } as any);
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: "/forgot-password",
+  path: "/forgot-password",
+  getParentRoute: () => rootRouteImport,
+} as any);
 const LoginRoute = LoginRouteImport.update({
   id: "/login",
   path: "/login",
@@ -37,6 +44,11 @@ const LoginRoute = LoginRouteImport.update({
 const RegisterRoute = RegisterRouteImport.update({
   id: "/register",
   path: "/register",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: "/reset-password",
+  path: "/reset-password",
   getParentRoute: () => rootRouteImport,
 } as any);
 const SetupRoute = SetupRouteImport.update({
@@ -105,8 +117,10 @@ const AppSettingsAccountTokensRoute =
 
 export interface FileRoutesByFullPath {
   "/": typeof AppIndexRoute;
+  "/forgot-password": typeof ForgotPasswordRoute;
   "/login": typeof LoginRoute;
   "/register": typeof RegisterRoute;
+  "/reset-password": typeof ResetPasswordRoute;
   "/setup": typeof SetupRoute;
   "/verify-email": typeof VerifyEmailRoute;
   "/$": typeof AppSplatRoute;
@@ -120,8 +134,10 @@ export interface FileRoutesByFullPath {
   "/settings/account/": typeof AppSettingsAccountIndexRoute;
 }
 export interface FileRoutesByTo {
+  "/forgot-password": typeof ForgotPasswordRoute;
   "/login": typeof LoginRoute;
   "/register": typeof RegisterRoute;
+  "/reset-password": typeof ResetPasswordRoute;
   "/setup": typeof SetupRoute;
   "/verify-email": typeof VerifyEmailRoute;
   "/$": typeof AppSplatRoute;
@@ -137,8 +153,10 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport;
   "/_app": typeof AppRouteWithChildren;
+  "/forgot-password": typeof ForgotPasswordRoute;
   "/login": typeof LoginRoute;
   "/register": typeof RegisterRoute;
+  "/reset-password": typeof ResetPasswordRoute;
   "/setup": typeof SetupRoute;
   "/verify-email": typeof VerifyEmailRoute;
   "/_app/$": typeof AppSplatRoute;
@@ -156,8 +174,10 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
   fullPaths:
     | "/"
+    | "/forgot-password"
     | "/login"
     | "/register"
+    | "/reset-password"
     | "/setup"
     | "/verify-email"
     | "/$"
@@ -171,8 +191,10 @@ export interface FileRouteTypes {
     | "/settings/account/";
   fileRoutesByTo: FileRoutesByTo;
   to:
+    | "/forgot-password"
     | "/login"
     | "/register"
+    | "/reset-password"
     | "/setup"
     | "/verify-email"
     | "/$"
@@ -187,8 +209,10 @@ export interface FileRouteTypes {
   id:
     | "__root__"
     | "/_app"
+    | "/forgot-password"
     | "/login"
     | "/register"
+    | "/reset-password"
     | "/setup"
     | "/verify-email"
     | "/_app/$"
@@ -205,8 +229,10 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren;
+  ForgotPasswordRoute: typeof ForgotPasswordRoute;
   LoginRoute: typeof LoginRoute;
   RegisterRoute: typeof RegisterRoute;
+  ResetPasswordRoute: typeof ResetPasswordRoute;
   SetupRoute: typeof SetupRoute;
   VerifyEmailRoute: typeof VerifyEmailRoute;
   LoginMfaRoute: typeof LoginMfaRoute;
@@ -221,6 +247,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AppRouteImport;
       parentRoute: typeof rootRouteImport;
     };
+    "/forgot-password": {
+      id: "/forgot-password";
+      path: "/forgot-password";
+      fullPath: "/forgot-password";
+      preLoaderRoute: typeof ForgotPasswordRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
     "/login": {
       id: "/login";
       path: "/login";
@@ -233,6 +266,13 @@ declare module "@tanstack/react-router" {
       path: "/register";
       fullPath: "/register";
       preLoaderRoute: typeof RegisterRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/reset-password": {
+      id: "/reset-password";
+      path: "/reset-password";
+      fullPath: "/reset-password";
+      preLoaderRoute: typeof ResetPasswordRouteImport;
       parentRoute: typeof rootRouteImport;
     };
     "/setup": {
@@ -360,8 +400,10 @@ const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren);
 
 const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
+  ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   SetupRoute: SetupRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   LoginMfaRoute: LoginMfaRoute,

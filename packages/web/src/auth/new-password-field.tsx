@@ -13,10 +13,10 @@ const POLICY_CODES: ReadonlyMap<string, PasswordProblem> = new Map([
   ["breached", "breached"],
 ]);
 
-/** What the server's answer says about the password, when it refused it: the first field error on `password`, else a plain `weak_password`. */
-export function passwordProblemOf(error: ApiProblemError): PasswordProblem | undefined {
+/** What the server's answer says about the password, when it refused it: the first field error on `field`, else a plain `weak_password`. */
+export function passwordProblemOf(error: ApiProblemError, field = "password"): PasswordProblem | undefined {
   for (const { path, code } of error.errors) {
-    if (path === "password") {
+    if (path === field) {
       return POLICY_CODES.get(code) ?? "weak";
     }
   }

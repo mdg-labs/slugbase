@@ -89,7 +89,6 @@ describe("the sign-in page", () => {
     expect(screen.getByRole("checkbox", { name: "Remember me" }).getAttribute("aria-checked")).toBe("false");
     expect(screen.getByRole("button", { name: "Sign in" })).toBeTruthy();
     expect(screen.queryByRole("navigation")).toBeNull();
-    expect(screen.queryByText("Forgot password?")).toBeNull();
   });
 
   it("is written in German", async () => {

@@ -1,7 +1,7 @@
 import { Button, Input } from "@slugbase/ui";
 import { Banner, CheckboxField, FormField, SecretInput } from "@slugbase/ui/patterns";
 import { useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "@tanstack/react-router";
+import { Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactElement, type SyntheticEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiProblemError } from "../api/client.ts";
@@ -209,7 +209,12 @@ export function LoginForm({ next }: { next: string | undefined }): ReactElement 
           value={password}
         />
       </FormField>
-      <CheckboxField checked={remember} label={t("login.remember")} name="remember" onCheckedChange={setRemember} />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <CheckboxField checked={remember} label={t("login.remember")} name="remember" onCheckedChange={setRemember} />
+        <Link className="text-muted-foreground text-sm underline underline-offset-4" to="/forgot-password">
+          {t("login.forgot")}
+        </Link>
+      </div>
       <Button loading={submitting} type="submit">
         {t("login.submit")}
       </Button>
