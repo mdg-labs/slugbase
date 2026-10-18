@@ -586,6 +586,11 @@
       "title": "Check your email",
       "description": "If we can use {email}, a link to verify it is on its way. Open it to finish creating your account.",
       "hint": "The link works for 24 hours. If it does not arrive, check your spam folder."
+    },
+    "ready": {
+      "title": "Your account is ready",
+      "description": "This server does not send email, so there is no link to open. Sign in to continue.",
+      "signIn": "Go to sign in"
     }
   },
   "newPassword": {

@@ -586,6 +586,11 @@
       "title": "Prüfe dein E-Mail-Postfach",
       "description": "Wenn wir {email} verwenden können, ist ein Link zur Bestätigung unterwegs. Öffne ihn, um dein Konto fertig zu erstellen.",
       "hint": "Der Link ist 24 Stunden gültig. Kommt er nicht an, sieh in deinem Spam-Ordner nach."
+    },
+    "ready": {
+      "title": "Dein Konto ist bereit",
+      "description": "Dieser Server versendet keine E-Mails, deshalb gibt es keinen Link zu öffnen. Melde dich an, um fortzufahren.",
+      "signIn": "Zur Anmeldung"
     }
   },
   "newPassword": {

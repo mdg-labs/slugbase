@@ -11,7 +11,7 @@ import { isSetupRequired } from "../config/setup-state.ts";
 
 function RegisterPage(): ReactElement {
   const { t } = useTranslation();
-  const { product, signIn } = useConfig();
+  const { product, signIn, features } = useConfig();
   const [registered, setRegistered] = useState<string | undefined>(undefined);
   // The server can close registration after the configuration was read; its answer closes the page too.
   const [closedByServer, setClosedByServer] = useState(false);
@@ -25,9 +25,14 @@ function RegisterPage(): ReactElement {
     );
   }
   if (registered !== undefined) {
-    return (
+    // Without mail nothing was sent, so there is no link to wait for: the account can sign in at once (doc 02 section 2.2).
+    return features.mail ? (
       <AuthPage productName={product.name} title={t("register.checkEmail.title")}>
         <CheckEmail email={registered} />
+      </AuthPage>
+    ) : (
+      <AuthPage description={t("register.ready.description")} productName={product.name} title={t("register.ready.title")}>
+        <Button render={<Link to="/login" />}>{t("register.ready.signIn")}</Button>
       </AuthPage>
     );
   }

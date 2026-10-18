@@ -10,7 +10,9 @@ const REGISTER_PATH = "/api/v1/auth/register";
 const RESEND_PATH = "/api/v1/auth/verify-email/resend";
 const PASSWORD = "correct horse battery staple";
 
-const OPEN = { ...CONFIG_BODY, signIn: { registration: true, oidc: [] } };
+const MAIL = { ai: false, mail: true };
+const OPEN = { ...CONFIG_BODY, features: MAIL, signIn: { registration: true, oidc: [] } };
+const OPEN_WITHOUT_MAIL = { ...CONFIG_BODY, features: { ai: false, mail: false }, signIn: { registration: true, oidc: [] } };
 const CLOSED = { ...CONFIG_BODY, signIn: { registration: false, oidc: [] } };
 
 interface Server {
@@ -170,6 +172,20 @@ describe("registering", () => {
     expect(screen.getByText(/ada@example\.org/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Send the link again" })).toBeTruthy();
     expect(screen.queryByLabelText("Password")).toBeNull();
+  });
+
+  it("tells the person the account is ready and offers sign-in, with no check-email state, when the server has no mail", async () => {
+    const server = stubServer(OPEN_WITHOUT_MAIL, accepted);
+    await openRegister();
+
+    await fillAndSubmit();
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Your account is ready" })).toBeTruthy();
+    expect(await server.registrations()).toEqual([{ displayName: "Ada Lovelace", email: "ada@example.org", password: PASSWORD }]);
+    expect(screen.getByRole("link", { name: "Go to sign in" }).getAttribute("href")).toBe("/login");
+    expect(screen.queryByRole("heading", { name: "Check your email" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /^(Send the link again|Send again in)/ })).toBeNull();
+    expect(await server.resends()).toEqual([]);
   });
 
   it("names the empty fields and sends nothing", async () => {
