@@ -8,20 +8,24 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 
 -- sys_email_verify(token_hash, password_hash, session_id, session_token_hash,
 -- ip_prefix, user_agent, replaced_token_hash): redeems a signup verification
--- token and signs the account in, all in this one call. The token is consumed
--- first (sys_credential_token_consume: once, before its expiry, purpose
--- email_verify); no row comes back for an unknown, used, expired or foreign
--- token, and none for an account that is disabled, which a caller does not tell
--- apart. An account whose address was never verified is the one a visitor
--- registered, and the visitor is not necessarily the owner of the address, so
--- verifying it takes the password the owner chose: the stored hash is replaced
--- (sys_password_set, which also moves password_changed_at), every session of
--- the account is deleted, and everything else the visitor could have set up
--- while signed in is removed with it: the second factor (a pending enrolment
--- included) and its backup codes, the API tokens, the linked identities and
--- the pending handshakes that would link one, and every unused password-reset
--- token, since a reset requested before the owner verified is not the owner's.
--- Only then is the address marked verified. An account that is already verified keeps all of it. The
+-- token and signs the account in, all in this one call. The row of the account
+-- the token belongs to is locked first, found by a read that locks nothing, and
+-- the token is consumed after that (sys_credential_token_consume: once, before
+-- its expiry, purpose email_verify), the order in which
+-- sys_credential_token_issue takes the same two rows, so a redemption and an
+-- issue for one account queue and do not wait on each other. No row comes back
+-- for an unknown, used, expired or foreign token, and none for an account that
+-- is disabled, which a caller does not tell apart. An account whose address was
+-- never verified is the one a visitor registered, and the visitor is not
+-- necessarily the owner of the address, so verifying it takes the password the
+-- owner chose: the stored hash is replaced (sys_password_set, which also moves
+-- password_changed_at), every session of the account is deleted, and everything
+-- else the visitor could have set up while signed in is removed with it: the
+-- second factor (a pending enrolment included) and its backup codes, the API
+-- tokens, the linked identities and the pending handshakes that would link one,
+-- and every unused password-reset token, since a reset requested before the
+-- owner verified is not the owner's. Only then is the address marked verified.
+-- An account that is already verified keeps all of it. The
 -- session is partial for an account whose second factor is on and full
 -- otherwise, and replaces the session of the token the request carried. The
 -- account row is locked before anything is changed, so two redemptions of
@@ -53,6 +57,10 @@ BEGIN
     RAISE EXCEPTION 'sys_email_verify needs a 32-byte token hash, a password hash, a session and a 32-byte session token hash'
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
+
+  PERFORM 1 FROM public.accounts a
+  WHERE a.id = (SELECT t.account_id FROM public.credential_tokens t WHERE t.purpose = 'email_verify' AND t.token_hash = p_token_hash)
+  FOR UPDATE;
 
   SELECT t.account_id INTO v_account FROM public.sys_credential_token_consume('email_verify', p_token_hash) t;
   IF v_account IS NULL THEN

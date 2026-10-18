@@ -1,4 +1,4 @@
 {
-  "sha256": "985a2a2b2d807d3af17ac73a9970fe14c7ae1571e76d986de1a00c2af42bd590",
-  "migration": "20261017221614_add_password_reset"
+  "sha256": "d880066f2cacc9d587a3a504f08a266b921efb565e3cb3f378a4139780045e8c",
+  "migration": "20261018103741_add_token_redemption_lock_order"
 }

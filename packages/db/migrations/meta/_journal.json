@@ -204,6 +204,13 @@
       "when": 1792275374933,
       "tag": "20261017221614_add_password_reset",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1792319861721,
+      "tag": "20261018103741_add_token_redemption_lock_order",
+      "breakpoints": true
     }
   ]
 }

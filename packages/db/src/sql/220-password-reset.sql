@@ -7,15 +7,19 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 
 -- sys_password_reset(token_hash, password_hash, session_id, session_token_hash,
 -- ip_prefix, user_agent, replaced_token_hash): redeems a password-reset token
--- and signs the account in, all in this one call. The token is consumed first
--- (sys_credential_token_consume: once, before its expiry, purpose
--- password_reset); no row comes back for an unknown, used, expired or foreign
--- token, none for an account that is disabled and none for one whose address
--- was never verified, which a caller does not tell apart. A reset is for the
--- owner of a verified address: an account nobody has verified may have been set
--- up by whoever registered the address first, and only the verification takes
--- that setup away (sys_email_verify). The stored hash is replaced
--- (sys_password_set, which also moves password_changed_at) and every session of
+-- and signs the account in, all in this one call. The row of the account the
+-- token belongs to is locked first, found by a read that locks nothing, and the
+-- token is consumed after that (sys_credential_token_consume: once, before its
+-- expiry, purpose password_reset), the order in which
+-- sys_credential_token_issue takes the same two rows, so a redemption and an
+-- issue for one account queue and do not wait on each other. No row comes back
+-- for an unknown, used, expired or foreign token, none for an account that is
+-- disabled and none for one whose address was never verified, which a caller
+-- does not tell apart. A reset is for the owner of a verified address: an
+-- account nobody has verified may have been set up by whoever registered the
+-- address first, and only the verification takes that setup away
+-- (sys_email_verify). The stored hash is replaced (sys_password_set, which also
+-- moves password_changed_at) and every session of
 -- the account is deleted, the one of the token the request carried included.
 -- The new session is partial for an account whose second factor is on and full
 -- otherwise, so a mailbox that is not the account's alone cannot skip the
@@ -47,6 +51,10 @@ BEGIN
     RAISE EXCEPTION 'sys_password_reset needs a 32-byte token hash, a password hash, a session and a 32-byte session token hash'
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
+
+  PERFORM 1 FROM public.accounts a
+  WHERE a.id = (SELECT t.account_id FROM public.credential_tokens t WHERE t.purpose = 'password_reset' AND t.token_hash = p_token_hash)
+  FOR UPDATE;
 
   SELECT t.account_id INTO v_account FROM public.sys_credential_token_consume('password_reset', p_token_hash) t;
   IF v_account IS NULL THEN
