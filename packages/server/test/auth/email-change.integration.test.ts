@@ -728,6 +728,43 @@ describe("the confirmation and the cancel link", { timeout: TEST_TIMEOUT_MS }, (
     expect(await pendingEmail(account.id)).toEqual({ email: "held.attacker@example.test", pending: null });
   });
 
+  it("keeps the old address for the owner's link: a registration of it, a request of another account for it and a confirmation onto it do not take it, and the link then restores it", async () => {
+    const world = serve({ mail, env: { PUBLIC_REGISTRATION: "true", RATE_LIMIT_REGISTER_IP: "1000/hour" } });
+    const account = await owner({ email: "reserved.victim@example.test" });
+    const rival = await owner({ email: "reserved.rival@example.test" });
+    await startWorker();
+    const attacker = await requested(world, account, "reserved.attacker@example.test");
+    expect((await redeem(world, CONFIRM, tokenOf("emailChange", "reserved.attacker@example.test"))).status).toBe(204);
+    const undo = tokenOf("emailChangeNotice", "reserved.victim@example.test");
+    const jobsBefore = (await mailJobs()).length;
+
+    const registered = await world.server.fetch(
+      postJson(world.origin, "/api/v1/auth/register", { displayName: "Ada Lovelace", email: "Reserved.Victim@example.test", password: "a long enough password for this account" }),
+    );
+    expect(registered.status).toBe(202);
+    expect((await mailJobs()).length).toBe(jobsBefore + 1);
+    const rivalCookie = await signIn(world, rival, true);
+    expect((await requestChange(world, rivalCookie, "reserved.victim@example.test")).status).toBe(202);
+    const planted = generateCredentialToken();
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`INSERT INTO credential_tokens (id, purpose, account_id, token_hash, target_email, expires_at) VALUES (${uuidv7()}, 'email_change', ${rival.id}, ${planted.hash}, 'reserved.victim@example.test', now() + interval '1 hour')`;
+    });
+    const refused = await redeem(world, CONFIRM, planted.value);
+
+    expect(refused.status).toBe(410);
+    expect(await answerOf(refused)).toEqual(await answerOf(await redeem(world, CONFIRM, "A".repeat(43))));
+    expect((await pendingEmail(rival.id)).email).toBe("reserved.rival@example.test");
+    const holders = await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      return tx<{ id: string }[]>`SELECT id FROM accounts WHERE email = 'reserved.victim@example.test'`;
+    });
+    expect(holders).toEqual([]);
+    expect((await redeem(world, CANCEL, undo)).status).toBe(204);
+    expect((await probe(world, attacker)).status).toBe(401);
+    expect(await pendingEmail(account.id)).toEqual({ email: "reserved.victim@example.test", pending: null });
+  });
+
   it("cancels a pending change with DELETE /me/email/pending: its links stop working, the session stays, and repeating it is a 204", async () => {
     const world = serve({ mail });
     const account = await owner({ email: "changer@example.test" });

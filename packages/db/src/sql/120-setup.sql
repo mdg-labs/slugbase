@@ -12,6 +12,12 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- generated and the email trimmed and NFKC-normalised. Answers false, and
 -- inserts nothing, when the email (or the id) is taken, so the caller answers
 -- generically and cannot be used to tell whether an address has an account.
+-- An address that the unused, unexpired "this wasn't me" token of an account
+-- records (credential_tokens.target_email: the address a confirmed change of
+-- that account replaced) counts as taken too, so the link that restores it
+-- cannot be blocked by creating an account on it; the reservation ends when the
+-- token is used or expires. The check runs first on every call, so an address
+-- that is reserved costs the caller what one that has an account costs.
 -- It never makes an instance admin.
 CREATE OR REPLACE FUNCTION public.sys_create_account(
   p_id uuid,
@@ -32,6 +38,14 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'sys_create_account needs an id, an email, a display name, a locale and a verified flag'
       USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM public.credential_tokens t
+    WHERE t.purpose = 'email_change_cancel' AND t.used_at IS NULL AND t.expires_at > clock_timestamp()
+      AND t.target_email = p_email::public.citext
+  ) THEN
+    RETURN false;
   END IF;
 
   BEGIN

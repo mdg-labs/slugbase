@@ -18,6 +18,12 @@
 -- never the ones issued before it: the oldest address's link outlives every other
 -- redemption. A cancel token that records no address, issued before the token recorded
 -- one, is treated as one that targets the account's current address.
+-- While a cancel token is unused and unexpired, the address it records is reserved to
+-- its account: no other account is created on it (sys_create_account) or confirmed onto
+-- it (sys_email_change_confirm, and sys_email_change_token_issue mails no confirmation
+-- for it), so whoever confirmed the change cannot take the address before the owner uses
+-- the link. The reservation ends when the token is used or expires; the restore in
+-- sys_email_change_cancel, which moves the account itself, is not held up by it.
 -- Every function that touches an account locks its row first and the tokens after,
 -- the order sys_credential_token_issue takes them in, so two calls for one account
 -- queue and do not wait on each other.
@@ -92,8 +98,8 @@ $$;
 -- disabled or was never verified (whoever registered an address first is not
 -- necessarily its owner, so such an account changes nothing, as it resets nothing:
 -- sys_password_reset), and, for the purpose email_change, when the pending address is
--- the account's own or belongs to another account: the confirmation is then mailed to
--- nobody, and the caller of the request is told nothing of it. The email_change token
+-- the account's own, belongs to another account or is reserved to another account by
+-- its unused cancel token: the confirmation is then mailed to nobody, and the caller of the request is told nothing of it. The email_change token
 -- records the address it moves to (credential_tokens.target_email); the cancel token
 -- records the account's current address, the one a confirmed change replaces and the
 -- cancel link puts back. An older unused token of the purpose is replaced; for the
@@ -138,6 +144,11 @@ BEGIN
 
   IF p_purpose = 'email_change' AND (
     v_pending = v_email OR EXISTS (SELECT 1 FROM public.accounts o WHERE o.email = v_pending AND o.id <> p_account_id)
+    OR EXISTS (
+    SELECT 1 FROM public.credential_tokens r
+    WHERE r.purpose = 'email_change_cancel' AND r.used_at IS NULL AND r.expires_at > clock_timestamp()
+      AND r.target_email = v_pending AND r.account_id <> p_account_id
+  )
   ) THEN
     DELETE FROM public.credential_tokens
     WHERE account_id = p_account_id AND purpose = 'email_change' AND used_at IS NULL;
@@ -168,7 +179,8 @@ $$;
 -- address was never verified, for a token whose address is no longer the account's
 -- pending one (the change was cancelled or asked for again), and for an address that
 -- another account holds by now, whether it was taken before the call or by a
--- registration that commits while it runs. The token is used up in each of those
+-- registration that commits while it runs, or that another account's unused, unexpired
+-- cancel token reserves. The token is used up in each of those
 -- cases. The address becomes the account's email and the pending address is cleared;
 -- the verified time stays, since the token proved the new address, and no session ends.
 -- The account's other unused confirmation tokens are deleted; its cancel token stays,
@@ -203,7 +215,12 @@ BEGIN
     RETURN NULL;
   END IF;
 
-  IF EXISTS (SELECT 1 FROM public.accounts o WHERE o.email = v_target AND o.id <> v_account) THEN
+  IF EXISTS (SELECT 1 FROM public.accounts o WHERE o.email = v_target AND o.id <> v_account)
+    OR EXISTS (
+    SELECT 1 FROM public.credential_tokens r
+    WHERE r.purpose = 'email_change_cancel' AND r.used_at IS NULL AND r.expires_at > clock_timestamp()
+      AND r.target_email = v_target AND r.account_id <> v_account
+  ) THEN
     RETURN NULL;
   END IF;
 

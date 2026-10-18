@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { createAuthStore, type AuthStore, type QueuedJob } from "../src/index.ts";
+import { createAuthStore, type AuthStore, type NewRegistration, type QueuedJob } from "../src/index.ts";
 import { systemOperations } from "../src/system/registry.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, freshToken, seedAccount, sessionRows } from "./support/auth-fixture.ts";
@@ -805,5 +805,146 @@ describe("cancelEmailChange", () => {
     const outcomes = await Promise.all(Array.from({ length: PARALLEL_CALLS }, () => store.cancelEmailChange(cancel)));
 
     expect(outcomes.filter((outcome) => outcome !== undefined)).toHaveLength(1);
+  });
+});
+
+// The address a confirmed change replaced stays the owner's while the undo link of the change is live (doc 05
+// section 3.3, doc 02 sections 2.2 and 2.6, doc 10 T8 and T18): without it, whoever confirmed the change could
+// register the old address before the owner used the link, and the restore would find it taken.
+describe("the address a live undo link restores", () => {
+  const OLD = "reserved.old@example.test";
+  const NEW = "reserved.new@example.test";
+
+  function registration(email: string): NewRegistration {
+    const accountId = freshId();
+    return {
+      accountId,
+      email,
+      displayName: "Ada",
+      passwordHash: "$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA",
+      locale: "de",
+      onCreated: [{ id: freshId(), queue: MAIL_QUEUE, data: { template: "verifyEmail", accountId, created: true } }],
+      onTaken: [{ id: freshId(), queue: MAIL_QUEUE, data: { template: "verifyEmail", accountId, created: false } }],
+    };
+  }
+
+  async function holders(email: string): Promise<string[]> {
+    return (await asSystem(db, (tx) => tx<{ id: string }[]>`SELECT id FROM accounts WHERE email = ${email}`)).map((row) => row.id);
+  }
+
+  async function plantConfirmation(accountId: string, target: string): Promise<Buffer> {
+    const { hash } = freshToken();
+    await asSystem(
+      db,
+      (tx) =>
+        tx`INSERT INTO credential_tokens (id, purpose, account_id, token_hash, target_email, expires_at)
+           VALUES (${freshId()}, 'email_change', ${accountId}, ${hash}, ${target}, now() + interval '1 hour')`,
+    );
+    await asSystem(db, (tx) => tx`UPDATE accounts SET pending_email = ${target} WHERE id = ${accountId}`);
+    return hash;
+  }
+
+  it("is not taken by a registration, whatever its spelling, which answers as for an address that has an account and creates nothing, and the owner's link then restores it", async () => {
+    const { owner, cancel } = await confirmed(OLD, NEW);
+    const holder = await account({ email: "holder@example.test" });
+
+    for (const spelling of [OLD, OLD.toUpperCase(), "holder@example.test"]) {
+      await db.owner`TRUNCATE pgboss.job`;
+      const input = registration(spelling);
+      expect(await store.registerAccount(input), spelling).toBe(false);
+      expect((await queued()).map((job) => job.data["created"]), spelling).toEqual([false]);
+      expect(await asSystem(db, (tx) => tx`SELECT 1 FROM accounts WHERE id = ${input.accountId}`), spelling).toHaveLength(0);
+    }
+    expect(await holders(OLD)).toEqual([]);
+    expect(await accountRow(holder)).toMatchObject({ email: "holder@example.test" });
+
+    expect(await store.cancelEmailChange(cancel)).toEqual({ accountId: owner });
+    expect(await accountRow(owner)).toMatchObject({ email: OLD, pending_email: null });
+  });
+
+  it("is not taken by another account's confirmation, which fails as an unknown token does and uses the token up, and the owner's link then restores it", async () => {
+    const { owner, cancel } = await confirmed(OLD, NEW);
+    const rival = await account();
+    const token = await plantConfirmation(rival, OLD);
+
+    expect(await store.confirmEmailChange(token)).toBeUndefined();
+    expect(await store.confirmEmailChange(freshToken().hash)).toBeUndefined();
+
+    expect((await accountRow(rival))?.email).not.toBe(OLD);
+    expect((await tokenRows(rival)).filter((row) => row.purpose === "email_change").map((row) => row.used)).toEqual([true]);
+    expect(await store.cancelEmailChange(cancel)).toEqual({ accountId: owner });
+    expect(await accountRow(owner)).toMatchObject({ email: OLD });
+  });
+
+  it("is not mailed a confirmation by another account's request, so no link is sent that cannot work", async () => {
+    await confirmed(OLD, NEW);
+    const rival = await account();
+    await request(rival, OLD);
+
+    expect((await issueAs(rival, "email_change")).pending).toBeNull();
+
+    expect((await tokenRows(rival)).filter((row) => row.purpose === "email_change")).toEqual([]);
+  });
+
+  it("is refused to sys_create_account whatever the verified flag, which is the operation every account-creating path goes through", async () => {
+    await confirmed(OLD, NEW);
+
+    for (const verified of [false, true]) {
+      const rows = await db.app`SELECT sys_create_account(${freshId()}::uuid, ${OLD}::text, 'Ada', '$argon2id$stub', 'en', ${verified}::boolean) AS created`;
+      expect(rows[0]?.["created"], String(verified)).toBe(false);
+    }
+    expect(await holders(OLD)).toEqual([]);
+  });
+
+  it("does not stop the account whose link it is from moving back onto the address with a change of its own", async () => {
+    const { owner } = await confirmed(OLD, NEW);
+
+    expect(await request(owner, OLD)).toBe(true);
+    expect((await issueAs(owner, "email_change")).pending).toBe(OLD);
+    expect(await store.confirmEmailChange(await confirmation(owner))).toEqual({ accountId: owner });
+
+    expect(await accountRow(owner)).toMatchObject({ email: OLD });
+  });
+
+  it("is free again once the link is used: the address of a later link is free when an earlier link restored the owner's address, and a confirmation can take it", async () => {
+    const { owner, cancel } = await confirmed(OLD, NEW);
+    await movedOn(owner, "reserved.third@example.test");
+    expect(await store.registerAccount(registration(NEW))).toBe(false);
+
+    expect(await store.cancelEmailChange(cancel)).toEqual({ accountId: owner });
+
+    expect(await accountRow(owner)).toMatchObject({ email: OLD });
+    const rival = await account();
+    expect(await store.confirmEmailChange(await plantConfirmation(rival, NEW))).toEqual({ accountId: rival });
+    expect(await accountRow(rival)).toMatchObject({ email: NEW });
+  });
+
+  it("is free again once the link has expired", async () => {
+    const { cancel } = await confirmed(OLD, NEW);
+    expect(await store.registerAccount(registration(OLD))).toBe(false);
+
+    await asSystem(db, (tx) => tx`UPDATE credential_tokens SET expires_at = now() - interval '1 second' WHERE token_hash = ${cancel}`);
+
+    const input = registration(OLD);
+    expect(await store.registerAccount(input)).toBe(true);
+    expect(await holders(OLD)).toEqual([input.accountId]);
+  });
+
+  it("is free again once the link was used", async () => {
+    const { owner, cancel } = await confirmed(OLD, NEW);
+    await asSystem(db, (tx) => tx`UPDATE accounts SET email = ${NEW} WHERE id = ${owner}`);
+    await asSystem(db, (tx) => tx`UPDATE credential_tokens SET used_at = now() WHERE token_hash = ${cancel}`);
+
+    expect(await store.registerAccount(registration(OLD))).toBe(true);
+  });
+
+  it("stays reserved after the owner requests or cancels another change, as the link does", async () => {
+    const { owner } = await confirmed(OLD, NEW);
+    await request(owner, "another@example.test");
+    await db.owner`TRUNCATE pgboss.job`;
+
+    expect(await store.registerAccount(registration(OLD))).toBe(false);
+    expect(await store.cancelPendingEmailChange(owner)).toBe(true);
+    expect(await store.registerAccount(registration(OLD))).toBe(false);
   });
 });

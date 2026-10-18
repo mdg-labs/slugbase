@@ -1,9 +1,11 @@
+import { randomBytes } from "node:crypto";
 import { verify } from "@node-rs/argon2";
 import { InMemoryMail } from "@slugbase/testing";
 import { useTestDatabase } from "@slugbase/testing/db";
 import type { AuthStore } from "@slugbase/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { HEAVY_TEST_TIMEOUT_MS } from "../../../../vitest.shared.ts";
+import { uuidv7 } from "../../src/auth/uuidv7.ts";
 import { runMigrations } from "../../src/migrate/index.ts";
 import { urlOf } from "../migrate/support.ts";
 import { CREDENTIAL_ENV, requestFlows, type RequestFlow } from "./credential-flows.ts";
@@ -209,6 +211,17 @@ describe("the requests for an emailed link (T8)", () => {
     readonly email: string;
   }
 
+  /** An account that moved away from `address`, whose unused "this wasn't me" link reserves it: no account holds the address. */
+  async function reserve(address: string, movedTo: string): Promise<void> {
+    const mover = await seedAccount(database(), { emailVerified: true, email: movedTo });
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`
+        INSERT INTO credential_tokens (id, purpose, account_id, token_hash, target_email, expires_at)
+        VALUES (${uuidv7()}, 'email_change_cancel', ${mover.id}, ${randomBytes(32)}, ${address}, now() + interval '1 hour')`;
+    });
+  }
+
   /** An address of every kind a request can name, each of its own, so that the per-address count in the limit headers reads the same. */
   async function targets(): Promise<readonly Target[]> {
     tag += 1;
@@ -217,6 +230,8 @@ describe("the requests for an emailed link (T8)", () => {
     const verifiedShouting = await seedAccount(database(), { emailVerified: true, email: `VERIFIED.SHOUTING.${suffix}@EXAMPLE.TEST` });
     const unverified = await seedAccount(database(), { email: `Unverified.Person.${suffix}@Example.test` });
     const unverifiedQuiet = await seedAccount(database(), { email: `unverified.quiet.${suffix}@example.test` });
+    await reserve(`Reserved.Old.${suffix}@Example.test`, `reserved.moved.${suffix}@example.test`);
+    await reserve(`reserved.shouting.${suffix}@example.test`, `reserved.moved.again.${suffix}@example.test`);
     return [
       { name: "a verified account", email: verified.email },
       { name: "a verified account in capitals", email: verifiedShouting.email },
@@ -224,6 +239,8 @@ describe("the requests for an emailed link (T8)", () => {
       { name: "an unverified account in lower case", email: unverifiedQuiet.email },
       { name: "an unknown address", email: `nobody.${suffix}@example.test` },
       { name: "an unknown address in capitals", email: `NOBODY.ELSE.${suffix}@EXAMPLE.TEST` },
+      { name: "an address reserved by a live undo link", email: `reserved.old.${suffix}@example.test` },
+      { name: "an address reserved by a live undo link, in capitals", email: `RESERVED.SHOUTING.${suffix}@EXAMPLE.TEST` },
     ];
   }
 
@@ -266,7 +283,7 @@ describe("the requests for an emailed link (T8)", () => {
       async () => {
         const world = serveAuth(database(), store, { env: { ...CREDENTIAL_ENV, RATE_LIMIT_REGISTER_IP: "1000/hour" }, mail });
         const cookie = await sessionFor(world, flow);
-        const [verified, , unverified] = await targets();
+        const [verified, , unverified, , , , reserved] = await targets();
         let unknown = 0;
         const reference = () => {
           unknown += 1;
@@ -274,7 +291,7 @@ describe("the requests for an emailed link (T8)", () => {
         };
         // A path that skipped the account lookup or the hashing would answer in a small fraction of the time: the
         // bounds are far wider than the noise of a loaded runner, and the ratio is a median over many back-to-back pairs.
-        for (const known of [verified, unverified]) {
+        for (const known of [verified, unverified, reserved]) {
           const ratio = await medianLatencyRatio(reference, () => flow.call(world, known?.email ?? "", {}, cookie));
           expect(ratio, known?.name).toBeGreaterThan(0.5);
           expect(ratio, known?.name).toBeLessThan(2);

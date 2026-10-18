@@ -232,6 +232,13 @@
       "when": 1792340623771,
       "tag": "20261018162343_add_email_change_undo",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1792342388322,
+      "tag": "20261018165308_add_email_reservation",
+      "breakpoints": true
     }
   ]
 }

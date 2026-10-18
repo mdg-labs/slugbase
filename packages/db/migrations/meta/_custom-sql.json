@@ -1,4 +1,4 @@
 {
-  "sha256": "a28469e92a699a541697071d21077601d45ceea289925878b431f81f4ba236ee",
-  "migration": "20261018162343_add_email_change_undo"
+  "sha256": "9bac122fc9eaa03c03041541bcfc6958e24a4edf8d7778cbe24fce8dd61144a6",
+  "migration": "20261018165308_add_email_reservation"
 }
