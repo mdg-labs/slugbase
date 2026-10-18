@@ -505,7 +505,9 @@ describe("revoking a token", () => {
     });
     expect(server.to("DELETE", `${TOKENS_PATH}/${DEPLOY.id}`)).toHaveLength(1);
     expect(screen.getByText("Token revoked")).toBeTruthy();
-    expect(screen.queryByRole("alertdialog")).toBeNull();
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).toBeNull();
+    });
   });
 
   it("does not revoke when the confirmation is cancelled", async () => {
