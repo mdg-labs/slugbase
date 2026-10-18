@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
-# Fails on a GraphQL-backed `gh` subcommand, `--paginate`, or a
-# non-repository-scoped search path anywhere under .claude/ or scripts/ —
-# the patterns a Claude Code cloud session's egress proxy refuses (GraphQL
-# entirely, `search/issues`, `--paginate`'s `repositories/{id}/...`
-# follow-on links). A skill or script that reintroduces one of these works on
-# the maintainer's own machine and then breaks silently the moment it runs in
-# a cloud session. Every GitHub call goes through gh-rest.sh instead.
+# Fails on a direct GitHub call anywhere under .claude/ or scripts/ outside
+# the vendored scripts: a `gh issue`/`gh pr`/`gh repo view`/… subcommand,
+# `gh api graphql`, a search, or `--paginate`. Those infer the repository
+# from the working directory (wrong or missing in orchestrate's scratch
+# clones, whose `origin` is a local path) and skip the scripts' error
+# handling. Every GitHub call goes through gh-rest.sh instead.
+#
+# The vendored scripts themselves (.claude/scripts/*.sh) may use GraphQL and
+# `--paginate`: they are scoped to workflow.json's repo and tested. Orchestrate
+# no longer runs in Claude Code cloud sessions, whose egress proxy refused
+# both, which is what this check was first written for.
 #
 # Vendored to .claude/scripts/; the repo root is two levels up. Run it from
 # the repo's lint target and CI.
@@ -25,7 +29,7 @@ patterns=(
   'gh +repo +view\>'
   'gh +label +list\>'
   'gh +release +list\>'
-  'gh +api +graphql\>'
+  'gh +api +graphql\>'   # allowed in .claude/scripts/*.sh (see script_only)
   'gh +api +search/'
   'gh +search\>'
   '\-\-search\>'
@@ -49,6 +53,14 @@ for allowlist in "${allowlists[@]}"; do
   done <"$allowlist"
 done
 
+# Patterns the vendored scripts may use; a skill, agent or doc still may not.
+script_only=('gh +api +graphql\>' '\-\-paginate\>')
+in_script_only() {
+  local pat=$1 p
+  for p in "${script_only[@]}"; do [[ $pat == "$p" ]] && return 0; done
+  return 1
+}
+
 is_allowed() {
   local file=$1 line=$2 i
   for i in "${!allow_file[@]}"; do
@@ -67,6 +79,9 @@ while IFS= read -r -d '' file; do
     line_no=$((line_no + 1))
     for pat in "${patterns[@]}"; do
       if [[ $line =~ $pat ]]; then
+        if [[ $rel == .claude/scripts/*.sh ]] && in_script_only "$pat"; then
+          continue
+        fi
         if is_allowed "$rel" "$line"; then
           continue
         fi

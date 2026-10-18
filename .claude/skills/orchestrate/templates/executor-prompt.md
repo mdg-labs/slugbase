@@ -204,7 +204,25 @@ GHSA id; the report goes to the orchestrator only.
 
   If a check isn't available on this machine, say so plainly in your report
   — never skip it silently.
-- **Stage per item, by name.** Never `git add -A`, `git add .` or
+{{IF ACT:}}- **A changed workflow is run, not just read.** For each job your diff
+  changes — or that uses a changed composite action or reusable workflow —
+  run it locally with the event its acceptance is about:
+
+  ```
+  {{TOOLS_ROOT}}/.claude/scripts/act-run.sh {{WORKSPACE_PATH}} <workflow file> <job id> [event]
+  ```
+
+  Pass the Bash tool's `timeout` above {{ACT_TIMEOUT}} s. Exit 0 is a pass;
+  any other failure of a job you changed is yours to fix before committing,
+  unless it is an act limitation you can name (a step that needs a secret,
+  OIDC or the GitHub API). Exit 3 means act cannot run here; exit 4 means the
+  job, or one it needs, may never run locally — never run it any other way,
+  and never pass secrets or edit `act` settings to get around either. Exit 5
+  means the job's `if:` skipped it on that event, which proves nothing: run
+  it on the event its acceptance is about. Report
+  each run and its exit status, and list under **Proves after landing**
+  whatever only a real run can show (a deploy, a secret, a `schedule`).
+{{END IF}}- **Stage per item, by name.** Never `git add -A`, `git add .` or
   `git commit -a`.
 - **No attribution.** No `Co-Authored-By`, no session link, no "Generated
   with" line in any commit — ever.

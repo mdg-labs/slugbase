@@ -14,7 +14,7 @@ after the number is free; the number and its meaning are not.
 | `## 4. Security invariants` | Numbered `T1`, `T2`, … `Tn`: properties that must hold (e.g. "no root write through a path a lower-trust principal controls"). Ids are never reused or renumbered. | "invariant `T<n>`" |
 | `## 5. Accepted residuals` | Numbered risks the project accepts on purpose, each with its reason. A path that is one of them is `ACCEPTED-RESIDUAL <n>`, not a finding. | "accepted residual `<n>`" |
 | `## 6. Severity rubric` | `critical`, `high`, `medium`, `low`, `info`, each defined by outcome and attacker, followed by **anti-inflation rules** (a path that needs the trust ceiling, a capability the attacker lacks, a developer flag, a mock or a test helper is not Critical or High) and, ideally, worked examples. A finding is rated at the **lowest** level whose definition it meets after those rules. | "the rubric (§6)" |
-| `## 7. Disclosure split` | Where a confirmed finding goes: Critical and High are withheld as draft private security advisories until fixed; Medium and lower are public items labelled `security`. Also how outside reports arrive (private vulnerability reporting, `SECURITY.md`). | "the disclosure split (§7)" |
+| `## 7. Disclosure split` | Where a confirmed finding goes: Critical and High are withheld as draft private security advisories until fixed; Medium and lower are public items labelled `security`. A private repository has no advisories: while it stays private, every finding is an item labelled `security` (`.claude/scripts/security-route.sh` prints `issues`), and §7 says so. Also how outside reports arrive (private vulnerability reporting, `SECURITY.md`). | "the disclosure split (§7)" |
 
 Anything after §7 (open questions, history) is ignored by the audit.
 
@@ -29,7 +29,9 @@ Anything after §7 (open questions, history) is ignored by the audit.
   and the unit table. Add new ones at the end.
 - **§7's split is enforced mechanically** by `.claude/scripts/audit-report.sh`:
   a `critical` or `high` finding must be withheld, and anything sharing its
-  root cause is withheld with it.
+  root cause is withheld with it. A report with `disclosure: issues`, written
+  while `security-route.sh` prints `issues`, withholds nothing, and the
+  script refuses to file it once the repository is public.
 
 ## Missing or partial
 

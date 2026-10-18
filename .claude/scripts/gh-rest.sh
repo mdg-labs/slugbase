@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# Repository-scoped REST wrapper around `gh api`, so no skill, agent
-# template or script has to know GitHub's REST quirks or call a
-# GraphQL-backed `gh` subcommand directly.
+# Repository-scoped wrapper around `gh api`, so no skill, agent template or
+# script has to know GitHub's API quirks or call a `gh` subcommand directly.
 #
-# Why this exists: in a Claude Code cloud session the egress proxy answers
-# every `https://api.github.com/graphql` request with HTTP 403 (every
-# `gh issue`/`gh pr`/`gh repo view`/`gh label list`/`gh release list`
-# subcommand is a GraphQL query or mutation under the hood), and also
-# refuses `search/issues` and any `--paginate`-followed
-# `repositories/{id}/...` link (a numeric-id repository path). Every
-# subcommand below only ever calls `gh api repos/$REPO/...` — a plain
-# `gh api` call, an argv built with `-f`/`-F` (never `sh -c`, never a
-# string-built JSON body) — which works identically on the maintainer's
-# own machine and in a cloud session.
+# Why this exists: every call is scoped to workflow.json's `repo`, never to
+# what `gh` infers from the working directory. Orchestrate's agents run from
+# scratch clones whose `origin` is a local path, where an inferred
+# repository is wrong or missing. Each subcommand builds its argv with
+# `-f`/`-F` (never `sh -c`, never a string-built JSON body).
+#
+# REST is the default. GraphQL (`gh api graphql`) is used where REST lacks
+# the data, such as a pull request's review threads and their resolved
+# state. Orchestrate no longer runs in Claude Code cloud sessions, whose
+# egress proxy refused GraphQL; a repo that needs cloud sessions again must
+# avoid the GraphQL subcommands (pr-threads, pr-thread-resolve).
 #
 # Usage: gh-rest.sh <subcommand> [args...]
 set -euo pipefail
@@ -25,6 +25,27 @@ REPO=$(wf_repo)
 die() { printf 'gh-rest: %s\n' "$*" >&2; exit 1; }
 
 urlencode() { jq -rn --arg s "$1" '$s|@uri'; }
+
+# Refuses, before any API call, to apply a label only the maintainer applies:
+# workflow.json labels.maintainerOnly, and every labels.extra entry marked
+# maintainerApplied. Agents call GitHub with the maintainer's own credential,
+# so a label added here shows the maintainer as its actor, and a CI gate that
+# reads it as the maintainer's approval (e.g. migration:contract) could not
+# tell the difference. Compared case-insensitively, as GitHub matches label
+# names. A guard against accidents, not a security boundary: `gh api` with
+# the same credential can still apply the label.
+refuse_maintainer_applied() {
+  (( $# )) || return 0
+  local applied label
+  applied=$(wf_get_json '[ (.labels.maintainerOnly.name // empty),
+    ((.labels.extra // [])[] | select(.maintainerApplied == true) | .name) ]
+    | map(ascii_downcase)' '[]') || die "could not read labels from $WF_CONFIG"
+  for label in "$@"; do
+    if jq -e --arg l "$label" 'index($l | ascii_downcase) != null' <<<"$applied" >/dev/null; then
+      die "refusing to apply label '$label': only the maintainer applies it (workflow.json labels)"
+    fi
+  done
+}
 
 # Pages a GET list endpoint (a path already rooted at "repos/$REPO/...",
 # with or without its own query string) into one combined JSON array.
@@ -196,6 +217,7 @@ cmd_issue_create() {
   [[ -n $title && -n $bodyfile ]] \
     || die "usage: issue-create --title <t> --body-file <f> [--label l]... [--milestone t]"
   [[ -f $bodyfile ]] || die "issue-create: body file not found: $bodyfile"
+  refuse_maintainer_applied ${labels[@]+"${labels[@]}"}
   local args=(--method POST "repos/$REPO/issues" -f "title=$title" -F "body=@$bodyfile")
   local label
   for label in ${labels[@]+"${labels[@]}"}; do
@@ -225,8 +247,10 @@ cmd_issue_edit() {
       *) die "issue-edit: unrecognized argument: $1" ;;
     esac
   done
-  # Resolve the milestone title before any write, so a bad title fails with
-  # nothing written yet.
+  # Refuse a maintainer-applied label and resolve the milestone title before
+  # any write, so either fails with nothing written yet. Removing such a
+  # label stays allowed.
+  refuse_maintainer_applied ${add_labels[@]+"${add_labels[@]}"}
   local milestone_num=""
   [[ -n $milestone ]] && milestone_num=$(resolve_milestone_number "$milestone")
   if [[ -n $title || -n $bodyfile || -n $milestone_num ]]; then
@@ -442,6 +466,72 @@ cmd_pr_reply() {
     || die "pr-reply: could not reply to comment $id on PR #$n"
 }
 
+# A PR's review threads, from GraphQL (REST has no resolved state): one
+# {id, resolved, outdated, path, line, commentId, author} per thread, where
+# commentId is the REST id of the thread's first comment (what pr-reply
+# takes) and author its login. Paged with the connection's cursor.
+cmd_pr_threads() {
+  [[ $# -ge 1 && $1 =~ ^[0-9]+$ ]] || die "usage: pr-threads <pr> [--jq f]"
+  local n=$1; shift
+  parse_optional_jq "$@"
+  # $owner, $name, $n and $after are GraphQL variables, sent as -f/-F.
+  # shellcheck disable=SC2016
+  local query='query($owner: String!, $name: String!, $n: Int!, $after: String) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $n) {
+      reviewThreads(first: 100, after: $after) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          id isResolved isOutdated path line
+          comments(first: 1) { nodes { databaseId author { login } } }
+        }
+      }
+    }
+  }
+}'
+  local owner=${REPO%%/*} name=${REPO#*/} after="" page out pages_file
+  pages_file=$(mktemp)
+  while :; do
+    local args=(graphql -f "query=$query" -f "owner=$owner" -f "name=$name" -F "n=$n")
+    [[ -n $after ]] && args+=(-f "after=$after")
+    if ! page=$(gh api "${args[@]}"); then
+      rm -f "$pages_file"
+      die "pr-threads: could not read the review threads of PR #$n"
+    fi
+    jq -e '.data.repository.pullRequest.reviewThreads' <<<"$page" >/dev/null \
+      || { rm -f "$pages_file"; die "pr-threads: PR #$n not found"; }
+    jq -c '[.data.repository.pullRequest.reviewThreads.nodes[] | {
+        id, resolved: .isResolved, outdated: .isOutdated, path, line,
+        commentId: .comments.nodes[0].databaseId, author: .comments.nodes[0].author.login }]' \
+      <<<"$page" >>"$pages_file"
+    [[ $(jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.hasNextPage' <<<"$page") == true ]] || break
+    local next
+    next=$(jq -r '.data.repository.pullRequest.reviewThreads.pageInfo.endCursor // empty' <<<"$page")
+    # More pages but no new cursor would request the same page forever.
+    if [[ -z $next || $next == "$after" ]]; then
+      rm -f "$pages_file"
+      die "pr-threads: GitHub reported more threads of PR #$n but no new cursor"
+    fi
+    after=$next
+  done
+  out=$(jq -cs 'add // []' "$pages_file")
+  rm -f "$pages_file"
+  print_json "$out" "$JQF"
+}
+
+# Resolves one review thread by its GraphQL node id (pr-threads' `id`).
+cmd_pr_thread_resolve() {
+  [[ $# -eq 1 && -n $1 ]] || die "usage: pr-thread-resolve <thread-id>"
+  local out
+  # $id is a GraphQL variable, sent as -f.
+  # shellcheck disable=SC2016
+  out=$(gh api graphql \
+    -f 'query=mutation($id: ID!) { resolveReviewThread(input: {threadId: $id}) { thread { id isResolved } } }' \
+    -f "id=$1") || die "pr-thread-resolve: could not resolve thread $1"
+  [[ $(jq -r '.data.resolveReviewThread.thread.isResolved' <<<"$out") == true ]] \
+    || die "pr-thread-resolve: thread $1 is still unresolved"
+}
+
 # The checks on a PR's current head: every check run plus every legacy commit
 # status, as one array of {name, status, conclusion, url}. `status` is
 # completed / in_progress / queued (statuses map to completed or pending).
@@ -452,10 +542,10 @@ cmd_pr_checks() {
   local sha runs statuses
   sha=$(gh api "repos/$REPO/pulls/$n" --jq '.head.sha') || die "pr-checks: could not read PR #$n"
   runs=$(gh api "repos/$REPO/commits/$sha/check-runs?per_page=100" \
-    --jq '[.check_runs[] | {name, status, conclusion, url: .html_url}]') \
+    --jq '[.check_runs[] | {name, app: .app.slug, status, conclusion, title: .output.title, summary: .output.summary, url: .html_url}]') \
     || die "pr-checks: could not read check runs for $sha"
   statuses=$(gh api "repos/$REPO/commits/$sha/status" \
-    --jq '[.statuses[] | {name: .context, status: (if .state == "pending" then "pending" else "completed" end), conclusion: (if .state == "pending" then null else .state end), url: .target_url}]') \
+    --jq '[.statuses[] | {name: .context, app: null, status: (if .state == "pending" then "pending" else "completed" end), conclusion: (if .state == "pending" then null else .state end), title: null, summary: .description, url: .target_url}]') \
     || die "pr-checks: could not read commit statuses for $sha"
   print_json "$(jq -c -n --argjson a "$runs" --argjson b "$statuses" '$a + $b')" "$JQF"
 }
@@ -674,6 +764,86 @@ cmd_alert_list() {
   print_json "$out" "$jqf"
 }
 
+# The log of one GitHub Actions job: the number after /job/ in a check's url
+# from pr-checks (a check run's id is its job's id). GitHub answers with a
+# redirect to the log text, which `gh api` follows.
+cmd_job_log() {
+  [[ $# -eq 1 && $1 =~ ^[0-9]+$ ]] || die "usage: job-log <job-id>"
+  gh api "repos/$REPO/actions/jobs/$1/logs" || die "job-log: could not read the log of job $1"
+}
+
+# --- code scanning alerts -----------------------------------------------
+#
+# CodeQL (and any other code scanning tool) results for a pull request. A
+# repository with no analysis answers 404 "no analysis found", and a private
+# one without GitHub Code Security answers 403 "... must be enabled": both
+# exit 4, while any other 403 (a missing permission) is a failure, so a caller
+# can tell "code scanning is not set up here" from a failed read (exit 1),
+# which must never pass for "no alerts".
+
+CODE_SCANNING_UNAVAILABLE=4
+
+cmd_code_scanning_alerts() {
+  [[ $# -ge 1 && $1 =~ ^[0-9]+$ ]] || die "usage: code-scanning-alerts <pr> [--state open|closed|dismissed|fixed] [--jq f]"
+  local n=$1; shift
+  local state="open" jqf=""
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --state) [[ $# -ge 2 ]] || die "code-scanning-alerts: --state needs a value"; state=$2; shift 2 ;;
+      --jq) [[ $# -ge 2 ]] || die "code-scanning-alerts: --jq needs a value"; jqf=$2; shift 2 ;;
+      *) die "code-scanning-alerts: unrecognized argument: $1" ;;
+    esac
+  done
+  require_one_of "code-scanning-alerts --state" "$state" "open closed dismissed fixed"
+  local err
+  err=$(mktemp)
+  if ! gh api "repos/$REPO/code-scanning/analyses?per_page=1" >/dev/null 2>"$err"; then
+    if grep -qiE 'no analysis found|(advanced|code) security must be enabled|code scanning is not enabled' "$err"; then
+      printf 'gh-rest: code-scanning-alerts: code scanning is not set up on %s (%s)\n' "$REPO" "$(tr '\n' ' ' <"$err")" >&2
+      rm -f "$err"
+      exit "$CODE_SCANNING_UNAVAILABLE"
+    fi
+    rm -f "$err"
+    die "code-scanning-alerts: could not read the code scanning analyses"
+  fi
+  rm -f "$err"
+  local out
+  out=$(gh_rest_list "repos/$REPO/code-scanning/alerts?pr=$n&state=$state") \
+    || die "code-scanning-alerts: could not list the alerts of PR #$n"
+  print_json "$out" "$jqf"
+}
+
+# Dismisses one alert as a false positive, won't fix or test-only code. Only
+# ever after the maintainer said yes to that alert: dismissing hides a
+# security result, and the API call carries the maintainer's identity.
+cmd_code_scanning_dismiss() {
+  local id="" reason="" comment_file="" dry=0
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --reason) [[ $# -ge 2 ]] || die "code-scanning-dismiss: --reason needs a value"; reason=$2; shift 2 ;;
+      --comment-file) [[ $# -ge 2 ]] || die "code-scanning-dismiss: --comment-file needs a value"; comment_file=$2; shift 2 ;;
+      --dry-run) dry=1; shift ;;
+      -*) die "code-scanning-dismiss: unrecognized argument: $1" ;;
+      *) [[ -z $id ]] || die "code-scanning-dismiss: unrecognized argument: $1"; id=$1; shift ;;
+    esac
+  done
+  [[ $id =~ ^[0-9]+$ && -n $reason && -n $comment_file ]] \
+    || die "usage: code-scanning-dismiss <alert-number> --reason 'false positive'|'won't fix'|'used in tests' --comment-file f [--dry-run]"
+  case $reason in
+    "false positive" | "won't fix" | "used in tests") ;;
+    *) die "code-scanning-dismiss: --reason must be 'false positive', 'won't fix' or 'used in tests'" ;;
+  esac
+  [[ -f $comment_file ]] || die "code-scanning-dismiss: comment file not found: $comment_file"
+  local body
+  body=$(jq -cn --arg r "$reason" --rawfile c "$comment_file" \
+    '{state: "dismissed", dismissed_reason: $r, dismissed_comment: ($c | rtrimstr("\n"))}') \
+    || die "code-scanning-dismiss: could not build the request body"
+  (( $(jq -r '.dismissed_comment | length' <<<"$body") <= 280 )) \
+    || die "code-scanning-dismiss: the comment is longer than GitHub's 280 characters"
+  ADV_DRY_RUN=$dry
+  advisory_send PATCH "code-scanning/alerts/$id" "$body" || die "code-scanning-dismiss: could not dismiss alert #$id"
+}
+
 # --- repo ------------------------------------------------------------
 
 cmd_repo_view() {
@@ -732,6 +902,9 @@ Pull requests
   pr-comment <n> --body-file f
   pr-reply <n> <comment-id> --body-file f    reply inside an inline review thread
   pr-checks <n> [--jq f]                     check runs + statuses on the PR head
+  pr-threads <n> [--jq f]                    review threads with their resolved state (GraphQL)
+  job-log <job-id>                           one Actions job's log (the id after /job/ in a check url)
+  pr-thread-resolve <thread-id>              resolve one review thread (GraphQL)
 Security advisories (write subcommands take --dry-run, which prints the
 method, path and JSON body and sends nothing)
   advisory-list [--state triage|draft|published|closed] [--jq f]
@@ -745,6 +918,9 @@ method, path and JSON body and sends nothing)
 Dependabot alerts (read-only)
   alert-get <n> [--jq f]
   alert-list [--state open|fixed|dismissed|auto_dismissed] [--jq f]
+Code scanning (exit 4: not set up on this repository)
+  code-scanning-alerts <pr> [--state open|closed|dismissed|fixed] [--jq f]
+  code-scanning-dismiss <alert> --reason "false positive"|"won't fix"|"used in tests" --comment-file f [--dry-run]
 Repository
   repo-view [--jq f]
   label-list [--jq f]
@@ -778,11 +954,16 @@ main() {
     pr-comment) cmd_pr_comment "$@" ;;
     pr-reply) cmd_pr_reply "$@" ;;
     pr-checks) cmd_pr_checks "$@" ;;
+    pr-threads) cmd_pr_threads "$@" ;;
+    job-log) cmd_job_log "$@" ;;
+    pr-thread-resolve) cmd_pr_thread_resolve "$@" ;;
     alert-get) cmd_alert_get "$@" ;;
     alert-list) cmd_alert_list "$@" ;;
     repo-view) cmd_repo_view "$@" ;;
     label-list) cmd_label_list "$@" ;;
     paged) cmd_paged "$@" ;;
+    code-scanning-alerts) cmd_code_scanning_alerts "$@" ;;
+    code-scanning-dismiss) cmd_code_scanning_dismiss "$@" ;;
     advisory-list) cmd_advisory_list "$@" ;;
     advisory-get) cmd_advisory_get "$@" ;;
     advisory-create) cmd_advisory_create "$@" ;;

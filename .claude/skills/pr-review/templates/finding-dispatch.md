@@ -1,6 +1,6 @@
 # Finding-based dispatch
 
-How `cr-review`'s delegated path dispatches `task-executor` and
+How `pr-review`'s delegated path dispatches `task-executor` and
 `task-verifier` for review findings instead of tracked items.
 
 Both orchestrate templates (`.claude/skills/orchestrate/templates/`) stay as

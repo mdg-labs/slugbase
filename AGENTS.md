@@ -17,7 +17,7 @@ Never add attribution to a commit, pull request or comment: no `Co-Authored-By`,
 
 ## Skills
 
-The skills in `.claude/skills/` (`orchestrate`, `triage`, `cr-review`, `open-pr`, `dev-diff`, `security-audit`,
+The skills in `.claude/skills/` (`orchestrate`, `triage`, `pr-review`, `open-pr`, `dev-diff`, `security-audit`,
 `customer-docs`) are discovered from there. Follow them as written, with the translations below.
 
 ## Translating Claude Code terms

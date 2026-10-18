@@ -5,6 +5,15 @@
 # draft private security advisory for each one that is (the threat model's
 # disclosure split).
 #
+# A report whose front matter says `disclosure: issues` was written for a
+# repo that files every finding as an issue (security-route.sh prints
+# `issues`: the repository is private, and GitHub offers it no advisories).
+# Its findings are all `withhold: false`, Critical and High included. `file`
+# asks security-route.sh before writing and refuses when the answer no longer
+# matches the report, so a repository made public since the audit never gets
+# a Critical finding filed in public. Without the key a report is
+# `disclosure: advisories`.
+#
 # Usage: audit-report.sh <subcommand> <report> [args...]
 #   check <report>        validate the report; prints "ok: …" or names the
 #                         finding, front matter or section at fault
@@ -74,6 +83,8 @@ TICKET_KEY = os.environ.get("AR_TICKET_KEY") or ""
 THREAT_MODEL = os.environ.get("AR_THREAT_MODEL") or ""
 SEVERITIES = ["critical", "high", "medium", "low", "info"]
 FRONT_KEYS = ["run_id", "branch", "sha", "scope", "units", "date"]
+FRONT_OPTIONAL = ["disclosure"]
+DISCLOSURES = ["advisories", "issues"]
 FINDING_KEYS = ["id", "title", "severity", "type", "area", "risk",
                 "withhold", "verdict", "files", "related", "invariant"]
 OPTIONAL_KEYS = ["cwe", "filed"]
@@ -201,7 +212,7 @@ def parse_front(lines):
     except ValueError:
         raise Refuse("front matter", "no closing --- line")
     w = "front matter"
-    raw = parse_block(lines[1:end], FRONT_KEYS, [], w)
+    raw = parse_block(lines[1:end], FRONT_KEYS, FRONT_OPTIONAL, w)
     run_id = scalar(raw["run_id"], w, "run_id")
     if not re.match(r"^\d{8}-[0-9a-f]{7}(-\d+)?$", run_id):
         raise Refuse(w, f"run_id: '{run_id}' is not <yyyymmdd>-<sha7>[-<n>]")
@@ -221,8 +232,9 @@ def parse_front(lines):
         datetime.date.fromisoformat(date)
     except ValueError:
         raise Refuse(w, f"date: '{date}' is not an ISO date")
+    disclosure = one_of(raw.get("disclosure", "advisories"), w, "disclosure", DISCLOSURES)
     return end, {"run_id": run_id, "branch": branch, "sha": sha, "scope": scope,
-                 "units": units, "date": date}
+                 "units": units, "date": date, "disclosure": disclosure}
 
 
 def split_sections(lines, flags, start, stop, where, names):
@@ -354,7 +366,10 @@ def parse_report(text):
         meta[f["id"]] = hdr
     by_id = {f["id"]: f for f in findings}
     for f in findings:
-        if f["severity"] in ("critical", "high") and not f["withhold"]:
+        if front["disclosure"] == "issues":
+            if f["withhold"]:
+                raise Refuse(f["id"], "disclosure: issues files every finding as an issue, so withhold must be false")
+        elif f["severity"] in ("critical", "high") and not f["withhold"]:
             raise Refuse(f["id"], f"a {f['severity']} finding must be withheld")
         for r in f["related"]:
             if r == f["id"] or r not in by_id:
@@ -435,7 +450,9 @@ def item_body(report, f):
     s = f["sections"]
     fr = report["front"]
     model = f"`{THREAT_MODEL}`" if THREAT_MODEL else "The threat model"
-    refs = [f"- {model} — severity rubric (§6): rated **{f['severity']}**; disclosure split (§7): public."]
+    split = ("tracked as an issue while the repository is private" if fr["disclosure"] == "issues"
+             else "public")
+    refs = [f"- {model} — severity rubric (§6): rated **{f['severity']}**; disclosure split (§7): {split}."]
     if f["invariant"] != "none":
         refs.append(f"- Invariant {f['invariant']} (§4).")
     files = ", ".join(f"`{p}`" for p in f["files"])
@@ -768,6 +785,21 @@ cmd_file() {
   print_list "$json"
   if (( ! dry && ! confirmed )); then
     die "file: refusing to write: show the list above to the maintainer and re-run with --confirmed once they say to file it (or with --dry-run to see what would happen)"
+  fi
+
+  # The route is read live, so it follows the repository as it is now, not as
+  # it was when the audit ran. Only asked when the answer changes what is
+  # filed: an issues report, or an advisories report with an advisory still
+  # to create.
+  local disclosure route
+  disclosure=$(jq -r '.front.disclosure' <<<"$json")
+  if [[ $disclosure == issues ]] || jq -e 'any(.findings[]; .withhold and (.filed // "") == "")' <<<"$json" >/dev/null; then
+    route=$("$HERE/security-route.sh") || die "file: could not tell where security findings go (security-route.sh failed)"
+    if [[ $disclosure == issues && $route != issues ]]; then
+      die "file: the report says disclosure: issues, but security-route.sh now says $route (the repository is public, or security.privateRepoIssues is false); filing it would put Critical and High findings in public. Re-run the audit"
+    elif [[ $disclosure == advisories && $route == issues ]]; then
+      die "file: the report withholds findings as advisories, but this repository files every finding as an issue (security-route.sh: issues) and has no advisories. Re-run the audit, so the report says disclosure: issues"
+    fi
   fi
 
   local rows

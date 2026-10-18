@@ -224,7 +224,7 @@ The documentation contract check `pnpm docs:check` (doc 09 §3.5) is a per-path 
 
 ### 6.5 Merge and promotion gate
 
-`dev` takes cherry-picked commits from `/orchestrate` only after the verifier has re-run the gate; CI on `dev` re-runs it plus e2e. The `dev → main` promotion PR needs green CI, green e2e, one CodeRabbit round (`/cr-review`), a clean `/security-audit` for the changed security units (D23) and the maintainer's merge. `main` is protected: no direct pushes and no force pushes. The promotion PR is merged with a merge commit, so the tree on `main` is the tree that was reviewed on `dev` (Cloud doc 13 Q78 relies on that identity). Linear history is therefore not required on `main`.
+`dev` takes cherry-picked commits from `/orchestrate` only after the verifier has re-run the gate; CI on `dev` re-runs it plus e2e. The `dev → main` promotion PR needs green CI, green e2e, one CodeRabbit round (`/pr-review`), a clean `/security-audit` for the changed security units (D23) and the maintainer's merge. `main` is protected: no direct pushes and no force pushes. The promotion PR is merged with a merge commit, so the tree on `main` is the tree that was reviewed on `dev` (Cloud doc 13 Q78 relies on that identity). Linear history is therefore not required on `main`.
 
 ---
 

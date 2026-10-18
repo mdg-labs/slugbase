@@ -48,7 +48,7 @@ and `issue-refiner` expect exactly the item shapes in
 - **`.claude/trackers/README.md` plus the mapping for `tracker.type`.** Every
   "read", "search", "create", "edit", "link" and "set status" below is done
   the way the mapping says. On GitHub, everything goes through
-  `.claude/scripts/gh-rest.sh`, never a GraphQL-backed `gh` subcommand. On
+  `.claude/scripts/gh-rest.sh`, never a `gh` call of your own. On
   Kaneo, GitHub issues are read-only.
 - **`templates/item-shapes.md`** and **`templates/titles.md`**, next to this
   file.
@@ -128,6 +128,10 @@ or the choice is theirs to make.
   - `regression`
   - `dependencies`
   - the repo's `labels.risk`, `labels.maintainerOnly` and `labels.extra`
+- **Maintainer-applied labels are proposed, never applied.** These are
+  `labels.maintainerOnly` and every `labels.extra` entry with
+  `maintainerApplied`. Name them in the proposal for the maintainer to add.
+  `gh-rest.sh` refuses to add them.
 - **Never create a new label name, and never set a status label.** A new
   label name goes in the proposal's open questions for approval. Status moves
   only through the tracker mapping.
@@ -302,8 +306,14 @@ A report of an exploitable defect in this repo's own code is never filed
 publicly before it is fixed.
 
 - **Judge it** against the repo's `threatModel`, if it has one.
-- **Critical or high:** propose a **private security advisory** instead of an
-  item (`gh-rest.sh advisory-create … --dry-run` first). Ask the maintainer.
+- **Critical or high:** run `.claude/scripts/security-route.sh`.
+  - **`advisories`:** propose a **private security advisory** instead of an
+    item (`gh-rest.sh advisory-create … --dry-run` first). Ask the
+    maintainer.
+  - **`issues`:** the repository is private and has no advisories. File an
+    ordinary item labelled `security`, through the usual approval. Its title
+    and body are neutral, with no exploit payload. Never propose an advisory.
+  - **The script fails:** ask the maintainer; never guess.
 - **Medium or lower,** or hardening: an ordinary item with the `security`
   label.
 
@@ -329,5 +339,5 @@ writes. This skill's approval gate is for maintainer-driven planning.
 - **Invention:** invented behaviour, fields, endpoints or ids; an open
   question without a recommended default.
 - **Secrets:** secrets or token-shaped strings in any body.
-- **Kaneo:** any GitHub write. **GitHub:** a GraphQL-backed `gh` call.
+- **Kaneo:** any GitHub write. **GitHub:** a `gh` call of your own, outside `.claude/scripts/`.
 - **Alerts:** dismissing a Dependabot alert.

@@ -216,7 +216,7 @@ In each repository, as its first commit after the skeleton:
 /mdg-setup:setup            → profile: full
 ```
 
-`setup` vendors the skills (`triage`, `orchestrate`, `open-pr`, `cr-review`, `dev-diff`, `security-audit`, `customer-docs`), the agents (`task-executor`, `task-verifier`, `issue-refiner`, `ci-investigator`, `security-reviewer`, `security-verifier`), scripts, tracker docs and the shared rules (`mdg-git.md`, `mdg-security.md`, `mdg-github-actions.md`) into `.claude/`, records them in `.claude/mdg-workflow.lock.json`, and writes the `## Agent workflow` skeleton into `CLAUDE.md`. The vendored files are committed, so the workflow also runs in claude.ai/code cloud sessions. `mdg-workflow` is never enabled as a plugin. Re-running `setup` updates the vendored copy; local edits are detected and asked about.
+`setup` vendors the skills (`triage`, `orchestrate`, `open-pr`, `pr-review`, `dev-diff`, `security-audit`, `customer-docs`), the agents (`task-executor`, `task-verifier`, `issue-refiner`, `ci-investigator`, `security-reviewer`, `security-verifier`), scripts, tracker docs and the shared rules (`mdg-git.md`, `mdg-security.md`, `mdg-github-actions.md`) into `.claude/`, records them in `.claude/mdg-workflow.lock.json`, and writes the `## Agent workflow` skeleton into `CLAUDE.md`. The vendored files are committed, so the workflow also runs in claude.ai/code cloud sessions. `mdg-workflow` is never enabled as a plugin. Re-running `setup` updates the vendored copy; local edits are detected and asked about.
 
 Then, per repository: fill `.claude/workflow.json` (§5.2) and the `## Agent workflow` section (§5.3), run `.claude/scripts/bootstrap-labels.sh`, commit `.github/workflows/issue-status.yml` and the issue templates `setup` rendered.
 
@@ -463,7 +463,7 @@ docker compose -f compose.dev.yml ps --status running postgres
 1. **Docs → epics.** Each roadmap phase in doc 12 is turned into an epic with `/triage seed phase <N>`; the epics named under each phase in doc 12 are the expected result. `triage` reads the docs, proposes the epic and its sub-issues, and creates them after approval.
 2. **Epics → issues.** Sub-issues carry acceptance criteria, `Reachable via:` lines, design references (`doc 02 §8.2`, `D8`), area labels and native blocked-by links.
 3. **Issues → commits on `dev`.** `/orchestrate #<epic>` refines, executes and verifies in scratch clones and cherry-picks each PASS onto `dev`.
-4. **`dev` → `main`.** `/dev-diff` sizes the promotion; `/open-pr` opens the promotion PR; `/cr-review` works one CodeRabbit round; the maintainer merges. Cloud deploys are driven from `main` and `dev` pushes (Cloud doc 07 §4).
+4. **`dev` → `main`.** `/dev-diff` sizes the promotion; `/open-pr` opens the promotion PR; `/pr-review` works one CodeRabbit round; the maintainer merges. Cloud deploys are driven from `main` and `dev` pushes (Cloud doc 07 §4).
 5. **Security.** `/security-audit` runs against doc 10 before each production promotion (D23) and whenever a safety-critical epic completes; Critical/High findings go to private advisories, fixed with `/orchestrate --advisory`.
 6. **Docs stay true.** A change that alters a documented behaviour edits the doc in the same commit; a default (Qn) that survives implementation is promoted to a decision (Dn) by a `docs` item.
 7. **End-user docs.** `/customer-docs` maintains `docs/user/` in this repository from shipped behaviour (Q2). A merge to `main` that changes a docs root triggers the docs-published hook (§3.5, Q111), and the site rebuilds.
@@ -479,7 +479,7 @@ maintainer idea / bug / dependabot
 GitHub issue (status:ready, area:*, Fixes target) ──► /orchestrate ──► executor ─► verifier ─► cherry-pick to dev
                                                                                                 │ CI on dev
                                                                                                 ▼
-                                    staging deploy (Cloud) ◄── /dev-diff · /open-pr · /cr-review ── dev → main PR
+                                    staging deploy (Cloud) ◄── /dev-diff · /open-pr · /pr-review ── dev → main PR
                                                                                                 │ maintainer merges
                                                                                                 ▼
                                                               main ─► production deploy (Cloud) · CE release

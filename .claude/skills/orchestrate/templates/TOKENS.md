@@ -30,6 +30,7 @@ fields that are theirs to complete. Leave those untouched.
 | `RISK_REVIEW` | CLAUDE.md `### Risk review`, verbatim, or the template's fallback text |
 | `ENTRY_POINTS` | CLAUDE.md `### Entry points`, as a comma-separated list |
 | `THREAT_MODEL` | `threatModel`. Drop the block when it is null |
+| `ACT`, `ACT_TIMEOUT` | `act` is set in workflow.json and the unit's scope can touch `.github/workflows/**` or `.github/actions/**`; `ACT_TIMEOUT` is `act.timeout` (default 1800) |
 | `CHECKS` | Each `checks` entry whose `paths` the unit's scope can touch, as `- <paths>: \`<run>\``, then `- Before handing off: \`<gate>\``. A cross-repo landing uses its entry's `gate` |
 | `KNOWN_ESCAPES_PATH` | `<TOOLS_ROOT>/.claude/known-escapes.md` |
 | `TEMPLATES_DIR` | `<TOOLS_ROOT>/.claude/skills/orchestrate/templates` |
@@ -83,12 +84,10 @@ fields that are theirs to complete. Leave those untouched.
 | `TRACKER_TOOL_LOAD` | Kaneo: `select:<P>update_task_status,<P>create_task_comment`. Dropped for GitHub |
 | `TRACKER_READS`, `BODY_EDIT` | Refiner only: the read forms, and the one body-edit call |
 
-## Fix rounds and CI
+## Fix rounds
 
 | Token | Value |
 |-------|-------|
 | `FIX_ROUND`, `FIX_ROUND_SAME_WORKSPACE`, `FIX_ROUND_FRESH_CLONE` | Step 9's case |
 | `PREVIOUS_SHA`, `PRIOR_COMMIT_PATH`, `PRIOR_ATTEMPT_PATH` | The rejected commit, and the clone it can be read in |
 | `VERIFIER_BLOCKING_FINDINGS`, `PREVIOUS_BLOCKING_FINDINGS` | The previous verdict's blocking findings, verbatim (never notes) |
-| `CI_RUN`, `CI_RUN_URL`, `CI_RUN_ID` | Step 7 ran the workflow for real: the run's URL and id |
-| `CI_NOT_RUNNABLE`, `CI_NOT_RUNNABLE_REASON` | The changed workflow cannot be run before landing, and why |

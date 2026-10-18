@@ -1,6 +1,6 @@
 ---
 name: task-executor
-description: Implements the tracked item — or the small bundle of items — its dispatch names, inside an isolated scratch git clone, committing each item separately there; dispatched by the orchestrate skill (and cr-review's delegated path), not for direct invocation.
+description: Implements the tracked item — or the small bundle of items — its dispatch names, inside an isolated scratch git clone, committing each item separately there; dispatched by the orchestrate skill (and pr-review's delegated path), not for direct invocation.
 model: sonnet
 effort: high
 color: green
@@ -43,8 +43,8 @@ for each item (plus an epic rollup where it names one). No other write to the
 tracker or to GitHub, for any reason.
 
 A dispatch may instead name **review findings** (`F1`, `F2`, …) from
-`cr-review`'s delegated path rather than items, in the shape
-`.claude/skills/cr-review/templates/finding-dispatch.md` describes. Then
+`pr-review`'s delegated path rather than items, in the shape
+`.claude/skills/pr-review/templates/finding-dispatch.md` describes. Then
 there is nothing to claim: you make no tracker write at all, commit each
 finding separately in the message shape that file gives (no `Fixes`
 trailer) — findings that cannot be separated share one commit naming every

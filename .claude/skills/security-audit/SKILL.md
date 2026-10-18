@@ -44,6 +44,13 @@ memory of another repo:
     `threat-model-format.md` (next to this file) before it can be audited.
   - `labels.areas`, `labels.risk`, `riskPaths`
   - `securityAudit.epic`, `securityAudit.exclude` (both optional)
+  - `security.privateRepoIssues` (optional), through
+    `.claude/scripts/security-route.sh`, which prints `ROUTE`: `advisories`
+    (Critical and High findings are withheld as draft private advisories) or
+    `issues` (the repository is private and has no advisories, so every
+    finding is an ordinary item labelled `security`). It reads the
+    repository's visibility live and is never `issues` on a public
+    repository.
 - **CLAUDE.md → `## Agent workflow`:**
   - `### Project` — the project introduction in every dispatch
   - `### Security units` — **required for the audit** (steps 1–8): the unit
@@ -109,7 +116,8 @@ in their sections.
   code, it does not execute it. **CLAUDE.md `### Hazards` binds you and every
   agent exactly as written**; it goes verbatim into every dispatch.
 - **Nothing touches the network except the calls you make yourself:** the
-  read-only lookups of step 3 and the one `.claude/scripts/notify-discord.sh`
+  read-only `security-route.sh` call of step 1, the lookups of step 3 and the
+  one `.claude/scripts/notify-discord.sh`
   call of step 7. **No agent does.** An agent has no network command, no
   `curl`, no `gh`, no tracker tool.
 - **No secret is read or reported.** Neither you nor an agent opens an `.env`
@@ -133,6 +141,9 @@ in their sections.
   into `prompt` verbatim, however long.
 
 ## 1. Snapshot
+
+First run `ROUTE=$(.claude/scripts/security-route.sh)` from `REAL`. A failure
+is a stop before anything is cloned: say so, never guess the route.
 
 ```
 SNAP=$(mktemp -d "<scratchpad>/security-audit.XXXXXX")
@@ -247,7 +258,8 @@ read-only, titles and summaries only, never a description:
   `.claude/scripts/gh-rest.sh issue-list --state open --label security --jq '.[] | "#\(.number) — \(.title)"'`.
   Kaneo: `Kaneo search { q: "security", type: "tasks", workspaceId, projectId }`,
   keeping tasks not in `done`, as `<KEY>-<n> — <title>`.
-- **Unpublished advisories**, on either tracker:
+- **Unpublished advisories**, on either tracker, when `ROUTE` is
+  `advisories` (with `issues` the list is "none" and nothing is called):
 
   ```
   .claude/scripts/gh-rest.sh advisory-list --state draft --jq '.[] | "\(.ghsa_id) — \(.summary)"'
@@ -333,7 +345,9 @@ other under `related`.
 
 Then apply the threat model's disclosure split (§7): `withhold` is `true` for
 every finding whose final severity is `critical` or `high`, and also for any
-finding that lists a withheld finding under `related`. Number the findings
+finding that lists a withheld finding under `related`. **When `ROUTE` is
+`issues`, nothing is withheld:** every finding is `withhold: false`, and the
+front matter says `disclosure: issues`. Number the findings
 `SA-<run-id>-01`… in order of severity (critical first), then unit table
 order.
 
@@ -370,11 +384,13 @@ sha: <full 40-character SHA that was audited>
 scope: whole codebase | [<scope item>, …]
 units: [<unit name>, …]           # every unit that was selected, including sweeps
 date: 2026-10-07                  # ISO date of the run
+disclosure: issues                # optional; only when ROUTE is issues
 ---
 ```
 
-All six keys are required, in this order, and no other key. `units` lists
-every selected unit, including any recorded as not reviewed.
+The first six keys are required, in this order, and the only other key is
+`disclosure`, last. Without it the report is `disclosure: advisories`.
+`units` lists every selected unit, including any recorded as not reviewed.
 
 ### Summary
 
@@ -436,8 +452,9 @@ unquoted value is ignored. Allowed values:
 - `area` is one name from `labels.areas`, or `none`.
 - `risk` is `true` when the fix touches `riskPaths` or what `### Risk review`
   covers; the file mode then adds `labels.risk`.
-- `withhold` follows step 5 and is `true` for every `critical` and `high`
-  finding without exception.
+- `withhold` follows step 5. It is `true` for every `critical` and `high`
+  finding without exception, unless the report says `disclosure: issues`,
+  where it is `false` for every finding.
 - `invariant` is a §4 id or `none`; `files`, `related` and `cwe` are YAML flow
   lists.
 - `title` is written double-quoted with `"` and `\` escaped, so a title
@@ -519,7 +536,13 @@ report is the file mode, run only when the maintainer says so.
 Turns a report the maintainer has read into records, per the threat model's
 disclosure split: a **public item** for every finding with `withhold: false`
 — a GitHub issue or a Kaneo task, per `tracker.type` — and a **draft private
-security advisory** for every finding with `withhold: true`. It runs only when
+security advisory** for every finding with `withhold: true`. A
+`disclosure: issues` report withholds nothing, so every finding becomes an
+item. Before writing, the script asks `security-route.sh` again. It refuses an
+issues report once the route says `advisories` (the repository has gone
+public), and it refuses an advisories report with an advisory still to create
+once the route says `issues`. Either refusal means the audit is run again;
+the report is never edited by hand to get past it. It runs only when
 the maintainer asks for it, on a report the audit wrote; none of steps 1–8
 runs, and no agent is dispatched.
 
@@ -618,6 +641,11 @@ vulnerability reporting: each waits as a repository security advisory in the
 claim against the code in theory, and the maintainer decides what happens to
 it. Where the audit hunts for findings, this mode judges what a stranger
 reported. It needs `threatModel` just as the audit does.
+
+**First run `.claude/scripts/security-route.sh`.** A failure is a stop. When
+it prints `issues`, the repository is private and GitHub offers it no
+private vulnerability reporting, so there is no queue: say so and end the
+run, with no clone made and no agent dispatched.
 
 **Limits.** Everything in "Hard limits" that is about the codebase, running
 nothing, secrets, theory-only verification, PIDs and bounds holds here too.
@@ -723,7 +751,10 @@ before the maintainer has approved *that* report in step 4.
   wait, never poll; `TaskStop` before replacing an agent.
 - **Critical and High findings are `withhold: true`**, and so is anything
   sharing their root cause. A withheld finding becomes a draft private
-  advisory, never a public item, and is never named on a public surface.
+  advisory, never a public item, and is never named on a public surface. The
+  one exception is `ROUTE` `issues`: on a private repository with no
+  advisories, nothing is withheld, the report says `disclosure: issues`, and
+  every finding becomes an item labelled `security`.
 - **Severity is the rubric's (§6), set by the verifier** — not the reviewer's
   proposal and not yours.
 - **The report is written once by the audit, to `AUDIT/<run-id>/report.md`, in

@@ -29,7 +29,7 @@ templates (`reviewer-prompt.md`, `verifier-prompt.md`,
 | `RISK_SCOPE` | `riskPaths` as a backticked list, plus "anything CLAUDE.md `### Risk review` names"; "nothing in this repo (always false)" when the repo has neither |
 | `KNOWN_ITEMS_KIND` | "GitHub issues labelled `security`", or "Kaneo tasks about security" |
 | `KNOWN_ITEMS` | Step 3's list of open security items, one `<ref> — <title>` per line, or `none` |
-| `KNOWN_ADVISORIES` | Step 3's list of draft and triage advisories, one `<GHSA id> — <summary>` per line, or `none`. In triage, without the report being verified |
+| `KNOWN_ADVISORIES` | Step 3's list of draft and triage advisories, one `<GHSA id> — <summary>` per line, or `none` (always `none` when `ROUTE` is `issues`). In triage, without the report being verified |
 
 ## Reviewer
 

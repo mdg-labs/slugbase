@@ -9,13 +9,8 @@
 # .claude/gh-rest-allowlist.local.txt, never here.
 
 # gh-rest.sh explains the cloud proxy, which means naming what it refuses.
-.claude/scripts/gh-rest.sh::# `gh issue`/`gh pr`/`gh repo view`/`gh label list`/`gh release list`
-.claude/scripts/gh-rest.sh::refuses `search/issues` and any `--paginate`-followed
 .claude/scripts/gh-rest.sh::pages itself with `?per_page=100&page=N` instead, and never `--paginate`.
 .claude/scripts/gh-rest.sh::# `--paginate`.
-.claude/scripts/issue-status.sh::a GraphQL-backed `gh issue view`
 
 # The GitHub tracker doc lists what the proxy refuses, and what is forbidden.
-.claude/trackers/github.md::- GraphQL, which is how `gh issue …`, `gh pr …`, `gh repo view`
-.claude/trackers/github.md::- the `repositories/{id}` links that `--paginate` follows
-.claude/trackers/github.md::- Any GraphQL-backed `gh` subcommand, `gh api graphql`, `gh search`
+.claude/trackers/github.md::- Any direct `gh` call outside `.claude/scripts/`: a `gh issue`/`gh pr` subcommand

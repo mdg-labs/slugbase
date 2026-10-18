@@ -4,7 +4,7 @@ A keyboard-driven bookmark manager where every link can get a short, private slu
 
 ## Agent workflow
 
-<!-- Read by the vendored skills (orchestrate, triage, cr-review, security-audit, customer-docs).
+<!-- Read by the vendored skills (orchestrate, triage, pr-review, security-audit, customer-docs).
      Keep these headings exactly. Machine-read settings live in .claude/workflow.json. -->
 
 ### Project
