@@ -20,6 +20,7 @@ const HOOK_TIMEOUT_MS = 300_000;
 const CHECK_VIOLATION = "23514";
 const INSUFFICIENT_PRIVILEGE = "42501";
 const TTL_SECONDS = 7 * 24 * 60 * 60;
+const TICKET = "0192f3a0-ffff-7000-8000-000000000001";
 
 let db: TestDatabase;
 
@@ -132,17 +133,17 @@ async function checksum(workspaceId: string): Promise<string> {
 }
 
 function newInvitation(email: string, overrides: { role?: InvitationRole; ttlSeconds?: number } = {}) {
-  return { id: freshId(), email, role: overrides.role ?? "member", teamIds: [], tokenHash: freshToken().hash, ttlSeconds: overrides.ttlSeconds ?? TTL_SECONDS };
+  return { id: freshId(), email, role: overrides.role ?? "member", teamIds: [], tokenHash: freshToken().hash, mailTicket: freshId(), ttlSeconds: overrides.ttlSeconds ?? TTL_SECONDS };
 }
 
 /** A pending invitation of `workspaceId` for `email`, written as the system role the way a seed does. */
-async function seedInvitation(workspaceId: string, email: string, overrides: { status?: string; expiresInSeconds?: number } = {}): Promise<string> {
+async function seedInvitation(workspaceId: string, email: string, overrides: { status?: string; expiresInSeconds?: number; mailTicket?: string } = {}): Promise<string> {
   const id = freshId();
   await asSystem(
     db,
     (tx) => tx`
-      INSERT INTO workspace_invitations (id, workspace_id, email, role, token_hash, status, closed_at, expires_at)
-      VALUES (${id}, ${workspaceId}, ${email}, 'member', ${freshToken().hash}, ${overrides.status ?? "pending"},
+      INSERT INTO workspace_invitations (id, workspace_id, email, role, token_hash, mail_ticket, status, closed_at, expires_at)
+      VALUES (${id}, ${workspaceId}, ${email}, 'member', ${freshToken().hash}, ${overrides.mailTicket ?? null}, ${overrides.status ?? "pending"},
               ${(overrides.status ?? "pending") === "pending" ? null : new Date()}, now() + ${overrides.expiresInSeconds ?? TTL_SECONDS} * interval '1 second')`,
   );
   return id;
@@ -173,8 +174,8 @@ describe("the table, its privileges and its policies", () => {
       return rows.map((row) => row.column);
     };
 
-    expect(await columns("INSERT")).toEqual(["email", "expires_at", "id", "invited_by", "role", "team_ids", "token_hash", "workspace_id"]);
-    expect(await columns("UPDATE")).toEqual(["closed_at", "expires_at", "invited_by", "role", "status", "team_ids", "token_hash"]);
+    expect(await columns("INSERT")).toEqual(["email", "expires_at", "id", "invited_by", "mail_ticket", "role", "team_ids", "token_hash", "workspace_id"]);
+    expect(await columns("UPDATE")).toEqual(["closed_at", "expires_at", "invited_by", "mail_ticket", "role", "status", "team_ids", "token_hash"]);
     const [table] = await db.owner<{ canDelete: boolean }[]>`SELECT has_table_privilege('slugbase_app', 'public.workspace_invitations', 'DELETE') AS "canDelete"`;
     expect(table?.canDelete).toBe(false);
   });
@@ -478,7 +479,7 @@ describe("invitationRepository.renew", () => {
     const [before] = await rowsOf(a.workspaceId);
     const replacement = freshToken().hash;
 
-    const renewed = await inTenant({ accountId: who(a, 1), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).renew(written.invitation.id, { tokenHash: replacement, ttlSeconds: TTL_SECONDS }));
+    const renewed = await inTenant({ accountId: who(a, 1), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).renew(written.invitation.id, { tokenHash: replacement, mailTicket: freshId(), ttlSeconds: TTL_SECONDS }));
 
     const [after] = await rowsOf(a.workspaceId);
     expect(renewed).toMatchObject({ id: written.invitation.id, email: "renew@example.test", status: "pending", invitedBy: who(a, 1) });
@@ -493,7 +494,7 @@ describe("invitationRepository.renew", () => {
     const a = await workspaceOf("owner");
     const id = await seedInvitation(a.workspaceId, "late@example.test", { expiresInSeconds: -3600 });
 
-    const renewed = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).renew(id, { tokenHash: freshToken().hash, ttlSeconds: TTL_SECONDS }));
+    const renewed = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).renew(id, { tokenHash: freshToken().hash, mailTicket: freshId(), ttlSeconds: TTL_SECONDS }));
 
     expect(renewed?.expiresAt.getTime()).toBeGreaterThan(Date.now());
   });
@@ -506,7 +507,7 @@ describe("invitationRepository.renew", () => {
     const id = await seedInvitation(a.workspaceId, "gone@example.test", overrides);
     const before = await checksum(a.workspaceId);
 
-    const renewed = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).renew(id, { tokenHash: freshToken().hash, ttlSeconds: TTL_SECONDS }));
+    const renewed = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).renew(id, { tokenHash: freshToken().hash, mailTicket: freshId(), ttlSeconds: TTL_SECONDS }));
 
     expect(renewed).toBeUndefined();
     expect(await checksum(a.workspaceId)).toBe(before);
@@ -518,7 +519,7 @@ describe("invitationRepository.renew", () => {
     const foreign = await seedInvitation(b.workspaceId, "foreign@example.test");
     const before = await checksum(b.workspaceId);
 
-    const renewed = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).renew(foreign, { tokenHash: freshToken().hash, ttlSeconds: TTL_SECONDS }));
+    const renewed = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).renew(foreign, { tokenHash: freshToken().hash, mailTicket: freshId(), ttlSeconds: TTL_SECONDS }));
 
     expect(renewed).toBeUndefined();
     expect(await checksum(b.workspaceId)).toBe(before);
@@ -529,7 +530,7 @@ describe("invitationRepository.renew", () => {
     const id = await seedInvitation(a.workspaceId, "race@example.test");
     const hashes = [freshToken().hash, freshToken().hash];
 
-    await Promise.all(hashes.map((tokenHash) => inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).renew(id, { tokenHash, ttlSeconds: TTL_SECONDS }))));
+    await Promise.all(hashes.map((tokenHash) => inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).renew(id, { tokenHash, mailTicket: freshId(), ttlSeconds: TTL_SECONDS }))));
 
     const [row] = await rowsOf(a.workspaceId);
     expect(hashes.filter((hash) => hash.equals(row?.token_hash ?? Buffer.alloc(0)))).toHaveLength(1);
@@ -629,11 +630,12 @@ describe("invitationRepository.actorRole and memberHoldsEmail", () => {
 describe("invitationRepository.issueToken", () => {
   it("replaces the token hash of a pending invitation, which ends the earlier link, and says what the email states", async () => {
     const a = await workspaceOf("owner");
-    const written = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).writePending(newInvitation("send@example.test", { role: "admin" })));
+    const invitation = newInvitation("send@example.test", { role: "admin" });
+    const written = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).writePending(invitation));
     const [before] = await rowsOf(a.workspaceId);
     const issued = freshToken().hash;
 
-    const context = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).issueToken(written.invitation.id, issued));
+    const context = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).issueToken(written.invitation.id, invitation.mailTicket, issued));
 
     expect(context).toEqual({ email: "send@example.test", role: "admin", expiresAt: written.invitation.expiresAt, workspaceName: "Invitations test" });
     const [after] = await rowsOf(a.workspaceId);
@@ -647,10 +649,10 @@ describe("invitationRepository.issueToken", () => {
     ["expired", { expiresInSeconds: -60 }],
   ])("changes nothing of an invitation that is %s", async (_name, overrides) => {
     const a = await workspaceOf("owner");
-    const id = await seedInvitation(a.workspaceId, "gone@example.test", overrides);
+    const id = await seedInvitation(a.workspaceId, "gone@example.test", { ...overrides, mailTicket: TICKET });
     const [before] = await rowsOf(a.workspaceId);
 
-    const context = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).issueToken(id, freshToken().hash));
+    const context = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).issueToken(id, TICKET, freshToken().hash));
 
     expect(context).toBeUndefined();
     expect((await rowsOf(a.workspaceId))[0]?.token_hash.equals(before?.token_hash ?? Buffer.alloc(0))).toBe(true);
@@ -659,13 +661,89 @@ describe("invitationRepository.issueToken", () => {
   it("changes nothing of an invitation of another workspace", async () => {
     const a = await workspaceOf("owner");
     const b = await workspaceOf("owner");
-    const foreign = await seedInvitation(b.workspaceId, "foreign@example.test");
+    const foreign = await seedInvitation(b.workspaceId, "foreign@example.test", { mailTicket: TICKET });
     const before = await checksum(b.workspaceId);
 
-    const context = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).issueToken(foreign, freshToken().hash));
+    const context = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).issueToken(foreign, TICKET, freshToken().hash));
 
     expect(context).toBeUndefined();
     expect(await checksum(b.workspaceId)).toBe(before);
+  });
+});
+
+describe("invitationRepository.issueToken and a renewal that follows the ticket", () => {
+  const as = (a: Workspace, index = 0) => ({ accountId: who(a, index), workspaceId: a.workspaceId });
+
+  it("issues a token again for the ticket it already issued one for, which a retry of the same job needs", async () => {
+    const a = await workspaceOf("owner");
+    const invitation = newInvitation("retry@example.test");
+    const written = await inTenant(as(a), (tx) => invitationRepository(tx).writePending(invitation));
+    const first = freshToken().hash;
+    const second = freshToken().hash;
+
+    const one = await inTenant(as(a), (tx) => invitationRepository(tx).issueToken(written.invitation.id, invitation.mailTicket, first));
+    const two = await inTenant(as(a), (tx) => invitationRepository(tx).issueToken(written.invitation.id, invitation.mailTicket, second));
+
+    expect(one).toBeDefined();
+    expect(two).toBeDefined();
+    expect((await rowsOf(a.workspaceId))[0]?.token_hash.equals(second)).toBe(true);
+  });
+
+  it("issues nothing for a ticket that a renewal replaced: the link it stored stays", async () => {
+    const a = await workspaceOf("owner");
+    const invitation = newInvitation("linked@example.test");
+    const written = await inTenant(as(a), (tx) => invitationRepository(tx).writePending(invitation));
+    const link = freshToken().hash;
+    await inTenant(as(a), (tx) => invitationRepository(tx).renew(written.invitation.id, { tokenHash: link, mailTicket: null, ttlSeconds: TTL_SECONDS }));
+
+    const context = await inTenant(as(a), (tx) => invitationRepository(tx).issueToken(written.invitation.id, invitation.mailTicket, freshToken().hash));
+
+    expect(context).toBeUndefined();
+    expect((await rowsOf(a.workspaceId))[0]?.token_hash.equals(link)).toBe(true);
+  });
+
+  it("issues nothing for the ticket of an earlier resend, and issues for the latest one", async () => {
+    const a = await workspaceOf("owner");
+    const invitation = newInvitation("twice@example.test");
+    const written = await inTenant(as(a), (tx) => invitationRepository(tx).writePending(invitation));
+    const later = freshId();
+    await inTenant(as(a), (tx) => invitationRepository(tx).renew(written.invitation.id, { tokenHash: freshToken().hash, mailTicket: later, ttlSeconds: TTL_SECONDS }));
+    const [renewed] = await rowsOf(a.workspaceId);
+    const stale = await inTenant(as(a), (tx) => invitationRepository(tx).issueToken(written.invitation.id, invitation.mailTicket, freshToken().hash));
+    const unchanged = (await rowsOf(a.workspaceId))[0]?.token_hash;
+    const issued = freshToken().hash;
+    const current = await inTenant(as(a), (tx) => invitationRepository(tx).issueToken(written.invitation.id, later, issued));
+
+    expect(stale).toBeUndefined();
+    expect(unchanged?.equals(renewed?.token_hash ?? Buffer.alloc(0))).toBe(true);
+    expect(current).toBeDefined();
+    expect((await rowsOf(a.workspaceId))[0]?.token_hash.equals(issued)).toBe(true);
+  });
+
+  it("replaces the ticket when writing an invitation for an address that already has a pending one", async () => {
+    const a = await workspaceOf("owner");
+    const first = newInvitation("again@example.test");
+    const second = newInvitation("again@example.test");
+    await inTenant(as(a), (tx) => invitationRepository(tx).writePending(first));
+    const written = await inTenant(as(a), (tx) => invitationRepository(tx).writePending(second));
+
+    const stale = await inTenant(as(a), (tx) => invitationRepository(tx).issueToken(written.invitation.id, first.mailTicket, freshToken().hash));
+    const current = await inTenant(as(a), (tx) => invitationRepository(tx).issueToken(written.invitation.id, second.mailTicket, freshToken().hash));
+
+    expect(written.resent).toBe(true);
+    expect(stale).toBeUndefined();
+    expect(current).toBeDefined();
+  });
+
+  it("issues nothing for an invitation that holds no ticket", async () => {
+    const a = await workspaceOf("owner");
+    const id = await seedInvitation(a.workspaceId, "seeded@example.test");
+    const before = await checksum(a.workspaceId);
+
+    const context = await inTenant(as(a), (tx) => invitationRepository(tx).issueToken(id, TICKET, freshToken().hash));
+
+    expect(context).toBeUndefined();
+    expect(await checksum(a.workspaceId)).toBe(before);
   });
 });
 

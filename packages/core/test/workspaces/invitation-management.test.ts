@@ -91,7 +91,13 @@ function world({ actorRole = "admin", present = true, revocation = "revoked", in
       return Promise.resolve();
     },
   };
-  return { log, renewals, audits, dependencies: { store, audit: createAuditWriter({ store: auditStore, newId: () => "0192f3a0-aaaa-7000-8000-000000000001" }), ttlSeconds: INVITATION_TTL_SECONDS } };
+  return { log, renewals, audits, dependencies: { store, audit: createAuditWriter({ store: auditStore, newId: () => "0192f3a0-aaaa-7000-8000-000000000001" }), newId: ticketIds(), ttlSeconds: INVITATION_TTL_SECONDS } };
+}
+
+/** Identifiers that differ at every call, as the tickets of two resends do. */
+function ticketIds(): () => string {
+  let next = 0;
+  return () => `0192f3a0-ffff-7000-8000-${String((next += 1)).padStart(12, "0")}`;
 }
 
 function ask(): InvitationActionAsk {
@@ -143,8 +149,9 @@ describe("resendInvitation", () => {
 
     const outcome = await resendInvitation(dependencies, ask());
 
-    expect(outcome).toEqual({ kind: "resent", invitation: RECORD, locale: "de" });
+    expect(outcome).toEqual({ kind: "resent", invitation: RECORD, locale: "de", mailTicket: "0192f3a0-ffff-7000-8000-000000000001" });
     expect(renewals).toHaveLength(1);
+    expect(renewals[0]?.mailTicket).toBe("0192f3a0-ffff-7000-8000-000000000001");
     expect(renewals[0]?.tokenHash).toHaveLength(32);
     expect(renewals[0]?.ttlSeconds).toBe(INVITATION_TTL_SECONDS);
     expect(audits).toHaveLength(1);
@@ -163,6 +170,17 @@ describe("resendInvitation", () => {
     await resendInvitation(dependencies, ask());
 
     expect(renewals[0]?.tokenHash.equals(renewals[1]?.tokenHash ?? Buffer.alloc(0))).toBe(false);
+  });
+
+  it("gives each resend its own mail ticket, so the job of the first finds the invitation renewed by the second", async () => {
+    const { dependencies, renewals } = world();
+
+    await resendInvitation(dependencies, ask());
+    await resendInvitation(dependencies, ask());
+
+    expect(renewals[0]?.mailTicket).toBeTypeOf("string");
+    expect(renewals[1]?.mailTicket).toBeTypeOf("string");
+    expect(renewals[0]?.mailTicket).not.toBe(renewals[1]?.mailTicket);
   });
 
   it("rejects when the audit write fails, so the caller's transaction does not commit the new token", async () => {
@@ -197,6 +215,7 @@ describe("createInvitationLink", () => {
     expect(outcome.invitation).toEqual(RECORD);
     expect(renewals[0]?.tokenHash.equals(hashCredentialToken(outcome.token) ?? Buffer.alloc(0))).toBe(true);
     expect(renewals[0]?.ttlSeconds).toBe(INVITATION_TTL_SECONDS);
+    expect(renewals[0]?.mailTicket).toBeNull();
     expect(audits).toHaveLength(1);
     expect(audits[0]).toMatchObject({ action: "invitation.link_created", entityId: INVITATION_ID, metadata: { role: "admin" } });
     expect(JSON.stringify(audits)).not.toContain(outcome.token);

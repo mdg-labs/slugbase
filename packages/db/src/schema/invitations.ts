@@ -31,6 +31,11 @@ export const workspaceInvitations = pgTable(
     teamIds: uuid().array().notNull().default(sql`'{}'::uuid[]`),
     /** SHA-256 of the token the link carries. */
     tokenHash: bytea().notNull().unique("workspace_invitations_token_hash_key"),
+    /**
+     * The identifier of the mail job queued by the request that last wrote or resent the invitation, null once a
+     * link replaced it. Only that job may issue the invitation's token; it is no secret.
+     */
+    mailTicket: uuid(),
     invitedBy: uuid().references(() => accounts.id, { onDelete: "set null" }),
     status: text().notNull().default("pending"),
     expiresAt: timestamp({ withTimezone: true }).notNull(),

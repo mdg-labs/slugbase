@@ -23,6 +23,12 @@ import type { WorkspaceRole } from "../ports/tenant-resolver.ts";
 // place a token leaves the server other than the mail: the service makes the token, stores its hash and hands
 // the value to the caller to return once, and records no field of it. Revoking ends a pending invitation for
 // good; revoking one that is already revoked is the same answer and writes nothing.
+//
+// The mail job issues its token only while the invitation is still the one the job was queued for. Writing or
+// resending an invitation gives it a mail ticket (a random identifier, no secret) that the queued job carries;
+// a link replaces the ticket with none. The job's token replaces the stored hash only where the invitation
+// still holds the job's ticket, so a link copied after the job was queued, or a later resend, is not ended by
+// an earlier job, and a retry of the same job, which finds its ticket still there, issues a token again.
 
 /** How long an invitation can be accepted for, in seconds (doc 02 section 3.4): 7 days. */
 export const INVITATION_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -55,6 +61,8 @@ export interface NewInvitation {
   readonly teamIds: readonly string[];
   /** SHA-256 of a token nobody holds yet; the mail job replaces it with the hash of the token it mails. */
   readonly tokenHash: Buffer;
+  /** The ticket of the mail job queued for this write; only that job may issue the invitation's token. */
+  readonly mailTicket: string;
   /** How long the invitation can be accepted for, counted by the database's clock when it writes the row. */
   readonly ttlSeconds: number;
 }
@@ -69,7 +77,7 @@ export interface InvitationStore {
   memberHoldsEmail(email: string): Promise<boolean>;
   /**
    * Writes the invitation for the workspace of the transaction, or, when the address already has a pending
-   * one, replaces that invitation's role, teams, inviter, token hash and expiry; `resent` says which. One
+   * one, replaces that invitation's role, teams, inviter, token hash, mail ticket and expiry; `resent` says which. One
    * statement, so two requests for one address leave one pending invitation.
    */
   writePending(invitation: NewInvitation): Promise<{ readonly invitation: InvitationRecord; readonly resent: boolean }>;
@@ -86,6 +94,8 @@ export interface InvitationListing extends InvitationRecord {
 export interface InvitationRenewal {
   /** SHA-256 of the new token: of one nobody holds yet for a resend, of the one a link returns. */
   readonly tokenHash: Buffer;
+  /** The ticket of the mail job queued for a resend; null for a link, which leaves no earlier job to issue a token. */
+  readonly mailTicket: string | null;
   /** How long the invitation can be accepted for from now, counted by the database's clock. */
   readonly ttlSeconds: number;
 }
@@ -107,7 +117,7 @@ export interface InvitationManagementStore {
   /** Up to `limit` pending invitations of the workspace of the transaction, newest first, after the one named. */
   listPending(afterId: string | null, limit: number): Promise<readonly InvitationListing[]>;
   /**
-   * Replaces the token hash and the expiry of the pending invitation `invitationId` and makes the account of
+   * Replaces the token hash, the mail ticket and the expiry of the pending invitation `invitationId` and makes the account of
    * the transaction its inviter; undefined, with nothing changed, when the workspace has no such pending invitation.
    */
   renew(invitationId: string, renewal: InvitationRenewal): Promise<InvitationRecord | undefined>;
@@ -140,8 +150,8 @@ export interface InvitationAsk {
 }
 
 export type InvitationOutcome =
-  /** The invitation was written; `locale` is the language its email is written in. */
-  | { readonly kind: "invited" | "resent"; readonly invitation: InvitationRecord; readonly locale: string }
+  /** The invitation was written; `locale` is the language its email is written in and `mailTicket` the ticket its mail job carries. */
+  | { readonly kind: "invited" | "resent"; readonly invitation: InvitationRecord; readonly locale: string; readonly mailTicket: string }
   /** The account that asks is not an admin or owner of the workspace; nothing was written. */
   | { readonly kind: "forbidden" }
   /** The role is not one an invitation can grant; nothing was written. */
@@ -174,12 +184,14 @@ export async function inviteMember({ store, audit, newId, ttlSeconds }: Invitati
   if (await store.memberHoldsEmail(email)) {
     return { kind: "already_member" };
   }
+  const mailTicket = newId();
   const { invitation, resent } = await store.writePending({
     id: newId(),
     email,
     role: ask.role,
     teamIds: ask.teamIds,
     tokenHash: generateCredentialToken().hash,
+    mailTicket,
     ttlSeconds,
   });
   await audit.write({
@@ -191,7 +203,7 @@ export async function inviteMember({ store, audit, newId, ttlSeconds }: Invitati
     ipPrefix: ask.ipPrefix,
   });
   const locale = (await store.inviteeLocale(invitation.id)) ?? ask.actorLocale;
-  return { kind: resent ? "resent" : "invited", invitation, locale };
+  return { kind: resent ? "resent" : "invited", invitation, locale, mailTicket };
 }
 
 /** What the invitation email says; the token exists only here, for the length of the send. */
@@ -237,6 +249,8 @@ export interface InvitationActionDependencies {
   readonly store: InvitationManagementStore;
   /** Bound to the same transaction as the store. */
   readonly audit: AuditWriter;
+  /** A fresh UUIDv7, the ticket of the mail job a resend queues. */
+  readonly newId: () => string;
   /** How long an invitation can be accepted for from a resend or a link. */
   readonly ttlSeconds: number;
 }
@@ -257,8 +271,8 @@ export type InvitationListOutcome =
   | { readonly kind: "forbidden" };
 
 export type InvitationResendOutcome =
-  /** The invitation has a new expiry and a token nobody holds; `locale` is the language its email is written in. */
-  | { readonly kind: "resent"; readonly invitation: InvitationRecord; readonly locale: string }
+  /** The invitation has a new expiry and a token nobody holds; `locale` is the language its email is written in and `mailTicket` the ticket its mail job carries. */
+  | { readonly kind: "resent"; readonly invitation: InvitationRecord; readonly locale: string; readonly mailTicket: string }
   | { readonly kind: "forbidden" }
   /** The workspace has no pending invitation of that identifier; nothing was written. */
   | { readonly kind: "not_found" };
@@ -292,11 +306,12 @@ export async function listInvitations({ store }: Pick<InvitationActionDependenci
  * link, and records `invitation.resent`, in the transaction the stores are bound to. The caller queues the job
  * that mails the new link.
  */
-export async function resendInvitation({ store, audit, ttlSeconds }: InvitationActionDependencies, ask: InvitationActionAsk): Promise<InvitationResendOutcome> {
+export async function resendInvitation({ store, audit, newId, ttlSeconds }: InvitationActionDependencies, ask: InvitationActionAsk): Promise<InvitationResendOutcome> {
   if (!(await mayManage(store))) {
     return { kind: "forbidden" };
   }
-  const invitation = await store.renew(ask.invitationId, { tokenHash: generateCredentialToken().hash, ttlSeconds });
+  const mailTicket = newId();
+  const invitation = await store.renew(ask.invitationId, { tokenHash: generateCredentialToken().hash, mailTicket, ttlSeconds });
   if (invitation === undefined) {
     return { kind: "not_found" };
   }
@@ -309,19 +324,20 @@ export async function resendInvitation({ store, audit, ttlSeconds }: InvitationA
     ipPrefix: ask.ipPrefix,
   });
   const locale = (await store.inviteeLocale(invitation.id)) ?? ask.actorLocale;
-  return { kind: "resent", invitation, locale };
+  return { kind: "resent", invitation, locale, mailTicket };
 }
 
 /**
  * Gives the pending invitation a new expiry and a new token, stores only the token's hash, which ends the
- * earlier link, and records `invitation.link_created`. The token's value is in the outcome and nowhere else.
+ * earlier link and any mail job queued before it, and records `invitation.link_created`. The token's value is
+ * in the outcome and nowhere else.
  */
-export async function createInvitationLink({ store, audit, ttlSeconds }: InvitationActionDependencies, ask: InvitationActionAsk): Promise<InvitationLinkOutcome> {
+export async function createInvitationLink({ store, audit, ttlSeconds }: Omit<InvitationActionDependencies, "newId">, ask: InvitationActionAsk): Promise<InvitationLinkOutcome> {
   if (!(await mayManage(store))) {
     return { kind: "forbidden" };
   }
   const token = generateCredentialToken();
-  const invitation = await store.renew(ask.invitationId, { tokenHash: token.hash, ttlSeconds });
+  const invitation = await store.renew(ask.invitationId, { tokenHash: token.hash, mailTicket: null, ttlSeconds });
   if (invitation === undefined) {
     return { kind: "not_found" };
   }

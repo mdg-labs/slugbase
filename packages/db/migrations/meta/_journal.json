@@ -323,6 +323,13 @@
       "when": 1792435656384,
       "tag": "20261019184736_add_invitation_revocation",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1792437755121,
+      "tag": "20261019192235_add_invitation_mail_ticket",
+      "breakpoints": true
     }
   ]
 }

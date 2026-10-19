@@ -52,7 +52,7 @@ import { route } from "../register.ts";
 // cannot send mail it is refused with 503 before anything is written, since it would end the earlier link and
 // send no other. A link makes a token
 // in the request, stores its hash and returns the link once: the token is in no log, audit event or stored
-// response, and another link or a resend ends it. Revoking a revoked invitation is answered 204 again. Each
+// response, and another link or a resend ends it; a mail job queued before the link finds the invitation renewed and issues no token. Revoking a revoked invitation is answered 204 again. Each
 // action, its audit event and, for a resend, the mail job are one transaction.
 
 const UNAUTHENTICATED = "Authentication is required.";
@@ -151,7 +151,13 @@ export function invitationRoutes({ mail, cursorSecret, appOrigin, store, ttlSeco
           },
         );
         if ((result.kind === "invited" || result.kind === "resent") && mail.available) {
-          await repository.enqueue([queueInvitationMail(uuidv7(), { invitationId: result.invitation.id, workspaceId: tenant.workspaceId, accountId, locale: result.locale })]);
+          await repository.enqueue([queueInvitationMail(uuidv7(), {
+              invitationId: result.invitation.id,
+              workspaceId: tenant.workspaceId,
+              accountId,
+              locale: result.locale,
+              mailTicket: result.mailTicket,
+            })]);
         }
         return result;
       });
@@ -217,10 +223,16 @@ export function invitationRoutes({ mail, cursorSecret, appOrigin, store, ttlSeco
         if (action === undefined) {
           return { kind: "forbidden" } as const;
         }
-        const result = await resendPending({ store: action.repository, audit: action.audit, ttlSeconds }, action.ask);
+        const result = await resendPending({ store: action.repository, audit: action.audit, newId: uuidv7, ttlSeconds }, action.ask);
         if (result.kind === "resent") {
           await action.repository.enqueue([
-            queueInvitationMail(uuidv7(), { invitationId: result.invitation.id, workspaceId: tenant.workspaceId, accountId: action.accountId, locale: result.locale }),
+            queueInvitationMail(uuidv7(), {
+              invitationId: result.invitation.id,
+              workspaceId: tenant.workspaceId,
+              accountId: action.accountId,
+              locale: result.locale,
+              mailTicket: result.mailTicket,
+            }),
           ]);
         }
         return result;

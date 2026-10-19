@@ -45,6 +45,7 @@
     "20261019145346_add_last_instance_admin_check": "b51badf2e4448a197b667de81ff68d38605fe4c8cf9b132007dc36c0c13c070e",
     "20261019161212_add_workspace_invitations": "51e2273db4602e3d4ce71b5bb6cb7dfadc6809255c6d6ec57f0fa021e1ef60e4",
     "20261019172426_add_idempotency_keys": "657248a9e7f94f2342b1ef24ebe3a3b5758c66213a8b0a5c5ab7dbca6deb61c5",
-    "20261019184736_add_invitation_revocation": "b7c693533c7c660fc57e66f9e8d37091d357d6bca4b65cf6f5dd080d80dc3e39"
+    "20261019184736_add_invitation_revocation": "b7c693533c7c660fc57e66f9e8d37091d357d6bca4b65cf6f5dd080d80dc3e39",
+    "20261019192235_add_invitation_mail_ticket": "8f3a610be842d61fca133f6b292c2693edde5770e53b8f6f8d5f8343009ec623"
   }
 }

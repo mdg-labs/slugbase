@@ -25,6 +25,8 @@ const WAIT_MS = 20_000;
 const TEST_TIMEOUT_MS = 60_000;
 const UNKNOWN = "0192f3a0-eeee-7000-8000-000000000001";
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 const database = useTestDatabase();
 const harness = workspaceHarness(database);
 const inbox = new InMemoryMail();
@@ -290,7 +292,10 @@ describe("POST /api/v1/invitations/{id}/resend", { timeout: TEST_TIMEOUT_MS }, (
     expect(events).toEqual([{ action: "invitation.resent", entity_type: "invitation", entity_id: seeded.id, actor_account_id: a.account.id, metadata: { role: "admin" } }]);
     expect(JSON.stringify(events)).not.toContain("example.test");
     const jobs = await jobsOf(workspaceId);
-    expect(jobs.map((job) => job.data)).toEqual([{ invitationId: seeded.id, workspaceId, accountId: a.account.id, locale: "en" }]);
+    const { mailTicket, ...identifiers } = jobs[0]?.data ?? {};
+    expect(jobs).toHaveLength(1);
+    expect(identifiers).toEqual({ invitationId: seeded.id, workspaceId, accountId: a.account.id, locale: "en" });
+    expect(String(mailTicket)).toMatch(UUID);
     expect((await resend(world, o, seeded.id)).status).toBe(200);
   });
 

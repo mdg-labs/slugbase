@@ -1,4 +1,4 @@
 {
-  "sha256": "beffc2a40addbddbca21438ee240e6d1e753bc36a5051ff1fef7ce35752292cf",
-  "migration": "20261019184736_add_invitation_revocation"
+  "sha256": "945872acbe80cf93a18852a36b496b66ab74b82a3ee61900b0799aed1f2317d3",
+  "migration": "20261019192235_add_invitation_mail_ticket"
 }

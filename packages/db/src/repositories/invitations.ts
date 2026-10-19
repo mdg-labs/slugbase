@@ -77,9 +77,11 @@ export interface InvitationRepository extends InvitationStore, InvitationManagem
   /**
    * Gives the pending, unexpired invitation `invitationId` of the workspace of the transaction the token whose
    * SHA-256 is `tokenHash`, which ends the link it had, and answers what its email says; undefined, with
-   * nothing changed, when the invitation is not pending or has expired. Needs a transaction opened with a workspace.
+   * nothing changed, when the invitation is not pending, has expired, or no longer holds `mailTicket` because
+   * a later write or link renewed it. The ticket stays, so the same job issues a token again when it is retried.
+   * Needs a transaction opened with a workspace.
    */
-  issueToken(invitationId: string, tokenHash: Buffer): Promise<InvitationMailContext | undefined>;
+  issueToken(invitationId: string, mailTicket: string, tokenHash: Buffer): Promise<InvitationMailContext | undefined>;
   /**
    * Queues `jobs` in the open transaction, so each exists exactly when the change that asked for it does and
    * none when the transaction ends without it.
@@ -170,14 +172,14 @@ export function invitationRepository(tx: TenantTx): InvitationRepository {
     async writePending(invitation: NewInvitation) {
       const workspaceId = workspaceOf(tx, "writing an invitation");
       const rows = await tenantHandle(tx).execute<WrittenRow>(sql`
-        INSERT INTO public.workspace_invitations (id, workspace_id, email, role, team_ids, token_hash, invited_by, expires_at)
+        INSERT INTO public.workspace_invitations (id, workspace_id, email, role, team_ids, token_hash, mail_ticket, invited_by, expires_at)
         VALUES (
           ${invitation.id}::uuid, ${workspaceId}::uuid, ${invitation.email}::citext, ${invitation.role}::member_role,
-          ${uuidArray(invitation.teamIds)}::uuid[], decode(${invitation.tokenHash.toString("hex")}, 'hex'), ${tx.accountId}::uuid,
+          ${uuidArray(invitation.teamIds)}::uuid[], decode(${invitation.tokenHash.toString("hex")}, 'hex'), ${invitation.mailTicket}::uuid, ${tx.accountId}::uuid,
           now() + ${invitation.ttlSeconds}::int * interval '1 second')
         ON CONFLICT (workspace_id, email) WHERE status = 'pending'
         DO UPDATE SET role = EXCLUDED.role, team_ids = EXCLUDED.team_ids, token_hash = EXCLUDED.token_hash,
-                      invited_by = EXCLUDED.invited_by, expires_at = EXCLUDED.expires_at
+                      mail_ticket = EXCLUDED.mail_ticket, invited_by = EXCLUDED.invited_by, expires_at = EXCLUDED.expires_at
         RETURNING id, email::text AS email, role::text AS role, to_json(team_ids)::text AS team_ids, status, invited_by,
                   to_char(expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS expires_at,
                   to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at, (xmax = 0) AS inserted`);
@@ -194,12 +196,13 @@ export function invitationRepository(tx: TenantTx): InvitationRepository {
       return rows[0]?.locale ?? undefined;
     },
 
-    async issueToken(invitationId, tokenHash) {
+    async issueToken(invitationId, mailTicket, tokenHash) {
       const workspaceId = workspaceOf(tx, "issuing the token of an invitation");
       const rows = await tenantHandle(tx).execute<IssuedRow>(sql`
         UPDATE public.workspace_invitations i
         SET token_hash = decode(${tokenHash.toString("hex")}, 'hex')
         WHERE i.id = ${invitationId}::uuid AND i.workspace_id = ${workspaceId}::uuid AND i.status = 'pending' AND i.expires_at > now()
+          AND i.mail_ticket = ${mailTicket}::uuid
         RETURNING i.email::text AS email, i.role::text AS role,
                   to_char(i.expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS expires_at,
                   (SELECT w.name FROM public.workspaces w WHERE w.id = i.workspace_id) AS workspace_name`);
@@ -226,11 +229,11 @@ export function invitationRepository(tx: TenantTx): InvitationRepository {
       return rows.map((row): InvitationListing => ({ ...recordOf(row), expired: row.expired }));
     },
 
-    async renew(invitationId, { tokenHash, ttlSeconds }: InvitationRenewal) {
+    async renew(invitationId, { tokenHash, mailTicket, ttlSeconds }: InvitationRenewal) {
       const workspaceId = workspaceOf(tx, "renewing an invitation");
       const rows = await tenantHandle(tx).execute<RecordRow>(sql`
         UPDATE public.workspace_invitations
-        SET token_hash = decode(${tokenHash.toString("hex")}, 'hex'), invited_by = ${tx.accountId}::uuid,
+        SET token_hash = decode(${tokenHash.toString("hex")}, 'hex'), mail_ticket = ${mailTicket}::uuid, invited_by = ${tx.accountId}::uuid,
             expires_at = now() + ${ttlSeconds}::int * interval '1 second'
         WHERE id = ${invitationId}::uuid AND workspace_id = ${workspaceId}::uuid AND status = 'pending'
         RETURNING ${RECORD_COLUMNS}`);

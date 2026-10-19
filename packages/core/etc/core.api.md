@@ -528,7 +528,7 @@ export function createAuditWriter(input: AuditWriterDependencies): AuditWriter;
 export function createBreachedPasswords(records: Uint8Array): BreachedPasswords;
 
 // @public
-export function createInvitationLink(input: InvitationActionDependencies, ask: InvitationActionAsk): Promise<InvitationLinkOutcome>;
+export function createInvitationLink(input: Omit<InvitationActionDependencies, "newId">, ask: InvitationActionAsk): Promise<InvitationLinkOutcome>;
 
 // @public (undocumented)
 export function createPasswordPolicy(input?: PasswordPolicyOptions): PasswordPolicy;
@@ -872,6 +872,7 @@ export interface InvitationActionAsk {
 // @public (undocumented)
 export interface InvitationActionDependencies {
     readonly audit: AuditWriter;
+    readonly newId: () => string;
     // (undocumented)
     readonly store: InvitationManagementStore;
     readonly ttlSeconds: number;
@@ -963,11 +964,12 @@ export interface InvitationMessageContent {
 
 // @public (undocumented)
 export type InvitationOutcome =
-/** The invitation was written; `locale` is the language its email is written in. */
+/** The invitation was written; `locale` is the language its email is written in and `mailTicket` the ticket its mail job carries. */
     {
     readonly kind: "invited" | "resent";
     readonly invitation: InvitationRecord;
     readonly locale: string;
+    readonly mailTicket: string;
 }
 /** The account that asks is not an admin or owner of the workspace; nothing was written. */
 | {
@@ -1007,17 +1009,19 @@ export interface InvitationRecord {
 
 // @public
 export interface InvitationRenewal {
+    readonly mailTicket: string | null;
     readonly tokenHash: Buffer;
     readonly ttlSeconds: number;
 }
 
 // @public (undocumented)
 export type InvitationResendOutcome =
-/** The invitation has a new expiry and a token nobody holds; `locale` is the language its email is written in. */
+/** The invitation has a new expiry and a token nobody holds; `locale` is the language its email is written in and `mailTicket` the ticket its mail job carries. */
     {
     readonly kind: "resent";
     readonly invitation: InvitationRecord;
     readonly locale: string;
+    readonly mailTicket: string;
 } | {
     readonly kind: "forbidden";
 }
@@ -1238,6 +1242,7 @@ export interface NewInvitation {
     // (undocumented)
     readonly email: string;
     readonly id: string;
+    readonly mailTicket: string;
     // (undocumented)
     readonly role: InvitationRole;
     // (undocumented)

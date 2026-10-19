@@ -517,7 +517,7 @@ export interface InvitationMailContext {
 // @public (undocumented)
 export interface InvitationRepository extends InvitationStore, InvitationManagementStore {
     enqueue(jobs: readonly QueuedJob[]): Promise<void>;
-    issueToken(invitationId: string, tokenHash: Buffer): Promise<InvitationMailContext | undefined>;
+    issueToken(invitationId: string, mailTicket: string, tokenHash: Buffer): Promise<InvitationMailContext | undefined>;
 }
 
 // @public (undocumented)

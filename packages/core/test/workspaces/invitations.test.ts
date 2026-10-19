@@ -162,6 +162,21 @@ describe("inviteMember", () => {
     expect(one?.teamIds).toEqual([]);
   });
 
+  it("writes the invitation with a mail ticket, which the outcome names for the job that mails it, and a different one for every write", async () => {
+    const { dependencies, written } = world();
+
+    const one = await inviteMember(dependencies, ask());
+    const two = await inviteMember(dependencies, ask());
+
+    if (one.kind !== "invited" || two.kind !== "invited") {
+      throw new Error("expected both invitations to be written");
+    }
+    expect(written[0]?.mailTicket).toBe(one.mailTicket);
+    expect(written[1]?.mailTicket).toBe(two.mailTicket);
+    expect(one.mailTicket).not.toBe(written[0]?.id);
+    expect(one.mailTicket).not.toBe(two.mailTicket);
+  });
+
   it("records invitation.created with the role and neither the address nor anything else", async () => {
     const { dependencies, log, audits } = world();
 
