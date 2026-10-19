@@ -1,0 +1,292 @@
+import {
+  createInvitation,
+  createInvitationLink,
+  listInvitations,
+  resendInvitation,
+  revokeInvitation,
+  type InvitationListItemSchema,
+  type InvitationSchema,
+} from "@slugbase/contracts";
+import {
+  INVITATION_TTL_SECONDS,
+  createAuditWriter,
+  createInvitationLink as makeInvitationLink,
+  invitationLink,
+  inviteMember,
+  listInvitations as listPending,
+  resendInvitation as resendPending,
+  revokeInvitation as revokePending,
+  type AuditActor,
+  type InvitationActionAsk,
+  type InvitationListing,
+  type InvitationRecord,
+  type MailPort,
+} from "@slugbase/core";
+import { accountProfileRepository, auditEventRepository, invitationRepository, type AuthStore, type TenantTx } from "@slugbase/db";
+import { z } from "zod";
+import { emailLimitKey } from "../../auth/email-limit.ts";
+import { createPageCursorCodec } from "../../auth/page-cursor.ts";
+import { uuidv7 } from "../../auth/uuidv7.ts";
+import type { ChainContext, RouteBinding } from "../../http/chain.ts";
+import { ProblemError } from "../../http/problem.ts";
+import type { RequestTenant } from "../../http/tenant.ts";
+import { networkPrefixOf } from "../../http/trusted-proxy.ts";
+import { queueInvitationMail } from "../../worker/jobs/invitation-mail.ts";
+import { route } from "../register.ts";
+
+// The invitation operations of doc 04 section 10.5 ( doc 02 section 3.4, doc 10 T1, T4 and T19). It acts in the workspace
+// the request is bound to and names no other: the authorization stage lets an admin or owner of it through, and
+// the invitation service judges the role again under the same transaction. The invitation, its audit event and
+// the job that mails its link are one transaction, so a refusal at the commit leaves none of them. The response
+// is the invitation and never its token: the token is made by the job that sends the email, which also ends
+// the link of an earlier send. A deployment that cannot send mail queues no job and still has the invitation;
+// inviting an address that has a pending one there changes its role, teams and expiry and keeps the stored token
+// hash, so the link an admin copied for it keeps working.
+// The operations declare `members.invite` (revoking does not); the authorization stage refuses it while no
+// entitlement source of the composition holds that entitlement, and they declare no token scope, so an API
+// token never reaches them.
+//
+// An admin or owner also lists the pending invitations, resends one, gets the link of one and revokes one. Each
+// names an invitation by identifier and acts in the workspace of the request only: the identifier of another
+// workspace's invitation is answered like one that does not exist (404). A resend counts against the
+// per-address limit of the `reset` bucket under the invited address, shared with the other operations of that
+// bucket, and queues the job that mails the new link; for an invitation of the workspace, on a composition that
+// cannot send mail it is refused with 503 before anything is written, since it would end the earlier link and
+// send no other. A link makes a token
+// in the request, stores its hash and returns the link once: the token is in no log, audit event or stored
+// response, and another link or a resend ends it; a mail job queued before the link finds the invitation renewed and issues no token. Revoking a revoked invitation is answered 204 again. Each
+// action, its audit event and, for a resend, the mail job are one transaction.
+
+const UNAUTHENTICATED = "Authentication is required.";
+const NO_WORKSPACE = "No such resource.";
+const NOT_ALLOWED = "Your role does not allow this.";
+const ALREADY_MEMBER = "This address already belongs to a member of the workspace.";
+const TEAMS_UNAVAILABLE = "Teams cannot be invited into yet.";
+const INVALID_ROLE = "An invitation can grant the admin or the member role.";
+const NO_SUCH_INVITATION = "No such resource.";
+const BAD_CURSOR = "The cursor is not valid.";
+const MAIL_UNAVAILABLE = "Email delivery is not available on this instance; use the link of the invitation instead.";
+
+export interface InvitationRoutesOptions {
+  /** The mail port: the invitation email is queued only when it can send. */
+  readonly mail: Pick<MailPort, "available">;
+  /** The server secret the list cursors are signed with, through a key derived for this list alone. */
+  readonly cursorSecret: string;
+  /** `APP_ORIGIN`: the link an invitation's token is returned in points to it. */
+  readonly appOrigin: string;
+  /** The account lookup a resend counts its per-address limit under, which folds an address as the accounts do. */
+  readonly store: Pick<AuthStore, "emailKey">;
+  /** How long an invitation can be accepted for; seven days unless the composition says otherwise. */
+  readonly ttlSeconds?: number;
+}
+
+/** The invitation as the contract's `Invitation` schema has it. */
+export function invitationBody(invitation: InvitationRecord): z.input<typeof InvitationSchema> {
+  const { id, email, role, teamIds, status, invitedBy, expiresAt, createdAt } = invitation;
+  return { id, email, role, teamIds: [...teamIds], status, invitedBy, expiresAt: expiresAt.toISOString(), createdAt: createdAt.toISOString() };
+}
+
+/** The invitation as the contract's `InvitationListItem` schema has it. */
+export function invitationListItemBody(invitation: InvitationListing): z.input<typeof InvitationListItemSchema> {
+  return { ...invitationBody(invitation), expired: invitation.expired };
+}
+
+function sessionOf(context: ChainContext): { readonly accountId: string } {
+  const principal = context.get("principal");
+  if (principal?.kind !== "session") {
+    throw new ProblemError("unauthenticated", UNAUTHENTICATED);
+  }
+  return principal;
+}
+
+function tenantOf(context: ChainContext): RequestTenant {
+  const tenant = context.get("tenant");
+  if (tenant === undefined) {
+    throw new ProblemError("not_found", NO_WORKSPACE);
+  }
+  return tenant;
+}
+
+/** What an action on one invitation needs of the transaction it runs in; undefined when the account's profile is gone. */
+async function actionOf(tx: TenantTx, context: ChainContext, invitationId: string) {
+  const { accountId } = sessionOf(context);
+  const tenant = tenantOf(context);
+  const profile = await accountProfileRepository(tx).profile();
+  if (profile === undefined) {
+    return undefined;
+  }
+  const actor: AuditActor = { type: "account", accountId, label: profile.displayName };
+  const ask: InvitationActionAsk = {
+    workspaceId: tenant.workspaceId,
+    actor,
+    actorLocale: profile.locale,
+    invitationId,
+    ipPrefix: networkPrefixOf(context.get("clientIp")) ?? null,
+  };
+  return { ask, accountId, repository: invitationRepository(tx), audit: createAuditWriter({ store: auditEventRepository(tx), newId: uuidv7 }) };
+}
+
+export function invitationRoutes({ mail, cursorSecret, appOrigin, store, ttlSeconds = INVITATION_TTL_SECONDS }: InvitationRoutesOptions): RouteBinding[] {
+  const cursors = createPageCursorCodec(cursorSecret, "invitations");
+  return [
+    route(createInvitation).handle(async ({ body }, context) => {
+      const { accountId } = sessionOf(context);
+      const tenant = tenantOf(context);
+      const ipPrefix = networkPrefixOf(context.get("clientIp")) ?? null;
+      const outcome = await tenant.withTenant(async (tx) => {
+        const profile = await accountProfileRepository(tx).profile();
+        if (profile === undefined) {
+          return { kind: "forbidden" } as const;
+        }
+        const repository = invitationRepository(tx);
+        const actor: AuditActor = { type: "account", accountId, label: profile.displayName };
+        const result = await inviteMember(
+          { store: repository, audit: createAuditWriter({ store: auditEventRepository(tx), newId: uuidv7 }), newId: uuidv7, ttlSeconds },
+          {
+            workspaceId: tenant.workspaceId,
+            actor,
+            actorLocale: profile.locale,
+            mailed: mail.available,
+            email: body.email,
+            role: body.role,
+            teamIds: body.teamIds ?? [],
+            ipPrefix,
+          },
+        );
+        if ((result.kind === "invited" || result.kind === "resent") && mail.available) {
+          await repository.enqueue([queueInvitationMail(uuidv7(), {
+              invitationId: result.invitation.id,
+              workspaceId: tenant.workspaceId,
+              accountId,
+              locale: result.locale,
+              mailTicket: result.mailTicket,
+            })]);
+        }
+        return result;
+      });
+      switch (outcome.kind) {
+        case "invited":
+        case "resent":
+          return { status: 201, body: invitationBody(outcome.invitation) };
+        case "forbidden":
+          throw new ProblemError("forbidden", NOT_ALLOWED);
+        case "already_member":
+          throw new ProblemError("already_member", ALREADY_MEMBER);
+        case "teams_unavailable":
+          throw new ProblemError("validation_failed", TEAMS_UNAVAILABLE, { errors: [{ path: "teamIds", code: "teams_unavailable" }] });
+        case "invalid_role":
+          throw new ProblemError("validation_failed", INVALID_ROLE, { errors: [{ path: "role", code: "invalid_role" }] });
+      }
+    }),
+
+    route(listInvitations).handle(async ({ query }, context) => {
+      const tenant = tenantOf(context);
+      let afterId: string | null = null;
+      if (query.cursor !== undefined) {
+        const decoded = cursors.decode(query.cursor, tenant.workspaceId);
+        if (decoded === undefined || !z.uuid().safeParse(decoded).success) {
+          throw new ProblemError("bad_request", BAD_CURSOR);
+        }
+        afterId = decoded;
+      }
+      // One more than the page, to know whether another page follows.
+      const outcome = await tenant.withTenant((tx) => listPending({ store: invitationRepository(tx) }, { afterId, limit: query.limit + 1 }));
+      if (outcome.kind === "forbidden") {
+        throw new ProblemError("forbidden", NOT_ALLOWED);
+      }
+      const page = outcome.invitations.slice(0, query.limit);
+      const last = page.at(-1);
+      return {
+        status: 200,
+        body: {
+          items: page.map(invitationListItemBody),
+          nextCursor: outcome.invitations.length > query.limit && last !== undefined ? cursors.encode(last.id, tenant.workspaceId) : null,
+        },
+      };
+    }),
+
+    route(resendInvitation).handle(async ({ params }, context) => {
+      const tenant = tenantOf(context);
+      const invitationId = params.id.toLowerCase();
+      const takeEmailLimit = context.get("takeEmailLimit");
+      if (takeEmailLimit === undefined) {
+        throw new Error("the resend route was reached without the rate-limit stage that counts attempts per email");
+      }
+      // The limit counts under the invited address, which only the invitation knows, so the invitation is read before it is taken and again, locked, by the resend.
+      const target = await tenant.withTenant((tx) => invitationRepository(tx).pending(invitationId));
+      if (target === undefined) {
+        throw new ProblemError("not_found", NO_SUCH_INVITATION);
+      }
+      if (!mail.available) {
+        throw new ProblemError("mail_unavailable", MAIL_UNAVAILABLE);
+      }
+      await takeEmailLimit(context, await emailLimitKey(store, target.email));
+      const outcome = await tenant.withTenant(async (tx) => {
+        const action = await actionOf(tx, context, invitationId);
+        if (action === undefined) {
+          return { kind: "forbidden" } as const;
+        }
+        const result = await resendPending({ store: action.repository, audit: action.audit, newId: uuidv7, ttlSeconds }, action.ask);
+        if (result.kind === "resent") {
+          await action.repository.enqueue([
+            queueInvitationMail(uuidv7(), {
+              invitationId: result.invitation.id,
+              workspaceId: tenant.workspaceId,
+              accountId: action.accountId,
+              locale: result.locale,
+              mailTicket: result.mailTicket,
+            }),
+          ]);
+        }
+        return result;
+      });
+      switch (outcome.kind) {
+        case "resent":
+          return { status: 200, body: invitationBody(outcome.invitation) };
+        case "forbidden":
+          throw new ProblemError("forbidden", NOT_ALLOWED);
+        case "not_found":
+          throw new ProblemError("not_found", NO_SUCH_INVITATION);
+      }
+    }),
+
+    route(createInvitationLink).handle(async ({ params }, context) => {
+      const tenant = tenantOf(context);
+      const outcome = await tenant.withTenant(async (tx) => {
+        const action = await actionOf(tx, context, params.id.toLowerCase());
+        if (action === undefined) {
+          return { kind: "forbidden" } as const;
+        }
+        return makeInvitationLink({ store: action.repository, audit: action.audit, ttlSeconds }, action.ask);
+      });
+      switch (outcome.kind) {
+        case "linked":
+          return { status: 200, body: { invitation: invitationBody(outcome.invitation), link: invitationLink(appOrigin, outcome.token) } };
+        case "forbidden":
+          throw new ProblemError("forbidden", NOT_ALLOWED);
+        case "not_found":
+          throw new ProblemError("not_found", NO_SUCH_INVITATION);
+      }
+    }),
+
+    route(revokeInvitation).handle(async ({ params }, context) => {
+      const tenant = tenantOf(context);
+      const outcome = await tenant.withTenant(async (tx) => {
+        const action = await actionOf(tx, context, params.id.toLowerCase());
+        if (action === undefined) {
+          return { kind: "forbidden" } as const;
+        }
+        return revokePending({ store: action.repository, audit: action.audit }, action.ask);
+      });
+      switch (outcome.kind) {
+        case "revoked":
+        case "already_revoked":
+          return { status: 204 };
+        case "forbidden":
+          throw new ProblemError("forbidden", NOT_ALLOWED);
+        case "not_found":
+          throw new ProblemError("not_found", NO_SUCH_INVITATION);
+      }
+    }),
+  ];
+}

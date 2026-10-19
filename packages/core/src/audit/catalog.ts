@@ -6,7 +6,7 @@
 // section 10. The catalog holds the actions that are recorded so far.
 
 /** The groups the audit log filters by. */
-export const AUDIT_CATEGORIES = ["workspace", "member"] as const;
+export const AUDIT_CATEGORIES = ["workspace", "member", "invitation"] as const;
 
 export type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
 
@@ -36,6 +36,8 @@ const FLAG: AuditMetadataField = { type: "text", minLength: 4, maxLength: 5 };
 /** What happens to a departing member's content: `transfer` or `delete`. */
 const CONTENT_CHOICE: AuditMetadataField = { type: "text", minLength: 6, maxLength: 8 };
 
+// `transferTo` names an account: the deletion of that account removes the field from the stored row (doc 05 section
+// 7.1), so the parser below validates what is written and is not the check for a row that was read back.
 export const AUDIT_ACTIONS = {
   "workspace.created": { category: "workspace", metadata: { name: WORKSPACE_NAME } },
   "workspace.renamed": { category: "workspace", metadata: { from: WORKSPACE_NAME, to: WORKSPACE_NAME } },
@@ -45,6 +47,11 @@ export const AUDIT_ACTIONS = {
   "member.role_changed": { category: "member", metadata: { from: MEMBER_ROLE, to: MEMBER_ROLE } },
   "member.removed": { category: "member", metadata: { content: CONTENT_CHOICE, transferTo: { type: "uuid" } } },
   "member.left": { category: "member", metadata: { content: CONTENT_CHOICE, transferTo: { type: "uuid" } } },
+  // The invited address is personal data and has no field: the event names the invitation and the role it grants.
+  "invitation.created": { category: "invitation", metadata: { role: MEMBER_ROLE } },
+  "invitation.resent": { category: "invitation", metadata: { role: MEMBER_ROLE } },
+  "invitation.link_created": { category: "invitation", metadata: { role: MEMBER_ROLE } },
+  "invitation.revoked": { category: "invitation", metadata: { role: MEMBER_ROLE } },
 } as const satisfies Record<string, AuditActionDefinition>;
 
 export type AuditAction = keyof typeof AUDIT_ACTIONS;

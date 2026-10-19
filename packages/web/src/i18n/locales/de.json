@@ -112,6 +112,44 @@
         "title": "Dein Profil konnte nicht geladen werden",
         "description": "Versuche es erneut. Melde es deiner Administration, wenn es weiter auftritt.",
         "retry": "Erneut versuchen"
+      },
+      "danger": {
+        "title": "Gefahrenbereich"
+      },
+      "delete": {
+        "item": {
+          "title": "Konto löschen",
+          "description": "Löscht dein Konto und meldet dich überall ab. Das lässt sich nicht rückgängig machen."
+        },
+        "action": "Konto löschen",
+        "title": "Dein Konto löschen?",
+        "description": "Das ist unwiderruflich. Dein Konto, deine Sitzungen, API-Tokens und verknüpften Anmeldungen werden sofort gelöscht.",
+        "confirmLabel": "Gib {email} zur Bestätigung ein",
+        "cancel": "Abbrechen",
+        "done": "Dein Konto wurde gelöscht",
+        "workspaces": {
+          "some": "{count, plural, one {Dieser Workspace wird mit deinem Konto gelöscht, weil du sein einziges Mitglied bist:} other {Diese Workspaces werden mit deinem Konto gelöscht, weil du ihr einziges Mitglied bist:}}",
+          "none": "Mit deinem Konto wird kein Workspace gelöscht.",
+          "others": "In allen anderen Workspaces endet deine Mitgliedschaft, und die Lesezeichen und Ordner, die du angelegt hast, bleiben im Workspace.",
+          "loadFailed": {
+            "title": "Die Workspaces konnten nicht geladen werden",
+            "description": "Versuche es erneut. Das Konto lässt sich erst löschen, wenn du siehst, welche Workspaces mit ihm gelöscht werden."
+          }
+        },
+        "error": {
+          "reauthCancelled": "Bestätige, dass du es bist, um dein Konto zu löschen.",
+          "mismatch": "Das ist nicht die E-Mail-Adresse deines Kontos."
+        },
+        "blocked": {
+          "title": "Dein Konto kann noch nicht gelöscht werden",
+          "close": "Schließen",
+          "lastOwner": "Du bist der einzige Eigentümer von Workspaces, die weitere Mitglieder haben. Mache ein anderes Mitglied zum Eigentümer oder lösche den Workspace und lösche dann dein Konto. Es wurde nichts geändert.",
+          "workspaces": "Workspaces zum Übergeben",
+          "members": "Mitglieder von {name} öffnen",
+          "lastInstanceAdmin": "Du bist der einzige Instanzadministrator, und eine Instanz braucht einen. Es wurde nichts geändert.",
+          "billingActive": "Dieses Konto oder einer seiner Workspaces hat ein aktives kostenpflichtiges Abonnement. Kündige zuerst das Abonnement und lösche dann dein Konto.",
+          "other": "Dieser Server erlaubt es gerade nicht, das Konto zu löschen. Es wurde nichts geändert."
+        }
       }
     },
     "preferences": {
@@ -529,6 +567,30 @@
           "action": "Workspace verlassen"
         },
         "done": "Du hast {name} verlassen"
+      },
+      "delete": {
+        "item": {
+          "title": "Workspace löschen",
+          "description": "Löscht den Workspace und alles darin für alle Mitglieder. Das lässt sich nicht rückgängig machen."
+        },
+        "action": "Workspace löschen",
+        "title": "{name} löschen?",
+        "description": "Das lässt sich nicht rückgängig machen. Beim Löschen von {name} wird jede Zeile des Workspace entfernt, darunter Lesezeichen, Ordner und Tags, und alle Mitglieder verlieren sofort den Zugriff.",
+        "confirmLabel": "Tippe {name} zur Bestätigung",
+        "cancel": "Abbrechen",
+        "done": "{name} wird gelöscht",
+        "error": {
+          "title": "Der Workspace wurde nicht gelöscht",
+          "reauthCancelled": "Bestätige, dass du es bist, um den Workspace zu löschen.",
+          "forbidden": "Nur ein Eigentümer kann den Workspace löschen. Die Seite wurde neu geladen.",
+          "gone": "Dieser Workspace existiert nicht mehr oder wird bereits gelöscht."
+        },
+        "blocked": {
+          "title": "{name} kann noch nicht gelöscht werden",
+          "close": "Schließen",
+          "billingActive": "Dieser Workspace hat ein aktives kostenpflichtiges Abonnement. Kündige zuerst das Abonnement und lösche den Workspace danach.",
+          "other": "Dieser Server erlaubt das Löschen des Workspace gerade nicht. Es wurde nichts geändert."
+        }
       }
     },
     "members": {

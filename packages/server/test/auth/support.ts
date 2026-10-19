@@ -30,6 +30,7 @@ export interface SeedOptions {
   readonly password?: string | null;
   readonly disabled?: boolean;
   readonly emailVerified?: boolean;
+  readonly instanceAdmin?: boolean;
 }
 
 export function storeFor(database: TestDatabase): AuthStore {
@@ -46,9 +47,9 @@ export async function seedAccount(database: TestDatabase, options: SeedOptions =
   await database.owner.begin(async (tx) => {
     await tx`SELECT set_config('app.account_id', ${id}, true)`;
     await tx`
-      INSERT INTO accounts (id, email, display_name, password_hash, disabled_at, email_verified_at)
+      INSERT INTO accounts (id, email, display_name, password_hash, disabled_at, email_verified_at, is_instance_admin)
       VALUES (${id}, ${email}, 'Test account', ${passwordHash}, ${options.disabled === true ? new Date() : null},
-              ${options.emailVerified === true ? new Date() : null})`;
+              ${options.emailVerified === true ? new Date() : null}, ${options.instanceAdmin === true})`;
   });
   return { id, email, password: password ?? "" };
 }

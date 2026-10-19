@@ -63,7 +63,9 @@ export interface WorkspaceSettingsServerOptions {
   readonly leave?: (call: number, request: Request) => Response | Promise<Response>;
   /** Answers `POST /workspace/transfer-ownership` instead of transferring; `call` counts from 1. */
   readonly transfer?: (call: number, request: Request) => Response | Promise<Response>;
-  /** Where the session acts once the caller has left: in another workspace, or in none. */
+  /** Answers `DELETE /workspace` instead of accepting the deletion; `call` counts from 1. */
+  readonly workspaceDelete?: (call: number, request: Request) => Response | Promise<Response>;
+  /** Where the session acts once the caller has left or the workspace is deleted: in another workspace, or in none. */
   readonly afterLeaving?: "other" | "none";
 }
 
@@ -168,6 +170,12 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
         return problem(404, "not_found", "req-404");
       }
       return options.get === undefined ? json(workspace(), { headers: { ETag: `"${String(version)}"` } }) : options.get(call);
+    }
+    if (pathname === WORKSPACE_PATH && request.method === "DELETE") {
+      const answer = options.workspaceDelete === undefined ? new Response(null, { status: 202 }) : await options.workspaceDelete(call, request);
+      // An accepted deletion marks the workspace as being deleted: the session no longer acts in it.
+      left = left || answer.ok;
+      return answer;
     }
     if (pathname === WORKSPACE_PATH && request.method === "PATCH") {
       if (options.patch !== undefined) {

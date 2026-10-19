@@ -11,6 +11,7 @@ import { createAuthorization, type EntitlementCheck } from "./authorize.ts";
 import { bodyLimits } from "./body-limits.ts";
 import { createCrossSiteProtection } from "./cross-site.ts";
 import { createSecurityHeaders } from "./headers.ts";
+import { createIdempotency } from "./idempotency.ts";
 import { failRequest, notFoundProblem, responseStage, type ResponseValidation } from "./problem.ts";
 import { createRateLimiting, type RateLimitState, type TakeEmailLimit } from "./rate-limit.ts";
 import { createRequestContext } from "./request-context.ts";
@@ -38,6 +39,7 @@ export const REQUEST_STAGES = [
   "tenant-resolution",
   "validation",
   "authorization",
+  "idempotency",
 ] as const;
 
 export const RESPONSE_STAGES = ["response", "audit-telemetry"] as const;
@@ -302,6 +304,7 @@ export function installChain(
     "tenant-resolution": createTenantResolution({ resolver: tenantResolver, withTenant }),
     validation,
     authorization: createAuthorization({ ...(entitlements === undefined ? {} : { entitlements }), ...(now === undefined ? {} : { now }) }),
+    idempotency: createIdempotency({ withTenant }),
   };
   const requestStages = REQUEST_STAGES.map((name) => ({
     name,

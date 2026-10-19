@@ -4,6 +4,7 @@ import { Link, useRouter } from "@tanstack/react-router";
 import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { meQuery } from "../account/me.ts";
+import { DeleteWorkspaceDialog } from "./delete-workspace-dialog.tsx";
 import { EndMembershipDialog } from "./end-membership-dialog.tsx";
 import { useAllMembers } from "./use-all-members.ts";
 import type { Workspace } from "./workspace.ts";
@@ -11,7 +12,7 @@ import type { Workspace } from "./workspace.ts";
 /**
  * The `danger-zone` of `/settings/workspace` (doc 03 section 11.6): Leave workspace, with the content choice of
  * doc 02 section 3.6. The last owner cannot leave; the zone says so, and points at the members, where another
- * member is made an owner first.
+ * member is made an owner first. Owners also see Delete workspace, with its typed confirmation; nobody else is offered it.
  */
 export function WorkspaceDangerZone({ workspace }: { workspace: Workspace }): ReactElement {
   const { t } = useTranslation();
@@ -21,6 +22,7 @@ export function WorkspaceDangerZone({ workspace }: { workspace: Workspace }): Re
   // Only an owner's Leave depends on whether another owner exists; the dialog loads the members for everyone else.
   const all = useAllMembers({ enabled: owner });
   const [leaving, setLeaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const viewerId = me.data?.account.id;
   const soleOwner = owner && viewerId !== undefined && all.complete && !all.members.some((member) => member.role === "owner" && member.accountId !== viewerId);
@@ -47,6 +49,19 @@ export function WorkspaceDangerZone({ workspace }: { workspace: Workspace }): Re
         setLeaving(true);
       },
     },
+    ...(owner
+      ? [
+          {
+            id: "delete",
+            title: t("settings.workspace.delete.item.title"),
+            description: t("settings.workspace.delete.item.description"),
+            actionLabel: t("settings.workspace.delete.action"),
+            onSelect: () => {
+              setDeleting(true);
+            },
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -61,6 +76,14 @@ export function WorkspaceDangerZone({ workspace }: { workspace: Workspace }): Re
             setLeaving(false);
           }}
           target={{ kind: "leave", viewerId, workspaceName: workspace.name }}
+        />
+      ) : null}
+      {deleting && owner ? (
+        <DeleteWorkspaceDialog
+          onClose={() => {
+            setDeleting(false);
+          }}
+          workspace={workspace}
         />
       ) : null}
     </>

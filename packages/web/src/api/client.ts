@@ -12,7 +12,14 @@ type ProblemFields = {
   requestId: string;
   errors?: readonly FieldError[] | undefined;
   retryAfterSeconds?: number | undefined;
+  workspaces?: unknown;
 };
+
+/** A workspace a `last_owner` problem names. */
+export interface ProblemWorkspace {
+  readonly id: string;
+  readonly name: string;
+}
 
 const PROBLEM_CONTENT_TYPE = "application/problem+json";
 const CONFIG_PATH = "/api/config";
@@ -48,6 +55,17 @@ export class ApiProblemError extends Error {
   }
 }
 
+/** A problem that names workspaces, as the `last_owner` answer of the account deletion does. */
+export class ApiWorkspacesProblemError extends ApiProblemError {
+  readonly workspaces: readonly ProblemWorkspace[];
+
+  constructor(problem: ConstructorParameters<typeof ApiProblemError>[0], workspaces: readonly ProblemWorkspace[]) {
+    super(problem);
+    this.name = "ApiWorkspacesProblemError";
+    this.workspaces = workspaces;
+  }
+}
+
 export type ApiClient = Client<paths>;
 
 export interface ApiClientOptions {
@@ -65,6 +83,14 @@ function isFieldError(value: unknown): value is FieldError {
   }
   const { path, code } = value as Record<string, unknown>;
   return typeof path === "string" && typeof code === "string";
+}
+
+function isProblemWorkspace(value: unknown): value is ProblemWorkspace {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const { id, name } = value as Record<string, unknown>;
+  return typeof id === "string" && typeof name === "string";
 }
 
 function isProblem(value: unknown): value is ProblemFields {
@@ -142,11 +168,12 @@ function createProblemMiddleware(onUnauthenticated: (() => void) | undefined): M
         onUnauthenticated?.();
       }
       if (problem !== undefined) {
-        throw new ApiProblemError({
+        const fields = {
           ...problem,
           errors: Array.isArray(problem.errors) ? problem.errors.filter(isFieldError) : undefined,
           retryAfterSeconds: parseRetryAfter(response.headers.get("Retry-After")),
-        });
+        };
+        throw Array.isArray(problem.workspaces) ? new ApiWorkspacesProblemError(fields, problem.workspaces.filter(isProblemWorkspace)) : new ApiProblemError(fields);
       }
       return undefined;
     },

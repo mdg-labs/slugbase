@@ -53,6 +53,11 @@ existing line by adding its PR number.
 - **cleanup replaces the error** — a cleanup step in a catch block (a ROLLBACK on a new connection) can itself reject, so its error replaces the one the caller rethrows or skips the recovery check that follows — PR 491
 - **lock order** — two functions lock the same pair of rows in opposite orders (a child row through an `UPDATE`, then its parent `FOR UPDATE`, against parent first, then a `DELETE` of its children), so concurrent calls for one parent deadlock and one aborts — PR 494
 - **race settled in one shape only** — a re-read after racing writes reconciles the case where both writers' values are present but not the case where the racer replaced ours, so the racer's value stands and the log reports ours as applied — PR 500
+- **policies disagree on visibility** — a write that one table's RLS policy still admits reads a related row through another table's policy that already hides it (a workspace being deleted), so the result carries NULL where its type promises a value and the job using it fails on every retry — PR 514
+
+## Optional capabilities
+
+- **renewal assumes delivery** — a write path replaces a credential on the assumption that an optional capability (mail) delivers the new one, so where the capability is off it ends the only working credential (a copied link) and delivers nothing, while a sibling path refuses the same case — PR 514
 
 ## Tests
 

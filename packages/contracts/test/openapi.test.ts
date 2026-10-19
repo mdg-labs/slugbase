@@ -161,6 +161,59 @@ describe("declaration checks", () => {
     }
   });
 
+  describe("idempotency", () => {
+    const keyed: OperationDefinition = { ...base, idempotency: true, responses: { 201: jsonResponse("created", Pong), 409: problemResponse("conflict"), 422: problemResponse("invalid") } };
+    const entryOf = (op: OperationDefinition): Obj | undefined =>
+      (buildOpenApiDocument([op])["paths"] as Record<string, Record<string, Obj>>)["/api/v1/things"]?.["post"];
+
+    it("publishes the Idempotency-Key header as an optional UUID parameter and x-slugbase-idempotency, and leaves both out when absent or false", () => {
+      const entry = entryOf(keyed);
+      expect(entry?.["x-slugbase-idempotency"]).toBe(true);
+      expect(entry?.["parameters"]).toEqual([
+        expect.objectContaining({ name: "Idempotency-Key", in: "header", required: false, schema: { type: "string", format: "uuid" } }),
+      ]);
+      for (const op of [{ ...keyed, idempotency: false }, omit(keyed, "idempotency")]) {
+        expect(entryOf(op)).not.toHaveProperty("x-slugbase-idempotency");
+        expect(entryOf(op)).not.toHaveProperty("parameters");
+      }
+    });
+
+    it("keeps the header beside the parameters the operation declares", () => {
+      const withHeaders = { ...keyed, request: { headers: z.object({ "If-Match": z.string() }) } };
+      const names = ((entryOf(withHeaders)?.["parameters"] ?? []) as Obj[]).map((parameter) => parameter["name"]);
+      expect(names).toEqual(["If-Match", "Idempotency-Key"]);
+    });
+
+    it("refuses an idempotency that is not a boolean", () => {
+      for (const value of ["yes", 1, null]) {
+        expect(problemsOf([{ ...keyed, idempotency: value }]).join("\n")).toContain("x-slugbase-idempotency (idempotency) must be a boolean");
+      }
+    });
+
+    it("refuses an idempotent get, and one with no account to keep the key for", () => {
+      expect(problemsOf([{ ...keyed, method: "get" }]).join("\n")).toContain("cannot be a get");
+      for (const auth of ["anonymous", "machine"] as const) {
+        expect(problemsOf([{ ...keyed, auth }]).join("\n")).toContain(`idempotency cannot be declared on a ${auth} operation`);
+      }
+    });
+
+    it("refuses an idempotent operation that declares the header itself, has no 409 or documents a header on a success", () => {
+      const declaredAgain = { ...keyed, request: { headers: z.object({ "idempotency-key": z.string() }) } };
+      expect(problemsOf([declaredAgain]).join("\n")).toContain("is published by idempotency");
+      expect(problemsOf([{ ...keyed, responses: { 201: jsonResponse("created", Pong), 422: problemResponse("invalid") } }]).join("\n")).toContain("declares its 409 response");
+      const headed = { ...keyed, responses: { ...keyed.responses, 201: jsonResponse("created", Pong, { headers: { Location: { description: "where", schema: z.string() } } }) } };
+      expect(problemsOf([headed]).join("\n")).toContain("response 201 documents headers");
+    });
+
+    it("is declared by createInvitation in the committed document, as a header parameter of that operation only", () => {
+      const parsed = JSON.parse(committed) as { paths: Record<string, Record<string, Obj>> };
+      const declaring = Object.values(parsed.paths).flatMap((item) => Object.values(item)).filter((entry) => entry["x-slugbase-idempotency"] === true);
+      expect(declaring.map((entry) => entry["operationId"])).toEqual(["createInvitation"]);
+      const parameters = declaring[0]?.["parameters"] as Obj[];
+      expect(parameters.map((parameter) => [parameter["name"], parameter["in"], parameter["required"]])).toEqual([["Idempotency-Key", "header", false]]);
+    });
+  });
+
   it("accepts a positive integer maxBodyBytes and leaves it out of the document", () => {
     const built = buildOpenApiDocument([defineOperation({ ...base, maxBodyBytes: 5 * 1024 * 1024 })]);
     expect(JSON.stringify(built)).not.toContain("5242880");

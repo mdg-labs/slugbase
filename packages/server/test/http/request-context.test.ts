@@ -228,6 +228,16 @@ describe("the request log line", () => {
     expect(output.lines.join("")).not.toContain("private-name-qx82");
   });
 
+  it("never records the token of an invitation link: the page the email links to is a path the logger and the span name by a constant", async () => {
+    const { server, output } = compose();
+    const token = "A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6Q7r8S9t0U1v";
+    const response = await server.fetch(new Request(`http://localhost/invite/${token}?next=${token}`, { headers: { referer: `http://localhost/invite/${token}` } }));
+    expect(response.status).toBe(404);
+    expect(output.requests()[0]).toMatchObject({ route: "unmatched", status: 404 });
+    expect(output.lines.join("")).not.toContain(token);
+    expect(JSON.stringify(exporter.getFinishedSpans().map((span) => [span.name, span.attributes]))).not.toContain(token);
+  });
+
   it("carries the final status when a handler fails, and nothing of the error", async () => {
     const { server, output } = compose();
     const response = await server.fetch(new Request("http://localhost/api/v1/boom"));

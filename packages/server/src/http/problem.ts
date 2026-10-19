@@ -85,6 +85,8 @@ export type ProblemFieldError = NonNullable<Problem["errors"]>[number];
 export interface ProblemErrorOptions {
   /** Per-field errors for `validation_failed` and per-field domain errors. */
   readonly errors?: readonly ProblemFieldError[];
+  /** Members of the code beside the standard ones, JSON values the author wrote for the caller, such as the workspaces that block a `last_owner`; they never replace a standard member. */
+  readonly members?: Readonly<Record<string, unknown>>;
 }
 
 /**
@@ -96,6 +98,7 @@ export class ProblemError extends Error {
   readonly code: ProblemCode;
   readonly detail: string;
   readonly errors: readonly ProblemFieldError[] | undefined;
+  readonly members: Readonly<Record<string, unknown>> | undefined;
 
   constructor(code: ProblemCode, detail: string, options: ProblemErrorOptions = {}) {
     super(detail);
@@ -103,6 +106,7 @@ export class ProblemError extends Error {
     this.code = code;
     this.detail = detail;
     this.errors = options.errors;
+    this.members = options.members;
   }
 }
 
@@ -111,15 +115,17 @@ export interface MappedProblem {
   readonly code: ProblemCode;
   readonly detail: string;
   readonly errors?: readonly ProblemFieldError[];
+  readonly members?: Readonly<Record<string, unknown>>;
   /** True for a `500`: it is logged and reported through the error port. */
   readonly unexpected: boolean;
 }
 
-function mapped(code: ProblemCode, detail: string, errors?: readonly ProblemFieldError[]): MappedProblem {
+function mapped(code: ProblemCode, detail: string, errors?: readonly ProblemFieldError[], members?: Readonly<Record<string, unknown>>): MappedProblem {
   return {
     code,
     detail,
     ...(errors === undefined ? {} : { errors }),
+    ...(members === undefined ? {} : { members }),
     unexpected: problemStatus(code) === 500,
   };
 }
@@ -141,7 +147,7 @@ export function fieldErrors(error: z.core.$ZodError): ProblemFieldError[] {
 /** The problem an error answers with: validation, a deliberate failure, an unavailable port, or a `500`. */
 export function mapError(error: unknown): MappedProblem {
   if (error instanceof ProblemError) {
-    return mapped(error.code, error.detail, error.errors);
+    return mapped(error.code, error.detail, error.errors, error.members);
   }
   if (error instanceof z.core.$ZodError) {
     return mapped("validation_failed", VALIDATION_FAILED_DETAIL, fieldErrors(error));
@@ -165,9 +171,10 @@ export function requestIdOf(context: ChainContext): string {
 }
 
 /** Builds the `application/problem+json` response for a mapped problem. */
-export function problemDocument(requestId: string, problem: Pick<MappedProblem, "code" | "detail" | "errors">): Response {
+export function problemDocument(requestId: string, problem: Pick<MappedProblem, "code" | "detail" | "errors" | "members">): Response {
   const status = problemStatus(problem.code);
   const body: Problem = {
+    ...problem.members,
     type: `${PROBLEM_TYPE_BASE}${problem.code}`,
     title: PROBLEM_TITLES[problem.code],
     status,

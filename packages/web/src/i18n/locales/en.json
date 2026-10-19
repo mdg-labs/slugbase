@@ -112,6 +112,44 @@
         "title": "Your profile could not be loaded",
         "description": "Try again. If this continues, tell your administrator.",
         "retry": "Try again"
+      },
+      "danger": {
+        "title": "Danger zone"
+      },
+      "delete": {
+        "item": {
+          "title": "Delete account",
+          "description": "Deletes your account and signs you out everywhere. This cannot be undone."
+        },
+        "action": "Delete account",
+        "title": "Delete your account?",
+        "description": "This is irreversible. Your account, sessions, API tokens and linked sign-ins are deleted right away.",
+        "confirmLabel": "Type {email} to confirm",
+        "cancel": "Cancel",
+        "done": "Your account was deleted",
+        "workspaces": {
+          "some": "{count, plural, one {This workspace is deleted with your account, because you are its only member:} other {These workspaces are deleted with your account, because you are their only member:}}",
+          "none": "No workspace is deleted with your account.",
+          "others": "In every other workspace your membership ends, and the bookmarks and folders you created stay with the workspace.",
+          "loadFailed": {
+            "title": "The workspaces could not be loaded",
+            "description": "Try again. The account cannot be deleted until you can see which workspaces go with it."
+          }
+        },
+        "error": {
+          "reauthCancelled": "Confirm it is you to delete your account.",
+          "mismatch": "That is not the email address of your account."
+        },
+        "blocked": {
+          "title": "Your account cannot be deleted yet",
+          "close": "Close",
+          "lastOwner": "You are the only owner of workspaces that have other members. Make another member an owner, or delete the workspace, then delete your account. Nothing was changed.",
+          "workspaces": "Workspaces to hand over",
+          "members": "Open the members of {name}",
+          "lastInstanceAdmin": "You are the only instance admin, and an instance needs one. Nothing was changed.",
+          "billingActive": "This account or one of its workspaces has an active paid subscription. Cancel the subscription first, then delete your account.",
+          "other": "This server does not allow the account to be deleted right now. Nothing was changed."
+        }
       }
     },
     "preferences": {
@@ -529,6 +567,30 @@
           "action": "Leave workspace"
         },
         "done": "You left {name}"
+      },
+      "delete": {
+        "item": {
+          "title": "Delete workspace",
+          "description": "Deletes the workspace and everything in it for every member. This cannot be undone."
+        },
+        "action": "Delete workspace",
+        "title": "Delete {name}?",
+        "description": "This is irreversible. Deleting {name} removes every row of the workspace, including its bookmarks, folders and tags, and every member loses access right away.",
+        "confirmLabel": "Type {name} to confirm",
+        "cancel": "Cancel",
+        "done": "{name} is being deleted",
+        "error": {
+          "title": "The workspace was not deleted",
+          "reauthCancelled": "Confirm it is you to delete the workspace.",
+          "forbidden": "Only an owner can delete the workspace. The page has been reloaded.",
+          "gone": "This workspace no longer exists or is already being deleted."
+        },
+        "blocked": {
+          "title": "{name} cannot be deleted yet",
+          "close": "Close",
+          "billingActive": "This workspace has an active paid subscription. Cancel the subscription first, then delete the workspace.",
+          "other": "This server does not allow the workspace to be deleted right now. Nothing was changed."
+        }
       }
     },
     "members": {

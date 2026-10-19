@@ -223,7 +223,7 @@ describe("the retention purge of a worker without modules", () => {
 
     await until(() => purgeLogs(logger).length > 0, 15_000, "the purge job to run");
     expect(await sessionIds()).toEqual([live, otherLive].sort());
-    expect(purgeLogs(logger).map((entry) => entry.fields)).toEqual([{ deleted: { sessions: 3, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0, audit_events: 0 } }]);
+    expect(purgeLogs(logger).map((entry) => entry.fields)).toEqual([{ deleted: { sessions: 3, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0, workspace_invitations: 0, idempotency_keys: 0, audit_events: 0 } }]);
     await expectOnlyEnqueuedRuns(since, [run]);
   });
 
@@ -287,7 +287,7 @@ describe("the retention purge of a worker without modules", () => {
       const logs = await runOnce({ AUDIT_RETENTION_DAYS: "30" });
 
       expect(logs.map((entry) => entry.fields)).toEqual([
-        { deleted: { sessions: 0, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0, audit_events: 2 } },
+        { deleted: { sessions: 0, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0, workspace_invitations: 0, idempotency_keys: 0, audit_events: 2 } },
       ]);
       expect(await auditIds()).toEqual([recent, fresh].sort());
     });
@@ -300,7 +300,7 @@ describe("the retention purge of a worker without modules", () => {
       const logs = await runOnce({ AUDIT_RETENTION_DAYS: "0" });
 
       expect(logs.map((entry) => entry.fields)).toEqual([
-        { deleted: { sessions: 0, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0, audit_events: 0 } },
+        { deleted: { sessions: 0, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0, workspace_invitations: 0, idempotency_keys: 0, audit_events: 0 } },
       ]);
       expect(await auditIds()).toEqual([old]);
     });
@@ -340,8 +340,8 @@ describe("the retention purge of a worker without modules", () => {
     await until(() => purgeLogs(logger).length === 2, 15_000, "the second run");
     expect(await sessionIds()).toEqual([live]);
     expect(purgeLogs(logger).map((entry) => entry.fields)).toEqual([
-      { deleted: { sessions: BATCH, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0, audit_events: 0 } },
-      { deleted: { sessions: extra, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0, audit_events: 0 } },
+      { deleted: { sessions: BATCH, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0, workspace_invitations: 0, idempotency_keys: 0, audit_events: 0 } },
+      { deleted: { sessions: extra, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0, workspace_invitations: 0, idempotency_keys: 0, audit_events: 0 } },
     ]);
     await expectOnlyEnqueuedRuns(since, [first, second]);
   }, 60_000);

@@ -188,6 +188,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the workspace's pending invitations */
+        get: operations["listInvitations"];
+        put?: never;
+        /** Invite a person to the workspace by email */
+        post: operations["createInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invitations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a pending invitation */
+        delete: operations["revokeInvitation"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invitations/{id}/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Get a link to give a pending invitation's invitee */
+        post: operations["createInvitationLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invitations/{id}/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Email a pending invitation again with a new link */
+        post: operations["resendInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -199,7 +268,8 @@ export interface paths {
         get: operations["getMe"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete the account */
+        delete: operations["deleteMe"];
         options?: never;
         head?: never;
         /** Change the signed-in account's profile and preferences */
@@ -900,6 +970,20 @@ export interface components {
              */
             workspaceId?: string;
         };
+        CreateInvitationRequest: {
+            /**
+             * Format: email
+             * @description The address to invite; case does not matter
+             */
+            email: string;
+            /**
+             * @description The role the invited person gets on accepting: admin or member, never owner
+             * @enum {string}
+             */
+            role: "admin" | "member";
+            /** @description The teams the invited person joins on accepting. Until team membership exists a list with an entry is refused with 422 validation_failed */
+            teamIds?: string[];
+        };
         CreateWorkspaceRequest: {
             /** @description The workspace's name, 1 to 64 characters; surrounding whitespace is removed and a name that is blank after that is refused */
             name: string;
@@ -937,6 +1021,10 @@ export interface components {
             workspaceId: string;
             /** @description The name of that workspace */
             workspaceName: string;
+        };
+        DeleteAccountRequest: {
+            /** @description The account's own email address, typed to confirm the deletion; case and surrounding space do not matter */
+            email: string;
         };
         DisableMfaRequest: {
             /** @description The current six-digit code of the authenticator app; spaces between the digits are ignored */
@@ -995,6 +1083,89 @@ export interface components {
             items: components["schemas"]["Identity"][];
             /** @description Passed as `cursor` to get the next page; null on the last page */
             nextCursor: string | null;
+        };
+        Invitation: {
+            /**
+             * Format: date-time
+             * @description When the invitation was first made, RFC 3339 UTC
+             */
+            createdAt: string;
+            /** @description The invited address */
+            email: string;
+            /**
+             * Format: date-time
+             * @description When the invitation stops working, RFC 3339 UTC
+             */
+            expiresAt: string;
+            /**
+             * Format: uuid
+             * @description The invitation's identifier
+             */
+            id: string;
+            /** @description The account that sent the invitation last, null once that account is deleted */
+            invitedBy: string | null;
+            /**
+             * @description The role the invited person gets on accepting
+             * @enum {string}
+             */
+            role: "owner" | "admin" | "member";
+            /**
+             * @description Where the invitation stands; only a pending one can be accepted
+             * @enum {string}
+             */
+            status: "pending" | "accepted" | "revoked";
+            /** @description The teams the invited person joins on accepting */
+            teamIds: string[];
+        };
+        InvitationLink: {
+            /** @description The invitation, with the new expiry */
+            invitation: components["schemas"]["Invitation"];
+            /**
+             * Format: uri
+             * @description The address the invited person opens to accept: the application's origin and /invite/ followed by the token. Returned this once and never again; a later request for a link makes another token and ends this one
+             */
+            link: string;
+        };
+        InvitationList: {
+            /** @description One page of the workspace's pending invitations, newest first */
+            items: components["schemas"]["InvitationListItem"][];
+            /** @description Passed as `cursor` to get the next page; null on the last page */
+            nextCursor: string | null;
+        };
+        InvitationListItem: {
+            /**
+             * Format: date-time
+             * @description When the invitation was first made, RFC 3339 UTC
+             */
+            createdAt: string;
+            /** @description The invited address */
+            email: string;
+            /** @description Whether the expiry has passed when the list is read; the invitation is still pending and can be resent, given a link or revoked, but not accepted */
+            expired: boolean;
+            /**
+             * Format: date-time
+             * @description When the invitation stops working, RFC 3339 UTC
+             */
+            expiresAt: string;
+            /**
+             * Format: uuid
+             * @description The invitation's identifier
+             */
+            id: string;
+            /** @description The account that sent the invitation last, null once that account is deleted */
+            invitedBy: string | null;
+            /**
+             * @description The role the invited person gets on accepting
+             * @enum {string}
+             */
+            role: "owner" | "admin" | "member";
+            /**
+             * @description Where the invitation stands; only a pending one can be accepted
+             * @enum {string}
+             */
+            status: "pending" | "accepted" | "revoked";
+            /** @description The teams the invited person joins on accepting */
+            teamIds: string[];
         };
         LoginRequest: {
             /** @description The account's email address; case does not matter */
@@ -2194,6 +2365,454 @@ export interface operations {
             };
         };
     };
+    listInvitations: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of the workspace's pending invitations, newest first, each with whether its expiry has passed; never a token */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationList"];
+                };
+            };
+            /** @description The request was malformed, or the cursor is not one this workspace issued */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the workspace does not hold the members.invite entitlement (entitlement_required) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The query did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createInvitation: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description A client-generated UUID that makes a retry safe. A retry with the same key and the same request answers the stored successful response with Idempotency-Replayed: true instead of running again; the same key with another request is 409 idempotency_conflict. A key is kept for 24 hours and belongs to the account */
+                "Idempotency-Key"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateInvitationRequest"];
+            };
+        };
+        responses: {
+            /** @description The invitation, pending, with a new token that expires in 7 days and is emailed once as a link to /invite/<token> when the deployment can send mail; the token is in no response. An address that already had a pending invitation is a resend: the same invitation, with the role and teams of this request, a new expiry and a new token, and the earlier link stops working. A retry with the same Idempotency-Key and the same request answers this response again with Idempotency-Replayed: true and sends no second email */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Invitation"];
+                };
+            };
+            /** @description The request was malformed, or the Idempotency-Key header is not a UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the workspace does not hold the members.invite entitlement (entitlement_required) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The address belongs to a member of the workspace (already_member), or the Idempotency-Key was used before for another request (idempotency_conflict); nothing is written */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation: an address that is not one, a role other than admin or member (owner included), or a teamIds with an entry, which cannot be invited into yet */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable, or an earlier request with the same Idempotency-Key is still running */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    revokeInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The invitation is revoked and its link is refused from the next request. An invitation that was revoked before is answered the same way, with nothing written, until the retention purge removes its row, 30 days after the revocation */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token, or the caller is a member and not an admin or owner of the workspace (forbidden) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The workspace has no pending or revoked invitation with this identifier: another workspace's, an accepted one, one the retention purge removed and one that never existed are answered alike */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The identifier did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createInvitationLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The invitation with a new expiry, 7 days from now, and the link of a new token, returned this once and never again. The earlier link stops working at once, and no email is sent. It works on a deployment that can send mail as on one that cannot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationLink"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the workspace does not hold the members.invite entitlement (entitlement_required) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The workspace has no pending invitation with this identifier: another workspace's, an accepted or revoked one and one that never existed are answered alike */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The identifier did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    resendInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The invitation with a new expiry, 7 days from now. Its token is replaced, so the earlier link stops working at once, and one email carries the new link to the invited address; the token is in no response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Invitation"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the workspace does not hold the members.invite entitlement (entitlement_required) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The workspace has no pending invitation with this identifier: another workspace's, an accepted or revoked one and one that never existed are answered alike */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The identifier did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests, from this address or to the invited address; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable, or the deployment cannot send email (mail_unavailable) and nothing was changed; the link operation serves such a deployment */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     getMe: {
         parameters: {
             query?: never;
@@ -2233,6 +2852,93 @@ export interface operations {
                 };
             };
             /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeleteAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description The account is deleted, with its sessions (the response clears the session cookie), API tokens, identities, emailed tokens and backup codes. Every workspace where it was the only member is deleted with it, the way a deleted workspace is: it is hidden at once and a background job removes its rows. In every other workspace its membership ends and the bookmarks and folders it created stay with the workspace without an owner. The audit events it caused keep the name they carry and lose the reference to the account and the network they were made from. `account.deleted` is announced to the modules that own content. The deletion cannot be undone */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself, or the credential is an API token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The account is the only owner of a workspace that has other members (last_owner), and the problem document names each such workspace in its `workspaces` member as `{ id, name }`, so the owner can transfer the ownership or delete the workspace first; or a deployment extension refuses the deletion (billing_active), for the account or for a workspace that would be deleted with it. Nothing is changed in either case */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation; the address typed is not the account's own (validation_failed with the field code email_mismatch in errors[]); or the account is the only instance admin, which would leave the instance without one (validation_failed with the field code last_instance_admin in errors[]). Nothing is changed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable, or a deployment extension that is consulted before the deletion did not answer in time; nothing is changed */
             503: {
                 headers: {
                     [name: string]: unknown;

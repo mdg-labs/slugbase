@@ -691,6 +691,7 @@ export interface TypedConfirmProps {
     // (undocumented)
     cancelLabel: ReactNode;
     children?: ReactNode;
+    confirmDisabled?: boolean;
     // (undocumented)
     confirmLabel: ReactNode;
     description: ReactNode;

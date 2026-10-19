@@ -288,6 +288,48 @@
       "when": 1792400942305,
       "tag": "20261019090902_add_workspace_deletion",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1792417227317,
+      "tag": "20261019134027_add_account_deletion",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1792421626547,
+      "tag": "20261019145346_add_last_instance_admin_check",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1792426332476,
+      "tag": "20261019161212_add_workspace_invitations",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1792430666888,
+      "tag": "20261019172426_add_idempotency_keys",
+      "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1792435656384,
+      "tag": "20261019184736_add_invitation_revocation",
+      "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1792437755121,
+      "tag": "20261019192235_add_invitation_mail_ticket",
+      "breakpoints": true
     }
   ]
 }

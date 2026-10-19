@@ -148,6 +148,7 @@ The server's middleware chain, in order. The order is part of the security model
 | 7 | **Tenant resolution** | The tenant-resolution port derives the **active workspace** from the session (or, for API tokens, from the single workspace the token is bound to — no override header, Q40); membership and role are loaded once per request |
 | 8 | **Validation** | A bearer request to an operation that requires an account or member principal and declares no `scope` is answered `403 forbidden` first, whatever its body says; an `anonymous` or `machine` operation ignores the bearer principal (the rest of the token policy is step 9); then the Zod request schema; unknown fields rejected (`strict`) |
 | 9 | **Authorization** | Route-declared policy (`requires: { role: 'admin' }`, `entitlement: 'sharing.teams'`, `instanceAdmin: true`) checked before the handler; record-level checks inside the service layer (§5.4) |
+| 9a | **Idempotency** | For an operation that declares `idempotency` and a request that carries `Idempotency-Key` (doc 04 §6.3): claims the key in the transaction the handler then runs in, answers a stored response with `Idempotency-Replayed: true` or `409 idempotency_conflict` without running the handler, and stores the handler's `2xx` response in the same commit. It sits after authorization so a replay is authorized like the first request |
 | 10 | **Handler → service → repository** | Business logic in services; all data access through the workspace-scoped repository inside a tenant transaction (§5.3) |
 | 11 | **Response** | Zod response schema validates in development and CI (strips undeclared fields in production); errors mapped to RFC 9457 problem details (doc 04 §3) with a stable `code` and an English `detail` (the SPA renders localised text from the code, doc 02 §15); no stack traces or internal identifiers in responses |
 | 12 | **Audit and telemetry** | Audit events for significant actions are written in the same transaction as the change; metrics and logs (redacting the fields listed in doc 10 §4) |
@@ -279,7 +280,7 @@ Entitlement keys are a closed, typed catalog in `@slugbase/core` (`entitlements/
 | `ai.suggestions` | workspace | boolean | `true` (still needs a configured `AiSuggestPort` and the workspace toggle) | The AI suggestion endpoint and UI |
 | `sharing.members` | workspace | boolean | `true` | Sharing a bookmark or folder with an individual member |
 | `sharing.teams` | workspace | boolean | `true` | Sharing with teams; teams as sharing targets |
-| `members.invite` | workspace | boolean | `true` | Creating invitations and accepting them |
+| `members.invite` | workspace | boolean | `true` | Creating, listing, resending and linking invitations, and accepting them; revoking one is not gated |
 | `teams.manage` | workspace | boolean | `true` | Teams administration (create, edit, membership) |
 | `audit.log` | workspace | boolean | `true` | Reading the audit log (audit events are always written; only reading is gated) |
 | `seats.max` | workspace | number or `unlimited` | `unlimited` | The member ceiling (accepted invitations count, pending ones do not) |
@@ -297,7 +298,7 @@ These are not entitlements on any edition: personal API tokens, folders, tags, s
 | Create workspace | `workspaces.owned < workspaces.ownMax` | `422 workspace_limit_reached` |
 | AI suggestion | `ai.suggestions`, a configured port, the workspace toggle and the member not opted out | `403 entitlement_required`, or `503 ai_unavailable` |
 | Share with a member or a team | `sharing.members` or `sharing.teams` | `403 entitlement_required` |
-| Create or accept an invitation | `members.invite` on both; `seats.used < seats.max` on acceptance, inside the acceptance transaction through the seat check (§13.1) | `403 entitlement_required`; `422 seat_limit_reached` |
+| Create, list, resend or link an invitation, or accept one | `members.invite` on each; `seats.used < seats.max` on acceptance, inside the acceptance transaction through the seat check (§13.1) | `403 entitlement_required`; `422 seat_limit_reached` |
 | Teams administration | `teams.manage` | `403 entitlement_required` |
 | Read the audit log | `audit.log` | `403 entitlement_required` |
 

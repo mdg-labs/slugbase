@@ -27,6 +27,8 @@ export interface TypedConfirmProps {
   cancelLabel: ReactNode;
   /** Called when the member confirms with the expected text typed; the dialog stays open until the app closes it, so a failure can be shown in place. */
   onConfirm: () => void;
+  /** Keeps the confirm button disabled although the expected text is typed, while something the action depends on is not known yet. */
+  confirmDisabled?: boolean;
   /** Whether the confirm button is styled as the destructive action. */
   destructive?: boolean;
   /** Shows the wait on the confirm button and keeps the dialog from being dismissed meanwhile. */
@@ -44,9 +46,9 @@ export function matchesExpected(typed: string, expected: string): boolean {
 
 type BodyProps = Omit<TypedConfirmProps, "open" | "onOpenChange">;
 
-function Body({ title, description, expected, inputLabel, confirmLabel, cancelLabel, onConfirm, destructive = false, loading = false, children, error }: BodyProps): ReactElement {
+function Body({ title, description, expected, inputLabel, confirmLabel, cancelLabel, onConfirm, confirmDisabled = false, destructive = false, loading = false, children, error }: BodyProps): ReactElement {
   const [typed, setTyped] = useState("");
-  const matches = matchesExpected(typed, expected);
+  const matches = matchesExpected(typed, expected) && !confirmDisabled;
 
   function submit(event: SyntheticEvent): void {
     event.preventDefault();

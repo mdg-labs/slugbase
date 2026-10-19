@@ -27,6 +27,7 @@ const DOCUMENTED_ORDER: readonly StageName[] = [
   "tenant-resolution",
   "validation",
   "authorization",
+  "idempotency",
   "handler",
   "response",
   "audit-telemetry",
@@ -62,6 +63,7 @@ function recorder(trace: string[]): StageImplementations {
     "tenant-resolution": request("tenant-resolution"),
     validation: request("validation"),
     authorization: request("authorization"),
+    idempotency: request("idempotency"),
     response: response("response"),
     "audit-telemetry": response("audit-telemetry"),
   };
@@ -282,6 +284,7 @@ describe("hooks in the chain", () => {
       "tenant-resolution",
       "validation",
       "authorization",
+      "idempotency",
       "handler",
       "seatCheck",
       "response",

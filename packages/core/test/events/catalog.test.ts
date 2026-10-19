@@ -15,9 +15,17 @@ const ACCOUNT = "0192f3a0-bbbb-7000-8000-000000000001";
 
 describe("the domain event catalog", () => {
   it("announces account.created with the account and how it came to exist", () => {
-    expect(DOMAIN_EVENT_NAMES).toEqual(["account.created", "workspace.created", "workspace.deleted", "member.left"]);
+    expect(DOMAIN_EVENT_NAMES).toEqual(["account.created", "account.deleted", "workspace.created", "workspace.deleted", "member.left"]);
     expect(Object.keys(DOMAIN_EVENTS["account.created"])).toEqual(["accountId", "path"]);
     expect(ACCOUNT_CREATION_PATHS).toEqual(["self-registration", "invitation", "oidc", "setup"]);
+  });
+
+  it("announces account.deleted with the account and nothing else", () => {
+    expect(Object.keys(DOMAIN_EVENTS["account.deleted"])).toEqual(["accountId"]);
+    expect(parseDomainEventPayload("account.deleted", { accountId: ACCOUNT })).toEqual({ accountId: ACCOUNT });
+    for (const bad of [{}, { accountId: ACCOUNT, email: "ada@example.test" }, { accountId: "someone" }]) {
+      expect(() => parseDomainEventPayload("account.deleted", bad)).toThrow(DomainEventPayloadError);
+    }
   });
 
   it("announces workspace.created with the workspace and the account it was created for", () => {
@@ -57,7 +65,7 @@ describe("the domain event catalog", () => {
 
   it("knows its event names", () => {
     expect(isDomainEventName("account.created")).toBe(true);
-    for (const other of ["account.deleted", "toString", "constructor", "", 7, null, undefined]) {
+    for (const other of ["account.updated", "toString", "constructor", "", 7, null, undefined]) {
       expect(isDomainEventName(other)).toBe(false);
     }
   });

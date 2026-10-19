@@ -739,3 +739,37 @@ export const unlinkIdentity = defineOperation({
     503: problemResponse("The service is temporarily unavailable"),
   },
 });
+
+export const DeleteAccountRequestSchema = z
+  .strictObject({
+    email: z.string().min(1).max(320).describe("The account's own email address, typed to confirm the deletion; case and surrounding space do not matter"),
+  })
+  .meta({ id: "DeleteAccountRequest" });
+
+export const deleteMe = defineOperation({
+  method: "delete",
+  path: "/api/v1/me",
+  operationId: "deleteMe",
+  tag: "me",
+  summary: "Delete the account",
+  auth: "account",
+  rate: "write",
+  reauth: true,
+  request: { body: DeleteAccountRequestSchema },
+  responses: {
+    204: emptyResponse(
+      "The account is deleted, with its sessions (the response clears the session cookie), API tokens, identities, emailed tokens and backup codes. Every workspace where it was the only member is deleted with it, the way a deleted workspace is: it is hidden at once and a background job removes its rows. In every other workspace its membership ends and the bookmarks and folders it created stay with the workspace without an owner. The audit events it caused keep the name they carry and lose the reference to the account and the network they were made from. `account.deleted` is announced to the modules that own content. The deletion cannot be undone",
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"),
+    403: problemResponse("The request did not come from the application itself, or the credential is an API token"),
+    409: problemResponse(
+      "The account is the only owner of a workspace that has other members (last_owner), and the problem document names each such workspace in its `workspaces` member as `{ id, name }`, so the owner can transfer the ownership or delete the workspace first; or a deployment extension refuses the deletion (billing_active), for the account or for a workspace that would be deleted with it. Nothing is changed in either case",
+    ),
+    422: problemResponse(
+      "The body did not pass validation; the address typed is not the account's own (validation_failed with the field code email_mismatch in errors[]); or the account is the only instance admin, which would leave the instance without one (validation_failed with the field code last_instance_admin in errors[]). Nothing is changed",
+    ),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable, or a deployment extension that is consulted before the deletion did not answer in time; nothing is changed"),
+  },
+});

@@ -12,6 +12,7 @@ import {
   runRlsOnlyMatrix,
   type ApiCall,
   type ApiResponse,
+  type MatrixFailure,
   type Probe,
   type TenantFixture,
 } from "../src/tenancy.ts";
@@ -47,9 +48,14 @@ describe("the matrix over the committed contract and the repository registry", (
   // and that every tenant-scoped operation is called by every principal of A,
   // the operations that name a member of B (the role change, the ownership transfer, the removal and the leaving) once for each member of B. The responder answers as the
   // chain does for a member of B: 403 to a token (they declare no scope), to a plain member where the policy is the admin's (the leaving is a
-  // member's) and to an admin where it is the owner's (the ownership transfer), 404 to the rest.
-  const answersAsTheChainDoes = (call: ApiCall): Promise<ApiResponse> =>
-    Promise.resolve({
+  // member's) and to an admin where it is the owner's (the ownership transfer), 404 to the rest. The invitation names a team of B in its body, and the
+  // server refuses any team with 422 because no team can be invited into yet and none can be told from another, so the responder gives an admin and
+  // an owner session that answer (the member and the tokens are refused with 403 before the handler).
+  const answersAsTheChainDoes = (call: ApiCall): Promise<ApiResponse> => {
+    if (call.operation.operationId === "createInvitation" && !("scope" in call.principal) && call.principal.role !== "member") {
+      return Promise.resolve({ status: 422 });
+    }
+    return Promise.resolve({
       status:
         "scope" in call.principal ||
         (call.principal.role === "member" && call.operation.operationId !== "leaveWorkspace") ||
@@ -57,19 +63,40 @@ describe("the matrix over the committed contract and the repository registry", (
           ? 403
           : 404,
     });
+  };
 
   it(`API mode classifies the ${String(classification.summary.total)} operations of openapi.json and calls each tenant-scoped one once for every principal of A`, async () => {
-    const report = await runApiMatrix({ document, fixture: scoped.fixture, request: answersAsTheChainDoes, mapping: { accountId: "member", transferTo: "member" } });
+    // The probe fixture holds no team and no invitation, so workspace B is given one of each: the matrix puts the team in the invitation's `teamIds`
+    // and the invitation in the path of the operations that resend, link and revoke one.
+    const fixture = {
+      ...scoped.fixture,
+      b: {
+        ...scoped.fixture.b,
+        identifiers: [
+          ...scoped.fixture.b.identifiers,
+          { kind: "team" as const, id: "0192f3a0-cccc-7000-8000-000000000005" },
+          { kind: "invitation" as const, id: "0192f3a0-cccc-7000-8000-000000000007" },
+        ],
+      },
+    };
+    const matrix = await runApiMatrix({ document, fixture, request: answersAsTheChainDoes, mapping: { accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation" } });
+    // The matrix expects 404 for an identifier of workspace B. The one exception is the 422 every team is refused with (see above), for the two sessions
+    // of A that reach the handler of the invitation; it is named exactly, and every other failure stays one.
+    const teamRefusal = (failure: MatrixFailure): boolean => failure.subject.startsWith("createInvitation ") && failure.kind === "unexpected_status" && /answered 422, expected 404/.test(failure.detail);
+    expect(matrix.failures.filter(teamRefusal).map((failure) => failure.detail.slice(0, "as owner of A".length))).toEqual(["as owner of A", "as admin of A"]);
+    const report = { ...matrix, failures: matrix.failures.filter((failure) => !teamRefusal(failure)) };
     expect(classification.problems).toEqual([]);
     expect(report.classified.total).toBe(classification.operations.length);
     expect(report.classified.total).toBeGreaterThan(0);
     expect(Object.values(report.classified.byKind).reduce((sum, count) => sum + count, 0)).toBe(report.classified.total);
     // The operations on /workspace (reading, renaming and deleting it) and /workspace/settings and the members list act in the workspace of the request and take no identifier of B;
-    // the role change, the ownership transfer and the removal name a member by account identifier, the removal and the leaving a recipient.
-    expect(report.classified.byKind["tenant-scoped"]).toBe(10);
-    // Three sessions and six tokens of A, once on each of the six operations that name no member, once for each of the three members of B on the role
-    // change, on the ownership transfer and on the leaving, and once for each pair of members of B (path and recipient) on the removal.
-    expect(report.attempts).toBe(9 * 6 + 9 * (3 + 3 + 3 + 3 * 3));
+    // the role change, the ownership transfer and the removal name a member by account identifier, the removal and the leaving a recipient, the invitation a team,
+    // and the resend, the link and the revocation of an invitation name an invitation; the invitation list takes no identifier.
+    expect(report.classified.byKind["tenant-scoped"]).toBe(15);
+    // Three sessions and six tokens of A, once on each of the seven operations that name no member, once for each of the three members of B on the role
+    // change, on the ownership transfer and on the leaving, once for each pair of members of B (path and recipient) on the removal, once for the
+    // team of B on the invitation, and once for the invitation of B on each of the resend, the link and the revocation.
+    expect(report.attempts).toBe(9 * 8 + 9 * (3 + 3 + 3 + 3 * 3 + 3));
     assertMatrixPassed(report);
   });
 

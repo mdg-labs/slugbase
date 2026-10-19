@@ -1,18 +1,19 @@
-import { classifyOperations, createProbe, loadOpenApiDocument, runApiMatrix, runTokenMatrix, type Probe } from "@slugbase/testing/tenancy";
+import { classifyOperations, createProbe, loadOpenApiDocument, runApiMatrix, runTokenMatrix, type MatrixFailure, type Probe } from "@slugbase/testing/tenancy";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createAccountOnlyTenantResolver } from "../../src/auth/tenant-resolver.ts";
 import { createServer, type Server, type ServerModule } from "../../src/create-server.ts";
 import { HookResult } from "../../src/hooks/index.ts";
+import type { EntitlementCheck } from "../../src/http/authorize.ts";
 import { ProblemError } from "../../src/http/problem.ts";
 import { runMigrations } from "../../src/migrate/index.ts";
 import { route } from "../../src/routes/register.ts";
 import { urlOf } from "../migrate/support.ts";
 import { recordingLogger, serverConfig } from "../support.ts";
 import { buildDocument, type TestDocument } from "./build-document.ts";
-import { readOperations } from "./document.ts";
+import { readOperations, type ContractFailure } from "./document.ts";
 import { seedAccount, seedMembership, seedWorkspace } from "../auth/support.ts";
-import { FIXTURES, WALKER_ACCOUNT, WALKER_WORKSPACE_ID } from "./fixtures.ts";
+import { B_INVITATION_ID, FIXTURES, UNKNOWN_TEAM_ID, WALKER_ACCOUNT, WALKER_WORKSPACE_ID } from "./fixtures.ts";
 import { matrixRequest, tokenMatrixRequest } from "./matrix.ts";
 import { getProbeAdminRow, getProbeRow, probeFixtures, probeModule, probeOperations } from "./probe-module.ts";
 import { createStubWorld, type StubWorld } from "./stubs.ts";
@@ -41,10 +42,10 @@ beforeAll(async () => {
   world = createStubWorld(probe.fixture);
 }, HOOK_TIMEOUT_MS);
 
-function serve(modules: readonly ServerModule[], document?: TestDocument, options: { readonly memberships?: boolean } = {}): Server {
-  // The walker signs in once for each operation that needs a session, and calls each of the mfa bucket's operations several times,
+function serve(modules: readonly ServerModule[], document?: TestDocument, options: { readonly memberships?: boolean; readonly entitlements?: EntitlementCheck } = {}): Server {
+  // The walker signs in once for each operation that needs a session, and calls each of the mfa and reset buckets' operations several times,
   // more often than the default limits of one address allow.
-  const config = serverConfig({ NODE_ENV: "test", DATABASE_URL: appUrl(database()), RATE_LIMIT_LOGIN_IP: "100/min", RATE_LIMIT_MFA_IP: "100/min", RATE_LIMIT_MFA_ACCOUNT: "1000/hour" });
+  const config = serverConfig({ NODE_ENV: "test", DATABASE_URL: appUrl(database()), RATE_LIMIT_LOGIN_IP: "100/min", RATE_LIMIT_MFA_IP: "100/min", RATE_LIMIT_MFA_ACCOUNT: "1000/hour", RATE_LIMIT_RESET_IP: "1000/hour" });
   return createServer({
     config,
     // The stub resolver knows the workspaces of the fixture and no session of a real sign-in; the walk of the committed document resolves each
@@ -55,7 +56,13 @@ function serve(modules: readonly ServerModule[], document?: TestDocument, option
     logger: recordingLogger(),
     database: tenantDatabase(database()),
     ...(document === undefined ? {} : { openApiDocument: document }),
+    ...(options.entitlements === undefined ? {} : { entitlements: options.entitlements }),
   });
+}
+
+/** The entitlement source of the walks and the matrix: it holds the entitlement the committed document declares, for every account but the ones named. */
+function entitlementsExcept(accounts: ReadonlySet<string>): EntitlementCheck {
+  return (entitlement, subject) => entitlement === "members.invite" && !accounts.has(subject.accountId);
 }
 
 /** The constructed Critical of doc 10 section 6: the handler looks the row up as the table owner, in every workspace. */
@@ -81,11 +88,14 @@ describe("the walker over the committed document", () => {
   // sends the session cookie it is given where a policy needs a principal. Each such operation gets an
   // account of its own: the valid request of the sign-out ends the session it is made with, and that of
   // "sign out everywhere" ends every other session of the account.
-  async function sessionHooks(server: Server): Promise<PolicyHooks> {
+  async function sessionHooks(server: Server, unentitled: Set<string>): Promise<PolicyHooks> {
     await seedAccount(database(), WALKER_ACCOUNT);
     const needsReauth = new Set(readOperations(committed).operations.filter((operation) => operation.reauth === true).map((operation) => operation.operationId));
-    const signIn = async (email: string, reauthenticate: boolean, member = false, role?: "owner" | "member"): Promise<string> => {
+    const signIn = async (email: string, reauthenticate: boolean, member = false, role?: "owner" | "member", entitled = true): Promise<string> => {
       const account = await seedAccount(database(), { email, password: WALKER_ACCOUNT.password });
+      if (!entitled) {
+        unentitled.add(account.id);
+      }
       if (role !== undefined) {
         // A tenant-scoped operation acts in the workspace of the request, which the server resolves from the walker's memberships: its own, with
         // the settings row creating a workspace makes.
@@ -132,6 +142,8 @@ describe("the walker over the committed document", () => {
     const cookies = new Map<string, string>();
     const stale = new Map<string, string>();
     const below = new Map<string, string>();
+    const without = new Map<string, string>();
+    const declaring = new Set(readOperations(committed).operations.filter((operation) => operation.entitlement !== undefined).map((operation) => operation.operationId));
     for (const { operationId, kind, policy } of classifyOperations(committed).operations) {
       if (kind === "tenant-scoped") {
         // Its owner, and the principal just below the policy: a member of a workspace of its own below `admin`, an account with no workspace below `member`.
@@ -142,6 +154,10 @@ describe("the walker over the committed document", () => {
           stale.set(operationId, await signIn(`walker-${operationId}-stale@example.test`.toLowerCase(), false, false, "owner"));
         }
         below.set(operationId, await signIn(`walker-${operationId}-below@example.test`.toLowerCase(), false, false, policy === "member" ? undefined : "member"));
+        if (declaring.has(operationId)) {
+          // An owner of a workspace of its own whose account the entitlement source does not hold the entitlement for: the policy admits it, the entitlement does not.
+          without.set(operationId, await signIn(`walker-${operationId}-unentitled@example.test`.toLowerCase(), false, false, "owner", false));
+        }
         continue;
       }
       if (kind !== "account-level") {
@@ -166,6 +182,7 @@ describe("the walker over the committed document", () => {
       authorized: ({ operationId }) => credentialsOf(cookies, operationId),
       withoutReauth: ({ operationId }) => credentialsOf(stale, operationId),
       tooLowRole: ({ operationId }) => credentialsOf(below, operationId),
+      withoutEntitlement: ({ operationId }) => credentialsOf(without, operationId),
       // The owner of the walker's own workspace names a member of workspace B, which it does not act in.
       workspaceA: ({ operationId }) => credentialsOf(cookies, operationId),
     };
@@ -176,17 +193,25 @@ describe("the walker over the committed document", () => {
     const operations = classifyOperations(committed).operations;
     expect(Object.keys(FIXTURES).sort()).toEqual(operations.map((operation) => operation.operationId).sort());
 
-    const server = serve([], undefined, { memberships: true });
-    const hooks = await sessionHooks(server);
+    const unentitled = new Set<string>();
+    const server = serve([], undefined, { memberships: true, entitlements: entitlementsExcept(unentitled) });
+    const hooks = await sessionHooks(server, unentitled);
     const report = await walkContract({ document: committed, send: (request) => server.fetch(request), origin, fixtures: FIXTURES, hooks });
-    expect(report.failures).toEqual([]);
+    // The walker holds the team it names for workspace B to the 404 it expects for an identifier of another workspace. A team is refused with 422
+    // whichever workspace holds it, because no team can be invited into yet and none can be told from another, which discloses nothing. That answer
+    // is the one difference of the walk, and the exception names exactly it (the status and the code that come with it).
+    const teamRefusal = (failure: ContractFailure): boolean =>
+      failure.subject === "createInvitation (POST /api/v1/invitations), resource of workspace B" &&
+      (failure.detail === "answered 422, expected 404" || failure.detail === 'the problem code is "validation_failed", expected not_found');
+    expect(report.failures.filter(teamRefusal).map((failure) => failure.kind)).toEqual(["unexpected_status", "wrong_code"]);
+    expect(report.failures.filter((failure) => !teamRefusal(failure))).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each anonymous operation and for the sign-in; each of the thirty-three operations that need a session
-    // also answers 401 without one, each of the nine that declare re-authentication answers 401 reauth_required without it, and each of
-    // the ten that need a role in the workspace answers the principal just below it (404 below member, 403 below admin), and each of the four
-    // that name a member or a recipient answers 404 for one of workspace B.
-    expect(report.calls).toBe(operations.length + 56);
+    // One valid request for each anonymous operation and for the sign-in; each of the thirty-nine operations that need a session
+    // also answers 401 without one, each of the ten that declare re-authentication answers 401 reauth_required without it, and each of
+    // the fifteen that need a role in the workspace answers the principal just below it (404 below member, 403 below admin), and each of the eight
+    // that name a member, a recipient, a team or an invitation answers for one of workspace B; each of the four that declare an entitlement answers 403 to an account without it.
+    expect(report.calls).toBe(operations.length + 76);
   }, WALK_TIMEOUT_MS);
 });
 
@@ -304,8 +329,8 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
   // identifier, so the matrix has none of workspace B to put in them: it makes each call as every principal of workspace A, reads and changes A's
   // workspace and settings, and holds that nothing of B is quoted in an answer. The role change and the removal name a member by account identifier and
   // the removal and the leaving may name a recipient, so the matrix puts each member of B in each and holds that A's principals are answered 404
-  // (403 below the admin policy, and for a token). In both, B's rows, its
-  // settings, its members and its audit events are as they were.
+  // (403 below the admin policy, and for a token). The invitation operations name an invitation of B by identifier, which is a real pending one
+  // that the seed writes. In both, B's rows, its settings, its members, its invitations and its audit events are as they were.
   async function contentOfB(): Promise<string> {
     const rows = await database().owner.begin(async (tx) => {
       await tx`SET LOCAL ROLE slugbase_system`;
@@ -314,7 +339,8 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
           coalesce((SELECT string_agg(w::text, '|') FROM workspaces w WHERE w.id = ${probe.fixture.b.id}), '') ||
           coalesce((SELECT string_agg(s::text, '|') FROM workspace_settings s WHERE s.workspace_id = ${probe.fixture.b.id}), '') ||
           coalesce((SELECT string_agg(m::text, '|' ORDER BY m.account_id) FROM workspace_members m WHERE m.workspace_id = ${probe.fixture.b.id}), '') ||
-          coalesce((SELECT string_agg(e::text, '|' ORDER BY e.id) FROM audit_events e WHERE e.workspace_id = ${probe.fixture.b.id}), '')
+          coalesce((SELECT string_agg(e::text, '|' ORDER BY e.id) FROM audit_events e WHERE e.workspace_id = ${probe.fixture.b.id}), '') ||
+          coalesce((SELECT string_agg(i::text, '|' ORDER BY i.id) FROM workspace_invitations i WHERE i.workspace_id = ${probe.fixture.b.id}), '')
         ) AS digest`;
     });
     return rows[0]?.digest ?? "";
@@ -339,9 +365,16 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
         }
       });
     }
+    // One pending invitation of workspace B, which the matrix names in the invitation operations of A.
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`
+        INSERT INTO workspace_invitations (id, workspace_id, email, role, token_hash, expires_at)
+        VALUES (${B_INVITATION_ID}, ${probe.fixture.b.id}, 'matrix-b-invitee@example.test', 'member', sha256('matrix-b-invitation'::bytea), now() + interval '7 days')`;
+    });
   }
 
-  it("passes for the ten tenant-scoped operations, and leaves workspace B, its settings, its members and its audit log as they were", async () => {
+  it("passes for the fifteen tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations and its audit log as they were", async () => {
     await seedFixtureWorkspaces();
     const before = await contentOfB();
     // The deletion of the workspace takes no identifier, so the matrix repeats it as every principal of A (the sessions of the matrix have just
@@ -354,23 +387,43 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
         hookRefusals: { deletionGuard: ["billing_active"] },
         register: () => ({ routes: [], authenticators: world.authenticators }),
       },
-    ]);
+    ], undefined, { entitlements: entitlementsExcept(new Set()) });
+    // The fixture of the probe holds no team, so workspace B is given one: the matrix puts it in the invitation's `teamIds`. It holds no invitation
+    // either, and is given the one the seed wrote.
+    const fixture = {
+      ...probe.fixture,
+      b: { ...probe.fixture.b, identifiers: [...probe.fixture.b.identifiers, { kind: "team" as const, id: UNKNOWN_TEAM_ID }, { kind: "invitation" as const, id: B_INVITATION_ID }] },
+    };
 
-    const report = await runApiMatrix({
+    const matrix = await runApiMatrix({
       document: committed,
-      fixture: probe.fixture,
-      mapping: { rowId: "bookmark", accountId: "member", transferTo: "member" },
+      fixture,
+      mapping: { rowId: "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation" },
       request: matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: FIXTURES, credentialsOf: (principal) => world.credentialsOf(principal) }),
     });
 
+    // A team is refused with 422 whichever workspace holds it, because no team can be invited into yet and none can be told from another, which
+    // discloses nothing; the matrix expects 404 for an identifier of workspace B. The exception names exactly that answer, for the two sessions of A
+    // that reach the handler (the member and the tokens are refused with 403 before it, as the matrix expects).
+    const teamRefusal = (failure: MatrixFailure): boolean => failure.subject.startsWith("createInvitation ") && failure.kind === "unexpected_status" && /answered 422, expected 404/.test(failure.detail);
+    const report = { ...matrix, failures: matrix.failures.filter((failure) => !teamRefusal(failure)) };
+    expect(matrix.failures.filter(teamRefusal).map((failure) => failure.detail.slice(0, "as owner of A".length))).toEqual(["as owner of A", "as admin of A"]);
     expect(report.failures).toEqual([]);
-    expect(report.classified.byKind["tenant-scoped"]).toBe(10);
-    // the three sessions and the six tokens (a read and a read-write one of each role) of A, once on each of the six operations that name no member,
+    expect(report.classified.byKind["tenant-scoped"]).toBe(15);
+    // the three sessions and the six tokens (a read and a read-write one of each role) of A, once on each of the seven operations that name no member
+    // (the invitation list among them) and on the invitation, which names the one team of B,
     // and on the operations that name members of B once for each of them: the role change, and the leaving, which names a recipient, once for each
     // of the three, and the ownership transfer, which names the member who becomes an owner, once for each of the three; the removal names both
-    // a member and a recipient, once for each pair
-    expect(report.attempts).toBe(9 * 6 + 9 * (3 + 3 + 3 + 3 * 3));
+    // a member and a recipient, once for each pair; the resend, the link and the revocation of an invitation name the one invitation of B once each
+    expect(report.attempts).toBe(9 * 8 + 9 * (3 + 3 + 3 + 3 * 3 + 3));
     expect(await contentOfB()).toBe(before);
+    // Every invitation the matrix tried to make was refused before anything was written, in A as in B, and the one invitation of B is still its own,
+    // pending, with the token hash the seed gave it.
+    const written = await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      return tx<{ workspace_id: string; id: string; status: string }[]>`SELECT workspace_id, id, status FROM workspace_invitations WHERE workspace_id IN (${probe.fixture.a.id}, ${probe.fixture.b.id})`;
+    });
+    expect(written.map((row) => [row.workspace_id, row.id, row.status])).toEqual([[probe.fixture.b.id, B_INVITATION_ID, "pending"]]);
     // The requests reached the handlers: the sessions of A renamed A and turned its AI suggestions off, and the tokens changed nothing.
     const [changed] = await database().owner.begin(async (tx) => {
       await tx`SET LOCAL ROLE slugbase_system`;

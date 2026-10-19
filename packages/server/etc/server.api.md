@@ -60,7 +60,7 @@ export interface BearerAuthenticator {
 export type BuildInfo = z.output<typeof VersionInfoSchema>;
 
 // @public
-export const CHAIN_STAGES: readonly ["request-context", "security-headers", "body-limits", "ip-rate-limiting", "authentication", "cross-site-protection", "rate-limiting", "tenant-resolution", "validation", "authorization", "handler", "response", "audit-telemetry"];
+export const CHAIN_STAGES: readonly ["request-context", "security-headers", "body-limits", "ip-rate-limiting", "authentication", "cross-site-protection", "rate-limiting", "tenant-resolution", "validation", "authorization", "idempotency", "handler", "response", "audit-telemetry"];
 
 // @public (undocumented)
 export type ChainContext = Context<ChainEnv>;
@@ -167,6 +167,7 @@ export interface CreateServerOptions {
     // (undocumented)
     readonly config: ServerConfig;
     readonly database?: Database;
+    readonly entitlements?: EntitlementCheck;
     readonly hookTimeoutMs?: number;
     // (undocumented)
     readonly logger: Logger;
@@ -258,6 +259,17 @@ export type DeletionRefusalCode = (typeof DELETION_REFUSAL_CODES)[number];
 
 // @public
 export const DEVELOPMENT_BUILD_INFO: BuildInfo;
+
+// @public
+export type EntitlementCheck = (entitlement: string, subject: EntitlementSubject) => boolean | Promise<boolean>;
+
+// @public
+export interface EntitlementSubject {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly workspaceId?: string;
+}
 
 // @public
 export function envBoolean(): z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>;
@@ -730,11 +742,14 @@ export class ProblemError extends Error {
     readonly detail: string;
     // (undocumented)
     readonly errors: readonly ProblemFieldError[] | undefined;
+    // (undocumented)
+    readonly members: Readonly<Record<string, unknown>> | undefined;
 }
 
 // @public (undocumented)
 export interface ProblemErrorOptions {
     readonly errors?: readonly ProblemFieldError[];
+    readonly members?: Readonly<Record<string, unknown>>;
 }
 
 // @public (undocumented)

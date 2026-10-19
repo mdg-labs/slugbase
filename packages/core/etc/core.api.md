@@ -16,6 +16,88 @@ export const ACCOUNT_NOTIFICATIONS: readonly ["passwordChanged", "mfaEnabled", "
 export type AccountCreationPath = (typeof ACCOUNT_CREATION_PATHS)[number];
 
 // @public (undocumented)
+export interface AccountDeletionAsk {
+    readonly accountEmail: string;
+    readonly accountId: string;
+    readonly typedEmail: string;
+}
+
+// @public (undocumented)
+export interface AccountDeletionDependencies<Code extends string> {
+    readonly guard: (input: AccountDeletionGuardInput) => Promise<WorkspaceDeletionGuardResult<Code>>;
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: AccountDeletionStore;
+}
+
+// @public
+export type AccountDeletionGuardInput = {
+    readonly kind: "account";
+    readonly accountId: string;
+} | {
+    readonly kind: "workspace";
+    readonly accountId: string;
+    readonly workspaceId: string;
+};
+
+// @public (undocumented)
+export type AccountDeletionOutcome<Code extends string> =
+/** The account is deleted; `workspaces` are the workspaces that were deleted with it. */
+    {
+    readonly kind: "deleted";
+    readonly workspaces: readonly AccountDeletionWorkspace[];
+}
+/** The typed address is not the account's; nothing was read or written. */
+| {
+    readonly kind: "email_mismatch";
+}
+/** The account is the only instance admin; nothing was written. */
+| {
+    readonly kind: "last_instance_admin";
+}
+/** The account is the only owner of these workspaces, which have other members; nothing was written. */
+| {
+    readonly kind: "last_owner";
+    readonly workspaces: readonly AccountDeletionWorkspace[];
+}
+/** The guard refused with `code`, for the account or for one of the workspaces; nothing was written. */
+| {
+    readonly kind: "refused";
+    readonly code: Code;
+}
+/** The account is gone, or the workspaces changed under the request; nothing was written. */
+| {
+    readonly kind: "unavailable";
+};
+
+// @public (undocumented)
+export interface AccountDeletionRequest {
+    readonly events: readonly DomainEvent<"account.deleted">[];
+    readonly soleWorkspaceIds: readonly string[];
+}
+
+// @public
+export interface AccountDeletionScope {
+    readonly blocking: readonly AccountDeletionWorkspace[];
+    readonly lastInstanceAdmin: boolean;
+    readonly soleMember: readonly AccountDeletionWorkspace[];
+}
+
+// @public (undocumented)
+export interface AccountDeletionStore {
+    delete(request: AccountDeletionRequest): Promise<boolean>;
+    scope(): Promise<AccountDeletionScope>;
+}
+
+// @public
+export interface AccountDeletionWorkspace {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public (undocumented)
 export type AccountNotification = (typeof ACCOUNT_NOTIFICATIONS)[number];
 
 // @public
@@ -222,10 +304,50 @@ export const AUDIT_ACTIONS: {
             };
         };
     };
+    readonly "invitation.created": {
+        readonly category: "invitation";
+        readonly metadata: {
+            readonly role: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
+    };
+    readonly "invitation.resent": {
+        readonly category: "invitation";
+        readonly metadata: {
+            readonly role: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
+    };
+    readonly "invitation.link_created": {
+        readonly category: "invitation";
+        readonly metadata: {
+            readonly role: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
+    };
+    readonly "invitation.revoked": {
+        readonly category: "invitation";
+        readonly metadata: {
+            readonly role: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
+    };
 };
 
 // @public
-export const AUDIT_CATEGORIES: readonly ["workspace", "member"];
+export const AUDIT_CATEGORIES: readonly ["workspace", "member", "invitation"];
 
 // @public (undocumented)
 export type AuditAction = keyof typeof AUDIT_ACTIONS;
@@ -405,6 +527,9 @@ export function createAuditWriter(input: AuditWriterDependencies): AuditWriter;
 // @public
 export function createBreachedPasswords(records: Uint8Array): BreachedPasswords;
 
+// @public
+export function createInvitationLink(input: Omit<InvitationActionDependencies, "newId">, ask: InvitationActionAsk): Promise<InvitationLinkOutcome>;
+
 // @public (undocumented)
 export function createPasswordPolicy(input?: PasswordPolicyOptions): PasswordPolicy;
 
@@ -434,6 +559,9 @@ export interface CredentialToken {
 // @public (undocumented)
 export type CredentialTokenPurpose = (typeof CREDENTIAL_TOKEN_PURPOSES)[number];
 
+// @public
+export function deleteAccount<Code extends string>(input: AccountDeletionDependencies<Code>, ask: AccountDeletionAsk): Promise<AccountDeletionOutcome<Code>>;
+
 // @public (undocumented)
 export const DOMAIN_EVENT_NAMES: readonly DomainEventName[];
 
@@ -446,6 +574,11 @@ export const DOMAIN_EVENTS: {
         readonly path: {
             readonly type: "enum";
             readonly values: readonly ["self-registration", "invitation", "oidc", "setup"];
+        };
+    };
+    readonly "account.deleted": {
+        readonly accountId: {
+            readonly type: "uuid";
         };
     };
     readonly "workspace.created": {
@@ -718,11 +851,242 @@ export interface IdentityProviderInfo {
     readonly id: string;
 }
 
+// @public
+export const INVITATION_ROLES: readonly ["admin", "member"];
+
+// @public
+export const INVITATION_TTL_SECONDS: number;
+
+// @public (undocumented)
+export interface InvitationActionAsk {
+    // (undocumented)
+    readonly actor: AuditActor;
+    readonly actorLocale: string;
+    // (undocumented)
+    readonly invitationId: string;
+    readonly ipPrefix: string | null;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface InvitationActionDependencies {
+    readonly audit: AuditWriter;
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: InvitationManagementStore;
+    readonly ttlSeconds: number;
+}
+
+// @public (undocumented)
+export interface InvitationAsk {
+    // (undocumented)
+    readonly actor: AuditActor;
+    readonly actorLocale: string;
+    readonly email: string;
+    readonly ipPrefix: string | null;
+    readonly mailed: boolean;
+    // (undocumented)
+    readonly role: string;
+    // (undocumented)
+    readonly teamIds: readonly string[];
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface InvitationDependencies {
+    readonly audit: AuditWriter;
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: InvitationStore;
+    readonly ttlSeconds: number;
+}
+
+// @public
+export function invitationLink(origin: string, token: string): string;
+
+// @public (undocumented)
+export type InvitationLinkOutcome =
+/** The invitation has a new expiry and the token whose value is `token`, which no stored row holds. */
+    {
+    readonly kind: "linked";
+    readonly invitation: InvitationRecord;
+    readonly token: string;
+} | {
+    readonly kind: "forbidden";
+} | {
+    readonly kind: "not_found";
+};
+
+// @public
+export interface InvitationListing extends InvitationRecord {
+    // (undocumented)
+    readonly expired: boolean;
+}
+
+// @public (undocumented)
+export type InvitationListOutcome = {
+    readonly kind: "listed";
+    readonly invitations: readonly InvitationListing[];
+}
+/** The account that asks is not an admin or owner of the workspace; nothing was read. */
+| {
+    readonly kind: "forbidden";
+};
+
+// @public
+export interface InvitationManagementStore {
+    actorRole(): Promise<WorkspaceRole | undefined>;
+    inviteeLocale(invitationId: string): Promise<string | undefined>;
+    listPending(afterId: string | null, limit: number): Promise<readonly InvitationListing[]>;
+    pending(invitationId: string): Promise<InvitationRecord | undefined>;
+    renew(invitationId: string, renewal: InvitationRenewal): Promise<InvitationRecord | undefined>;
+    // (undocumented)
+    revoke(invitationId: string): Promise<InvitationRevocation>;
+}
+
+// @public
+export function invitationMessage(content: InvitationMessageContent): MailMessage;
+
+// @public
+export interface InvitationMessageContent {
+    // (undocumented)
+    readonly expiresAt: Date;
+    readonly inviterName: string;
+    readonly locale: string;
+    // (undocumented)
+    readonly role: InvitationRole;
+    readonly to: string;
+    readonly token: string;
+    // (undocumented)
+    readonly workspaceName: string;
+}
+
+// @public (undocumented)
+export type InvitationOutcome =
+/** The invitation was written; `locale` is the language its email is written in and `mailTicket` the ticket its mail job carries. */
+    {
+    readonly kind: "invited" | "resent";
+    readonly invitation: InvitationRecord;
+    readonly locale: string;
+    readonly mailTicket: string;
+}
+/** The account that asks is not an admin or owner of the workspace; nothing was written. */
+| {
+    readonly kind: "forbidden";
+}
+/** The role is not one an invitation can grant; nothing was written. */
+| {
+    readonly kind: "invalid_role";
+}
+/** The request names teams, which cannot be invited into yet; nothing was written. */
+| {
+    readonly kind: "teams_unavailable";
+}
+/** The address belongs to a member of the workspace; nothing was written. */
+| {
+    readonly kind: "already_member";
+};
+
+// @public
+export interface InvitationRecord {
+    // (undocumented)
+    readonly createdAt: Date;
+    // (undocumented)
+    readonly email: string;
+    // (undocumented)
+    readonly expiresAt: Date;
+    // (undocumented)
+    readonly id: string;
+    readonly invitedBy: string | null;
+    // (undocumented)
+    readonly role: WorkspaceRole;
+    // (undocumented)
+    readonly status: InvitationStatus;
+    // (undocumented)
+    readonly teamIds: readonly string[];
+}
+
+// @public
+export interface InvitationRenewal {
+    readonly mailTicket: string | null;
+    readonly tokenHash: Buffer;
+    readonly ttlSeconds: number;
+}
+
+// @public (undocumented)
+export type InvitationResendOutcome =
+/** The invitation has a new expiry and a token nobody holds; `locale` is the language its email is written in and `mailTicket` the ticket its mail job carries. */
+    {
+    readonly kind: "resent";
+    readonly invitation: InvitationRecord;
+    readonly locale: string;
+    readonly mailTicket: string;
+} | {
+    readonly kind: "forbidden";
+}
+/** The workspace has no pending invitation of that identifier; nothing was written. */
+| {
+    readonly kind: "not_found";
+};
+
+// @public (undocumented)
+export type InvitationRevocation =
+/** The invitation was pending and is revoked now. */
+    {
+    readonly kind: "revoked";
+    readonly invitation: InvitationRecord;
+}
+/** The invitation was revoked before; nothing was written. */
+| {
+    readonly kind: "already_revoked";
+}
+/** The workspace has no pending or revoked invitation of that identifier, an accepted one included. */
+| {
+    readonly kind: "not_found";
+};
+
+// @public (undocumented)
+export type InvitationRevokeOutcome = {
+    readonly kind: "revoked" | "already_revoked";
+} | {
+    readonly kind: "forbidden";
+} | {
+    readonly kind: "not_found";
+};
+
+// @public (undocumented)
+export type InvitationRole = (typeof INVITATION_ROLES)[number];
+
+// @public (undocumented)
+export type InvitationStatus = "pending" | "accepted" | "revoked";
+
+// @public (undocumented)
+export interface InvitationStore {
+    actorRole(): Promise<WorkspaceRole | undefined>;
+    inviteeLocale(invitationId: string): Promise<string | undefined>;
+    memberHoldsEmail(email: string): Promise<boolean>;
+    writePending(invitation: NewInvitation): Promise<{
+        readonly invitation: InvitationRecord;
+        readonly resent: boolean;
+    }>;
+}
+
+// @public
+export function inviteMember(input: InvitationDependencies, ask: InvitationAsk): Promise<InvitationOutcome>;
+
 // @public (undocumented)
 export function isAuditAction(value: unknown): value is AuditAction;
 
 // @public (undocumented)
 export function isDomainEventName(value: unknown): value is DomainEventName;
+
+// @public
+export function listInvitations(input: Pick<InvitationActionDependencies, "store">, ask: {
+    readonly afterId: string | null;
+    readonly limit: number;
+}): Promise<InvitationListOutcome>;
 
 // @public
 export function loadBreachedPasswords(): BreachedPasswords;
@@ -872,6 +1236,21 @@ export interface MembershipEndRequest {
 export interface MembershipEndStore extends MemberRoleStore {
     end(request: MembershipEndRequest): Promise<boolean>;
     longestStandingOwner(excludingAccountId: string): Promise<string | undefined>;
+}
+
+// @public (undocumented)
+export interface NewInvitation {
+    // (undocumented)
+    readonly email: string;
+    readonly id: string;
+    readonly keepTokenHash: boolean;
+    readonly mailTicket: string;
+    // (undocumented)
+    readonly role: InvitationRole;
+    // (undocumented)
+    readonly teamIds: readonly string[];
+    readonly tokenHash: Buffer;
+    readonly ttlSeconds: number;
 }
 
 // @public
@@ -1116,6 +1495,12 @@ export function renameWorkspace(input: WorkspaceAdministrationDependencies, ask:
 
 // @public
 export function requestWorkspaceDeletion<Code extends string>(input: WorkspaceDeletionDependencies<Code>, ask: WorkspaceDeletionAsk): Promise<WorkspaceDeletionOutcome<Code>>;
+
+// @public
+export function resendInvitation(input: InvitationActionDependencies, ask: InvitationActionAsk): Promise<InvitationResendOutcome>;
+
+// @public
+export function revokeInvitation(input: Pick<InvitationActionDependencies, "store" | "audit">, ask: InvitationActionAsk): Promise<InvitationRevokeOutcome>;
 
 // @public
 export function safeReturnTo(value: string | undefined): string;

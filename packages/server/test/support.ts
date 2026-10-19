@@ -160,6 +160,7 @@ export function documentEntry(operation: OperationDefinition): Record<string, un
     ...(operation.entitlement === undefined ? {} : { "x-slugbase-entitlement": operation.entitlement }),
     ...(operation.audience === undefined ? {} : { "x-slugbase-audience": operation.audience }),
     ...(operation.reauth === true ? { "x-slugbase-reauth": true } : {}),
+    ...(operation.idempotency === true ? { "x-slugbase-idempotency": true } : {}),
   };
 }
 

@@ -4,10 +4,13 @@
 
 ```ts
 
+import type { AccountDeletionScope } from '@slugbase/core';
 import type { AuditRecord } from '@slugbase/core';
 import type { CredentialTokenPurpose } from '@slugbase/core';
 import { InferInsertModel } from 'drizzle-orm';
 import { InferSelectModel } from 'drizzle-orm';
+import type { InvitationManagementStore } from '@slugbase/core';
+import type { InvitationStore } from '@slugbase/core';
 import type { MemberRoleStore } from '@slugbase/core';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 import type { PgTable } from 'drizzle-orm/pg-core';
@@ -15,6 +18,7 @@ import { SQL } from 'drizzle-orm';
 import type { WorkspaceAdministrationStore } from '@slugbase/core';
 import type { WorkspaceRenameRequest } from '@slugbase/core';
 import type { WorkspaceRenameResult } from '@slugbase/core';
+import type { WorkspaceRole } from '@slugbase/core';
 import type { WorkspaceSettings } from '@slugbase/core';
 import type { WorkspaceSettingsChange } from '@slugbase/core';
 import type { WorkspaceSettingsPatch } from '@slugbase/core';
@@ -24,6 +28,15 @@ export const ACCENT_PRESETS: readonly ["periwinkle", "violet", "rose", "amber", 
 
 // @public (undocumented)
 export type AccentPreset = (typeof ACCENT_PRESETS)[number];
+
+// @public (undocumented)
+export interface AccountDeletionRepository {
+    delete(soleWorkspaceIds: readonly string[], jobs: readonly QueuedJob[]): Promise<boolean>;
+    scope(): Promise<AccountDeletionScope>;
+}
+
+// @public (undocumented)
+export function accountDeletionRepository(tx: TenantTx): AccountDeletionRepository;
 
 // @public
 export interface AccountIdentity {
@@ -387,6 +400,43 @@ export interface EmailVerificationStore {
 }
 
 // @public
+export class IdempotencyBusyError extends Error {
+    constructor();
+}
+
+// @public (undocumented)
+export interface IdempotencyClaim {
+    readonly key: string;
+    readonly operation: string;
+    readonly requestHash: Buffer;
+}
+
+// @public (undocumented)
+export type IdempotencyOutcome =
+/** The key was not in use (or had expired): the request runs and then calls `complete`. */
+    {
+    readonly kind: "claimed";
+}
+/** An earlier request with this key and this request finished; its response is `response`. */
+| {
+    readonly kind: "replay";
+    readonly response: StoredResponse;
+}
+/** The key was used for another operation or another request. */
+| {
+    readonly kind: "conflict";
+};
+
+// @public (undocumented)
+export interface IdempotencyRepository {
+    claim(claim: IdempotencyClaim): Promise<IdempotencyOutcome>;
+    complete(key: string, response: StoredResponse): Promise<void>;
+}
+
+// @public (undocumented)
+export function idempotencyRepository(tx: TenantTx): IdempotencyRepository;
+
+// @public
 export interface IdentityLink {
     readonly accountId: string;
     readonly email: string;
@@ -451,6 +501,27 @@ export type IdentityUnlinkOutcome = "unlinked"
 export type InsertValues<T extends WorkspaceTable> = Omit<InferInsertModel<T>, "workspaceId"> & {
     workspaceId?: string;
 };
+
+// @public
+export interface InvitationMailContext {
+    // (undocumented)
+    readonly email: string;
+    // (undocumented)
+    readonly expiresAt: Date;
+    // (undocumented)
+    readonly role: WorkspaceRole;
+    // (undocumented)
+    readonly workspaceName: string;
+}
+
+// @public (undocumented)
+export interface InvitationRepository extends InvitationStore, InvitationManagementStore {
+    enqueue(jobs: readonly QueuedJob[]): Promise<void>;
+    issueToken(invitationId: string, mailTicket: string, tokenHash: Buffer): Promise<InvitationMailContext | undefined>;
+}
+
+// @public (undocumented)
+export function invitationRepository(tx: TenantTx): InvitationRepository;
 
 // @public
 export function isLastOwnerViolation(error: unknown): boolean;
@@ -1005,6 +1076,14 @@ export type SignInCompletionOutcome =
 | "replayed"
 /** The account has no such partial session, or its MFA is no longer on; nothing was written. */
 | "no_session";
+
+// @public
+export interface StoredResponse {
+    // (undocumented)
+    readonly body: unknown;
+    // (undocumented)
+    readonly status: number;
+}
 
 // @public
 export interface TenantContext {
