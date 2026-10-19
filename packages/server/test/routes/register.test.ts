@@ -255,6 +255,45 @@ describe("the registration check", () => {
     expect(() => compose([moduleOf(route(sensitive).handle(() => ({ status: 204 })), route(verify).handle(() => ({ status: 204 })))], document)).not.toThrow();
   });
 
+  it("refuses a binding whose idempotency differs from the document's, in either direction", () => {
+    const keyed = defineOperation({
+      method: "post",
+      path: "/api/v1/notes/keyed",
+      operationId: "createKeyedNote",
+      tag: "notes",
+      auth: "member",
+      rate: "write",
+      idempotency: true,
+      responses: { 204: emptyResponse("done"), 409: problemResponse("conflict") },
+    });
+    const dropped: OperationDefinition = { ...keyed, idempotency: false };
+    const omitted = Object.fromEntries(Object.entries(keyed).filter(([key]) => key !== "idempotency")) as unknown as OperationDefinition;
+    for (const operation of [dropped, omitted]) {
+      const error = refusal(() => compose([moduleOf({ operation, ...raw })], documentFor([keyed])));
+      expect(error.code).toBe("policy_mismatch");
+      expect(error.message).toContain("createKeyedNote");
+      expect(error.message).toContain("x-slugbase-idempotency");
+    }
+    const added = refusal(() => compose([moduleOf({ operation: keyed, ...raw })], documentFor([omitted])));
+    expect(added.code).toBe("policy_mismatch");
+    expect(added.message).toContain("x-slugbase-idempotency");
+    expect(() => compose([moduleOf(route(keyed).handle(() => ({ status: 204 })))], documentFor([keyed]))).not.toThrow();
+  });
+
+  it("refuses an idempotency declaration that is not a boolean or sits on an operation with no account", () => {
+    const notBoolean = { ...createNote, idempotency: "yes" } as unknown as OperationDefinition;
+    const invalid = refusal(() => compose([moduleOf({ operation: notBoolean, ...raw })], documentFor([createNote])));
+    expect(invalid.code).toBe("missing_policy");
+    expect(invalid.message).toContain("idempotency");
+    for (const auth of ["anonymous", "machine"] as const) {
+      const operation: OperationDefinition = { ...createNote, auth, idempotency: true };
+      const error = refusal(() => compose([moduleOf({ operation, ...raw })], documentFor([createNote])));
+      expect(error.code).toBe("missing_policy");
+      expect(error.message).toContain("createNote");
+      expect(error.message).toContain("idempotency");
+    }
+  });
+
   it("refuses a route that moves a documented operation to another path or method", () => {
     const document = documentFor([createNote]);
     const moved = refusal(() => compose([moduleOf({ operation: { ...createNote, path: "/api/v1/moved/{id}" }, ...raw })], document));

@@ -315,7 +315,7 @@ Index `(workspace_id, created_at DESC, id DESC)`, `(workspace_id, actor_account_
 
 ### 2.10 Infrastructure tables
 
-**`idempotency_keys`** — RLS: A. `account_id`, `key uuid`, `operation text`, `request_hash bytea`, `status` (`in_progress` / `done`), `response_status`, `response_body jsonb`, `created_at`, `expires_at` (24 h). PK `(account_id, key)`.
+**`idempotency_keys`** — RLS: A. `account_id`, `key uuid`, `operation text`, `request_hash bytea`, `status` (`in_progress` / `done`), `response_status`, `response_body jsonb`, `created_at`, `expires_at` (24 h). PK `(account_id, key)`. `request_hash` is the SHA-256 of the operation, workspace and validated request (doc 04 §6.3). The row is inserted `in_progress` and completed `done` with the response inside the transaction that runs the request, so no committed row stays `in_progress` and a concurrent duplicate waits on the unique index until that transaction ends; a rollback leaves no row. `response_status` is a `2xx` status, and `slugbase_app` can insert and update but not delete a key (`sys_retention_purge` does, once `expires_at` has passed).
 
 **`rate_limit_buckets`** — `UNLOGGED` (defined in `packages/db/src/sql/`, because the Drizzle schema cannot express it), RLS: S. `key text PK` (bucket + IP/principal hash), `tokens real`, `updated_at timestamptz`. Lost on crash or failover by design — limits reset, nothing else breaks (doc 10 §5).
 

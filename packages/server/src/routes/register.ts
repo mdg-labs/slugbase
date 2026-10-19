@@ -170,6 +170,9 @@ function missingPolicy(operation: OperationDefinition): string | undefined {
   if (operation.reauth !== undefined && typeof operation.reauth !== "boolean") {
     return "reauth";
   }
+  if (operation.idempotency !== undefined && typeof operation.idempotency !== "boolean") {
+    return "idempotency";
+  }
   return undefined;
 }
 
@@ -180,6 +183,9 @@ function missingPolicy(operation: OperationDefinition): string | undefined {
  * anonymous caller, a machine, a session whose second factor is pending or an API token.
  */
 function inconsistency(operation: OperationDefinition): string | undefined {
+  if (operation.idempotency === true && (operation.auth === "anonymous" || operation.auth === "machine")) {
+    return `idempotency cannot be declared on a ${operation.auth} operation, which has no account to keep a key for`;
+  }
   if (operation.reauth !== true) {
     return undefined;
   }
@@ -206,6 +212,7 @@ const POLICY_FIELDS = [
 ] as const;
 
 const REAUTH_EXTENSION = "x-slugbase-reauth";
+const IDEMPOTENCY_EXTENSION = "x-slugbase-idempotency";
 
 function problemOf(operation: OperationDefinition, documented: ReadonlyMap<string, DocumentedOperation>): RegistrationProblem | undefined {
   // A binding can come from JavaScript, so the ID is checked before it names anything.
@@ -243,6 +250,9 @@ function problemOf(operation: OperationDefinition, documented: ReadonlyMap<strin
   }
   if ((operation.reauth === true) !== (entry.entry[REAUTH_EXTENSION] === true)) {
     return refuse("policy_mismatch", `reauth differs from the document's ${REAUTH_EXTENSION}; a route takes its policy from the contract`);
+  }
+  if ((operation.idempotency === true) !== (entry.entry[IDEMPOTENCY_EXTENSION] === true)) {
+    return refuse("policy_mismatch", `idempotency differs from the document's ${IDEMPOTENCY_EXTENSION}; a route takes its policy from the contract`);
   }
   return undefined;
 }

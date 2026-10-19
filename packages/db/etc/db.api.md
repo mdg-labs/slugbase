@@ -399,6 +399,43 @@ export interface EmailVerificationStore {
 }
 
 // @public
+export class IdempotencyBusyError extends Error {
+    constructor();
+}
+
+// @public (undocumented)
+export interface IdempotencyClaim {
+    readonly key: string;
+    readonly operation: string;
+    readonly requestHash: Buffer;
+}
+
+// @public (undocumented)
+export type IdempotencyOutcome =
+/** The key was not in use (or had expired): the request runs and then calls `complete`. */
+    {
+    readonly kind: "claimed";
+}
+/** An earlier request with this key and this request finished; its response is `response`. */
+| {
+    readonly kind: "replay";
+    readonly response: StoredResponse;
+}
+/** The key was used for another operation or another request. */
+| {
+    readonly kind: "conflict";
+};
+
+// @public (undocumented)
+export interface IdempotencyRepository {
+    claim(claim: IdempotencyClaim): Promise<IdempotencyOutcome>;
+    complete(key: string, response: StoredResponse): Promise<void>;
+}
+
+// @public (undocumented)
+export function idempotencyRepository(tx: TenantTx): IdempotencyRepository;
+
+// @public
 export interface IdentityLink {
     readonly accountId: string;
     readonly email: string;
@@ -1038,6 +1075,14 @@ export type SignInCompletionOutcome =
 | "replayed"
 /** The account has no such partial session, or its MFA is no longer on; nothing was written. */
 | "no_session";
+
+// @public
+export interface StoredResponse {
+    // (undocumented)
+    readonly body: unknown;
+    // (undocumented)
+    readonly status: number;
+}
 
 // @public
 export interface TenantContext {

@@ -3098,6 +3098,18 @@
     "/api/v1/invitations": {
       "post": {
         "operationId": "createInvitation",
+        "parameters": [
+          {
+            "description": "A client-generated UUID that makes a retry safe. A retry with the same key and the same request answers the stored successful response with Idempotency-Replayed: true instead of running again; the same key with another request is 409 idempotency_conflict. A key is kept for 24 hours and belongs to the account",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "content": {
             "application/json": {
@@ -3117,7 +3129,7 @@
                 }
               }
             },
-            "description": "The invitation, pending, with a new token that expires in 7 days and is emailed once as a link to /invite/<token> when the deployment can send mail; the token is in no response. An address that already had a pending invitation is a resend: the same invitation, with the role and teams of this request, a new expiry and a new token, and the earlier link stops working"
+            "description": "The invitation, pending, with a new token that expires in 7 days and is emailed once as a link to /invite/<token> when the deployment can send mail; the token is in no response. An address that already had a pending invitation is a resend: the same invitation, with the role and teams of this request, a new expiry and a new token, and the earlier link stops working. A retry with the same Idempotency-Key and the same request answers this response again with Idempotency-Replayed: true and sends no second email"
           },
           "400": {
             "content": {
@@ -3127,7 +3139,7 @@
                 }
               }
             },
-            "description": "The request was malformed"
+            "description": "The request was malformed, or the Idempotency-Key header is not a UUID"
           },
           "401": {
             "content": {
@@ -3167,7 +3179,7 @@
                 }
               }
             },
-            "description": "The address belongs to a member of the workspace (already_member); nothing is written"
+            "description": "The address belongs to a member of the workspace (already_member), or the Idempotency-Key was used before for another request (idempotency_conflict); nothing is written"
           },
           "422": {
             "content": {
@@ -3208,7 +3220,7 @@
                 }
               }
             },
-            "description": "The service is temporarily unavailable"
+            "description": "The service is temporarily unavailable, or an earlier request with the same Idempotency-Key is still running"
           }
         },
         "summary": "Invite a person to the workspace by email",
@@ -3217,6 +3229,7 @@
         ],
         "x-slugbase-auth": "admin",
         "x-slugbase-entitlement": "members.invite",
+        "x-slugbase-idempotency": true,
         "x-slugbase-rate": "write"
       }
     },

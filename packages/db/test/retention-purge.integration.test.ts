@@ -77,13 +77,14 @@ async function seedSession(session: SeedSession): Promise<string> {
   return id;
 }
 
-/** What a purge answers when it deleted `sessions` sessions, `apiTokens` API tokens, `loginStates` OIDC login states, `credentialTokens` credential tokens and `auditEvents` audit events, in the order of doc 05 section 6. */
-function counts(sessions: number, apiTokens = 0, loginStates = 0, credentialTokens = 0, auditEvents = 0): { table: string; deleted: number }[] {
+/** What a purge answers when it deleted `sessions` sessions, `apiTokens` API tokens, `loginStates` OIDC login states, `credentialTokens` credential tokens, `auditEvents` audit events and `idempotencyKeys` idempotency keys, in the order of doc 05 section 6. */
+function counts(sessions: number, apiTokens = 0, loginStates = 0, credentialTokens = 0, auditEvents = 0, idempotencyKeys = 0): { table: string; deleted: number }[] {
   return [
     { table: "sessions", deleted: sessions },
     { table: "api_tokens", deleted: apiTokens },
     { table: "oidc_login_states", deleted: loginStates },
     { table: "credential_tokens", deleted: credentialTokens },
+    { table: "idempotency_keys", deleted: idempotencyKeys },
     { table: "audit_events", deleted: auditEvents },
   ];
 }
@@ -454,6 +455,71 @@ describe("purging used and expired credential tokens", () => {
 
   it("gives slugbase_app no DELETE on credential_tokens: the purge is the only way it removes one", async () => {
     await expect(db.app.unsafe("DELETE FROM public.credential_tokens")).rejects.toMatchObject({ code: "42501" });
+  });
+});
+
+describe("purging expired idempotency keys", () => {
+  /** Seeds a key that expires `expiresIn` milliseconds from now (negative is in the past), through the application role as the account. */
+  async function seedKey(owner: string, expiresIn: number): Promise<string> {
+    const key = freshId();
+    await db.app.begin(async (tx) => {
+      await tx`SELECT set_config('app.account_id', ${owner}, true)`;
+      await tx`
+        INSERT INTO idempotency_keys (account_id, key, operation, request_hash, expires_at)
+        VALUES (${owner}, ${key}, 'createInvitation', ${Buffer.alloc(32)}, now() + ${expiresIn} * interval '1 millisecond')`;
+    });
+    return key;
+  }
+
+  async function remainingKeys(): Promise<string[]> {
+    const rows = await db.owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      return tx<{ key: string }[]>`SELECT key FROM idempotency_keys`;
+    });
+    return rows.map((row) => row.key).sort();
+  }
+
+  async function clearKeys(): Promise<void> {
+    await db.owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`DELETE FROM idempotency_keys`;
+    });
+  }
+
+  it("deletes a key 24 hours after it was first used and keeps a younger one, counting what it deleted", async () => {
+    await clearSessions();
+    await clearKeys();
+    const owner = await account();
+    const other = await account();
+    // A key lives 24 hours from its first use: one made 25 hours ago has expired, one made 23 hours ago has not.
+    const gone = [await seedKey(owner, -HOUR_MS), await seedKey(other, -DAY_MS)];
+    const kept = [await seedKey(owner, HOUR_MS), await seedKey(other, DAY_MS - HOUR_MS)];
+
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 0, gone.length));
+    expect(await remainingKeys()).toEqual(kept.sort());
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 0, 0));
+  });
+
+  it("deletes at most one batch per call and finishes the rest on the next", async () => {
+    await clearKeys();
+    const owner = await account();
+    const extra = 3;
+    await db.owner.begin(async (tx) => {
+      await tx`SELECT set_config('app.account_id', ${owner}, true)`;
+      await tx`
+        INSERT INTO idempotency_keys (account_id, key, operation, request_hash, expires_at)
+        SELECT ${owner}, ('0192f3a0-eeee-7000-8000-' || lpad(to_hex(n), 12, '0'))::uuid, 'createInvitation', sha256(('batch' || n)::bytea),
+               now() - interval '1 hour'
+        FROM generate_series(1, ${BATCH + extra}::int) AS n`;
+    });
+
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 0, BATCH));
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 0, extra));
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 0, 0));
+  });
+
+  it("gives slugbase_app no DELETE on idempotency_keys: the purge is the only way it removes one", async () => {
+    await expect(db.app.unsafe("DELETE FROM public.idempotency_keys")).rejects.toMatchObject({ code: "42501" });
   });
 });
 

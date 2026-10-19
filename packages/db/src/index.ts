@@ -44,6 +44,8 @@ export { isLastOwnerViolation, memberRepository, OWNER_REQUIRED_CONSTRAINT } fro
 export type { MemberRepository, WorkspaceMember } from "./repositories/members.ts";
 export { invitationRepository } from "./repositories/invitations.ts";
 export type { InvitationMailContext, InvitationRepository } from "./repositories/invitations.ts";
+export { IdempotencyBusyError, idempotencyRepository } from "./repositories/idempotency.ts";
+export type { IdempotencyClaim, IdempotencyOutcome, IdempotencyRepository, StoredResponse } from "./repositories/idempotency.ts";
 export { membershipRepository } from "./repositories/memberships.ts";
 export type { Membership, MembershipRepository } from "./repositories/memberships.ts";
 export type { MemberRole } from "./schema/workspaces.ts";

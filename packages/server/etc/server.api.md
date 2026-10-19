@@ -60,7 +60,7 @@ export interface BearerAuthenticator {
 export type BuildInfo = z.output<typeof VersionInfoSchema>;
 
 // @public
-export const CHAIN_STAGES: readonly ["request-context", "security-headers", "body-limits", "ip-rate-limiting", "authentication", "cross-site-protection", "rate-limiting", "tenant-resolution", "validation", "authorization", "handler", "response", "audit-telemetry"];
+export const CHAIN_STAGES: readonly ["request-context", "security-headers", "body-limits", "ip-rate-limiting", "authentication", "cross-site-protection", "rate-limiting", "tenant-resolution", "validation", "authorization", "idempotency", "handler", "response", "audit-telemetry"];
 
 // @public (undocumented)
 export type ChainContext = Context<ChainEnv>;

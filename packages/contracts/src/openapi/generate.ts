@@ -3,6 +3,8 @@ import {
   AUDIENCES,
   AUTH_POLICIES,
   HTTP_METHODS,
+  IDEMPOTENCY_KEY_HEADER,
+  IDEMPOTENCY_REPLAYED_HEADER,
   RATE_BUCKETS,
   RETRY_AFTER_HEADER,
   TOKEN_SCOPES,
@@ -198,7 +200,7 @@ function checkDeclaration(raw: unknown, index: number, seenIds: Set<string>, see
     problems.push(`${label}: ${message}`);
   };
 
-  const { operationId, method, path, tag, auth, rate, scope, entitlement, audience, reauth, request, maxBodyBytes, responses } = raw;
+  const { operationId, method, path, tag, auth, rate, scope, entitlement, audience, reauth, idempotency, request, maxBodyBytes, responses } = raw;
 
   if (typeof operationId !== "string" || !/^[a-z][A-Za-z0-9]*$/.test(operationId)) {
     need("operationId is required and must be camelCase");
@@ -239,6 +241,30 @@ function checkDeclaration(raw: unknown, index: number, seenIds: Set<string>, see
   }
   if (reauth !== undefined && typeof reauth !== "boolean") {
     need("x-slugbase-reauth (reauth) must be a boolean when present");
+  }
+  if (idempotency !== undefined && typeof idempotency !== "boolean") {
+    need("x-slugbase-idempotency (idempotency) must be a boolean when present");
+  }
+  if (idempotency === true) {
+    if (method === "get") {
+      need("an idempotent operation changes state, so it cannot be a get");
+    }
+    if (auth === "anonymous" || auth === "machine") {
+      need(`an idempotency key belongs to an account, so idempotency cannot be declared on a ${auth} operation`);
+    }
+    const headers = isRecord(request) && request["headers"] instanceof z.ZodObject ? Object.keys(request["headers"].shape) : [];
+    if (headers.some((name) => name.toLowerCase() === IDEMPOTENCY_KEY_HEADER.toLowerCase())) {
+      need(`the ${IDEMPOTENCY_KEY_HEADER} header is published by idempotency and is not declared again in request.headers`);
+    }
+    const documented = isRecord(responses) ? responses : {};
+    if (!isRecord(documented["409"])) {
+      need("an idempotent operation declares its 409 response, which includes idempotency_conflict");
+    }
+    for (const [status, response] of Object.entries(documented)) {
+      if (Number(status) < 400 && isRecord(response) && response["headers"] !== undefined) {
+        need(`response ${status} documents headers, which a replay does not restore; ${IDEMPOTENCY_REPLAYED_HEADER} is the only one it adds`);
+      }
+    }
   }
   if (maxBodyBytes !== undefined && (typeof maxBodyBytes !== "number" || !Number.isSafeInteger(maxBodyBytes) || maxBodyBytes < 1)) {
     need("maxBodyBytes must be a positive integer number of bytes when present");
@@ -364,6 +390,9 @@ function buildOperation(op: OperationDefinition, converter: Converter): JsonObje
   if (op.reauth === true) {
     entry["x-slugbase-reauth"] = true;
   }
+  if (op.idempotency === true) {
+    entry["x-slugbase-idempotency"] = true;
+  }
 
   const parameters: JsonObject[] = [];
   if (op.request?.params !== undefined) {
@@ -374,6 +403,15 @@ function buildOperation(op: OperationDefinition, converter: Converter): JsonObje
   }
   if (op.request?.headers !== undefined) {
     parameters.push(...objectParameters(converter, op.request.headers, "header"));
+  }
+  if (op.idempotency === true) {
+    parameters.push({
+      name: IDEMPOTENCY_KEY_HEADER,
+      in: "header",
+      required: false,
+      description: `A client-generated UUID that makes a retry safe. A retry with the same key and the same request answers the stored successful response with ${IDEMPOTENCY_REPLAYED_HEADER}: true instead of running again; the same key with another request is 409 idempotency_conflict. A key is kept for 24 hours and belongs to the account`,
+      schema: { type: "string", format: "uuid" },
+    });
   }
   if (parameters.length > 0) {
     entry["parameters"] = parameters;

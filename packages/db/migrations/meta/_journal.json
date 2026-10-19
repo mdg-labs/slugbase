@@ -309,6 +309,13 @@
       "when": 1792426332476,
       "tag": "20261019161212_add_workspace_invitations",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1792430666888,
+      "tag": "20261019172426_add_idempotency_keys",
+      "breakpoints": true
     }
   ]
 }

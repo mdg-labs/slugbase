@@ -62,12 +62,13 @@ describe("defineScopedRepository", () => {
 });
 
 describe("the package entry point", () => {
-  it("exports withTenant through createDatabase, the repository helper, the account repositories, the credential token repository, the audit event and workspace repositories, the rate-limit store and the workspace deletion store, and no raw handle", () => {
+  it("exports withTenant through createDatabase, the repository helper, the account repositories, the credential token repository, the idempotency repository, the audit event and workspace repositories, the rate-limit store and the workspace deletion store, and no raw handle", () => {
     expect(Object.keys(entry).sort()).toEqual(
       [
         "ACCENT_PRESETS",
         "CE_CHAIN",
         "ConnectionRoleError",
+        "IdempotencyBusyError",
         "MigrationError",
         "OWNER_REQUIRED_CONSTRAINT",
         "TenantContextError",
@@ -86,6 +87,7 @@ describe("the package entry point", () => {
         "credentialTokenRepository",
         "defineScopedRepository",
         "emailChangeRepository",
+        "idempotencyRepository",
         "invitationRepository",
         "isLastOwnerViolation",
         "listRepositoryMethods",

@@ -69,6 +69,12 @@ describe("defineOperation types", () => {
     defineOperation({ ...complete, reauth: "yes" });
   });
 
+  it("accepts a declared idempotency and keeps it, and rejects one that is not a boolean at compile time", () => {
+    expect(defineOperation({ ...complete, idempotency: true }).idempotency).toBe(true);
+    // @ts-expect-error #145 idempotency is a boolean
+    defineOperation({ ...complete, idempotency: "yes" });
+  });
+
   it("rejects an operation without auth at compile time", () => {
     const rest = omit(complete, "auth");
     // @ts-expect-error #17 auth (x-slugbase-auth) is required

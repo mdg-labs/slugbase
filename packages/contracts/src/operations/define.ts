@@ -116,6 +116,10 @@ export function rateLimitedResponse(description: string): RateLimitedResponse {
   };
 }
 
+/** The request header that makes a retried request safe (doc 04 section 6.3), and the response header that marks a stored answer. */
+export const IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
+export const IDEMPOTENCY_REPLAYED_HEADER = "Idempotency-Replayed";
+
 /** A response without a body, and optionally the headers it documents. */
 export function emptyResponse<H extends ResponseHeaders = ResponseHeaders>(
   description: string,
@@ -165,6 +169,15 @@ export interface OperationDefinition {
    */
   readonly reauth?: boolean;
   readonly audience?: Audience;
+  /**
+   * The operation accepts an `Idempotency-Key` header (doc 04 section 6.3): the server stores the successful
+   * response under the key for 24 hours and answers a retry with it and `Idempotency-Replayed: true`, and
+   * answers `409 idempotency_conflict` when the key comes back with another request. The key belongs to the
+   * account, so the operation needs a principal with one, and a replay answers the status and the JSON body
+   * only. Published as the `Idempotency-Key` header parameter and as x-slugbase-idempotency when `true`; an
+   * absent or `false` declaration is the same.
+   */
+  readonly idempotency?: boolean;
   readonly request?: OperationRequest;
   /**
    * The largest request body the body-limits stage accepts, in bytes. Absent,

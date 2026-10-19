@@ -33,6 +33,11 @@
 -- or expired token from the moment it is one, so deleting the row later changes
 -- no answer. The grants it needs are in 190-credential-tokens.sql.
 --
+-- idempotency_keys: past expires_at, which is 24 hours after the key was first used (doc 04 section
+-- 6.3). A request that finds an expired key treats it as absent and replaces it, so deleting the row
+-- later changes no answer. Rows another statement holds are skipped and found by the next call. The
+-- grants it needs are in 310-idempotency-keys.sql.
+--
 -- audit_events: workspace events (those with a workspace) created more than
 -- p_audit_retention_days days ago, which is the operator's AUDIT_RETENTION_DAYS (Q53). 0 keeps
 -- them forever and deletes none; a negative number or NULL is refused. Events of a deployment
@@ -106,6 +111,16 @@ BEGIN
   );
   GET DIAGNOSTICS v_deleted = ROW_COUNT;
   RETURN QUERY SELECT 'credential_tokens'::text, v_deleted;
+
+  DELETE FROM public.idempotency_keys
+  WHERE (account_id, key) IN (
+    SELECT k.account_id, k.key FROM public.idempotency_keys k
+    WHERE k.expires_at <= v_now
+    LIMIT c_batch
+    FOR UPDATE SKIP LOCKED
+  );
+  GET DIAGNOSTICS v_deleted = ROW_COUNT;
+  RETURN QUERY SELECT 'idempotency_keys'::text, v_deleted;
 
   v_deleted := 0;
   IF p_audit_retention_days > 0 THEN

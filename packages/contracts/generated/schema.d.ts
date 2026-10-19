@@ -2266,7 +2266,10 @@ export interface operations {
     createInvitation: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description A client-generated UUID that makes a retry safe. A retry with the same key and the same request answers the stored successful response with Idempotency-Replayed: true instead of running again; the same key with another request is 409 idempotency_conflict. A key is kept for 24 hours and belongs to the account */
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -2276,7 +2279,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The invitation, pending, with a new token that expires in 7 days and is emailed once as a link to /invite/<token> when the deployment can send mail; the token is in no response. An address that already had a pending invitation is a resend: the same invitation, with the role and teams of this request, a new expiry and a new token, and the earlier link stops working */
+            /** @description The invitation, pending, with a new token that expires in 7 days and is emailed once as a link to /invite/<token> when the deployment can send mail; the token is in no response. An address that already had a pending invitation is a resend: the same invitation, with the role and teams of this request, a new expiry and a new token, and the earlier link stops working. A retry with the same Idempotency-Key and the same request answers this response again with Idempotency-Replayed: true and sends no second email */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -2285,7 +2288,7 @@ export interface operations {
                     "application/json": components["schemas"]["Invitation"];
                 };
             };
-            /** @description The request was malformed */
+            /** @description The request was malformed, or the Idempotency-Key header is not a UUID */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -2321,7 +2324,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The address belongs to a member of the workspace (already_member); nothing is written */
+            /** @description The address belongs to a member of the workspace (already_member), or the Idempotency-Key was used before for another request (idempotency_conflict); nothing is written */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -2350,7 +2353,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The service is temporarily unavailable */
+            /** @description The service is temporarily unavailable, or an earlier request with the same Idempotency-Key is still running */
             503: {
                 headers: {
                     [name: string]: unknown;

@@ -46,21 +46,24 @@ export const createInvitation = defineOperation({
   auth: "admin",
   rate: "write",
   entitlement: "members.invite",
+  idempotency: true,
   request: { body: CreateInvitationRequestSchema },
   responses: {
     201: jsonResponse(
-      "The invitation, pending, with a new token that expires in 7 days and is emailed once as a link to /invite/<token> when the deployment can send mail; the token is in no response. An address that already had a pending invitation is a resend: the same invitation, with the role and teams of this request, a new expiry and a new token, and the earlier link stops working",
+      "The invitation, pending, with a new token that expires in 7 days and is emailed once as a link to /invite/<token> when the deployment can send mail; the token is in no response. An address that already had a pending invitation is a resend: the same invitation, with the role and teams of this request, a new expiry and a new token, and the earlier link stops working. A retry with the same Idempotency-Key and the same request answers this response again with Idempotency-Replayed: true and sends no second email",
       InvitationSchema,
     ),
-    400: problemResponse("The request was malformed"),
+    400: problemResponse("The request was malformed, or the Idempotency-Key header is not a UUID"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse(
       "The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the workspace does not hold the members.invite entitlement (entitlement_required)",
     ),
     404: problemResponse("The request acts in no workspace"),
-    409: problemResponse("The address belongs to a member of the workspace (already_member); nothing is written"),
+    409: problemResponse(
+      "The address belongs to a member of the workspace (already_member), or the Idempotency-Key was used before for another request (idempotency_conflict); nothing is written",
+    ),
     422: problemResponse("The body did not pass validation: an address that is not one, a role other than admin or member (owner included), or a teamIds with an entry, which cannot be invited into yet"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
-    503: problemResponse("The service is temporarily unavailable"),
+    503: problemResponse("The service is temporarily unavailable, or an earlier request with the same Idempotency-Key is still running"),
   },
 });

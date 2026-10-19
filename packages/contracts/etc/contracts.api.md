@@ -819,6 +819,7 @@ export const createInvitation: {
     readonly auth: "admin";
     readonly rate: "write";
     readonly entitlement: "members.invite";
+    readonly idempotency: true;
     readonly request: {
         readonly body: z.ZodObject<{
             email: z.ZodEmail;
@@ -1353,6 +1354,12 @@ export const HTTP_METHODS: readonly ["get", "post", "put", "patch", "delete"];
 
 // @public (undocumented)
 export type HttpMethod = (typeof HTTP_METHODS)[number];
+
+// @public
+export const IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
+
+// @public (undocumented)
+export const IDEMPOTENCY_REPLAYED_HEADER = "Idempotency-Replayed";
 
 // @public (undocumented)
 export const IdentityIdParamsSchema: z.ZodObject<{
@@ -1911,6 +1918,7 @@ export interface OperationDefinition {
     readonly auth: AuthPolicy;
     // (undocumented)
     readonly entitlement?: string;
+    readonly idempotency?: boolean;
     readonly maxBodyBytes?: number;
     // (undocumented)
     readonly method: HttpMethod;
@@ -2514,7 +2522,9 @@ export interface OperationTypes {
     createInvitation: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
