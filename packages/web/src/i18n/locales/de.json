@@ -555,6 +555,7 @@
         "makeOwner": "Zum Eigentümer machen",
         "makeAdmin": "Zum Admin machen",
         "makeMember": "Zum Mitglied machen",
+        "transfer": "Eigentum übertragen",
         "remove": "Aus dem Workspace entfernen"
       },
       "error": {
@@ -582,6 +583,24 @@
           "action": "Mitglied entfernen"
         },
         "done": "{name} wurde aus dem Workspace entfernt"
+      },
+      "transfer": {
+        "title": "Eigentum an {name} übertragen?",
+        "description": "{name} wird Eigentümer dieses Workspace, kann seine Mitglieder und Einstellungen verwalten und ihn löschen. Eigentümer können auch weitere Mitglieder zu Eigentümern machen.",
+        "stayAdmin": "Als Admin bleiben",
+        "stayAdminNote": "Du wirst vom Eigentümer zum Admin, sobald {name} Eigentümer ist. Lass das aus, um Eigentümer zu bleiben.",
+        "confirmLabel": "Tippe {name} zur Bestätigung",
+        "action": "Eigentum übertragen",
+        "cancel": "Abbrechen",
+        "done": "{name} ist jetzt Eigentümer des Workspace",
+        "doneStepDown": "{name} ist jetzt Eigentümer des Workspace, und du bist Admin",
+        "error": {
+          "title": "Das Eigentum wurde nicht übertragen",
+          "reauthCancelled": "Bestätige, dass du es bist, um das Eigentum zu übertragen.",
+          "lastOwner": "Ein Workspace braucht mindestens einen Eigentümer. Das Eigentum wurde nicht geändert.",
+          "forbidden": "Nur ein Eigentümer kann das Eigentum übertragen. Die Seite wurde neu geladen.",
+          "notAMember": "Diese Person ist kein Mitglied des Workspace mehr. Die Liste wurde neu geladen."
+        }
       }
     }
   },

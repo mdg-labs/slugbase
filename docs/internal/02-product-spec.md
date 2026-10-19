@@ -129,7 +129,7 @@ A workspace has a name (1–64 characters), a generated colour and monogram, an 
 | Promote to owner, transfer ownership, demote an owner | ✓ | — | — |
 | Delete the workspace | ✓ | — | — |
 
-A workspace always has at least one owner; the last owner cannot leave, be removed or be demoted, and the database enforces it (doc 05 §2.2), so two owners demoting each other at the same moment leave exactly one. Several owners are allowed. An admin who tries to promote a member, or themselves, to owner, or to change an owner's role, is refused; a role change of one's own rotates the session's token (doc 04 §4.3). **Transfer ownership** promotes another member to owner and, optionally, demotes the transferring owner to admin, with a typed confirmation of the recipient's name.
+A workspace always has at least one owner; the last owner cannot leave, be removed or be demoted, and the database enforces it (doc 05 §2.2), so two owners demoting each other at the same moment leave exactly one. Several owners are allowed. An admin who tries to promote a member, or themselves, to owner, or to change an owner's role, is refused; a role change of one's own rotates the session's token (doc 04 §4.3). **Transfer ownership** promotes another member to owner and, optionally, demotes the transferring owner to admin (the option "Stay as admin"), with a typed confirmation of the recipient's name and a fresh re-authentication; both role changes are one transaction, the caller's session token is rotated when their own role changes, and the new owner gets the "ownership transferred to you" email (§12).
 
 ### 3.4 Invitations
 

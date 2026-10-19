@@ -470,6 +470,7 @@ export interface LoginCandidate {
 
 // @public (undocumented)
 export interface MemberRepository extends MemberRoleStore {
+    enqueue(jobs: readonly QueuedJob[]): Promise<void>;
     list(afterAccountId: string | null, limit: number): Promise<readonly WorkspaceMember[]>;
     longestStandingOwner(excludingAccountId: string): Promise<string | undefined>;
     member(accountId: string): Promise<WorkspaceMember | undefined>;

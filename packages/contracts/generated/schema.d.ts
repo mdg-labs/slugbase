@@ -637,6 +637,23 @@ export interface paths {
         patch: operations["updateWorkspaceSettings"];
         trace?: never;
     };
+    "/api/v1/workspace/transfer-ownership": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Transfer the active workspace's ownership */
+        post: operations["transferWorkspaceOwnership"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces": {
         parameters: {
             query?: never;
@@ -1258,6 +1275,15 @@ export interface components {
             setupRequired: boolean;
             /** @description Whether the first account needs the one-time setup token: true only while setup is pending and the deployment requires one, false otherwise. A flag only, never the token */
             setupTokenRequired: boolean;
+        };
+        TransferOwnershipRequest: {
+            /**
+             * Format: uuid
+             * @description The account identifier of the member who becomes an owner; another member of the workspace, not the caller
+             */
+            accountId: string;
+            /** @description Whether the caller becomes an admin once the member is an owner; false leaves the caller an owner */
+            demoteSelf: boolean;
         };
         UpdateAccountRequest: {
             /**
@@ -4738,6 +4764,104 @@ export interface operations {
                 };
             };
             /** @description The body did not pass validation (a value of the wrong type, or a field the operation does not declare) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    transferWorkspaceOwnership: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TransferOwnershipRequest"];
+            };
+        };
+        responses: {
+            /** @description The member is an owner of the workspace; when the caller asked to step down, the caller is an admin in the same transaction and the response carries the Set-Cookie header of the session's new token. The member is told by email, in their language, when the call made them an owner. When the member already is an owner and the caller stays one, nothing changes and nothing is written */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Member"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token, or the caller is not an owner of the workspace (forbidden) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace, or the account is not a member of it, whichever workspace it belongs to */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The change would leave the workspace without an owner (last_owner); nothing is written */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation (an identifier that is not a UUID, a `demoteSelf` that is not a boolean, or a field the operation does not declare), or `accountId` names the caller (the errors name accountId) */
             422: {
                 headers: {
                     [name: string]: unknown;

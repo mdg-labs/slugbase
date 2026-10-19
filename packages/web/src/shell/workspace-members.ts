@@ -1,7 +1,10 @@
 import type { ComponentTypes } from "@slugbase/contracts";
-import { infiniteQueryOptions, type InfiniteData } from "@tanstack/react-query";
+import { infiniteQueryOptions, type InfiniteData, type QueryClient } from "@tanstack/react-query";
+import { ME_QUERY_KEY, type Me } from "../account/me.ts";
 import { ApiProblemError, type ApiClient } from "../api/client.ts";
-import type { WorkspaceRole } from "./workspace.ts";
+import { isReauthCancelled } from "../auth/reauth.ts";
+import { WORKSPACE_QUERY_KEY, type Workspace, type WorkspaceRole } from "./workspace.ts";
+import { WORKSPACES_QUERY_KEY } from "./workspaces.ts";
 
 export type Member = ComponentTypes["schemas"]["Member"];
 export type MemberList = ComponentTypes["schemas"]["MemberList"];
@@ -67,6 +70,22 @@ export function withMember(data: InfiniteData<MemberList, string | undefined> | 
   return data === undefined
     ? data
     : { ...data, pages: data.pages.map((page) => ({ ...page, items: page.items.map((item) => (item.accountId === member.accountId ? member : item)) })) };
+}
+
+/**
+ * What the page knows of the caller's own role after the server changed it and rotated the session's token: the
+ * account, the workspace and the list of workspaces are updated at once and read again.
+ */
+export function moveOwnRole(queryClient: QueryClient, role: WorkspaceRole): void {
+  queryClient.setQueryData<Me>(ME_QUERY_KEY, (me) =>
+    me === undefined
+      ? me
+      : { ...me, memberships: me.memberships.map((membership) => (membership.workspaceId === me.activeWorkspaceId ? { ...membership, role } : membership)) },
+  );
+  queryClient.setQueryData<Workspace>(WORKSPACE_QUERY_KEY, (workspace) => (workspace === undefined ? workspace : { ...workspace, role }));
+  void queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
+  void queryClient.invalidateQueries({ queryKey: WORKSPACE_QUERY_KEY });
+  void queryClient.invalidateQueries({ queryKey: WORKSPACES_QUERY_KEY });
 }
 
 /**
@@ -168,4 +187,51 @@ export function defaultRecipient(members: readonly Member[], departingId: string
   return [...members]
     .filter((member) => member.role === "owner" && member.accountId !== departingId)
     .sort((a, b) => compare(a.joinedAt, b.joinedAt) || compare(a.accountId, b.accountId))[0];
+}
+
+/** Why an ownership transfer was refused, as far as the member is told. */
+export type OwnershipRefusal = "lastOwner" | "forbidden" | "notAMember" | "reauthRequired";
+
+export type OwnershipTransfer =
+  | { readonly status: "transferred"; readonly member: Member }
+  | { readonly status: "refused"; readonly refusal: OwnershipRefusal };
+
+/**
+ * Makes the member an owner and, when `demoteSelf` is set, the caller an admin (doc 02 section 3.3). The call needs a fresh
+ * re-authentication; the API client opens the shared prompt for it and sends the call again. A refusal the dialog explains
+ * (the prompt was closed, the workspace would be left without an owner, the caller may not transfer, the account is no longer
+ * a member) is an answer; any other failure throws.
+ */
+export async function transferOwnership(api: ApiClient, accountId: string, demoteSelf: boolean): Promise<OwnershipTransfer> {
+  try {
+    const { data, error } = await api.POST("/api/v1/workspace/transfer-ownership", { body: { accountId, demoteSelf } });
+    if (data === undefined) {
+      throw new Error("The ownership transfer did not answer with a document", { cause: error });
+    }
+    return { status: "transferred", member: data };
+  } catch (caught) {
+    if (isReauthCancelled(caught)) {
+      return { status: "refused", refusal: "reauthRequired" };
+    }
+    if (caught instanceof ApiProblemError) {
+      if (caught.status === 401 && caught.code === "reauth_required") {
+        return { status: "refused", refusal: "reauthRequired" };
+      }
+      if (caught.status === 409 && caught.code === "last_owner") {
+        return { status: "refused", refusal: "lastOwner" };
+      }
+      if (caught.status === 403) {
+        return { status: "refused", refusal: "forbidden" };
+      }
+      if (caught.status === 404) {
+        return { status: "refused", refusal: "notAMember" };
+      }
+    }
+    throw caught;
+  }
+}
+
+/** Whether the viewer may transfer ownership to the member (doc 02 section 3.3): an owner, to a member who is not an owner yet and is not themself. */
+export function canTransferOwnership(viewer: WorkspaceRole | undefined, viewerId: string | undefined, member: Member): boolean {
+  return viewer === "owner" && viewerId !== undefined && member.accountId !== viewerId && member.role !== "owner";
 }

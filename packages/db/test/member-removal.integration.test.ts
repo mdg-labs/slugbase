@@ -241,6 +241,41 @@ describe("memberRepository.remove", () => {
   });
 });
 
+describe("memberRepository.enqueue", () => {
+  it("queues every job when the transaction commits", async () => {
+    const a = await workspaceOf("owner", "member");
+
+    await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) =>
+      memberRepository(tx).enqueue([job(a.workspaceId, who(a, 0), who(a, 1)), job(a.workspaceId, who(a, 1), who(a, 0))]),
+    );
+
+    expect(await queued()).toHaveLength(2);
+  });
+
+  it("queues no job when the transaction ends in an error, so a job never announces a change that did not commit", async () => {
+    const a = await workspaceOf("owner", "member");
+
+    const error = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, async (tx) => {
+      await memberRepository(tx).enqueue([job(a.workspaceId, who(a, 0), who(a, 1))]);
+      throw new Error("the change was refused");
+    }).catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({ message: "the change was refused" });
+    expect(await queued()).toEqual([]);
+  });
+
+  it("queues none of the jobs when one of them names a queue that does not exist", async () => {
+    const a = await workspaceOf("owner", "member");
+
+    const error = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) =>
+      memberRepository(tx).enqueue([job(a.workspaceId, who(a, 0), who(a, 1)), { id: freshId(), queue: "event.no.such.queue", data: {} }]),
+    ).catch((caught: unknown) => caught);
+
+    expect(error).toMatchObject({ name: "QueueMissingError" });
+    expect(await queued()).toEqual([]);
+  });
+});
+
 describe("memberRepository.longestStandingOwner", () => {
   it("is the owner who joined first other than the one excluded, then the lowest account identifier", async () => {
     const a = await workspaceOf("owner", "admin", "owner", "owner");

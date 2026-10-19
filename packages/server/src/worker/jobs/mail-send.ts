@@ -1,5 +1,5 @@
 import { ACCOUNT_NOTIFICATIONS, CREDENTIAL_TOKEN_TTL_SECONDS, accountNotification, generateCredentialToken, type MailMessage } from "@slugbase/core";
-import { accountProfileRepository, credentialTokenRepository, emailChangeRepository, type QueuedJob } from "@slugbase/db";
+import { accountProfileRepository, credentialTokenRepository, emailChangeRepository, memberRepository, workspaceRepository, type QueuedJob } from "@slugbase/db";
 import { z } from "zod";
 import { uuidv7 } from "../../auth/uuidv7.ts";
 import type { JobDefinition } from "../job.ts";
@@ -35,6 +35,12 @@ import { defineJob } from "../job.ts";
 // pending, and the confirmation only to an address that is free, so nothing is mailed to another account. A
 // change cancelled before the worker runs sends nothing.
 //
+// The "ownership transferred to you" email (doc 02 section 12) names the workspace and the owner who made the
+// recipient one. The job carries the identifiers of both and nothing else: the worker reads the workspace's name
+// and the owner's display name in a transaction acting in that workspace as the recipient, so a rename or a
+// departure between the request and the send is what the message shows. It is sent only while the recipient is
+// still an owner of the workspace.
+//
 // The "new sign-in" email (doc 02 section 12) carries what it shows, taken when the sign-in happened: the
 // time, the browser family and the coarse network prefix, none of which is a secret. The alert was queued
 // while the account's switch was on, so it is sent whatever becomes of the session or the switch before the
@@ -66,10 +72,33 @@ export const mailSendJob = defineJob({
     signedInAt: z.iso.datetime().optional(),
     browser: z.string().min(1).max(64).optional(),
     network: z.string().min(1).max(64).optional(),
+    workspaceId: z.uuid().optional(),
+    fromAccountId: z.uuid().optional(),
   }),
   // Delivery is at least once: a retry after an attempt that failed past the point the relay took the
   // message sends it again, and nothing here can tell the two apart.
-  handle: async ({ template, accountId, signedInAt, browser, network }, context) => {
+  handle: async ({ template, accountId, signedInAt, browser, network, workspaceId, fromAccountId }, context) => {
+    if (template === "ownershipTransferred") {
+      if (workspaceId === undefined || fromAccountId === undefined) {
+        context.logger.warn("Mail not sent; the ownership notice names no workspace or no previous owner", { template });
+        return;
+      }
+      const notices = await context.withTenant({ accountId, workspaceId, requestId: JOB_REQUEST_ID }, async (tx): Promise<readonly MailMessage[]> => {
+        const profile = await accountProfileRepository(tx).profile();
+        const workspace = await workspaceRepository(tx).current();
+        if (profile === undefined || workspace === undefined || workspace.role !== "owner") {
+          // The account or the workspace is gone, or the account is no owner any more; the message would say what is no longer so.
+          context.logger.warn("Mail not sent; the account is no longer an owner of the workspace", { template });
+          return [];
+        }
+        const previous = await memberRepository(tx).member(fromAccountId);
+        return [accountNotification(template, profile, { workspaceName: workspace.name, transferredBy: previous?.displayName ?? "" })];
+      });
+      for (const message of notices) {
+        await context.adapters.mail.send(message);
+      }
+      return;
+    }
     const messages = await context.withTenant({ accountId, requestId: JOB_REQUEST_ID }, async (tx): Promise<readonly MailMessage[]> => {
       const profile = await accountProfileRepository(tx).profile();
       if (profile === undefined) {
@@ -175,6 +204,15 @@ export function queueMailSend(id: string, template: MailJobTemplate, accountId: 
       ...(payload.network === undefined ? {} : { network: payload.network }),
     },
   };
+}
+
+/**
+ * The job that tells `accountId` it became an owner of `workspaceId` through `fromAccountId`; for the transaction that
+ * makes the change. The names the message shows are read when it is sent.
+ */
+export function queueOwnershipTransferredMail(id: string, accountId: string, ownership: { readonly workspaceId: string; readonly fromAccountId: string }): QueuedJob {
+  const payload = mailSendJob.parse({ template: "ownershipTransferred", accountId, ...ownership });
+  return { id, queue: MAIL_SEND_JOB, data: { template: payload.template, accountId: payload.accountId, workspaceId: ownership.workspaceId, fromAccountId: ownership.fromAccountId } };
 }
 
 /** The mail job the worker always runs, whatever modules it composes. */

@@ -30,6 +30,9 @@ const SETTING_VALUE: AuditMetadataField = { type: "text", minLength: 1, maxLengt
 /** A member's role: `owner`, `admin` or `member`. */
 const MEMBER_ROLE: AuditMetadataField = { type: "text", minLength: 5, maxLength: 6 };
 
+/** Whether an option was chosen: `true` or `false`. */
+const FLAG: AuditMetadataField = { type: "text", minLength: 4, maxLength: 5 };
+
 /** What happens to a departing member's content: `transfer` or `delete`. */
 const CONTENT_CHOICE: AuditMetadataField = { type: "text", minLength: 6, maxLength: 8 };
 
@@ -38,6 +41,7 @@ export const AUDIT_ACTIONS = {
   "workspace.renamed": { category: "workspace", metadata: { from: WORKSPACE_NAME, to: WORKSPACE_NAME } },
   "workspace.settings_changed": { category: "workspace", metadata: { setting: SETTING_NAME, from: SETTING_VALUE, to: SETTING_VALUE } },
   "workspace.deletion_requested": { category: "workspace", metadata: {} },
+  "workspace.ownership_transferred": { category: "workspace", metadata: { demoteSelf: FLAG } },
   "member.role_changed": { category: "member", metadata: { from: MEMBER_ROLE, to: MEMBER_ROLE } },
   "member.removed": { category: "member", metadata: { content: CONTENT_CHOICE, transferTo: { type: "uuid" } } },
   "member.left": { category: "member", metadata: { content: CONTENT_CHOICE, transferTo: { type: "uuid" } } },

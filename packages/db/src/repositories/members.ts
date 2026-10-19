@@ -59,6 +59,11 @@ export interface MemberRepository extends MemberRoleStore {
    * session of that account.
    */
   rotateSession(sessionId: string, tokenHash: Uint8Array): Promise<boolean>;
+  /**
+   * Queues `jobs` in the open transaction, so each exists exactly when the change that asked for it does and
+   * none when the transaction ends without it.
+   */
+  enqueue(jobs: readonly QueuedJob[]): Promise<void>;
 }
 
 /** The name of the constraint trigger that keeps an owner in every workspace; the commit it refuses names it. */
@@ -193,6 +198,12 @@ export function memberRepository(tx: TenantTx): MemberRepository {
         await enqueueInTenantTransaction(tx, job);
       }
       return true;
+    },
+
+    async enqueue(jobs) {
+      for (const job of jobs) {
+        await enqueueInTenantTransaction(tx, job);
+      }
     },
 
     async rotateSession(sessionId, tokenHash) {

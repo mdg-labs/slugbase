@@ -8,6 +8,7 @@ import {
   listWorkspaces,
   renameWorkspace as renameWorkspaceOperation,
   setActiveWorkspace,
+  transferWorkspaceOwnership,
   updateWorkspaceSettings,
 } from "@slugbase/contracts";
 import {
@@ -17,11 +18,25 @@ import {
   createWorkspace,
   renameWorkspace,
   requestWorkspaceDeletion,
+  transferOwnership,
   type AuditActor,
+  type MailPort,
+  type SessionCookieSpec,
   type WorkspaceStore,
 } from "@slugbase/core";
-import { accountProfileRepository, auditEventRepository, workspaceRepository, type Database, type TenantTx, type WorkspaceDetail } from "@slugbase/db";
+import {
+  accountProfileRepository,
+  auditEventRepository,
+  isLastOwnerViolation,
+  memberRepository,
+  workspaceRepository,
+  type Database,
+  type TenantTx,
+  type WorkspaceDetail,
+} from "@slugbase/db";
 import type { z } from "zod";
+import { setSessionCookie } from "../../auth/cookie.ts";
+import { newSessionToken } from "../../auth/session-token.ts";
 import { uuidv7 } from "../../auth/uuidv7.ts";
 import { queueDomainEvent } from "../../events/publish.ts";
 import type { ChainContext, RouteBinding } from "../../http/chain.ts";
@@ -29,7 +44,9 @@ import { ProblemError, requestIdOf } from "../../http/problem.ts";
 import type { RequestTenant } from "../../http/tenant.ts";
 import { networkPrefixOf } from "../../http/trusted-proxy.ts";
 import { endMembershipOf } from "../members/departure.ts";
+import { memberBody } from "../members/index.ts";
 import { route } from "../register.ts";
+import { queueOwnershipTransferredMail } from "../../worker/jobs/mail-send.ts";
 import { WORKSPACE_DELETE_JOB } from "../../worker/jobs/workspace-delete.ts";
 import { acceptedVersions, entityTagOf } from "./if-match.ts";
 
@@ -66,6 +83,16 @@ import { acceptedVersions, entityTagOf } from "./if-match.ts";
 // the job removes the rows afterwards. A workspace that is being deleted is not one the request can act in, so a repeated
 // request is 404.
 //
+// POST /api/v1/workspace/transfer-ownership makes another member of the workspace the request acts in an owner and,
+// when asked, steps the caller down to admin (doc 04 section 10.4, doc 02 section 3.3, doc 10 T1, T2 and T18). It is
+// an owner's, needs a session that re-authenticated within ten minutes (the authorization stage judges both before the
+// handler runs) and declares no token scope. The member service judges the roles again under the lock of the workspace's
+// row; the promotion, the demotion, the audit event, the rotation of the caller's session token when the caller stepped
+// down and the recipient's email are one transaction, and the database refuses the commit of one that would leave the
+// workspace without an owner (409 last_owner). The new token travels in Set-Cookie only when the caller stepped down.
+// An account that is no member of the workspace is 404 whichever workspace it belongs to. The email is queued only for
+// a recipient the request made an owner, and only when the composition can send mail.
+//
 // POST /api/v1/workspace/leave ends the caller's own membership of the workspace the request acts in with the
 // content choice of doc 02 section 3.6, as the removal of a member does (routes/members/departure.ts); it is a
 // member's, and declares no token scope.
@@ -77,6 +104,10 @@ const UNVERIFIED = "Verify your email address before you create a workspace.";
 
 const NO_WORKSPACE = "No such resource.";
 const DELETION_REFUSED = "The workspace cannot be deleted while its subscription is active; cancel the subscription first.";
+const NOT_AN_OWNER = "Only an owner can transfer the ownership of the workspace.";
+const NO_SUCH_MEMBER = "There is no such member.";
+const OWN_ACCOUNT = "Ownership cannot be transferred to yourself.";
+const LAST_OWNER = "A workspace always has an owner; make another member an owner first.";
 const STALE_VERSION = "The workspace has changed since it was read; read it again and retry.";
 
 export interface WorkspaceRoutesOptions {
@@ -86,6 +117,9 @@ export interface WorkspaceRoutesOptions {
    * (the Community Edition's is off). It is a plain value so that no edition decides it (D4).
    */
   readonly creationAllowed: boolean;
+  readonly cookie: SessionCookieSpec;
+  /** The mail port of the composition; the recipient of an ownership transfer is mailed only when it can send. */
+  readonly mail: Pick<MailPort, "available">;
 }
 
 function sessionOf(context: ChainContext): { readonly sessionId: string; readonly accountId: string } {
@@ -132,7 +166,7 @@ function workspaceBody(workspace: WorkspaceDetail): z.input<typeof WorkspaceSche
   return { id, name, role, memberCount, createdAt: createdAt.toISOString(), version };
 }
 
-export function workspaceRoutes({ withTenant, creationAllowed }: WorkspaceRoutesOptions): RouteBinding[] {
+export function workspaceRoutes({ withTenant, creationAllowed, cookie, mail }: WorkspaceRoutesOptions): RouteBinding[] {
   return [
     route(listWorkspaces).handle(async (_request, context) => {
       const accountId = accountOf(context);
@@ -280,6 +314,59 @@ export function workspaceRoutes({ withTenant, creationAllowed }: WorkspaceRoutes
           throw new ProblemError(outcome.code, DELETION_REFUSED);
         case "unavailable":
           throw new ProblemError("not_found", NO_WORKSPACE);
+      }
+    }),
+
+    route(transferWorkspaceOwnership).handle(async ({ body }, context) => {
+      const { sessionId, accountId } = sessionOf(context);
+      const tenant = tenantOf(context);
+      const targetAccountId = body.accountId.toLowerCase();
+      const ipPrefix = networkPrefixOf(context.get("clientIp")) ?? null;
+      const token = newSessionToken();
+      let result;
+      try {
+        result = await tenant.withTenant(async (tx) => {
+          const profile = await accountProfileRepository(tx).profile();
+          if (profile === undefined) {
+            return { kind: "not_found" } as const;
+          }
+          const repository = memberRepository(tx);
+          const outcome = await transferOwnership(
+            { store: repository, audit: createAuditWriter({ store: auditEventRepository(tx), newId: uuidv7 }) },
+            { workspaceId: tenant.workspaceId, actor: actorOf(context, profile.displayName), actorAccountId: accountId, targetAccountId, demoteSelf: body.demoteSelf, ipPrefix },
+          );
+          if (outcome.kind === "forbidden" || outcome.kind === "not_found" || outcome.kind === "invalid_recipient") {
+            return outcome;
+          }
+          const rotated = outcome.kind === "transferred" && outcome.demoted;
+          if (rotated && !(await repository.rotateSession(sessionId, token.hash))) {
+            throw new ProblemError("unauthenticated", UNAUTHENTICATED);
+          }
+          if (outcome.kind === "transferred" && outcome.promoted && mail.available) {
+            await repository.enqueue([queueOwnershipTransferredMail(uuidv7(), targetAccountId, { workspaceId: tenant.workspaceId, fromAccountId: accountId })]);
+          }
+          const member = await repository.member(targetAccountId);
+          if (member === undefined) {
+            throw new Error("the recipient of an ownership transfer is not a member after the transfer");
+          }
+          return { kind: "done", member, rotated } as const;
+        });
+      } catch (error) {
+        // The database refuses the commit of a transaction that leaves the workspace without an owner: the roles, the audit event, the email and the new token are not written.
+        if (isLastOwnerViolation(error)) {
+          throw new ProblemError("last_owner", LAST_OWNER);
+        }
+        throw error;
+      }
+      switch (result.kind) {
+        case "forbidden":
+          throw new ProblemError("forbidden", NOT_AN_OWNER);
+        case "not_found":
+          throw new ProblemError("not_found", NO_SUCH_MEMBER);
+        case "invalid_recipient":
+          throw new ProblemError("validation_failed", OWN_ACCOUNT, { errors: [{ path: "accountId", code: "invalid_recipient" }] });
+        case "done":
+          return { status: 200, body: memberBody(result.member), ...(result.rotated ? { headers: { "Set-Cookie": setSessionCookie(cookie, token.value) } } : {}) };
       }
     }),
 

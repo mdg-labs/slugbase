@@ -61,6 +61,8 @@ export interface WorkspaceSettingsServerOptions {
   readonly memberDelete?: (call: number, request: Request) => Response | Promise<Response>;
   /** Answers `POST /workspace/leave` instead of ending the caller's membership; `call` counts from 1. */
   readonly leave?: (call: number, request: Request) => Response | Promise<Response>;
+  /** Answers `POST /workspace/transfer-ownership` instead of transferring; `call` counts from 1. */
+  readonly transfer?: (call: number, request: Request) => Response | Promise<Response>;
   /** Where the session acts once the caller has left: in another workspace, or in none. */
   readonly afterLeaving?: "other" | "none";
 }
@@ -224,6 +226,24 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
       const answer = ending(SELF.accountId, JSON.parse(text) as { content: "transfer" | "delete"; transferTo?: string }, true);
       left = answer.ok;
       return answer;
+    }
+    if (pathname === `${WORKSPACE_PATH}/transfer-ownership` && request.method === "POST") {
+      if (options.transfer !== undefined) {
+        return options.transfer(call, request);
+      }
+      const { accountId, demoteSelf } = JSON.parse(text) as { accountId: string; demoteSelf: boolean };
+      const recipient = members.find((candidate) => candidate.accountId === accountId);
+      if (recipient === undefined) {
+        return problem(404, "not_found", "req-404");
+      }
+      const promoted = { ...recipient, role: "owner" as const };
+      members = members.map((candidate) => (candidate.accountId === accountId ? promoted : candidate));
+      if (demoteSelf) {
+        // The caller steps down, and the session's token is rotated with it.
+        members = members.map((candidate) => (candidate.accountId === SELF.accountId ? { ...candidate, role: "admin" as const } : candidate));
+        role = "admin";
+      }
+      return json(promoted);
     }
     if (options.other !== undefined) {
       return options.other(request);

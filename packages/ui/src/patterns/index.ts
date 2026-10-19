@@ -28,6 +28,7 @@ export { SettingsSection, type SettingsSectionProps } from "./settings-section.t
 export { ShownOnce, type ShownOnceProps } from "./shown-once.tsx";
 export { StatusBadge, type StatusBadgeProps, type StatusBadgeVariant } from "./status-badge.tsx";
 export { Totp, type TotpProps } from "./totp.tsx";
+export { TypedConfirm, matchesExpected, type TypedConfirmProps } from "./typed-confirm.tsx";
 export { Wizard, type WizardProps } from "./wizard.tsx";
 export type { WorkspaceSwitcherAction, WorkspaceSwitcherItem, WorkspaceSwitcherProps } from "./workspace-switcher.tsx";
 export type { Accent, ResolvedTheme } from "../theme/theme-provider.tsx";

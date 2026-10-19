@@ -555,6 +555,7 @@
         "makeOwner": "Make owner",
         "makeAdmin": "Make admin",
         "makeMember": "Make member",
+        "transfer": "Transfer ownership",
         "remove": "Remove from workspace"
       },
       "error": {
@@ -582,6 +583,24 @@
           "action": "Remove member"
         },
         "done": "{name} was removed from the workspace"
+      },
+      "transfer": {
+        "title": "Transfer ownership to {name}?",
+        "description": "{name} becomes an owner of this workspace and can manage its members and settings and delete it. Owners can also make other members owners.",
+        "stayAdmin": "Stay as admin",
+        "stayAdminNote": "You step down from owner to admin once {name} is an owner. Leave this off to stay an owner.",
+        "confirmLabel": "Type {name} to confirm",
+        "action": "Transfer ownership",
+        "cancel": "Cancel",
+        "done": "{name} is now an owner of the workspace",
+        "doneStepDown": "{name} is now an owner of the workspace, and you are an admin",
+        "error": {
+          "title": "Ownership was not transferred",
+          "reauthCancelled": "Confirm it is you to transfer ownership.",
+          "lastOwner": "A workspace needs at least one owner. The ownership was not changed.",
+          "forbidden": "Only an owner can transfer ownership. The page has been reloaded.",
+          "notAMember": "This person is no longer a member of the workspace. The list has been reloaded."
+        }
       }
     }
   },

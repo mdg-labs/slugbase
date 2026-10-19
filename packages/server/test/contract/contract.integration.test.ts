@@ -182,11 +182,11 @@ describe("the walker over the committed document", () => {
     expect(report.failures).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each anonymous operation and for the sign-in; each of the thirty-two operations that need a session
-    // also answers 401 without one, each of the eight that declare re-authentication answers 401 reauth_required without it, and each of
-    // the nine that need a role in the workspace answers the principal just below it (404 below member, 403 below admin), and each of the three
+    // One valid request for each anonymous operation and for the sign-in; each of the thirty-three operations that need a session
+    // also answers 401 without one, each of the nine that declare re-authentication answers 401 reauth_required without it, and each of
+    // the ten that need a role in the workspace answers the principal just below it (404 below member, 403 below admin), and each of the four
     // that name a member or a recipient answers 404 for one of workspace B.
-    expect(report.calls).toBe(operations.length + 52);
+    expect(report.calls).toBe(operations.length + 56);
   }, WALK_TIMEOUT_MS);
 });
 
@@ -341,11 +341,12 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     }
   }
 
-  it("passes for the nine tenant-scoped operations, and leaves workspace B, its settings, its members and its audit log as they were", async () => {
+  it("passes for the ten tenant-scoped operations, and leaves workspace B, its settings, its members and its audit log as they were", async () => {
     await seedFixtureWorkspaces();
     const before = await contentOfB();
-    // The deletion of the workspace takes no identifier, so the matrix repeats it as every principal of A: the guard of the composition refuses it,
-    // which keeps A in place for the calls that follow, and the refusal is what a deployment with an active subscription answers.
+    // The deletion of the workspace takes no identifier, so the matrix repeats it as every principal of A (the sessions of the matrix have just
+    // re-authenticated): the guard of the composition refuses it, which keeps A in place for the calls that follow, and the refusal is what a
+    // deployment with an active subscription answers.
     const server = serve([
       {
         name: "stub-principals",
@@ -363,11 +364,12 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     });
 
     expect(report.failures).toEqual([]);
-    expect(report.classified.byKind["tenant-scoped"]).toBe(9);
+    expect(report.classified.byKind["tenant-scoped"]).toBe(10);
     // the three sessions and the six tokens (a read and a read-write one of each role) of A, once on each of the six operations that name no member,
     // and on the operations that name members of B once for each of them: the role change, and the leaving, which names a recipient, once for each
-    // of the three; the removal names both a member and a recipient, once for each pair
-    expect(report.attempts).toBe(9 * 6 + 9 * (3 + 3 + 3 * 3));
+    // of the three, and the ownership transfer, which names the member who becomes an owner, once for each of the three; the removal names both
+    // a member and a recipient, once for each pair
+    expect(report.attempts).toBe(9 * 6 + 9 * (3 + 3 + 3 + 3 * 3));
     expect(await contentOfB()).toBe(before);
     // The requests reached the handlers: the sessions of A renamed A and turned its AI suggestions off, and the tokens changed nothing.
     const [changed] = await database().owner.begin(async (tx) => {

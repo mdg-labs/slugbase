@@ -104,7 +104,7 @@ describe("removing a member", () => {
     await openList();
 
     await press(within(rowOf("Grace Hopper")).getByRole("button", { name: "Actions for Grace Hopper" }));
-    expect((await screen.findAllByRole("menuitem")).map((item) => item.textContent)).toEqual(["Make owner", "Make admin", "Remove from workspace"]);
+    expect((await screen.findAllByRole("menuitem")).map((item) => item.textContent)).toEqual(["Make owner", "Make admin", "Transfer ownership", "Remove from workspace"]);
     expect(within(rowOf("Ada Lovelace")).getByRole("button", { name: "Actions for Ada Lovelace" })).toBeTruthy();
   }, SLOW_TEST_TIMEOUT_MS);
 

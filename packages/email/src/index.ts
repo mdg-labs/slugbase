@@ -2,6 +2,7 @@ import { EMAIL_CHANGE_NOTICE_TEMPLATE, emailChangeNotice } from "./templates/ema
 import { EMAIL_CHANGE_TEMPLATE, emailChange } from "./templates/email-change.ts";
 import { MFA_DISABLED_TEMPLATE, MFA_ENABLED_TEMPLATE, mfaDisabled, mfaEnabled } from "./templates/mfa.ts";
 import { NEW_SIGN_IN_TEMPLATE, newSignIn } from "./templates/new-sign-in.ts";
+import { OWNERSHIP_TRANSFERRED_TEMPLATE, ownershipTransferred } from "./templates/ownership-transferred.ts";
 import { PASSWORD_CHANGED_TEMPLATE, passwordChanged } from "./templates/password-changed.ts";
 import { PASSWORD_RESET_TEMPLATE, passwordReset } from "./templates/password-reset.ts";
 import { VERIFY_EMAIL_TEMPLATE, verifyEmail } from "./templates/verify-email.ts";
@@ -37,5 +38,6 @@ export function createMailTemplates({ appOrigin }: MailTemplateOptions): MailTem
     [PASSWORD_RESET_TEMPLATE]: passwordReset(options),
     [EMAIL_CHANGE_TEMPLATE]: emailChange(options),
     [EMAIL_CHANGE_NOTICE_TEMPLATE]: emailChangeNotice(options),
+    [OWNERSHIP_TRANSFERRED_TEMPLATE]: ownershipTransferred(options),
   };
 }

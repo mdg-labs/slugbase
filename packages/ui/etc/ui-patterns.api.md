@@ -384,6 +384,9 @@ export { LogOutIcon }
 export const MAIN_CONTENT_ID = "main-content";
 
 // @public
+export function matchesExpected(typed: string, expected: string): boolean;
+
+// @public
 export type PasswordScore = 0 | 1 | 2 | 3 | 4;
 
 // @public
@@ -679,6 +682,30 @@ export interface TotpProps {
 }
 
 export { TriangleAlertIcon }
+
+// @public
+export function TypedConfirm(input: TypedConfirmProps): ReactElement;
+
+// @public (undocumented)
+export interface TypedConfirmProps {
+    // (undocumented)
+    cancelLabel: ReactNode;
+    children?: ReactNode;
+    // (undocumented)
+    confirmLabel: ReactNode;
+    description: ReactNode;
+    destructive?: boolean;
+    error?: ReactNode;
+    expected: string;
+    inputLabel: ReactNode;
+    loading?: boolean;
+    onConfirm: () => void;
+    onOpenChange: (open: boolean) => void;
+    // (undocumented)
+    open: boolean;
+    // (undocumented)
+    title: ReactNode;
+}
 
 // @public
 export function Wizard(input: WizardProps): ReactElement;

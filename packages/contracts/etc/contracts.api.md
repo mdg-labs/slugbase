@@ -581,6 +581,10 @@ export interface ComponentTypes {
             setupRequired: boolean;
             setupTokenRequired: boolean;
         };
+        TransferOwnershipRequest: {
+            accountId: string;
+            demoteSelf: boolean;
+        };
         UpdateAccountRequest: {
             accent?: "periwinkle" | "violet" | "rose" | "amber" | "green" | "teal";
             aiOptOut?: boolean;
@@ -4621,6 +4625,95 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    transferWorkspaceOwnership: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["TransferOwnershipRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["Member"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     unlinkIdentity: {
         parameters: {
             query?: never;
@@ -5727,6 +5820,23 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/workspace/transfer-ownership": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["transferWorkspaceOwnership"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/api/v1/workspaces": {
         parameters: {
             query?: never;
@@ -6641,6 +6751,52 @@ export const TOKEN_SCOPES: readonly ["read", "write"];
 
 // @public (undocumented)
 export type TokenScope = (typeof TOKEN_SCOPES)[number];
+
+// @public (undocumented)
+export const TransferOwnershipRequestSchema: z.ZodObject<{
+    accountId: z.ZodUUID;
+    demoteSelf: z.ZodBoolean;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const transferWorkspaceOwnership: {
+    readonly method: "post";
+    readonly path: "/api/v1/workspace/transfer-ownership";
+    readonly operationId: "transferWorkspaceOwnership";
+    readonly tag: "workspaces";
+    readonly summary: "Transfer the active workspace's ownership";
+    readonly auth: "owner";
+    readonly rate: "write";
+    readonly reauth: true;
+    readonly request: {
+        readonly body: z.ZodObject<{
+            accountId: z.ZodUUID;
+            demoteSelf: z.ZodBoolean;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        email: z.ZodString;
+        role: z.ZodEnum<{
+        member: "member";
+        admin: "admin";
+        owner: "owner";
+        }>;
+        joinedAt: z.ZodISODateTime;
+        lastActiveAt: z.ZodNullable<z.ZodISODateTime>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 409: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
 
 // @public (undocumented)
 export const unlinkIdentity: {

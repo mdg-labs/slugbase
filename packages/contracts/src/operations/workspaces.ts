@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
 import { WORKSPACE_ROLES } from "./me.ts";
-import { EndMembershipRequestSchema, MembershipEndedSchema } from "./members.ts";
+import { EndMembershipRequestSchema, MemberSchema, MembershipEndedSchema } from "./members.ts";
 
 // The workspaces tag of doc 04 section 10.4. The account-level operations list the workspaces the signed-in
 // account belongs to, create one and switch the session's active one; they act on the session's own account,
@@ -84,6 +84,13 @@ const EntityTagHeader = {
 export const SetActiveWorkspaceRequestSchema = z
   .strictObject({ workspaceId: z.uuid().describe("The workspace the session acts in from its next request on; one the account is a member of") })
   .meta({ id: "SetActiveWorkspaceRequest" });
+
+export const TransferOwnershipRequestSchema = z
+  .strictObject({
+    accountId: z.uuid().describe("The account identifier of the member who becomes an owner; another member of the workspace, not the caller"),
+    demoteSelf: z.boolean().describe("Whether the caller becomes an admin once the member is an owner; false leaves the caller an owner"),
+  })
+  .meta({ id: "TransferOwnershipRequest" });
 
 export const listWorkspaces = defineOperation({
   method: "get",
@@ -281,5 +288,31 @@ export const deleteWorkspace = defineOperation({
     ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable, or a deployment extension that is consulted before the deletion did not answer in time; nothing is changed"),
+  },
+});
+
+export const transferWorkspaceOwnership = defineOperation({
+  method: "post",
+  path: "/api/v1/workspace/transfer-ownership",
+  operationId: "transferWorkspaceOwnership",
+  tag: "workspaces",
+  summary: "Transfer the active workspace's ownership",
+  auth: "owner",
+  rate: "write",
+  reauth: true,
+  request: { body: TransferOwnershipRequestSchema },
+  responses: {
+    200: jsonResponse(
+      "The member is an owner of the workspace; when the caller asked to step down, the caller is an admin in the same transaction and the response carries the Set-Cookie header of the session's new token. The member is told by email, in their language, when the call made them an owner. When the member already is an owner and the caller stays one, nothing changes and nothing is written",
+      MemberSchema,
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"),
+    403: problemResponse("The request did not come from the application itself (cross_site_request), the credential is an API token, or the caller is not an owner of the workspace (forbidden)"),
+    404: problemResponse("The request acts in no workspace, or the account is not a member of it, whichever workspace it belongs to"),
+    409: problemResponse("The change would leave the workspace without an owner (last_owner); nothing is written"),
+    422: problemResponse("The body did not pass validation (an identifier that is not a UUID, a `demoteSelf` that is not a boolean, or a field the operation does not declare), or `accountId` names the caller (the errors name accountId)"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
   },
 });

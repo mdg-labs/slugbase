@@ -80,5 +80,16 @@
     "expiry": "The link works once and for 1 hour.",
     "itWasYou": "If this was you, you do not need to do anything.",
     "footer": "You are receiving this email because a change of the email address of your {appName} account was requested."
+  },
+  "ownershipTransferred": {
+    "subject": "You are now an owner of {workspace} on {appName}",
+    "greeting": "Hi {name},",
+    "greetingAnonymous": "Hi,",
+    "body": "You were made an owner of the workspace {workspace} on {appName}.",
+    "bodyBy": "{owner} made you an owner of the workspace {workspace} on {appName}.",
+    "powers": "As an owner you can manage the workspace's members and settings, make other members owners and delete the workspace.",
+    "notExpected": "If you did not expect this, ask the owner who made the change.",
+    "action": "Open {appName}",
+    "footer": "You are receiving this email because you were made an owner of the {appName} workspace {workspace}."
   }
 }

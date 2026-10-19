@@ -127,6 +127,13 @@ export const FIXTURES: ContractFixtures = {
   // workspace of its own that no other operation uses, and it has just re-authenticated, so the valid request is the declared 202: it marks
   // that workspace as being deleted, and the walker's other calls to the operation are refused before the handler.
   deleteWorkspace: {},
+  // The transfer names a member by account identifier in its body and takes an owner's re-authenticated session, so its valid request is the declared
+  // 404 for an account that is no member of the workspace the walker owns, and a member of workspace B is the same 404; the route tests transfer ownership.
+  transferWorkspaceOwnership: {
+    body: { accountId: UNKNOWN_MEMBER_ID, demoteSelf: false },
+    status: 404,
+    foreign: { body: { accountId: UNKNOWN_MEMBER_ID, demoteSelf: false } },
+  },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

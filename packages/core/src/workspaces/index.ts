@@ -48,3 +48,5 @@ export type {
   WorkspaceDeletionOutcome,
   WorkspaceDeletionStore,
 } from "./delete.ts";
+export { transferOwnership } from "./ownership.ts";
+export type { OwnershipTransferAsk, OwnershipTransferDependencies, OwnershipTransferOutcome } from "./ownership.ts";

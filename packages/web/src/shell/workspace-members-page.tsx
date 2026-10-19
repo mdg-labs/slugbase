@@ -18,20 +18,22 @@ import { useTranslation } from "react-i18next";
 import { ME_QUERY_KEY, meQuery, type Me } from "../account/me.ts";
 import { useFormat } from "../i18n/use-format.ts";
 import { EndMembershipDialog } from "./end-membership-dialog.tsx";
+import { TransferOwnershipDialog } from "./transfer-ownership-dialog.tsx";
 import { WorkspaceAdminOnly } from "./workspace-admin-only.tsx";
 import {
   MEMBERS_QUERY_KEY,
   assignableRoles,
   canRemove,
+  canTransferOwnership,
   changeMemberRole,
   membersQuery,
+  moveOwnRole,
   withMember,
   type Member,
   type MemberList,
   type RoleChangeRefusal,
 } from "./workspace-members.ts";
-import { WORKSPACE_QUERY_KEY, workspaceQuery, type Workspace, type WorkspaceRole } from "./workspace.ts";
-import { WORKSPACES_QUERY_KEY } from "./workspaces.ts";
+import { WORKSPACE_QUERY_KEY, workspaceQuery, type WorkspaceRole } from "./workspace.ts";
 
 const ROLES: readonly WorkspaceRole[] = ["owner", "admin", "member"];
 
@@ -59,6 +61,7 @@ function MembersTable({ viewerRole, viewerId }: { viewerRole: WorkspaceRole; vie
   const members = useInfiniteQuery(membersQuery(api));
   const [refusals, setRefusals] = useState<ReadonlyMap<string, RoleChangeRefusal>>(new Map());
   const [removing, setRemoving] = useState<Member | undefined>(undefined);
+  const [transferring, setTransferring] = useState<Member | undefined>(undefined);
 
   const change = useMutation({
     mutationKey: ["workspace", "members", "role"],
@@ -81,16 +84,7 @@ function MembersTable({ viewerRole, viewerId }: { viewerRole: WorkspaceRole; vie
       queryClient.setQueryData<InfiniteData<MemberList, string | undefined>>(MEMBERS_QUERY_KEY, (data) => withMember(data, outcome.member));
       if (member.accountId === queryClient.getQueryData<Me>(ME_QUERY_KEY)?.account.id) {
         // The server rotated the session's token with the change; what the page knows of the caller's role moves with it.
-        const role = outcome.member.role;
-        queryClient.setQueryData<Me>(ME_QUERY_KEY, (me) =>
-          me === undefined
-            ? me
-            : { ...me, memberships: me.memberships.map((membership) => (membership.workspaceId === me.activeWorkspaceId ? { ...membership, role } : membership)) },
-        );
-        queryClient.setQueryData<Workspace>(WORKSPACE_QUERY_KEY, (workspace) => (workspace === undefined ? workspace : { ...workspace, role }));
-        void queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
-        void queryClient.invalidateQueries({ queryKey: WORKSPACE_QUERY_KEY });
-        void queryClient.invalidateQueries({ queryKey: WORKSPACES_QUERY_KEY });
+        moveOwnRole(queryClient, outcome.member.role);
       }
     },
   });
@@ -125,9 +119,21 @@ function MembersTable({ viewerRole, viewerId }: { viewerRole: WorkspaceRole; vie
         change.mutate({ member, role });
       },
     }));
+    const transferAction: readonly RowAction[] = canTransferOwnership(viewerRole, viewerId, member)
+      ? [
+          {
+            id: "transfer",
+            label: t("settings.members.action.transfer"),
+            onSelect: () => {
+              setTransferring(member);
+            },
+          },
+        ]
+      : [];
     return canRemove(viewerRole, viewerId, member)
       ? [
           ...roleActions,
+          ...transferAction,
           {
             id: "remove",
             label: t("settings.members.action.remove"),
@@ -137,7 +143,7 @@ function MembersTable({ viewerRole, viewerId }: { viewerRole: WorkspaceRole; vie
             },
           },
         ]
-      : roleActions;
+      : [...roleActions, ...transferAction];
   }
 
   const columns: readonly DataTableColumn<Member>[] = [
@@ -224,6 +230,14 @@ function MembersTable({ viewerRole, viewerId }: { viewerRole: WorkspaceRole; vie
           target={{ kind: "remove", member: removing, viewerId }}
         />
       ) : null}
+      {transferring === undefined ? null : (
+        <TransferOwnershipDialog
+          member={transferring}
+          onClose={() => {
+            setTransferring(undefined);
+          }}
+        />
+      )}
       {items.length === 0 ? null : (
         <>
           <DataTable columns={columns} label={t("settings.members.title")} rowKey={(member) => member.accountId} rows={items} />

@@ -1537,6 +1537,26 @@
         ],
         "type": "object"
       },
+      "TransferOwnershipRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "accountId": {
+            "description": "The account identifier of the member who becomes an owner; another member of the workspace, not the caller",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "demoteSelf": {
+            "description": "Whether the caller becomes an admin once the member is an owner; false leaves the caller an owner",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "accountId",
+          "demoteSelf"
+        ],
+        "type": "object"
+      },
       "UpdateAccountRequest": {
         "additionalProperties": false,
         "properties": {
@@ -6360,6 +6380,131 @@
         ],
         "x-slugbase-auth": "admin",
         "x-slugbase-rate": "write"
+      }
+    },
+    "/api/v1/workspace/transfer-ownership": {
+      "post": {
+        "operationId": "transferWorkspaceOwnership",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TransferOwnershipRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Member"
+                }
+              }
+            },
+            "description": "The member is an owner of the workspace; when the caller asked to step down, the caller is an admin in the same transaction and the response carries the Set-Cookie header of the session's new token. The member is told by email, in their language, when the call made them an owner. When the member already is an owner and the caller stays one, nothing changes and nothing is written"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), the credential is an API token, or the caller is not an owner of the workspace (forbidden)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace, or the account is not a member of it, whichever workspace it belongs to"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The change would leave the workspace without an owner (last_owner); nothing is written"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body did not pass validation (an identifier that is not a UUID, a `demoteSelf` that is not a boolean, or a field the operation does not declare), or `accountId` names the caller (the errors name accountId)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Transfer the active workspace's ownership",
+        "tags": [
+          "workspaces"
+        ],
+        "x-slugbase-auth": "owner",
+        "x-slugbase-rate": "write",
+        "x-slugbase-reauth": true
       }
     },
     "/api/v1/workspaces": {

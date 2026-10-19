@@ -56,7 +56,8 @@ function tenantOf(context: ChainContext): RequestTenant {
   return tenant;
 }
 
-function memberBody(member: WorkspaceMember): z.input<typeof MemberSchema> {
+/** The member as the contract's `Member` schema has it. */
+export function memberBody(member: WorkspaceMember): z.input<typeof MemberSchema> {
   const { accountId, displayName, email, role, joinedAt, lastActiveAt } = member;
   return { accountId, displayName, email, role, joinedAt: joinedAt.toISOString(), lastActiveAt: lastActiveAt === null ? null : lastActiveAt.toISOString() };
 }

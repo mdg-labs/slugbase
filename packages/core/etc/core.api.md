@@ -10,7 +10,7 @@ import type { ProblemCode } from '@slugbase/contracts';
 export const ACCOUNT_CREATION_PATHS: readonly ["self-registration", "invitation", "oidc", "setup"];
 
 // @public
-export const ACCOUNT_NOTIFICATIONS: readonly ["passwordChanged", "mfaEnabled", "mfaDisabled", "verifyEmail", "newSignIn", "passwordReset", "emailChange", "emailChangeNotice"];
+export const ACCOUNT_NOTIFICATIONS: readonly ["passwordChanged", "mfaEnabled", "mfaDisabled", "verifyEmail", "newSignIn", "passwordReset", "emailChange", "emailChangeNotice", "ownershipTransferred"];
 
 // @public (undocumented)
 export type AccountCreationPath = (typeof ACCOUNT_CREATION_PATHS)[number];
@@ -170,6 +170,16 @@ export const AUDIT_ACTIONS: {
     readonly "workspace.deletion_requested": {
         readonly category: "workspace";
         readonly metadata: {};
+    };
+    readonly "workspace.ownership_transferred": {
+        readonly category: "workspace";
+        readonly metadata: {
+            readonly demoteSelf: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
     };
     readonly "member.role_changed": {
         readonly category: "member";
@@ -922,6 +932,50 @@ export interface OtpauthOptions {
 // @public
 export function otpauthUri(input: OtpauthOptions): string;
 
+// @public (undocumented)
+export interface OwnershipTransferAsk {
+    // (undocumented)
+    readonly actor: AuditActor;
+    readonly actorAccountId: string;
+    readonly demoteSelf: boolean;
+    readonly ipPrefix: string | null;
+    readonly targetAccountId: string;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface OwnershipTransferDependencies {
+    readonly audit: AuditWriter;
+    // (undocumented)
+    readonly store: MemberRoleStore;
+}
+
+// @public (undocumented)
+export type OwnershipTransferOutcome =
+/** The roles were changed and the event written; `promoted` says the recipient was not an owner before, `demoted` that the caller stepped down. */
+    {
+    readonly kind: "transferred";
+    readonly promoted: boolean;
+    readonly demoted: boolean;
+}
+/** The recipient is an owner already and the caller stays one; nothing was written. */
+| {
+    readonly kind: "unchanged";
+}
+/** The account that asks is not an owner; nothing was written. */
+| {
+    readonly kind: "forbidden";
+}
+/** The recipient is the account that asks; nothing was written. */
+| {
+    readonly kind: "invalid_recipient";
+}
+/** The workspace has no such member, the caller is none, or the workspace cannot be reached. */
+| {
+    readonly kind: "not_found";
+};
+
 // @public
 export function parseAuditMetadata<Name extends AuditAction>(name: Name, value: unknown): AuditMetadata<Name>;
 
@@ -1154,6 +1208,9 @@ export function totpCode(secret: Uint8Array, step: number): string;
 
 // @public
 export function totpStep(nowMs: number): number;
+
+// @public
+export function transferOwnership(input: OwnershipTransferDependencies, ask: OwnershipTransferAsk): Promise<OwnershipTransferOutcome>;
 
 // @public
 export function truncateUserAgent(userAgent: string | null | undefined): string | null;
