@@ -1072,7 +1072,7 @@
       "cancel": "Cancel",
       "continue": "Continue",
       "content": {
-        "label": "What happens to their bookmarks and folders",
+        "label": "What happens to the bookmarks and folders",
         "note": "Private tags and go preferences are deleted either way.",
         "transfer": {
           "label": "Transfer the content",

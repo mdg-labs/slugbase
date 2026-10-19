@@ -342,6 +342,7 @@ describe("leaving the workspace", () => {
 
     const dialog = await openLeave();
 
+    expect(within(dialog).getByRole("radiogroup", { name: "What happens to the bookmarks and folders" })).toBeTruthy();
     expect(recipientOf(dialog)).toBe("Katherine Johnson");
     await press(within(dialog).getByRole("button", { name: "Continue" }));
     const confirm = await screen.findByRole("alertdialog", { name: "Leave Ada's Workspace?" });
