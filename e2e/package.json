@@ -8,6 +8,7 @@
   "scripts": {
     "lint": "eslint --max-warnings=0 .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:unit": "node --test \"support/**/*.test.ts\"",
     "test:e2e": "node run-tests.ts"
   },
   "devDependencies": {
