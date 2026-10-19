@@ -91,7 +91,7 @@ function world({ actorRole = "admin", memberHoldsEmail = false, resent = false, 
 }
 
 function ask(overrides: Partial<InvitationAsk> = {}): InvitationAsk {
-  return { workspaceId: WORKSPACE, actor: ACTOR, actorLocale: "en", email: "grace@example.test", role: "member", teamIds: [], ipPrefix: "203.0.0.0/16", ...overrides };
+  return { workspaceId: WORKSPACE, actor: ACTOR, actorLocale: "en", mailed: true, email: "grace@example.test", role: "member", teamIds: [], ipPrefix: "203.0.0.0/16", ...overrides };
 }
 
 describe("inviteMember", () => {
@@ -160,6 +160,18 @@ describe("inviteMember", () => {
     expect(one?.tokenHash.equals(two?.tokenHash ?? Buffer.alloc(0))).toBe(false);
     expect(one?.ttlSeconds).toBe(7 * 24 * 60 * 60);
     expect(one?.teamIds).toEqual([]);
+  });
+
+  it("asks the store to replace a pending invitation's token hash where the composition mails the link, and to keep it where it does not", async () => {
+    const mailed = world();
+    const unmailed = world();
+
+    await inviteMember(mailed.dependencies, ask({ mailed: true }));
+    await inviteMember(unmailed.dependencies, ask({ mailed: false }));
+
+    expect(mailed.written.map((invitation) => invitation.keepTokenHash)).toEqual([false]);
+    expect(unmailed.written.map((invitation) => invitation.keepTokenHash)).toEqual([true]);
+    expect(unmailed.written[0]?.tokenHash).toHaveLength(32);
   });
 
   it("writes the invitation with a mail ticket, which the outcome names for the job that mails it, and a different one for every write", async () => {

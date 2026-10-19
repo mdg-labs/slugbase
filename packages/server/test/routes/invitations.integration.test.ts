@@ -341,6 +341,30 @@ describe("POST /api/v1/invitations", { timeout: TEST_TIMEOUT_MS }, () => {
     expect(await jobsOf(workspaceId)).toEqual([]);
   });
 
+  it("keeps the copied link of a pending invitation working when the address is invited again where no mail can be sent, and changes the role, the inviter and the expiry", async () => {
+    const world = harness.serve({ entitlements: GRANTED });
+    const { workspaceId, o, a } = await workspace(world);
+    const created = await invite(world, o, { email: "grace@example.test", role: "member" });
+    const { id } = (await created.json()) as { id: string };
+    const linked = await send(world, "POST", `${INVITATIONS}/${id}/link`, { cookie: o.cookie });
+    const prefix = `${world.origin}/invite/`;
+    const copied = ((await linked.json()) as { link: string }).link.slice(prefix.length);
+    const [before] = await rowsOf(workspaceId);
+
+    const again = await invite(world, a, { email: "GRACE@example.test", role: "admin" });
+
+    expect(linked.status).toBe(200);
+    expect(again.status).toBe(201);
+    expect(((await again.json()) as { id: string }).id).toBe(id);
+    const rows = await rowsOf(workspaceId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id, role: "admin", status: "pending", invited_by: a.account.id });
+    expect(rows[0]?.token_hash.equals(hashCredentialToken(copied) ?? Buffer.alloc(0))).toBe(true);
+    expect(rows[0]?.expires_at.getTime()).toBeGreaterThan(before?.expires_at.getTime() ?? 0);
+    expect((await auditOf(workspaceId)).map((event) => event.action)).toEqual(["invitation.created", "invitation.link_created", "invitation.resent"]);
+    expect(await jobsOf(workspaceId)).toEqual([]);
+  });
+
   it("writes neither the invitation nor its audit event when the mail job cannot be queued, and answers an error", async () => {
     const world = harness.serve({ entitlements: GRANTED, mail });
     const { workspaceId, o } = await workspace(world);

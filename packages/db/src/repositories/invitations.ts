@@ -178,7 +178,8 @@ export function invitationRepository(tx: TenantTx): InvitationRepository {
           ${uuidArray(invitation.teamIds)}::uuid[], decode(${invitation.tokenHash.toString("hex")}, 'hex'), ${invitation.mailTicket}::uuid, ${tx.accountId}::uuid,
           now() + ${invitation.ttlSeconds}::int * interval '1 second')
         ON CONFLICT (workspace_id, email) WHERE status = 'pending'
-        DO UPDATE SET role = EXCLUDED.role, team_ids = EXCLUDED.team_ids, token_hash = EXCLUDED.token_hash,
+        DO UPDATE SET role = EXCLUDED.role, team_ids = EXCLUDED.team_ids,
+                      token_hash = CASE WHEN ${invitation.keepTokenHash}::boolean THEN workspace_invitations.token_hash ELSE EXCLUDED.token_hash END,
                       mail_ticket = EXCLUDED.mail_ticket, invited_by = EXCLUDED.invited_by, expires_at = EXCLUDED.expires_at
         RETURNING id, email::text AS email, role::text AS role, to_json(team_ids)::text AS team_ids, status, invited_by,
                   to_char(expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS expires_at,

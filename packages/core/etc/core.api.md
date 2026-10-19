@@ -885,6 +885,7 @@ export interface InvitationAsk {
     readonly actorLocale: string;
     readonly email: string;
     readonly ipPrefix: string | null;
+    readonly mailed: boolean;
     // (undocumented)
     readonly role: string;
     // (undocumented)
@@ -1242,6 +1243,7 @@ export interface NewInvitation {
     // (undocumented)
     readonly email: string;
     readonly id: string;
+    readonly keepTokenHash: boolean;
     readonly mailTicket: string;
     // (undocumented)
     readonly role: InvitationRole;

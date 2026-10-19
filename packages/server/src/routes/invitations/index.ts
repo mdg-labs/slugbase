@@ -39,7 +39,9 @@ import { route } from "../register.ts";
 // the invitation service judges the role again under the same transaction. The invitation, its audit event and
 // the job that mails its link are one transaction, so a refusal at the commit leaves none of them. The response
 // is the invitation and never its token: the token is made by the job that sends the email, which also ends
-// the link of an earlier send. A deployment that cannot send mail queues no job and still has the invitation.
+// the link of an earlier send. A deployment that cannot send mail queues no job and still has the invitation;
+// inviting an address that has a pending one there changes its role, teams and expiry and keeps the stored token
+// hash, so the link an admin copied for it keeps working.
 // The operations declare `members.invite` (revoking does not); the authorization stage refuses it while no
 // entitlement source of the composition holds that entitlement, and they declare no token scope, so an API
 // token never reaches them.
@@ -144,6 +146,7 @@ export function invitationRoutes({ mail, cursorSecret, appOrigin, store, ttlSeco
             workspaceId: tenant.workspaceId,
             actor,
             actorLocale: profile.locale,
+            mailed: mail.available,
             email: body.email,
             role: body.role,
             teamIds: body.teamIds ?? [],

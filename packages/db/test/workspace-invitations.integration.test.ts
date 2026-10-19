@@ -132,8 +132,17 @@ async function checksum(workspaceId: string): Promise<string> {
   return rows[0]?.digest ?? "";
 }
 
-function newInvitation(email: string, overrides: { role?: InvitationRole; ttlSeconds?: number } = {}) {
-  return { id: freshId(), email, role: overrides.role ?? "member", teamIds: [], tokenHash: freshToken().hash, mailTicket: freshId(), ttlSeconds: overrides.ttlSeconds ?? TTL_SECONDS };
+function newInvitation(email: string, overrides: { role?: InvitationRole; ttlSeconds?: number; keepTokenHash?: boolean } = {}) {
+  return {
+    id: freshId(),
+    email,
+    role: overrides.role ?? "member",
+    teamIds: [],
+    tokenHash: freshToken().hash,
+    keepTokenHash: overrides.keepTokenHash ?? false,
+    mailTicket: freshId(),
+    ttlSeconds: overrides.ttlSeconds ?? TTL_SECONDS,
+  };
 }
 
 /** A pending invitation of `workspaceId` for `email`, written as the system role the way a seed does. */
@@ -350,6 +359,36 @@ describe("invitationRepository.writePending", () => {
     expect(rows[0]?.expires_at.getTime()).toBeGreaterThan(before?.expires_at.getTime() ?? 0);
     expect(rows[0]?.created_at.getTime()).toBe(before?.created_at.getTime());
     expect(rows[0]?.updated_at.getTime()).toBeGreaterThanOrEqual(before?.updated_at.getTime() ?? 0);
+  });
+
+  it("keeps the token hash of a pending invitation when asked to, and replaces the role, inviter, mail ticket and expiry as it does otherwise", async () => {
+    const a = await workspaceOf("owner", "admin");
+    const first = newInvitation("keep@example.test", { role: "member", ttlSeconds: 60 });
+    const second = newInvitation("KEEP@example.test", { role: "admin", keepTokenHash: true });
+    await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).writePending(first));
+    const [before] = await rowsOf(a.workspaceId);
+
+    const written = await inTenant({ accountId: who(a, 1), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).writePending(second));
+
+    expect(written.resent).toBe(true);
+    const rows = await rowsOf(a.workspaceId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: first.id, role: "admin", invited_by: who(a, 1), status: "pending" });
+    expect(rows[0]?.token_hash.equals(first.tokenHash)).toBe(true);
+    expect(rows[0]?.token_hash.equals(second.tokenHash)).toBe(false);
+    expect(rows[0]?.expires_at.getTime()).toBeGreaterThan(before?.expires_at.getTime() ?? 0);
+    const [ticket] = await asSystem(db, (tx) => tx<{ mail_ticket: string }[]>`SELECT mail_ticket FROM workspace_invitations WHERE id = ${first.id}`);
+    expect(ticket?.mail_ticket).toBe(second.mailTicket);
+  });
+
+  it("stores the hash it is given for an address without a pending invitation whatever it is asked about the token hash", async () => {
+    const a = await workspaceOf("owner");
+    const invitation = newInvitation("fresh@example.test", { keepTokenHash: true });
+
+    const written = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).writePending(invitation));
+
+    expect(written.resent).toBe(false);
+    expect((await rowsOf(a.workspaceId))[0]?.token_hash.equals(invitation.tokenHash)).toBe(true);
   });
 
   it("writes a new invitation for an address whose earlier one was revoked, and leaves the revoked row as it was", async () => {

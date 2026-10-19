@@ -12,10 +12,11 @@ import type { WorkspaceRole } from "../ports/tenant-resolver.ts";
 // that mails it issues the token and puts it into the message (which is why no token is in a queued payload,
 // a log line or a response), and a resend ends the earlier link at once. Inviting an address that already has
 // a pending invitation is a resend of that invitation: the same row gets the new role and teams, the new
-// inviter, a new expiry and a new token. An address that already belongs to a member is refused. Teams cannot
-// be invited into until team membership exists. The invitation, its audit event and the mail job are one
-// transaction, so each exists exactly when the others do; a failure of a write rejects, so the caller's
-// transaction must not commit.
+// inviter, a new expiry and a new token. Where the composition cannot mail the link, a copied link is the
+// only one there is, so such a resend keeps the stored token hash and the link keeps working. An address that
+// already belongs to a member is refused. Teams cannot be invited into until team membership exists. The
+// invitation, its audit event and the mail job are one transaction, so each exists exactly when the others
+// do; a failure of a write rejects, so the caller's transaction must not commit.
 //
 // A pending invitation is then listed, resent, given a link and revoked by an admin or an owner (doc 04 section
 // 10.5). Resending and giving a link each replace the token hash and the expiry, which ends the earlier link
@@ -61,6 +62,11 @@ export interface NewInvitation {
   readonly teamIds: readonly string[];
   /** SHA-256 of a token nobody holds yet; the mail job replaces it with the hash of the token it mails. */
   readonly tokenHash: Buffer;
+  /**
+   * Whether a pending invitation of the address keeps the token hash it holds instead of taking `tokenHash`,
+   * which leaves a link made for it working. It has no effect on an address without a pending invitation.
+   */
+  readonly keepTokenHash: boolean;
   /** The ticket of the mail job queued for this write; only that job may issue the invitation's token. */
   readonly mailTicket: string;
   /** How long the invitation can be accepted for, counted by the database's clock when it writes the row. */
@@ -77,8 +83,8 @@ export interface InvitationStore {
   memberHoldsEmail(email: string): Promise<boolean>;
   /**
    * Writes the invitation for the workspace of the transaction, or, when the address already has a pending
-   * one, replaces that invitation's role, teams, inviter, token hash, mail ticket and expiry; `resent` says which. One
-   * statement, so two requests for one address leave one pending invitation.
+   * one, replaces that invitation's role, teams, inviter, token hash (unless `keepTokenHash`), mail ticket and expiry;
+   * `resent` says which. One statement, so two requests for one address leave one pending invitation.
    */
   writePending(invitation: NewInvitation): Promise<{ readonly invitation: InvitationRecord; readonly resent: boolean }>;
   /** The language of the account that holds the address of the pending invitation; undefined when none does. */
@@ -141,6 +147,11 @@ export interface InvitationAsk {
   readonly actor: AuditActor;
   /** The language of the account that asks: the invitation is written in it when the invitee's is not known. */
   readonly actorLocale: string;
+  /**
+   * Whether the composition mails the invitation's link. Where it does not, an address with a pending invitation
+   * keeps the token hash of the link already copied for it, since no mail would bring another.
+   */
+  readonly mailed: boolean;
   /** What the caller sent. */
   readonly email: string;
   readonly role: string;
@@ -191,6 +202,7 @@ export async function inviteMember({ store, audit, newId, ttlSeconds }: Invitati
     role: ask.role,
     teamIds: ask.teamIds,
     tokenHash: generateCredentialToken().hash,
+    keepTokenHash: !ask.mailed,
     mailTicket,
     ttlSeconds,
   });
