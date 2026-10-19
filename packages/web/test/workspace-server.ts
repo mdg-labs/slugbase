@@ -63,7 +63,7 @@ export function stubWorkspaceServer(options: WorkspaceServerOptions = {}) {
   const german = globalThis.navigator.languages.some((language) => language.toLowerCase().startsWith("de"));
   const body = (): object => ({ account: { ...ACCOUNT_BODY, locale: german ? "de" : "en" }, memberships: memberships(), activeWorkspaceId: active });
 
-  const fetch = vi.fn<Transport>(async (request) => {
+  const transport = vi.fn<Transport>(async (request) => {
     const { pathname } = new URL(request.url);
     if (pathname === "/api/config") {
       return json({ ...CONFIG_BODY, ...options.extraConfig });
@@ -109,10 +109,10 @@ export function stubWorkspaceServer(options: WorkspaceServerOptions = {}) {
     }
     throw new Error(`unexpected call ${request.method} ${pathname}`);
   });
-  vi.stubGlobal("fetch", fetch);
+  vi.stubGlobal("fetch", transport);
 
   return {
-    fetch,
+    fetch: transport,
     calls: (method: string, path: string): Call[] => calls.filter((call) => call.method === method && call.path === path),
     /** The workspace the server has the session in. */
     active: (): string | null => active,
