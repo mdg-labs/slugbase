@@ -529,6 +529,30 @@
           "action": "Leave workspace"
         },
         "done": "You left {name}"
+      },
+      "delete": {
+        "item": {
+          "title": "Delete workspace",
+          "description": "Deletes the workspace and everything in it for every member. This cannot be undone."
+        },
+        "action": "Delete workspace",
+        "title": "Delete {name}?",
+        "description": "This is irreversible. Deleting {name} removes every row of the workspace, including its bookmarks, folders and tags, and every member loses access right away.",
+        "confirmLabel": "Type {name} to confirm",
+        "cancel": "Cancel",
+        "done": "{name} is being deleted",
+        "error": {
+          "title": "The workspace was not deleted",
+          "reauthCancelled": "Confirm it is you to delete the workspace.",
+          "forbidden": "Only an owner can delete the workspace. The page has been reloaded.",
+          "gone": "This workspace no longer exists or is already being deleted."
+        },
+        "blocked": {
+          "title": "{name} cannot be deleted yet",
+          "close": "Close",
+          "billingActive": "This workspace has an active paid subscription. Cancel the subscription first, then delete the workspace.",
+          "other": "This server does not allow the workspace to be deleted right now. Nothing was changed."
+        }
       }
     },
     "members": {

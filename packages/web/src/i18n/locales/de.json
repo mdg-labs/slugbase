@@ -529,6 +529,30 @@
           "action": "Workspace verlassen"
         },
         "done": "Du hast {name} verlassen"
+      },
+      "delete": {
+        "item": {
+          "title": "Workspace löschen",
+          "description": "Löscht den Workspace und alles darin für alle Mitglieder. Das lässt sich nicht rückgängig machen."
+        },
+        "action": "Workspace löschen",
+        "title": "{name} löschen?",
+        "description": "Das lässt sich nicht rückgängig machen. Beim Löschen von {name} wird jede Zeile des Workspace entfernt, darunter Lesezeichen, Ordner und Tags, und alle Mitglieder verlieren sofort den Zugriff.",
+        "confirmLabel": "Tippe {name} zur Bestätigung",
+        "cancel": "Abbrechen",
+        "done": "{name} wird gelöscht",
+        "error": {
+          "title": "Der Workspace wurde nicht gelöscht",
+          "reauthCancelled": "Bestätige, dass du es bist, um den Workspace zu löschen.",
+          "forbidden": "Nur ein Eigentümer kann den Workspace löschen. Die Seite wurde neu geladen.",
+          "gone": "Dieser Workspace existiert nicht mehr oder wird bereits gelöscht."
+        },
+        "blocked": {
+          "title": "{name} kann noch nicht gelöscht werden",
+          "close": "Schließen",
+          "billingActive": "Dieser Workspace hat ein aktives kostenpflichtiges Abonnement. Kündige zuerst das Abonnement und lösche den Workspace danach.",
+          "other": "Dieser Server erlaubt das Löschen des Workspace gerade nicht. Es wurde nichts geändert."
+        }
       }
     },
     "members": {

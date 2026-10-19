@@ -4,7 +4,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { ME_QUERY_KEY, meQuery } from "../account/me.ts";
 import { useAllMembers } from "./use-all-members.ts";
 import {
   MEMBERS_QUERY_KEY,
@@ -16,6 +15,7 @@ import {
   type EndRefusal,
   type Member,
 } from "./workspace-members.ts";
+import { leaveWorkspaceView } from "./workspace-departure.ts";
 import { WORKSPACE_QUERY_KEY } from "./workspace.ts";
 import { WORKSPACES_QUERY_KEY } from "./workspaces.ts";
 
@@ -69,20 +69,6 @@ export function EndMembershipDialog({ target, onClose }: { target: EndMembership
     }
   }
 
-  async function afterLeaving(): Promise<void> {
-    let noWorkspace = false;
-    try {
-      const me = await queryClient.query({ ...meQuery(api), staleTime: 0 });
-      noWorkspace = me.activeWorkspaceId === null;
-    } catch {
-      // The account could not be read again: it is dropped, so the start page asks for it afresh and decides where the account goes.
-      queryClient.removeQueries({ queryKey: ME_QUERY_KEY });
-    }
-    await router.navigate({ to: noWorkspace ? "/no-workspace" : "/", replace: true });
-    void queryClient.invalidateQueries();
-    void router.invalidate();
-  }
-
   const end = useMutation({
     mutationKey: ["workspace", "members", "end"],
     mutationFn: (choice: ContentChoice) => (target.kind === "remove" ? removeMember(api, target.member.accountId, choice) : leaveWorkspace(api, choice)),
@@ -97,7 +83,7 @@ export function EndMembershipDialog({ target, onClose }: { target: EndMembership
       }
       if (target.kind === "leave") {
         feedbackToast.success(t("settings.workspace.leave.done", { name: target.workspaceName }));
-        await afterLeaving();
+        await leaveWorkspaceView(api, queryClient, router);
         onClose();
         return;
       }
