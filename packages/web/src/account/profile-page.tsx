@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { ApiProblemError } from "../api/client.ts";
 import type { Locale } from "../i18n/locales.ts";
 import { supportedLocale } from "../i18n/resolve-language.ts";
+import { AccountDangerZone } from "./account-danger-zone.tsx";
 import { EmailRow } from "./email-row.tsx";
 import { ME_QUERY_KEY, meQuery, withAccount, type Account, type Me, type UpdateAccountRequest } from "./me.ts";
 
@@ -153,6 +154,7 @@ export function AccountProfilePage(): ReactElement {
     <div className="flex flex-col gap-4">
       <h1 className="font-semibold text-xl">{t("settings.account.title")}</h1>
       {me.data === undefined ? null : <ProfileForm account={me.data.account} key={me.data.account.id} />}
+      {me.data === undefined ? null : <AccountDangerZone account={me.data.account} key={`danger-${me.data.account.id}`} />}
       {me.isPending ? <Loading label={t("shell.loading")} /> : null}
       {me.isError ? (
         <Banner

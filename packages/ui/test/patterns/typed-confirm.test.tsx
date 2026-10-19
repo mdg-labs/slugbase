@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TypedConfirm, matchesExpected } from "../../src/patterns/index.ts";
 import { expectNoViolations, stubBrowserApis } from "../support.tsx";
 
-function Harness({ onConfirm, loading = false, error }: { onConfirm: () => void; loading?: boolean; error?: string }): ReactElement {
+function Harness({ onConfirm, loading = false, error, confirmDisabled = false }: { onConfirm: () => void; loading?: boolean; error?: string; confirmDisabled?: boolean }): ReactElement {
   const [open, setOpen] = useState(true);
   return (
     <>
@@ -13,6 +13,7 @@ function Harness({ onConfirm, loading = false, error }: { onConfirm: () => void;
       </button>
       <TypedConfirm
         cancelLabel="Cancel"
+        confirmDisabled={confirmDisabled}
         confirmLabel="Transfer ownership"
         description="Grace Hopper becomes an owner."
         destructive
@@ -95,6 +96,20 @@ describe("TypedConfirm", () => {
 
     await type("Grace Hopper");
     expect(confirm.hasAttribute("disabled")).toBe(false);
+  });
+
+  it("keeps the confirm button disabled and confirms nothing on Enter while confirmDisabled is set, although the text matches", async () => {
+    const onConfirm = vi.fn<() => void>();
+    render(<Harness confirmDisabled onConfirm={onConfirm} />);
+    await screen.findByRole("alertdialog");
+
+    await type("Grace Hopper");
+    expect(screen.getByRole("button", { name: "Transfer ownership" }).hasAttribute("disabled")).toBe(true);
+    await act(async () => {
+      fireEvent.submit(screen.getByRole("textbox").closest("form") ?? document.body);
+      await Promise.resolve();
+    });
+    expect(onConfirm).not.toHaveBeenCalled();
   });
 
   it("calls onConfirm once for the typed text, from the button and from Enter, and leaves closing it to the app", async () => {
