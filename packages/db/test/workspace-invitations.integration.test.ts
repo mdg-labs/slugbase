@@ -697,6 +697,19 @@ describe("invitationRepository.issueToken", () => {
     expect((await rowsOf(a.workspaceId))[0]?.token_hash.equals(before?.token_hash ?? Buffer.alloc(0))).toBe(true);
   });
 
+  it("changes nothing of an invitation of a workspace that is being deleted, which the transaction cannot see", async () => {
+    const a = await workspaceOf("owner");
+    const invitation = newInvitation("deleting@example.test");
+    const written = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).writePending(invitation));
+    await asSystem(db, (tx) => tx`UPDATE workspaces SET deleting_at = now() WHERE id = ${a.workspaceId}`);
+    const [before] = await rowsOf(a.workspaceId);
+
+    const context = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).issueToken(written.invitation.id, invitation.mailTicket, freshToken().hash));
+
+    expect(context).toBeUndefined();
+    expect((await rowsOf(a.workspaceId))[0]?.token_hash.equals(before?.token_hash ?? Buffer.alloc(0))).toBe(true);
+  });
+
   it("changes nothing of an invitation of another workspace", async () => {
     const a = await workspaceOf("owner");
     const b = await workspaceOf("owner");

@@ -18,7 +18,8 @@ import { HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type World } from
 // (a mail job is queued and has not run), copies a link with POST /invitations/{id}/link, and the job then runs
 // and replaces the stored hash, so the copied link stops matching. Also: a job whose invitation nothing renewed
 // still mails a link that matches, and so does the retry of such a job after a failed send; the plaintext token is
-// in no queued payload, audit event or log.
+// in no queued payload, audit event or log. And a job whose workspace is being deleted by the time it runs: it
+// sends nothing, leaves the stored hash and ends without an error, so the queue does not retry it.
 
 const INVITATIONS = "/api/v1/invitations";
 const WAIT_MS = 20_000;
@@ -231,6 +232,28 @@ describe("the invitation.send job and a link issued after it was queued", { time
 
     expect(inbox.sent).toHaveLength(1);
     expect(matches((await rowsOf(workspaceId))[0], String(inbox.sent[0]?.data["token"]))).toBe(true);
+  });
+
+  it("sends nothing and ends without an error when the workspace is being deleted by the time the job runs, and leaves the stored hash", async () => {
+    const world = harness.serve({ entitlements: GRANTED, mail });
+    const { workspaceId, owner } = await workspace(world);
+    await invite(world, owner, "grace@example.test");
+    const [job] = await jobsOf(workspaceId);
+    if (job === undefined) {
+      throw new Error("expected a queued job");
+    }
+    const before = (await rowsOf(workspaceId))[0]?.token_hash;
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`UPDATE workspaces SET deleting_at = now() WHERE id = ${workspaceId}`;
+    });
+    const logger = recordingLogger();
+
+    await runJob(job, logger);
+
+    expect(inbox.sent).toEqual([]);
+    expect((await rowsOf(workspaceId))[0]?.token_hash.equals(before ?? Buffer.alloc(0))).toBe(true);
+    expect(logger.entries.map((entry) => entry.level)).toEqual(["warn"]);
   });
 
   it("sends nothing from a retry once a link was issued after the failed attempt", async () => {

@@ -77,8 +77,9 @@ export interface InvitationRepository extends InvitationStore, InvitationManagem
   /**
    * Gives the pending, unexpired invitation `invitationId` of the workspace of the transaction the token whose
    * SHA-256 is `tokenHash`, which ends the link it had, and answers what its email says; undefined, with
-   * nothing changed, when the invitation is not pending, has expired, or no longer holds `mailTicket` because
-   * a later write or link renewed it. The ticket stays, so the same job issues a token again when it is retried.
+   * nothing changed, when the invitation is not pending, has expired, no longer holds `mailTicket` because
+   * a later write or link renewed it, or belongs to a workspace the transaction cannot see (one being deleted,
+   * doc 05 section 7.2, or gone). The ticket stays, so the same job issues a token again when it is retried.
    * Needs a transaction opened with a workspace.
    */
   issueToken(invitationId: string, mailTicket: string, tokenHash: Buffer): Promise<InvitationMailContext | undefined>;
@@ -204,6 +205,7 @@ export function invitationRepository(tx: TenantTx): InvitationRepository {
         SET token_hash = decode(${tokenHash.toString("hex")}, 'hex')
         WHERE i.id = ${invitationId}::uuid AND i.workspace_id = ${workspaceId}::uuid AND i.status = 'pending' AND i.expires_at > now()
           AND i.mail_ticket = ${mailTicket}::uuid
+          AND EXISTS (SELECT 1 FROM public.workspaces w WHERE w.id = i.workspace_id)
         RETURNING i.email::text AS email, i.role::text AS role,
                   to_char(i.expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS expires_at,
                   (SELECT w.name FROM public.workspaces w WHERE w.id = i.workspace_id) AS workspace_name`);

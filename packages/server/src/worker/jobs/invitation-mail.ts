@@ -12,7 +12,8 @@ import { defineJob } from "../job.ts";
 // the invitation in a transaction acting in its workspace as the inviting account, so what the message says is
 // what the invitation says when it is sent. It sends nothing for an invitation that is no longer pending or has
 // expired, nor for one that holds another ticket than the job's: a link issued, or a resend made, after the job
-// was queued has renewed the invitation, and the job must not end that link. A retry after an attempt that failed
+// was queued has renewed the invitation, and the job must not end that link, nor for one whose workspace is
+// being deleted, which the transaction cannot see. A retry after an attempt that failed
 // finds its ticket still on the invitation and makes a new token, which replaces the earlier one.
 
 export const INVITATION_SEND_JOB = "invitation.send";
@@ -40,8 +41,8 @@ export const invitationSendJob = defineJob({
       return { issued, inviterName: inviter?.displayName ?? "" };
     });
     if (prepared === undefined) {
-      // Revoked, accepted, expired, gone or renewed since the job was queued: there is no link for this job to send and a retry would find the same.
-      context.logger.warn("Mail not sent; the invitation is no longer pending or was renewed since the job was queued");
+      // Revoked, accepted, expired, gone or renewed since the job was queued, or its workspace is being deleted or gone: there is no link for this job to send and a retry would find the same.
+      context.logger.warn("Mail not sent; the invitation is no longer pending, was renewed since the job was queued, or its workspace is gone");
       return;
     }
     const { issued, inviterName } = prepared;
