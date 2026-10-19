@@ -280,8 +280,8 @@ class Released {
   // slugbase_system and not yet revoked.
   private declared = new Set<string>();
   private creatable = new Set<string>();
-  // The triggers the migration has dropped and not yet created again, by table and name, with the function and form each had (undefined when
-  // none was known to exist).
+  // The triggers the migration has dropped and not yet created again, by table and name, with the function and form each had when it was first
+  // dropped (undefined when none was known to exist).
   private dropped = new Map<string, { readonly table: TableName; readonly name: string; readonly trigger: TriggerDefinition | undefined }>();
 
   readonly tag: string | undefined;
@@ -554,7 +554,12 @@ class Released {
         if (!this.triggersKnown) {
           return [`drops trigger ${operation.name} on ${describe(operation.table)}, which this check cannot show is not a trigger of ${at}: it could not read every earlier statement, so it cannot show the trigger is created again as it was`];
         }
-        this.dropped.set(triggerKey(operation.table, operation.name), { table: operation.table, name: operation.name, trigger });
+        // A second drop of the same trigger finds it already gone from the model: the definition the first drop recorded stays, until the file
+        // creates the trigger again.
+        const droppedKey = triggerKey(operation.table, operation.name);
+        if (!this.dropped.has(droppedKey)) {
+          this.dropped.set(droppedKey, { table: operation.table, name: operation.name, trigger });
+        }
         return [];
       }
       case "creates-trigger": {

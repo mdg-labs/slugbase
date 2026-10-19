@@ -238,6 +238,13 @@ describe("what the expand/contract rule says about CREATE CONSTRAINT TRIGGER", (
     expect(findings[0]?.message).toContain(NOT_ACCEPTED);
   });
 
+  it("rejects a trigger dropped twice and not created again, for a trigger the chain created", async () => {
+    const findings = await addedAfter(`${DECLARE}\n${DEFERRED}`, `${DROP_DEFERRED}\n${DROP_DEFERRED}`);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("drops trigger bookmarks_keep_one on bookmarks, which executes set_updated_at() now, and does not create it again in the same file");
+    expect(findings[0]?.message).toContain(NOT_ACCEPTED);
+  });
+
   it("rejects a drop that is followed by the trigger with another function", async () => {
     const findings = await addedAfter(`${DECLARE}\n${DECLARE_OTHER}\n${DEFERRED}`, `${DROP_DEFERRED}\n${DEFERRED.replace("set_updated_at()", "set_other()")}`);
     expect(findings).toHaveLength(1);
@@ -294,6 +301,13 @@ describe("what the expand/contract rule says about CREATE CONSTRAINT TRIGGER", (
       const findings = await run();
       expect(findings).toHaveLength(1);
       expect(findings[0]?.message).toContain(`replaces trigger bookmarks_set_updated_at on bookmarks, ${AS_CONSTRAINT}`);
+      expect(findings[0]?.message).toContain(NOT_ACCEPTED);
+    });
+
+    it("rejects a constraint trigger dropped twice and made a plain BEFORE UPDATE trigger", async () => {
+      const findings = await addedAfter(`${DECLARE}\n${DEFERRED}`, `${DROP_DEFERRED}\n${DROP_DEFERRED}\n${PLAIN_KEEP}`);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]?.message).toContain(`replaces trigger bookmarks_keep_one on bookmarks, ${AS_PLAIN}`);
       expect(findings[0]?.message).toContain(NOT_ACCEPTED);
     });
 
