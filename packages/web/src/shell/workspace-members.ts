@@ -82,3 +82,90 @@ export function assignableRoles(viewer: WorkspaceRole | undefined, member: Membe
   }
   return [];
 }
+
+export type MembershipEnded = ComponentTypes["schemas"]["MembershipEnded"];
+
+/** What happens to the content of a member who is removed or leaves (doc 02 section 3.6): it goes to another member, or it is deleted. */
+export type ContentChoice = { readonly content: "transfer"; readonly transferTo: string } | { readonly content: "delete" };
+
+/** Why a removal or a departure was refused, as far as the member is told. */
+export type EndRefusal = "lastOwner" | "forbidden" | "notAMember" | "recipientGone";
+
+export type EndOutcome =
+  | { readonly status: "ended"; readonly ended: MembershipEnded }
+  | { readonly status: "refused"; readonly refusal: EndRefusal };
+
+function endRefusal(caught: unknown): EndRefusal | undefined {
+  if (!(caught instanceof ApiProblemError)) {
+    return undefined;
+  }
+  if (caught.status === 409 && caught.code === "last_owner") {
+    return "lastOwner";
+  }
+  if (caught.status === 403) {
+    return "forbidden";
+  }
+  if (caught.status === 404) {
+    return caught.errors.some(({ path }) => path === "transferTo") ? "recipientGone" : "notAMember";
+  }
+  return undefined;
+}
+
+async function ending(request: () => Promise<{ data?: MembershipEnded | undefined; error?: unknown }>): Promise<EndOutcome> {
+  try {
+    const { data, error } = await request();
+    if (data === undefined) {
+      throw new Error("The membership change did not answer with a document", { cause: error });
+    }
+    return { status: "ended", ended: data };
+  } catch (caught) {
+    const refusal = endRefusal(caught);
+    if (refusal === undefined) {
+      throw caught;
+    }
+    return { status: "refused", refusal };
+  }
+}
+
+/**
+ * Removes the member with the content choice. A refusal the page explains (the member is the last owner, the caller
+ * may not remove them, they or the recipient are no longer members) is an answer; any other failure throws.
+ */
+export function removeMember(api: ApiClient, accountId: string, choice: ContentChoice): Promise<EndOutcome> {
+  return ending(() => api.DELETE("/api/v1/members/{accountId}", { params: { path: { accountId } }, body: choice }));
+}
+
+/** The caller leaves the workspace the session acts in, with the content choice. Refusals are answers, as for a removal. */
+export function leaveWorkspace(api: ApiClient, choice: ContentChoice): Promise<EndOutcome> {
+  return ending(() => api.POST("/api/v1/workspace/leave", { body: choice }));
+}
+
+/** Whether the viewer may remove the member (doc 02 section 3.3): an owner anyone but themself, an admin anyone but an owner or themself. Leaving is a different action. */
+export function canRemove(viewer: WorkspaceRole | undefined, viewerId: string | undefined, member: Member): boolean {
+  if (viewerId === undefined || member.accountId === viewerId) {
+    return false;
+  }
+  return viewer === "owner" || (viewer === "admin" && member.role !== "owner");
+}
+
+/** The members who can receive the content of the one who departs. */
+export function recipientsFor(members: readonly Member[], departingId: string): readonly Member[] {
+  return members.filter((member) => member.accountId !== departingId);
+}
+
+function compare(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * The recipient the choice starts at (doc 02 section 3.6): the acting admin when one removes a member, and the
+ * longest-standing owner other than the one who leaves when a member leaves, as the server resolves it.
+ */
+export function defaultRecipient(members: readonly Member[], departingId: string, actingId: string | undefined): Member | undefined {
+  if (actingId !== undefined && actingId !== departingId) {
+    return members.find((member) => member.accountId === actingId);
+  }
+  return [...members]
+    .filter((member) => member.role === "owner" && member.accountId !== departingId)
+    .sort((a, b) => compare(a.joinedAt, b.joinedAt) || compare(a.accountId, b.accountId))[0];
+}

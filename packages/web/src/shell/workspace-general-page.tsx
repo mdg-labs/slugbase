@@ -6,6 +6,7 @@ import { useState, type ReactElement, type SyntheticEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { ME_QUERY_KEY, type Me } from "../account/me.ts";
 import { ApiProblemError } from "../api/client.ts";
+import { WorkspaceDangerZone } from "./workspace-danger-zone.tsx";
 import { WORKSPACES_QUERY_KEY } from "./workspaces.ts";
 import { WORKSPACE_QUERY_KEY, canAdminister, renameWorkspace, workspaceQuery, type Workspace } from "./workspace.ts";
 
@@ -150,6 +151,7 @@ export function WorkspaceGeneralPage(): ReactElement {
           workspace={workspace.data}
         />
       )}
+      {workspace.data === undefined ? null : <WorkspaceDangerZone workspace={workspace.data} />}
       {workspace.isPending ? <Loading label={t("shell.loading")} /> : null}
       {workspace.isError ? (
         <Banner

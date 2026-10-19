@@ -57,7 +57,15 @@ export interface WorkspaceSettingsServerOptions {
   readonly membersGet?: (call: number) => Response | Promise<Response>;
   /** Answers `PATCH /members/{accountId}` instead of changing the role; `call` counts from 1. */
   readonly memberPatch?: (call: number, request: Request) => Response | Promise<Response>;
+  /** Answers `DELETE /members/{accountId}` instead of removing the member; `call` counts from 1. */
+  readonly memberDelete?: (call: number, request: Request) => Response | Promise<Response>;
+  /** Answers `POST /workspace/leave` instead of ending the caller's membership; `call` counts from 1. */
+  readonly leave?: (call: number, request: Request) => Response | Promise<Response>;
+  /** Where the session acts once the caller has left: in another workspace, or in none. */
+  readonly afterLeaving?: "other" | "none";
 }
+
+export const OTHER_WORKSPACE_ID = "0192f3a0-cccc-7000-8000-000000000009";
 
 export interface Received {
   readonly method: string;
@@ -75,6 +83,7 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
   let name = options.name ?? "Ada's Workspace";
   let members: TestMember[] = [...(options.members ?? [{ ...SELF, role: options.role ?? "owner" }, GRACE])];
   let version = options.version ?? 3;
+  let left = false;
   const received: Received[] = [];
   const counts = new Map<string, number>();
 
@@ -86,11 +95,41 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
     createdAt: "2026-09-01T08:00:00.000Z",
     version,
   });
-  const me = () => ({
-    account: ACCOUNT_BODY,
-    memberships: [{ workspaceId: WORKSPACE_ID, name, role }],
-    activeWorkspaceId: options.noWorkspace === true ? null : WORKSPACE_ID,
-  });
+  const other = { workspaceId: OTHER_WORKSPACE_ID, name: "Second Workspace", role: "member" as const };
+  const me = () =>
+    left
+      ? {
+          account: ACCOUNT_BODY,
+          memberships: options.afterLeaving === "other" ? [other] : [],
+          activeWorkspaceId: options.afterLeaving === "other" ? OTHER_WORKSPACE_ID : null,
+        }
+      : {
+          account: ACCOUNT_BODY,
+          memberships: [{ workspaceId: WORKSPACE_ID, name, role }],
+          activeWorkspaceId: options.noWorkspace === true ? null : WORKSPACE_ID,
+        };
+  /** Ends a membership as the server does; the answer is the document of the departure or a problem. */
+  const ending = (accountId: string, body: { content: "transfer" | "delete"; transferTo?: string }, byself: boolean): Response => {
+    const member = members.find((candidate) => candidate.accountId === accountId);
+    if (member === undefined) {
+      return problem(404, "not_found", "req-404");
+    }
+    if (member.role === "owner" && members.filter((candidate) => candidate.role === "owner").length === 1) {
+      return problem(409, "last_owner", "req-409");
+    }
+    const recipient =
+      body.transferTo ??
+      (byself
+        ? members
+            .filter((candidate) => candidate.role === "owner" && candidate.accountId !== accountId)
+            .sort((a, b) => a.joinedAt.localeCompare(b.joinedAt))[0]?.accountId
+        : SELF.accountId);
+    if (body.content === "transfer" && !members.some((candidate) => candidate.accountId === recipient && candidate.accountId !== accountId)) {
+      return problem(404, "not_found", "req-404");
+    }
+    members = members.filter((candidate) => candidate.accountId !== accountId);
+    return json({ content: body.content, transferTo: recipient ?? SELF.accountId });
+  };
 
   const transport = vi.fn<Transport>(async (request) => {
     const { pathname } = new URL(request.url);
@@ -114,9 +153,18 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
       return json(me());
     }
     if (pathname === WORKSPACES_PATH && request.method === "GET") {
+      if (left) {
+        return json({
+          items: options.afterLeaving === "other" ? [{ id: OTHER_WORKSPACE_ID, name: other.name, role: other.role, memberCount: 3 }] : [],
+          canCreate: false,
+        });
+      }
       return json({ items: [{ id: WORKSPACE_ID, name, role, memberCount: 2 }], canCreate: false });
     }
     if (pathname === WORKSPACE_PATH && request.method === "GET") {
+      if (left) {
+        return problem(404, "not_found", "req-404");
+      }
       return options.get === undefined ? json(workspace(), { headers: { ETag: `"${String(version)}"` } }) : options.get(call);
     }
     if (pathname === WORKSPACE_PATH && request.method === "PATCH") {
@@ -162,6 +210,20 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
         role = requested;
       }
       return json(changed);
+    }
+    if (pathname.startsWith(`${MEMBERS_PATH}/`) && request.method === "DELETE") {
+      if (options.memberDelete !== undefined) {
+        return options.memberDelete(call, request);
+      }
+      return ending(pathname.slice(MEMBERS_PATH.length + 1), JSON.parse(text) as { content: "transfer" | "delete"; transferTo?: string }, false);
+    }
+    if (pathname === `${WORKSPACE_PATH}/leave` && request.method === "POST") {
+      if (options.leave !== undefined) {
+        return options.leave(call, request);
+      }
+      const answer = ending(SELF.accountId, JSON.parse(text) as { content: "transfer" | "delete"; transferTo?: string }, true);
+      left = answer.ok;
+      return answer;
     }
     if (options.other !== undefined) {
       return options.other(request);

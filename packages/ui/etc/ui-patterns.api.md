@@ -163,6 +163,38 @@ export interface CheckboxFieldProps {
     onCheckedChange?: (checked: boolean) => void;
 }
 
+// @public (undocumented)
+export interface ChoiceCardOption {
+    description?: ReactNode;
+    // (undocumented)
+    disabled?: boolean;
+    // (undocumented)
+    label: ReactNode;
+    // (undocumented)
+    value: string;
+}
+
+// @public
+export function ChoiceCards(input: ChoiceCardsProps): ReactElement;
+
+// @public (undocumented)
+export interface ChoiceCardsProps {
+    // (undocumented)
+    className?: string;
+    description?: ReactNode;
+    // (undocumented)
+    disabled?: boolean;
+    error?: ReactNode;
+    label: ReactNode;
+    name?: string;
+    // (undocumented)
+    onValueChange: (value: string) => void;
+    // (undocumented)
+    options: readonly ChoiceCardOption[];
+    // (undocumented)
+    value: string;
+}
+
 export { CompassIcon }
 
 // @public
@@ -197,6 +229,33 @@ export interface CopyValueProps {
     label: string;
     // (undocumented)
     value: string;
+}
+
+// @public
+export function DangerZone(input: DangerZoneProps): ReactElement;
+
+// @public (undocumented)
+export interface DangerZoneItem {
+    actionLabel: ReactNode;
+    description: ReactNode;
+    // (undocumented)
+    disabled?: boolean;
+    id: string;
+    loading?: boolean;
+    onSelect: () => void;
+    title: ReactNode;
+}
+
+// @public (undocumented)
+export interface DangerZoneProps {
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    description?: ReactNode;
+    // (undocumented)
+    items: readonly DangerZoneItem[];
+    // (undocumented)
+    title: ReactNode;
 }
 
 // @public
@@ -338,6 +397,37 @@ export interface PasswordStrengthProps {
     // (undocumented)
     score: PasswordScore;
     scoreLabel: string;
+}
+
+// @public
+export function Picker(input: PickerProps): ReactElement;
+
+// @public (undocumented)
+export interface PickerOption {
+    description?: string;
+    // (undocumented)
+    label: string;
+    // (undocumented)
+    value: string;
+}
+
+// @public (undocumented)
+export interface PickerProps {
+    // (undocumented)
+    className?: string;
+    description?: ReactNode;
+    // (undocumented)
+    disabled?: boolean;
+    emptyLabel: ReactNode;
+    error?: ReactNode;
+    // (undocumented)
+    label: ReactNode;
+    // (undocumented)
+    onValueChange: (value: string) => void;
+    // (undocumented)
+    options: readonly PickerOption[];
+    placeholder?: string;
+    value: string | undefined;
 }
 
 // @public (undocumented)

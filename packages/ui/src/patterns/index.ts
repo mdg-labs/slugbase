@@ -5,8 +5,10 @@ export { AppShell, MAIN_CONTENT_ID, type AppShellLabels, type AppShellProps } fr
 export { AuthCard, AuthLayout, type AuthCardProps, type AuthLayoutProps } from "./auth-card.tsx";
 export { Banner, type BannerProps, type BannerVariant } from "./banner.tsx";
 export { CheckboxField, type CheckboxFieldProps } from "./checkbox-field.tsx";
+export { ChoiceCards, type ChoiceCardOption, type ChoiceCardsProps } from "./choice-cards.tsx";
 export { Confirm, type ConfirmProps } from "./confirm.tsx";
 export { CopyValue, type CopyValueProps } from "./copy-value.tsx";
+export { DangerZone, type DangerZoneItem, type DangerZoneProps } from "./danger-zone.tsx";
 export { DataTable, type DataTableColumn, type DataTableProps } from "./data-table.tsx";
 export { EmptyState, type EmptyStateProps } from "./empty-state.tsx";
 export { FeedbackToastProvider, feedbackToast, type FeedbackToastProviderProps } from "./feedback-toast.tsx";
@@ -15,6 +17,7 @@ export { FormOverlay, type FormOverlayProps } from "./form-overlay.tsx";
 export { InlineNote, type InlineNoteProps } from "./inline-note.tsx";
 export { Loading, type LoadingProps } from "./loading.tsx";
 export { PasswordStrength, type PasswordScore, type PasswordStrengthProps } from "./password-strength.tsx";
+export { Picker, type PickerOption, type PickerProps } from "./picker.tsx";
 export { RowActions, type RowAction, type RowActionsProps } from "./row-actions.tsx";
 export { SecretInput, type SecretInputProps } from "./secret-input.tsx";
 export { SegmentedChoice, type SegmentedChoiceOption, type SegmentedChoiceProps } from "./segmented-choice.tsx";

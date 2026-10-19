@@ -17,10 +17,12 @@ import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { ME_QUERY_KEY, meQuery, type Me } from "../account/me.ts";
 import { useFormat } from "../i18n/use-format.ts";
+import { EndMembershipDialog } from "./end-membership-dialog.tsx";
 import { WorkspaceAdminOnly } from "./workspace-admin-only.tsx";
 import {
   MEMBERS_QUERY_KEY,
   assignableRoles,
+  canRemove,
   changeMemberRole,
   membersQuery,
   withMember,
@@ -56,6 +58,7 @@ function MembersTable({ viewerRole, viewerId }: { viewerRole: WorkspaceRole; vie
   const roleLabel = useRoleLabel();
   const members = useInfiniteQuery(membersQuery(api));
   const [refusals, setRefusals] = useState<ReadonlyMap<string, RoleChangeRefusal>>(new Map());
+  const [removing, setRemoving] = useState<Member | undefined>(undefined);
 
   const change = useMutation({
     mutationKey: ["workspace", "members", "role"],
@@ -109,7 +112,7 @@ function MembersTable({ viewerRole, viewerId }: { viewerRole: WorkspaceRole; vie
   }
 
   function actionsOf(member: Member): readonly RowAction[] {
-    return assignableRoles(viewerRole, member).map((role) => ({
+    const roleActions = assignableRoles(viewerRole, member).map((role) => ({
       id: role,
       label:
         role === "owner"
@@ -122,6 +125,19 @@ function MembersTable({ viewerRole, viewerId }: { viewerRole: WorkspaceRole; vie
         change.mutate({ member, role });
       },
     }));
+    return canRemove(viewerRole, viewerId, member)
+      ? [
+          ...roleActions,
+          {
+            id: "remove",
+            label: t("settings.members.action.remove"),
+            destructive: true,
+            onSelect: () => {
+              setRemoving(member);
+            },
+          },
+        ]
+      : roleActions;
   }
 
   const columns: readonly DataTableColumn<Member>[] = [
@@ -198,6 +214,14 @@ function MembersTable({ viewerRole, viewerId }: { viewerRole: WorkspaceRole; vie
           description={t("settings.account.loadFailed.description")}
           title={t("settings.members.loadFailed.title")}
           variant="error"
+        />
+      ) : null}
+      {removing !== undefined && viewerId !== undefined ? (
+        <EndMembershipDialog
+          onClose={() => {
+            setRemoving(undefined);
+          }}
+          target={{ kind: "remove", member: removing, viewerId }}
         />
       ) : null}
       {items.length === 0 ? null : (

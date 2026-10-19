@@ -169,7 +169,7 @@ describe("the members table", () => {
       await Promise.resolve();
     });
     const items = (await screen.findAllByRole("menuitem")).map((item) => item.textContent);
-    expect(items).toEqual(["Make owner", "Make admin"]);
+    expect(items).toEqual(["Make owner", "Make admin", "Remove from workspace"]);
     await act(async () => {
       fireEvent.click(screen.getByRole("menuitem", { name: "Make owner" }));
       await Promise.resolve();
