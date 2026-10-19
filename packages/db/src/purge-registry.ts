@@ -10,6 +10,7 @@ export const workspacePurgeOrder: readonly string[] = [
   // api_tokens references the membership of its account, so the tokens go before the members.
   "api_tokens",
   "audit_events",
+  "workspace_invitations",
   "workspace_settings",
   "workspace_members",
 ];

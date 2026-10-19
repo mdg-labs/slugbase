@@ -91,5 +91,20 @@
     "notExpected": "Falls du damit nicht gerechnet hast, frage den Eigentümer, der die Änderung vorgenommen hat.",
     "action": "{appName} öffnen",
     "footer": "Du erhältst diese E-Mail, weil du zum Eigentümer des {appName}-Workspace {workspace} gemacht wurdest."
+  },
+  "invitation": {
+    "subject": "Du wurdest zu {workspace} auf {appName} eingeladen",
+    "subjectBy": "{inviter} hat dich zu {workspace} auf {appName} eingeladen",
+    "greeting": "Hallo,",
+    "body": "Du wurdest eingeladen, dem Workspace {workspace} auf {appName} als {role} beizutreten.",
+    "bodyBy": "{inviter} hat dich eingeladen, dem Workspace {workspace} auf {appName} als {role} beizutreten.",
+    "role": {
+      "admin": "Admin",
+      "member": "Mitglied"
+    },
+    "action": "Einladung annehmen",
+    "expiry": "Der Link funktioniert einmal und bis zum {date}.",
+    "notExpected": "Falls du diese Einladung nicht erwartet hast, kannst du diese E-Mail ignorieren.",
+    "footer": "Du erhältst diese E-Mail, weil jemand diese Adresse in den {appName}-Workspace {workspace} eingeladen hat."
   }
 }

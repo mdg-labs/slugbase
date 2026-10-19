@@ -42,6 +42,7 @@ export type {
   ResponseResult,
 } from "./routes/register.ts";
 export type { ProblemErrorOptions, ProblemFieldError } from "./http/problem.ts";
+export type { EntitlementCheck, EntitlementSubject } from "./http/authorize.ts";
 export type {
   ApiTokenPrincipal,
   Authenticator,

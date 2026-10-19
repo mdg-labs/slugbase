@@ -133,13 +133,13 @@ A workspace always has at least one owner; the last owner cannot leave, be remov
 
 ### 3.4 Invitations
 
-- An admin invites by email with a role (admin or member only; an invitation can never grant owner, and an owner is made by promotion, §3.3, or by an instance admin creating a workspace, §11.1) and optional teams. On Cloud the invitation requires `members.invite`; a seat is **consumed on acceptance, not on send** (doc 06, doc 01 §13.1). The invite list shows pending invitations with resend and revoke. Inviting an email that already has a pending invitation resends it: a new token and expiry, the old link stops working, one email.
-- The invitation email carries a single-use token (hashed, 7 days) in a link to `/invite/<token>`, written in the invitee's language when known and the inviter's otherwise. Accepting requires the signed-in account's *verified* email to equal the invited email, and:
+- An admin invites by email with a role (admin or member only; an invitation can never grant owner, and an owner is made by promotion, §3.3, or by an instance admin creating a workspace, §11.1) and optional teams. On Cloud the invitation requires `members.invite`; a seat is **consumed on acceptance, not on send** (doc 06, doc 01 §13.1). The invite list shows pending invitations with resend and revoke. Inviting an email that already has a pending invitation resends it (the same invitation, with the role and teams of the new request in place of the earlier ones): a new token and expiry, the old link stops working at once, one email.
+- The invitation email carries a single-use token (hashed, 7 days) in a link to `/invite/<token>`, written in the invitee's language when known and the inviter's otherwise. The token is made by the background job that sends the email, so it exists in no request, response, queued job or log; an invitation holds only its hash, and until the email is sent, or when none is, that hash belongs to a token nobody has. Accepting requires the signed-in account's *verified* email to equal the invited email, and:
   - if the recipient is signed in as the invited email → membership added;
   - if signed in as a different account → told the invitation is for another address, with "sign out and continue";
   - if no account exists → a short sign-up (name, password, or an OIDC provider that asserts exactly the invited email as verified) with the email fixed and pre-verified (Q31); a sign-up for an email that has an account is refused and the person signs in instead;
   - if an account exists but is not signed in → sign in, then accept.
-- Accepting adds the membership with exactly the invited role and any invited teams still in the workspace, and makes that workspace active. Inviting an email that is already a member is a no-op with a clear message. Invitations require mail; without mail configured the admin sees a copyable invitation link instead (CE only — the link is the same token).
+- Accepting adds the membership with exactly the invited role and any invited teams still in the workspace, and makes that workspace active. Inviting an email that is already a member is refused with `409 already_member` and nothing is written. Invitations require mail; without mail configured the admin sees a copyable invitation link instead (CE only — the link is the same token).
 
 ### 3.5 Switching
 

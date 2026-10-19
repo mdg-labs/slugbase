@@ -304,10 +304,30 @@ export const AUDIT_ACTIONS: {
             };
         };
     };
+    readonly "invitation.created": {
+        readonly category: "invitation";
+        readonly metadata: {
+            readonly role: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
+    };
+    readonly "invitation.resent": {
+        readonly category: "invitation";
+        readonly metadata: {
+            readonly role: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
+    };
 };
 
 // @public
-export const AUDIT_CATEGORIES: readonly ["workspace", "member"];
+export const AUDIT_CATEGORIES: readonly ["workspace", "member", "invitation"];
 
 // @public (undocumented)
 export type AuditAction = keyof typeof AUDIT_ACTIONS;
@@ -808,6 +828,117 @@ export interface IdentityProviderInfo {
     readonly id: string;
 }
 
+// @public
+export const INVITATION_ROLES: readonly ["admin", "member"];
+
+// @public
+export const INVITATION_TTL_SECONDS: number;
+
+// @public (undocumented)
+export interface InvitationAsk {
+    // (undocumented)
+    readonly actor: AuditActor;
+    readonly actorLocale: string;
+    readonly email: string;
+    readonly ipPrefix: string | null;
+    // (undocumented)
+    readonly role: string;
+    // (undocumented)
+    readonly teamIds: readonly string[];
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface InvitationDependencies {
+    readonly audit: AuditWriter;
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: InvitationStore;
+    readonly ttlSeconds: number;
+}
+
+// @public
+export function invitationMessage(content: InvitationMessageContent): MailMessage;
+
+// @public
+export interface InvitationMessageContent {
+    // (undocumented)
+    readonly expiresAt: Date;
+    readonly inviterName: string;
+    readonly locale: string;
+    // (undocumented)
+    readonly role: InvitationRole;
+    readonly to: string;
+    readonly token: string;
+    // (undocumented)
+    readonly workspaceName: string;
+}
+
+// @public (undocumented)
+export type InvitationOutcome =
+/** The invitation was written; `locale` is the language its email is written in. */
+    {
+    readonly kind: "invited" | "resent";
+    readonly invitation: InvitationRecord;
+    readonly locale: string;
+}
+/** The account that asks is not an admin or owner of the workspace; nothing was written. */
+| {
+    readonly kind: "forbidden";
+}
+/** The role is not one an invitation can grant; nothing was written. */
+| {
+    readonly kind: "invalid_role";
+}
+/** The request names teams, which cannot be invited into yet; nothing was written. */
+| {
+    readonly kind: "teams_unavailable";
+}
+/** The address belongs to a member of the workspace; nothing was written. */
+| {
+    readonly kind: "already_member";
+};
+
+// @public
+export interface InvitationRecord {
+    // (undocumented)
+    readonly createdAt: Date;
+    // (undocumented)
+    readonly email: string;
+    // (undocumented)
+    readonly expiresAt: Date;
+    // (undocumented)
+    readonly id: string;
+    readonly invitedBy: string | null;
+    // (undocumented)
+    readonly role: WorkspaceRole;
+    // (undocumented)
+    readonly status: InvitationStatus;
+    // (undocumented)
+    readonly teamIds: readonly string[];
+}
+
+// @public (undocumented)
+export type InvitationRole = (typeof INVITATION_ROLES)[number];
+
+// @public (undocumented)
+export type InvitationStatus = "pending" | "accepted" | "revoked";
+
+// @public (undocumented)
+export interface InvitationStore {
+    actorRole(): Promise<WorkspaceRole | undefined>;
+    inviteeLocale(invitationId: string): Promise<string | undefined>;
+    memberHoldsEmail(email: string): Promise<boolean>;
+    writePending(invitation: NewInvitation): Promise<{
+        readonly invitation: InvitationRecord;
+        readonly resent: boolean;
+    }>;
+}
+
+// @public
+export function inviteMember(input: InvitationDependencies, ask: InvitationAsk): Promise<InvitationOutcome>;
+
 // @public (undocumented)
 export function isAuditAction(value: unknown): value is AuditAction;
 
@@ -962,6 +1093,19 @@ export interface MembershipEndRequest {
 export interface MembershipEndStore extends MemberRoleStore {
     end(request: MembershipEndRequest): Promise<boolean>;
     longestStandingOwner(excludingAccountId: string): Promise<string | undefined>;
+}
+
+// @public (undocumented)
+export interface NewInvitation {
+    // (undocumented)
+    readonly email: string;
+    readonly id: string;
+    // (undocumented)
+    readonly role: InvitationRole;
+    // (undocumented)
+    readonly teamIds: readonly string[];
+    readonly tokenHash: Buffer;
+    readonly ttlSeconds: number;
 }
 
 // @public

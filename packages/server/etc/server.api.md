@@ -167,6 +167,7 @@ export interface CreateServerOptions {
     // (undocumented)
     readonly config: ServerConfig;
     readonly database?: Database;
+    readonly entitlements?: EntitlementCheck;
     readonly hookTimeoutMs?: number;
     // (undocumented)
     readonly logger: Logger;
@@ -258,6 +259,17 @@ export type DeletionRefusalCode = (typeof DELETION_REFUSAL_CODES)[number];
 
 // @public
 export const DEVELOPMENT_BUILD_INFO: BuildInfo;
+
+// @public
+export type EntitlementCheck = (entitlement: string, subject: EntitlementSubject) => boolean | Promise<boolean>;
+
+// @public
+export interface EntitlementSubject {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly workspaceId?: string;
+}
 
 // @public
 export function envBoolean(): z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>;

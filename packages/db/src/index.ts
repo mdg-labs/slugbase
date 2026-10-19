@@ -42,6 +42,8 @@ export { workspaceRepository } from "./repositories/workspaces.ts";
 export type { NewWorkspace, WorkspaceDetail, WorkspaceRepository, WorkspaceSummary } from "./repositories/workspaces.ts";
 export { isLastOwnerViolation, memberRepository, OWNER_REQUIRED_CONSTRAINT } from "./repositories/members.ts";
 export type { MemberRepository, WorkspaceMember } from "./repositories/members.ts";
+export { invitationRepository } from "./repositories/invitations.ts";
+export type { InvitationMailContext, InvitationRepository } from "./repositories/invitations.ts";
 export { membershipRepository } from "./repositories/memberships.ts";
 export type { Membership, MembershipRepository } from "./repositories/memberships.ts";
 export type { MemberRole } from "./schema/workspaces.ts";

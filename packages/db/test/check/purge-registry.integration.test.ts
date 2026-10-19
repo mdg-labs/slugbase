@@ -93,6 +93,6 @@ describe("the purge registry", () => {
 
     const findings = await inspect(database, ["audit_events"]);
 
-    expect(findings.map((finding) => finding.object).sort()).toEqual(["table public.api_tokens", "table public.workspace_members", "table public.workspace_settings"]);
+    expect(findings.map((finding) => finding.object).sort()).toEqual(["table public.api_tokens", "table public.workspace_invitations", "table public.workspace_members", "table public.workspace_settings"]);
   }, HOOK_TIMEOUT_MS);
 });

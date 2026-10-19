@@ -20,6 +20,9 @@ export const UNKNOWN_API_TOKEN_ID = "0192f3a0-cccc-7000-8000-000000000002";
 export const UNKNOWN_MEMBER_ID = "0192f3a0-cccc-7000-8000-000000000004";
 export const UNKNOWN_IDENTITY_ID = "0192f3a0-cccc-7000-8000-000000000003";
 
+/** A team no workspace holds: teams have no members to join yet, so any team named in an invitation is refused the same way. */
+export const UNKNOWN_TEAM_ID = "0192f3a0-cccc-7000-8000-000000000005";
+
 export const FIXTURES: ContractFixtures = {
   getHealth: {},
   getReady: {},
@@ -137,6 +140,14 @@ export const FIXTURES: ContractFixtures = {
     body: { accountId: UNKNOWN_MEMBER_ID, demoteSelf: false },
     status: 404,
     foreign: { body: { accountId: UNKNOWN_MEMBER_ID, demoteSelf: false } },
+  },
+  // The invitation acts in the workspace of the request and names a team of it by identifier in its body. The walker's server holds the entitlement the
+  // operation declares for every account but the one that has none, so the valid request is the declared 201. A team is refused with 422 whichever workspace
+  // holds it, since no team can be invited into yet, so the request naming a team is the declared 422 for a team of workspace B as for any other; the matrix
+  // and the walker hold that one answer to the 404 they expect for an identifier of another workspace (see contract.integration.test.ts).
+  createInvitation: {
+    body: { email: "walker-invitee@example.test", role: "member" },
+    foreign: { body: { email: "walker-invitee@example.test", role: "member", teamIds: [UNKNOWN_TEAM_ID] } },
   },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.

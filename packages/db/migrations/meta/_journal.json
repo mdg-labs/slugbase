@@ -302,6 +302,13 @@
       "when": 1792421626547,
       "tag": "20261019145346_add_last_instance_admin_check",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1792426332476,
+      "tag": "20261019161212_add_workspace_invitations",
+      "breakpoints": true
     }
   ]
 }

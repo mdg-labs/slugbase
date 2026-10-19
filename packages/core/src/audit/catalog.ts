@@ -6,7 +6,7 @@
 // section 10. The catalog holds the actions that are recorded so far.
 
 /** The groups the audit log filters by. */
-export const AUDIT_CATEGORIES = ["workspace", "member"] as const;
+export const AUDIT_CATEGORIES = ["workspace", "member", "invitation"] as const;
 
 export type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
 
@@ -47,6 +47,9 @@ export const AUDIT_ACTIONS = {
   "member.role_changed": { category: "member", metadata: { from: MEMBER_ROLE, to: MEMBER_ROLE } },
   "member.removed": { category: "member", metadata: { content: CONTENT_CHOICE, transferTo: { type: "uuid" } } },
   "member.left": { category: "member", metadata: { content: CONTENT_CHOICE, transferTo: { type: "uuid" } } },
+  // The invited address is personal data and has no field: the event names the invitation and the role it grants.
+  "invitation.created": { category: "invitation", metadata: { role: MEMBER_ROLE } },
+  "invitation.resent": { category: "invitation", metadata: { role: MEMBER_ROLE } },
 } as const satisfies Record<string, AuditActionDefinition>;
 
 export type AuditAction = keyof typeof AUDIT_ACTIONS;

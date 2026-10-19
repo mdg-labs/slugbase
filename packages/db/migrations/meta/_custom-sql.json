@@ -1,4 +1,4 @@
 {
-  "sha256": "0dc9de75788879b733a53a04457e58969a2c21f856cb79691f895b576a78813a",
-  "migration": "20261019145346_add_last_instance_admin_check"
+  "sha256": "08e2b833da3faaa9009808cb29f88d69c06fe04fb6f3c4c0d8f3f5cb40e7da41",
+  "migration": "20261019161212_add_workspace_invitations"
 }

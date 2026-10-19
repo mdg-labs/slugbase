@@ -188,6 +188,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Invite a person to the workspace by email */
+        post: operations["createInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me": {
         parameters: {
             query?: never;
@@ -901,6 +918,20 @@ export interface components {
              */
             workspaceId?: string;
         };
+        CreateInvitationRequest: {
+            /**
+             * Format: email
+             * @description The address to invite; case does not matter
+             */
+            email: string;
+            /**
+             * @description The role the invited person gets on accepting: admin or member, never owner
+             * @enum {string}
+             */
+            role: "admin" | "member";
+            /** @description The teams the invited person joins on accepting. Until team membership exists a list with an entry is refused with 422 validation_failed */
+            teamIds?: string[];
+        };
         CreateWorkspaceRequest: {
             /** @description The workspace's name, 1 to 64 characters; surrounding whitespace is removed and a name that is blank after that is refused */
             name: string;
@@ -1000,6 +1031,39 @@ export interface components {
             items: components["schemas"]["Identity"][];
             /** @description Passed as `cursor` to get the next page; null on the last page */
             nextCursor: string | null;
+        };
+        Invitation: {
+            /**
+             * Format: date-time
+             * @description When the invitation was first made, RFC 3339 UTC
+             */
+            createdAt: string;
+            /** @description The invited address */
+            email: string;
+            /**
+             * Format: date-time
+             * @description When the invitation stops working, RFC 3339 UTC
+             */
+            expiresAt: string;
+            /**
+             * Format: uuid
+             * @description The invitation's identifier
+             */
+            id: string;
+            /** @description The account that sent the invitation last, null once that account is deleted */
+            invitedBy: string | null;
+            /**
+             * @description The role the invited person gets on accepting
+             * @enum {string}
+             */
+            role: "owner" | "admin" | "member";
+            /**
+             * @description Where the invitation stands; only a pending one can be accepted
+             * @enum {string}
+             */
+            status: "pending" | "accepted" | "revoked";
+            /** @description The teams the invited person joins on accepting */
+            teamIds: string[];
         };
         LoginRequest: {
             /** @description The account's email address; case does not matter */
@@ -2178,6 +2242,104 @@ export interface operations {
                 };
             };
             /** @description Too many requests from this address or for this email address; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateInvitationRequest"];
+            };
+        };
+        responses: {
+            /** @description The invitation, pending, with a new token that expires in 7 days and is emailed once as a link to /invite/<token> when the deployment can send mail; the token is in no response. An address that already had a pending invitation is a resend: the same invitation, with the role and teams of this request, a new expiry and a new token, and the earlier link stops working */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Invitation"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the workspace does not hold the members.invite entitlement (entitlement_required) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The address belongs to a member of the workspace (already_member); nothing is written */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation: an address that is not one, a role other than admin or member (owner included), or a teamIds with an entry, which cannot be invited into yet */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
             429: {
                 headers: {
                     /** @description Whole seconds to wait before the request can succeed */

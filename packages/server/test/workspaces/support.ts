@@ -1,8 +1,9 @@
-import { generateApiToken } from "@slugbase/core";
+import { generateApiToken, type MailPort } from "@slugbase/core";
 import { apiTokenRepository, type AuthStore } from "@slugbase/db";
 import type { TestDatabase } from "@slugbase/testing/db";
 import { createAccountOnlyTenantResolver } from "../../src/auth/tenant-resolver.ts";
 import { createServer, type Server } from "../../src/create-server.ts";
+import type { EntitlementCheck } from "../../src/http/authorize.ts";
 import { runMigrations } from "../../src/migrate/index.ts";
 import { seedAccount, seedMembership, seedWorkspace, sessionRows, setActiveWorkspace, storeFor, type SeededAccount } from "../auth/support.ts";
 import { appUrl, tenantDatabase } from "../contract/support.ts";
@@ -66,7 +67,7 @@ export interface WorkspaceHarness {
   start(): Promise<void>;
   /** Closes the auth store; the `afterAll` of a suite. */
   stop(): Promise<void>;
-  serve(options?: { readonly allowWorkspaceCreation?: boolean }): World;
+  serve(options?: { readonly allowWorkspaceCreation?: boolean; readonly entitlements?: EntitlementCheck; readonly mail?: MailPort }): World;
   /** A verified account with a session that re-authenticated just now. */
   person(world: World): Promise<Person>;
   /** Re-authenticates the person's session, which moves the ten-minute window of the operations that ask for it. */
@@ -122,13 +123,14 @@ export function workspaceHarness(database: () => TestDatabase): WorkspaceHarness
       });
       const server = createServer({
         config,
-        adapters: { ...adapters(config), tenantResolver: createAccountOnlyTenantResolver() },
+        adapters: { ...adapters(config), ...(options.mail === undefined ? {} : { mail: options.mail }), tenantResolver: createAccountOnlyTenantResolver() },
         modules: [],
         migrations: [],
         logger: recordingLogger(),
         database: tenantDatabase(database()),
         authStore: authStore(),
         ...(options.allowWorkspaceCreation === undefined ? {} : { allowWorkspaceCreation: options.allowWorkspaceCreation }),
+        ...(options.entitlements === undefined ? {} : { entitlements: options.entitlements }),
       });
       return { server, origin: config.APP_ORIGIN };
     },

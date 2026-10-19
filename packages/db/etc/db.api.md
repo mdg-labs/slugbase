@@ -9,6 +9,7 @@ import type { AuditRecord } from '@slugbase/core';
 import type { CredentialTokenPurpose } from '@slugbase/core';
 import { InferInsertModel } from 'drizzle-orm';
 import { InferSelectModel } from 'drizzle-orm';
+import type { InvitationStore } from '@slugbase/core';
 import type { MemberRoleStore } from '@slugbase/core';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 import type { PgTable } from 'drizzle-orm/pg-core';
@@ -16,6 +17,7 @@ import { SQL } from 'drizzle-orm';
 import type { WorkspaceAdministrationStore } from '@slugbase/core';
 import type { WorkspaceRenameRequest } from '@slugbase/core';
 import type { WorkspaceRenameResult } from '@slugbase/core';
+import type { WorkspaceRole } from '@slugbase/core';
 import type { WorkspaceSettings } from '@slugbase/core';
 import type { WorkspaceSettingsChange } from '@slugbase/core';
 import type { WorkspaceSettingsPatch } from '@slugbase/core';
@@ -461,6 +463,27 @@ export type IdentityUnlinkOutcome = "unlinked"
 export type InsertValues<T extends WorkspaceTable> = Omit<InferInsertModel<T>, "workspaceId"> & {
     workspaceId?: string;
 };
+
+// @public
+export interface InvitationMailContext {
+    // (undocumented)
+    readonly email: string;
+    // (undocumented)
+    readonly expiresAt: Date;
+    // (undocumented)
+    readonly role: WorkspaceRole;
+    // (undocumented)
+    readonly workspaceName: string;
+}
+
+// @public (undocumented)
+export interface InvitationRepository extends InvitationStore {
+    enqueue(jobs: readonly QueuedJob[]): Promise<void>;
+    issueToken(invitationId: string, tokenHash: Buffer): Promise<InvitationMailContext | undefined>;
+}
+
+// @public (undocumented)
+export function invitationRepository(tx: TenantTx): InvitationRepository;
 
 // @public
 export function isLastOwnerViolation(error: unknown): boolean;

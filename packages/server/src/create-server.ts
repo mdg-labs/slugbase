@@ -12,6 +12,7 @@ import { ensureSetupToken } from "./auth/setup-token.ts";
 import { createMembershipTenantResolver, defersToMembershipResolver } from "./auth/tenant-resolver.ts";
 import { createRateLimitRegistry, type ServerConfig, type WorkerConfig } from "./config/index.ts";
 import type { Authenticator } from "./http/authenticate.ts";
+import type { EntitlementCheck } from "./http/authorize.ts";
 import { bodyLimits } from "./http/body-limits.ts";
 import {
   RouteTable,
@@ -41,6 +42,7 @@ import { apiConfigRoute } from "./routes/meta/config.ts";
 import { apiDocs } from "./routes/meta/docs.ts";
 import { isOpenApiDocument, openApiRoute } from "./routes/meta/openapi.ts";
 import { setupRoutes } from "./routes/setup/index.ts";
+import { invitationRoutes } from "./routes/invitations/index.ts";
 import { memberRoutes } from "./routes/members/index.ts";
 import { workspaceRoutes } from "./routes/workspaces/index.ts";
 import { checkRegistrations, type ContractDocument } from "./routes/register.ts";
@@ -165,6 +167,13 @@ export interface CreateServerOptions {
    * by default the system clock. A test passes a clock it moves.
    */
   readonly now?: () => number;
+  /**
+   * Decides the entitlement an operation declares (stage 9, doc 01 section 7.5): the composition's entitlement
+   * source. Without one every declared entitlement is refused (`403 entitlement_required`), so an operation
+   * that declares one, such as `POST /invitations` with `members.invite`, answers that until the composition
+   * supplies the source.
+   */
+  readonly entitlements?: EntitlementCheck;
   /** How long a shutdown lets in-flight requests finish before cutting them (doc 01 section 3 rule 2). */
   readonly shutdownTimeoutMs?: number;
 }
@@ -517,6 +526,8 @@ export function createServer(options: CreateServerOptions): Server {
   builtInRoutes.push(...workspaceRoutes({ withTenant: context.withTenant, creationAllowed: options.allowWorkspaceCreation ?? false, cookie: sessionCookieSpec(config.APP_ORIGIN), mail: adapters.mail }));
   // So are the members of the active workspace: listed with the co-member projection of their accounts, and their roles changed under the last-owner rule the database enforces.
   builtInRoutes.push(...memberRoutes({ cursorSecret: config.SESSION_SECRET, cookie: sessionCookieSpec(config.APP_ORIGIN) }));
+  // So are the invitations of the active workspace: an admin invites an address, and the invitation's email is queued with it when the composition can send mail.
+  builtInRoutes.push(...invitationRoutes({ mail: adapters.mail }));
   // So are the account's personal API tokens: created, listed and revoked in an account-level transaction on the account's own rows.
   builtInRoutes.push(...apiTokenRoutes({ withTenant: context.withTenant, cursorSecret: config.SESSION_SECRET }));
   // So are the identities linked to the account: listed in an account-level transaction, unlinked by a system operation that checks the account keeps another way to sign in.
@@ -624,6 +635,7 @@ export function createServer(options: CreateServerOptions): Server {
       : adapters.tenantResolver,
     withTenant: context.withTenant,
     ...(options.now === undefined ? {} : { now: options.now }),
+    ...(options.entitlements === undefined ? {} : { entitlements: options.entitlements }),
     responseValidation,
     metrics,
   }, chainStages);

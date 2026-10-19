@@ -71,4 +71,5 @@ export const systemOperations: readonly string[] = [
   "sys_account_deletion_scope",
   "sys_account_last_instance_admin",
   "sys_delete_account",
+  "sys_invitation_invitee_locale",
 ];

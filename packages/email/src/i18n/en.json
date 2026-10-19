@@ -91,5 +91,20 @@
     "notExpected": "If you did not expect this, ask the owner who made the change.",
     "action": "Open {appName}",
     "footer": "You are receiving this email because you were made an owner of the {appName} workspace {workspace}."
+  },
+  "invitation": {
+    "subject": "You are invited to {workspace} on {appName}",
+    "subjectBy": "{inviter} invited you to {workspace} on {appName}",
+    "greeting": "Hi,",
+    "body": "You are invited to join the workspace {workspace} on {appName} as {role}.",
+    "bodyBy": "{inviter} invited you to join the workspace {workspace} on {appName} as {role}.",
+    "role": {
+      "admin": "an admin",
+      "member": "a member"
+    },
+    "action": "Accept the invitation",
+    "expiry": "The link works once and until {date}.",
+    "notExpected": "If you did not expect this invitation, you can ignore this email.",
+    "footer": "You are receiving this email because someone invited this address to the {appName} workspace {workspace}."
   }
 }
