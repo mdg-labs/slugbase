@@ -10,6 +10,8 @@ export interface SelectOption {
 
 export interface SelectFieldProps {
   label: ReactNode;
+  /** Keeps the label from showing while it still names the select to assistive technology, for a select in a table cell. */
+  hideLabel?: boolean;
   /** Names the field as it is posted. */
   name?: string;
   /** Help shown under the field; the field is described by it. */
@@ -24,11 +26,11 @@ export interface SelectFieldProps {
 }
 
 /** A label, a Select and the message that says what is wrong with its value, tied together for assistive technology. */
-export function SelectField({ label, name, description, error, options, value, onValueChange, disabled, className }: SelectFieldProps): ReactElement {
+export function SelectField({ label, hideLabel = false, name, description, error, options, value, onValueChange, disabled, className }: SelectFieldProps): ReactElement {
   const invalid = error !== undefined && error !== null && error !== false;
   return (
     <Field className={cn("items-stretch gap-1.5", className)} disabled={disabled} invalid={invalid} name={name}>
-      <FieldLabel>{label}</FieldLabel>
+      <FieldLabel className={hideLabel ? "sr-only" : undefined}>{label}</FieldLabel>
       <Select
         items={options}
         onValueChange={(next) => {

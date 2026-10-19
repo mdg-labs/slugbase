@@ -41,7 +41,8 @@
       "security": "Security",
       "tokens": "API tokens",
       "workspace": "Workspace",
-      "general": "General"
+      "general": "General",
+      "members": "Members"
     },
     "account": {
       "title": "Profile",
@@ -504,6 +505,45 @@
       },
       "forbidden": "You are no longer allowed to change this workspace.",
       "saveFailed": "The name could not be saved. Try again."
+    },
+    "members": {
+      "title": "Members",
+      "description": "The people in this workspace, and what each of them can do.",
+      "column": {
+        "name": "Name",
+        "email": "Email",
+        "role": "Role",
+        "joined": "Joined",
+        "lastActive": "Last active",
+        "actions": "Actions"
+      },
+      "you": "You",
+      "never": "Never",
+      "role": {
+        "owner": "Owner",
+        "admin": "Admin",
+        "member": "Member"
+      },
+      "roleOf": "Role of {name}",
+      "actionsFor": "Actions for {name}",
+      "action": {
+        "makeOwner": "Make owner",
+        "makeAdmin": "Make admin",
+        "makeMember": "Make member"
+      },
+      "error": {
+        "lastOwner": "A workspace needs at least one owner. Make someone else an owner first.",
+        "forbidden": "You are not allowed to change this role.",
+        "notAMember": "This person is no longer a member of the workspace."
+      },
+      "loadFailed": {
+        "title": "The members could not be loaded"
+      },
+      "loadMore": "Show more",
+      "single": {
+        "title": "You are the only member",
+        "description": "People who join this workspace will appear here with their role."
+      }
     }
   },
   "configFailure": {

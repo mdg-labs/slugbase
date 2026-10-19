@@ -24,6 +24,14 @@ describe("SelectField", () => {
     await expectNoViolations(container);
   });
 
+  it("keeps a hidden label for assistive technology only", async () => {
+    const { container } = render(<SelectField hideLabel label="Language of Ada" onValueChange={() => undefined} options={LANGUAGES} value="en" />);
+
+    expect(screen.getByRole("combobox", { name: "Language of Ada" })).toBeTruthy();
+    expect(screen.getByText("Language of Ada").className).toContain("sr-only");
+    await expectNoViolations(container);
+  });
+
   it("reports the option the member chooses", async () => {
     const onValueChange = vi.fn<(value: string) => void>();
     render(<SelectField label="Language" onValueChange={onValueChange} options={LANGUAGES} value="en" />);

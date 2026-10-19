@@ -15,6 +15,7 @@ export { FormOverlay, type FormOverlayProps } from "./form-overlay.tsx";
 export { InlineNote, type InlineNoteProps } from "./inline-note.tsx";
 export { Loading, type LoadingProps } from "./loading.tsx";
 export { PasswordStrength, type PasswordScore, type PasswordStrengthProps } from "./password-strength.tsx";
+export { RowActions, type RowAction, type RowActionsProps } from "./row-actions.tsx";
 export { SecretInput, type SecretInputProps } from "./secret-input.tsx";
 export { SegmentedChoice, type SegmentedChoiceOption, type SegmentedChoiceProps } from "./segmented-choice.tsx";
 export { SelectField, type SelectFieldProps, type SelectOption } from "./select-field.tsx";

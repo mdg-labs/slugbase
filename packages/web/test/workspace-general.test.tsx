@@ -49,12 +49,11 @@ describe("the settings navigation", () => {
 
     const nav = await screen.findByRole("navigation", { name: "Settings" });
     const group = await within(nav).findByRole("list", { name: "Workspace" });
-    const links = within(group).getAllByRole("link");
-    expect(links.map((link) => link.textContent)).toEqual(["General"]);
-    expect(links[0]?.getAttribute("aria-current")).toBeNull();
+    const general = within(group).getByRole("link", { name: "General" });
+    expect(general.getAttribute("aria-current")).toBeNull();
 
     await act(async () => {
-      fireEvent.click(links[0] as HTMLElement);
+      fireEvent.click(general);
       await Promise.resolve();
     });
 

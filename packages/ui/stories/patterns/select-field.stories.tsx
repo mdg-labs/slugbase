@@ -22,3 +22,8 @@ export const WithError = (): React.ReactElement => (
 );
 
 export const Disabled = (): React.ReactElement => <SelectField disabled label="Language" onValueChange={() => undefined} options={LANGUAGES} value="de" />;
+
+export const HiddenLabel = (): React.ReactElement => {
+  const [value, setValue] = useState("en");
+  return <SelectField hideLabel label="Language of Ada" onValueChange={setValue} options={LANGUAGES} value={value} />;
+};

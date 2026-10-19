@@ -41,7 +41,8 @@
       "security": "Sicherheit",
       "tokens": "API-Tokens",
       "workspace": "Workspace",
-      "general": "Allgemein"
+      "general": "Allgemein",
+      "members": "Mitglieder"
     },
     "account": {
       "title": "Profil",
@@ -504,6 +505,45 @@
       },
       "forbidden": "Du darfst diesen Workspace nicht mehr ändern.",
       "saveFailed": "Der Name konnte nicht gespeichert werden. Versuche es erneut."
+    },
+    "members": {
+      "title": "Mitglieder",
+      "description": "Die Personen in diesem Workspace und was jede von ihnen tun darf.",
+      "column": {
+        "name": "Name",
+        "email": "E-Mail",
+        "role": "Rolle",
+        "joined": "Beigetreten",
+        "lastActive": "Zuletzt aktiv",
+        "actions": "Aktionen"
+      },
+      "you": "Du",
+      "never": "Nie",
+      "role": {
+        "owner": "Eigentümer",
+        "admin": "Admin",
+        "member": "Mitglied"
+      },
+      "roleOf": "Rolle von {name}",
+      "actionsFor": "Aktionen für {name}",
+      "action": {
+        "makeOwner": "Zum Eigentümer machen",
+        "makeAdmin": "Zum Admin machen",
+        "makeMember": "Zum Mitglied machen"
+      },
+      "error": {
+        "lastOwner": "Ein Workspace braucht mindestens einen Eigentümer. Mache zuerst jemand anderen zum Eigentümer.",
+        "forbidden": "Du darfst diese Rolle nicht ändern.",
+        "notAMember": "Diese Person ist kein Mitglied des Workspace mehr."
+      },
+      "loadFailed": {
+        "title": "Die Mitglieder konnten nicht geladen werden"
+      },
+      "loadMore": "Mehr anzeigen",
+      "single": {
+        "title": "Du bist das einzige Mitglied",
+        "description": "Personen, die diesem Workspace beitreten, erscheinen hier mit ihrer Rolle."
+      }
     }
   },
   "configFailure": {

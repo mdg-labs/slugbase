@@ -1,11 +1,41 @@
 import { vi } from "vitest";
-import { ACCOUNT_BODY, CONFIG_BODY, ME_PATH, SESSION_BODY, SESSION_PATH, WORKSPACES_PATH, WORKSPACE_ID, json } from "./support.tsx";
+import { ACCOUNT_BODY, CONFIG_BODY, ME_PATH, SESSION_BODY, SESSION_PATH, WORKSPACES_PATH, WORKSPACE_ID, json, problem } from "./support.tsx";
 
 type Transport = (request: Request) => Promise<Response>;
 
 export const WORKSPACE_PATH = "/api/v1/workspace";
 
 export type Role = "owner" | "admin" | "member";
+
+export const MEMBERS_PATH = "/api/v1/members";
+
+export interface TestMember {
+  readonly accountId: string;
+  readonly displayName: string;
+  readonly email: string;
+  readonly role: Role;
+  readonly joinedAt: string;
+  readonly lastActiveAt: string | null;
+}
+
+/** The signed-in account as the member list holds it. */
+export const SELF: TestMember = {
+  accountId: ACCOUNT_BODY.id,
+  displayName: ACCOUNT_BODY.displayName,
+  email: ACCOUNT_BODY.email,
+  role: "owner",
+  joinedAt: "2026-09-01T08:00:00.000Z",
+  lastActiveAt: "2026-10-18T09:30:00.000Z",
+};
+
+export const GRACE: TestMember = {
+  accountId: "0192f3a0-bbbb-7000-8000-000000000002",
+  displayName: "Grace Hopper",
+  email: "grace@example.org",
+  role: "member",
+  joinedAt: "2026-09-05T08:00:00.000Z",
+  lastActiveAt: null,
+};
 
 export interface WorkspaceSettingsServerOptions {
   /** The caller's role in the workspace. */
@@ -20,6 +50,13 @@ export interface WorkspaceSettingsServerOptions {
   readonly other?: Transport;
   /** The account acts in no workspace. */
   readonly noWorkspace?: boolean;
+  /** The members `GET /members` lists, in one page unless `pageSize` splits them. */
+  readonly members?: readonly TestMember[];
+  readonly pageSize?: number;
+  /** Answers `GET /members` instead of the list; `call` counts from 1. */
+  readonly membersGet?: (call: number) => Response | Promise<Response>;
+  /** Answers `PATCH /members/{accountId}` instead of changing the role; `call` counts from 1. */
+  readonly memberPatch?: (call: number, request: Request) => Response | Promise<Response>;
 }
 
 export interface Received {
@@ -34,8 +71,9 @@ export interface Received {
  * real one does: it needs the version the workspace has and moves it by one.
  */
 export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOptions = {}) {
-  const role: Role = options.role ?? "owner";
+  let role: Role = options.role ?? "owner";
   let name = options.name ?? "Ada's Workspace";
+  let members: TestMember[] = [...(options.members ?? [{ ...SELF, role: options.role ?? "owner" }, GRACE])];
   let version = options.version ?? 3;
   const received: Received[] = [];
   const counts = new Map<string, number>();
@@ -94,6 +132,36 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
       name = ((JSON.parse(text) as { name: string }).name);
       version += 1;
       return json(workspace(), { headers: { ETag: `"${String(version)}"` } });
+    }
+    if (pathname === MEMBERS_PATH && request.method === "GET") {
+      if (options.membersGet !== undefined) {
+        return options.membersGet(call);
+      }
+      const size = options.pageSize ?? members.length;
+      const start = Number(new URL(request.url).searchParams.get("cursor") ?? 0);
+      const next = start + size;
+      return json({ items: members.slice(start, next), nextCursor: next < members.length ? String(next) : null });
+    }
+    if (pathname.startsWith(`${MEMBERS_PATH}/`) && request.method === "PATCH") {
+      if (options.memberPatch !== undefined) {
+        return options.memberPatch(call, request);
+      }
+      const accountId = pathname.slice(MEMBERS_PATH.length + 1);
+      const requested = (JSON.parse(text) as { role: Role }).role;
+      const member = members.find((candidate) => candidate.accountId === accountId);
+      if (member === undefined) {
+        return problem(404, "not_found", "req-404");
+      }
+      if (member.role === "owner" && requested !== "owner" && members.filter((candidate) => candidate.role === "owner").length === 1) {
+        return problem(409, "last_owner", "req-409");
+      }
+      const changed = { ...member, role: requested };
+      members = members.map((candidate) => (candidate.accountId === accountId ? changed : candidate));
+      if (accountId === SELF.accountId) {
+        // The caller's own role moves, and the session's token with it.
+        role = requested;
+      }
+      return json(changed);
     }
     if (options.other !== undefined) {
       return options.other(request);

@@ -343,6 +343,29 @@ export interface PasswordStrengthProps {
 // @public (undocumented)
 export type ResolvedTheme = "light" | "dark";
 
+// @public (undocumented)
+export interface RowAction {
+    destructive?: boolean;
+    // (undocumented)
+    disabled?: boolean;
+    icon?: ReactNode;
+    id: string;
+    // (undocumented)
+    label: string;
+    // (undocumented)
+    onSelect: () => void;
+}
+
+// @public
+export function RowActions(input: RowActionsProps): ReactElement | null;
+
+// @public (undocumented)
+export interface RowActionsProps {
+    // (undocumented)
+    actions: readonly RowAction[];
+    label: string;
+}
+
 // @public
 export function SecretInput(input: SecretInputProps): ReactElement;
 
@@ -413,6 +436,7 @@ export interface SelectFieldProps {
     // (undocumented)
     disabled?: boolean;
     error?: ReactNode;
+    hideLabel?: boolean;
     // (undocumented)
     label: ReactNode;
     name?: string;
