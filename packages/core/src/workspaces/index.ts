@@ -31,3 +31,11 @@ export type {
 } from "./manage.ts";
 export { changeMemberRole } from "./members.ts";
 export type { MemberRoleAsk, MemberRoleDependencies, MemberRoleOutcome, MemberRoleStore, MemberRoles } from "./members.ts";
+export { endMembership } from "./departure.ts";
+export type {
+  MembershipEndAsk,
+  MembershipEndDependencies,
+  MembershipEndOutcome,
+  MembershipEndRequest,
+  MembershipEndStore,
+} from "./departure.ts";

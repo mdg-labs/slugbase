@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
 import { WORKSPACE_ROLES } from "./me.ts";
+import { EndMembershipRequestSchema, MembershipEndedSchema } from "./members.ts";
 
 // The workspaces tag of doc 04 section 10.4. The account-level operations list the workspaces the signed-in
 // account belongs to, create one and switch the session's active one; they act on the session's own account,
@@ -228,6 +229,31 @@ export const updateWorkspaceSettings = defineOperation({
     ),
     404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),
     422: problemResponse("The body did not pass validation (a value of the wrong type, or a field the operation does not declare)"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const leaveWorkspace = defineOperation({
+  method: "post",
+  path: "/api/v1/workspace/leave",
+  operationId: "leaveWorkspace",
+  tag: "workspaces",
+  summary: "Leave the active workspace",
+  auth: "member",
+  rate: "write",
+  request: { body: EndMembershipRequestSchema },
+  responses: {
+    200: jsonResponse(
+      "The caller's membership is ended at once and the recipient the request resolved to is returned. The content choice is queued with `member.left` and applied by the modules that own content once it is delivered after the call answers, not before. The session acts in another workspace, or in none, from its next request",
+      MembershipEndedSchema,
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    403: problemResponse("The request did not come from the application itself (cross_site_request), or the credential is an API token"),
+    404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted; or `transferTo` names an account that is not a member of it (the errors name transferTo)"),
+    409: problemResponse("The caller is the last owner of the workspace (last_owner); nothing is written"),
+    422: problemResponse("The body did not pass validation, or `transferTo` names the caller (the errors name transferTo)"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },

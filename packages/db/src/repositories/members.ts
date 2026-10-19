@@ -2,6 +2,7 @@ import type { MemberRoleStore, MemberRoles, WorkspaceRole } from "@slugbase/core
 import { and, asc, eq, gt, sql } from "drizzle-orm";
 import { accounts } from "../schema/accounts.ts";
 import { workspaceMembers, type MemberRole } from "../schema/workspaces.ts";
+import { enqueueInTenantTransaction, type QueuedJob } from "../system/queue.ts";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
 
 // The members of the active workspace (doc 05 sections 2.1 and 2.2, doc 04 section 10.5, doc 10 T1 and T2).
@@ -15,7 +16,9 @@ import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
 // trigger of `workspace_members` takes as well (src/sql/270-member-roles.sql): two role changes in one
 // workspace queue on it, so each judges the roles the other left. The trigger is the database's own guard
 // that a workspace keeps an owner; it refuses the commit of a transaction that would leave none, and
-// `isLastOwnerViolation` tells that refusal from any other error.
+// `isLastOwnerViolation` tells that refusal from any other error. Removing a member deletes the membership
+// row in the active workspace on the same policies, and the API tokens bound to it go with it through the
+// composite foreign key of `api_tokens`; the jobs announcing it are queued in the same transaction.
 
 /** One member of the workspace, with the co-member projection of the member's account. */
 export interface WorkspaceMember {
@@ -36,6 +39,19 @@ export interface MemberRepository extends MemberRoleStore {
   list(afterAccountId: string | null, limit: number): Promise<readonly WorkspaceMember[]>;
   /** One member of the workspace of the transaction; undefined when the account is not one. Needs a transaction opened with a workspace. */
   member(accountId: string): Promise<WorkspaceMember | undefined>;
+  /**
+   * The owner of the workspace of the transaction with the earliest `joinedAt` (then the lowest account
+   * identifier) other than `excludingAccountId`; undefined when it has no other owner. Needs a transaction
+   * opened with a workspace.
+   */
+  longestStandingOwner(excludingAccountId: string): Promise<string | undefined>;
+  /**
+   * Deletes the membership of `accountId` in the workspace of the transaction and queues `jobs`, in the open
+   * transaction. The API tokens bound to the membership are deleted with it by their foreign key. False,
+   * with nothing queued, when the account is no member. The commit is refused when the membership was the
+   * last owner's (`isLastOwnerViolation`). Needs a transaction opened with a workspace.
+   */
+  remove(accountId: string, jobs: readonly QueuedJob[]): Promise<boolean>;
   /**
    * Gives the full session `sessionId` of the account of the transaction a new token (`tokenHash`, the SHA-256
    * of 32 random bytes) through `sys_session_rotate`, in the open transaction, so the new token exists exactly
@@ -78,6 +94,10 @@ function roleOf(value: string): WorkspaceRole {
 interface RoleRow extends Record<string, unknown> {
   account_id: string;
   role: string;
+}
+
+interface OwnerRow extends Record<string, unknown> {
+  account_id: string;
 }
 
 interface FlagRow extends Record<string, unknown> {
@@ -149,6 +169,30 @@ export function memberRepository(tx: TenantTx): MemberRepository {
         .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.accountId, targetAccountId)))
         .returning({ accountId: workspaceMembers.accountId });
       return written.length === 1;
+    },
+
+    async longestStandingOwner(excludingAccountId) {
+      const workspaceId = workspaceOf(tx, "reading the longest-standing owner");
+      const rows = await tenantHandle(tx).execute<OwnerRow>(sql`
+        SELECT account_id FROM public.workspace_members
+        WHERE workspace_id = ${workspaceId}::uuid AND role = 'owner' AND account_id <> ${excludingAccountId}::uuid
+        ORDER BY joined_at, account_id LIMIT 1`);
+      return rows[0]?.account_id;
+    },
+
+    async remove(accountId, jobs) {
+      const workspaceId = workspaceOf(tx, "removing a member");
+      const removed = await tenantHandle(tx)
+        .delete(workspaceMembers)
+        .where(and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.accountId, accountId)))
+        .returning({ accountId: workspaceMembers.accountId });
+      if (removed.length !== 1) {
+        return false;
+      }
+      for (const job of jobs) {
+        await enqueueInTenantTransaction(tx, job);
+      }
+      return true;
     },
 
     async rotateSession(sessionId, tokenHash) {

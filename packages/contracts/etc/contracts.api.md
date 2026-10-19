@@ -416,6 +416,10 @@ export interface ComponentTypes {
             backupCode: string;
             password?: string;
         };
+        EndMembershipRequest: {
+            content: "transfer" | "delete";
+            transferTo?: string;
+        };
         ForgotPasswordRequest: {
             email: string;
         };
@@ -463,6 +467,10 @@ export interface ComponentTypes {
             name: string;
             role: "owner" | "admin" | "member";
             workspaceId: string;
+        };
+        MembershipEnded: {
+            content: "transfer" | "delete";
+            transferTo: string;
         };
         MfaBackupCodes: {
             backupCodes: string[];
@@ -877,6 +885,15 @@ export interface EmptyResponse<H extends ResponseHeaders = ResponseHeaders> {
 export function emptyResponse<H extends ResponseHeaders = ResponseHeaders>(description: string, options?: JsonResponseOptions<H>): EmptyResponse<H>;
 
 // @public (undocumented)
+export const EndMembershipRequestSchema: z.ZodObject<{
+    content: z.ZodEnum<{
+        delete: "delete";
+        transfer: "transfer";
+    }>;
+    transferTo: z.ZodOptional<z.ZodUUID>;
+}, z.core.$strict>;
+
+// @public (undocumented)
 export const forgotPassword: {
     readonly method: "post";
     readonly path: "/api/v1/auth/password/forgot";
@@ -1260,6 +1277,43 @@ export interface JsonResponseOptions<H extends ResponseHeaders = ResponseHeaders
 }
 
 // @public (undocumented)
+export const leaveWorkspace: {
+    readonly method: "post";
+    readonly path: "/api/v1/workspace/leave";
+    readonly operationId: "leaveWorkspace";
+    readonly tag: "workspaces";
+    readonly summary: "Leave the active workspace";
+    readonly auth: "member";
+    readonly rate: "write";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            content: z.ZodEnum<{
+                delete: "delete";
+                transfer: "transfer";
+            }>;
+            transferTo: z.ZodOptional<z.ZodUUID>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        content: z.ZodEnum<{
+        delete: "delete";
+        transfer: "transfer";
+        }>;
+        transferTo: z.ZodUUID;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 409: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
 export const listApiTokens: {
     readonly method: "get";
     readonly path: "/api/v1/me/api-tokens";
@@ -1514,6 +1568,9 @@ export const logout: {
 };
 
 // @public (undocumented)
+export const MEMBER_CONTENT_CHOICES: readonly ["transfer", "delete"];
+
+// @public (undocumented)
 export const MemberAccountParamsSchema: z.ZodObject<{
     accountId: z.ZodUUID;
 }, z.core.$strict>;
@@ -1553,6 +1610,15 @@ export const MemberSchema: z.ZodObject<{
     }>;
     joinedAt: z.ZodISODateTime;
     lastActiveAt: z.ZodNullable<z.ZodISODateTime>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const MembershipEndedSchema: z.ZodObject<{
+    content: z.ZodEnum<{
+        delete: "delete";
+        transfer: "transfer";
+    }>;
+    transferTo: z.ZodUUID;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -2868,6 +2934,95 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    leaveWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["EndMembershipRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["MembershipEnded"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     listApiTokens: {
         parameters: {
             query?: {
@@ -3506,6 +3661,97 @@ export interface OperationTypes {
                 };
             };
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    removeMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["EndMembershipRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["MembershipEnded"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5258,7 +5504,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        delete: OperationTypes["removeMember"];
         options?: never;
         head?: never;
         patch: OperationTypes["updateMember"];
@@ -5347,6 +5593,23 @@ export interface paths {
         options?: never;
         head?: never;
         patch: OperationTypes["renameWorkspace"];
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/workspace/leave": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["leaveWorkspace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     // (undocumented)
@@ -5815,6 +6078,46 @@ export const RegisterRequestSchema: z.ZodObject<{
     email: z.ZodEmail;
     password: z.ZodString;
 }, z.core.$strict>;
+
+// @public (undocumented)
+export const removeMember: {
+    readonly method: "delete";
+    readonly path: "/api/v1/members/{accountId}";
+    readonly operationId: "removeMember";
+    readonly tag: "members";
+    readonly summary: "Remove a member";
+    readonly auth: "admin";
+    readonly rate: "write";
+    readonly request: {
+        readonly params: z.ZodObject<{
+            accountId: z.ZodUUID;
+        }, z.core.$strict>;
+        readonly body: z.ZodObject<{
+            content: z.ZodEnum<{
+                delete: "delete";
+                transfer: "transfer";
+            }>;
+            transferTo: z.ZodOptional<z.ZodUUID>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        content: z.ZodEnum<{
+        delete: "delete";
+        transfer: "transfer";
+        }>;
+        transferTo: z.ZodUUID;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 409: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
 
 // @public (undocumented)
 export const renameWorkspace: {

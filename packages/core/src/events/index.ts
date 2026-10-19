@@ -2,6 +2,7 @@ export {
   ACCOUNT_CREATION_PATHS,
   DOMAIN_EVENTS,
   DOMAIN_EVENT_NAMES,
+  MEMBER_CONTENT_CHOICES,
   DomainEventPayloadError,
   isDomainEventName,
   parseDomainEventPayload,
@@ -14,4 +15,5 @@ export type {
   DomainEventFieldValue,
   DomainEventName,
   DomainEventPayload,
+  MemberContentChoice,
 } from "./catalog.ts";

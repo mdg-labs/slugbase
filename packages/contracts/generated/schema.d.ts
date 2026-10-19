@@ -507,7 +507,8 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /** Remove a member */
+        delete: operations["removeMember"];
         options?: never;
         head?: never;
         /** Change a member's role */
@@ -598,6 +599,23 @@ export interface paths {
         head?: never;
         /** Rename the active workspace */
         patch: operations["renameWorkspace"];
+        trace?: never;
+    };
+    "/api/v1/workspace/leave": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Leave the active workspace */
+        post: operations["leaveWorkspace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/workspace/settings": {
@@ -913,6 +931,18 @@ export interface components {
             /** @description The account's current password. Left out only by an account that has none, whose re-authentication within the last ten minutes stands in for it; an account that has a password is refused without it */
             password?: string;
         };
+        EndMembershipRequest: {
+            /**
+             * @description What happens to the departing member's content: `transfer` it to the recipient, or `delete` it
+             * @enum {string}
+             */
+            content: "transfer" | "delete";
+            /**
+             * Format: uuid
+             * @description The account identifier of the member who receives the content; another current member of the workspace and not the one who departs. Left out, it is the account that removes the member, or the longest-standing owner when the member leaves on their own
+             */
+            transferTo?: string;
+        };
         ForgotPasswordRequest: {
             /**
              * Format: email
@@ -1017,6 +1047,18 @@ export interface components {
              * @description The workspace's identifier
              */
             workspaceId: string;
+        };
+        MembershipEnded: {
+            /**
+             * @description The content choice recorded with the departure; the modules that own content apply it when they handle `member.left`, which is delivered after the call answers
+             * @enum {string}
+             */
+            content: "transfer" | "delete";
+            /**
+             * Format: uuid
+             * @description The account identifier of the recipient, resolved from the request or its default; the content goes to it when the choice is `transfer`
+             */
+            transferTo: string;
         };
         MfaBackupCodes: {
             /** @description Ten single-use backup codes of ten characters each, shown only in this response */
@@ -3761,6 +3803,106 @@ export interface operations {
             };
         };
     };
+    removeMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EndMembershipRequest"];
+            };
+        };
+        responses: {
+            /** @description The membership is ended at once and the recipient the request resolved to is returned. The content choice is queued with `member.left` and applied by the modules that own content once it is delivered after the call answers, not before. The member's sessions act in another workspace, or in none, from their next request and the API tokens bound to the workspace are dead */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MembershipEnded"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace, or the caller is an admin and the member is an owner (forbidden) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace, or the account is not a member of it, or `transferTo` names an account that is not (the errors name transferTo) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The member is the last owner of the workspace (last_owner); nothing is written */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The identifier or the body did not pass validation, or `transferTo` names the member who is removed (the errors name transferTo) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     updateMember: {
         parameters: {
             query?: never;
@@ -4249,6 +4391,104 @@ export interface operations {
                 };
             };
             /** @description The body did not pass validation (a name that is blank or outside 1 to 64 characters, or a field the operation does not declare) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    leaveWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EndMembershipRequest"];
+            };
+        };
+        responses: {
+            /** @description The caller's membership is ended at once and the recipient the request resolved to is returned. The content choice is queued with `member.left` and applied by the modules that own content once it is delivered after the call answers, not before. The session acts in another workspace, or in none, from its next request */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MembershipEnded"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted; or `transferTo` names an account that is not a member of it (the errors name transferTo) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The caller is the last owner of the workspace (last_owner); nothing is written */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation, or `transferTo` names the caller (the errors name transferTo) */
             422: {
                 headers: {
                     [name: string]: unknown;

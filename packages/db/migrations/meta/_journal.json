@@ -274,6 +274,13 @@
       "when": 1792370804347,
       "tag": "20261019004644_add_member_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1792397305072,
+      "tag": "20261019080825_add_member_removal",
+      "breakpoints": true
     }
   ]
 }

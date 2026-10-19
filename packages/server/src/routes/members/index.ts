@@ -1,4 +1,4 @@
-import { listMembers, updateMember, type MemberSchema } from "@slugbase/contracts";
+import { listMembers, removeMember, updateMember, type MemberSchema } from "@slugbase/contracts";
 import { changeMemberRole, createAuditWriter, type AuditActor, type SessionCookieSpec } from "@slugbase/core";
 import { accountProfileRepository, auditEventRepository, isLastOwnerViolation, memberRepository, type WorkspaceMember } from "@slugbase/db";
 import { z } from "zod";
@@ -11,8 +11,9 @@ import { ProblemError } from "../../http/problem.ts";
 import type { RequestTenant } from "../../http/tenant.ts";
 import { networkPrefixOf } from "../../http/trusted-proxy.ts";
 import { route } from "../register.ts";
+import { endMembershipOf } from "./departure.ts";
 
-// GET /api/v1/members and PATCH /api/v1/members/{accountId} (doc 04 section 10.5, doc 02 section 3.3, doc 10
+// GET /api/v1/members, PATCH /api/v1/members/{accountId} and DELETE /api/v1/members/{accountId} (doc 04 section 10.5, doc 02 section 3.3, doc 10
 // T1, T2 and T3). Both act in the workspace the request is bound to, which the tenant stage resolved from the
 // session or the token, and name a member by account identifier only: an account outside that workspace is
 // answered like one that does not exist (404), whatever workspace it belongs to. The list is open to a member
@@ -23,7 +24,8 @@ import { route } from "../register.ts";
 // a transaction that would leave none, which is answered 409 last_owner with nothing written. The change, its
 // audit event and, when the member is the caller, the rotation of the session's token are one transaction, so a
 // refusal at the commit leaves the old token and the old role; the new token travels in Set-Cookie only when
-// the change is the caller's own (doc 04 section 4.3).
+// the change is the caller's own (doc 04 section 4.3). The removal is an admin's as well (an owner's for an
+// owner) and ends the membership as departure.ts describes.
 
 const UNAUTHENTICATED = "Authentication is required.";
 const NO_WORKSPACE = "No such resource.";
@@ -131,5 +133,10 @@ export function memberRoutes({ cursorSecret, cookie }: MemberRoutesOptions): Rou
           return { status: 200, body: memberBody(result.member), ...(result.rotated ? { headers: { "Set-Cookie": setSessionCookie(cookie, token.value) } } : {}) };
       }
     }),
+
+    route(removeMember).handle(async ({ params, body }, context) => ({
+      status: 200,
+      body: await endMembershipOf(context, { targetAccountId: params.accountId.toLowerCase(), content: body.content, transferTo: body.transferTo }),
+    })),
   ];
 }

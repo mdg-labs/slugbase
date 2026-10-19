@@ -614,6 +614,29 @@
           }
         ]
       },
+      "EndMembershipRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "description": "What happens to the departing member's content: `transfer` it to the recipient, or `delete` it",
+            "enum": [
+              "transfer",
+              "delete"
+            ],
+            "type": "string"
+          },
+          "transferTo": {
+            "description": "The account identifier of the member who receives the content; another current member of the workspace and not the one who departs. Left out, it is the account that removes the member, or the longest-standing owner when the member leaves on their own",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content"
+        ],
+        "type": "object"
+      },
       "ForgotPasswordRequest": {
         "additionalProperties": false,
         "properties": {
@@ -902,6 +925,30 @@
           "workspaceId",
           "name",
           "role"
+        ],
+        "type": "object"
+      },
+      "MembershipEnded": {
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "description": "The content choice recorded with the departure; the modules that own content apply it when they handle `member.left`, which is delivered after the call answers",
+            "enum": [
+              "transfer",
+              "delete"
+            ],
+            "type": "string"
+          },
+          "transferTo": {
+            "description": "The account identifier of the recipient, resolved from the request or its default; the content goes to it when the choice is `transfer`",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "content",
+          "transferTo"
         ],
         "type": "object"
       },
@@ -5065,6 +5112,141 @@
       }
     },
     "/api/v1/members/{accountId}": {
+      "delete": {
+        "operationId": "removeMember",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "accountId",
+            "required": true,
+            "schema": {
+              "description": "The account identifier of a member of the workspace, as listed",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EndMembershipRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MembershipEnded"
+                }
+              }
+            },
+            "description": "The membership is ended at once and the recipient the request resolved to is returned. The content choice is queued with `member.left` and applied by the modules that own content once it is delivered after the call answers, not before. The member's sessions act in another workspace, or in none, from their next request and the API tokens bound to the workspace are dead"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace, or the caller is an admin and the member is an owner (forbidden)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace, or the account is not a member of it, or `transferTo` names an account that is not (the errors name transferTo)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The member is the last owner of the workspace (last_owner); nothing is written"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The identifier or the body did not pass validation, or `transferTo` names the member who is removed (the errors name transferTo)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Remove a member",
+        "tags": [
+          "members"
+        ],
+        "x-slugbase-auth": "admin",
+        "x-slugbase-rate": "write"
+      },
       "patch": {
         "operationId": "updateMember",
         "parameters": [
@@ -5751,6 +5933,130 @@
           "workspaces"
         ],
         "x-slugbase-auth": "admin",
+        "x-slugbase-rate": "write"
+      }
+    },
+    "/api/v1/workspace/leave": {
+      "post": {
+        "operationId": "leaveWorkspace",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EndMembershipRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MembershipEnded"
+                }
+              }
+            },
+            "description": "The caller's membership is ended at once and the recipient the request resolved to is returned. The content choice is queued with `member.left` and applied by the modules that own content once it is delivered after the call answers, not before. The session acts in another workspace, or in none, from its next request"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace: the account has none, or the workspace is being deleted; or `transferTo` names an account that is not a member of it (the errors name transferTo)"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The caller is the last owner of the workspace (last_owner); nothing is written"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body did not pass validation, or `transferTo` names the caller (the errors name transferTo)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Leave the active workspace",
+        "tags": [
+          "workspaces"
+        ],
+        "x-slugbase-auth": "member",
         "x-slugbase-rate": "write"
       }
     },

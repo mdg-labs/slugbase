@@ -2,6 +2,7 @@ import {
   createWorkspace as createWorkspaceOperation,
   getWorkspace,
   getWorkspaceSettings,
+  leaveWorkspace,
   type WorkspaceSchema,
   listWorkspaces,
   renameWorkspace as renameWorkspaceOperation,
@@ -25,6 +26,7 @@ import type { ChainContext, RouteBinding } from "../../http/chain.ts";
 import { ProblemError, requestIdOf } from "../../http/problem.ts";
 import type { RequestTenant } from "../../http/tenant.ts";
 import { networkPrefixOf } from "../../http/trusted-proxy.ts";
+import { endMembershipOf } from "../members/departure.ts";
 import { route } from "../register.ts";
 import { acceptedVersions, entityTagOf } from "./if-match.ts";
 
@@ -51,6 +53,10 @@ import { acceptedVersions, entityTagOf } from "./if-match.ts";
 // token never reaches them. The role is judged by the authorization stage before any handler runs. A rename
 // takes `If-Match` and compares it with the version under the row lock, so a stale tab cannot overwrite a newer
 // name; the change and its audit event are one transaction, and a change that changes nothing writes no event.
+//
+// POST /api/v1/workspace/leave ends the caller's own membership of the workspace the request acts in with the
+// content choice of doc 02 section 3.6, as the removal of a member does (routes/members/departure.ts); it is a
+// member's, and declares no token scope.
 
 const UNAUTHENTICATED = "Authentication is required.";
 const NOT_ALLOWED = "This deployment does not let accounts create workspaces.";
@@ -231,5 +237,10 @@ export function workspaceRoutes({ withTenant, creationAllowed }: WorkspaceRoutes
       }
       return { status: 200, body: { aiEnabled: outcome.settings.aiEnabled } };
     }),
+
+    route(leaveWorkspace).handle(async ({ body }, context) => ({
+      status: 200,
+      body: await endMembershipOf(context, { targetAccountId: accountOf(context), content: body.content, transferTo: body.transferTo }),
+    })),
   ];
 }

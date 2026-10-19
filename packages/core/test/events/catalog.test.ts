@@ -4,8 +4,10 @@ import {
   DOMAIN_EVENTS,
   DOMAIN_EVENT_NAMES,
   DomainEventPayloadError,
+  MEMBER_CONTENT_CHOICES,
   isDomainEventName,
   parseDomainEventPayload,
+  type DomainEventField,
   type DomainEventPayload,
 } from "../../src/index.ts";
 
@@ -13,7 +15,7 @@ const ACCOUNT = "0192f3a0-bbbb-7000-8000-000000000001";
 
 describe("the domain event catalog", () => {
   it("announces account.created with the account and how it came to exist", () => {
-    expect(DOMAIN_EVENT_NAMES).toEqual(["account.created", "workspace.created"]);
+    expect(DOMAIN_EVENT_NAMES).toEqual(["account.created", "workspace.created", "member.left"]);
     expect(Object.keys(DOMAIN_EVENTS["account.created"])).toEqual(["accountId", "path"]);
     expect(ACCOUNT_CREATION_PATHS).toEqual(["self-registration", "invitation", "oidc", "setup"]);
   });
@@ -25,8 +27,20 @@ describe("the domain event catalog", () => {
     expect(() => parseDomainEventPayload("workspace.created", { workspaceId: ACCOUNT })).toThrow(DomainEventPayloadError);
   });
 
+  it("announces member.left with the workspace, the member, the content choice and the recipient, and nothing else", () => {
+    const ids = { workspaceId: ACCOUNT, accountId: ACCOUNT, transferTo: ACCOUNT };
+    expect(Object.keys(DOMAIN_EVENTS["member.left"])).toEqual(["workspaceId", "accountId", "content", "transferTo"]);
+    for (const content of MEMBER_CONTENT_CHOICES) {
+      expect(parseDomainEventPayload("member.left", { ...ids, content })).toEqual({ ...ids, content });
+    }
+    expect(MEMBER_CONTENT_CHOICES).toEqual(["transfer", "delete"]);
+    for (const bad of [{ ...ids, content: "keep" }, { ...ids }, { ...ids, content: "delete", email: "a@example.test" }, { ...ids, content: "delete", transferTo: "someone" }]) {
+      expect(() => parseDomainEventPayload("member.left", bad)).toThrow(DomainEventPayloadError);
+    }
+  });
+
   it("holds no field that could carry personal data", () => {
-    for (const fields of Object.values(DOMAIN_EVENTS)) {
+    for (const fields of Object.values<Readonly<Record<string, DomainEventField>>>(DOMAIN_EVENTS)) {
       for (const field of Object.values(fields)) {
         expect(["uuid", "enum"]).toContain(field.type);
       }

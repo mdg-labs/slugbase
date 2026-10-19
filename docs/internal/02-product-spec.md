@@ -152,7 +152,9 @@ Leaving (self) and removal (by an admin) both revoke the membership. The member'
 - The remover (or, when leaving, the leaving member) chooses: **transfer** the member's bookmarks and folders to another member (default: the acting admin, or the workspace's longest-standing owner when the member leaves on their own), or **delete** them. Transfer keeps slugs; a slug that would collide with one the recipient already owns is cleared on the transferred bookmark and listed in the result.
 - The member's **tags** are private, so they are deleted — transferred bookmarks arrive without tags.
 - The member's **go preferences** are deleted; shares the member *received* are deleted; shares the member *granted* move with transferred content and are deleted with deleted content.
-- API tokens bound to the workspace are revoked.
+- API tokens bound to the workspace are revoked: they are deleted with the membership, in the same transaction, so they answer `401` from the next request.
+
+The membership ends immediately, in one transaction: it is deleted, `member.left` is queued in that transaction with the choice and the recipient, so the modules that own content apply the choice once they handle it (at least once, after the commit), and the audit log records `member.removed` (by an admin or owner) or `member.left` (by the member, including an admin who removes themself) with the choice and the recipient. The recipient must be another current member. The removed member's sessions act in their most recently active remaining workspace from the next request, or in none (§3.3).
 
 Users who want their content elsewhere export it first (§13).
 

@@ -112,6 +112,17 @@ export const FIXTURES: ContractFixtures = {
   // members of workspace B in it.
   listMembers: {},
   updateMember: { path: { accountId: UNKNOWN_MEMBER_ID }, body: { role: "admin" }, status: 404, foreign: { path: { accountId: UNKNOWN_MEMBER_ID }, body: { role: "admin" } } },
+  // The removal names a member by account identifier and the content choice may name a recipient, so its valid request is the declared 404
+  // for an account that is no member, and a recipient that is a member of workspace B is the same 404. The walker owns the workspace it acts in
+  // and leaving it would end its membership, so its valid request to leave names a recipient that is no member of it: the same declared 404, with
+  // nothing removed; the route tests end memberships.
+  removeMember: {
+    path: { accountId: UNKNOWN_MEMBER_ID },
+    body: { content: "transfer" },
+    status: 404,
+    foreign: { path: { accountId: UNKNOWN_MEMBER_ID }, body: { content: "transfer", transferTo: UNKNOWN_MEMBER_ID } },
+  },
+  leaveWorkspace: { body: { content: "transfer", transferTo: UNKNOWN_MEMBER_ID }, status: 404, foreign: { body: { content: "transfer", transferTo: UNKNOWN_MEMBER_ID } } },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

@@ -45,23 +45,24 @@ describe("the matrix over the committed contract and the repository registry", (
   // to account. Here a fixed responder stands in for the server, so what the
   // test proves is the runner's own part: the classification of the document
   // and that every tenant-scoped operation is called by every principal of A,
-  // the role change once for each member of B. The responder answers as the
-  // chain does for a member of B: 403 to a token (the role change declares no
-  // scope) and to a plain member (below the admin policy), 404 to the rest.
+  // the operations that name a member of B (the role change, the removal and the leaving) once for each member of B. The responder answers as the
+  // chain does for a member of B: 403 to a token (they declare no scope) and to a plain member where the policy is the admin's (the leaving is a
+  // member's), 404 to the rest.
   const answersAsTheChainDoes = (call: ApiCall): Promise<ApiResponse> =>
-    Promise.resolve({ status: "scope" in call.principal || call.principal.role === "member" ? 403 : 404 });
+    Promise.resolve({ status: "scope" in call.principal || (call.principal.role === "member" && call.operation.operationId !== "leaveWorkspace") ? 403 : 404 });
 
   it(`API mode classifies the ${String(classification.summary.total)} operations of openapi.json and calls each tenant-scoped one once for every principal of A`, async () => {
-    const report = await runApiMatrix({ document, fixture: scoped.fixture, request: answersAsTheChainDoes, mapping: { accountId: "member" } });
+    const report = await runApiMatrix({ document, fixture: scoped.fixture, request: answersAsTheChainDoes, mapping: { accountId: "member", transferTo: "member" } });
     expect(classification.problems).toEqual([]);
     expect(report.classified.total).toBe(classification.operations.length);
     expect(report.classified.total).toBeGreaterThan(0);
     expect(Object.values(report.classified.byKind).reduce((sum, count) => sum + count, 0)).toBe(report.classified.total);
     // The operations on /workspace and /workspace/settings and the members list act in the workspace of the request and take no identifier of B;
-    // the role change names a member by account identifier.
-    expect(report.classified.byKind["tenant-scoped"]).toBe(6);
-    // Three sessions and six tokens of A, once on each of the five operations that name no member and once for each of the three members of B on the sixth.
-    expect(report.attempts).toBe(9 * 5 + 9 * 3);
+    // the role change and the removal name a member by account identifier, the removal and the leaving a recipient.
+    expect(report.classified.byKind["tenant-scoped"]).toBe(8);
+    // Three sessions and six tokens of A, once on each of the five operations that name no member, once for each of the three members of B on the role
+    // change and on the leaving, and once for each pair of members of B (path and recipient) on the removal.
+    expect(report.attempts).toBe(9 * 5 + 9 * (3 + 3 + 3 * 3));
     assertMatrixPassed(report);
   });
 

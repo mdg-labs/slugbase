@@ -182,6 +182,32 @@ export const AUDIT_ACTIONS: {
             };
         };
     };
+    readonly "member.removed": {
+        readonly category: "member";
+        readonly metadata: {
+            readonly content: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+            readonly transferTo: {
+                readonly type: "uuid";
+            };
+        };
+    };
+    readonly "member.left": {
+        readonly category: "member";
+        readonly metadata: {
+            readonly content: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+            readonly transferTo: {
+                readonly type: "uuid";
+            };
+        };
+    };
 };
 
 // @public
@@ -416,6 +442,21 @@ export const DOMAIN_EVENTS: {
             readonly type: "uuid";
         };
     };
+    readonly "member.left": {
+        readonly workspaceId: {
+            readonly type: "uuid";
+        };
+        readonly accountId: {
+            readonly type: "uuid";
+        };
+        readonly content: {
+            readonly type: "enum";
+            readonly values: readonly ["transfer", "delete"];
+        };
+        readonly transferTo: {
+            readonly type: "uuid";
+        };
+    };
 };
 
 // @public
@@ -526,6 +567,9 @@ export class EgressTimeout extends EgressError {
 export class EgressTooLarge extends EgressError {
     constructor();
 }
+
+// @public
+export function endMembership(input: MembershipEndDependencies, ask: MembershipEndAsk): Promise<MembershipEndOutcome>;
 
 // @public (undocumented)
 export interface ErrorReportContext {
@@ -685,6 +729,12 @@ export interface MailPort extends Port {
 // @public
 export const MAX_API_TOKENS_PER_USER = 10;
 
+// @public
+export const MEMBER_CONTENT_CHOICES: readonly ["transfer", "delete"];
+
+// @public (undocumented)
+export type MemberContentChoice = (typeof MEMBER_CONTENT_CHOICES)[number];
+
 // @public (undocumented)
 export interface MemberRoleAsk {
     // (undocumented)
@@ -739,6 +789,70 @@ export interface MemberRoles {
 export interface MemberRoleStore {
     roles(targetAccountId: string): Promise<MemberRoles | undefined>;
     setRole(targetAccountId: string, role: WorkspaceRole): Promise<boolean>;
+}
+
+// @public (undocumented)
+export interface MembershipEndAsk {
+    // (undocumented)
+    readonly actor: AuditActor;
+    readonly actorAccountId: string;
+    // (undocumented)
+    readonly content: MemberContentChoice;
+    readonly ipPrefix: string | null;
+    readonly targetAccountId: string;
+    readonly transferTo?: string;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface MembershipEndDependencies {
+    readonly audit: AuditWriter;
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: MembershipEndStore;
+}
+
+// @public (undocumented)
+export type MembershipEndOutcome =
+/** The membership was deleted; `transferTo` is the recipient the ask resolved to, `self` says the member is the account that asked. */
+    {
+    readonly kind: "ended";
+    readonly content: MemberContentChoice;
+    readonly transferTo: string;
+    readonly self: boolean;
+}
+/** The account that asks may not remove this member; nothing was written. */
+| {
+    readonly kind: "forbidden";
+}
+/** The workspace has no such member, or cannot be reached. */
+| {
+    readonly kind: "not_found";
+}
+/** The member is the owner the workspace has left; nothing was written. */
+| {
+    readonly kind: "last_owner";
+}
+/** The named recipient is no member of the workspace, which is answered like any account outside it; nothing was written. */
+| {
+    readonly kind: "recipient_not_found";
+}
+/** The named recipient is the member whose membership ends; nothing was written. */
+| {
+    readonly kind: "invalid_recipient";
+};
+
+// @public (undocumented)
+export interface MembershipEndRequest {
+    readonly accountId: string;
+    readonly events: readonly DomainEvent<"member.left">[];
+}
+
+// @public (undocumented)
+export interface MembershipEndStore extends MemberRoleStore {
+    end(request: MembershipEndRequest): Promise<boolean>;
+    longestStandingOwner(excludingAccountId: string): Promise<string | undefined>;
 }
 
 // @public
