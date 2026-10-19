@@ -1,4 +1,4 @@
-import { analyseSql, identifierForm, mentionOfAny, setsSessionTimeout, SYSTEM_ROLE, TENANT_FUNCTIONS, type AnalysedStatement, type ColumnType, type FunctionIdentity, type Operation, type TableName } from "./migration-statements.ts";
+import { analyseSql, identifierForm, mentionOfAny, setsSessionTimeout, SYSTEM_ROLE, TENANT_FUNCTIONS, type AnalysedStatement, type ColumnType, type FunctionIdentity, type Operation, type TableName, type TriggerForm } from "./migration-statements.ts";
 import { readJournal, readMigration } from "./migration-files.ts";
 import { readReleaseState, releaseTags, type ReleaseState } from "./release-history.ts";
 import type { CheckRule, ContractMarker, Finding } from "./types.ts";
@@ -99,18 +99,26 @@ import type { CheckRule, ContractMarker, Finding } from "./types.ts";
 //     grammar before a "(", is not read, and a tenant context function stays one
 //     LANGUAGE sql SELECT of built-ins, since every policy relies on it,
 //   - CREATE [OR REPLACE] TRIGGER name BEFORE UPDATE ON table FOR EACH ROW EXECUTE
-//     FUNCTION f(), for an f that an earlier statement of the chain declares without
-//     arguments as RETURNS trigger. A trigger function runs when a row is written, not
+//     FUNCTION f(), and CREATE CONSTRAINT TRIGGER name AFTER DELETE OR
+//     UPDATE ON table DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION f(),
+//     for an f that an earlier statement of the chain declares without
+//     arguments as RETURNS trigger. A trigger function runs when a row is written (or,
+//     for the deferred form, when the transaction that wrote it commits), not
 //     when the trigger is created, and a migration writes no row (a data change is
 //     rejected below), so the statement names f without calling it. Any other trigger
 //     (another timing or event, a column list, a WHEN condition, arguments, a
-//     constraint trigger, an event trigger) is not read. OR REPLACE replaces a trigger
+//     constraint trigger of another shape, an event trigger) is not read. A constraint
+//     trigger has no OR REPLACE, so a file that creates it again drops it first: DROP
+//     TRIGGER [IF EXISTS] name ON table is accepted when the same file creates the trigger
+//     of that name and table again with the function and the form it had (a trigger of the release that
+//     is dropped and not created again, or created with another function or the other form, is reported),
+//     and not after a statement this check cannot read, which may have changed the trigger. OR REPLACE replaces a trigger
 //     of that name on that table whatever its shape, so it is accepted only over the
-//     trigger the chain created with the same f (the statement again), or where this
+//     trigger the chain created with the same f in the same form (the statement again), or where this
 //     check has read every earlier statement, and so can show the name is no trigger of
 //     the release: after a migration or statement it cannot read, or a table move
 //     (RENAME TO, SET SCHEMA), it is rejected, as is a replacement that gives the
-//     trigger another f. The trigger is identified by its name and its table, and the
+//     trigger another f or the other form. The trigger is identified by its name and its table, and the
 //     name, the schema and the table name are each compared as PostgreSQL does (an
 //     unquoted name folded to lower case, a quoted one kept, each cut to 63 bytes), and
 //     an OR REPLACE with a trigger or table name outside printable ASCII is not read,
@@ -203,6 +211,30 @@ export function contractMarkerFromEnv(env: Readonly<Record<string, string | unde
 const key = (table: TableName): string => `${table.schema}.${table.name}`;
 const functionKey = ({ name, args }: FunctionIdentity): string => `${key(name)}(${args})`;
 const functionLabel = ({ name, args }: FunctionIdentity): string => `${describe(name)}(${args})`;
+
+const FORM_LABELS: Record<TriggerForm, string> = {
+  plain: "a BEFORE UPDATE row trigger",
+  constraint: "a deferred constraint trigger AFTER DELETE OR UPDATE",
+};
+
+/** A trigger as the chain created it: the function it executes and the form it fires in. */
+interface TriggerDefinition {
+  readonly fn: FunctionIdentity;
+  readonly form: TriggerForm;
+}
+
+/** What a trigger made again changes about the trigger it replaces, as the problem says it, or nothing when it is the same function in the same form. */
+function triggerChange(name: string, table: TableName, before: TriggerDefinition, after: TriggerDefinition): string[] {
+  const subject = `replaces trigger ${name} on ${describe(table)}`;
+  if (functionKey(before.fn) !== functionKey(after.fn)) {
+    return [`${subject}, which executes ${functionLabel(before.fn)} now, with one that executes ${functionLabel(after.fn)}: the previous release still relies on the trigger as it is`];
+  }
+  if (before.form !== after.form) {
+    return [`${subject}, which is ${FORM_LABELS[before.form]} now, with ${FORM_LABELS[after.form]}: it fires at another time or for other events, and the previous release still relies on the trigger as it is`];
+  }
+  return [];
+}
+
 // A trigger is identified by its table and its name, which the reader gives as PostgreSQL compares it. The two parts cannot run together:
 // a NUL does not occur in a name.
 const triggerKey = (table: TableName, name: string): string => `${key(table)}\0${name}`;
@@ -238,16 +270,19 @@ class Released {
   private readonly functionNames = new Set<string>();
   // The functions the chain declares without arguments as RETURNS trigger, by name and (empty) input argument types.
   private readonly triggerFunctions = new Set<string>();
-  // The function each trigger the chain creates executes, by its table and name, since the last point where the chain may have changed a
+  // The function and the form of each trigger the chain creates, by its table and name, since the last point where the chain may have changed a
   // trigger unseen. triggersKnown is false after a migration or statement this check cannot read, or one that moves a table, which may
   // have created, renamed, replaced or moved a trigger: the triggers held are then dropped, since an unseen statement may have given
   // one of them another shape or function.
-  private readonly triggers = new Map<string, FunctionIdentity>();
+  private readonly triggers = new Map<string, TriggerDefinition>();
   private triggersKnown = true;
   // What the migration being read has done: the functions it declares, and the schemas it has granted CREATE on to
   // slugbase_system and not yet revoked.
   private declared = new Set<string>();
   private creatable = new Set<string>();
+  // The triggers the migration has dropped and not yet created again, by table and name, with the function and form each had (undefined when
+  // none was known to exist).
+  private dropped = new Map<string, { readonly table: TableName; readonly name: string; readonly trigger: TriggerDefinition | undefined }>();
 
   readonly tag: string | undefined;
 
@@ -293,11 +328,20 @@ class Released {
   startFile(): void {
     this.declared = new Set();
     this.creatable = new Set();
+    this.dropped = new Map();
   }
 
-  /** What is still open when the migration ends: CREATE on a schema that was granted to slugbase_system and not revoked. */
+  /**
+   * What is still open when the migration ends: CREATE on a schema that was granted to slugbase_system and not revoked, and a
+   * trigger of the release that was dropped and not created again.
+   */
   endFile(): string[] {
-    return [...this.creatable].map((schema) => `grants CREATE on schema ${schema} to ${SYSTEM_ROLE} and does not revoke it in the same file: the role would keep the right to create objects in the schema`);
+    return [
+      ...[...this.creatable].map((schema) => `grants CREATE on schema ${schema} to ${SYSTEM_ROLE} and does not revoke it in the same file: the role would keep the right to create objects in the schema`),
+      ...[...this.dropped.values()]
+        .flatMap(({ table, name, trigger }) => (trigger === undefined ? [] : [{ table, name, trigger }]))
+        .map(({ table, name, trigger }) => `drops trigger ${name} on ${describe(table)}, which executes ${functionLabel(trigger.fn)} now, and does not create it again in the same file: the previous release still relies on the trigger`),
+    ];
   }
 
   /** Takes the type or function a migration declares or changes into the model. */
@@ -314,7 +358,9 @@ class Released {
         this.functionNames.add(identifierForm(operation.fn.name.name));
       }
     } else if (operation.kind === "creates-trigger") {
-      this.triggers.set(triggerKey(operation.table, operation.name), operation.fn);
+      this.triggers.set(triggerKey(operation.table, operation.name), { fn: operation.fn, form: operation.form });
+    } else if (operation.kind === "drops-trigger") {
+      this.triggers.delete(triggerKey(operation.table, operation.name));
     } else if (operation.kind === "rename-table" || operation.kind === "set-schema") {
       // The triggers of the table go with it, under a key the model does not move them to.
       this.forgetTriggers();
@@ -380,7 +426,7 @@ class Released {
   apply(operation: Operation): string[] {
     const open = [...this.creatable];
     const before = operation.kind === "declares-function" ? this.functions.get(functionKey(operation.fn)) : undefined;
-    const trigger = operation.kind === "creates-trigger" ? this.triggers.get(triggerKey(operation.table, operation.name)) : undefined;
+    const trigger = operation.kind === "creates-trigger" || operation.kind === "drops-trigger" ? this.triggers.get(triggerKey(operation.table, operation.name)) : undefined;
     this.track(operation);
     const problems = this.place(operation, before, trigger);
     return open.length > 0 && !FUNCTION_STATEMENTS.has(operation.kind)
@@ -390,10 +436,10 @@ class Released {
 
   /**
    * The problems of one operation; `before` is the return type the chain declared for the function it declares,
-   * and `trigger` the function the chain had a trigger of the same table and name execute before the trigger
+   * and `trigger` the function and form the chain had a trigger of the same table and name before the trigger
    * it creates.
    */
-  private place(operation: Operation, before: string | undefined, trigger: FunctionIdentity | undefined): string[] {
+  private place(operation: Operation, before: string | undefined, trigger: TriggerDefinition | undefined): string[] {
     const at = this.tag ?? "the latest release";
     switch (operation.kind) {
       case "drop-table": {
@@ -502,17 +548,32 @@ class Released {
         return this.declared.has(functionKey(operation.fn))
           ? []
           : [`revokes privileges on function ${functionLabel(operation.fn)} from PUBLIC, and this migration does not create it: a running replica may lose the access it uses`];
+      case "drops-trigger": {
+        // A drop is accepted as one half of a replacement: the file has to create the trigger again with the function and the form it had, which is judged
+        // where it does (and at the end of the file, where it does not). It needs the trigger to be one this check can show.
+        if (!this.triggersKnown) {
+          return [`drops trigger ${operation.name} on ${describe(operation.table)}, which this check cannot show is not a trigger of ${at}: it could not read every earlier statement, so it cannot show the trigger is created again as it was`];
+        }
+        this.dropped.set(triggerKey(operation.table, operation.name), { table: operation.table, name: operation.name, trigger });
+        return [];
+      }
       case "creates-trigger": {
         const problems = this.triggerFunctions.has(functionKey(operation.fn))
           ? []
           : [`creates a trigger on ${describe(operation.table)} that executes ${functionLabel(operation.fn)}, which no earlier statement of the migration chain declares as a trigger function (a function without arguments that RETURNS trigger): only a trigger function the chain declares is run by a row write`];
+        const created: TriggerDefinition = { fn: operation.fn, form: operation.form };
+        const dropped = this.dropped.get(triggerKey(operation.table, operation.name));
+        if (dropped !== undefined) {
+          this.dropped.delete(triggerKey(operation.table, operation.name));
+          if (dropped.trigger !== undefined) {
+            problems.push(...triggerChange(operation.name, operation.table, dropped.trigger, created));
+          }
+        }
         if (!operation.replace) {
           return problems;
         }
         if (trigger !== undefined) {
-          if (functionKey(trigger) !== functionKey(operation.fn)) {
-            problems.push(`replaces trigger ${operation.name} on ${describe(operation.table)}, which executes ${functionLabel(trigger)} now, with one that executes ${functionLabel(operation.fn)}: the previous release still relies on the trigger as it is`);
-          }
+          problems.push(...triggerChange(operation.name, operation.table, trigger, created));
         } else if (!this.triggersKnown) {
           problems.push(`replaces trigger ${operation.name} on ${describe(operation.table)}, which this check cannot show is not a trigger of ${at}: it could not read every earlier statement, so it cannot show the name is not a trigger of the release, which the replacement would change`);
         }

@@ -181,7 +181,7 @@ function setup(options: SetupOptions = {}) {
     account: operationOf("/api/v1/account-check", "checkAccount", "account", { scope: "read" }),
     member: operationOf("/api/v1/bookmarks", "listBookmarks", "member", { scope: "read" }),
     memberWrite: operationOf("/api/v1/bookmarks", "createBookmark", "member", { method: "post", scope: "write", body: true }),
-    admin: operationOf("/api/v1/members", "listMembers", "admin", { scope: "read" }),
+    admin: operationOf("/api/v1/admin-check", "adminCheck", "admin", { scope: "read" }),
     owner: operationOf("/api/v1/owner-check", "checkOwner", "owner", { scope: "read" }),
     unscoped: operationOf("/api/v1/tokens", "listTokens", "account"),
     instance: operationOf("/api/v1/instance/accounts", "listAccounts", "instanceAdmin"),
@@ -253,7 +253,7 @@ describe("the failure scenario (T3): an anonymous caller of an operation that re
   });
 
   it.each([
-    ["/api/v1/members"],
+    ["/api/v1/admin-check"],
     ["/api/v1/owner-check"],
     ["/api/v1/account-check"],
     ["/api/v1/instance/accounts"],
@@ -416,7 +416,7 @@ describe("stage 7: tenant resolution", () => {
     const stranger = setup({
       resolver: { available: true, resolve: () => Promise.resolve(undefined) },
     });
-    for (const path of ["/api/v1/bookmarks", "/api/v1/members", "/api/v1/owner-check"]) {
+    for (const path of ["/api/v1/bookmarks", "/api/v1/admin-check", "/api/v1/owner-check"]) {
       const missing = await stranger.server.fetch(get(path, cookieOf("owner")));
       expect(missing.status, path).toBe(404);
       expect(await codeOf(missing), path).toBe("not_found");
@@ -485,9 +485,9 @@ describe("stage 9: authorization", () => {
     ["/api/v1/bookmarks", "member", 200],
     ["/api/v1/bookmarks", "admin", 200],
     ["/api/v1/bookmarks", "owner", 200],
-    ["/api/v1/members", "member", 403],
-    ["/api/v1/members", "admin", 200],
-    ["/api/v1/members", "owner", 200],
+    ["/api/v1/admin-check", "member", 403],
+    ["/api/v1/admin-check", "admin", 200],
+    ["/api/v1/admin-check", "owner", 200],
     ["/api/v1/owner-check", "member", 403],
     ["/api/v1/owner-check", "admin", 403],
     ["/api/v1/owner-check", "owner", 200],
@@ -672,7 +672,7 @@ describe("stage 9: declared re-authentication and completed second factor (T18)"
     it.each([
       ["/api/v1/account-check", "member"],
       ["/api/v1/bookmarks", "member"],
-      ["/api/v1/members", "admin"],
+      ["/api/v1/admin-check", "admin"],
       ["/api/v1/owner-check", "owner"],
       ["/api/v1/instance/accounts", "instanceAdmin"],
       ["/api/v1/tokens", "member"],

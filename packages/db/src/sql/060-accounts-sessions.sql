@@ -1,9 +1,10 @@
 -- Row-level security and privileges of accounts and sessions (doc 05 sections
 -- 2.1, 3.1 and 3.3). The tables themselves are defined in src/schema/.
 --
--- accounts: forced row-level security with the own-row policy. The policy
--- stays own-row only until the members list needs a co-member branch.
--- slugbase_app may read
+-- accounts: forced row-level security with the own-row policy, and a second policy
+-- that lets an account read the rows of the members of the workspace it acts in
+-- (the members list); the two are permissive, so they add up for a read, and only
+-- the own-row policy admits a write. slugbase_app may read
 -- every column but password_hash and the mfa_* columns, which only the system
 -- operations return (140-mfa.sql). It
 -- may update display_name, locale and the preference columns of the profile
@@ -18,6 +19,9 @@ DROP POLICY IF EXISTS accounts_tenant ON public.accounts;
 CREATE POLICY accounts_tenant ON public.accounts
   USING (id = public.app_account_id())
   WITH CHECK (id = public.app_account_id());
+DROP POLICY IF EXISTS accounts_tenant_co_members ON public.accounts;
+CREATE POLICY accounts_tenant_co_members ON public.accounts FOR SELECT
+  USING (id IN (SELECT m.account_id FROM public.workspace_members m WHERE m.workspace_id = public.app_workspace_id()));
 REVOKE ALL ON TABLE public.accounts FROM PUBLIC, slugbase_app;
 GRANT SELECT (
   id, email, email_verified_at, pending_email, display_name, password_changed_at, locale, theme, accent,

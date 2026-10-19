@@ -55,7 +55,8 @@ async function holder(scope: "read" | "read-write" = "read", expiresInDays: numb
   const accountId = freshId();
   await seedAccount(db, { id: accountId, email: `lookup${String(emailNumber)}@example.test`, passwordHash: "$argon2id$stub" });
   const workspaceId = await seedWorkspace(db, { createdBy: accountId });
-  await seedMember(db, { workspaceId, accountId, role: "owner" });
+  // An admin: the test that ends the membership must not remove the last owner of the workspace.
+  await seedMember(db, { workspaceId, accountId, role: "admin" });
   const secret = randomBytes(32).toString("base64url");
   const hash = createHash("sha256").update(`slb_${secret}`).digest();
   const tokenId = freshId();

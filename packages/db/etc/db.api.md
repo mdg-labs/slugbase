@@ -8,6 +8,7 @@ import type { AuditRecord } from '@slugbase/core';
 import type { CredentialTokenPurpose } from '@slugbase/core';
 import { InferInsertModel } from 'drizzle-orm';
 import { InferSelectModel } from 'drizzle-orm';
+import type { MemberRoleStore } from '@slugbase/core';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import { SQL } from 'drizzle-orm';
@@ -447,6 +448,9 @@ export type InsertValues<T extends WorkspaceTable> = Omit<InferInsertModel<T>, "
 };
 
 // @public
+export function isLastOwnerViolation(error: unknown): boolean;
+
+// @public
 export function listRepositoryMethods(): readonly RepositoryMethodEntry[];
 
 // @public
@@ -458,6 +462,16 @@ export interface LoginCandidate {
     // (undocumented)
     readonly passwordHash: string | null;
 }
+
+// @public (undocumented)
+export interface MemberRepository extends MemberRoleStore {
+    list(afterAccountId: string | null, limit: number): Promise<readonly WorkspaceMember[]>;
+    member(accountId: string): Promise<WorkspaceMember | undefined>;
+    rotateSession(sessionId: string, tokenHash: Uint8Array): Promise<boolean>;
+}
+
+// @public (undocumented)
+export function memberRepository(tx: TenantTx): MemberRepository;
 
 // @public
 export type MemberRole = "owner" | "admin" | "member";
@@ -726,6 +740,9 @@ export interface Onboarding {
     // (undocumented)
     readonly importDone: boolean;
 }
+
+// @public
+export const OWNER_REQUIRED_CONSTRAINT = "workspace_members_owner_required";
 
 // @public
 export interface PasswordChange {
@@ -1042,6 +1059,21 @@ export interface WorkspaceDetail {
     // (undocumented)
     readonly role: MemberRole;
     readonly version: number;
+}
+
+// @public
+export interface WorkspaceMember {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly displayName: string;
+    // (undocumented)
+    readonly email: string;
+    // (undocumented)
+    readonly joinedAt: Date;
+    readonly lastActiveAt: Date | null;
+    // (undocumented)
+    readonly role: MemberRole;
 }
 
 // @public (undocumented)

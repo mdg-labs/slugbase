@@ -71,8 +71,11 @@ CREATE OR REPLACE TRIGGER workspaces_set_updated_at
 
 -- workspace_members: the members of the active workspace and the account's own
 -- rows in every workspace; writes only in the active workspace. slugbase_app
--- may move last_active_at, the one column the tenant resolver writes; the
--- membership changes arrive with the operations that make them.
+-- may move last_active_at, which the tenant resolver writes, and change role, the
+-- one column a membership operation writes (whether the caller may is the role
+-- check of the member service; that the workspace keeps an owner is the deferred
+-- constraint trigger of 270-member-roles.sql). Adding and removing a member
+-- arrive with the operations that make them.
 ALTER TABLE public.workspace_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.workspace_members FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS workspace_members_tenant ON public.workspace_members;
@@ -87,5 +90,5 @@ CREATE POLICY workspace_members_tenant_delete ON public.workspace_members FOR DE
   USING (workspace_id = public.app_workspace_id());
 REVOKE ALL ON TABLE public.workspace_members FROM PUBLIC, slugbase_app;
 GRANT SELECT ON TABLE public.workspace_members TO slugbase_app;
-GRANT UPDATE (last_active_at) ON TABLE public.workspace_members TO slugbase_app;
+GRANT UPDATE (role, last_active_at) ON TABLE public.workspace_members TO slugbase_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.workspace_members TO slugbase_system;

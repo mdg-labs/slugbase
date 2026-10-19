@@ -43,8 +43,12 @@ beforeEach(async () => {
   await db.owner`TRUNCATE accounts, workspaces, instance_state CASCADE`;
 });
 
-/** Deletes every account the way the owner can: one own row at a time, as the policy of `accounts` allows. */
+/**
+ * Deletes every account the way the owner can: one own row at a time, as the policy of `accounts` allows. The workspaces go first, with
+ * their memberships: an account that is the only owner of a workspace that stays cannot be deleted (the workspace would have no owner).
+ */
 async function deleteAccounts(): Promise<void> {
+  await asSystem(db, (tx) => tx`DELETE FROM workspaces`);
   const ids = await asSystem(db, (tx) => tx<{ id: string }[]>`SELECT id FROM accounts`);
   for (const { id } of ids) {
     await db.owner.begin(async (tx) => {

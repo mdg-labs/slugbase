@@ -38,6 +38,8 @@ export { auditEventRepository } from "./repositories/audit-events.ts";
 export type { AuditEventRepository } from "./repositories/audit-events.ts";
 export { workspaceRepository } from "./repositories/workspaces.ts";
 export type { NewWorkspace, WorkspaceDetail, WorkspaceRepository, WorkspaceSummary } from "./repositories/workspaces.ts";
+export { isLastOwnerViolation, memberRepository, OWNER_REQUIRED_CONSTRAINT } from "./repositories/members.ts";
+export type { MemberRepository, WorkspaceMember } from "./repositories/members.ts";
 export { membershipRepository } from "./repositories/memberships.ts";
 export type { Membership, MembershipRepository } from "./repositories/memberships.ts";
 export type { MemberRole } from "./schema/workspaces.ts";

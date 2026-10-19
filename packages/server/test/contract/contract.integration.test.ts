@@ -157,6 +157,8 @@ describe("the walker over the committed document", () => {
       authorized: ({ operationId }) => credentialsOf(cookies, operationId),
       withoutReauth: ({ operationId }) => credentialsOf(stale, operationId),
       tooLowRole: ({ operationId }) => credentialsOf(below, operationId),
+      // The owner of the walker's own workspace names a member of workspace B, which it does not act in.
+      workspaceA: ({ operationId }) => credentialsOf(cookies, operationId),
     };
   }
 
@@ -171,10 +173,11 @@ describe("the walker over the committed document", () => {
     expect(report.failures).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each anonymous operation and for the sign-in; each of the twenty-seven operations that need a session
+    // One valid request for each anonymous operation and for the sign-in; each of the twenty-nine operations that need a session
     // also answers 401 without one, each of the seven that declare re-authentication answers 401 reauth_required without it, and each of
-    // the four that need a role in the workspace answers the principal just below it (404 below member, 403 below admin).
-    expect(report.calls).toBe(operations.length + 38);
+    // the six that need a role in the workspace answers the principal just below it (404 below member, 403 below admin), and the one that names a
+    // member answers 404 for one of workspace B.
+    expect(report.calls).toBe(operations.length + 43);
   }, WALK_TIMEOUT_MS);
 });
 
@@ -288,9 +291,11 @@ describe("the cross-tenant matrix in API mode over the server", () => {
 });
 
 describe("the cross-tenant matrix in API mode over the operations of the committed document", () => {
-  // The tenant-scoped operations of the committed document act in the workspace of the request and take no identifier, so the matrix has no
-  // identifier of workspace B to put in them: it makes each call as every principal of workspace A, reads and changes A's workspace and
-  // settings, and holds that nothing of B is quoted in an answer and that B's rows, its settings and its audit events are as they were.
+  // The tenant-scoped operations of the committed document act in the workspace of the request. Those on /workspace and the members list take no
+  // identifier, so the matrix has none of workspace B to put in them: it makes each call as every principal of workspace A, reads and changes A's
+  // workspace and settings, and holds that nothing of B is quoted in an answer. The role change names a member by account identifier, so the matrix
+  // puts each member of B in it and holds that A's principals are answered 404 (403 below the admin policy, and for a token). In both, B's rows, its
+  // settings, its members and its audit events are as they were.
   async function contentOfB(): Promise<string> {
     const rows = await database().owner.begin(async (tx) => {
       await tx`SET LOCAL ROLE slugbase_system`;
@@ -298,6 +303,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
         SELECT md5(
           coalesce((SELECT string_agg(w::text, '|') FROM workspaces w WHERE w.id = ${probe.fixture.b.id}), '') ||
           coalesce((SELECT string_agg(s::text, '|') FROM workspace_settings s WHERE s.workspace_id = ${probe.fixture.b.id}), '') ||
+          coalesce((SELECT string_agg(m::text, '|' ORDER BY m.account_id) FROM workspace_members m WHERE m.workspace_id = ${probe.fixture.b.id}), '') ||
           coalesce((SELECT string_agg(e::text, '|' ORDER BY e.id) FROM audit_events e WHERE e.workspace_id = ${probe.fixture.b.id}), '')
         ) AS digest`;
     });
@@ -325,7 +331,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     }
   }
 
-  it("passes for the four operations on /workspace, and leaves workspace B, its settings and its audit log as they were", async () => {
+  it("passes for the six tenant-scoped operations, and leaves workspace B, its settings, its members and its audit log as they were", async () => {
     await seedFixtureWorkspaces();
     const before = await contentOfB();
     const server = serve([{ name: "stub-principals", register: () => ({ routes: [], authenticators: world.authenticators }) }]);
@@ -333,14 +339,15 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     const report = await runApiMatrix({
       document: committed,
       fixture: probe.fixture,
-      mapping: { rowId: "bookmark" },
+      mapping: { rowId: "bookmark", accountId: "member" },
       request: matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: FIXTURES, credentialsOf: (principal) => world.credentialsOf(principal) }),
     });
 
     expect(report.failures).toEqual([]);
-    expect(report.classified.byKind["tenant-scoped"]).toBe(4);
-    // the three sessions and the six tokens (a read and a read-write one of each role) of A, once on each of the four operations
-    expect(report.attempts).toBe(9 * 4);
+    expect(report.classified.byKind["tenant-scoped"]).toBe(6);
+    // the three sessions and the six tokens (a read and a read-write one of each role) of A, once on each of the five operations that name no member,
+    // and on the role change once for each member of B
+    expect(report.attempts).toBe(9 * 5 + 9 * 3);
     expect(await contentOfB()).toBe(before);
     // The requests reached the handlers: the sessions of A renamed A and turned its AI suggestions off, and the tokens changed nothing.
     const [changed] = await database().owner.begin(async (tx) => {

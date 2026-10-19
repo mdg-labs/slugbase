@@ -167,10 +167,25 @@ export const AUDIT_ACTIONS: {
             };
         };
     };
+    readonly "member.role_changed": {
+        readonly category: "member";
+        readonly metadata: {
+            readonly from: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+            readonly to: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
+    };
 };
 
 // @public
-export const AUDIT_CATEGORIES: readonly ["workspace"];
+export const AUDIT_CATEGORIES: readonly ["workspace", "member"];
 
 // @public (undocumented)
 export type AuditAction = keyof typeof AUDIT_ACTIONS;
@@ -324,6 +339,9 @@ export interface ChallengeVerdict {
     // (undocumented)
     readonly ok: boolean;
 }
+
+// @public
+export function changeMemberRole(input: MemberRoleDependencies, ask: MemberRoleAsk): Promise<MemberRoleOutcome>;
 
 // @public
 export function changeWorkspaceSettings(input: WorkspaceAdministrationDependencies, ask: WorkspaceSettingsAsk): Promise<WorkspaceSettingsOutcome>;
@@ -666,6 +684,62 @@ export interface MailPort extends Port {
 
 // @public
 export const MAX_API_TOKENS_PER_USER = 10;
+
+// @public (undocumented)
+export interface MemberRoleAsk {
+    // (undocumented)
+    readonly actor: AuditActor;
+    readonly actorAccountId: string;
+    readonly ipPrefix: string | null;
+    // (undocumented)
+    readonly role: WorkspaceRole;
+    // (undocumented)
+    readonly targetAccountId: string;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface MemberRoleDependencies {
+    readonly audit: AuditWriter;
+    // (undocumented)
+    readonly store: MemberRoleStore;
+}
+
+// @public (undocumented)
+export type MemberRoleOutcome =
+/** The role was replaced; `self` says the member is the account that asked. */
+    {
+    readonly kind: "changed";
+    readonly from: WorkspaceRole;
+    readonly to: WorkspaceRole;
+    readonly self: boolean;
+}
+/** The member already has the role; nothing was written. */
+| {
+    readonly kind: "unchanged";
+    readonly role: WorkspaceRole;
+}
+/** The account that asks may not make this change; nothing was written. */
+| {
+    readonly kind: "forbidden";
+}
+/** The workspace has no such member, or cannot be reached. */
+| {
+    readonly kind: "not_found";
+};
+
+// @public
+export interface MemberRoles {
+    readonly actor: WorkspaceRole | undefined;
+    readonly target: WorkspaceRole | undefined;
+}
+
+// @public (undocumented)
+export interface MemberRoleStore {
+    roles(targetAccountId: string): Promise<MemberRoles | undefined>;
+    setRole(targetAccountId: string, role: WorkspaceRole): Promise<boolean>;
+}
 
 // @public
 export function newOidcHandshake(): OidcHandshake;

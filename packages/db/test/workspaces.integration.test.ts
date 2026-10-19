@@ -129,7 +129,7 @@ describe("the workspace tables", () => {
     ]);
   });
 
-  it("give slugbase_app a read of both tables and a write of last_active_at on the memberships and of name and version on the workspaces alone", async () => {
+  it("give slugbase_app a read of both tables and a write of role and last_active_at on the memberships and of name and version on the workspaces alone", async () => {
     const privileges = await db.owner<{ table: string; privilege: string }[]>`
       SELECT t AS table, p AS privilege
       FROM unnest(ARRAY['workspaces', 'workspace_members']) AS t,
@@ -145,7 +145,7 @@ describe("the workspace tables", () => {
       FROM pg_attribute a
       WHERE a.attrelid = 'public.workspace_members'::regclass AND a.attnum > 0 AND NOT a.attisdropped
         AND has_column_privilege('slugbase_app', 'public.workspace_members', a.attname, 'UPDATE')`;
-    expect(columns.map((row) => row.column)).toEqual(["last_active_at"]);
+    expect(columns.map((row) => row.column)).toEqual(["role", "last_active_at"]);
     const workspaceColumns = await db.owner<{ column: string }[]>`
       SELECT a.attname AS column
       FROM pg_attribute a
@@ -298,7 +298,9 @@ describe("the policies, with row-level security as the only guard (T1)", () => {
     expect([...touchedB]).toEqual([]);
     const touchedBob = await asApp(alice, workspaceA, (tx) => tx`UPDATE workspace_members SET last_active_at = now() WHERE account_id = ${bob} RETURNING account_id`);
     expect([...touchedBob]).toEqual([]);
-    await expect(asApp(alice, workspaceA, (tx) => tx`UPDATE workspace_members SET role = 'owner' WHERE workspace_id = ${workspaceB}`)).rejects.toMatchObject({ code: "42501" });
+    const promotedB = await asApp(alice, workspaceA, (tx) => tx`UPDATE workspace_members SET role = 'owner' WHERE workspace_id = ${workspaceB} RETURNING account_id`);
+    expect([...promotedB]).toEqual([]);
+    await expect(asApp(alice, workspaceA, (tx) => tx`UPDATE workspace_members SET joined_at = now() WHERE workspace_id = ${workspaceA}`)).rejects.toMatchObject({ code: "42501" });
     const renamedB = await asApp(alice, workspaceA, (tx) => tx`UPDATE workspaces SET name = 'taken', version = version + 1 WHERE id = ${workspaceB} RETURNING id`);
     expect([...renamedB]).toEqual([]);
     await expect(asApp(alice, workspaceA, (tx) => tx`UPDATE workspaces SET deleting_at = now() WHERE id = ${workspaceB}`)).rejects.toMatchObject({ code: "42501" });

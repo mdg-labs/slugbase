@@ -17,6 +17,7 @@ export const WALKER_WORKSPACE_ID = "0192f3a0-cccc-7000-8000-0000000000f1";
 export const UNKNOWN_API_TOKEN_ID = "0192f3a0-cccc-7000-8000-000000000002";
 
 /** An identity id no account holds: the walker's request to unlink it is the declared 404. */
+export const UNKNOWN_MEMBER_ID = "0192f3a0-cccc-7000-8000-000000000004";
 export const UNKNOWN_IDENTITY_ID = "0192f3a0-cccc-7000-8000-000000000003";
 
 export const FIXTURES: ContractFixtures = {
@@ -105,6 +106,12 @@ export const FIXTURES: ContractFixtures = {
   renameWorkspace: { body: { name: "Walker's renamed workspace" } },
   getWorkspaceSettings: {},
   updateWorkspaceSettings: { body: { aiEnabled: false } },
+  // Tenant-scoped operations of the workspace of the request. The list names no identifier. The role change names a member by account
+  // identifier, and the walker cannot know the identifier of a member of the workspace it owns, so its valid request names an account that is no
+  // member of it, which is the declared 404 whoever holds it, and so is a member of workspace B; the route tests change roles, and the matrix puts the
+  // members of workspace B in it.
+  listMembers: {},
+  updateMember: { path: { accountId: UNKNOWN_MEMBER_ID }, body: { role: "admin" }, status: 404, foreign: { path: { accountId: UNKNOWN_MEMBER_ID }, body: { role: "admin" } } },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

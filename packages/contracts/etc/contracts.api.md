@@ -447,6 +447,18 @@ export interface ComponentTypes {
             clientErrorReportDsn?: string;
             memberships: ComponentTypes["schemas"]["Membership"][];
         };
+        Member: {
+            accountId: string;
+            displayName: string;
+            email: string;
+            joinedAt: string;
+            lastActiveAt: string | null;
+            role: "owner" | "admin" | "member";
+        };
+        MemberList: {
+            items: ComponentTypes["schemas"]["Member"][];
+            nextCursor: string | null;
+        };
         Membership: {
             name: string;
             role: "owner" | "admin" | "member";
@@ -572,6 +584,9 @@ export interface ComponentTypes {
             signinAlerts?: boolean;
             singleKeyShortcuts?: boolean;
             theme?: "light" | "dark" | "system";
+        };
+        UpdateMemberRequest: {
+            role: "owner" | "admin" | "member";
         };
         UpdateWorkspaceSettingsRequest: {
             aiEnabled?: boolean;
@@ -1322,6 +1337,47 @@ export const listIdentities: {
 };
 
 // @public (undocumented)
+export const listMembers: {
+    readonly method: "get";
+    readonly path: "/api/v1/members";
+    readonly operationId: "listMembers";
+    readonly tag: "members";
+    readonly summary: "List the active workspace's members";
+    readonly auth: "member";
+    readonly rate: "read";
+    readonly scope: "read";
+    readonly request: {
+        readonly query: z.ZodObject<{
+            limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+            cursor: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        items: z.ZodArray<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        email: z.ZodString;
+        role: z.ZodEnum<{
+        member: "member";
+        admin: "admin";
+        owner: "owner";
+        }>;
+        joinedAt: z.ZodISODateTime;
+        lastActiveAt: z.ZodNullable<z.ZodISODateTime>;
+        }, z.core.$strict>>;
+        nextCursor: z.ZodNullable<z.ZodString>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
 export const listSessions: {
     readonly method: "get";
     readonly path: "/api/v1/me/sessions";
@@ -1456,6 +1512,48 @@ export const logout: {
         readonly 503: ProblemResponse;
     };
 };
+
+// @public (undocumented)
+export const MemberAccountParamsSchema: z.ZodObject<{
+    accountId: z.ZodUUID;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const MemberListQuerySchema: z.ZodObject<{
+    limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+    cursor: z.ZodOptional<z.ZodString>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const MemberListSchema: z.ZodObject<{
+    items: z.ZodArray<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        email: z.ZodString;
+        role: z.ZodEnum<{
+            member: "member";
+            admin: "admin";
+            owner: "owner";
+        }>;
+        joinedAt: z.ZodISODateTime;
+        lastActiveAt: z.ZodNullable<z.ZodISODateTime>;
+    }, z.core.$strict>>;
+    nextCursor: z.ZodNullable<z.ZodString>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const MemberSchema: z.ZodObject<{
+    accountId: z.ZodUUID;
+    displayName: z.ZodString;
+    email: z.ZodString;
+    role: z.ZodEnum<{
+        member: "member";
+        admin: "admin";
+        owner: "owner";
+    }>;
+    joinedAt: z.ZodISODateTime;
+    lastActiveAt: z.ZodNullable<z.ZodISODateTime>;
+}, z.core.$strict>;
 
 // @public (undocumented)
 export const MembershipSchema: z.ZodObject<{
@@ -2914,6 +3012,78 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    listMembers: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["MemberList"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     listSessions: {
         parameters: {
             query?: {
@@ -4258,6 +4428,97 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    updateMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                accountId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["UpdateMemberRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["Member"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     updateWorkspaceSettings: {
         parameters: {
             query?: never;
@@ -4967,6 +5228,40 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["listMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/members/{accountId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: OperationTypes["updateMember"];
         trace?: never;
     };
     // (undocumented)
@@ -6113,6 +6408,60 @@ export const updateMe: {
         readonly 503: ProblemResponse;
     };
 };
+
+// @public (undocumented)
+export const updateMember: {
+    readonly method: "patch";
+    readonly path: "/api/v1/members/{accountId}";
+    readonly operationId: "updateMember";
+    readonly tag: "members";
+    readonly summary: "Change a member's role";
+    readonly auth: "admin";
+    readonly rate: "write";
+    readonly request: {
+        readonly params: z.ZodObject<{
+            accountId: z.ZodUUID;
+        }, z.core.$strict>;
+        readonly body: z.ZodObject<{
+            role: z.ZodEnum<{
+                member: "member";
+                admin: "admin";
+                owner: "owner";
+            }>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        email: z.ZodString;
+        role: z.ZodEnum<{
+        member: "member";
+        admin: "admin";
+        owner: "owner";
+        }>;
+        joinedAt: z.ZodISODateTime;
+        lastActiveAt: z.ZodNullable<z.ZodISODateTime>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 409: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const UpdateMemberRequestSchema: z.ZodObject<{
+    role: z.ZodEnum<{
+        member: "member";
+        admin: "admin";
+        owner: "owner";
+    }>;
+}, z.core.$strict>;
 
 // @public (undocumented)
 export const updateWorkspaceSettings: {

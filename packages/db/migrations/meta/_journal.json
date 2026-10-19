@@ -267,6 +267,13 @@
       "when": 1792367047861,
       "tag": "20261018234407_add_workspace_write_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1792370804347,
+      "tag": "20261019004644_add_member_roles",
+      "breakpoints": true
     }
   ]
 }

@@ -21,6 +21,7 @@ export const systemOperations: readonly string[] = [
   "sys_session_set_active_workspace",
   "app_member_workspace_ids",
   "app_member_workspace_counts",
+  "workspace_members_check_owner",
   "sys_account_has_password",
   "sys_retention_purge",
   "sys_create_account",

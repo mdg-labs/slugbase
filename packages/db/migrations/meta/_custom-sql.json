@@ -1,4 +1,4 @@
 {
-  "sha256": "461b29042cdcd2ff9d1d6b8fc6d2b9f85d157af138f9e2700797f9d6ef757067",
-  "migration": "20261018234407_add_workspace_write_grants"
+  "sha256": "6b894c5f2582f7a8589e590995db199fc9778f8d0c96b97b727f82326628ffa6",
+  "migration": "20261019004644_add_member_roles"
 }

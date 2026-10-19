@@ -6,7 +6,7 @@
 // section 10. The catalog holds the actions that are recorded so far.
 
 /** The groups the audit log filters by. */
-export const AUDIT_CATEGORIES = ["workspace"] as const;
+export const AUDIT_CATEGORIES = ["workspace", "member"] as const;
 
 export type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
 
@@ -27,10 +27,14 @@ const WORKSPACE_NAME: AuditMetadataField = { type: "text", minLength: 1, maxLeng
 const SETTING_NAME: AuditMetadataField = { type: "text", minLength: 1, maxLength: 64 };
 const SETTING_VALUE: AuditMetadataField = { type: "text", minLength: 1, maxLength: 64 };
 
+/** A member's role: `owner`, `admin` or `member`. */
+const MEMBER_ROLE: AuditMetadataField = { type: "text", minLength: 5, maxLength: 6 };
+
 export const AUDIT_ACTIONS = {
   "workspace.created": { category: "workspace", metadata: { name: WORKSPACE_NAME } },
   "workspace.renamed": { category: "workspace", metadata: { from: WORKSPACE_NAME, to: WORKSPACE_NAME } },
   "workspace.settings_changed": { category: "workspace", metadata: { setting: SETTING_NAME, from: SETTING_VALUE, to: SETTING_VALUE } },
+  "member.role_changed": { category: "member", metadata: { from: MEMBER_ROLE, to: MEMBER_ROLE } },
 } as const satisfies Record<string, AuditActionDefinition>;
 
 export type AuditAction = keyof typeof AUDIT_ACTIONS;
