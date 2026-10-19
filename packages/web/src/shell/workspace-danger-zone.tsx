@@ -17,11 +17,12 @@ export function WorkspaceDangerZone({ workspace }: { workspace: Workspace }): Re
   const { t } = useTranslation();
   const router = useRouter();
   const me = useQuery(meQuery(router.options.context.api));
-  const all = useAllMembers();
+  const owner = workspace.role === "owner";
+  // Only an owner's Leave depends on whether another owner exists; the dialog loads the members for everyone else.
+  const all = useAllMembers({ enabled: owner });
   const [leaving, setLeaving] = useState(false);
 
   const viewerId = me.data?.account.id;
-  const owner = workspace.role === "owner";
   const soleOwner = owner && viewerId !== undefined && all.complete && !all.members.some((member) => member.role === "owner" && member.accountId !== viewerId);
   // Whether another owner exists is known only once every member is in; the server refuses the last owner either way.
   const checking = owner && !all.complete && !all.failed;

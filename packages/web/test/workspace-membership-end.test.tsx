@@ -336,6 +336,32 @@ describe("leaving the workspace", () => {
     });
   }, SLOW_TEST_TIMEOUT_MS);
 
+  it("loads the members for an owner to find out whether another owner exists", async () => {
+    const server = stubWorkspaceSettingsServer({ members: [SELF, { ...GRACE, role: "owner" }] });
+    await openGeneral();
+
+    await waitFor(() => {
+      expect(server.received("GET", MEMBERS_PATH).length).toBeGreaterThan(0);
+    });
+  }, SLOW_TEST_TIMEOUT_MS);
+
+  it.each(["admin", "member"] as const)("loads no members for %s until the Leave dialog opens", async (role) => {
+    const server = stubWorkspaceSettingsServer({ role, members: [{ ...SELF, role }, { ...GRACE, role: "owner" }], pageSize: 1 });
+    await openGeneral();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Leave workspace" }).hasAttribute("disabled")).toBe(false);
+    });
+    expect(server.received("GET", MEMBERS_PATH)).toHaveLength(0);
+
+    const dialog = await openLeave();
+
+    await waitFor(() => {
+      expect(recipientOf(dialog)).toBe("Grace Hopper");
+    });
+    expect(server.received("GET", MEMBERS_PATH).length).toBeGreaterThan(0);
+  }, SLOW_TEST_TIMEOUT_MS);
+
   it("starts at transferring to the longest-standing owner, asks to confirm, sends the choice and leaves for /no-workspace", async () => {
     const server = stubWorkspaceSettingsServer({ role: "member", members: MEMBER_VIEW, afterLeaving: "none" });
     await openGeneral();
