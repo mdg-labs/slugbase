@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createWebApp } from "../src/index.ts";
-import { ACCOUNT_BODY, CONFIG_BODY, ME_PATH, SESSION_BODY, SESSION_PATH, json, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
+import { ACCOUNT_BODY, CONFIG_BODY, ME_PATH, SESSION_BODY, SESSION_PATH, WORKSPACES_PATH, WORKSPACE_LIST_BODY, json, meOf, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
 type Transport = (request: Request) => Promise<Response>;
 
@@ -145,11 +145,14 @@ describe("the banner for an unverified account", () => {
         return Promise.resolve(json(config));
       }
       if (pathname === ME_PATH) {
-        return Promise.resolve(json({ account: { ...ACCOUNT_BODY, emailVerified }, memberships: [], activeWorkspaceId: null }));
+        return Promise.resolve(json(meOf({ ...ACCOUNT_BODY, emailVerified })));
       }
       if (pathname === RESEND_PATH) {
         resent.push(request.clone());
         return resend(request);
+      }
+      if (pathname === WORKSPACES_PATH) {
+        return Promise.resolve(json(WORKSPACE_LIST_BODY));
       }
       return pathname === SESSION_PATH ? Promise.resolve(json(SESSION_BODY)) : Promise.reject(new Error("unexpected call"));
     });

@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from "./routes/__root.tsx";
 import { Route as AppRouteImport } from "./routes/_app.tsx";
 import { Route as ForgotPasswordRouteImport } from "./routes/forgot-password.tsx";
 import { Route as LoginRouteImport } from "./routes/login.tsx";
+import { Route as NoWorkspaceRouteImport } from "./routes/no-workspace.tsx";
 import { Route as RegisterRouteImport } from "./routes/register.tsx";
 import { Route as ResetPasswordRouteImport } from "./routes/reset-password.tsx";
 import { Route as SetupRouteImport } from "./routes/setup.tsx";
@@ -41,6 +42,11 @@ const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: "/login",
   path: "/login",
+  getParentRoute: () => rootRouteImport,
+} as any);
+const NoWorkspaceRoute = NoWorkspaceRouteImport.update({
+  id: "/no-workspace",
+  path: "/no-workspace",
   getParentRoute: () => rootRouteImport,
 } as any);
 const RegisterRoute = RegisterRouteImport.update({
@@ -131,6 +137,7 @@ export interface FileRoutesByFullPath {
   "/": typeof AppIndexRoute;
   "/forgot-password": typeof ForgotPasswordRoute;
   "/login": typeof LoginRoute;
+  "/no-workspace": typeof NoWorkspaceRoute;
   "/register": typeof RegisterRoute;
   "/reset-password": typeof ResetPasswordRoute;
   "/setup": typeof SetupRoute;
@@ -150,6 +157,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   "/forgot-password": typeof ForgotPasswordRoute;
   "/login": typeof LoginRoute;
+  "/no-workspace": typeof NoWorkspaceRoute;
   "/register": typeof RegisterRoute;
   "/reset-password": typeof ResetPasswordRoute;
   "/setup": typeof SetupRoute;
@@ -171,6 +179,7 @@ export interface FileRoutesById {
   "/_app": typeof AppRouteWithChildren;
   "/forgot-password": typeof ForgotPasswordRoute;
   "/login": typeof LoginRoute;
+  "/no-workspace": typeof NoWorkspaceRoute;
   "/register": typeof RegisterRoute;
   "/reset-password": typeof ResetPasswordRoute;
   "/setup": typeof SetupRoute;
@@ -194,6 +203,7 @@ export interface FileRouteTypes {
     | "/"
     | "/forgot-password"
     | "/login"
+    | "/no-workspace"
     | "/register"
     | "/reset-password"
     | "/setup"
@@ -213,6 +223,7 @@ export interface FileRouteTypes {
   to:
     | "/forgot-password"
     | "/login"
+    | "/no-workspace"
     | "/register"
     | "/reset-password"
     | "/setup"
@@ -233,6 +244,7 @@ export interface FileRouteTypes {
     | "/_app"
     | "/forgot-password"
     | "/login"
+    | "/no-workspace"
     | "/register"
     | "/reset-password"
     | "/setup"
@@ -255,6 +267,7 @@ export interface RootRouteChildren {
   AppRoute: typeof AppRouteWithChildren;
   ForgotPasswordRoute: typeof ForgotPasswordRoute;
   LoginRoute: typeof LoginRoute;
+  NoWorkspaceRoute: typeof NoWorkspaceRoute;
   RegisterRoute: typeof RegisterRoute;
   ResetPasswordRoute: typeof ResetPasswordRoute;
   SetupRoute: typeof SetupRoute;
@@ -285,6 +298,13 @@ declare module "@tanstack/react-router" {
       path: "/login";
       fullPath: "/login";
       preLoaderRoute: typeof LoginRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/no-workspace": {
+      id: "/no-workspace";
+      path: "/no-workspace";
+      fullPath: "/no-workspace";
+      preLoaderRoute: typeof NoWorkspaceRouteImport;
       parentRoute: typeof rootRouteImport;
     };
     "/register": {
@@ -442,6 +462,7 @@ const rootRouteChildren: RootRouteChildren = {
   AppRoute: AppRouteWithChildren,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
+  NoWorkspaceRoute: NoWorkspaceRoute,
   RegisterRoute: RegisterRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SetupRoute: SetupRoute,

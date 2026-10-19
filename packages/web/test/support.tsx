@@ -68,17 +68,41 @@ export const ACCOUNT_BODY = {
   pendingEmail: null,
 } as const;
 
+export const WORKSPACES_PATH = "/api/v1/workspaces";
+
+export const ACTIVE_WORKSPACE_PATH = "/api/v1/session/active-workspace";
+
+export const WORKSPACE_ID = "0192f3a0-cccc-7000-8000-000000000001";
+
+export const WORKSPACE_NAME = "Ada's Workspace";
+
+/** The one workspace the account of a test server is a member of and acts in. */
+export const MEMBERSHIPS_BODY: { workspaceId: string; name: string; role: "owner" }[] = [
+  { workspaceId: WORKSPACE_ID, name: WORKSPACE_NAME, role: "owner" },
+];
+
+/** What `GET /workspaces` answers for that account: the one workspace, and no creation. */
+export const WORKSPACE_LIST_BODY = {
+  items: [{ id: WORKSPACE_ID, name: WORKSPACE_NAME, role: "owner", memberCount: 1 }],
+  canCreate: false,
+} as const;
+
+/** `GET /me` for `account`, who is a member of the one workspace and acts in it. */
+export function meOf<Account extends object>(account: Account): { account: Account; memberships: typeof MEMBERSHIPS_BODY; activeWorkspaceId: string } {
+  return { account, memberships: MEMBERSHIPS_BODY, activeWorkspaceId: WORKSPACE_ID };
+}
+
 /** The signed-in account of a test server. It chose the language of the browser, so a test that opens the app in German sees German. */
 export function meBody(): object {
   const german = globalThis.navigator.languages.some((language) => language.toLowerCase().startsWith("de"));
-  return { account: german ? { ...ACCOUNT_BODY, locale: "de" } : ACCOUNT_BODY, memberships: [], activeWorkspaceId: null };
+  return meOf(german ? { ...ACCOUNT_BODY, locale: "de" } : ACCOUNT_BODY);
 }
 
 export const SESSION_BODY = { items: [], nextCursor: null } as const;
 
 /**
- * The answers of a server with a signed-in visitor: the configuration, the session check, their account,
- * and `other` for every other call.
+ * The answers of a server with a signed-in visitor: the configuration, the session check, their account, the
+ * list of their workspaces, and `other` for every other call.
  */
 export function signedIn(
   request: Request,
@@ -90,6 +114,9 @@ export function signedIn(
   }
   if (pathname === ME_PATH && request.method === "GET") {
     return Promise.resolve(json(meBody()));
+  }
+  if (pathname === WORKSPACES_PATH && request.method === "GET") {
+    return Promise.resolve(json(WORKSPACE_LIST_BODY));
   }
   return pathname === SESSION_PATH ? Promise.resolve(json(SESSION_BODY)) : other(request);
 }

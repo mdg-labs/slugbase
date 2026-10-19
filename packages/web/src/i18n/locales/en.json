@@ -870,5 +870,69 @@
         "action": "Open security settings"
       }
     }
+  },
+  "workspaces": {
+    "switcher": {
+      "label": "Workspace",
+      "none": "No workspace",
+      "unavailable": "Workspace unavailable",
+      "groupLabel": "Workspaces",
+      "new": "New workspace",
+      "settings": "Workspace settings",
+      "loadFailed": "Your workspaces could not be loaded.",
+      "retry": "Try again",
+      "empty": "No other workspaces yet."
+    },
+    "switch": {
+      "failed": {
+        "title": "The workspace was not switched",
+        "unavailable": "You are still in the same workspace. Try again.",
+        "notAMember": "You are no longer a member of that workspace."
+      }
+    },
+    "create": {
+      "title": "New workspace",
+      "description": "A workspace holds your bookmarks, folders and members.",
+      "close": "Close",
+      "dismiss": "Not now",
+      "cancel": "Cancel",
+      "submit": "Create workspace",
+      "name": {
+        "label": "Name",
+        "required": "Enter a name."
+      },
+      "error": {
+        "invalidName": "Use a name of 1 to 64 characters.",
+        "unverified": "Verify your email address to create a workspace.",
+        "notAllowed": "This server does not let accounts create workspaces.",
+        "limitReached": "You have reached the limit of workspaces for your account.",
+        "unavailable": "The workspace could not be created. Try again in a moment."
+      },
+      "created": "“{name}” was created.",
+      "notOpened": "The new workspace was not opened",
+      "retry": "Try again"
+    }
+  },
+  "noWorkspace": {
+    "retry": "Try again",
+    "signedInAs": "Signed in as {email}",
+    "open": "Open {name}",
+    "loadFailed": {
+      "title": "Your account could not be loaded",
+      "description": "Try again. If this continues, tell your administrator."
+    },
+    "choose": {
+      "title": "Choose a workspace",
+      "description": "You are a member of these workspaces, but none is open."
+    },
+    "create": {
+      "title": "You are not in a workspace yet",
+      "description": "Create a workspace to start saving bookmarks.",
+      "action": "Create a workspace"
+    },
+    "waiting": {
+      "title": "Waiting for an invitation",
+      "description": "Ask the owner of a workspace to invite you. It appears here once you accept."
+    }
   }
 }

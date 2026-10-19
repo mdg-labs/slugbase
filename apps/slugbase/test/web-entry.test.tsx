@@ -5,9 +5,9 @@ import { expect, it, vi } from "vitest";
 import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 
 // The CE web entry: it builds the app with createWebApp, mounts it on #root, and
-// the app asks /api/config before it renders, then checks the session and loads the account
-// for its first page. The server side of the configuration answer (the product name from the build info)
-// is checked with the built app in web-build.test.ts; here the answer is typed from the contract.
+// the app asks /api/config before it renders, then checks the session, loads the account
+// for its first page and the list of its workspaces for the switcher. The server side of the configuration
+// answer (the product name from the build info) is checked with the built app in web-build.test.ts; here the answer is typed from the contract.
 
 const config: ComponentTypes["schemas"]["ApiConfig"] = {
   apiVersion: "v1",
@@ -40,13 +40,20 @@ it("mounts the app on #root and shows the product name that /api/config answers 
       mfaEnabled: false,
       pendingEmail: null,
     },
-    memberships: [],
-    activeWorkspaceId: null,
+    memberships: [{ workspaceId: "0192f3a0-cccc-7000-8000-000000000001", name: "Home", role: "owner" }],
+    activeWorkspaceId: "0192f3a0-cccc-7000-8000-000000000001",
+  };
+  const workspaces: ComponentTypes["schemas"]["WorkspaceList"] = {
+    items: [{ id: "0192f3a0-cccc-7000-8000-000000000001", name: "Home", role: "owner", memberCount: 1 }],
+    canCreate: false,
   };
   vi.stubGlobal("fetch", (request: Request) => {
     const { pathname } = new URL(request.url);
     requested.push(pathname);
-    return Promise.resolve(Response.json(pathname === "/api/v1/me" ? me : config));
+    if (pathname === "/api/v1/me") {
+      return Promise.resolve(Response.json(me));
+    }
+    return Promise.resolve(Response.json(pathname === "/api/v1/workspaces" ? workspaces : config));
   });
   vi.stubGlobal("matchMedia", () => ({
     matches: false,
@@ -63,5 +70,5 @@ it("mounts the app on #root and shows the product name that /api/config answers 
 
   const heading = await screen.findByRole("heading", { name: "Welcome to Bookmarks Entry Test" });
   expect(heading.closest("#root")).not.toBeNull();
-  expect(requested).toEqual(["/api/config", "/api/v1/me/sessions", "/api/v1/me"]);
+  expect(requested).toEqual(["/api/config", "/api/v1/me/sessions", "/api/v1/me", "/api/v1/workspaces"]);
 });

@@ -25,6 +25,7 @@ export { ShownOnce, type ShownOnceProps } from "./shown-once.tsx";
 export { StatusBadge, type StatusBadgeProps, type StatusBadgeVariant } from "./status-badge.tsx";
 export { Totp, type TotpProps } from "./totp.tsx";
 export { Wizard, type WizardProps } from "./wizard.tsx";
+export type { WorkspaceSwitcherAction, WorkspaceSwitcherItem, WorkspaceSwitcherProps } from "./workspace-switcher.tsx";
 export type { Accent, ResolvedTheme } from "../theme/theme-provider.tsx";
 export { ThemeToggle, type ThemeToggleProps } from "./theme-toggle.tsx";
 // The icons the shell and the empty states of the app place; the app takes them from here so the icon library has one home.

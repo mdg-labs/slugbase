@@ -2,7 +2,7 @@ import type { ComponentTypes } from "@slugbase/contracts";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createWebApp } from "../src/index.ts";
-import { SESSION_PATH, json, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
+import { SESSION_PATH, json, meOf, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
 // /settings/account (doc 03 section 11.1): the profile form over a stubbed transport. The failure
 // scenarios are a save that is reported as done when the server refused it, a language that stays
@@ -34,7 +34,7 @@ const ACCOUNT: Account = {
 };
 
 function me(account: Account): ComponentTypes["schemas"]["Me"] {
-  return { account, memberships: [], activeWorkspaceId: null };
+  return meOf(account);
 }
 
 interface Server {
@@ -88,9 +88,9 @@ function nameInput(): HTMLInputElement {
   return screen.getByRole<HTMLInputElement>("textbox", { name: "Name" });
 }
 
-/** The initials of the avatar preview; the account menu's avatar is a stand-in icon and is not hidden from assistive technology. */
+/** The initials of the avatar preview in the page; the account menu's avatar is a stand-in icon, and the workspace switcher's monogram is in the sidebar. */
 function avatarText(): string | null | undefined {
-  return document.querySelector('[data-slot="avatar"][aria-hidden="true"]')?.textContent;
+  return document.querySelector('main [data-slot="avatar"][aria-hidden="true"]')?.textContent;
 }
 
 /** The text of every alert on the page: the toasts, which are announced at once when they report an error. */

@@ -11,6 +11,7 @@ import {
   SidebarTrigger,
 } from "../components/ui/sidebar.tsx";
 import { SlugBaseMark } from "./slugbase-mark.tsx";
+import { WorkspaceSwitcher, type WorkspaceSwitcherProps } from "./workspace-switcher.tsx";
 
 /** The texts of the shell's own controls. `@slugbase/ui` carries no catalogs, so the app passes them in its language. */
 export interface AppShellLabels {
@@ -30,6 +31,8 @@ export interface AppShellProps {
   labels: AppShellLabels;
   /** Written beside the mark in the sidebar header. */
   productName: string;
+  /** The workspace switcher under the product name; the sidebar has none without it. */
+  workspaceSwitcher?: WorkspaceSwitcherProps;
   /** The sidebar's links: a `SidebarMenu`. */
   navigation: ReactNode;
   /** Below the links, for example the help link. */
@@ -52,12 +55,14 @@ const SIDEBAR_COLLAPSE = "icon";
 /**
  * The in-app frame (doc 03 "App shell"): a sidebar that collapses to icons and
  * becomes a drawer below the `md` breakpoint, a top bar with the breadcrumb and
- * its controls, and the page in the `main` landmark. The first focusable
+ * its controls, and the page in the `main` landmark. The sidebar header holds the
+ * product name and the workspace switcher. The first focusable
  * element is a link that skips to the page.
  */
 export function AppShell({
   labels,
   productName,
+  workspaceSwitcher,
   navigation,
   footer,
   breadcrumb,
@@ -82,6 +87,7 @@ export function AppShell({
             <SlugBaseMark className="size-5 shrink-0 text-primary" />
             <span className="truncate group-data-[collapsible=icon]:hidden">{productName}</span>
           </div>
+          {workspaceSwitcher === undefined ? null : <WorkspaceSwitcher {...workspaceSwitcher} />}
         </SidebarHeader>
         <SidebarContent>
           <SidebarGroup>
