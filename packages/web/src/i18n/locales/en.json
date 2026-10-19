@@ -663,6 +663,105 @@
           "forbidden": "Only an owner can transfer ownership. The page has been reloaded.",
           "notAMember": "This person is no longer a member of the workspace. The list has been reloaded."
         }
+      },
+      "invitations": {
+        "title": "Invitations",
+        "description": "People who were invited and have not joined yet.",
+        "invite": "Invite people",
+        "pending": "Pending",
+        "expired": "Expired",
+        "column": {
+          "email": "Email",
+          "role": "Role",
+          "invitedBy": "Invited by",
+          "status": "Status",
+          "expires": "Expires",
+          "actions": "Actions"
+        },
+        "invitedBy": {
+          "deleted": "Deleted account",
+          "former": "Former member",
+          "unknown": "Another member"
+        },
+        "actionsFor": "Actions for the invitation of {email}",
+        "action": {
+          "resend": "Resend",
+          "link": "Copy invitation link",
+          "revoke": "Revoke"
+        },
+        "gone": "This invitation is no longer pending. The list has been reloaded.",
+        "loadFailed": {
+          "title": "The invitations could not be loaded"
+        },
+        "empty": {
+          "title": "No pending invitations",
+          "description": "People you invite appear here until they join."
+        },
+        "resend": {
+          "done": "The invitation for {email} was sent again",
+          "noMail": "This server cannot send email. Copy the invitation link instead."
+        },
+        "revoke": {
+          "title": "Revoke the invitation for {email}?",
+          "description": "The link in the invitation stops working right away. {email} can be invited again later.",
+          "action": "Revoke invitation",
+          "cancel": "Cancel",
+          "done": "The invitation for {email} was revoked"
+        },
+        "link": {
+          "title": "Invitation link",
+          "description": "Send this link to {email}. It adds them to the workspace once they sign in or sign up with that address.",
+          "label": "Invitation link",
+          "copy": "Copy link",
+          "copied": "Link copied",
+          "note": "This link is shown only once, and any earlier link for this invitation no longer works. It expires in 7 days.",
+          "done": "Done",
+          "close": "Close"
+        },
+        "loading": "Loading invitations"
+      },
+      "invite": {
+        "title": "Invite people",
+        "description": "Invite people to this workspace by email.",
+        "close": "Close",
+        "noMail": "This server cannot send email. The invitations are created without one: copy each invitation link from the list of pending invitations and send it yourself.",
+        "emails": {
+          "label": "Email addresses",
+          "description": "Separate several addresses with a comma or press Enter after each.",
+          "placeholder": "name@example.org"
+        },
+        "addresses": "Addresses to invite",
+        "remove": "Remove",
+        "removeAddress": "Remove {address}",
+        "role": {
+          "label": "Role",
+          "admin": "Manages members, invitations and the settings of the workspace.",
+          "member": "Uses the workspace's bookmarks and folders and cannot manage members or settings."
+        },
+        "error": {
+          "required": "Enter at least one email address.",
+          "invalid": "{address} is not a valid email address."
+        },
+        "cancel": "Cancel",
+        "submit": "Send invitations",
+        "result": {
+          "title": "Invitations",
+          "summary": "{invited} of {total} invited.",
+          "list": "Result for each address",
+          "invitedBadge": "Invited",
+          "skippedBadge": "Skipped",
+          "failedBadge": "Failed",
+          "sent": "The invitation was sent by email.",
+          "created": "The invitation was created. Copy its link from the pending invitations.",
+          "alreadyMember": "Already a member of this workspace.",
+          "invalid": "Not a valid email address.",
+          "rateLimited": "Too many requests. Try again in a while.",
+          "unavailable": "The server is busy. Try again.",
+          "failed": "The invitation could not be created.",
+          "requestId": "Request ID: {requestId}",
+          "tryAgain": "Try the failed ones again",
+          "done": "Done"
+        }
       }
     }
   },

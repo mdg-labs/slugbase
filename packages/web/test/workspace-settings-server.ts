@@ -37,7 +37,34 @@ export const GRACE: TestMember = {
   lastActiveAt: null,
 };
 
+export const INVITATIONS_PATH = "/api/v1/invitations";
+
+export interface TestInvitation {
+  readonly id: string;
+  readonly email: string;
+  readonly role: "admin" | "member";
+  readonly invitedBy: string | null;
+  readonly expiresAt: string;
+  readonly expired?: boolean;
+}
+
+export const INVITE_LINK_ORIGIN = "http://localhost:3000/invite/";
+
 export interface WorkspaceSettingsServerOptions {
+  /** Whether the server reports that it can send mail in `/api/config`; by default it cannot, as in the other fixtures. */
+  readonly mail?: boolean;
+  /** The pending invitations the workspace starts with. */
+  readonly invitations?: readonly TestInvitation[];
+  /** Answers `GET /invitations` instead of the list; `call` counts from 1. */
+  readonly invitationsGet?: (call: number) => Response | Promise<Response>;
+  /** Answers `POST /invitations` instead of inviting; `call` counts from 1. */
+  readonly invitationPost?: (call: number, request: Request) => Response | Promise<Response>;
+  /** Answers `POST /invitations/{id}/resend` instead of resending; `call` counts from 1. */
+  readonly invitationResend?: (call: number, request: Request) => Response | Promise<Response>;
+  /** Answers `POST /invitations/{id}/link` instead of making a link; `call` counts from 1. */
+  readonly invitationLink?: (call: number, request: Request) => Response | Promise<Response>;
+  /** Answers `DELETE /invitations/{id}` instead of revoking; `call` counts from 1. */
+  readonly invitationDelete?: (call: number, request: Request) => Response | Promise<Response>;
   /** The caller's role in the workspace. */
   readonly role?: Role;
   readonly name?: string;
@@ -75,6 +102,7 @@ export interface Received {
   readonly method: string;
   readonly path: string;
   readonly ifMatch: string | null;
+  readonly idempotencyKey: string | null;
   readonly body: unknown;
 }
 
@@ -87,6 +115,8 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
   let name = options.name ?? "Ada's Workspace";
   let members: TestMember[] = [...(options.members ?? [{ ...SELF, role: options.role ?? "owner" }, GRACE])];
   let version = options.version ?? 3;
+  let invitations: TestInvitation[] = [...(options.invitations ?? [])];
+  let issued = 0;
   let left = false;
   const received: Received[] = [];
   const counts = new Map<string, number>();
@@ -112,6 +142,80 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
           memberships: [{ workspaceId: WORKSPACE_ID, name, role }],
           activeWorkspaceId: options.noWorkspace === true ? null : WORKSPACE_ID,
         };
+  const FAR = "2026-12-01T10:00:00.000Z";
+  const invitationBody = (invitation: TestInvitation) => ({
+    id: invitation.id,
+    email: invitation.email,
+    role: invitation.role,
+    teamIds: [],
+    status: "pending",
+    invitedBy: invitation.invitedBy,
+    expiresAt: invitation.expiresAt,
+    createdAt: "2026-10-10T08:00:00.000Z",
+  });
+  /** What the server does with the invitation routes, unless a test answers the request itself. */
+  const invitationRoutes = (method: string, pathname: string, call: number, request: Request, text: string): Response | Promise<Response> | undefined => {
+    if (pathname === INVITATIONS_PATH && method === "GET") {
+      return options.invitationsGet === undefined
+        ? json({ items: invitations.map((invitation) => ({ ...invitationBody(invitation), expired: invitation.expired === true })), nextCursor: null })
+        : options.invitationsGet(call);
+    }
+    if (pathname === INVITATIONS_PATH && method === "POST") {
+      if (options.invitationPost !== undefined) {
+        return options.invitationPost(call, request);
+      }
+      const { email, role } = JSON.parse(text) as { email: string; role: "admin" | "member" };
+      if (members.some((member) => member.email.toLowerCase() === email.toLowerCase())) {
+        return problem(409, "already_member", "req-409");
+      }
+      const existing = invitations.find((invitation) => invitation.email.toLowerCase() === email.toLowerCase());
+      const next: TestInvitation = { id: existing?.id ?? `0192f3a0-dddd-7000-8000-${String(100 + invitations.length).padStart(12, "0")}`, email, role, invitedBy: SELF.accountId, expiresAt: FAR };
+      invitations = existing === undefined ? [next, ...invitations] : invitations.map((invitation) => (invitation === existing ? next : invitation));
+      return json(invitationBody(next), { status: 201 });
+    }
+    const match = /^\/api\/v1\/invitations\/([^/]+)(\/resend|\/link)?$/.exec(pathname);
+    if (match === null) {
+      return undefined;
+    }
+    const target = invitations.find((invitation) => invitation.id === match[1]);
+    if (match[2] === "/resend" && method === "POST") {
+      if (options.invitationResend !== undefined) {
+        return options.invitationResend(call, request);
+      }
+      if (target === undefined) {
+        return problem(404, "not_found", "req-404");
+      }
+      if (options.mail !== true) {
+        return problem(503, "mail_unavailable", "req-503");
+      }
+      const renewed = { ...target, expiresAt: FAR, expired: false };
+      invitations = invitations.map((invitation) => (invitation === target ? renewed : invitation));
+      return json(invitationBody(renewed));
+    }
+    if (match[2] === "/link" && method === "POST") {
+      if (options.invitationLink !== undefined) {
+        return options.invitationLink(call, request);
+      }
+      if (target === undefined) {
+        return problem(404, "not_found", "req-404");
+      }
+      const renewed = { ...target, expiresAt: FAR, expired: false };
+      invitations = invitations.map((invitation) => (invitation === target ? renewed : invitation));
+      issued += 1;
+      return json({ invitation: invitationBody(renewed), link: `${INVITE_LINK_ORIGIN}token-${String(issued)}` });
+    }
+    if (match[2] === undefined && method === "DELETE") {
+      if (options.invitationDelete !== undefined) {
+        return options.invitationDelete(call, request);
+      }
+      if (target === undefined) {
+        return problem(404, "not_found", "req-404");
+      }
+      invitations = invitations.filter((invitation) => invitation !== target);
+      return new Response(null, { status: 204 });
+    }
+    return undefined;
+  };
   /** Ends a membership as the server does; the answer is the document of the departure or a problem. */
   const ending = (accountId: string, body: { content: "transfer" | "delete"; transferTo?: string }, byself: boolean): Response => {
     const member = members.find((candidate) => candidate.accountId === accountId);
@@ -138,7 +242,7 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
   const transport = vi.fn<Transport>(async (request) => {
     const { pathname } = new URL(request.url);
     if (pathname === "/api/config") {
-      return json(CONFIG_BODY);
+      return json({ ...CONFIG_BODY, features: { ...CONFIG_BODY.features, mail: options.mail === true } });
     }
     if (pathname === SESSION_PATH) {
       return json(SESSION_BODY);
@@ -148,11 +252,18 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
       method: request.method,
       path: pathname,
       ifMatch: request.headers.get("If-Match"),
+      idempotencyKey: request.headers.get("Idempotency-Key"),
       body: text === "" ? undefined : (JSON.parse(text) as unknown),
     });
     const key = `${request.method} ${pathname}`;
     const call = (counts.get(key) ?? 0) + 1;
     counts.set(key, call);
+    if (pathname.startsWith(INVITATIONS_PATH)) {
+      const answer = invitationRoutes(request.method, pathname, call, request, text);
+      if (answer !== undefined) {
+        return answer;
+      }
+    }
     if (pathname === ME_PATH && request.method === "GET") {
       return json(me());
     }
