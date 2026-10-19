@@ -2,6 +2,7 @@ import type { ModuleContribution, ServerModule } from "../create-server.ts";
 import { eventJobs } from "../events/jobs.ts";
 import type { JobDefinition } from "./job.ts";
 import { mailJobs } from "./jobs/mail-send.ts";
+import { workspaceDeleteJob } from "./jobs/workspace-delete.ts";
 import { maintenanceContribution, type MaintenanceStores } from "./maintenance.ts";
 
 /** The subscribers the composed modules registered for an event; read when a job runs, after composition. */
@@ -17,6 +18,8 @@ interface BuiltIn {
 const BUILT_IN: readonly BuiltIn[] = [
   { name: "@slugbase/server/maintenance", contribute: maintenanceContribution },
   { name: "@slugbase/server/mail", contribute: () => ({ jobs: mailJobs }) },
+  // Removes the rows of a workspace that was marked as being deleted (doc 05 section 7.2).
+  { name: "@slugbase/server/workspace-deletion", contribute: (stores) => ({ jobs: [workspaceDeleteJob(stores.workspaceDeletion)] }) },
   // One job per domain event, which hands the event to the subscribers of the composed modules.
   { name: "@slugbase/server/events", contribute: (_stores, subscribersFor) => ({ jobs: eventJobs(subscribersFor) }) },
 ];
@@ -28,6 +31,10 @@ export function createBuiltInModules(stores: MaintenanceStores, subscribersFor: 
 const NEVER_RUN: MaintenanceStores = {
   rateLimit: { purgeIdle: () => Promise.reject(new Error("a job list read for its queues does not run jobs")) },
   retention: { purge: () => Promise.reject(new Error("a job list read for its queues does not run jobs")) },
+  workspaceDeletion: {
+    purgeRows: () => Promise.reject(new Error("a job list read for its queues does not run jobs")),
+    finish: () => Promise.reject(new Error("a job list read for its queues does not run jobs")),
+  },
 };
 
 const NO_SUBSCRIBERS: SubscribersFor = () => [];

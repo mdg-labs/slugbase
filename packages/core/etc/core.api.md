@@ -167,6 +167,10 @@ export const AUDIT_ACTIONS: {
             };
         };
     };
+    readonly "workspace.deletion_requested": {
+        readonly category: "workspace";
+        readonly metadata: {};
+    };
     readonly "member.role_changed": {
         readonly category: "member";
         readonly metadata: {
@@ -439,6 +443,11 @@ export const DOMAIN_EVENTS: {
             readonly type: "uuid";
         };
         readonly accountId: {
+            readonly type: "uuid";
+        };
+    };
+    readonly "workspace.deleted": {
+        readonly workspaceId: {
             readonly type: "uuid";
         };
     };
@@ -1052,6 +1061,9 @@ export function registrationUnavailable(settings: RegistrationSettings, mailAvai
 export function renameWorkspace(input: WorkspaceAdministrationDependencies, ask: WorkspaceRenameAsk): Promise<WorkspaceRenameOutcome>;
 
 // @public
+export function requestWorkspaceDeletion<Code extends string>(input: WorkspaceDeletionDependencies<Code>, ask: WorkspaceDeletionAsk): Promise<WorkspaceDeletionOutcome<Code>>;
+
+// @public
 export function safeReturnTo(value: string | undefined): string;
 
 // @public (undocumented)
@@ -1228,6 +1240,60 @@ export interface WorkspaceCreationRequest {
     // (undocumented)
     readonly name: string;
     readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface WorkspaceDeletionAsk {
+    readonly actor: Extract<AuditActor, {
+        type: "account";
+    }>;
+    readonly ipPrefix: string | null;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface WorkspaceDeletionDependencies<Code extends string> {
+    readonly audit: AuditWriter;
+    readonly guard: (input: WorkspaceDeletionGuardInput) => Promise<WorkspaceDeletionGuardResult<Code>>;
+    // (undocumented)
+    readonly store: WorkspaceDeletionStore;
+}
+
+// @public (undocumented)
+export interface WorkspaceDeletionGuardInput {
+    readonly accountId: string;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public
+export type WorkspaceDeletionGuardResult<Code extends string = string> = {
+    readonly outcome: "allow";
+} | {
+    readonly outcome: "refuse";
+    readonly code: Code;
+};
+
+// @public (undocumented)
+export type WorkspaceDeletionOutcome<Code extends string> =
+/** The workspace is marked, the job is queued and the request is in the audit log. */
+    {
+    readonly kind: "requested";
+}
+/** The guard refused with `code`; nothing was written. */
+| {
+    readonly kind: "refused";
+    readonly code: Code;
+}
+/** The workspace cannot be marked: the caller is no owner of it or it is already being deleted; nothing was written. */
+| {
+    readonly kind: "unavailable";
+};
+
+// @public (undocumented)
+export interface WorkspaceDeletionStore {
+    markDeleting(): Promise<boolean>;
 }
 
 // @public (undocumented)

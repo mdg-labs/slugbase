@@ -37,6 +37,7 @@ export const AUDIT_ACTIONS = {
   "workspace.created": { category: "workspace", metadata: { name: WORKSPACE_NAME } },
   "workspace.renamed": { category: "workspace", metadata: { from: WORKSPACE_NAME, to: WORKSPACE_NAME } },
   "workspace.settings_changed": { category: "workspace", metadata: { setting: SETTING_NAME, from: SETTING_VALUE, to: SETTING_VALUE } },
+  "workspace.deletion_requested": { category: "workspace", metadata: {} },
   "member.role_changed": { category: "member", metadata: { from: MEMBER_ROLE, to: MEMBER_ROLE } },
   "member.removed": { category: "member", metadata: { content: CONTENT_CHOICE, transferTo: { type: "uuid" } } },
   "member.left": { category: "member", metadata: { content: CONTENT_CHOICE, transferTo: { type: "uuid" } } },

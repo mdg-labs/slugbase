@@ -1,4 +1,4 @@
 {
-  "sha256": "d9e153fe8e927a699e537643779cfe4ad0cd79147ef6866b9758fbaa0b783552",
-  "migration": "20261019080825_add_member_removal"
+  "sha256": "492b4f861a124d57c73c8fab506e7fcc09f99b9a46c1661018869420a15cda2f",
+  "migration": "20261019090902_add_workspace_deletion"
 }

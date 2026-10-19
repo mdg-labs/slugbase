@@ -34,6 +34,14 @@ export const DOMAIN_EVENTS = {
     accountId: { type: "uuid" },
   },
   /**
+   * A workspace's rows are all gone: queued in the transaction of the deletion job that removes the workspace row,
+   * so it is announced exactly once, when the workspace no longer exists. A subscriber that holds data of its own
+   * about the workspace removes it, identified by `workspaceId`.
+   */
+  "workspace.deleted": {
+    workspaceId: { type: "uuid" },
+  },
+  /**
    * A membership ended, by the member leaving or by an admin removing the member; it is queued in the transaction that
    * deletes the membership. `transferTo` is the recipient the request resolved to, carried for `delete` as well, where
    * it is not used.

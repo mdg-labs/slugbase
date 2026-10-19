@@ -39,3 +39,12 @@ export type {
   MembershipEndRequest,
   MembershipEndStore,
 } from "./departure.ts";
+export { requestWorkspaceDeletion } from "./delete.ts";
+export type {
+  WorkspaceDeletionAsk,
+  WorkspaceDeletionDependencies,
+  WorkspaceDeletionGuardInput,
+  WorkspaceDeletionGuardResult,
+  WorkspaceDeletionOutcome,
+  WorkspaceDeletionStore,
+} from "./delete.ts";

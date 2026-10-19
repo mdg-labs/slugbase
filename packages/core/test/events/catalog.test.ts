@@ -15,7 +15,7 @@ const ACCOUNT = "0192f3a0-bbbb-7000-8000-000000000001";
 
 describe("the domain event catalog", () => {
   it("announces account.created with the account and how it came to exist", () => {
-    expect(DOMAIN_EVENT_NAMES).toEqual(["account.created", "workspace.created", "member.left"]);
+    expect(DOMAIN_EVENT_NAMES).toEqual(["account.created", "workspace.created", "workspace.deleted", "member.left"]);
     expect(Object.keys(DOMAIN_EVENTS["account.created"])).toEqual(["accountId", "path"]);
     expect(ACCOUNT_CREATION_PATHS).toEqual(["self-registration", "invitation", "oidc", "setup"]);
   });
@@ -25,6 +25,14 @@ describe("the domain event catalog", () => {
     expect(parseDomainEventPayload("workspace.created", { workspaceId: ACCOUNT, accountId: ACCOUNT })).toEqual({ workspaceId: ACCOUNT, accountId: ACCOUNT });
     expect(() => parseDomainEventPayload("workspace.created", { workspaceId: ACCOUNT, accountId: ACCOUNT, name: "Ada's workspace" })).toThrow(DomainEventPayloadError);
     expect(() => parseDomainEventPayload("workspace.created", { workspaceId: ACCOUNT })).toThrow(DomainEventPayloadError);
+  });
+
+  it("announces workspace.deleted with the workspace and nothing else", () => {
+    expect(Object.keys(DOMAIN_EVENTS["workspace.deleted"])).toEqual(["workspaceId"]);
+    expect(parseDomainEventPayload("workspace.deleted", { workspaceId: ACCOUNT })).toEqual({ workspaceId: ACCOUNT });
+    for (const bad of [{}, { workspaceId: ACCOUNT, name: "Ada's workspace" }, { workspaceId: "someone" }]) {
+      expect(() => parseDomainEventPayload("workspace.deleted", bad)).toThrow(DomainEventPayloadError);
+    }
   });
 
   it("announces member.left with the workspace, the member, the content choice and the recipient, and nothing else", () => {

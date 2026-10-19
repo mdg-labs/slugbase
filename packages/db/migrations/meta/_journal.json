@@ -281,6 +281,13 @@
       "when": 1792397305072,
       "tag": "20261019080825_add_member_removal",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1792400942305,
+      "tag": "20261019090902_add_workspace_deletion",
+      "breakpoints": true
     }
   ]
 }

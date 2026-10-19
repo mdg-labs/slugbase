@@ -258,3 +258,28 @@ export const leaveWorkspace = defineOperation({
     503: problemResponse("The service is temporarily unavailable"),
   },
 });
+
+export const deleteWorkspace = defineOperation({
+  method: "delete",
+  path: "/api/v1/workspace",
+  operationId: "deleteWorkspace",
+  tag: "workspaces",
+  summary: "Delete the active workspace",
+  auth: "owner",
+  rate: "write",
+  reauth: true,
+  responses: {
+    202: emptyResponse(
+      "The workspace is marked as being deleted and the request is recorded in its audit log, in one transaction. From that moment it is gone from the account's workspaces, its members' sessions act in another workspace or in none, and its API tokens are revoked; a background job then removes its rows in batches and announces `workspace.deleted` when the workspace row is gone. The deletion cannot be undone",
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"),
+    403: problemResponse("The request did not come from the application itself (cross_site_request), the credential is an API token, or the caller is not an owner of the workspace (forbidden)"),
+    404: problemResponse("The request acts in no workspace: the account has none, or the workspace is already being deleted"),
+    409: problemResponse(
+      "A deployment extension refuses the deletion (billing_active: the workspace owns an active paid subscription, which is cancelled first); nothing is changed and no audit event is written",
+    ),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable, or a deployment extension that is consulted before the deletion did not answer in time; nothing is changed"),
+  },
+});

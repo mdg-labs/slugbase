@@ -123,6 +123,10 @@ export const FIXTURES: ContractFixtures = {
     foreign: { path: { accountId: UNKNOWN_MEMBER_ID }, body: { content: "transfer", transferTo: UNKNOWN_MEMBER_ID } },
   },
   leaveWorkspace: { body: { content: "transfer", transferTo: UNKNOWN_MEMBER_ID }, status: 404, foreign: { body: { content: "transfer", transferTo: UNKNOWN_MEMBER_ID } } },
+  // A tenant-scoped operation that acts in the workspace of the request and takes no identifier. The walker that calls it is the owner of a
+  // workspace of its own that no other operation uses, and it has just re-authenticated, so the valid request is the declared 202: it marks
+  // that workspace as being deleted, and the walker's other calls to the operation are refused before the handler.
+  deleteWorkspace: {},
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

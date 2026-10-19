@@ -57,12 +57,12 @@ describe("the matrix over the committed contract and the repository registry", (
     expect(report.classified.total).toBe(classification.operations.length);
     expect(report.classified.total).toBeGreaterThan(0);
     expect(Object.values(report.classified.byKind).reduce((sum, count) => sum + count, 0)).toBe(report.classified.total);
-    // The operations on /workspace and /workspace/settings and the members list act in the workspace of the request and take no identifier of B;
+    // The operations on /workspace (reading, renaming and deleting it) and /workspace/settings and the members list act in the workspace of the request and take no identifier of B;
     // the role change and the removal name a member by account identifier, the removal and the leaving a recipient.
-    expect(report.classified.byKind["tenant-scoped"]).toBe(8);
-    // Three sessions and six tokens of A, once on each of the five operations that name no member, once for each of the three members of B on the role
+    expect(report.classified.byKind["tenant-scoped"]).toBe(9);
+    // Three sessions and six tokens of A, once on each of the six operations that name no member, once for each of the three members of B on the role
     // change and on the leaving, and once for each pair of members of B (path and recipient) on the removal.
-    expect(report.attempts).toBe(9 * 5 + 9 * (3 + 3 + 3 * 3));
+    expect(report.attempts).toBe(9 * 6 + 9 * (3 + 3 + 3 * 3));
     assertMatrixPassed(report);
   });
 

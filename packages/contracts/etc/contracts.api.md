@@ -830,6 +830,28 @@ export const CreateWorkspaceRequestSchema: z.ZodObject<{
 export function defineOperation<const D extends OperationDefinition>(definition: D): D;
 
 // @public (undocumented)
+export const deleteWorkspace: {
+    readonly method: "delete";
+    readonly path: "/api/v1/workspace";
+    readonly operationId: "deleteWorkspace";
+    readonly tag: "workspaces";
+    readonly summary: "Delete the active workspace";
+    readonly auth: "owner";
+    readonly rate: "write";
+    readonly reauth: true;
+    readonly responses: {
+        readonly 202: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 409: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
 export const disableMfa: {
     readonly method: "delete";
     readonly path: "/api/v1/me/mfa";
@@ -2395,6 +2417,81 @@ export interface OperationTypes {
                 };
             };
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    deleteWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5589,7 +5686,7 @@ export interface paths {
         get: OperationTypes["getWorkspace"];
         put?: never;
         post?: never;
-        delete?: never;
+        delete: OperationTypes["deleteWorkspace"];
         options?: never;
         head?: never;
         patch: OperationTypes["renameWorkspace"];

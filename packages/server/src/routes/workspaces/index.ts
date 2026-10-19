@@ -1,5 +1,6 @@
 import {
   createWorkspace as createWorkspaceOperation,
+  deleteWorkspace,
   getWorkspace,
   getWorkspaceSettings,
   leaveWorkspace,
@@ -15,6 +16,7 @@ import {
   createAuditWriter,
   createWorkspace,
   renameWorkspace,
+  requestWorkspaceDeletion,
   type AuditActor,
   type WorkspaceStore,
 } from "@slugbase/core";
@@ -28,6 +30,7 @@ import type { RequestTenant } from "../../http/tenant.ts";
 import { networkPrefixOf } from "../../http/trusted-proxy.ts";
 import { endMembershipOf } from "../members/departure.ts";
 import { route } from "../register.ts";
+import { WORKSPACE_DELETE_JOB } from "../../worker/jobs/workspace-delete.ts";
 import { acceptedVersions, entityTagOf } from "./if-match.ts";
 
 // GET /api/v1/workspaces and POST /api/v1/workspaces (doc 04 section 10.4, doc 02 section 3.2, doc 05
@@ -54,6 +57,15 @@ import { acceptedVersions, entityTagOf } from "./if-match.ts";
 // takes `If-Match` and compares it with the version under the row lock, so a stale tab cannot overwrite a newer
 // name; the change and its audit event are one transaction, and a change that changes nothing writes no event.
 //
+// DELETE /api/v1/workspace marks the workspace the request acts in as being deleted and answers 202 (doc 04 section 10.4,
+// doc 02 section 3.7, doc 05 section 7.2, doc 01 section 13.2). It is an owner's, needs a session that re-authenticated
+// within ten minutes (the authorization stage judges both before the handler runs), and declares no token scope. Before
+// anything changes the deletion guard of the composition is asked: a refusal is its code (409 billing_active) and a guard
+// that throws or times out is 503 from the dispatcher, both with nothing written. The mark, the revocation of the
+// workspace's tokens, the sessions pointed at none, the `workspace.delete` job and the audit event are one transaction;
+// the job removes the rows afterwards. A workspace that is being deleted is not one the request can act in, so a repeated
+// request is 404.
+//
 // POST /api/v1/workspace/leave ends the caller's own membership of the workspace the request acts in with the
 // content choice of doc 02 section 3.6, as the removal of a member does (routes/members/departure.ts); it is a
 // member's, and declares no token scope.
@@ -64,6 +76,7 @@ const NO_SUCH_WORKSPACE = "There is no such workspace.";
 const UNVERIFIED = "Verify your email address before you create a workspace.";
 
 const NO_WORKSPACE = "No such resource.";
+const DELETION_REFUSED = "The workspace cannot be deleted while its subscription is active; cancel the subscription first.";
 const STALE_VERSION = "The workspace has changed since it was read; read it again and retry.";
 
 export interface WorkspaceRoutesOptions {
@@ -97,7 +110,7 @@ function tenantOf(context: ChainContext): RequestTenant {
 }
 
 /** The account that asked, as the audit log names it. Only a session reaches the operations that write. */
-function actorOf(context: ChainContext, displayName: string): AuditActor {
+function actorOf(context: ChainContext, displayName: string): Extract<AuditActor, { type: "account" }> {
   return { type: "account", accountId: sessionOf(context).accountId, label: displayName };
 }
 
@@ -236,6 +249,38 @@ export function workspaceRoutes({ withTenant, creationAllowed }: WorkspaceRoutes
         throw new ProblemError("not_found", NO_WORKSPACE);
       }
       return { status: 200, body: { aiEnabled: outcome.settings.aiEnabled } };
+    }),
+
+    route(deleteWorkspace).handle(async (_request, context) => {
+      const tenant = tenantOf(context);
+      const hooks = context.get("hooks");
+      if (hooks === undefined) {
+        throw new Error("the workspace deletion route was reached without the hook dispatcher");
+      }
+      const ipPrefix = networkPrefixOf(context.get("clientIp")) ?? null;
+      const outcome = await tenant.withTenant(async (tx) => {
+        const profile = await accountProfileRepository(tx).profile();
+        if (profile === undefined) {
+          return { kind: "unavailable" } as const;
+        }
+        const repository = workspaceRepository(tx);
+        return requestWorkspaceDeletion(
+          {
+            store: { markDeleting: () => repository.markDeleting([{ id: uuidv7(), queue: WORKSPACE_DELETE_JOB, data: { workspaceId: tenant.workspaceId } }]) },
+            audit: createAuditWriter({ store: auditEventRepository(tx), newId: uuidv7 }),
+            guard: ({ workspaceId, accountId }) => hooks.deletionGuard({ kind: "workspace", workspaceId, accountId, requestedBy: "member" }),
+          },
+          { workspaceId: tenant.workspaceId, actor: actorOf(context, profile.displayName), ipPrefix },
+        );
+      });
+      switch (outcome.kind) {
+        case "requested":
+          return { status: 202 };
+        case "refused":
+          throw new ProblemError(outcome.code, DELETION_REFUSED);
+        case "unavailable":
+          throw new ProblemError("not_found", NO_WORKSPACE);
+      }
     }),
 
     route(leaveWorkspace).handle(async ({ body }, context) => ({

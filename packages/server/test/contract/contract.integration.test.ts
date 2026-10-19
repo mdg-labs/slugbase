@@ -3,8 +3,11 @@ import { useTestDatabase } from "@slugbase/testing/db";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createAccountOnlyTenantResolver } from "../../src/auth/tenant-resolver.ts";
 import { createServer, type Server, type ServerModule } from "../../src/create-server.ts";
+import { HookResult } from "../../src/hooks/index.ts";
 import { ProblemError } from "../../src/http/problem.ts";
+import { runMigrations } from "../../src/migrate/index.ts";
 import { route } from "../../src/routes/register.ts";
+import { urlOf } from "../migrate/support.ts";
 import { recordingLogger, serverConfig } from "../support.ts";
 import { buildDocument, type TestDocument } from "./build-document.ts";
 import { readOperations } from "./document.ts";
@@ -32,6 +35,8 @@ let probe: Probe;
 let world: StubWorld;
 
 beforeAll(async () => {
+  // The queues of the jobs a request queues exist once the image entrypoint has run migrate; the walker's deletion of a workspace queues one.
+  await runMigrations({ url: urlOf(database().owner) });
   probe = await createProbe(database(), { table: "contract_probe", repository: "contract_probe" });
   world = createStubWorld(probe.fixture);
 }, HOOK_TIMEOUT_MS);
@@ -131,7 +136,11 @@ describe("the walker over the committed document", () => {
       if (kind === "tenant-scoped") {
         // Its owner, and the principal just below the policy: a member of a workspace of its own below `admin`, an account with no workspace below `member`.
         const email = `walker-${operationId}@example.test`.toLowerCase();
-        cookies.set(operationId, await signIn(email, false, false, "owner"));
+        cookies.set(operationId, await signIn(email, needsReauth.has(operationId), false, "owner"));
+        if (needsReauth.has(operationId)) {
+          // An owner of a workspace of its own that has not re-authenticated: the policy admits it, the re-authentication does not.
+          stale.set(operationId, await signIn(`walker-${operationId}-stale@example.test`.toLowerCase(), false, false, "owner"));
+        }
         below.set(operationId, await signIn(`walker-${operationId}-below@example.test`.toLowerCase(), false, false, policy === "member" ? undefined : "member"));
         continue;
       }
@@ -173,11 +182,11 @@ describe("the walker over the committed document", () => {
     expect(report.failures).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each anonymous operation and for the sign-in; each of the thirty-one operations that need a session
-    // also answers 401 without one, each of the seven that declare re-authentication answers 401 reauth_required without it, and each of
-    // the eight that need a role in the workspace answers the principal just below it (404 below member, 403 below admin), and each of the three
+    // One valid request for each anonymous operation and for the sign-in; each of the thirty-two operations that need a session
+    // also answers 401 without one, each of the eight that declare re-authentication answers 401 reauth_required without it, and each of
+    // the nine that need a role in the workspace answers the principal just below it (404 below member, 403 below admin), and each of the three
     // that name a member or a recipient answers 404 for one of workspace B.
-    expect(report.calls).toBe(operations.length + 49);
+    expect(report.calls).toBe(operations.length + 52);
   }, WALK_TIMEOUT_MS);
 });
 
@@ -332,10 +341,19 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     }
   }
 
-  it("passes for the eight tenant-scoped operations, and leaves workspace B, its settings, its members and its audit log as they were", async () => {
+  it("passes for the nine tenant-scoped operations, and leaves workspace B, its settings, its members and its audit log as they were", async () => {
     await seedFixtureWorkspaces();
     const before = await contentOfB();
-    const server = serve([{ name: "stub-principals", register: () => ({ routes: [], authenticators: world.authenticators }) }]);
+    // The deletion of the workspace takes no identifier, so the matrix repeats it as every principal of A: the guard of the composition refuses it,
+    // which keeps A in place for the calls that follow, and the refusal is what a deployment with an active subscription answers.
+    const server = serve([
+      {
+        name: "stub-principals",
+        hooks: { deletionGuard: () => HookResult.refuse("billing_active") },
+        hookRefusals: { deletionGuard: ["billing_active"] },
+        register: () => ({ routes: [], authenticators: world.authenticators }),
+      },
+    ]);
 
     const report = await runApiMatrix({
       document: committed,
@@ -345,11 +363,11 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     });
 
     expect(report.failures).toEqual([]);
-    expect(report.classified.byKind["tenant-scoped"]).toBe(8);
-    // the three sessions and the six tokens (a read and a read-write one of each role) of A, once on each of the five operations that name no member,
+    expect(report.classified.byKind["tenant-scoped"]).toBe(9);
+    // the three sessions and the six tokens (a read and a read-write one of each role) of A, once on each of the six operations that name no member,
     // and on the operations that name members of B once for each of them: the role change, and the leaving, which names a recipient, once for each
     // of the three; the removal names both a member and a recipient, once for each pair
-    expect(report.attempts).toBe(9 * 5 + 9 * (3 + 3 + 3 * 3));
+    expect(report.attempts).toBe(9 * 6 + 9 * (3 + 3 + 3 * 3));
     expect(await contentOfB()).toBe(before);
     // The requests reached the handlers: the sessions of A renamed A and turned its AI suggestions off, and the tokens changed nothing.
     const [changed] = await database().owner.begin(async (tx) => {

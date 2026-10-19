@@ -243,8 +243,9 @@ GRANT SELECT, INSERT, UPDATE ON TABLE public.instance_state TO slugbase_system;
 
 -- workspace_settings: a workspace's own row only. slugbase_app reads it and may
 -- change the setting columns and who changed them, in the active workspace; the
--- row is written by sys_create_workspace, and a column joins the grant with the
--- operation that introduces the setting.
+-- row is written by sys_create_workspace and deleted with the workspace by
+-- sys_workspace_purge_batch (280-workspace-deletion.sql), and a column joins the
+-- grant with the operation that introduces the setting.
 ALTER TABLE public.workspace_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.workspace_settings FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS workspace_settings_tenant ON public.workspace_settings;
@@ -257,7 +258,7 @@ CREATE POLICY workspace_settings_tenant_update ON public.workspace_settings FOR 
 REVOKE ALL ON TABLE public.workspace_settings FROM PUBLIC, slugbase_app;
 GRANT SELECT ON TABLE public.workspace_settings TO slugbase_app;
 GRANT UPDATE (ai_enabled, updated_by) ON TABLE public.workspace_settings TO slugbase_app;
-GRANT SELECT, INSERT, UPDATE ON TABLE public.workspace_settings TO slugbase_system;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.workspace_settings TO slugbase_system;
 CREATE OR REPLACE TRIGGER workspace_settings_set_updated_at
   BEFORE UPDATE ON public.workspace_settings
   FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();

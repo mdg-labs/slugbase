@@ -314,7 +314,7 @@ These are not entitlements on any edition: personal API tokens, folders, tags, s
 | `bookmark.fetchMetadata` | Bookmark created/URL changed | Through `EgressPort`; result cached per workspace and canonical URL (7 days); never changes a bookmark field |
 | `favicon.fetch` | First request for a host's favicon | Stored in Postgres (`bytea`, size-capped, re-encoded to PNG) and served by our own favicon operation with long-lived private cache headers; SVG icons are refused |
 | `mail.send` | Any transactional mail | Retries with backoff; never blocks a request |
-| `workspace.delete` | A workspace deletion request (Q55) | The workspace is marked `deleting` and hidden at once; the job removes its rows in batches in dependency order and is idempotent and resumable |
+| `workspace.delete` | A workspace deletion request (Q55) | The workspace is marked `deleting` and hidden at once; the job removes its rows in batches in dependency order, then the workspace row, and is idempotent and resumable; it queues `workspace.deleted` in the transaction that deletes the row |
 | `retention.purge` | Hourly schedule | Expired sessions, credential tokens, idempotency keys, rate-limit buckets, metadata and AI caches, favicons, invitations after 30 days, audit beyond retention (doc 05 §6) |
 | `billing.reconcile` (Cloud) | Daily schedule | Re-reads billing state from the billing service and corrects local drift (Cloud doc 06 §4.4) |
 | `plan.downgradeOverflow` (Cloud) | A cancellation event, or the stored period end passing with a pending cancellation, plus grace | Archives over-cap bookmarks deterministically (doc 06 §5) |

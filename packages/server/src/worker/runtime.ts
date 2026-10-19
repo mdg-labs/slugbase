@@ -1,5 +1,5 @@
 import type { Adapters, DomainEventName } from "@slugbase/core";
-import { createDatabase, createRateLimitStore, createRetentionStore, type Database } from "@slugbase/db";
+import { createDatabase, createRateLimitStore, createRetentionStore, createWorkspaceDeletionStore, type Database } from "@slugbase/db";
 import { PgBoss } from "pg-boss";
 import type { WorkerConfig } from "../config/index.ts";
 import {
@@ -100,12 +100,17 @@ export function createWorker(options: CreateWorkerOptions): Worker {
   const maintenanceStores = {
     rateLimit: createRateLimitStore({ url: config.DATABASE_URL, poolSize: MAINTENANCE_POOL_SIZE }),
     retention: createRetentionStore({ url: config.DATABASE_URL, poolSize: MAINTENANCE_POOL_SIZE, auditRetentionDays: config.AUDIT_RETENTION_DAYS }),
+    workspaceDeletion: createWorkspaceDeletionStore({ url: config.DATABASE_URL, poolSize: MAINTENANCE_POOL_SIZE }),
   };
   const closeMaintenanceStores = async (): Promise<void> => {
     try {
       await maintenanceStores.rateLimit.close();
     } finally {
-      await maintenanceStores.retention.close();
+      try {
+        await maintenanceStores.retention.close();
+      } finally {
+        await maintenanceStores.workspaceDeletion.close();
+      }
     }
   };
   const context: ModuleContext = Object.freeze({

@@ -190,7 +190,7 @@ function setup(options: SetupOptions = {}) {
     form: operationOf("/api/v1/contact", "sendContact", "anonymous", { method: "post", audience: "marketing-form" }),
     partial: operationOf("/api/v1/test/partial", "checkPartial", "partial", { method: "post" }),
     changeTestPassword: operationOf("/api/v1/test/password", "changeTestPassword", "account", { method: "post", reauth: true }),
-    deleteWorkspace: operationOf("/api/v1/workspace/delete", "deleteWorkspace", "owner", { method: "post", reauth: true }),
+    deleteTestWorkspace: operationOf("/api/v1/workspace/delete", "deleteTestWorkspace", "owner", { method: "post", reauth: true }),
     instanceReauth: operationOf("/api/v1/instance/accounts/delete", "deleteAccountAsAdmin", "instanceAdmin", { method: "post", reauth: true }),
   };
   const routes: RouteBinding[] = [
@@ -563,7 +563,7 @@ describe("stage 9: authorization", () => {
 describe("stage 9: declared re-authentication and completed second factor (T18)", () => {
   const sensitive = [
     ["changeTestPassword", "/api/v1/test/password", "member"],
-    ["deleteWorkspace", "/api/v1/workspace/delete", "owner"],
+    ["deleteTestWorkspace", "/api/v1/workspace/delete", "owner"],
   ] as const;
   const withState = (who: Who, state: string) => ({ cookie: `sid=${who}; state=${state}` });
 

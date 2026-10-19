@@ -62,7 +62,7 @@ describe("defineScopedRepository", () => {
 });
 
 describe("the package entry point", () => {
-  it("exports withTenant through createDatabase, the repository helper, the account repositories, the credential token repository, the audit event and workspace repositories and the rate-limit store, and no raw handle", () => {
+  it("exports withTenant through createDatabase, the repository helper, the account repositories, the credential token repository, the audit event and workspace repositories, the rate-limit store and the workspace deletion store, and no raw handle", () => {
     expect(Object.keys(entry).sort()).toEqual(
       [
         "ACCENT_PRESETS",
@@ -71,6 +71,7 @@ describe("the package entry point", () => {
         "MigrationError",
         "OWNER_REQUIRED_CONSTRAINT",
         "TenantContextError",
+        "WORKSPACE_PURGE_BATCH_SIZE",
         "accountIdentityRepository",
         "accountProfileRepository",
         "apiTokenRepository",
@@ -80,6 +81,7 @@ describe("the package entry point", () => {
         "createDatabase",
         "createRateLimitStore",
         "createRetentionStore",
+        "createWorkspaceDeletionStore",
         "credentialTokenRepository",
         "defineScopedRepository",
         "emailChangeRepository",
@@ -89,6 +91,7 @@ describe("the package entry point", () => {
         "membershipRepository",
         "migrate",
         "migrationLevel",
+        "workspacePurgeOrder",
         "workspaceRepository",
       ].sort(),
     );

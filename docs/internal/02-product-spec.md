@@ -160,7 +160,7 @@ Users who want their content elsewhere export it first (§13).
 
 ### 3.7 Deleting a workspace
 
-Owner only, after a fresh re-authentication and typed confirmation of the workspace name. A deletion veto of the composition may refuse it (doc 01 §13.2; on Cloud, while a paid subscription is active, doc 06). Deleting marks the workspace as deleting, which hides it at once from every query and the switcher, revokes bound API tokens and moves every session that had it active to "no active workspace"; the request is answered as accepted and a background job then removes every row of the workspace (bookmarks, folders, tags, teams, shares, invitations, preferences, settings, audit events, caches) in batches (Q55). It is irreversible; the confirmation says so and offers export first.
+Owner only, after a fresh re-authentication and typed confirmation of the workspace name. A deletion veto of the composition may refuse it (doc 01 §13.2; on Cloud, while a paid subscription is active, doc 06). Deleting marks the workspace as deleting, which hides it at once from every query and the switcher, revokes bound API tokens and moves every session that had it active to "no active workspace"; the request is answered as accepted and a background job then removes every row of the workspace (bookmarks, folders, tags, teams, shares, invitations, preferences, settings, audit events, caches) in batches (Q55). The request is recorded in the workspace's audit log as `workspace.deletion_requested` before any row goes, and `workspace.deleted` is announced when the workspace row is gone. It is irreversible; the confirmation says so and offers export first.
 
 ---
 
