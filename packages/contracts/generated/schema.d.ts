@@ -2304,7 +2304,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation, or the address typed is not the account's own (validation_failed with the field code email_mismatch in errors[]). Nothing is changed */
+            /** @description The body did not pass validation; the address typed is not the account's own (validation_failed with the field code email_mismatch in errors[]); or the account is the only instance admin, which would leave the instance without one (validation_failed with the field code last_instance_admin in errors[]). Nothing is changed */
             422: {
                 headers: {
                     [name: string]: unknown;

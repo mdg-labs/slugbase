@@ -295,6 +295,13 @@
       "when": 1792417227317,
       "tag": "20261019134027_add_account_deletion",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1792421626547,
+      "tag": "20261019145346_add_last_instance_admin_check",
+      "breakpoints": true
     }
   ]
 }

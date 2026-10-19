@@ -176,7 +176,7 @@ Field codes inside `errors[]` of a `422 validation_failed` or a `403 forbidden`:
 | `invitation_email_mismatch` | `POST /invitations/accept` | The signed-in account's verified email is not the invited address (`403 forbidden`) |
 | `invalid_password` | `POST /me/reauth` (`401 reauth_required`), `POST /me/password` on `currentPassword` (`422 validation_failed`) | The password is wrong, or the account has none; one answer for both, so the response does not tell them apart |
 | `last_sign_in_method` | `DELETE /me/identities/{id}` | Would leave the account with no way to sign in |
-| `last_instance_admin` | `PATCH` / `DELETE /instance/accounts/{id}` | Would leave the instance without an admin |
+| `last_instance_admin` | `DELETE /me` (`422 validation_failed`, on `email`), `PATCH` / `DELETE /instance/accounts/{id}` | Would leave the instance without an admin; `DELETE /me` refuses the last instance admin the way the instance routes do |
 
 New codes are additive (§2.2); a client must treat an unknown `code` by its `status`.
 
@@ -435,7 +435,7 @@ Unauthenticated, `Content-Type: application/opensearchdescription+xml`, built on
 | DELETE | `/me/identities/{id}` | Unlink: `204`; `404 not_found` for an id the account does not hold, another account's included; `422 validation_failed` with the field code `last_sign_in_method` (on `id`) when the account would be left with neither a password nor another identity, checked atomically so two unlinks made at once cannot both pass. Linking is `GET /auth/oidc/{provider}/start?intent=link` (§4.5). Session principals only | acct | ✓ | write |
 | GET | `/me/go-preferences` | Remembered slug choices in the active workspace | mem† (read) | | |
 | DELETE | `/me/go-preferences/{slug}` | Forget a remembered choice | mem† (write) | | |
-| DELETE | `/me` | Delete account `{ email }` typed (doc 05 §7.1); `409 last_owner` lists the blocking workspaces | acct | ✓ | |
+| DELETE | `/me` | Delete account `{ email }` typed (doc 05 §7.1); `422 validation_failed` with the field code `last_instance_admin` (on `email`) when the account is the only instance admin, decided before the deletion guard is asked and under a lock that serialises the admins' deletions, so two admins deleting themselves at once leave one; `409 last_owner` lists the blocking workspaces | acct | ✓ | |
 
 ### 10.4 workspaces
 

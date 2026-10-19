@@ -4,14 +4,16 @@ import { enqueueInTenantTransaction, type QueuedJob } from "../system/queue.ts";
 import { tenantHandle, type TenantTx } from "../tenant.ts";
 
 // Deleting the account of the transaction (doc 05 sections 3.3 and 7.1, doc 02 section 2.10, doc 10 T1), through the
-// system operations sys_account_deletion_scope and sys_delete_account. Both act for the account `withTenant` was
+// system operations sys_account_deletion_scope, sys_account_last_instance_admin and sys_delete_account. All act for the account `withTenant` was
 // opened for and for no other: the operations refuse any other account, and the repository never names one. The
-// scope read locks the account's workspaces and then the account, so what it answers holds until the transaction ends.
+// scope read locks the account's workspaces and then the account, and for an instance admin takes the lock that
+// serialises the admins' deletions, so what it answers holds until the transaction ends.
 
 export interface AccountDeletionRepository {
   /**
-   * What deleting the account would do to the workspaces it belongs to that are not being deleted, and the lock
-   * that keeps it true for the rest of the transaction. Works in an account-level transaction.
+   * What deleting the account would do to the workspaces it belongs to that are not being deleted, whether it is the
+   * last instance admin, and the locks that keep it true for the rest of the transaction. Works in an account-level
+   * transaction.
    */
   scope(): Promise<AccountDeletionScope>;
   /**
@@ -19,7 +21,7 @@ export interface AccountDeletionRepository {
    * request half of the workspace deletion, clears the network prefix of the events that name the account as their
    * actor and deletes the account row, and queues `jobs`, all in the open transaction. False, with nothing written and
    * nothing queued, when the scope is no longer what `soleWorkspaceIds` says, the account is the only owner of a
-   * workspace that has other members, or the account does not exist. Works in an account-level transaction.
+   * workspace that has other members, it is the last instance admin, or the account does not exist. Works in an account-level transaction.
    */
   delete(soleWorkspaceIds: readonly string[], jobs: readonly QueuedJob[]): Promise<boolean>;
 }
@@ -28,6 +30,10 @@ interface ScopeRow extends Record<string, unknown> {
   workspace_id: string;
   workspace_name: string;
   kind: string;
+}
+
+interface LastAdminRow extends Record<string, unknown> {
+  last: boolean;
 }
 
 interface DeletedRow extends Record<string, unknown> {
@@ -50,7 +56,13 @@ export function accountDeletionRepository(tx: TenantTx): AccountDeletionReposito
           throw new Error("sys_account_deletion_scope returned a kind other than blocking and sole");
         }
       }
-      return { blocking, soleMember };
+      const admin = await tenantHandle(tx).execute<LastAdminRow>(sql`
+        SELECT public.sys_account_last_instance_admin(${tx.accountId}::uuid) AS last`);
+      const answer = admin[0];
+      if (admin.length !== 1 || answer === undefined) {
+        throw new Error("sys_account_last_instance_admin did not return exactly one row");
+      }
+      return { blocking, soleMember, lastInstanceAdmin: answer.last };
     },
 
     async delete(soleWorkspaceIds, jobs) {

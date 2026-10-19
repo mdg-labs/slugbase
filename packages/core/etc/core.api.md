@@ -51,6 +51,10 @@ export type AccountDeletionOutcome<Code extends string> =
 | {
     readonly kind: "email_mismatch";
 }
+/** The account is the only instance admin; nothing was written. */
+| {
+    readonly kind: "last_instance_admin";
+}
 /** The account is the only owner of these workspaces, which have other members; nothing was written. */
 | {
     readonly kind: "last_owner";
@@ -75,6 +79,7 @@ export interface AccountDeletionRequest {
 // @public
 export interface AccountDeletionScope {
     readonly blocking: readonly AccountDeletionWorkspace[];
+    readonly lastInstanceAdmin: boolean;
     readonly soleMember: readonly AccountDeletionWorkspace[];
 }
 

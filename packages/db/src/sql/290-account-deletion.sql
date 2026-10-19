@@ -61,6 +61,40 @@ BEGIN
 END
 $$;
 
+-- sys_account_last_instance_admin(account_id): whether the account holds the instance-admin flag and no other account
+-- does, so deleting it would leave the instance without an admin (doc 02 section 6). It is the last step of the locks
+-- of the deletion, after the workspaces and the account's own row (sys_account_deletion_scope): an account that is an
+-- instance admin takes the transaction-level advisory lock of the set of admins, held until the transaction ends, and
+-- reads the other admins under it. Two admins deleting themselves at once therefore take the decision one after the
+-- other, and the second one sees the first one's deletion; neither reads "another admin remains" from the same stale
+-- set. Row locks on the admins' rows would be taken in the order each caller reaches them and could deadlock two
+-- admins; the one advisory key cannot, because it is always taken after the rows of the caller and never before them.
+-- A path that clears the flag of an admin or deletes one must take the same key after the rows it locks, or it and a
+-- deletion each read the other admin as still there; only the deletion and this function take it so far. The first
+-- promotion of the first-run setup needs no lock, as no admin exists for it to race with. An account that is not an
+-- admin takes no lock: its own row is locked by the scope, so its flag holds for the transaction. For an account other than the one of the transaction, and when no tenant account is set, it is false
+-- and nothing is locked.
+CREATE OR REPLACE FUNCTION public.sys_account_last_instance_admin(p_account_id uuid)
+  RETURNS boolean
+  LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+  SET search_path = pg_catalog, public, pg_temp
+  AS $$
+BEGIN
+  IF p_account_id IS NULL THEN
+    RAISE EXCEPTION 'sys_account_last_instance_admin needs an account'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+  IF public.app_account_id() IS DISTINCT FROM p_account_id THEN
+    RETURN false;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.accounts a WHERE a.id = p_account_id AND a.is_instance_admin) THEN
+    RETURN false;
+  END IF;
+  PERFORM pg_advisory_xact_lock(hashtext('slugbase.instance_admins'));
+  RETURN NOT EXISTS (SELECT 1 FROM public.accounts a WHERE a.is_instance_admin AND a.id <> p_account_id);
+END
+$$;
+
 -- sys_delete_account(account_id, sole_workspace_ids): deletes the account of the transaction, in that transaction, and
 -- says whether it did. The workspaces where the account is the only member (`sole_workspace_ids`, the ones the
 -- caller asked the deletion guard about) are put through the request half of the workspace deletion (doc 05 section
@@ -74,9 +108,10 @@ $$;
 -- codes; the audit events stay with the actor reference set to NULL and the label they carry. The scope is
 -- computed again under the locks of sys_account_deletion_scope: when the account is the only owner of a workspace
 -- that has other members, or the workspaces where it is the only member are not exactly `sole_workspace_ids`, the
--- function is false and changes nothing. It is false as well for an account other than the one of the transaction,
--- for a transaction that acts in a workspace and for an account that does not exist; the caller cannot tell these
--- apart.
+-- function is false and changes nothing, and so it is when the account is the last instance admin
+-- (sys_account_last_instance_admin, read under its lock once the account is locked). It is false as well for an
+-- account other than the one of the transaction, for a transaction that acts in a workspace and for an account that
+-- does not exist; the caller cannot tell these apart.
 CREATE OR REPLACE FUNCTION public.sys_delete_account(p_account_id uuid, p_sole_workspace_ids uuid[])
   RETURNS boolean
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -99,6 +134,9 @@ BEGIN
          count(*) FILTER (WHERE s.kind = 'blocking')
   INTO v_sole, v_blocking
   FROM public.sys_account_deletion_scope(p_account_id) s;
+  IF public.sys_account_last_instance_admin(p_account_id) THEN
+    RETURN false;
+  END IF;
   IF v_blocking > 0 OR v_sole IS DISTINCT FROM (SELECT coalesce(array_agg(DISTINCT i ORDER BY i), '{}') FROM unnest(p_sole_workspace_ids) i) THEN
     RETURN false;
   END IF;
@@ -118,10 +156,13 @@ END
 $$;
 
 ALTER FUNCTION public.sys_account_deletion_scope(uuid) OWNER TO slugbase_system;
+ALTER FUNCTION public.sys_account_last_instance_admin(uuid) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_delete_account(uuid, uuid[]) OWNER TO slugbase_system;
 REVOKE CREATE ON SCHEMA public FROM slugbase_system;
 
 REVOKE ALL ON FUNCTION public.sys_account_deletion_scope(uuid) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.sys_account_last_instance_admin(uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sys_delete_account(uuid, uuid[]) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.sys_account_deletion_scope(uuid) TO slugbase_app;
+GRANT EXECUTE ON FUNCTION public.sys_account_last_instance_admin(uuid) TO slugbase_app;
 GRANT EXECUTE ON FUNCTION public.sys_delete_account(uuid, uuid[]) TO slugbase_app;

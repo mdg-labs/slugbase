@@ -4,8 +4,8 @@ import type { WorkspaceDeletionGuardResult } from "../workspaces/delete.ts";
 
 // Deleting an account (doc 02 section 2.10, doc 04 section 10.3, doc 05 section 7.1, doc 01 section 13.2, Q24, Q54).
 // The caller has judged the fresh re-authentication; the service judges the typed confirmation first, reads what the
-// deletion would do to each workspace of the account, refuses while the account is the only owner of a workspace that
-// has other members, and then asks the deletion guard of the composition, once for the account and once for each
+// deletion would do to each workspace of the account, refuses while the account is the last instance admin or the only
+// owner of a workspace that has other members, and then asks the deletion guard of the composition, once for the account and once for each
 // workspace that goes with it, before anything changes. Only then does the store delete the account, in the
 // transaction it is bound to. A refusal writes nothing, and a guard that cannot answer rejects, so the caller's
 // transaction must not commit and the account stays. The account's content in shared workspaces is not handled
@@ -23,6 +23,8 @@ export interface AccountDeletionScope {
   readonly blocking: readonly AccountDeletionWorkspace[];
   /** Workspaces where the account is the only member; they are deleted with it. */
   readonly soleMember: readonly AccountDeletionWorkspace[];
+  /** The account holds the instance-admin flag and no other account does; the account cannot be deleted. */
+  readonly lastInstanceAdmin: boolean;
 }
 
 export interface AccountDeletionRequest {
@@ -38,7 +40,7 @@ export interface AccountDeletionStore {
   /**
    * Deletes the account of the transaction, puts `soleWorkspaceIds` through the workspace deletion path and queues
    * the jobs of both and the events, in the open transaction. False, with nothing written, when the scope no longer
-   * is what `soleWorkspaceIds` says or the account is gone.
+   * is what `soleWorkspaceIds` says, the account is the last instance admin or the account is gone.
    */
   delete(request: AccountDeletionRequest): Promise<boolean>;
 }
@@ -73,6 +75,8 @@ export type AccountDeletionOutcome<Code extends string> =
   | { readonly kind: "deleted"; readonly workspaces: readonly AccountDeletionWorkspace[] }
   /** The typed address is not the account's; nothing was read or written. */
   | { readonly kind: "email_mismatch" }
+  /** The account is the only instance admin; nothing was written. */
+  | { readonly kind: "last_instance_admin" }
   /** The account is the only owner of these workspaces, which have other members; nothing was written. */
   | { readonly kind: "last_owner"; readonly workspaces: readonly AccountDeletionWorkspace[] }
   /** The guard refused with `code`, for the account or for one of the workspaces; nothing was written. */
@@ -85,8 +89,9 @@ function sameAddress(a: string, b: string): boolean {
 }
 
 /**
- * Deletes the account of the transaction the store is bound to when the typed address is its own, no workspace
- * would be left without an owner and the guard allows the account and each workspace that goes with it.
+ * Deletes the account of the transaction the store is bound to when the typed address is its own, it is not the last
+ * instance admin, no workspace would be left without an owner and the guard allows the account and each workspace
+ * that goes with it.
  */
 export async function deleteAccount<Code extends string>(
   { store, guard, newId }: AccountDeletionDependencies<Code>,
@@ -95,7 +100,10 @@ export async function deleteAccount<Code extends string>(
   if (!sameAddress(ask.typedEmail, ask.accountEmail)) {
     return { kind: "email_mismatch" };
   }
-  const { blocking, soleMember } = await store.scope();
+  const { blocking, soleMember, lastInstanceAdmin } = await store.scope();
+  if (lastInstanceAdmin) {
+    return { kind: "last_instance_admin" };
+  }
   if (blocking.length > 0) {
     return { kind: "last_owner", workspaces: blocking };
   }

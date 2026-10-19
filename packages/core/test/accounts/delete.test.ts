@@ -24,7 +24,7 @@ interface WorldOptions {
   deletes?: boolean;
 }
 
-function world({ scope = { blocking: [], soleMember: [] }, guard = () => Promise.resolve({ outcome: "allow" }), deletes = true }: WorldOptions = {}) {
+function world({ scope = { blocking: [], soleMember: [], lastInstanceAdmin: false }, guard = () => Promise.resolve({ outcome: "allow" }), deletes = true }: WorldOptions = {}) {
   const log: string[] = [];
   const guarded: AccountDeletionGuardInput[] = [];
   const requests: AccountDeletionRequest[] = [];
@@ -57,7 +57,7 @@ function world({ scope = { blocking: [], soleMember: [] }, guard = () => Promise
 
 describe("deleting an account", () => {
   it("deletes the account and the workspaces where it is the only member, and announces account.deleted once", async () => {
-    const { dependencies, requests, log } = world({ scope: { blocking: [], soleMember: [FIRST, SECOND] } });
+    const { dependencies, requests, log } = world({ scope: { blocking: [], soleMember: [FIRST, SECOND], lastInstanceAdmin: false } });
 
     const outcome = await deleteAccount(dependencies, ASK);
 
@@ -79,14 +79,21 @@ describe("deleting an account", () => {
   });
 
   it("refuses with the workspaces that would be left without an owner, and asks no guard and writes nothing", async () => {
-    const { dependencies, log } = world({ scope: { blocking: [SHARED], soleMember: [FIRST] } });
+    const { dependencies, log } = world({ scope: { blocking: [SHARED], soleMember: [FIRST], lastInstanceAdmin: false } });
 
     expect(await deleteAccount(dependencies, ASK)).toEqual({ kind: "last_owner", workspaces: [SHARED] });
     expect(log).toEqual(["scope"]);
   });
 
+  it("refuses the last instance admin before the guard is asked, and writes nothing", async () => {
+    const { dependencies, log } = world({ scope: { blocking: [SHARED], soleMember: [FIRST], lastInstanceAdmin: true } });
+
+    expect(await deleteAccount(dependencies, ASK)).toEqual({ kind: "last_instance_admin" });
+    expect(log).toEqual(["scope"]);
+  });
+
   it("asks the guard for the account first and then for each workspace that goes with it, as the account that asks", async () => {
-    const { dependencies, guarded } = world({ scope: { blocking: [], soleMember: [FIRST, SECOND] } });
+    const { dependencies, guarded } = world({ scope: { blocking: [], soleMember: [FIRST, SECOND], lastInstanceAdmin: false } });
 
     await deleteAccount(dependencies, ASK);
 
@@ -99,7 +106,7 @@ describe("deleting an account", () => {
 
   it("writes nothing when the guard refuses the account, and asks it no further", async () => {
     const { dependencies, guarded, log } = world({
-      scope: { blocking: [], soleMember: [FIRST] },
+      scope: { blocking: [], soleMember: [FIRST], lastInstanceAdmin: false },
       guard: () => Promise.resolve({ outcome: "refuse", code: "billing_active" }),
     });
 
@@ -110,7 +117,7 @@ describe("deleting an account", () => {
 
   it("writes nothing when the guard refuses the second workspace", async () => {
     const { dependencies, guarded, log } = world({
-      scope: { blocking: [], soleMember: [FIRST, SECOND] },
+      scope: { blocking: [], soleMember: [FIRST, SECOND], lastInstanceAdmin: false },
       guard: (input) => Promise.resolve(input.kind === "workspace" && input.workspaceId === SECOND.id ? { outcome: "refuse", code: "billing_active" } : { outcome: "allow" }),
     });
 
@@ -121,7 +128,7 @@ describe("deleting an account", () => {
 
   it("rejects, with nothing written, when the guard cannot answer", async () => {
     const { dependencies, log } = world({
-      scope: { blocking: [], soleMember: [FIRST] },
+      scope: { blocking: [], soleMember: [FIRST], lastInstanceAdmin: false },
       guard: () => Promise.reject(new Error("the guard timed out")),
     });
 

@@ -49,6 +49,10 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await database().owner`DELETE FROM pgboss.job WHERE name IN (${JOB}, ${WORKSPACE_EVENT}, ${ACCOUNT_EVENT})`;
+  await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    await tx`UPDATE accounts SET is_instance_admin = false`;
+  });
 });
 
 const workers: RunningWorker[] = [];
@@ -119,8 +123,8 @@ async function signIn(world: World, account: SeededAccount, reauthenticate: bool
   return cookie;
 }
 
-async function person(world: World): Promise<Person> {
-  const account = await seedAccount(database(), { emailVerified: true });
+async function person(world: World, instanceAdmin = false): Promise<Person> {
+  const account = await seedAccount(database(), { emailVerified: true, instanceAdmin });
   return { account, cookie: await signIn(world, account, true), stale: await signIn(world, account, false) };
 }
 
@@ -393,6 +397,72 @@ describe("DELETE /api/v1/me while the account is the only owner of a workspace t
     expect(await markedAt(team)).toBeNull();
     expect((await workspaceRows(team)).members).toBe(1);
     expect((await send(world, "GET", WORKSPACE, { cookie: grace.cookie })).status).toBe(200);
+  });
+});
+
+async function instanceAdmins(): Promise<string[]> {
+  const rows = await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    return tx<{ id: string }[]>`SELECT id FROM accounts WHERE is_instance_admin ORDER BY id`;
+  });
+  return rows.map((row) => row.id);
+}
+
+describe("DELETE /api/v1/me by an instance admin", () => {
+  it("answers 422 validation_failed with the field code last_instance_admin for the only instance admin, asks no guard and changes nothing", async () => {
+    const asked: DeletionGuardInput[] = [];
+    const world = serve([guardModule((input) => (asked.push(input), HookResult.allow()))]);
+    const ada = await person(world, true);
+    const grace = await person(world);
+    await workspaceOf("Ada's own", [ada, "owner"]);
+    await workspaceOf("Shared", [grace, "owner"], [ada, "member"]);
+    const before = await state();
+
+    const response = await send(world, "DELETE", ME, { cookie: ada.cookie }, { email: ada.account.email });
+
+    expect(response.status).toBe(422);
+    expect(await problem(response)).toMatchObject({ code: "validation_failed", errors: [{ path: "email", code: "last_instance_admin" }] });
+    expect(await state()).toBe(before);
+    expect(await instanceAdmins()).toEqual([ada.account.id]);
+    expect(asked).toEqual([]);
+    expect(await jobs(JOB)).toEqual([]);
+    expect(await jobs(ACCOUNT_EVENT)).toEqual([]);
+    expect((await send(world, "GET", ME, { cookie: ada.cookie })).status).toBe(200);
+  });
+
+  it("deletes an instance admin while another one remains, and a non-admin is unaffected", async () => {
+    const world = serve();
+    const ada = await person(world, true);
+    const grace = await person(world, true);
+    const heidi = await person(world);
+
+    expect((await send(world, "DELETE", ME, { cookie: heidi.cookie }, { email: heidi.account.email })).status).toBe(204);
+    expect((await send(world, "DELETE", ME, { cookie: ada.cookie }, { email: ada.account.email })).status).toBe(204);
+    expect(await instanceAdmins()).toEqual([grace.account.id]);
+    const last = await send(world, "DELETE", ME, { cookie: grace.cookie }, { email: grace.account.email });
+    expect(last.status).toBe(422);
+    expect(await accountExists(grace.account.id)).toBe(true);
+  });
+
+  it("leaves one instance admin when two delete themselves at once", async () => {
+    const world = serve();
+    const ada = await person(world, true);
+    const grace = await person(world, true);
+    await workspaceOf("Ada's own", [ada, "owner"]);
+    await workspaceOf("Grace's own", [grace, "owner"]);
+
+    const statuses = (
+      await Promise.all([
+        send(world, "DELETE", ME, { cookie: ada.cookie }, { email: ada.account.email }),
+        send(world, "DELETE", ME, { cookie: grace.cookie }, { email: grace.account.email }),
+      ])
+    )
+      .map((response) => response.status)
+      .sort();
+
+    expect(statuses).toEqual([204, 422]);
+    expect(await instanceAdmins()).toHaveLength(1);
+    expect(await accountExists((await instanceAdmins())[0] ?? "")).toBe(true);
   });
 });
 

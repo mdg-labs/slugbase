@@ -1,3 +1,4 @@
+import { setTimeout as sleep } from "node:timers/promises";
 import postgres from "postgres";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { accountDeletionRepository, apiTokenRepository, workspaceRepository } from "../src/index.ts";
@@ -48,6 +49,7 @@ afterAll(async () => {
 
 beforeEach(async () => {
   await db.owner`TRUNCATE pgboss.job`;
+  await asSystem(db, (tx) => tx`UPDATE accounts SET is_instance_admin = false`);
 });
 
 let counter = 0;
@@ -57,12 +59,18 @@ interface Person {
   readonly email: string;
 }
 
-async function person(): Promise<Person> {
+async function person(isInstanceAdmin = false): Promise<Person> {
   counter += 1;
   const id = freshId();
   const email = `deletion-subject-${String(counter)}@example.test`;
-  await seedAccount(db, { id, email, passwordHash: "$argon2id$stub" });
+  await seedAccount(db, { id, email, passwordHash: "$argon2id$stub", isInstanceAdmin });
   return { id, email };
+}
+
+/** The accounts that hold the instance-admin flag, by identifier. */
+async function instanceAdmins(): Promise<string[]> {
+  const rows = await asSystem(db, (tx) => tx<{ id: string }[]>`SELECT id FROM accounts WHERE is_instance_admin ORDER BY id`);
+  return rows.map((row) => row.id);
 }
 
 async function workspaceOf(name: string, ...members: readonly (readonly [Person, Role])[]): Promise<string> {
@@ -143,9 +151,10 @@ function eventJob(accountId: string) {
 async function deleteAccount(subject: Person): Promise<{ readonly deleted: boolean; readonly blocking: readonly string[]; readonly sole: readonly string[] }> {
   return inTenant({ accountId: subject.id }, async (tx) => {
     const repository = accountDeletionRepository(tx);
-    const { blocking, soleMember } = await repository.scope();
+    const { blocking, soleMember, lastInstanceAdmin } = await repository.scope();
     const sole = soleMember.map((workspace) => workspace.id);
     const deleted =
+      !lastInstanceAdmin &&
       blocking.length === 0 &&
       (await repository.delete(sole, [...sole.map((workspaceId) => ({ id: freshId(), queue: WORKSPACE_QUEUE, data: { workspaceId } })), eventJob(subject.id)]));
     return { deleted, blocking: blocking.map((workspace) => workspace.id), sole };
@@ -413,5 +422,78 @@ describe("deleting an account", () => {
     const grace = await person();
     const shared = await workspaceOf("Shared", [grace, "owner"], [ada, "member"]);
     expect(await inTenant({ accountId: ada.id, workspaceId: shared }, (tx) => workspaceRepository(tx).markDeleting([]))).toBe(false);
+  });
+});
+
+describe("deleting an instance admin", () => {
+  it("refuses the only instance admin, names the refusal in the scope, and leaves the account, the flag and every row as they were", async () => {
+    const admin = await person(true);
+    const member = await person();
+    const own = await workspaceOf("Admin's own", [admin, "owner"]);
+    await workspaceOf("Shared", [member, "owner"], [admin, "member"]);
+    await seedToken(admin.id, own);
+    await seedPersonalRows(admin);
+    await seedEvent(own, admin, "Admin", PREFIX);
+    const before = await snapshot();
+
+    const outcome = await deleteAccount(admin);
+
+    expect(outcome).toMatchObject({ deleted: false });
+    expect(await inTenant({ accountId: admin.id }, (tx) => accountDeletionRepository(tx).scope())).toMatchObject({ lastInstanceAdmin: true });
+    // the function refuses too, whatever the caller read: the rule is the database's
+    expect(await inTenant({ accountId: admin.id }, (tx) => accountDeletionRepository(tx).delete([own], [eventJob(admin.id)]))).toBe(false);
+    expect(await snapshot()).toEqual(before);
+    expect(await instanceAdmins()).toEqual([admin.id]);
+    expect(await queued(WORKSPACE_QUEUE)).toEqual([]);
+    expect(await queued(EVENT_QUEUE)).toEqual([]);
+  });
+
+  it("deletes an instance admin while another instance admin remains, and does not ask a non-admin about the rule", async () => {
+    const first = await person(true);
+    const second = await person(true);
+    const plain = await person();
+    await workspaceOf("First's own", [first, "owner"]);
+    expect(await inTenant({ accountId: first.id }, (tx) => accountDeletionRepository(tx).scope())).toMatchObject({ lastInstanceAdmin: false });
+
+    expect((await deleteAccount(first)).deleted).toBe(true);
+    expect(await instanceAdmins()).toEqual([second.id]);
+
+    expect(await inTenant({ accountId: plain.id }, (tx) => accountDeletionRepository(tx).scope())).toMatchObject({ lastInstanceAdmin: false });
+    expect((await deleteAccount(plain)).deleted).toBe(true);
+    expect(await instanceAdmins()).toEqual([second.id]);
+    expect(await deleteAccount(second)).toMatchObject({ deleted: false });
+    expect(await instanceAdmins()).toEqual([second.id]);
+  });
+
+  it("lets a non-admin go when the instance has no admin at all", async () => {
+    const plain = await person();
+    expect(await instanceAdmins()).toEqual([]);
+    expect((await deleteAccount(plain)).deleted).toBe(true);
+  });
+
+  it("serialises two instance admins deleting themselves at once: the one that holds the lock deletes, the other is refused and stays", async () => {
+    const ada = await person(true);
+    const grace = await person(true);
+    await workspaceOf("Ada's own", [ada, "owner"]);
+    await workspaceOf("Grace's own", [grace, "owner"]);
+    let scoped: () => void = () => undefined;
+    const adaScoped = new Promise<void>((resolve) => {
+      scoped = resolve;
+    });
+
+    // Ada reads her scope, then stays in her transaction for a while before she deletes; Grace starts in that window.
+    const adaRun = inTenant({ accountId: ada.id }, async (tx) => {
+      const repository = accountDeletionRepository(tx);
+      const scope = await repository.scope();
+      scoped();
+      await sleep(600);
+      return !scope.lastInstanceAdmin && (await repository.delete([...scope.soleMember.map((workspace) => workspace.id)], []));
+    });
+    await adaScoped;
+    const graceRun = deleteAccount(grace);
+
+    expect(await adaRun).toBe(true);
+    expect(await graceRun).toMatchObject({ deleted: false });
+    expect(await instanceAdmins()).toEqual([grace.id]);
   });
 });

@@ -766,7 +766,9 @@ export const deleteMe = defineOperation({
     409: problemResponse(
       "The account is the only owner of a workspace that has other members (last_owner), and the problem document names each such workspace in its `workspaces` member as `{ id, name }`, so the owner can transfer the ownership or delete the workspace first; or a deployment extension refuses the deletion (billing_active), for the account or for a workspace that would be deleted with it. Nothing is changed in either case",
     ),
-    422: problemResponse("The body did not pass validation, or the address typed is not the account's own (validation_failed with the field code email_mismatch in errors[]). Nothing is changed"),
+    422: problemResponse(
+      "The body did not pass validation; the address typed is not the account's own (validation_failed with the field code email_mismatch in errors[]); or the account is the only instance admin, which would leave the instance without one (validation_failed with the field code last_instance_admin in errors[]). Nothing is changed",
+    ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable, or a deployment extension that is consulted before the deletion did not answer in time; nothing is changed"),
   },
