@@ -22,6 +22,7 @@ existing line by adding its PR number.
 - **regex guard** — a line-based check of a structured file (YAML) matches a key only in its block form, or judges a line as a whole, so the same key in flow or quoted form, or a bad value beside a good one on the line, passes — PR 444
 - **deny list by spelling** — a command deny list names one spelling of a forbidden form (`git add .`, `HEAD:main`) and misses an equivalent one (`git add ./`, a `+`-prefixed force refspec), so the forbidden command passes — PR 462
 - **two clocks** — a freshness check compares an instant stamped by one host's clock (the database) with one read from another (the application) and allows no difference, so a session stamped a moment ago reads as in the future and is refused — PR 462
+- **repeat erases the record** — a fail-closed lint records an object's prior state each time a statement names it, so a repeat that is valid SQL (a second `DROP … IF EXISTS`) overwrites the record with "unknown" and the later comparison and end-of-file check skip it — PR 506
 - **floating image** — a rig meant for repeatable measurement pulls a floating tag (`latest`), so a re-run can measure a different build than the recorded baseline — PR 381
 
 - **uniqueness by raw string** — a duplicate check compares raw strings that the consumer normalises (a router path with and without a trailing slash), so two entries the consumer treats as one pass and one shadows the other — PR 422
@@ -62,6 +63,7 @@ existing line by adding its PR number.
 - **leaked starting state** — a test asserts a starting state that persisted browser state (saved localStorage) or a late emulation decides, instead of setting it before the page loads — PR 457
 - **ignored declaration key** — a test fixture declares a field under a key the consuming type does not read (a top-level `body` where the stage reads `request.body`), the extra key compiles, and the declared check never runs — PR 479
 - **URL by prefix** — a check that a URL points at an expected host tests a string prefix (`startsWith(issuer)`) instead of the parsed origin, so a look-alike host (`https://idp.example.test.evil/`) passes — PR 484
+- **race window at the wrong point** — a concurrency test widens the race with a pause before the read it needs to overlap rather than between that read and the commit, so the overlap lasts only as long as one commit and the test flakes on a slow runner — PR 506
 
 ## Web UI
 
