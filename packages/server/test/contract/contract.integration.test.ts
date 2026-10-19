@@ -13,7 +13,7 @@ import { recordingLogger, serverConfig } from "../support.ts";
 import { buildDocument, type TestDocument } from "./build-document.ts";
 import { readOperations, type ContractFailure } from "./document.ts";
 import { seedAccount, seedMembership, seedWorkspace } from "../auth/support.ts";
-import { FIXTURES, UNKNOWN_TEAM_ID, WALKER_ACCOUNT, WALKER_WORKSPACE_ID } from "./fixtures.ts";
+import { B_INVITATION_ID, FIXTURES, UNKNOWN_TEAM_ID, WALKER_ACCOUNT, WALKER_WORKSPACE_ID } from "./fixtures.ts";
 import { matrixRequest, tokenMatrixRequest } from "./matrix.ts";
 import { getProbeAdminRow, getProbeRow, probeFixtures, probeModule, probeOperations } from "./probe-module.ts";
 import { createStubWorld, type StubWorld } from "./stubs.ts";
@@ -43,9 +43,9 @@ beforeAll(async () => {
 }, HOOK_TIMEOUT_MS);
 
 function serve(modules: readonly ServerModule[], document?: TestDocument, options: { readonly memberships?: boolean; readonly entitlements?: EntitlementCheck } = {}): Server {
-  // The walker signs in once for each operation that needs a session, and calls each of the mfa bucket's operations several times,
+  // The walker signs in once for each operation that needs a session, and calls each of the mfa and reset buckets' operations several times,
   // more often than the default limits of one address allow.
-  const config = serverConfig({ NODE_ENV: "test", DATABASE_URL: appUrl(database()), RATE_LIMIT_LOGIN_IP: "100/min", RATE_LIMIT_MFA_IP: "100/min", RATE_LIMIT_MFA_ACCOUNT: "1000/hour" });
+  const config = serverConfig({ NODE_ENV: "test", DATABASE_URL: appUrl(database()), RATE_LIMIT_LOGIN_IP: "100/min", RATE_LIMIT_MFA_IP: "100/min", RATE_LIMIT_MFA_ACCOUNT: "1000/hour", RATE_LIMIT_RESET_IP: "1000/hour" });
   return createServer({
     config,
     // The stub resolver knows the workspaces of the fixture and no session of a real sign-in; the walk of the committed document resolves each
@@ -207,11 +207,11 @@ describe("the walker over the committed document", () => {
     expect(report.failures.filter((failure) => !teamRefusal(failure))).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each anonymous operation and for the sign-in; each of the thirty-five operations that need a session
+    // One valid request for each anonymous operation and for the sign-in; each of the thirty-nine operations that need a session
     // also answers 401 without one, each of the ten that declare re-authentication answers 401 reauth_required without it, and each of
-    // the eleven that need a role in the workspace answers the principal just below it (404 below member, 403 below admin), and each of the five
-    // that name a member, a recipient or a team answers for one of workspace B; the one that declares an entitlement answers 403 to an account without it.
-    expect(report.calls).toBe(operations.length + 62);
+    // the fifteen that need a role in the workspace answers the principal just below it (404 below member, 403 below admin), and each of the eight
+    // that name a member, a recipient, a team or an invitation answers for one of workspace B; each of the four that declare an entitlement answers 403 to an account without it.
+    expect(report.calls).toBe(operations.length + 76);
   }, WALK_TIMEOUT_MS);
 });
 
@@ -329,8 +329,8 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
   // identifier, so the matrix has none of workspace B to put in them: it makes each call as every principal of workspace A, reads and changes A's
   // workspace and settings, and holds that nothing of B is quoted in an answer. The role change and the removal name a member by account identifier and
   // the removal and the leaving may name a recipient, so the matrix puts each member of B in each and holds that A's principals are answered 404
-  // (403 below the admin policy, and for a token). In both, B's rows, its
-  // settings, its members and its audit events are as they were.
+  // (403 below the admin policy, and for a token). The invitation operations name an invitation of B by identifier, which is a real pending one
+  // that the seed writes. In both, B's rows, its settings, its members, its invitations and its audit events are as they were.
   async function contentOfB(): Promise<string> {
     const rows = await database().owner.begin(async (tx) => {
       await tx`SET LOCAL ROLE slugbase_system`;
@@ -365,9 +365,16 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
         }
       });
     }
+    // One pending invitation of workspace B, which the matrix names in the invitation operations of A.
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`
+        INSERT INTO workspace_invitations (id, workspace_id, email, role, token_hash, expires_at)
+        VALUES (${B_INVITATION_ID}, ${probe.fixture.b.id}, 'matrix-b-invitee@example.test', 'member', sha256('matrix-b-invitation'::bytea), now() + interval '7 days')`;
+    });
   }
 
-  it("passes for the eleven tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations and its audit log as they were", async () => {
+  it("passes for the fifteen tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations and its audit log as they were", async () => {
     await seedFixtureWorkspaces();
     const before = await contentOfB();
     // The deletion of the workspace takes no identifier, so the matrix repeats it as every principal of A (the sessions of the matrix have just
@@ -381,13 +388,17 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
         register: () => ({ routes: [], authenticators: world.authenticators }),
       },
     ], undefined, { entitlements: entitlementsExcept(new Set()) });
-    // The fixture of the probe holds no team, so workspace B is given one: the matrix puts it in the invitation's `teamIds`.
-    const fixture = { ...probe.fixture, b: { ...probe.fixture.b, identifiers: [...probe.fixture.b.identifiers, { kind: "team" as const, id: UNKNOWN_TEAM_ID }] } };
+    // The fixture of the probe holds no team, so workspace B is given one: the matrix puts it in the invitation's `teamIds`. It holds no invitation
+    // either, and is given the one the seed wrote.
+    const fixture = {
+      ...probe.fixture,
+      b: { ...probe.fixture.b, identifiers: [...probe.fixture.b.identifiers, { kind: "team" as const, id: UNKNOWN_TEAM_ID }, { kind: "invitation" as const, id: B_INVITATION_ID }] },
+    };
 
     const matrix = await runApiMatrix({
       document: committed,
       fixture,
-      mapping: { rowId: "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team" },
+      mapping: { rowId: "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation" },
       request: matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: FIXTURES, credentialsOf: (principal) => world.credentialsOf(principal) }),
     });
 
@@ -398,20 +409,21 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     const report = { ...matrix, failures: matrix.failures.filter((failure) => !teamRefusal(failure)) };
     expect(matrix.failures.filter(teamRefusal).map((failure) => failure.detail.slice(0, "as owner of A".length))).toEqual(["as owner of A", "as admin of A"]);
     expect(report.failures).toEqual([]);
-    expect(report.classified.byKind["tenant-scoped"]).toBe(11);
-    // the three sessions and the six tokens (a read and a read-write one of each role) of A, once on each of the six operations that name no member
-    // and on the invitation, which names the one team of B,
+    expect(report.classified.byKind["tenant-scoped"]).toBe(15);
+    // the three sessions and the six tokens (a read and a read-write one of each role) of A, once on each of the seven operations that name no member
+    // (the invitation list among them) and on the invitation, which names the one team of B,
     // and on the operations that name members of B once for each of them: the role change, and the leaving, which names a recipient, once for each
     // of the three, and the ownership transfer, which names the member who becomes an owner, once for each of the three; the removal names both
-    // a member and a recipient, once for each pair
-    expect(report.attempts).toBe(9 * 7 + 9 * (3 + 3 + 3 + 3 * 3));
+    // a member and a recipient, once for each pair; the resend, the link and the revocation of an invitation name the one invitation of B once each
+    expect(report.attempts).toBe(9 * 8 + 9 * (3 + 3 + 3 + 3 * 3 + 3));
     expect(await contentOfB()).toBe(before);
-    // Every invitation the matrix tried was refused before anything was written, in A as in B.
+    // Every invitation the matrix tried to make was refused before anything was written, in A as in B, and the one invitation of B is still its own,
+    // pending, with the token hash the seed gave it.
     const written = await database().owner.begin(async (tx) => {
       await tx`SET LOCAL ROLE slugbase_system`;
-      return tx<{ count: number }[]>`SELECT count(*)::int AS count FROM workspace_invitations WHERE workspace_id IN (${probe.fixture.a.id}, ${probe.fixture.b.id})`;
+      return tx<{ workspace_id: string; id: string; status: string }[]>`SELECT workspace_id, id, status FROM workspace_invitations WHERE workspace_id IN (${probe.fixture.a.id}, ${probe.fixture.b.id})`;
     });
-    expect(written[0]?.count).toBe(0);
+    expect(written.map((row) => [row.workspace_id, row.id, row.status])).toEqual([[probe.fixture.b.id, B_INVITATION_ID, "pending"]]);
     // The requests reached the handlers: the sessions of A renamed A and turned its AI suggestions off, and the tokens changed nothing.
     const [changed] = await database().owner.begin(async (tx) => {
       await tx`SET LOCAL ROLE slugbase_system`;

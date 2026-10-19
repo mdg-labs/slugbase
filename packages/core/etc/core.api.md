@@ -324,6 +324,26 @@ export const AUDIT_ACTIONS: {
             };
         };
     };
+    readonly "invitation.link_created": {
+        readonly category: "invitation";
+        readonly metadata: {
+            readonly role: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
+    };
+    readonly "invitation.revoked": {
+        readonly category: "invitation";
+        readonly metadata: {
+            readonly role: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
+    };
 };
 
 // @public
@@ -506,6 +526,9 @@ export function createAuditWriter(input: AuditWriterDependencies): AuditWriter;
 
 // @public
 export function createBreachedPasswords(records: Uint8Array): BreachedPasswords;
+
+// @public
+export function createInvitationLink(input: InvitationActionDependencies, ask: InvitationActionAsk): Promise<InvitationLinkOutcome>;
 
 // @public (undocumented)
 export function createPasswordPolicy(input?: PasswordPolicyOptions): PasswordPolicy;
@@ -835,6 +858,26 @@ export const INVITATION_ROLES: readonly ["admin", "member"];
 export const INVITATION_TTL_SECONDS: number;
 
 // @public (undocumented)
+export interface InvitationActionAsk {
+    // (undocumented)
+    readonly actor: AuditActor;
+    readonly actorLocale: string;
+    // (undocumented)
+    readonly invitationId: string;
+    readonly ipPrefix: string | null;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface InvitationActionDependencies {
+    readonly audit: AuditWriter;
+    // (undocumented)
+    readonly store: InvitationManagementStore;
+    readonly ttlSeconds: number;
+}
+
+// @public (undocumented)
 export interface InvitationAsk {
     // (undocumented)
     readonly actor: AuditActor;
@@ -856,6 +899,49 @@ export interface InvitationDependencies {
     // (undocumented)
     readonly store: InvitationStore;
     readonly ttlSeconds: number;
+}
+
+// @public
+export function invitationLink(origin: string, token: string): string;
+
+// @public (undocumented)
+export type InvitationLinkOutcome =
+/** The invitation has a new expiry and the token whose value is `token`, which no stored row holds. */
+    {
+    readonly kind: "linked";
+    readonly invitation: InvitationRecord;
+    readonly token: string;
+} | {
+    readonly kind: "forbidden";
+} | {
+    readonly kind: "not_found";
+};
+
+// @public
+export interface InvitationListing extends InvitationRecord {
+    // (undocumented)
+    readonly expired: boolean;
+}
+
+// @public (undocumented)
+export type InvitationListOutcome = {
+    readonly kind: "listed";
+    readonly invitations: readonly InvitationListing[];
+}
+/** The account that asks is not an admin or owner of the workspace; nothing was read. */
+| {
+    readonly kind: "forbidden";
+};
+
+// @public
+export interface InvitationManagementStore {
+    actorRole(): Promise<WorkspaceRole | undefined>;
+    inviteeLocale(invitationId: string): Promise<string | undefined>;
+    listPending(afterId: string | null, limit: number): Promise<readonly InvitationListing[]>;
+    pending(invitationId: string): Promise<InvitationRecord | undefined>;
+    renew(invitationId: string, renewal: InvitationRenewal): Promise<InvitationRecord | undefined>;
+    // (undocumented)
+    revoke(invitationId: string): Promise<InvitationRevocation>;
 }
 
 // @public
@@ -919,6 +1005,52 @@ export interface InvitationRecord {
     readonly teamIds: readonly string[];
 }
 
+// @public
+export interface InvitationRenewal {
+    readonly tokenHash: Buffer;
+    readonly ttlSeconds: number;
+}
+
+// @public (undocumented)
+export type InvitationResendOutcome =
+/** The invitation has a new expiry and a token nobody holds; `locale` is the language its email is written in. */
+    {
+    readonly kind: "resent";
+    readonly invitation: InvitationRecord;
+    readonly locale: string;
+} | {
+    readonly kind: "forbidden";
+}
+/** The workspace has no pending invitation of that identifier; nothing was written. */
+| {
+    readonly kind: "not_found";
+};
+
+// @public (undocumented)
+export type InvitationRevocation =
+/** The invitation was pending and is revoked now. */
+    {
+    readonly kind: "revoked";
+    readonly invitation: InvitationRecord;
+}
+/** The invitation was revoked before; nothing was written. */
+| {
+    readonly kind: "already_revoked";
+}
+/** The workspace has no pending or revoked invitation of that identifier, an accepted one included. */
+| {
+    readonly kind: "not_found";
+};
+
+// @public (undocumented)
+export type InvitationRevokeOutcome = {
+    readonly kind: "revoked" | "already_revoked";
+} | {
+    readonly kind: "forbidden";
+} | {
+    readonly kind: "not_found";
+};
+
 // @public (undocumented)
 export type InvitationRole = (typeof INVITATION_ROLES)[number];
 
@@ -944,6 +1076,12 @@ export function isAuditAction(value: unknown): value is AuditAction;
 
 // @public (undocumented)
 export function isDomainEventName(value: unknown): value is DomainEventName;
+
+// @public
+export function listInvitations(input: Pick<InvitationActionDependencies, "store">, ask: {
+    readonly afterId: string | null;
+    readonly limit: number;
+}): Promise<InvitationListOutcome>;
 
 // @public
 export function loadBreachedPasswords(): BreachedPasswords;
@@ -1350,6 +1488,12 @@ export function renameWorkspace(input: WorkspaceAdministrationDependencies, ask:
 
 // @public
 export function requestWorkspaceDeletion<Code extends string>(input: WorkspaceDeletionDependencies<Code>, ask: WorkspaceDeletionAsk): Promise<WorkspaceDeletionOutcome<Code>>;
+
+// @public
+export function resendInvitation(input: InvitationActionDependencies, ask: InvitationActionAsk): Promise<InvitationResendOutcome>;
+
+// @public
+export function revokeInvitation(input: Pick<InvitationActionDependencies, "store" | "audit">, ask: InvitationActionAsk): Promise<InvitationRevokeOutcome>;
 
 // @public
 export function safeReturnTo(value: string | undefined): string;

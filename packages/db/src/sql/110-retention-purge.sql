@@ -33,6 +33,13 @@
 -- or expired token from the moment it is one, so deleting the row later changes
 -- no answer. The grants it needs are in 190-credential-tokens.sql.
 --
+-- workspace_invitations: not pending (accepted or revoked) and closed_at more than 30 days in the past.
+-- closed_at is set by the statement that moves the status out of pending and by nothing else, so a later
+-- change to the row (the inviter's account deleted, which nulls invited_by) does not move the deletion. A
+-- pending invitation stays whatever its expiry says: it is listed, resent and revoked until it is
+-- answered, and the accept refuses an expired one from the moment it is. The grants it needs are in
+-- 300-workspace-invitations.sql.
+--
 -- idempotency_keys: past expires_at, which is 24 hours after the key was first used (doc 04 section
 -- 6.3). A request that finds an expired key treats it as absent and replaces it, so deleting the row
 -- later changes no answer. Rows another statement holds are skipped and found by the next call. The
@@ -65,6 +72,7 @@ DECLARE
   v_now timestamptz := clock_timestamp();
   c_token_retention CONSTANT interval := interval '30 days';
   c_credential_token_retention CONSTANT interval := interval '7 days';
+  c_invitation_retention CONSTANT interval := interval '30 days';
   v_deleted bigint;
 BEGIN
   IF p_audit_retention_days IS NULL OR p_audit_retention_days < 0 THEN
@@ -111,6 +119,16 @@ BEGIN
   );
   GET DIAGNOSTICS v_deleted = ROW_COUNT;
   RETURN QUERY SELECT 'credential_tokens'::text, v_deleted;
+
+  DELETE FROM public.workspace_invitations
+  WHERE id IN (
+    SELECT i.id FROM public.workspace_invitations i
+    WHERE i.status <> 'pending' AND i.closed_at <= v_now - c_invitation_retention
+    LIMIT c_batch
+    FOR UPDATE SKIP LOCKED
+  );
+  GET DIAGNOSTICS v_deleted = ROW_COUNT;
+  RETURN QUERY SELECT 'workspace_invitations'::text, v_deleted;
 
   DELETE FROM public.idempotency_keys
   WHERE (account_id, key) IN (

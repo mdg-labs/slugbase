@@ -1,4 +1,14 @@
-import type { InvitationRecord, InvitationStatus, InvitationStore, NewInvitation, WorkspaceRole } from "@slugbase/core";
+import type {
+  InvitationListing,
+  InvitationManagementStore,
+  InvitationRecord,
+  InvitationRenewal,
+  InvitationRevocation,
+  InvitationStatus,
+  InvitationStore,
+  NewInvitation,
+  WorkspaceRole,
+} from "@slugbase/core";
 import { sql } from "drizzle-orm";
 import { enqueueInTenantTransaction, type QueuedJob } from "../system/queue.ts";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
@@ -8,10 +18,11 @@ import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
 // of that, so an invitation of a workspace the transaction does not act in is neither read nor changed
 // whatever identifier is named. `slugbase_app` may insert an invitation without `instance_issued`, `status`
 // and `accepted_by`, so a row it writes is pending, is never an owner's and is never accepted (the CHECK of the
-// table refuses the owner role besides), and may change only what a resend replaces. The token is stored as
-// its SHA-256 and read back by nobody: no method here returns it or its hash.
+// table refuses the owner role besides), and may change what a resend replaces and turn a pending invitation
+// into a revoked one, which the update policy allows for a pending row only. The token is stored as its
+// SHA-256 and read back by nobody: no method here returns it or its hash.
 
-interface WrittenRow extends Record<string, unknown> {
+interface RecordRow extends Record<string, unknown> {
   id: string;
   email: string;
   role: string;
@@ -21,7 +32,18 @@ interface WrittenRow extends Record<string, unknown> {
   invited_by: string | null;
   expires_at: string;
   created_at: string;
+}
+
+interface WrittenRow extends RecordRow {
   inserted: boolean;
+}
+
+interface ListedRow extends RecordRow {
+  expired: boolean;
+}
+
+interface StatusRow extends Record<string, unknown> {
+  status: string;
 }
 
 interface RoleRow extends Record<string, unknown> {
@@ -51,7 +73,7 @@ export interface InvitationMailContext {
   readonly workspaceName: string;
 }
 
-export interface InvitationRepository extends InvitationStore {
+export interface InvitationRepository extends InvitationStore, InvitationManagementStore {
   /**
    * Gives the pending, unexpired invitation `invitationId` of the workspace of the transaction the token whose
    * SHA-256 is `tokenHash`, which ends the link it had, and answers what its email says; undefined, with
@@ -64,6 +86,11 @@ export interface InvitationRepository extends InvitationStore {
    */
   enqueue(jobs: readonly QueuedJob[]): Promise<void>;
 }
+
+// The columns of an invitation as an `InvitationRecord` has them, for a statement that names the table `i` or none.
+const RECORD_COLUMNS = sql.raw(`id, email::text AS email, role::text AS role, to_json(team_ids)::text AS team_ids, status, invited_by,
+  to_char(expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS expires_at,
+  to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at`);
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -96,7 +123,7 @@ function teamIdsOf(json: string): readonly string[] {
   return parsed;
 }
 
-function recordOf(row: WrittenRow): InvitationRecord {
+function recordOf(row: RecordRow): InvitationRecord {
   return {
     id: row.id,
     email: row.email,
@@ -178,6 +205,53 @@ export function invitationRepository(tx: TenantTx): InvitationRepository {
                   (SELECT w.name FROM public.workspaces w WHERE w.id = i.workspace_id) AS workspace_name`);
       const row = rows[0];
       return row === undefined ? undefined : { email: row.email, role: roleOf(row.role), expiresAt: new Date(row.expires_at), workspaceName: row.workspace_name };
+    },
+
+    async pending(invitationId) {
+      const workspaceId = workspaceOf(tx, "reading an invitation");
+      const rows = await tenantHandle(tx).execute<RecordRow>(sql`
+        SELECT ${RECORD_COLUMNS} FROM public.workspace_invitations
+        WHERE id = ${invitationId}::uuid AND workspace_id = ${workspaceId}::uuid AND status = 'pending'`);
+      const row = rows[0];
+      return row === undefined ? undefined : recordOf(row);
+    },
+
+    async listPending(afterId, limit) {
+      const workspaceId = workspaceOf(tx, "listing invitations");
+      const rows = await tenantHandle(tx).execute<ListedRow>(sql`
+        SELECT ${RECORD_COLUMNS}, (expires_at <= now()) AS expired FROM public.workspace_invitations
+        WHERE workspace_id = ${workspaceId}::uuid AND status = 'pending' AND (${afterId}::uuid IS NULL OR id < ${afterId}::uuid)
+        ORDER BY id DESC
+        LIMIT ${limit}::int`);
+      return rows.map((row): InvitationListing => ({ ...recordOf(row), expired: row.expired }));
+    },
+
+    async renew(invitationId, { tokenHash, ttlSeconds }: InvitationRenewal) {
+      const workspaceId = workspaceOf(tx, "renewing an invitation");
+      const rows = await tenantHandle(tx).execute<RecordRow>(sql`
+        UPDATE public.workspace_invitations
+        SET token_hash = decode(${tokenHash.toString("hex")}, 'hex'), invited_by = ${tx.accountId}::uuid,
+            expires_at = now() + ${ttlSeconds}::int * interval '1 second'
+        WHERE id = ${invitationId}::uuid AND workspace_id = ${workspaceId}::uuid AND status = 'pending'
+        RETURNING ${RECORD_COLUMNS}`);
+      const row = rows[0];
+      return row === undefined ? undefined : recordOf(row);
+    },
+
+    async revoke(invitationId): Promise<InvitationRevocation> {
+      const workspaceId = workspaceOf(tx, "revoking an invitation");
+      const handle = tenantHandle(tx);
+      const revoked = await handle.execute<RecordRow>(sql`
+        UPDATE public.workspace_invitations SET status = 'revoked', closed_at = now()
+        WHERE id = ${invitationId}::uuid AND workspace_id = ${workspaceId}::uuid AND status = 'pending'
+        RETURNING ${RECORD_COLUMNS}`);
+      const row = revoked[0];
+      if (row !== undefined) {
+        return { kind: "revoked", invitation: recordOf(row) };
+      }
+      const current = await handle.execute<StatusRow>(sql`
+        SELECT status FROM public.workspace_invitations WHERE id = ${invitationId}::uuid AND workspace_id = ${workspaceId}::uuid`);
+      return current[0] !== undefined && statusOf(current[0].status) === "revoked" ? { kind: "already_revoked" } : { kind: "not_found" };
     },
 
     async enqueue(jobs) {

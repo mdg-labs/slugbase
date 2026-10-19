@@ -10,7 +10,8 @@ import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 // its retention, a batch of 5 000 rows per table per call, and answers how many
 // it deleted per table. The rules so far: expired sessions, API tokens that
 // were revoked or expired more than 30 days ago, OIDC login states past their expiry, credential
-// tokens that were used or expired more than 7 days ago, and workspace audit events older than the
+// tokens that were used or expired more than 7 days ago, invitations that stopped being pending more than 30 days ago,
+// idempotency keys past their 24 hours, and workspace audit events older than the
 // retention the operator chose (365 days unless told otherwise, 0 keeps them forever).
 
 const HOOK_TIMEOUT_MS = 300_000;
@@ -77,13 +78,14 @@ async function seedSession(session: SeedSession): Promise<string> {
   return id;
 }
 
-/** What a purge answers when it deleted `sessions` sessions, `apiTokens` API tokens, `loginStates` OIDC login states, `credentialTokens` credential tokens, `auditEvents` audit events and `idempotencyKeys` idempotency keys, in the order of doc 05 section 6. */
-function counts(sessions: number, apiTokens = 0, loginStates = 0, credentialTokens = 0, auditEvents = 0, idempotencyKeys = 0): { table: string; deleted: number }[] {
+/** What a purge answers when it deleted `sessions` sessions, `apiTokens` API tokens, `loginStates` OIDC login states, `credentialTokens` credential tokens, `auditEvents` audit events, `idempotencyKeys` idempotency keys and `invitations` invitations, in the order of doc 05 section 6. */
+function counts(sessions: number, apiTokens = 0, loginStates = 0, credentialTokens = 0, auditEvents = 0, idempotencyKeys = 0, invitations = 0): { table: string; deleted: number }[] {
   return [
     { table: "sessions", deleted: sessions },
     { table: "api_tokens", deleted: apiTokens },
     { table: "oidc_login_states", deleted: loginStates },
     { table: "credential_tokens", deleted: credentialTokens },
+    { table: "workspace_invitations", deleted: invitations },
     { table: "idempotency_keys", deleted: idempotencyKeys },
     { table: "audit_events", deleted: auditEvents },
   ];
@@ -455,6 +457,104 @@ describe("purging used and expired credential tokens", () => {
 
   it("gives slugbase_app no DELETE on credential_tokens: the purge is the only way it removes one", async () => {
     await expect(db.app.unsafe("DELETE FROM public.credential_tokens")).rejects.toMatchObject({ code: "42501" });
+  });
+});
+
+describe("purging invitations that are no longer pending", () => {
+  const RETENTION_DAYS = 30;
+
+  /** An invitation of `workspaceId` with the status given; one that is not pending closed `changedAgoMs` ago, by `invitedBy` when given. */
+  async function seedInvitation(workspaceId: string, status: string, changedAgoMs: number, expiresInMs = DAY_MS, invitedBy: string | null = null): Promise<string> {
+    const id = freshId();
+    invitationNumber += 1;
+    await asSystem(db, (tx) => tx`
+      INSERT INTO workspace_invitations (id, workspace_id, email, role, token_hash, status, invited_by, closed_at, expires_at, updated_at)
+      VALUES (${id}, ${workspaceId}, ${`purge${String(invitationNumber)}@example.test`}, 'member', ${freshToken().hash}, ${status}, ${invitedBy},
+              CASE WHEN ${status} = 'pending' THEN NULL ELSE now() - ${changedAgoMs} * interval '1 millisecond' END,
+              now() + ${expiresInMs} * interval '1 millisecond', now() - ${changedAgoMs} * interval '1 millisecond')`);
+    return id;
+  }
+  let invitationNumber = 0;
+
+  async function remainingInvitations(): Promise<string[]> {
+    const rows = await asSystem(db, (tx) => tx<{ id: string }[]>`SELECT id FROM workspace_invitations`);
+    return rows.map((row) => row.id).sort();
+  }
+
+  it("deletes an accepted or revoked invitation closed more than 30 days ago and keeps every other, a pending one however old or expired included", async () => {
+    await asSystem(db, (tx) => tx`DELETE FROM workspace_invitations`);
+    const workspaceId = await seedWorkspace(db, { name: "Purge" });
+    const past = RETENTION_DAYS * DAY_MS;
+    const gone = [await seedInvitation(workspaceId, "revoked", past + HOUR_MS), await seedInvitation(workspaceId, "accepted", past + 2 * HOUR_MS)];
+    const kept = [
+      await seedInvitation(workspaceId, "revoked", past - HOUR_MS),
+      await seedInvitation(workspaceId, "accepted", DAY_MS),
+      await seedInvitation(workspaceId, "pending", past + 10 * DAY_MS),
+      await seedInvitation(workspaceId, "pending", past + 10 * DAY_MS, -past - DAY_MS),
+    ];
+
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 0, 0, gone.length));
+    expect(await remainingInvitations()).toEqual(kept.sort());
+    expect(await store.purge()).toEqual(counts(0));
+  });
+
+  it("starts the 30 days at the revocation, however long the invitation was pending", async () => {
+    await asSystem(db, (tx) => tx`DELETE FROM workspace_invitations`);
+    const workspaceId = await seedWorkspace(db, { name: "Purge revocation" });
+    const id = await seedInvitation(workspaceId, "pending", 60 * DAY_MS);
+
+    await db.app.begin(async (tx) => {
+      await tx`SELECT set_config('app.workspace_id', ${workspaceId}, true)`;
+      await tx`UPDATE workspace_invitations SET status = 'revoked', closed_at = now() WHERE id = ${id}`;
+    });
+
+    expect(await store.purge()).toEqual(counts(0));
+    expect(await remainingInvitations()).toEqual([id]);
+  });
+
+  it("does not restart the 30 days when the inviter's account is deleted after the invitation was revoked", async () => {
+    await asSystem(db, (tx) => tx`DELETE FROM workspace_invitations`);
+    const workspaceId = await seedWorkspace(db, { name: "Purge inviter" });
+    const inviter = await account();
+    const id = await seedInvitation(workspaceId, "revoked", (RETENTION_DAYS + 1) * DAY_MS, DAY_MS, inviter);
+
+    await asSystem(db, (tx) => tx`DELETE FROM accounts WHERE id = ${inviter}`);
+
+    const [row] = await asSystem(db, (tx) => tx<{ invited_by: string | null; refreshed: boolean }[]>`
+      SELECT invited_by, updated_at > now() - interval '1 hour' AS refreshed FROM workspace_invitations WHERE id = ${id}`);
+    expect(row).toEqual({ invited_by: null, refreshed: true });
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 0, 0, 1));
+    expect(await remainingInvitations()).toEqual([]);
+  });
+
+  it("refuses a pending invitation with a closing time and a closed one without", async () => {
+    const workspaceId = await seedWorkspace(db, { name: "Purge closing" });
+    const pending = await seedInvitation(workspaceId, "pending", 0);
+    const revoked = await seedInvitation(workspaceId, "revoked", 0);
+
+    await expect(asSystem(db, (tx) => tx`UPDATE workspace_invitations SET closed_at = now() WHERE id = ${pending}`)).rejects.toMatchObject({ code: "23514" });
+    await expect(asSystem(db, (tx) => tx`UPDATE workspace_invitations SET closed_at = NULL WHERE id = ${revoked}`)).rejects.toMatchObject({ code: "23514" });
+  });
+
+  it("deletes at most one batch per call and finishes the rest on the next", async () => {
+    await asSystem(db, (tx) => tx`DELETE FROM workspace_invitations`);
+    const workspaceId = await seedWorkspace(db, { name: "Purge batch" });
+    const extra = 3;
+    await asSystem(db, async (tx) => {
+      await tx`
+        INSERT INTO workspace_invitations (id, workspace_id, email, role, token_hash, status, closed_at, expires_at)
+        SELECT ('0192f3a0-dddd-7000-8000-' || lpad(to_hex(n), 12, '0'))::uuid, ${workspaceId}, 'batch' || n || '@example.test', 'member',
+               sha256(('invitation' || n)::bytea), 'revoked', now() - interval '31 days', now() + interval '1 day'
+        FROM generate_series(1, ${BATCH + extra}::int) AS n`;
+    });
+
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 0, 0, BATCH));
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 0, 0, extra));
+    expect(await store.purge()).toEqual(counts(0));
+  });
+
+  it("gives slugbase_app no DELETE on workspace_invitations: the purge is the only way it removes one", async () => {
+    await expect(db.app.unsafe("DELETE FROM public.workspace_invitations")).rejects.toMatchObject({ code: "42501" });
   });
 });
 

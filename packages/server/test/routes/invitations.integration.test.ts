@@ -447,7 +447,7 @@ describe("the invitation email", { timeout: TEST_TIMEOUT_MS }, () => {
     await invite(world, o, { email: "expired@example.test", role: "member" });
     await database().owner.begin(async (tx) => {
       await tx`SET LOCAL ROLE slugbase_system`;
-      await tx`UPDATE workspace_invitations SET status = 'revoked' WHERE workspace_id = ${workspaceId} AND email = 'revoked@example.test'`;
+      await tx`UPDATE workspace_invitations SET status = 'revoked', closed_at = now() WHERE workspace_id = ${workspaceId} AND email = 'revoked@example.test'`;
       await tx`UPDATE workspace_invitations SET expires_at = now() - interval '1 minute' WHERE workspace_id = ${workspaceId} AND email = 'expired@example.test'`;
     });
     const before = await rowsOf(workspaceId);

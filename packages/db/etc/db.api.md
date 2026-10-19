@@ -9,6 +9,7 @@ import type { AuditRecord } from '@slugbase/core';
 import type { CredentialTokenPurpose } from '@slugbase/core';
 import { InferInsertModel } from 'drizzle-orm';
 import { InferSelectModel } from 'drizzle-orm';
+import type { InvitationManagementStore } from '@slugbase/core';
 import type { InvitationStore } from '@slugbase/core';
 import type { MemberRoleStore } from '@slugbase/core';
 import type { PgColumn } from 'drizzle-orm/pg-core';
@@ -514,7 +515,7 @@ export interface InvitationMailContext {
 }
 
 // @public (undocumented)
-export interface InvitationRepository extends InvitationStore {
+export interface InvitationRepository extends InvitationStore, InvitationManagementStore {
     enqueue(jobs: readonly QueuedJob[]): Promise<void>;
     issueToken(invitationId: string, tokenHash: Buffer): Promise<InvitationMailContext | undefined>;
 }

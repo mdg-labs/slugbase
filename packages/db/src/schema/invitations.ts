@@ -35,12 +35,15 @@ export const workspaceInvitations = pgTable(
     status: text().notNull().default("pending"),
     expiresAt: timestamp({ withTimezone: true }).notNull(),
     acceptedBy: uuid().references(() => accounts.id, { onDelete: "set null" }),
+    /** When the status left `pending`; the retention purge counts its 30 days from it. Null exactly while the invitation is pending. */
+    closedAt: timestamp({ withTimezone: true }),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     check("workspace_invitations_role_check", sql`${table.role} <> 'owner' OR ${table.instanceIssued}`),
     check("workspace_invitations_status_check", sql`${table.status} IN ('pending', 'accepted', 'revoked')`),
+    check("workspace_invitations_closed_at_check", sql`(${table.status} = 'pending') = (${table.closedAt} IS NULL)`),
     check("workspace_invitations_token_hash_check", sql`length(${table.tokenHash}) = 32`),
     uniqueIndex("workspace_invitations_pending_email_key").on(table.workspaceId, table.email).where(sql`${table.status} = 'pending'`),
     index("workspace_invitations_invited_by_idx").on(table.invitedBy),

@@ -66,9 +66,20 @@ describe("the matrix over the committed contract and the repository registry", (
   };
 
   it(`API mode classifies the ${String(classification.summary.total)} operations of openapi.json and calls each tenant-scoped one once for every principal of A`, async () => {
-    // The probe fixture holds no team, so workspace B is given one: the matrix puts it in the invitation's `teamIds`.
-    const fixture = { ...scoped.fixture, b: { ...scoped.fixture.b, identifiers: [...scoped.fixture.b.identifiers, { kind: "team" as const, id: "0192f3a0-cccc-7000-8000-000000000005" }] } };
-    const matrix = await runApiMatrix({ document, fixture, request: answersAsTheChainDoes, mapping: { accountId: "member", transferTo: "member", "teamIds[]": "team" } });
+    // The probe fixture holds no team and no invitation, so workspace B is given one of each: the matrix puts the team in the invitation's `teamIds`
+    // and the invitation in the path of the operations that resend, link and revoke one.
+    const fixture = {
+      ...scoped.fixture,
+      b: {
+        ...scoped.fixture.b,
+        identifiers: [
+          ...scoped.fixture.b.identifiers,
+          { kind: "team" as const, id: "0192f3a0-cccc-7000-8000-000000000005" },
+          { kind: "invitation" as const, id: "0192f3a0-cccc-7000-8000-000000000007" },
+        ],
+      },
+    };
+    const matrix = await runApiMatrix({ document, fixture, request: answersAsTheChainDoes, mapping: { accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation" } });
     // The matrix expects 404 for an identifier of workspace B. The one exception is the 422 every team is refused with (see above), for the two sessions
     // of A that reach the handler of the invitation; it is named exactly, and every other failure stays one.
     const teamRefusal = (failure: MatrixFailure): boolean => failure.subject.startsWith("createInvitation ") && failure.kind === "unexpected_status" && /answered 422, expected 404/.test(failure.detail);
@@ -79,12 +90,13 @@ describe("the matrix over the committed contract and the repository registry", (
     expect(report.classified.total).toBeGreaterThan(0);
     expect(Object.values(report.classified.byKind).reduce((sum, count) => sum + count, 0)).toBe(report.classified.total);
     // The operations on /workspace (reading, renaming and deleting it) and /workspace/settings and the members list act in the workspace of the request and take no identifier of B;
-    // the role change, the ownership transfer and the removal name a member by account identifier, the removal and the leaving a recipient, and the invitation a team.
-    expect(report.classified.byKind["tenant-scoped"]).toBe(11);
-    // Three sessions and six tokens of A, once on each of the six operations that name no member, once for each of the three members of B on the role
-    // change, on the ownership transfer and on the leaving, once for each pair of members of B (path and recipient) on the removal, and once for the
-    // team of B on the invitation.
-    expect(report.attempts).toBe(9 * 7 + 9 * (3 + 3 + 3 + 3 * 3));
+    // the role change, the ownership transfer and the removal name a member by account identifier, the removal and the leaving a recipient, the invitation a team,
+    // and the resend, the link and the revocation of an invitation name an invitation; the invitation list takes no identifier.
+    expect(report.classified.byKind["tenant-scoped"]).toBe(15);
+    // Three sessions and six tokens of A, once on each of the seven operations that name no member, once for each of the three members of B on the role
+    // change, on the ownership transfer and on the leaving, once for each pair of members of B (path and recipient) on the removal, once for the
+    // team of B on the invitation, and once for the invitation of B on each of the resend, the link and the revocation.
+    expect(report.attempts).toBe(9 * 8 + 9 * (3 + 3 + 3 + 3 * 3 + 3));
     assertMatrixPassed(report);
   });
 

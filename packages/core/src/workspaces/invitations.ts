@@ -16,6 +16,13 @@ import type { WorkspaceRole } from "../ports/tenant-resolver.ts";
 // be invited into until team membership exists. The invitation, its audit event and the mail job are one
 // transaction, so each exists exactly when the others do; a failure of a write rejects, so the caller's
 // transaction must not commit.
+//
+// A pending invitation is then listed, resent, given a link and revoked by an admin or an owner (doc 04 section
+// 10.5). Resending and giving a link each replace the token hash and the expiry, which ends the earlier link
+// at once; a resend leaves the new link to the job that mails it, as an invitation does, and a link is the one
+// place a token leaves the server other than the mail: the service makes the token, stores its hash and hands
+// the value to the caller to return once, and records no field of it. Revoking ends a pending invitation for
+// good; revoking one that is already revoked is the same answer and writes nothing.
 
 /** How long an invitation can be accepted for, in seconds (doc 02 section 3.4): 7 days. */
 export const INVITATION_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -66,6 +73,45 @@ export interface InvitationStore {
    * statement, so two requests for one address leave one pending invitation.
    */
   writePending(invitation: NewInvitation): Promise<{ readonly invitation: InvitationRecord; readonly resent: boolean }>;
+  /** The language of the account that holds the address of the pending invitation; undefined when none does. */
+  inviteeLocale(invitationId: string): Promise<string | undefined>;
+}
+
+/** A pending invitation of the list: the invitation and whether its expiry has passed, by the database's clock when it was read. */
+export interface InvitationListing extends InvitationRecord {
+  readonly expired: boolean;
+}
+
+/** What a resend or a link replaces on a pending invitation. */
+export interface InvitationRenewal {
+  /** SHA-256 of the new token: of one nobody holds yet for a resend, of the one a link returns. */
+  readonly tokenHash: Buffer;
+  /** How long the invitation can be accepted for from now, counted by the database's clock. */
+  readonly ttlSeconds: number;
+}
+
+export type InvitationRevocation =
+  /** The invitation was pending and is revoked now. */
+  | { readonly kind: "revoked"; readonly invitation: InvitationRecord }
+  /** The invitation was revoked before; nothing was written. */
+  | { readonly kind: "already_revoked" }
+  /** The workspace has no pending or revoked invitation of that identifier, an accepted one included. */
+  | { readonly kind: "not_found" };
+
+/** The stores of listing, resending, linking and revoking, bound to the transaction of the request. */
+export interface InvitationManagementStore {
+  /** The role of the account of the transaction in the workspace of the transaction; undefined when it is no member. */
+  actorRole(): Promise<WorkspaceRole | undefined>;
+  /** The pending invitation `invitationId` of the workspace of the transaction; undefined when there is none. */
+  pending(invitationId: string): Promise<InvitationRecord | undefined>;
+  /** Up to `limit` pending invitations of the workspace of the transaction, newest first, after the one named. */
+  listPending(afterId: string | null, limit: number): Promise<readonly InvitationListing[]>;
+  /**
+   * Replaces the token hash and the expiry of the pending invitation `invitationId` and makes the account of
+   * the transaction its inviter; undefined, with nothing changed, when the workspace has no such pending invitation.
+   */
+  renew(invitationId: string, renewal: InvitationRenewal): Promise<InvitationRecord | undefined>;
+  revoke(invitationId: string): Promise<InvitationRevocation>;
   /** The language of the account that holds the address of the pending invitation; undefined when none does. */
   inviteeLocale(invitationId: string): Promise<string | undefined>;
 }
@@ -177,4 +223,135 @@ export function invitationMessage(content: InvitationMessageContent): MailMessag
       expiresOn: content.expiresAt.toISOString().slice(0, 10),
     },
   };
+}
+
+/** The path of the page that accepts an invitation, on the deployment's origin. */
+const INVITE_PATH = "/invite/";
+
+/** The link that carries `token` to the invitation page of the deployment at `origin`. */
+export function invitationLink(origin: string, token: string): string {
+  return `${new URL(origin).origin}${INVITE_PATH}${token}`;
+}
+
+export interface InvitationActionDependencies {
+  readonly store: InvitationManagementStore;
+  /** Bound to the same transaction as the store. */
+  readonly audit: AuditWriter;
+  /** How long an invitation can be accepted for from a resend or a link. */
+  readonly ttlSeconds: number;
+}
+
+export interface InvitationActionAsk {
+  readonly workspaceId: string;
+  readonly actor: AuditActor;
+  /** The language of the account that asks: the email of a resend is written in it when the invitee's is not known. */
+  readonly actorLocale: string;
+  readonly invitationId: string;
+  /** The coarse network of the request, null when unknown. */
+  readonly ipPrefix: string | null;
+}
+
+export type InvitationListOutcome =
+  | { readonly kind: "listed"; readonly invitations: readonly InvitationListing[] }
+  /** The account that asks is not an admin or owner of the workspace; nothing was read. */
+  | { readonly kind: "forbidden" };
+
+export type InvitationResendOutcome =
+  /** The invitation has a new expiry and a token nobody holds; `locale` is the language its email is written in. */
+  | { readonly kind: "resent"; readonly invitation: InvitationRecord; readonly locale: string }
+  | { readonly kind: "forbidden" }
+  /** The workspace has no pending invitation of that identifier; nothing was written. */
+  | { readonly kind: "not_found" };
+
+export type InvitationLinkOutcome =
+  /** The invitation has a new expiry and the token whose value is `token`, which no stored row holds. */
+  | { readonly kind: "linked"; readonly invitation: InvitationRecord; readonly token: string }
+  | { readonly kind: "forbidden" }
+  | { readonly kind: "not_found" };
+
+export type InvitationRevokeOutcome =
+  | { readonly kind: "revoked" | "already_revoked" }
+  | { readonly kind: "forbidden" }
+  | { readonly kind: "not_found" };
+
+async function mayManage(store: Pick<InvitationManagementStore, "actorRole">): Promise<boolean> {
+  const role = await store.actorRole();
+  return role === "owner" || role === "admin";
+}
+
+/** The pending invitations of the workspace, for an admin or an owner. */
+export async function listInvitations({ store }: Pick<InvitationActionDependencies, "store">, ask: { readonly afterId: string | null; readonly limit: number }): Promise<InvitationListOutcome> {
+  if (!(await mayManage(store))) {
+    return { kind: "forbidden" };
+  }
+  return { kind: "listed", invitations: await store.listPending(ask.afterId, ask.limit) };
+}
+
+/**
+ * Gives the pending invitation a new expiry and a token hash nobody holds the token of, which ends the earlier
+ * link, and records `invitation.resent`, in the transaction the stores are bound to. The caller queues the job
+ * that mails the new link.
+ */
+export async function resendInvitation({ store, audit, ttlSeconds }: InvitationActionDependencies, ask: InvitationActionAsk): Promise<InvitationResendOutcome> {
+  if (!(await mayManage(store))) {
+    return { kind: "forbidden" };
+  }
+  const invitation = await store.renew(ask.invitationId, { tokenHash: generateCredentialToken().hash, ttlSeconds });
+  if (invitation === undefined) {
+    return { kind: "not_found" };
+  }
+  await audit.write({
+    action: "invitation.resent",
+    workspaceId: ask.workspaceId,
+    actor: ask.actor,
+    entity: { type: "invitation", id: invitation.id },
+    metadata: { role: invitation.role },
+    ipPrefix: ask.ipPrefix,
+  });
+  const locale = (await store.inviteeLocale(invitation.id)) ?? ask.actorLocale;
+  return { kind: "resent", invitation, locale };
+}
+
+/**
+ * Gives the pending invitation a new expiry and a new token, stores only the token's hash, which ends the
+ * earlier link, and records `invitation.link_created`. The token's value is in the outcome and nowhere else.
+ */
+export async function createInvitationLink({ store, audit, ttlSeconds }: InvitationActionDependencies, ask: InvitationActionAsk): Promise<InvitationLinkOutcome> {
+  if (!(await mayManage(store))) {
+    return { kind: "forbidden" };
+  }
+  const token = generateCredentialToken();
+  const invitation = await store.renew(ask.invitationId, { tokenHash: token.hash, ttlSeconds });
+  if (invitation === undefined) {
+    return { kind: "not_found" };
+  }
+  await audit.write({
+    action: "invitation.link_created",
+    workspaceId: ask.workspaceId,
+    actor: ask.actor,
+    entity: { type: "invitation", id: invitation.id },
+    metadata: { role: invitation.role },
+    ipPrefix: ask.ipPrefix,
+  });
+  return { kind: "linked", invitation, token: token.value };
+}
+
+/** Revokes the pending invitation and records `invitation.revoked`; a revoked one is answered the same way and writes nothing. */
+export async function revokeInvitation({ store, audit }: Pick<InvitationActionDependencies, "store" | "audit">, ask: InvitationActionAsk): Promise<InvitationRevokeOutcome> {
+  if (!(await mayManage(store))) {
+    return { kind: "forbidden" };
+  }
+  const outcome = await store.revoke(ask.invitationId);
+  if (outcome.kind !== "revoked") {
+    return { kind: outcome.kind };
+  }
+  await audit.write({
+    action: "invitation.revoked",
+    workspaceId: ask.workspaceId,
+    actor: ask.actor,
+    entity: { type: "invitation", id: outcome.invitation.id },
+    metadata: { role: outcome.invitation.role },
+    ipPrefix: ask.ipPrefix,
+  });
+  return { kind: "revoked" };
 }

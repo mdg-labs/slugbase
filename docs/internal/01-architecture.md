@@ -280,7 +280,7 @@ Entitlement keys are a closed, typed catalog in `@slugbase/core` (`entitlements/
 | `ai.suggestions` | workspace | boolean | `true` (still needs a configured `AiSuggestPort` and the workspace toggle) | The AI suggestion endpoint and UI |
 | `sharing.members` | workspace | boolean | `true` | Sharing a bookmark or folder with an individual member |
 | `sharing.teams` | workspace | boolean | `true` | Sharing with teams; teams as sharing targets |
-| `members.invite` | workspace | boolean | `true` | Creating invitations and accepting them |
+| `members.invite` | workspace | boolean | `true` | Creating, listing, resending and linking invitations, and accepting them; revoking one is not gated |
 | `teams.manage` | workspace | boolean | `true` | Teams administration (create, edit, membership) |
 | `audit.log` | workspace | boolean | `true` | Reading the audit log (audit events are always written; only reading is gated) |
 | `seats.max` | workspace | number or `unlimited` | `unlimited` | The member ceiling (accepted invitations count, pending ones do not) |
@@ -298,7 +298,7 @@ These are not entitlements on any edition: personal API tokens, folders, tags, s
 | Create workspace | `workspaces.owned < workspaces.ownMax` | `422 workspace_limit_reached` |
 | AI suggestion | `ai.suggestions`, a configured port, the workspace toggle and the member not opted out | `403 entitlement_required`, or `503 ai_unavailable` |
 | Share with a member or a team | `sharing.members` or `sharing.teams` | `403 entitlement_required` |
-| Create or accept an invitation | `members.invite` on both; `seats.used < seats.max` on acceptance, inside the acceptance transaction through the seat check (§13.1) | `403 entitlement_required`; `422 seat_limit_reached` |
+| Create, list, resend or link an invitation, or accept one | `members.invite` on each; `seats.used < seats.max` on acceptance, inside the acceptance transaction through the seat check (§13.1) | `403 entitlement_required`; `422 seat_limit_reached` |
 | Teams administration | `teams.manage` | `403 entitlement_required` |
 | Read the audit log | `audit.log` | `403 entitlement_required` |
 

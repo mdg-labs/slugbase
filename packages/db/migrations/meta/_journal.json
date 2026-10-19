@@ -316,6 +316,13 @@
       "when": 1792430666888,
       "tag": "20261019172426_add_idempotency_keys",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1792435656384,
+      "tag": "20261019184736_add_invitation_revocation",
+      "breakpoints": true
     }
   ]
 }

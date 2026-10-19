@@ -23,6 +23,12 @@ export const UNKNOWN_IDENTITY_ID = "0192f3a0-cccc-7000-8000-000000000003";
 /** A team no workspace holds: teams have no members to join yet, so any team named in an invitation is refused the same way. */
 export const UNKNOWN_TEAM_ID = "0192f3a0-cccc-7000-8000-000000000005";
 
+/** The pending invitation the matrix seeds in workspace B, which the invitation operations of A name. */
+export const B_INVITATION_ID = "0192f3a0-cccc-7000-8000-000000000007";
+
+/** An invitation no workspace holds: the walker's request to resend, link or revoke it is the declared 404. */
+export const UNKNOWN_INVITATION_ID = "0192f3a0-cccc-7000-8000-000000000006";
+
 export const FIXTURES: ContractFixtures = {
   getHealth: {},
   getReady: {},
@@ -149,6 +155,14 @@ export const FIXTURES: ContractFixtures = {
     body: { email: "walker-invitee@example.test", role: "member" },
     foreign: { body: { email: "walker-invitee@example.test", role: "member", teamIds: [UNKNOWN_TEAM_ID] } },
   },
+  // The invitations of the workspace of the request. The list names no identifier. The other three name an invitation by identifier, and the walker
+  // cannot know the identifier of one in the workspace it owns (it has none), so each valid request names an invitation that no workspace holds, which
+  // is the declared 404 whoever would hold it, and so is an invitation of workspace B; the route tests resend, link and revoke invitations, and the
+  // matrix puts a real invitation of workspace B in each.
+  listInvitations: {},
+  resendInvitation: { path: { id: UNKNOWN_INVITATION_ID }, status: 404, foreign: { path: { id: UNKNOWN_INVITATION_ID } } },
+  createInvitationLink: { path: { id: UNKNOWN_INVITATION_ID }, status: 404, foreign: { path: { id: UNKNOWN_INVITATION_ID } } },
+  revokeInvitation: { path: { id: UNKNOWN_INVITATION_ID }, status: 404, foreign: { path: { id: UNKNOWN_INVITATION_ID } } },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

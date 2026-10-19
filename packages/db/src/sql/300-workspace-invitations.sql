@@ -35,7 +35,9 @@ GRANT EXECUTE ON FUNCTION public.sys_invitation_invitee_locale(uuid) TO slugbase
 -- workspace_invitations: the invitations of the active workspace, read and written there only. slugbase_app
 -- may insert an invitation without the columns that make one an owner's or an accepted one (instance_issued,
 -- status, accepted_by: a new row is pending and never instance-issued), and change what a resend replaces:
--- the role and teams of the new request, the inviter, the token hash and the expiry. It never deletes a row.
+-- the role and teams of the new request, the inviter, the token hash and the expiry, and revoke a pending one
+-- (the status and closed_at columns, with an update policy that lets only a pending row become pending or revoked, so the
+-- application role can neither accept an invitation nor reopen a revoked one). It never deletes a row.
 -- Whether the caller may invite is the invitation service's check and the role of the authorization stage;
 -- that an invitation never grants owner is the CHECK of the table. Inspecting and accepting an invitation by
 -- its token, and the purge of old rows, are system operations of their own. slugbase_system, which bypasses
@@ -50,12 +52,12 @@ CREATE POLICY workspace_invitations_tenant_insert ON public.workspace_invitation
   WITH CHECK (workspace_id = public.app_workspace_id());
 DROP POLICY IF EXISTS workspace_invitations_tenant_update ON public.workspace_invitations;
 CREATE POLICY workspace_invitations_tenant_update ON public.workspace_invitations FOR UPDATE
-  USING (workspace_id = public.app_workspace_id())
-  WITH CHECK (workspace_id = public.app_workspace_id());
+  USING (workspace_id = public.app_workspace_id() AND status = 'pending')
+  WITH CHECK (workspace_id = public.app_workspace_id() AND status IN ('pending', 'revoked'));
 REVOKE ALL ON TABLE public.workspace_invitations FROM PUBLIC, slugbase_app;
 GRANT SELECT ON TABLE public.workspace_invitations TO slugbase_app;
 GRANT INSERT (id, workspace_id, email, role, team_ids, token_hash, invited_by, expires_at) ON TABLE public.workspace_invitations TO slugbase_app;
-GRANT UPDATE (role, team_ids, token_hash, invited_by, expires_at) ON TABLE public.workspace_invitations TO slugbase_app;
+GRANT UPDATE (role, team_ids, token_hash, invited_by, expires_at, status, closed_at) ON TABLE public.workspace_invitations TO slugbase_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.workspace_invitations TO slugbase_system;
 CREATE OR REPLACE TRIGGER workspace_invitations_set_updated_at
   BEFORE UPDATE ON public.workspace_invitations

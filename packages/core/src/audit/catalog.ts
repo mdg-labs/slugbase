@@ -50,6 +50,8 @@ export const AUDIT_ACTIONS = {
   // The invited address is personal data and has no field: the event names the invitation and the role it grants.
   "invitation.created": { category: "invitation", metadata: { role: MEMBER_ROLE } },
   "invitation.resent": { category: "invitation", metadata: { role: MEMBER_ROLE } },
+  "invitation.link_created": { category: "invitation", metadata: { role: MEMBER_ROLE } },
+  "invitation.revoked": { category: "invitation", metadata: { role: MEMBER_ROLE } },
 } as const satisfies Record<string, AuditActionDefinition>;
 
 export type AuditAction = keyof typeof AUDIT_ACTIONS;

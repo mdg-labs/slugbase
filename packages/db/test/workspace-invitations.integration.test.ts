@@ -11,7 +11,9 @@ import { seedMember, seedWorkspace, type Role } from "./support/workspace-fixtur
 // role; one written with the columns that make it an owner's or an accepted one; a workspace B's invitation
 // read, written or replaced from a transaction acting in A; two requests for one address that leave two pending
 // invitations; a resend that leaves the earlier link working; a token that can be read back; and a language
-// asked of an address nobody invited, by a caller who may not invite. The RLS-only checks run statements as
+// asked of an address nobody invited, by a caller who may not invite; and, for the management of a pending
+// invitation, a resend or link that leaves the earlier token working, a revocation that reopens, accepts or
+// changes another workspace's invitation, and a purge that deletes a pending one. The RLS-only checks run statements as
 // slugbase_app with the tenant settings of A and no application layer.
 
 const HOOK_TIMEOUT_MS = 300_000;
@@ -102,6 +104,7 @@ async function refusedWith(work: Promise<unknown>): Promise<string | undefined> 
 
 interface Row {
   id: string;
+  accepted_by: string | null;
   workspace_id: string;
   email: string;
   role: string;
@@ -138,8 +141,9 @@ async function seedInvitation(workspaceId: string, email: string, overrides: { s
   await asSystem(
     db,
     (tx) => tx`
-      INSERT INTO workspace_invitations (id, workspace_id, email, role, token_hash, status, expires_at)
-      VALUES (${id}, ${workspaceId}, ${email}, 'member', ${freshToken().hash}, ${overrides.status ?? "pending"}, now() + ${overrides.expiresInSeconds ?? TTL_SECONDS} * interval '1 second')`,
+      INSERT INTO workspace_invitations (id, workspace_id, email, role, token_hash, status, closed_at, expires_at)
+      VALUES (${id}, ${workspaceId}, ${email}, 'member', ${freshToken().hash}, ${overrides.status ?? "pending"},
+              ${(overrides.status ?? "pending") === "pending" ? null : new Date()}, now() + ${overrides.expiresInSeconds ?? TTL_SECONDS} * interval '1 second')`,
   );
   return id;
 }
@@ -159,7 +163,7 @@ describe("the table, its privileges and its policies", () => {
     ]);
   });
 
-  it("lets the application role insert the columns of a pending invitation and none that make it an owner's or an accepted one, update what a resend replaces, and never delete", async () => {
+  it("lets the application role insert the columns of a pending invitation and none that make it an owner's or an accepted one, update what a resend replaces and the status, and never delete", async () => {
     const columns = async (privilege: string): Promise<string[]> => {
       const rows = await db.owner<{ column: string }[]>`
         SELECT a.attname AS column FROM pg_attribute a
@@ -170,7 +174,7 @@ describe("the table, its privileges and its policies", () => {
     };
 
     expect(await columns("INSERT")).toEqual(["email", "expires_at", "id", "invited_by", "role", "team_ids", "token_hash", "workspace_id"]);
-    expect(await columns("UPDATE")).toEqual(["expires_at", "invited_by", "role", "team_ids", "token_hash"]);
+    expect(await columns("UPDATE")).toEqual(["closed_at", "expires_at", "invited_by", "role", "status", "team_ids", "token_hash"]);
     const [table] = await db.owner<{ canDelete: boolean }[]>`SELECT has_table_privilege('slugbase_app', 'public.workspace_invitations', 'DELETE') AS "canDelete"`;
     expect(table?.canDelete).toBe(false);
   });
@@ -254,6 +258,57 @@ describe("the table, its privileges and its policies", () => {
     const listed = await appAs({ accountId: who(a, 0) }, (tx) => tx`SELECT id FROM workspace_invitations`);
 
     expect(listed).toHaveLength(0);
+  });
+});
+
+describe("the status of an invitation under the application role", () => {
+  it("lets a pending invitation of the workspace become revoked and nothing else: not accepted, not pending again once revoked, not another workspace's", async () => {
+    const a = await workspaceOf("owner", "admin");
+    const b = await workspaceOf("owner");
+    const own = await seedInvitation(a.workspaceId, "own@example.test");
+    const accepting = await seedInvitation(a.workspaceId, "accepting@example.test");
+    const revoked = await seedInvitation(a.workspaceId, "revoked@example.test", { status: "revoked" });
+    const accepted = await seedInvitation(a.workspaceId, "accepted@example.test", { status: "accepted" });
+    const foreign = await seedInvitation(b.workspaceId, "foreign@example.test");
+    const before = await checksum(b.workspaceId);
+    const actor = { accountId: who(a, 0), workspaceId: a.workspaceId };
+
+    const accept = await refusedWith(appAs(actor, (tx) => tx`UPDATE workspace_invitations SET status = 'accepted' WHERE id = ${accepting}`));
+    const invalid = await refusedWith(appAs(actor, (tx) => tx`UPDATE workspace_invitations SET status = 'done' WHERE id = ${accepting}`));
+    const reopened = await appAs(actor, (tx) => tx`UPDATE workspace_invitations SET status = 'pending' WHERE id = ${revoked}`);
+    const unaccepted = await appAs(actor, (tx) => tx`UPDATE workspace_invitations SET status = 'revoked' WHERE id = ${accepted}`);
+    const reached = await appAs(actor, (tx) => tx`UPDATE workspace_invitations SET status = 'revoked' WHERE id = ${foreign}`);
+    const done = await appAs(actor, (tx) => tx`UPDATE workspace_invitations SET status = 'revoked', closed_at = now() WHERE id = ${own}`);
+
+    expect(accept).toBe(INSUFFICIENT_PRIVILEGE);
+    expect(invalid).toBe(INSUFFICIENT_PRIVILEGE);
+    expect(reopened.count).toBe(0);
+    expect(unaccepted.count).toBe(0);
+    expect(reached.count).toBe(0);
+    expect(done.count).toBe(1);
+    expect((await rowsOf(a.workspaceId)).map((row) => [row.id, row.status]).sort()).toEqual(
+      [
+        [own, "revoked"],
+        [accepting, "pending"],
+        [revoked, "revoked"],
+        [accepted, "accepted"],
+      ].sort(),
+    );
+    expect(await checksum(b.workspaceId)).toBe(before);
+  });
+
+  it("refuses to change the workspace, the accepting account or the owner flag of an invitation, and never lets a pending one be moved to another workspace", async () => {
+    const a = await workspaceOf("owner");
+    const b = await workspaceOf("owner");
+    const own = await seedInvitation(a.workspaceId, "own@example.test");
+    const actor = { accountId: who(a, 0), workspaceId: a.workspaceId };
+
+    const moved = await refusedWith(appAs(actor, (tx) => tx`UPDATE workspace_invitations SET workspace_id = ${b.workspaceId} WHERE id = ${own}`));
+    const flagged = await refusedWith(appAs(actor, (tx) => tx`UPDATE workspace_invitations SET instance_issued = true WHERE id = ${own}`));
+    const accepter = await refusedWith(appAs(actor, (tx) => tx`UPDATE workspace_invitations SET accepted_by = ${who(a, 0)} WHERE id = ${own}`));
+
+    expect([moved, flagged, accepter]).toEqual([INSUFFICIENT_PRIVILEGE, INSUFFICIENT_PRIVILEGE, INSUFFICIENT_PRIVILEGE]);
+    expect((await rowsOf(a.workspaceId)).map((row) => [row.workspace_id, row.instance_issued, row.accepted_by])).toEqual([[a.workspaceId, false, null]]);
   });
 });
 
@@ -354,6 +409,194 @@ describe("invitationRepository.writePending", () => {
     }).catch(() => undefined);
 
     expect(await rowsOf(a.workspaceId)).toHaveLength(0);
+  });
+});
+
+describe("invitationRepository.pending and listPending", () => {
+  it("reads a pending invitation of the workspace and none that is revoked, accepted or another workspace's", async () => {
+    const a = await workspaceOf("owner");
+    const b = await workspaceOf("owner");
+    const pending = await seedInvitation(a.workspaceId, "pending@example.test");
+    const revoked = await seedInvitation(a.workspaceId, "revoked@example.test", { status: "revoked" });
+    const accepted = await seedInvitation(a.workspaceId, "accepted@example.test", { status: "accepted" });
+    const foreign = await seedInvitation(b.workspaceId, "foreign@example.test");
+
+    const read = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, async (tx) => {
+      const repository = invitationRepository(tx);
+      return { pending: await repository.pending(pending), revoked: await repository.pending(revoked), accepted: await repository.pending(accepted), foreign: await repository.pending(foreign) };
+    });
+
+    expect(read.pending).toMatchObject({ id: pending, email: "pending@example.test", status: "pending", role: "member" });
+    expect([read.revoked, read.accepted, read.foreign]).toEqual([undefined, undefined, undefined]);
+  });
+
+  it("lists the pending invitations of the workspace newest first with whether each has expired, keyset by identifier, and never another workspace's", async () => {
+    const a = await workspaceOf("owner");
+    const b = await workspaceOf("owner");
+    const first = await seedInvitation(a.workspaceId, "first@example.test");
+    const expired = await seedInvitation(a.workspaceId, "expired@example.test", { expiresInSeconds: -60 });
+    await seedInvitation(a.workspaceId, "revoked@example.test", { status: "revoked" });
+    await seedInvitation(a.workspaceId, "accepted@example.test", { status: "accepted" });
+    const last = await seedInvitation(a.workspaceId, "last@example.test");
+    await seedInvitation(b.workspaceId, "foreign@example.test");
+    const actor = { accountId: who(a, 0), workspaceId: a.workspaceId };
+
+    const all = await inTenant(actor, (tx) => invitationRepository(tx).listPending(null, 10));
+    const firstPage = await inTenant(actor, (tx) => invitationRepository(tx).listPending(null, 2));
+    const secondPage = await inTenant(actor, (tx) => invitationRepository(tx).listPending(firstPage[1]?.id ?? null, 2));
+
+    const newestFirst = [first, expired, last].sort().reverse();
+    expect(all.map((invitation) => invitation.id)).toEqual(newestFirst);
+    expect(all.map((invitation) => [invitation.email, invitation.expired]).sort()).toEqual([
+      ["expired@example.test", true],
+      ["first@example.test", false],
+      ["last@example.test", false],
+    ]);
+    expect([...firstPage, ...secondPage].map((invitation) => invitation.id)).toEqual(newestFirst);
+    expect(secondPage).toHaveLength(1);
+    expect(JSON.stringify(all)).not.toMatch(/token/i);
+  });
+
+  it("lists nothing and reads nothing for another workspace's transaction, and needs a workspace", async () => {
+    const a = await workspaceOf("owner");
+    const b = await workspaceOf("owner");
+    const foreign = await seedInvitation(b.workspaceId, "foreign@example.test");
+
+    const listed = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).listPending(null, 10));
+    const read = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).pending(foreign));
+
+    expect(listed).toEqual([]);
+    expect(read).toBeUndefined();
+    await expect(inTenant({ accountId: who(a, 0) }, (tx) => invitationRepository(tx).listPending(null, 10))).rejects.toMatchObject({ code: "workspace_required" });
+  });
+});
+
+describe("invitationRepository.renew", () => {
+  it("replaces the token hash and the expiry of a pending invitation and makes the account of the transaction its inviter, which ends the earlier link", async () => {
+    const a = await workspaceOf("owner", "admin");
+    const written = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).writePending(newInvitation("renew@example.test", { ttlSeconds: 60 })));
+    const [before] = await rowsOf(a.workspaceId);
+    const replacement = freshToken().hash;
+
+    const renewed = await inTenant({ accountId: who(a, 1), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).renew(written.invitation.id, { tokenHash: replacement, ttlSeconds: TTL_SECONDS }));
+
+    const [after] = await rowsOf(a.workspaceId);
+    expect(renewed).toMatchObject({ id: written.invitation.id, email: "renew@example.test", status: "pending", invitedBy: who(a, 1) });
+    expect(after?.token_hash.equals(replacement)).toBe(true);
+    expect(after?.token_hash.equals(before?.token_hash ?? Buffer.alloc(0))).toBe(false);
+    expect(after?.invited_by).toBe(who(a, 1));
+    expect(((after?.expires_at.getTime() ?? 0) - Date.now()) / 1000).toBeGreaterThan(TTL_SECONDS - 60);
+    expect(renewed?.expiresAt.getTime()).toBe(after?.expires_at.getTime());
+  });
+
+  it("renews an invitation whose expiry has passed, which makes it acceptable again", async () => {
+    const a = await workspaceOf("owner");
+    const id = await seedInvitation(a.workspaceId, "late@example.test", { expiresInSeconds: -3600 });
+
+    const renewed = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).renew(id, { tokenHash: freshToken().hash, ttlSeconds: TTL_SECONDS }));
+
+    expect(renewed?.expiresAt.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it.each([
+    ["revoked", { status: "revoked" }],
+    ["accepted", { status: "accepted" }],
+  ])("changes nothing of an invitation that is %s", async (_name, overrides) => {
+    const a = await workspaceOf("owner");
+    const id = await seedInvitation(a.workspaceId, "gone@example.test", overrides);
+    const before = await checksum(a.workspaceId);
+
+    const renewed = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).renew(id, { tokenHash: freshToken().hash, ttlSeconds: TTL_SECONDS }));
+
+    expect(renewed).toBeUndefined();
+    expect(await checksum(a.workspaceId)).toBe(before);
+  });
+
+  it("changes nothing of an invitation of another workspace", async () => {
+    const a = await workspaceOf("owner");
+    const b = await workspaceOf("owner");
+    const foreign = await seedInvitation(b.workspaceId, "foreign@example.test");
+    const before = await checksum(b.workspaceId);
+
+    const renewed = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).renew(foreign, { tokenHash: freshToken().hash, ttlSeconds: TTL_SECONDS }));
+
+    expect(renewed).toBeUndefined();
+    expect(await checksum(b.workspaceId)).toBe(before);
+  });
+
+  it("leaves one token standing when two renewals arrive together: the hash of one of them", async () => {
+    const a = await workspaceOf("owner");
+    const id = await seedInvitation(a.workspaceId, "race@example.test");
+    const hashes = [freshToken().hash, freshToken().hash];
+
+    await Promise.all(hashes.map((tokenHash) => inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).renew(id, { tokenHash, ttlSeconds: TTL_SECONDS }))));
+
+    const [row] = await rowsOf(a.workspaceId);
+    expect(hashes.filter((hash) => hash.equals(row?.token_hash ?? Buffer.alloc(0)))).toHaveLength(1);
+  });
+});
+
+describe("invitationRepository.revoke", () => {
+  it("revokes a pending invitation, keeps its row and answers its record", async () => {
+    const a = await workspaceOf("owner");
+    const id = await seedInvitation(a.workspaceId, "revoke@example.test");
+
+    const outcome = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).revoke(id));
+
+    expect(outcome).toMatchObject({ kind: "revoked", invitation: { id, email: "revoke@example.test", status: "revoked" } });
+    expect((await rowsOf(a.workspaceId)).map((row) => [row.id, row.status])).toEqual([[id, "revoked"]]);
+  });
+
+  it("answers an invitation that is revoked already as such and writes nothing, and one that is accepted, gone or unknown as not found", async () => {
+    const a = await workspaceOf("owner");
+    const revoked = await seedInvitation(a.workspaceId, "revoked@example.test", { status: "revoked" });
+    const accepted = await seedInvitation(a.workspaceId, "accepted@example.test", { status: "accepted" });
+    const before = await checksum(a.workspaceId);
+
+    const outcomes = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, async (tx) => {
+      const repository = invitationRepository(tx);
+      return [await repository.revoke(revoked), await repository.revoke(accepted), await repository.revoke(freshId())];
+    });
+
+    expect(outcomes).toEqual([{ kind: "already_revoked" }, { kind: "not_found" }, { kind: "not_found" }]);
+    expect(await checksum(a.workspaceId)).toBe(before);
+  });
+
+  it("revokes nothing of another workspace and answers it as not found, whether it is pending or revoked", async () => {
+    const a = await workspaceOf("owner");
+    const b = await workspaceOf("owner");
+    const pending = await seedInvitation(b.workspaceId, "pending@example.test");
+    const revoked = await seedInvitation(b.workspaceId, "revoked@example.test", { status: "revoked" });
+    const before = await checksum(b.workspaceId);
+
+    const outcomes = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, async (tx) => {
+      const repository = invitationRepository(tx);
+      return [await repository.revoke(pending), await repository.revoke(revoked)];
+    });
+
+    expect(outcomes).toEqual([{ kind: "not_found" }, { kind: "not_found" }]);
+    expect(await checksum(b.workspaceId)).toBe(before);
+  });
+
+  it("rolls the revocation back with the transaction", async () => {
+    const a = await workspaceOf("owner");
+    const id = await seedInvitation(a.workspaceId, "rollback@example.test");
+
+    await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, async (tx) => {
+      await invitationRepository(tx).revoke(id);
+      throw new Error("the audit write failed");
+    }).catch(() => undefined);
+
+    expect((await rowsOf(a.workspaceId))[0]?.status).toBe("pending");
+  });
+
+  it("revokes once when two revocations arrive together, and the other finds it revoked", async () => {
+    const a = await workspaceOf("owner");
+    const id = await seedInvitation(a.workspaceId, "twice@example.test");
+
+    const outcomes = await Promise.all([1, 2].map(() => inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).revoke(id))));
+
+    expect(outcomes.map((outcome) => outcome.kind).sort()).toEqual(["already_revoked", "revoked"]);
   });
 });
 
