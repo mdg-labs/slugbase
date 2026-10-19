@@ -7,6 +7,9 @@
 import type { ProblemCode } from '@slugbase/contracts';
 
 // @public
+export function acceptInvitation(input: InvitationAcceptDependencies, ask: InvitationAcceptAsk): Promise<InvitationAcceptOutcome>;
+
+// @public
 export const ACCOUNT_CREATION_PATHS: readonly ["self-registration", "invitation", "oidc", "setup"];
 
 // @public
@@ -301,6 +304,16 @@ export const AUDIT_ACTIONS: {
             };
             readonly transferTo: {
                 readonly type: "uuid";
+            };
+        };
+    };
+    readonly "member.joined": {
+        readonly category: "member";
+        readonly metadata: {
+            readonly role: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
             };
         };
     };
@@ -609,6 +622,18 @@ export const DOMAIN_EVENTS: {
             readonly type: "uuid";
         };
     };
+    readonly "member.joined": {
+        readonly workspaceId: {
+            readonly type: "uuid";
+        };
+        readonly accountId: {
+            readonly type: "uuid";
+        };
+        readonly role: {
+            readonly type: "enum";
+            readonly values: readonly ["owner", "admin", "member"];
+        };
+    };
 };
 
 // @public
@@ -852,10 +877,66 @@ export interface IdentityProviderInfo {
 }
 
 // @public
+export function inspectInvitation(input: {
+    readonly store: InvitationInspectStore;
+}, ask: {
+    readonly token: string;
+}): Promise<InvitationInspectOutcome>;
+
+// @public
 export const INVITATION_ROLES: readonly ["admin", "member"];
 
 // @public
 export const INVITATION_TTL_SECONDS: number;
+
+// @public (undocumented)
+export interface InvitationAcceptAsk {
+    readonly actor: Extract<AuditActor, {
+        type: "account";
+    }>;
+    readonly ipPrefix: string | null;
+    readonly seatLimit: number | null;
+    readonly sessionId: string;
+    readonly token: string;
+}
+
+// @public (undocumented)
+export interface InvitationAcceptDependencies {
+    readonly audit: AuditWriter;
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: InvitationAcceptStore;
+}
+
+// @public (undocumented)
+export type InvitationAcceptOutcome = InvitationAcceptResult;
+
+// @public
+export type InvitationAcceptResult = {
+    readonly kind: "accepted";
+    readonly workspaceId: string;
+    readonly invitationId: string;
+    readonly role: WorkspaceRole;
+}
+/** An unknown, used, revoked, replaced or expired token, a workspace being deleted or an account that is gone or disabled. */
+| {
+    readonly kind: "gone";
+}
+/** The account's verified address is not the invited one, or the account's address is not verified. */
+| {
+    readonly kind: "email_mismatch";
+} | {
+    readonly kind: "already_member";
+} | {
+    readonly kind: "seat_limit_reached";
+};
+
+// @public
+export interface InvitationAcceptStore {
+    accept(tokenHash: Buffer, seatLimit: number | null): Promise<InvitationAcceptResult>;
+    activate(sessionId: string, workspaceId: string): Promise<boolean>;
+    queueEvents(events: readonly DomainEvent<"member.joined">[]): Promise<void>;
+}
 
 // @public (undocumented)
 export interface InvitationActionAsk {
@@ -901,6 +982,21 @@ export interface InvitationDependencies {
     // (undocumented)
     readonly store: InvitationStore;
     readonly ttlSeconds: number;
+}
+
+// @public (undocumented)
+export type InvitationInspectOutcome = {
+    readonly kind: "inspected";
+    readonly preview: InvitationPreview;
+}
+/** The text is not the token of a pending, unexpired invitation. */
+| {
+    readonly kind: "gone";
+};
+
+// @public (undocumented)
+export interface InvitationInspectStore {
+    inspectInvitation(tokenHash: Buffer): Promise<InvitationPreview | undefined>;
 }
 
 // @public
@@ -988,6 +1084,18 @@ export type InvitationOutcome =
 | {
     readonly kind: "already_member";
 };
+
+// @public
+export interface InvitationPreview {
+    readonly accountExists: boolean;
+    // (undocumented)
+    readonly email: string;
+    readonly inviterName: string | null;
+    // (undocumented)
+    readonly role: WorkspaceRole;
+    // (undocumented)
+    readonly workspaceName: string;
+}
 
 // @public
 export interface InvitationRecord {

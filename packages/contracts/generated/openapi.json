@@ -1,6 +1,21 @@
 {
   "components": {
     "schemas": {
+      "AcceptInvitationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "description": "The token of the invitation link, from the path of /invite/<token>",
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "type": "object"
+      },
       "Account": {
         "additionalProperties": false,
         "properties": {
@@ -786,6 +801,21 @@
         ],
         "type": "object"
       },
+      "InspectInvitationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "token": {
+            "description": "The token of the invitation link, from the path of /invite/<token>",
+            "maxLength": 256,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "type": "object"
+      },
       "Invitation": {
         "additionalProperties": false,
         "properties": {
@@ -861,6 +891,31 @@
           "invitedBy",
           "expiresAt",
           "createdAt"
+        ],
+        "type": "object"
+      },
+      "InvitationAccepted": {
+        "additionalProperties": false,
+        "properties": {
+          "role": {
+            "description": "The role the membership has: exactly the invited role",
+            "enum": [
+              "owner",
+              "admin",
+              "member"
+            ],
+            "type": "string"
+          },
+          "workspaceId": {
+            "description": "The workspace the account joined, which is the session's active workspace from the next request on",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspaceId",
+          "role"
         ],
         "type": "object"
       },
@@ -987,6 +1042,47 @@
           "expiresAt",
           "createdAt",
           "expired"
+        ],
+        "type": "object"
+      },
+      "InvitationPreview": {
+        "additionalProperties": false,
+        "properties": {
+          "accountExists": {
+            "description": "Whether an account holds the invited address, which tells the page to ask for a sign-in or for a sign-up",
+            "type": "boolean"
+          },
+          "email": {
+            "description": "The invited address; the account that accepts must hold it, verified",
+            "type": "string"
+          },
+          "inviterName": {
+            "description": "The display name of the account that sent the invitation, null once that account is deleted",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "role": {
+            "description": "The role the invited person gets on accepting",
+            "enum": [
+              "owner",
+              "admin",
+              "member"
+            ],
+            "type": "string"
+          },
+          "workspaceName": {
+            "description": "The name of the workspace the invitation is into",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspaceName",
+          "inviterName",
+          "email",
+          "role",
+          "accountExists"
         ],
         "type": "object"
       },
@@ -3485,6 +3581,234 @@
         "x-slugbase-entitlement": "members.invite",
         "x-slugbase-idempotency": true,
         "x-slugbase-rate": "write"
+      }
+    },
+    "/api/v1/invitations/accept": {
+      "post": {
+        "operationId": "acceptInvitation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcceptInvitationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationAccepted"
+                }
+              }
+            },
+            "description": "The token is redeemed, once: the account is a member of the invitation's workspace with exactly the invited role, the invitation is accepted and the session acts in the workspace from its next request on"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), the credential is an API token, or the account's verified email address is not the invited one, an unverified address included (forbidden, field code invitation_email_mismatch). Nothing is written and the invitation stays pending"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The account is a member of the workspace already (already_member); nothing is written and the invitation stays pending"
+          },
+          "410": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The token is unknown, expired (7 days), already used, revoked or replaced by a newer one, or its workspace is being deleted; all of them answer alike (token_expired) and nothing is changed"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body did not pass validation, or the workspace has no seat left (seat_limit_reached); nothing is written and the invitation stays pending"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many attempts from this address; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Accept an invitation as the invited account",
+        "tags": [
+          "invitations"
+        ],
+        "x-slugbase-auth": "account",
+        "x-slugbase-rate": "token_redeem"
+      }
+    },
+    "/api/v1/invitations/inspect": {
+      "post": {
+        "operationId": "inspectInvitation",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InspectInvitationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitationPreview"
+                }
+              }
+            },
+            "description": "The invitation the token belongs to: the workspace's name, the inviter's name, the invited address, the role and whether an account holds the address. Nothing is changed and the token stays valid"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request)"
+          },
+          "410": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The token is unknown, expired (7 days), already used, revoked or replaced by a newer one, or its workspace is being deleted; all of them answer alike (token_expired)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body did not pass validation"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many attempts from this address; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Read what an invitation link is for",
+        "tags": [
+          "invitations"
+        ],
+        "x-slugbase-auth": "anonymous",
+        "x-slugbase-rate": "token_redeem"
       }
     },
     "/api/v1/invitations/{id}": {

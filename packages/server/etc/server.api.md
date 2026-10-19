@@ -786,6 +786,7 @@ export const RATE_LIMIT_DEFAULTS: {
     };
     readonly token_redeem: {
         readonly ip: "10/hour";
+        readonly account: "10/hour";
     };
     readonly token_create: {
         readonly ip: "20/hour";

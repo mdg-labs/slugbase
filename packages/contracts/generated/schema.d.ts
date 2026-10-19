@@ -206,6 +206,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/invitations/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept an invitation as the invited account */
+        post: operations["acceptInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invitations/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read what an invitation link is for */
+        post: operations["inspectInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/invitations/{id}": {
         parameters: {
             query?: never;
@@ -797,6 +831,10 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AcceptInvitationRequest: {
+            /** @description The token of the invitation link, from the path of /invite/<token> */
+            token: string;
+        };
         Account: {
             /** @description The accent colour, one of the six preset names; null when none was chosen, which shows the default */
             accent: ("periwinkle" | "violet" | "rose" | "amber" | "green" | "teal") | null;
@@ -1084,6 +1122,10 @@ export interface components {
             /** @description Passed as `cursor` to get the next page; null on the last page */
             nextCursor: string | null;
         };
+        InspectInvitationRequest: {
+            /** @description The token of the invitation link, from the path of /invite/<token> */
+            token: string;
+        };
         Invitation: {
             /**
              * Format: date-time
@@ -1116,6 +1158,18 @@ export interface components {
             status: "pending" | "accepted" | "revoked";
             /** @description The teams the invited person joins on accepting */
             teamIds: string[];
+        };
+        InvitationAccepted: {
+            /**
+             * @description The role the membership has: exactly the invited role
+             * @enum {string}
+             */
+            role: "owner" | "admin" | "member";
+            /**
+             * Format: uuid
+             * @description The workspace the account joined, which is the session's active workspace from the next request on
+             */
+            workspaceId: string;
         };
         InvitationLink: {
             /** @description The invitation, with the new expiry */
@@ -1166,6 +1220,21 @@ export interface components {
             status: "pending" | "accepted" | "revoked";
             /** @description The teams the invited person joins on accepting */
             teamIds: string[];
+        };
+        InvitationPreview: {
+            /** @description Whether an account holds the invited address, which tells the page to ask for a sign-in or for a sign-up */
+            accountExists: boolean;
+            /** @description The invited address; the account that accepts must hold it, verified */
+            email: string;
+            /** @description The display name of the account that sent the invitation, null once that account is deleted */
+            inviterName: string | null;
+            /**
+             * @description The role the invited person gets on accepting
+             * @enum {string}
+             */
+            role: "owner" | "admin" | "member";
+            /** @description The name of the workspace the invitation is into */
+            workspaceName: string;
         };
         LoginRequest: {
             /** @description The account's email address; case does not matter */
@@ -2544,6 +2613,184 @@ export interface operations {
                 };
             };
             /** @description The service is temporarily unavailable, or an earlier request with the same Idempotency-Key is still running */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    acceptInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptInvitationRequest"];
+            };
+        };
+        responses: {
+            /** @description The token is redeemed, once: the account is a member of the invitation's workspace with exactly the invited role, the invitation is accepted and the session acts in the workspace from its next request on */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationAccepted"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token, or the account's verified email address is not the invited one, an unverified address included (forbidden, field code invitation_email_mismatch). Nothing is written and the invitation stays pending */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The account is a member of the workspace already (already_member); nothing is written and the invitation stays pending */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The token is unknown, expired (7 days), already used, revoked or replaced by a newer one, or its workspace is being deleted; all of them answer alike (token_expired) and nothing is changed */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation, or the workspace has no seat left (seat_limit_reached); nothing is written and the invitation stays pending */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many attempts from this address; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    inspectInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InspectInvitationRequest"];
+            };
+        };
+        responses: {
+            /** @description The invitation the token belongs to: the workspace's name, the inviter's name, the invited address, the role and whether an account holds the address. Nothing is changed and the token stays valid */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationPreview"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The token is unknown, expired (7 days), already used, revoked or replaced by a newer one, or its workspace is being deleted; all of them answer alike (token_expired) */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many attempts from this address; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
             503: {
                 headers: {
                     [name: string]: unknown;

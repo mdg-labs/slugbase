@@ -163,6 +163,11 @@ export const FIXTURES: ContractFixtures = {
   resendInvitation: { path: { id: UNKNOWN_INVITATION_ID }, status: 404, foreign: { path: { id: UNKNOWN_INVITATION_ID } } },
   createInvitationLink: { path: { id: UNKNOWN_INVITATION_ID }, status: 404, foreign: { path: { id: UNKNOWN_INVITATION_ID } } },
   revokeInvitation: { path: { id: UNKNOWN_INVITATION_ID }, status: 404, foreign: { path: { id: UNKNOWN_INVITATION_ID } } },
+  // The two operations that redeem an invitation's token: the inspection is anonymous and the acceptance is the signed-in account's. Neither names a
+  // workspace, an account or an invitation by identifier (the token is the only handle and a workspace identifier cannot be put in it), and the walker
+  // holds no invitation token, so each valid request is the declared 410; the redemptions themselves are walked by the invitation acceptance tests.
+  inspectInvitation: { body: { token: "A".repeat(43) }, status: 410 },
+  acceptInvitation: { body: { token: "A".repeat(43) }, status: 410 },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

@@ -160,6 +160,8 @@ describe("the shipped chain", () => {
       "sys_account_last_instance_admin",
       "sys_delete_account",
       "sys_invitation_invitee_locale",
+      "sys_invitation_inspect",
+      "sys_invitation_accept",
     ]);
     expect(checkRules).toContain(systemOperationsRule);
     const database = await scratch();

@@ -10,7 +10,7 @@ Vocabulary is doc 00 §3 and is binding in code, API, database and copy. Decisio
 
 1. **CE and Cloud behave identically** except where this document names configuration (`PUBLIC_REGISTRATION`, `EMAIL_VERIFICATION_REQUIRED`, configured adapters) or an entitlement. No behaviour depends on an edition flag (D4).
 2. **Every capability is an API operation** (D12). The UI has no private behaviour; anything the UI can do, an API token can do, within that token's scope.
-3. **Non-enumerating by default.** Any flow that could reveal whether an email address has an account (login failure, password reset, registration, resend verification, email change, invitation inspect and accept) answers identically for both cases and takes comparable time.
+3. **Non-enumerating by default.** Any flow that could reveal whether an email address has an account (login failure, password reset, registration, resend verification, email change, invitation inspect and accept) answers identically for both cases and takes comparable time. The one exception is the field `accountExists` of `POST /invitations/inspect`, which tells the holder of a live invitation token whether the invited address, and only that address, has an account, so the page can ask for a sign-in or a sign-up (§3.4); the holder is the invitee and the admin who took the link. An unknown, expired, revoked or used token is one `410 token_expired`, and the answer is limited by the `token_redeem` bucket (§16).
 4. **Destructive actions are explicit.** Deletes are hard (no trash in v1, doc 00 §4); every destructive action states its consequence and requires confirmation (doc 03 shared patterns). The only non-destructive "hidden" state is plan-archive (§5.6).
 5. **Private by default.** A new bookmark, folder, tag and slug is visible to its owner only. Sharing is an explicit act (§8).
 6. **Degrade, don't fail.** With an optional adapter missing (mail, AI, OIDC), the dependent feature is unavailable and says so; nothing else breaks (D22).
@@ -488,7 +488,7 @@ Token buckets through `RateLimitPort` (doc 01 §8.2); each operation names its b
 | `mfa` | MFA code, TOTP re-authentication, MFA enrolment confirmation, backup-code regeneration and disabling MFA | 10 / min | 5 failures per pending session (then it ends); 30 / hour per account |
 | `register` | Registration | 5 / hour | — |
 | `reset` | Password-reset request, verification resend, email-change request, invitation resend | 5 / hour | 3 / hour per target email |
-| `token_redeem` | Redeeming an emailed or invitation token (verify email, reset password, confirm or cancel an email change, inspect and accept an invitation) | 10 / hour | — |
+| `token_redeem` | Redeeming an emailed or invitation token (verify email, reset password, confirm or cancel an email change, inspect and accept an invitation) | 10 / hour | 10 / hour per account, taken for a signed-in caller (accepting an invitation) |
 | `token_create` | API token creation | 20 / hour | 20 / hour per account |
 | `setup` | First-run setup | 10 / hour | — |
 | `go` | `/go` resolution, choosing a candidate, slug suggestions and recording an open | 600 / min | 300 / min per account |

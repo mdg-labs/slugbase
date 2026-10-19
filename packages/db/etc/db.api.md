@@ -9,6 +9,8 @@ import type { AuditRecord } from '@slugbase/core';
 import type { CredentialTokenPurpose } from '@slugbase/core';
 import { InferInsertModel } from 'drizzle-orm';
 import { InferSelectModel } from 'drizzle-orm';
+import type { InvitationAcceptResult } from '@slugbase/core';
+import type { InvitationInspectStore } from '@slugbase/core';
 import type { InvitationManagementStore } from '@slugbase/core';
 import type { InvitationStore } from '@slugbase/core';
 import type { MemberRoleStore } from '@slugbase/core';
@@ -200,7 +202,7 @@ export interface AuditEventRepository {
 export function auditEventRepository(tx: TenantTx): AuditEventRepository;
 
 // @public (undocumented)
-export interface AuthStore extends SetupStore, MfaStore, OidcStore, RegistrationStore, EmailVerificationStore, PasswordResetStore, EmailChangeStore {
+export interface AuthStore extends SetupStore, MfaStore, OidcStore, RegistrationStore, EmailVerificationStore, PasswordResetStore, EmailChangeStore, InvitationInspectStore {
     changePassword(change: PasswordChange): Promise<boolean>;
     close(): Promise<void>;
     createSession(session: NewSession): Promise<boolean>;
@@ -501,6 +503,15 @@ export type IdentityUnlinkOutcome = "unlinked"
 export type InsertValues<T extends WorkspaceTable> = Omit<InferInsertModel<T>, "workspaceId"> & {
     workspaceId?: string;
 };
+
+// @public
+export interface InvitationAcceptanceRepository {
+    accept(tokenHash: Buffer, seatLimit: number | null): Promise<InvitationAcceptResult>;
+    enqueue(jobs: readonly QueuedJob[]): Promise<void>;
+}
+
+// @public (undocumented)
+export function invitationAcceptanceRepository(tx: TenantTx): InvitationAcceptanceRepository;
 
 // @public
 export interface InvitationMailContext {

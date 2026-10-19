@@ -39,7 +39,7 @@ export const RATE_LIMIT_DEFAULTS = {
   mfa: { ip: "10/min", account: "30/hour" },
   register: { ip: "5/hour" },
   reset: { ip: "5/hour", email: "3/hour" },
-  token_redeem: { ip: "10/hour" },
+  token_redeem: { ip: "10/hour", account: "10/hour" },
   token_create: { ip: "20/hour", account: "20/hour" },
   setup: { ip: "10/hour" },
   go: { ip: "600/min", account: "300/min" },

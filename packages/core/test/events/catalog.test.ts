@@ -15,7 +15,7 @@ const ACCOUNT = "0192f3a0-bbbb-7000-8000-000000000001";
 
 describe("the domain event catalog", () => {
   it("announces account.created with the account and how it came to exist", () => {
-    expect(DOMAIN_EVENT_NAMES).toEqual(["account.created", "account.deleted", "workspace.created", "workspace.deleted", "member.left"]);
+    expect(DOMAIN_EVENT_NAMES).toEqual(["account.created", "account.deleted", "workspace.created", "workspace.deleted", "member.left", "member.joined"]);
     expect(Object.keys(DOMAIN_EVENTS["account.created"])).toEqual(["accountId", "path"]);
     expect(ACCOUNT_CREATION_PATHS).toEqual(["self-registration", "invitation", "oidc", "setup"]);
   });
@@ -40,6 +40,17 @@ describe("the domain event catalog", () => {
     expect(parseDomainEventPayload("workspace.deleted", { workspaceId: ACCOUNT })).toEqual({ workspaceId: ACCOUNT });
     for (const bad of [{}, { workspaceId: ACCOUNT, name: "Ada's workspace" }, { workspaceId: "someone" }]) {
       expect(() => parseDomainEventPayload("workspace.deleted", bad)).toThrow(DomainEventPayloadError);
+    }
+  });
+
+  it("announces member.joined with the workspace, the account and the role it was given, and nothing else", () => {
+    const ids = { workspaceId: "0192f3a0-cccc-7000-8000-000000000001", accountId: ACCOUNT };
+    expect(Object.keys(DOMAIN_EVENTS["member.joined"])).toEqual(["workspaceId", "accountId", "role"]);
+    for (const role of ["owner", "admin", "member"]) {
+      expect(parseDomainEventPayload("member.joined", { ...ids, role })).toEqual({ ...ids, role });
+    }
+    for (const bad of [{}, ids, { ...ids, role: "superuser" }, { ...ids, role: "member", email: "ada@example.test" }, { workspaceId: "w", accountId: ACCOUNT, role: "member" }]) {
+      expect(() => parseDomainEventPayload("member.joined", bad)).toThrow(DomainEventPayloadError);
     }
   });
 

@@ -88,6 +88,7 @@ describe("the package entry point", () => {
         "defineScopedRepository",
         "emailChangeRepository",
         "idempotencyRepository",
+        "invitationAcceptanceRepository",
         "invitationRepository",
         "isLastOwnerViolation",
         "listRepositoryMethods",

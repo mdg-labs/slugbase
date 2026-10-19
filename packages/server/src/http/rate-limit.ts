@@ -11,7 +11,8 @@ import { rateLimitKeyOf } from "./trusted-proxy.ts";
 // before it is authenticated (stage 3a), so a flood of unauthenticated or
 // bad-credential requests is throttled before any credential lookup. Once it is
 // authenticated it takes one from the buckets of its account and, for a bucket
-// that has one, its workspace (stage 6); whichever is empty first denies it. The
+// that has one, its workspace (stage 6), unless the operation is anonymous;
+// whichever is empty first denies it. The
 // IP is the one the request-context stage derived across the trusted proxy
 // hops, never a header read here; its bucket key is the IPv4 address, or the /64
 // of an IPv6 one (`rateLimitKeyOf`). An operation that declares `none`, a
@@ -102,7 +103,8 @@ export function createRateLimiting({ limiter, registry, logger, errors, recordRe
   };
 
   const subjectOf = (context: ChainContext, limit: ScopeLimit): string | undefined => {
-    const principal = context.get("principal");
+    // An anonymous operation is limited per address only, whatever credential a caller sends along.
+    const principal = context.get("route")?.operation.auth === "anonymous" ? undefined : context.get("principal");
     switch (limit.scope) {
       case "ip":
         return rateLimitKeyOf(context.get("clientIp") ?? UNKNOWN_CLIENT);

@@ -31,7 +31,7 @@ describe("the RATE_LIMIT_<BUCKET>_<SCOPE> keys", () => {
       expect(Object.keys(RATE_LIMIT_DEFAULTS[bucket]), bucket).toContain("ip");
     }
     const registry = createRateLimitRegistry(loadConfig("server", productionEnv()).config);
-    for (const bucket of ["token_create", "bulk", "ai"] as const) {
+    for (const bucket of ["token_redeem", "token_create", "bulk", "ai"] as const) {
       const perIp = registry.window(bucket);
       const perAccount = registry.window(`${bucket}:account`);
       expect(perIp, bucket).toBeDefined();
@@ -58,6 +58,7 @@ describe("the RATE_LIMIT_<BUCKET>_<SCOPE> keys", () => {
       reset: [5, 3600],
       "reset:email": [3, 3600],
       token_redeem: [10, 3600],
+      "token_redeem:account": [10, 3600],
       token_create: [20, 3600],
       "token_create:account": [20, 3600],
       setup: [10, 3600],

@@ -527,7 +527,7 @@ export function createServer(options: CreateServerOptions): Server {
   // So are the members of the active workspace: listed with the co-member projection of their accounts, and their roles changed under the last-owner rule the database enforces.
   builtInRoutes.push(...memberRoutes({ cursorSecret: config.SESSION_SECRET, cookie: sessionCookieSpec(config.APP_ORIGIN) }));
   // So are the invitations of the active workspace: an admin invites an address, and the invitation's email is queued with it when the composition can send mail; the pending ones are listed, resent, linked and revoked.
-  builtInRoutes.push(...invitationRoutes({ mail: adapters.mail, cursorSecret: config.SESSION_SECRET, appOrigin: config.APP_ORIGIN, store: authStore }));
+  builtInRoutes.push(...invitationRoutes({ mail: adapters.mail, cursorSecret: config.SESSION_SECRET, appOrigin: config.APP_ORIGIN, store: authStore, withTenant: context.withTenant }));
   // So are the account's personal API tokens: created, listed and revoked in an account-level transaction on the account's own rows.
   builtInRoutes.push(...apiTokenRoutes({ withTenant: context.withTenant, cursorSecret: config.SESSION_SECRET }));
   // So are the identities linked to the account: listed in an account-level transaction, unlinked by a system operation that checks the account keeps another way to sign in.

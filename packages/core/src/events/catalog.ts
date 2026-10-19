@@ -17,6 +17,9 @@ export const MEMBER_CONTENT_CHOICES = ["transfer", "delete"] as const;
 
 export type MemberContentChoice = (typeof MEMBER_CONTENT_CHOICES)[number];
 
+/** The roles a membership can hold (doc 02 section 3.3). */
+const MEMBER_ROLES = ["owner", "admin", "member"] as const;
+
 /** The kinds of field a payload holds. */
 export type DomainEventField =
   | { readonly type: "uuid" }
@@ -60,6 +63,16 @@ export const DOMAIN_EVENTS = {
     accountId: { type: "uuid" },
     content: { type: "enum", values: MEMBER_CONTENT_CHOICES },
     transferTo: { type: "uuid" },
+  },
+  /**
+   * An account became a member of a workspace by accepting an invitation; it is queued in the transaction that inserts
+   * the membership, so it is announced exactly when the membership exists. A module that counts seats recounts on it.
+   * `role` is the role the membership was given.
+   */
+  "member.joined": {
+    workspaceId: { type: "uuid" },
+    accountId: { type: "uuid" },
+    role: { type: "enum", values: MEMBER_ROLES },
   },
 } as const satisfies Record<string, Readonly<Record<string, DomainEventField>>>;
 

@@ -82,3 +82,14 @@ export type {
   InvitationStore,
   NewInvitation,
 } from "./invitations.ts";
+export { acceptInvitation, inspectInvitation } from "./invitation-acceptance.ts";
+export type {
+  InvitationAcceptAsk,
+  InvitationAcceptDependencies,
+  InvitationAcceptOutcome,
+  InvitationAcceptResult,
+  InvitationAcceptStore,
+  InvitationInspectOutcome,
+  InvitationInspectStore,
+  InvitationPreview,
+} from "./invitation-acceptance.ts";

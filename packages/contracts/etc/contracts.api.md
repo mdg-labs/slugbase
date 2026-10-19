@@ -10,6 +10,45 @@ import { z } from 'zod';
 export const ACCENT_PRESETS: readonly ["periwinkle", "violet", "rose", "amber", "green", "teal"];
 
 // @public (undocumented)
+export const acceptInvitation: {
+    readonly method: "post";
+    readonly path: "/api/v1/invitations/accept";
+    readonly operationId: "acceptInvitation";
+    readonly tag: "invitations";
+    readonly summary: "Accept an invitation as the invited account";
+    readonly auth: "account";
+    readonly rate: "token_redeem";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            token: z.ZodString;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        workspaceId: z.ZodUUID;
+        role: z.ZodEnum<{
+        member: "member";
+        admin: "admin";
+        owner: "owner";
+        }>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 409: ProblemResponse;
+        readonly 410: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const AcceptInvitationRequestSchema: z.ZodObject<{
+    token: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
 export const AccountSchema: z.ZodObject<{
     id: z.ZodUUID;
     email: z.ZodString;
@@ -318,6 +357,9 @@ export interface ComponentTypes {
     responses: never;
     // (undocumented)
     schemas: {
+        AcceptInvitationRequest: {
+            token: string;
+        };
         Account: {
             accent: ("periwinkle" | "violet" | "rose" | "amber" | "green" | "teal") | null;
             aiOptOut: boolean;
@@ -445,6 +487,9 @@ export interface ComponentTypes {
             items: ComponentTypes["schemas"]["Identity"][];
             nextCursor: string | null;
         };
+        InspectInvitationRequest: {
+            token: string;
+        };
         Invitation: {
             createdAt: string;
             email: string;
@@ -454,6 +499,10 @@ export interface ComponentTypes {
             role: "owner" | "admin" | "member";
             status: "pending" | "accepted" | "revoked";
             teamIds: string[];
+        };
+        InvitationAccepted: {
+            role: "owner" | "admin" | "member";
+            workspaceId: string;
         };
         InvitationLink: {
             invitation: ComponentTypes["schemas"]["Invitation"];
@@ -473,6 +522,13 @@ export interface ComponentTypes {
             role: "owner" | "admin" | "member";
             status: "pending" | "accepted" | "revoked";
             teamIds: string[];
+        };
+        InvitationPreview: {
+            accountExists: boolean;
+            email: string;
+            inviterName: string | null;
+            role: "owner" | "admin" | "member";
+            workspaceName: string;
         };
         LoginRequest: {
             email: string;
@@ -1464,11 +1520,61 @@ export const IfMatchHeaderSchema: z.ZodObject<{
     "If-Match": z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
 
+// @public (undocumented)
+export const inspectInvitation: {
+    readonly method: "post";
+    readonly path: "/api/v1/invitations/inspect";
+    readonly operationId: "inspectInvitation";
+    readonly tag: "invitations";
+    readonly summary: "Read what an invitation link is for";
+    readonly auth: "anonymous";
+    readonly rate: "token_redeem";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            token: z.ZodString;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        workspaceName: z.ZodString;
+        inviterName: z.ZodNullable<z.ZodString>;
+        email: z.ZodString;
+        role: z.ZodEnum<{
+        member: "member";
+        admin: "admin";
+        owner: "owner";
+        }>;
+        accountExists: z.ZodBoolean;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 410: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const InspectInvitationRequestSchema: z.ZodObject<{
+    token: z.ZodString;
+}, z.core.$strict>;
+
 // @public
 export const INVITATION_ROLES: readonly ["admin", "member"];
 
 // @public (undocumented)
 export const INVITATION_STATUSES: readonly ["pending", "accepted", "revoked"];
+
+// @public (undocumented)
+export const InvitationAcceptedSchema: z.ZodObject<{
+    workspaceId: z.ZodUUID;
+    role: z.ZodEnum<{
+        member: "member";
+        admin: "admin";
+        owner: "owner";
+    }>;
+}, z.core.$strict>;
 
 // @public (undocumented)
 export const InvitationLinkSchema: z.ZodObject<{
@@ -1547,6 +1653,19 @@ export const InvitationListSchema: z.ZodObject<{
 // @public (undocumented)
 export const InvitationParamsSchema: z.ZodObject<{
     id: z.ZodUUID;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const InvitationPreviewSchema: z.ZodObject<{
+    workspaceName: z.ZodString;
+    inviterName: z.ZodNullable<z.ZodString>;
+    email: z.ZodString;
+    role: z.ZodEnum<{
+        member: "member";
+        admin: "admin";
+        owner: "owner";
+    }>;
+    accountExists: z.ZodBoolean;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -2156,6 +2275,95 @@ export const operations: readonly OperationDefinition[];
 
 // @public (undocumented)
 export interface OperationTypes {
+    // (undocumented)
+    acceptInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["AcceptInvitationRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["InvitationAccepted"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     // (undocumented)
     cancelEmailChange: {
         parameters: {
@@ -3595,6 +3803,79 @@ export interface OperationTypes {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    inspectInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["InspectInvitationRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["InvitationPreview"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6211,6 +6492,40 @@ export interface paths {
         get: OperationTypes["listInvitations"];
         put?: never;
         post: OperationTypes["createInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/invitations/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["acceptInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/invitations/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["inspectInvitation"];
         delete?: never;
         options?: never;
         head?: never;

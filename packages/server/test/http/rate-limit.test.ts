@@ -98,6 +98,7 @@ function build(bindings: readonly RouteBinding[], options: Build = {}) {
 
 const PUBLIC = route(limited("/api/v1/open", "open", "public"));
 const READ = route(limited("/api/v1/items", "items", "read"));
+const READ_AS_ACCOUNT = route(limited("/api/v1/items", "items", "read", { auth: "account" }));
 
 describe("the rate-limit stage", () => {
   it("allows requests up to the burst of the bucket and carries the policy and the remaining tokens", async () => {
@@ -212,7 +213,7 @@ describe("the rate-limit stage", () => {
   });
 
   it("keeps a bucket per account, and the account bucket empties first when it is the smaller", async () => {
-    const { get, memory } = build([READ], { env: { RATE_LIMIT_READ_IP: "50/min", RATE_LIMIT_READ_ACCOUNT: "2/min" } });
+    const { get, memory } = build([READ_AS_ACCOUNT], { env: { RATE_LIMIT_READ_IP: "50/min", RATE_LIMIT_READ_ACCOUNT: "2/min" } });
     const as = (account: string) => get("/api/v1/items", { "x-account": account });
     expect((await as("a")).status).toBe(200);
     expect((await as("a")).status).toBe(200);
@@ -234,7 +235,7 @@ describe("the rate-limit stage", () => {
   });
 
   it("empties the IP bucket first when it is the smaller, and then takes nothing from the account", async () => {
-    const { get, memory } = build([READ], { env: { RATE_LIMIT_READ_IP: "1/min", RATE_LIMIT_READ_ACCOUNT: "50/min" } });
+    const { get, memory } = build([READ_AS_ACCOUNT], { env: { RATE_LIMIT_READ_IP: "1/min", RATE_LIMIT_READ_ACCOUNT: "50/min" } });
     expect((await get("/api/v1/items", { "x-account": "a" })).status).toBe(200);
     const denied = await get("/api/v1/items", { "x-account": "b" });
     expect(denied.status).toBe(429);
@@ -245,6 +246,13 @@ describe("the rate-limit stage", () => {
   it("limits an anonymous request by IP alone", async () => {
     const { get, memory } = build([READ]);
     await get("/api/v1/items");
+    expect(memory.takes.map((take) => take.bucket)).toEqual(["read"]);
+  });
+
+  it("limits an anonymous operation by IP alone, whatever credential the request carries", async () => {
+    const anonymous = route(limited("/api/v1/redeem", "redeem", "read"));
+    const { get, memory } = build([anonymous]);
+    await get("/api/v1/redeem", { "x-account": "a" });
     expect(memory.takes.map((take) => take.bucket)).toEqual(["read"]);
   });
 
@@ -419,7 +427,7 @@ describe("the rate-limit stage", () => {
 
     it("takes the IP bucket before authentication and the account and workspace buckets after it", async () => {
       const trace: string[] = [];
-      const { get, memory } = build([READ], {
+      const { get, memory } = build([READ_AS_ACCOUNT], {
         stages: {
           authentication: async (context, next) => {
             trace.push(`authentication after ${memory.takes.map((take) => take.bucket).join(",") || "nothing"}`);

@@ -1,6 +1,8 @@
 import {
+  acceptInvitation,
   createInvitation,
   createInvitationLink,
+  inspectInvitation,
   listInvitations,
   resendInvitation,
   revokeInvitation,
@@ -9,8 +11,10 @@ import {
 } from "@slugbase/contracts";
 import {
   INVITATION_TTL_SECONDS,
+  acceptInvitation as acceptPending,
   createAuditWriter,
   createInvitationLink as makeInvitationLink,
+  inspectInvitation as inspectPending,
   invitationLink,
   inviteMember,
   listInvitations as listPending,
@@ -22,13 +26,23 @@ import {
   type InvitationRecord,
   type MailPort,
 } from "@slugbase/core";
-import { accountProfileRepository, auditEventRepository, invitationRepository, type AuthStore, type TenantTx } from "@slugbase/db";
+import {
+  accountProfileRepository,
+  auditEventRepository,
+  invitationAcceptanceRepository,
+  invitationRepository,
+  workspaceRepository,
+  type AuthStore,
+  type Database,
+  type TenantTx,
+} from "@slugbase/db";
 import { z } from "zod";
 import { emailLimitKey } from "../../auth/email-limit.ts";
 import { createPageCursorCodec } from "../../auth/page-cursor.ts";
 import { uuidv7 } from "../../auth/uuidv7.ts";
+import { queueDomainEvent } from "../../events/publish.ts";
 import type { ChainContext, RouteBinding } from "../../http/chain.ts";
-import { ProblemError } from "../../http/problem.ts";
+import { ProblemError, requestIdOf } from "../../http/problem.ts";
 import type { RequestTenant } from "../../http/tenant.ts";
 import { networkPrefixOf } from "../../http/trusted-proxy.ts";
 import { queueInvitationMail } from "../../worker/jobs/invitation-mail.ts";
@@ -56,6 +70,15 @@ import { route } from "../register.ts";
 // in the request, stores its hash and returns the link once: the token is in no log, audit event or stored
 // response, and another link or a resend ends it; a mail job queued before the link finds the invitation renewed and issues no token. Revoking a revoked invitation is answered 204 again. Each
 // action, its audit event and, for a resend, the mail job are one transaction.
+//
+// The invited person redeems the token with two operations that act on no workspace of the request. The inspection
+// is anonymous and answers what the invitation page shows; an unknown, malformed, used, revoked, replaced or expired
+// token, and one of a workspace being deleted, is one 410 token_expired. The acceptance is the signed-in account's:
+// in an account-level transaction, `sys_invitation_accept` locks the workspace, the account and the invitation, checks
+// that the account's verified address is the invited one and that it is no member yet, and inserts the membership with
+// exactly the invited role; the `member.joined` event job, its audit event and the move of the session to the workspace
+// are in the same transaction, and a failure of any rolls all of it back. Both count against the `token_redeem` bucket
+// of the client address. The seat limit is null (unlimited) until the entitlement engine supplies one.
 
 const UNAUTHENTICATED = "Authentication is required.";
 const NO_WORKSPACE = "No such resource.";
@@ -65,6 +88,10 @@ const TEAMS_UNAVAILABLE = "Teams cannot be invited into yet.";
 const INVALID_ROLE = "An invitation can grant the admin or the member role.";
 const NO_SUCH_INVITATION = "No such resource.";
 const BAD_CURSOR = "The cursor is not valid.";
+const TOKEN_REFUSED = "The invitation link is invalid or has expired.";
+const EMAIL_MISMATCH = "This invitation is for another email address.";
+const ACCEPT_ALREADY_MEMBER = "You are already a member of this workspace.";
+const NO_SEAT = "The workspace has no seat left.";
 const MAIL_UNAVAILABLE = "Email delivery is not available on this instance; use the link of the invitation instead.";
 
 export interface InvitationRoutesOptions {
@@ -74,8 +101,10 @@ export interface InvitationRoutesOptions {
   readonly cursorSecret: string;
   /** `APP_ORIGIN`: the link an invitation's token is returned in points to it. */
   readonly appOrigin: string;
-  /** The account lookup a resend counts its per-address limit under, which folds an address as the accounts do. */
-  readonly store: Pick<AuthStore, "emailKey">;
+  /** The account lookup a resend counts its per-address limit under, which folds an address as the accounts do, and the inspection of an invitation by its token. */
+  readonly store: Pick<AuthStore, "emailKey" | "inspectInvitation">;
+  /** Opens the account-level transaction accepting an invitation runs in. */
+  readonly withTenant: Database["withTenant"];
   /** How long an invitation can be accepted for; seven days unless the composition says otherwise. */
   readonly ttlSeconds?: number;
 }
@@ -126,9 +155,66 @@ async function actionOf(tx: TenantTx, context: ChainContext, invitationId: strin
   return { ask, accountId, repository: invitationRepository(tx), audit: createAuditWriter({ store: auditEventRepository(tx), newId: uuidv7 }) };
 }
 
-export function invitationRoutes({ mail, cursorSecret, appOrigin, store, ttlSeconds = INVITATION_TTL_SECONDS }: InvitationRoutesOptions): RouteBinding[] {
+/** The session that accepts: the account and the session the workspace is made active in. */
+function acceptingSessionOf(context: ChainContext): { readonly accountId: string; readonly sessionId: string } {
+  const principal = context.get("principal");
+  if (principal?.kind !== "session") {
+    throw new ProblemError("unauthenticated", UNAUTHENTICATED);
+  }
+  return principal;
+}
+
+export function invitationRoutes({ mail, cursorSecret, appOrigin, store, withTenant, ttlSeconds = INVITATION_TTL_SECONDS }: InvitationRoutesOptions): RouteBinding[] {
   const cursors = createPageCursorCodec(cursorSecret, "invitations");
   return [
+    route(inspectInvitation).handle(async ({ body }) => {
+      const outcome = await inspectPending({ store }, { token: body.token });
+      if (outcome.kind === "gone") {
+        throw new ProblemError("token_expired", TOKEN_REFUSED);
+      }
+      return { status: 200, body: outcome.preview };
+    }),
+
+    route(acceptInvitation).handle(async ({ body }, context) => {
+      const { accountId, sessionId } = acceptingSessionOf(context);
+      const ipPrefix = networkPrefixOf(context.get("clientIp")) ?? null;
+      const outcome = await withTenant({ accountId, requestId: requestIdOf(context) }, async (tx) => {
+        const profile = await accountProfileRepository(tx).profile();
+        if (profile === undefined) {
+          return undefined;
+        }
+        const repository = invitationAcceptanceRepository(tx);
+        return acceptPending(
+          {
+            store: {
+              accept: (tokenHash, seatLimit) => repository.accept(tokenHash, seatLimit),
+              queueEvents: (events) => repository.enqueue(events.map((event) => queueDomainEvent(event.eventId, event.name, event.payload))),
+              activate: (session, workspaceId) => workspaceRepository(tx).setActive(session, workspaceId),
+            },
+            audit: createAuditWriter({ store: auditEventRepository(tx), newId: uuidv7 }),
+            newId: uuidv7,
+          },
+          // Seats are unlimited until the entitlement engine supplies a limit (doc 01 section 13.1).
+          { token: body.token, actor: { type: "account", accountId, label: profile.displayName }, sessionId, seatLimit: null, ipPrefix },
+        );
+      });
+      if (outcome === undefined) {
+        throw new ProblemError("unauthenticated", UNAUTHENTICATED);
+      }
+      switch (outcome.kind) {
+        case "accepted":
+          return { status: 200, body: { workspaceId: outcome.workspaceId, role: outcome.role } };
+        case "gone":
+          throw new ProblemError("token_expired", TOKEN_REFUSED);
+        case "email_mismatch":
+          throw new ProblemError("forbidden", EMAIL_MISMATCH, { errors: [{ path: "token", code: "invitation_email_mismatch" }] });
+        case "already_member":
+          throw new ProblemError("already_member", ACCEPT_ALREADY_MEMBER);
+        case "seat_limit_reached":
+          throw new ProblemError("seat_limit_reached", NO_SEAT);
+      }
+    }),
+
     route(createInvitation).handle(async ({ body }, context) => {
       const { accountId } = sessionOf(context);
       const tenant = tenantOf(context);

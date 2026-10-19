@@ -47,6 +47,7 @@ export const AUDIT_ACTIONS = {
   "member.role_changed": { category: "member", metadata: { from: MEMBER_ROLE, to: MEMBER_ROLE } },
   "member.removed": { category: "member", metadata: { content: CONTENT_CHOICE, transferTo: { type: "uuid" } } },
   "member.left": { category: "member", metadata: { content: CONTENT_CHOICE, transferTo: { type: "uuid" } } },
+  "member.joined": { category: "member", metadata: { role: MEMBER_ROLE } },
   // The invited address is personal data and has no field: the event names the invitation and the role it grants.
   "invitation.created": { category: "invitation", metadata: { role: MEMBER_ROLE } },
   "invitation.resent": { category: "invitation", metadata: { role: MEMBER_ROLE } },
