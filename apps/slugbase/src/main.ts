@@ -197,9 +197,10 @@ function composeIdentity(config: ServerConfig | WorkerConfig, egress: EgressPort
 // Sentry-protocol adapter when the operator set `ERROR_REPORT_DSN`, and the
 // no-op default (errors are logged only) when not. Egress is always on (doc 01
 // section 6): the adapter that resolves, validates and pins every outbound request.
-// No account has a workspace until the workspace tables exist, so the tenant resolver puts every
-// request at account level; sign-in and the session cookie are served by `createServer` itself,
-// on `DATABASE_URL`.
+// The composition leaves the tenant resolver to `createServer`: the account-only resolver below
+// stands for "no choice made", and `createServer` replaces it with the membership resolver, which
+// puts each request in the principal's active workspace through its memberships (doc 01 section
+// 5.2). Sign-in and the session cookie are served by `createServer` itself, on `DATABASE_URL`.
 // The rate limiter keeps its tokens in Postgres through the system operation of
 // `@slugbase/db`, on a small pool of its own as the role of `DATABASE_URL`; the
 // pool connects on the first limited request, not at start-up. Its limits are the
