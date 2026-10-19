@@ -550,18 +550,25 @@ describe("memberRepository.rotateSession", () => {
 
 describe("the control for the concurrency tests", () => {
   it("would let both demotions commit if the function took no lock before it counted, which is why it takes one", async () => {
-    // A copy of the function without the lock, with a pause where the count is read so that both transactions
-    // are inside it together: the two concurrency tests above only prove something if the demotions really
-    // overlap. It runs last because it replaces the function of this test database.
+    // A copy of the function without the lock, with a pause so that both transactions are inside it together:
+    // the two concurrency tests above only prove something if the demotions really overlap. The pause follows
+    // the count and holds the result. The two commits are released together but reach the database a few
+    // milliseconds apart; with the pause before the count, the first transaction could count and commit before
+    // the second one counted, and the second would then find no other owner. With the count first, both count
+    // while the other demotion is still uncommitted, and neither commits before its pause ends, so the overlap
+    // is the whole pause and not the time one commit takes. It runs last because it replaces the function of
+    // this test database.
     const { workspaceId, members } = await workspaceOf("owner", "owner");
     const [first, second] = members;
     await db.owner.unsafe(`
       CREATE OR REPLACE FUNCTION public.workspace_members_check_owner() RETURNS trigger
         LANGUAGE plpgsql VOLATILE SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+      DECLARE has_owner boolean;
       BEGIN
         IF OLD.role <> 'owner' THEN RETURN NULL; END IF;
+        has_owner := EXISTS (SELECT 1 FROM public.workspace_members m WHERE m.workspace_id = OLD.workspace_id AND m.role = 'owner');
         PERFORM pg_sleep(0.5);
-        IF NOT EXISTS (SELECT 1 FROM public.workspace_members m WHERE m.workspace_id = OLD.workspace_id AND m.role = 'owner') THEN
+        IF NOT has_owner THEN
           RAISE EXCEPTION 'no owner' USING ERRCODE = 'check_violation', CONSTRAINT = 'workspace_members_owner_required';
         END IF;
         RETURN NULL;
