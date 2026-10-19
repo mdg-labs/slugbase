@@ -72,6 +72,7 @@ describe("the package entry point", () => {
         "OWNER_REQUIRED_CONSTRAINT",
         "TenantContextError",
         "WORKSPACE_PURGE_BATCH_SIZE",
+        "accountDeletionRepository",
         "accountIdentityRepository",
         "accountProfileRepository",
         "apiTokenRepository",

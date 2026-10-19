@@ -288,6 +288,13 @@
       "when": 1792400942305,
       "tag": "20261019090902_add_workspace_deletion",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1792417227317,
+      "tag": "20261019134027_add_account_deletion",
+      "breakpoints": true
     }
   ]
 }

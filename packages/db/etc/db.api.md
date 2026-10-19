@@ -4,6 +4,7 @@
 
 ```ts
 
+import type { AccountDeletionScope } from '@slugbase/core';
 import type { AuditRecord } from '@slugbase/core';
 import type { CredentialTokenPurpose } from '@slugbase/core';
 import { InferInsertModel } from 'drizzle-orm';
@@ -24,6 +25,15 @@ export const ACCENT_PRESETS: readonly ["periwinkle", "violet", "rose", "amber", 
 
 // @public (undocumented)
 export type AccentPreset = (typeof ACCENT_PRESETS)[number];
+
+// @public (undocumented)
+export interface AccountDeletionRepository {
+    delete(soleWorkspaceIds: readonly string[], jobs: readonly QueuedJob[]): Promise<boolean>;
+    scope(): Promise<AccountDeletionScope>;
+}
+
+// @public (undocumented)
+export function accountDeletionRepository(tx: TenantTx): AccountDeletionRepository;
 
 // @public
 export interface AccountIdentity {

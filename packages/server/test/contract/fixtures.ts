@@ -85,6 +85,10 @@ export const FIXTURES: ContractFixtures = {
   listApiTokens: {},
   createApiToken: { body: { name: "Walker token", scope: "read", workspaceId: WALKER_WORKSPACE_ID } },
   revokeApiToken: { path: { id: UNKNOWN_API_TOKEN_ID }, status: 404 },
+  // An account-level operation: no workspace or other account's identifier is part of it, and it deletes the walker's own account, which every
+  // call of the walk needs. The address it names is another one, so the valid request is the declared 422; the deletion itself is walked by the
+  // account deletion route tests.
+  deleteMe: { body: { email: "not-the-walker@example.test" }, status: 422 },
   // Account-level operations: no workspace or other account's identifier is part of them, and the identities they act on are the walker's own.
   // The walker has none, so a valid unlink names an identity that is not its own, which is the declared 404 whoever holds it.
   listIdentities: {},

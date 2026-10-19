@@ -36,6 +36,8 @@ export { credentialTokenRepository } from "./repositories/credential-tokens.ts";
 export type { CredentialTokenRepository, NewCredentialToken } from "./repositories/credential-tokens.ts";
 export { auditEventRepository } from "./repositories/audit-events.ts";
 export type { AuditEventRepository } from "./repositories/audit-events.ts";
+export { accountDeletionRepository } from "./repositories/account-deletion.ts";
+export type { AccountDeletionRepository } from "./repositories/account-deletion.ts";
 export { workspaceRepository } from "./repositories/workspaces.ts";
 export type { NewWorkspace, WorkspaceDetail, WorkspaceRepository, WorkspaceSummary } from "./repositories/workspaces.ts";
 export { isLastOwnerViolation, memberRepository, OWNER_REQUIRED_CONSTRAINT } from "./repositories/members.ts";

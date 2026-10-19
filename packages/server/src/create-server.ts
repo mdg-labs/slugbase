@@ -32,6 +32,7 @@ import { loadCommittedDocument } from "./routes/committed-document.ts";
 import { probeRoutes } from "./routes/health.ts";
 import { authContribution } from "./routes/auth/index.ts";
 import { apiTokenRoutes } from "./routes/me/api-tokens.ts";
+import { accountDeletionRoutes } from "./routes/me/delete.ts";
 import { emailChangeRoutes } from "./routes/me/email.ts";
 import { identityRoutes } from "./routes/me/identities.ts";
 import { mfaRoutes } from "./routes/me/mfa.ts";
@@ -510,6 +511,8 @@ export function createServer(options: CreateServerOptions): Server {
   builtInRoutes.push(...profileRoutes({ withTenant: context.withTenant }));
   // So is the change of the account's email address: the request records the address and queues its two mails, and the two links redeem anonymously.
   builtInRoutes.push(...emailChangeRoutes({ store: authStore, mail: adapters.mail }));
+  // So is the deletion of the account: it deletes the account of the session and the workspaces where it is the only member, after the deletion guard of the composition allows it.
+  builtInRoutes.push(...accountDeletionRoutes({ withTenant: context.withTenant, cookie: sessionCookieSpec(config.APP_ORIGIN) }));
   // So are the account's workspaces: listed, with the creation policy the composition root supplied, created and switched to in an account-level transaction; the ownership transfer rotates the caller's session token and mails the new owner.
   builtInRoutes.push(...workspaceRoutes({ withTenant: context.withTenant, creationAllowed: options.allowWorkspaceCreation ?? false, cookie: sessionCookieSpec(config.APP_ORIGIN), mail: adapters.mail }));
   // So are the members of the active workspace: listed with the co-member projection of their accounts, and their roles changed under the last-owner rule the database enforces.

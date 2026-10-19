@@ -409,6 +409,9 @@ export interface ComponentTypes {
             workspaceId: string;
             workspaceName: string;
         };
+        DeleteAccountRequest: {
+            email: string;
+        };
         DisableMfaRequest: {
             code: string;
             password?: string;
@@ -832,6 +835,38 @@ export const CreateWorkspaceRequestSchema: z.ZodObject<{
 
 // @public
 export function defineOperation<const D extends OperationDefinition>(definition: D): D;
+
+// @public (undocumented)
+export const DeleteAccountRequestSchema: z.ZodObject<{
+    email: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const deleteMe: {
+    readonly method: "delete";
+    readonly path: "/api/v1/me";
+    readonly operationId: "deleteMe";
+    readonly tag: "me";
+    readonly summary: "Delete the account";
+    readonly auth: "account";
+    readonly rate: "write";
+    readonly reauth: true;
+    readonly request: {
+        readonly body: z.ZodObject<{
+            email: z.ZodString;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 204: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 409: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
 
 // @public (undocumented)
 export const deleteWorkspace: {
@@ -2413,6 +2448,85 @@ export interface OperationTypes {
                 };
             };
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    deleteMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["DeleteAccountRequest"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5388,7 +5502,7 @@ export interface paths {
         get: OperationTypes["getMe"];
         put?: never;
         post?: never;
-        delete?: never;
+        delete: OperationTypes["deleteMe"];
         options?: never;
         head?: never;
         patch: OperationTypes["updateMe"];

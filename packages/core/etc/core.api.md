@@ -16,6 +16,83 @@ export const ACCOUNT_NOTIFICATIONS: readonly ["passwordChanged", "mfaEnabled", "
 export type AccountCreationPath = (typeof ACCOUNT_CREATION_PATHS)[number];
 
 // @public (undocumented)
+export interface AccountDeletionAsk {
+    readonly accountEmail: string;
+    readonly accountId: string;
+    readonly typedEmail: string;
+}
+
+// @public (undocumented)
+export interface AccountDeletionDependencies<Code extends string> {
+    readonly guard: (input: AccountDeletionGuardInput) => Promise<WorkspaceDeletionGuardResult<Code>>;
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: AccountDeletionStore;
+}
+
+// @public
+export type AccountDeletionGuardInput = {
+    readonly kind: "account";
+    readonly accountId: string;
+} | {
+    readonly kind: "workspace";
+    readonly accountId: string;
+    readonly workspaceId: string;
+};
+
+// @public (undocumented)
+export type AccountDeletionOutcome<Code extends string> =
+/** The account is deleted; `workspaces` are the workspaces that were deleted with it. */
+    {
+    readonly kind: "deleted";
+    readonly workspaces: readonly AccountDeletionWorkspace[];
+}
+/** The typed address is not the account's; nothing was read or written. */
+| {
+    readonly kind: "email_mismatch";
+}
+/** The account is the only owner of these workspaces, which have other members; nothing was written. */
+| {
+    readonly kind: "last_owner";
+    readonly workspaces: readonly AccountDeletionWorkspace[];
+}
+/** The guard refused with `code`, for the account or for one of the workspaces; nothing was written. */
+| {
+    readonly kind: "refused";
+    readonly code: Code;
+}
+/** The account is gone, or the workspaces changed under the request; nothing was written. */
+| {
+    readonly kind: "unavailable";
+};
+
+// @public (undocumented)
+export interface AccountDeletionRequest {
+    readonly events: readonly DomainEvent<"account.deleted">[];
+    readonly soleWorkspaceIds: readonly string[];
+}
+
+// @public
+export interface AccountDeletionScope {
+    readonly blocking: readonly AccountDeletionWorkspace[];
+    readonly soleMember: readonly AccountDeletionWorkspace[];
+}
+
+// @public (undocumented)
+export interface AccountDeletionStore {
+    delete(request: AccountDeletionRequest): Promise<boolean>;
+    scope(): Promise<AccountDeletionScope>;
+}
+
+// @public
+export interface AccountDeletionWorkspace {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public (undocumented)
 export type AccountNotification = (typeof ACCOUNT_NOTIFICATIONS)[number];
 
 // @public
@@ -434,6 +511,9 @@ export interface CredentialToken {
 // @public (undocumented)
 export type CredentialTokenPurpose = (typeof CREDENTIAL_TOKEN_PURPOSES)[number];
 
+// @public
+export function deleteAccount<Code extends string>(input: AccountDeletionDependencies<Code>, ask: AccountDeletionAsk): Promise<AccountDeletionOutcome<Code>>;
+
 // @public (undocumented)
 export const DOMAIN_EVENT_NAMES: readonly DomainEventName[];
 
@@ -446,6 +526,11 @@ export const DOMAIN_EVENTS: {
         readonly path: {
             readonly type: "enum";
             readonly values: readonly ["self-registration", "invitation", "oidc", "setup"];
+        };
+    };
+    readonly "account.deleted": {
+        readonly accountId: {
+            readonly type: "uuid";
         };
     };
     readonly "workspace.created": {

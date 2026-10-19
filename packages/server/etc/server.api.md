@@ -730,11 +730,14 @@ export class ProblemError extends Error {
     readonly detail: string;
     // (undocumented)
     readonly errors: readonly ProblemFieldError[] | undefined;
+    // (undocumented)
+    readonly members: Readonly<Record<string, unknown>> | undefined;
 }
 
 // @public (undocumented)
 export interface ProblemErrorOptions {
     readonly errors?: readonly ProblemFieldError[];
+    readonly members?: Readonly<Record<string, unknown>>;
 }
 
 // @public (undocumented)

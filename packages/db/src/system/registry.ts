@@ -68,4 +68,6 @@ export const systemOperations: readonly string[] = [
   "sys_workspace_mark_deleting",
   "sys_workspace_purge_batch",
   "sys_workspace_delete_finish",
+  "sys_account_deletion_scope",
+  "sys_delete_account",
 ];

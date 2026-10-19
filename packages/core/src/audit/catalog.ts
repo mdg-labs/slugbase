@@ -36,6 +36,8 @@ const FLAG: AuditMetadataField = { type: "text", minLength: 4, maxLength: 5 };
 /** What happens to a departing member's content: `transfer` or `delete`. */
 const CONTENT_CHOICE: AuditMetadataField = { type: "text", minLength: 6, maxLength: 8 };
 
+// `transferTo` names an account: the deletion of that account removes the field from the stored row (doc 05 section
+// 7.1), so the parser below validates what is written and is not the check for a row that was read back.
 export const AUDIT_ACTIONS = {
   "workspace.created": { category: "workspace", metadata: { name: WORKSPACE_NAME } },
   "workspace.renamed": { category: "workspace", metadata: { from: WORKSPACE_NAME, to: WORKSPACE_NAME } },

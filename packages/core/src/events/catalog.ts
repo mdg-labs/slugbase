@@ -28,6 +28,15 @@ export const DOMAIN_EVENTS = {
     accountId: { type: "uuid" },
     path: { type: "enum", values: ACCOUNT_CREATION_PATHS },
   },
+  /**
+   * An account is gone, with everything personal to it: queued in the transaction that deletes the account row, so it
+   * is announced once, when the account no longer exists. A module that owns content keeps the account's content in
+   * the workspaces that remain ownerless (its foreign keys to the account set the owner to NULL, Q54) and removes
+   * whatever personal data of its own it holds, identified by `accountId`.
+   */
+  "account.deleted": {
+    accountId: { type: "uuid" },
+  },
   "workspace.created": {
     workspaceId: { type: "uuid" },
     /** The account the workspace was created for, which is its owner. */
