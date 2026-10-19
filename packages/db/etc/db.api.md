@@ -11,6 +11,12 @@ import { InferSelectModel } from 'drizzle-orm';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import { SQL } from 'drizzle-orm';
+import type { WorkspaceAdministrationStore } from '@slugbase/core';
+import type { WorkspaceRenameRequest } from '@slugbase/core';
+import type { WorkspaceRenameResult } from '@slugbase/core';
+import type { WorkspaceSettings } from '@slugbase/core';
+import type { WorkspaceSettingsChange } from '@slugbase/core';
+import type { WorkspaceSettingsPatch } from '@slugbase/core';
 
 // @public (undocumented)
 export const ACCENT_PRESETS: readonly ["periwinkle", "violet", "rose", "amber", "green", "teal"];
@@ -1023,11 +1029,30 @@ export interface VerifiedEmail {
     readonly next: "done" | "mfa";
 }
 
+// @public
+export interface WorkspaceDetail {
+    // (undocumented)
+    readonly createdAt: Date;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly memberCount: number;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly role: MemberRole;
+    readonly version: number;
+}
+
 // @public (undocumented)
-export interface WorkspaceRepository {
+export interface WorkspaceRepository extends WorkspaceAdministrationStore {
+    changeSettings(patch: WorkspaceSettingsPatch): Promise<WorkspaceSettingsChange | undefined>;
     create(workspace: NewWorkspace): Promise<boolean>;
+    current(): Promise<WorkspaceDetail | undefined>;
     list(): Promise<readonly WorkspaceSummary[]>;
+    rename(request: WorkspaceRenameRequest): Promise<WorkspaceRenameResult>;
     setActive(sessionId: string, workspaceId: string): Promise<boolean>;
+    settings(): Promise<WorkspaceSettings | undefined>;
 }
 
 // @public (undocumented)

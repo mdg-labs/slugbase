@@ -37,7 +37,7 @@ export type { CredentialTokenRepository, NewCredentialToken } from "./repositori
 export { auditEventRepository } from "./repositories/audit-events.ts";
 export type { AuditEventRepository } from "./repositories/audit-events.ts";
 export { workspaceRepository } from "./repositories/workspaces.ts";
-export type { NewWorkspace, WorkspaceRepository, WorkspaceSummary } from "./repositories/workspaces.ts";
+export type { NewWorkspace, WorkspaceDetail, WorkspaceRepository, WorkspaceSummary } from "./repositories/workspaces.ts";
 export { membershipRepository } from "./repositories/memberships.ts";
 export type { Membership, MembershipRepository } from "./repositories/memberships.ts";
 export type { MemberRole } from "./schema/workspaces.ts";

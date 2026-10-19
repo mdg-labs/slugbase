@@ -516,6 +516,9 @@ export interface ComponentTypes {
             email: string;
             password: string;
         };
+        RenameWorkspaceRequest: {
+            name: string;
+        };
         RequestEmailChangeRequest: {
             email: string;
         };
@@ -570,6 +573,9 @@ export interface ComponentTypes {
             singleKeyShortcuts?: boolean;
             theme?: "light" | "dark" | "system";
         };
+        UpdateWorkspaceSettingsRequest: {
+            aiEnabled?: boolean;
+        };
         VerifyEmailRequest: {
             password: string;
             token: string;
@@ -591,9 +597,20 @@ export interface ComponentTypes {
             name: string;
             version: string;
         };
+        Workspace: {
+            createdAt: string;
+            id: string;
+            memberCount: number;
+            name: string;
+            role: "owner" | "admin" | "member";
+            version: number;
+        };
         WorkspaceList: {
             canCreate: boolean;
             items: ComponentTypes["schemas"]["WorkspaceSummary"][];
+        };
+        WorkspaceSettings: {
+            aiEnabled: boolean;
         };
         WorkspaceSummary: {
             id: string;
@@ -1101,6 +1118,64 @@ export const getVersion: {
 };
 
 // @public (undocumented)
+export const getWorkspace: {
+    readonly method: "get";
+    readonly path: "/api/v1/workspace";
+    readonly operationId: "getWorkspace";
+    readonly tag: "workspaces";
+    readonly summary: "Read the active workspace";
+    readonly auth: "member";
+    readonly rate: "read";
+    readonly scope: "read";
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        role: z.ZodEnum<{
+        member: "member";
+        admin: "admin";
+        owner: "owner";
+        }>;
+        memberCount: z.ZodNumber;
+        createdAt: z.ZodISODateTime;
+        version: z.ZodNumber;
+        }, z.core.$strict>, {
+        readonly ETag: {
+        readonly description: "The workspace's version as an entity tag, for example \"3\"; the If-Match of the next change";
+        readonly schema: z.ZodString;
+        };
+        }>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const getWorkspaceSettings: {
+    readonly method: "get";
+    readonly path: "/api/v1/workspace/settings";
+    readonly operationId: "getWorkspaceSettings";
+    readonly tag: "workspaces";
+    readonly summary: "Read the active workspace's settings";
+    readonly auth: "admin";
+    readonly rate: "read";
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        aiEnabled: z.ZodBoolean;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
 export const HealthStatusSchema: z.ZodObject<{
     status: z.ZodLiteral<"ok">;
 }, z.core.$strict>;
@@ -1142,6 +1217,11 @@ export const IdentitySchema: z.ZodObject<{
     createdAt: z.ZodISODateTime;
     lastUsedAt: z.ZodNullable<z.ZodISODateTime>;
 }, z.core.$strict>;
+
+// @public
+export const IfMatchHeaderSchema: z.ZodObject<{
+    "If-Match": z.ZodOptional<z.ZodString>;
+}, z.core.$strip>;
 
 // @public
 export interface JsonResponse<S extends z.ZodType = z.ZodType, H extends ResponseHeaders = ResponseHeaders> {
@@ -1529,6 +1609,7 @@ export interface OperationDefinition {
 // @public (undocumented)
 export interface OperationRequest {
     readonly body?: z.ZodType;
+    readonly headers?: z.ZodObject;
     // (undocumented)
     readonly params?: z.ZodObject;
     // (undocumented)
@@ -2558,6 +2639,137 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    getWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    ETag: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["Workspace"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    getWorkspaceSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["WorkspaceSettings"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     listApiTokens: {
         parameters: {
             query?: {
@@ -3124,6 +3336,98 @@ export interface OperationTypes {
                 };
             };
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    renameWorkspace: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["RenameWorkspaceRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    ETag: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["Workspace"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            412: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3954,6 +4258,87 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    updateWorkspaceSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["UpdateWorkspaceSettingsRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["WorkspaceSettings"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     verifyEmail: {
         parameters: {
             query?: never;
@@ -4653,6 +5038,40 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/workspace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["getWorkspace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: OperationTypes["renameWorkspace"];
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/workspace/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["getWorkspaceSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: OperationTypes["updateWorkspaceSettings"];
+        trace?: never;
+    };
+    // (undocumented)
     "/api/v1/workspaces": {
         parameters: {
             query?: never;
@@ -5100,6 +5519,57 @@ export const RegisterRequestSchema: z.ZodObject<{
     displayName: z.ZodString;
     email: z.ZodEmail;
     password: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const renameWorkspace: {
+    readonly method: "patch";
+    readonly path: "/api/v1/workspace";
+    readonly operationId: "renameWorkspace";
+    readonly tag: "workspaces";
+    readonly summary: "Rename the active workspace";
+    readonly auth: "admin";
+    readonly rate: "write";
+    readonly request: {
+        readonly headers: z.ZodObject<{
+            "If-Match": z.ZodOptional<z.ZodString>;
+        }, z.core.$strip>;
+        readonly body: z.ZodObject<{
+            name: z.ZodString;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        role: z.ZodEnum<{
+        member: "member";
+        admin: "admin";
+        owner: "owner";
+        }>;
+        memberCount: z.ZodNumber;
+        createdAt: z.ZodISODateTime;
+        version: z.ZodNumber;
+        }, z.core.$strict>, {
+        readonly ETag: {
+        readonly description: "The workspace's version as an entity tag, for example \"3\"; the If-Match of the next change";
+        readonly schema: z.ZodString;
+        };
+        }>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 412: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const RenameWorkspaceRequestSchema: z.ZodObject<{
+    name: z.ZodString;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -5645,6 +6115,39 @@ export const updateMe: {
 };
 
 // @public (undocumented)
+export const updateWorkspaceSettings: {
+    readonly method: "patch";
+    readonly path: "/api/v1/workspace/settings";
+    readonly operationId: "updateWorkspaceSettings";
+    readonly tag: "workspaces";
+    readonly summary: "Change the active workspace's settings";
+    readonly auth: "admin";
+    readonly rate: "write";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            aiEnabled: z.ZodOptional<z.ZodBoolean>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        aiEnabled: z.ZodBoolean;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const UpdateWorkspaceSettingsRequestSchema: z.ZodObject<{
+    aiEnabled: z.ZodOptional<z.ZodBoolean>;
+}, z.core.$strict>;
+
+// @public (undocumented)
 export const verifyEmail: {
     readonly method: "post";
     readonly path: "/api/v1/auth/verify-email";
@@ -5771,6 +6274,25 @@ export const WorkspaceListSchema: z.ZodObject<{
 
 // @public
 export const WorkspaceNameSchema: z.ZodString;
+
+// @public (undocumented)
+export const WorkspaceSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    name: z.ZodString;
+    role: z.ZodEnum<{
+        member: "member";
+        admin: "admin";
+        owner: "owner";
+    }>;
+    memberCount: z.ZodNumber;
+    createdAt: z.ZodISODateTime;
+    version: z.ZodNumber;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const WorkspaceSettingsSchema: z.ZodObject<{
+    aiEnabled: z.ZodBoolean;
+}, z.core.$strict>;
 
 // @public (undocumented)
 export const WorkspaceSummarySchema: z.ZodObject<{

@@ -50,10 +50,14 @@ function memoryStore(): { store: AuditStore; records: AuditRecord[] } {
 }
 
 describe("the audit catalog", () => {
-  it("records workspace creation in the workspace category", () => {
-    expect(AUDIT_ACTION_NAMES).toEqual(["workspace.created"]);
-    expect(AUDIT_ACTIONS["workspace.created"].category).toBe("workspace");
+  it("records the changes to a workspace in the workspace category", () => {
+    expect(AUDIT_ACTION_NAMES).toEqual(["workspace.created", "workspace.renamed", "workspace.settings_changed"]);
+    for (const name of AUDIT_ACTION_NAMES) {
+      expect(AUDIT_ACTIONS[name].category).toBe("workspace");
+    }
     expect(Object.keys(AUDIT_ACTIONS["workspace.created"].metadata)).toEqual(["name"]);
+    expect(Object.keys(AUDIT_ACTIONS["workspace.renamed"].metadata)).toEqual(["from", "to"]);
+    expect(Object.keys(AUDIT_ACTIONS["workspace.settings_changed"].metadata)).toEqual(["setting", "from", "to"]);
   });
 
   it("knows its action names", () => {
@@ -68,6 +72,20 @@ describe("parseAuditMetadata", () => {
   it("accepts the metadata the catalog declares", () => {
     expect(parseAuditMetadata("workspace.created", { name: "Ada's workspace" })).toEqual({ name: "Ada's workspace" });
     expect(parseAuditMetadata("workspace.created", { name: "x".repeat(64) })).toEqual({ name: "x".repeat(64) });
+  });
+
+  it("accepts the metadata of a rename and of a settings change, and refuses a key or a value outside them", () => {
+    expect(parseAuditMetadata("workspace.renamed", { from: "Old", to: "New" })).toEqual({ from: "Old", to: "New" });
+    expect(parseAuditMetadata("workspace.settings_changed", { setting: "aiEnabled", from: "true", to: "false" })).toEqual({
+      setting: "aiEnabled",
+      from: "true",
+      to: "false",
+    });
+    expect(() => parseAuditMetadata("workspace.renamed", { from: "Old" })).toThrow(AuditMetadataError);
+    expect(() => parseAuditMetadata("workspace.renamed", { from: "Old", to: "x".repeat(65) })).toThrow(AuditMetadataError);
+    expect(() => parseAuditMetadata("workspace.renamed", { from: "Old", to: "New", email: "ada@example.test" })).toThrow(AuditMetadataError);
+    expect(() => parseAuditMetadata("workspace.settings_changed", { setting: "aiEnabled", from: true, to: false })).toThrow(AuditMetadataError);
+    expect(() => parseAuditMetadata("workspace.settings_changed", { setting: "aiEnabled", from: "true", to: "false", token: "x" })).toThrow(AuditMetadataError);
   });
 
   it("refuses a key the catalog does not declare, so a secret has no place to go", () => {

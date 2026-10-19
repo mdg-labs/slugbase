@@ -1,7 +1,8 @@
+import type { WorkspaceAdministrationStore, WorkspaceRenameRequest, WorkspaceRenameResult, WorkspaceSettings, WorkspaceSettingsChange, WorkspaceSettingsPatch } from "@slugbase/core";
 import { sql } from "drizzle-orm";
 import { enqueueInTenantTransaction, type QueuedJob } from "../system/queue.ts";
 import type { MemberRole } from "../schema/workspaces.ts";
-import { tenantHandle, type TenantTx } from "../tenant.ts";
+import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
 
 // The workspaces of the signed-in account, in an account-level transaction (doc 05 sections 2.2 and 3.3,
 // doc 04 section 10.4). The list reads the account's own membership rows, whose workspaces the `workspaces`
@@ -9,7 +10,11 @@ import { tenantHandle, type TenantTx } from "../tenant.ts";
 // `app_member_workspace_counts()`, which counts the members of the workspaces the account belongs to and
 // shows no member's identity. A workspace is created by the system operation `sys_create_workspace`; the
 // account it makes the owner is always the one `withTenant` was opened for, never one the caller passes, and
-// the operation itself refuses another account while a tenant account is set.
+// the operation itself refuses another account while a tenant account is set. The workspace of the
+// transaction is read with the role of the account in it and renamed, and its settings are read and
+// changed, on the policies of `workspaces` and `workspace_settings` (the active workspace only) and the
+// column grants of `slugbase_app`; each write locks the row first, so the value an audit event records as
+// the previous one is the value the write replaced.
 
 /** One workspace the account is a member of. */
 export interface WorkspaceSummary {
@@ -29,7 +34,18 @@ export interface NewWorkspace {
   readonly jobs: readonly QueuedJob[];
 }
 
-export interface WorkspaceRepository {
+/** The active workspace, with the role of the account of the transaction in it. */
+export interface WorkspaceDetail {
+  readonly id: string;
+  readonly name: string;
+  readonly createdAt: Date;
+  /** Bumped by every rename; the `ETag` of the workspace. */
+  readonly version: number;
+  readonly role: MemberRole;
+  readonly memberCount: number;
+}
+
+export interface WorkspaceRepository extends WorkspaceAdministrationStore {
   /**
    * The workspaces of the account of the transaction that are not being deleted, the most recently active
    * first: by the membership's `last_active_at` (never active last), then `joined_at` (newest first), then
@@ -51,6 +67,27 @@ export interface WorkspaceRepository {
    * account-level transaction.
    */
   setActive(sessionId: string, workspaceId: string): Promise<boolean>;
+  /**
+   * The workspace of the transaction with the role of the transaction's account in it and its member count;
+   * undefined when the workspace cannot be seen (it is being deleted) or the account is not a member. Needs
+   * a transaction opened with a workspace.
+   */
+  current(): Promise<WorkspaceDetail | undefined>;
+  /**
+   * Renames the workspace of the transaction. The row is locked first; when `expectedVersions` is given and
+   * the version under the lock is none of them the answer is `stale` and nothing is written, and the name the
+   * workspace already has is `unchanged`. A rename moves the version by one. Needs a transaction opened with
+   * a workspace.
+   */
+  rename(request: WorkspaceRenameRequest): Promise<WorkspaceRenameResult>;
+  /** The settings of the workspace of the transaction; undefined when it has no settings row. Needs a transaction opened with a workspace. */
+  settings(): Promise<WorkspaceSettings | undefined>;
+  /**
+   * Applies the patch to the settings row, locked first, and returns the settings before and after; a patch
+   * that changes no value writes nothing. Records the account of the transaction as the one who changed
+   * them. Undefined when the workspace has no settings row. Needs a transaction opened with a workspace.
+   */
+  changeSettings(patch: WorkspaceSettingsPatch): Promise<WorkspaceSettingsChange | undefined>;
 }
 
 interface ListedRow extends Record<string, unknown> {
@@ -66,6 +103,35 @@ interface CreatedRow extends Record<string, unknown> {
 
 interface SwitchedRow extends Record<string, unknown> {
   switched: boolean;
+}
+
+interface DetailRow extends Record<string, unknown> {
+  id: string;
+  name: string;
+  created_at: string;
+  version: number;
+  role: string | null;
+  member_count: string;
+}
+
+interface LockedWorkspaceRow extends Record<string, unknown> {
+  name: string;
+  version: number;
+}
+
+interface VersionRow extends Record<string, unknown> {
+  version: number;
+}
+
+interface SettingsRow extends Record<string, unknown> {
+  ai_enabled: boolean;
+}
+
+function workspaceOf(tx: TenantTx, what: string): string {
+  if (tx.workspaceId === undefined) {
+    throw new TenantContextError("workspace_required", `${what} needs a tenant transaction opened with a workspace`);
+  }
+  return tx.workspaceId;
 }
 
 function roleOf(value: string): MemberRole {
@@ -113,6 +179,75 @@ export function workspaceRepository(tx: TenantTx): WorkspaceRepository {
         throw new Error("sys_session_set_active_workspace did not return exactly one row");
       }
       return row.switched;
+    },
+
+    async current() {
+      const workspaceId = workspaceOf(tx, "reading the workspace");
+      const rows = await tenantHandle(tx).execute<DetailRow>(sql`
+        SELECT w.id, w.name, to_char(w.created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS created_at, w.version,
+          (SELECT m.role::text FROM public.workspace_members m WHERE m.workspace_id = w.id AND m.account_id = ${tx.accountId}::uuid) AS role,
+          (SELECT count(*) FROM public.workspace_members m WHERE m.workspace_id = w.id)::text AS member_count
+        FROM public.workspaces w
+        WHERE w.id = ${workspaceId}::uuid`);
+      const row = rows[0];
+      if (row === undefined || row.role === null) {
+        return undefined;
+      }
+      return { id: row.id, name: row.name, createdAt: new Date(row.created_at), version: row.version, role: roleOf(row.role), memberCount: Number(row.member_count) };
+    },
+
+    async rename({ name, expectedVersions }) {
+      const workspaceId = workspaceOf(tx, "renaming the workspace");
+      const handle = tenantHandle(tx);
+      const locked = await handle.execute<LockedWorkspaceRow>(sql`
+        SELECT name, version FROM public.workspaces WHERE id = ${workspaceId}::uuid FOR UPDATE`);
+      const row = locked[0];
+      if (row === undefined) {
+        return { kind: "unavailable" };
+      }
+      if (expectedVersions !== undefined && !expectedVersions.includes(row.version)) {
+        return { kind: "stale", version: row.version };
+      }
+      if (row.name === name) {
+        return { kind: "unchanged", version: row.version };
+      }
+      const written = await handle.execute<VersionRow>(sql`
+        UPDATE public.workspaces SET name = ${name}, version = version + 1 WHERE id = ${workspaceId}::uuid RETURNING version`);
+      const updated = written[0];
+      if (written.length !== 1 || updated === undefined) {
+        throw new Error("renaming a locked workspace did not update exactly one row");
+      }
+      return { kind: "renamed", previousName: row.name, version: updated.version };
+    },
+
+    async settings() {
+      const workspaceId = workspaceOf(tx, "reading the settings");
+      const rows = await tenantHandle(tx).execute<SettingsRow>(sql`
+        SELECT ai_enabled FROM public.workspace_settings WHERE workspace_id = ${workspaceId}::uuid`);
+      const row = rows[0];
+      return row === undefined ? undefined : { aiEnabled: row.ai_enabled };
+    },
+
+    async changeSettings(patch) {
+      const workspaceId = workspaceOf(tx, "changing the settings");
+      const handle = tenantHandle(tx);
+      const locked = await handle.execute<SettingsRow>(sql`
+        SELECT ai_enabled FROM public.workspace_settings WHERE workspace_id = ${workspaceId}::uuid FOR UPDATE`);
+      const row = locked[0];
+      if (row === undefined) {
+        return undefined;
+      }
+      const previous: WorkspaceSettings = { aiEnabled: row.ai_enabled };
+      const current: WorkspaceSettings = { aiEnabled: patch.aiEnabled ?? previous.aiEnabled };
+      if (current.aiEnabled !== previous.aiEnabled) {
+        const written = await handle.execute<SettingsRow>(sql`
+          UPDATE public.workspace_settings SET ai_enabled = ${current.aiEnabled}, updated_by = ${tx.accountId}::uuid
+          WHERE workspace_id = ${workspaceId}::uuid RETURNING ai_enabled`);
+        if (written.length !== 1) {
+          throw new Error("changing locked settings did not update exactly one row");
+        }
+      }
+      return { previous, current };
     },
   };
 }

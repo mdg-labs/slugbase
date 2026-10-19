@@ -148,12 +148,12 @@ describe("the setup tables", () => {
     await expect(db.app`SELECT * FROM instance_state`).rejects.toMatchObject({ code: "42501" });
   });
 
-  it("give workspace_settings forced row-level security, a read for the application role and an updated_at trigger", async () => {
+  it("give workspace_settings forced row-level security, a read for the application role, a write of the setting columns alone and an updated_at trigger", async () => {
     const [security] = await db.owner<{ enabled: boolean; forced: boolean; policies: string[] }[]>`
       SELECT c.relrowsecurity AS enabled, c.relforcerowsecurity AS forced,
              (SELECT array_agg(p.polname ORDER BY p.polname) FROM pg_policy p WHERE p.polrelid = c.oid) AS policies
       FROM pg_class c WHERE c.oid = 'public.workspace_settings'::regclass`;
-    expect(security).toEqual({ enabled: true, forced: true, policies: ["workspace_settings_tenant"] });
+    expect(security).toEqual({ enabled: true, forced: true, policies: ["workspace_settings_tenant", "workspace_settings_tenant_update"] });
     const privileges = await db.owner<{ privilege: string }[]>`
       SELECT p AS privilege FROM unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) AS p
       WHERE has_table_privilege('slugbase_app', 'public.workspace_settings', p)`;

@@ -132,6 +132,41 @@ export const AUDIT_ACTIONS: {
             };
         };
     };
+    readonly "workspace.renamed": {
+        readonly category: "workspace";
+        readonly metadata: {
+            readonly from: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+            readonly to: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
+    };
+    readonly "workspace.settings_changed": {
+        readonly category: "workspace";
+        readonly metadata: {
+            readonly setting: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+            readonly from: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+            readonly to: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
+    };
 };
 
 // @public
@@ -289,6 +324,9 @@ export interface ChallengeVerdict {
     // (undocumented)
     readonly ok: boolean;
 }
+
+// @public
+export function changeWorkspaceSettings(input: WorkspaceAdministrationDependencies, ask: WorkspaceSettingsAsk): Promise<WorkspaceSettingsOutcome>;
 
 // @public
 export interface ClientErrorReportPort extends Port {
@@ -823,6 +861,9 @@ export type RegistrationUnavailable = "registration_closed" | "mail_unavailable"
 export function registrationUnavailable(settings: RegistrationSettings, mailAvailable: boolean): RegistrationUnavailable | undefined;
 
 // @public
+export function renameWorkspace(input: WorkspaceAdministrationDependencies, ask: WorkspaceRenameAsk): Promise<WorkspaceRenameOutcome>;
+
+// @public
 export function safeReturnTo(value: string | undefined): string;
 
 // @public (undocumented)
@@ -930,6 +971,28 @@ export function verifyTotp(secret: Uint8Array, code: string, nowMs: number): num
 export const WORKSPACE_NAME_MAX_LENGTH = 64;
 
 // @public (undocumented)
+export interface WorkspaceAdministrationDependencies {
+    readonly audit: AuditWriter;
+    // (undocumented)
+    readonly store: WorkspaceAdministrationStore;
+}
+
+// @public (undocumented)
+export interface WorkspaceAdministrationStore {
+    changeSettings(patch: WorkspaceSettingsPatch): Promise<WorkspaceSettingsChange | undefined>;
+    rename(request: WorkspaceRenameRequest): Promise<WorkspaceRenameResult>;
+}
+
+// @public (undocumented)
+export interface WorkspaceChangeAsk {
+    // (undocumented)
+    readonly actor: AuditActor;
+    readonly ipPrefix: string | null;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
 export interface WorkspaceCreationAsk extends WorkspaceCreationPolicy {
     // (undocumented)
     readonly accountId: string;
@@ -980,7 +1043,89 @@ export interface WorkspaceCreationRequest {
 }
 
 // @public (undocumented)
+export interface WorkspaceRenameAsk extends WorkspaceChangeAsk {
+    // (undocumented)
+    readonly expectedVersions: readonly number[] | undefined;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public (undocumented)
+export type WorkspaceRenameOutcome = Exclude<WorkspaceRenameResult, {
+    readonly kind: "renamed";
+}> | {
+    readonly kind: "renamed";
+    readonly version: number;
+};
+
+// @public (undocumented)
+export interface WorkspaceRenameRequest {
+    readonly expectedVersions: readonly number[] | undefined;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public (undocumented)
+export type WorkspaceRenameResult =
+/** The name was replaced and the version moved to `version`. */
+    {
+    readonly kind: "renamed";
+    readonly previousName: string;
+    readonly version: number;
+}
+/** The name is the one the workspace has; nothing was written and the version is `version`. */
+| {
+    readonly kind: "unchanged";
+    readonly version: number;
+}
+/** The workspace is at `version`, which the caller did not accept; nothing was written. */
+| {
+    readonly kind: "stale";
+    readonly version: number;
+}
+/** The workspace of the transaction cannot be reached. */
+| {
+    readonly kind: "unavailable";
+};
+
+// @public (undocumented)
 export type WorkspaceRole = "owner" | "admin" | "member";
+
+// @public
+export interface WorkspaceSettings {
+    // (undocumented)
+    readonly aiEnabled: boolean;
+}
+
+// @public (undocumented)
+export interface WorkspaceSettingsAsk extends WorkspaceChangeAsk {
+    // (undocumented)
+    readonly patch: WorkspaceSettingsPatch;
+}
+
+// @public (undocumented)
+export interface WorkspaceSettingsChange {
+    readonly current: WorkspaceSettings;
+    readonly previous: WorkspaceSettings;
+}
+
+// @public (undocumented)
+export type WorkspaceSettingsOutcome = {
+    readonly kind: "changed";
+    readonly settings: WorkspaceSettings;
+} | {
+    readonly kind: "unchanged";
+    readonly settings: WorkspaceSettings;
+}
+/** The workspace has no settings row. */
+| {
+    readonly kind: "unavailable";
+};
+
+// @public
+export type WorkspaceSettingsPatch = {
+    readonly [Key in keyof WorkspaceSettings]?: WorkspaceSettings[Key];
+};
 
 // @public (undocumented)
 export interface WorkspaceStore {

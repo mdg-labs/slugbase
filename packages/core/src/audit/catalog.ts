@@ -23,8 +23,14 @@ export interface AuditActionDefinition {
 /** A workspace's name has 1 to 64 characters (doc 02 section 3.1); the metadata of its creation records it. */
 const WORKSPACE_NAME: AuditMetadataField = { type: "text", minLength: 1, maxLength: 64 };
 
+/** The name of a setting and the value it had or has, as text: a flag is `true` or `false`. */
+const SETTING_NAME: AuditMetadataField = { type: "text", minLength: 1, maxLength: 64 };
+const SETTING_VALUE: AuditMetadataField = { type: "text", minLength: 1, maxLength: 64 };
+
 export const AUDIT_ACTIONS = {
   "workspace.created": { category: "workspace", metadata: { name: WORKSPACE_NAME } },
+  "workspace.renamed": { category: "workspace", metadata: { from: WORKSPACE_NAME, to: WORKSPACE_NAME } },
+  "workspace.settings_changed": { category: "workspace", metadata: { setting: SETTING_NAME, from: SETTING_VALUE, to: SETTING_VALUE } },
 } as const satisfies Record<string, AuditActionDefinition>;
 
 export type AuditAction = keyof typeof AUDIT_ACTIONS;

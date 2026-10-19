@@ -260,6 +260,13 @@
       "when": 1792364830002,
       "tag": "20261018230710_add_session_active_workspace",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1792367047861,
+      "tag": "20261018234407_add_workspace_write_grants",
+      "breakpoints": true
     }
   ]
 }

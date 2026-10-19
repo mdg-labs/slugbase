@@ -182,7 +182,7 @@ function setup(options: SetupOptions = {}) {
     member: operationOf("/api/v1/bookmarks", "listBookmarks", "member", { scope: "read" }),
     memberWrite: operationOf("/api/v1/bookmarks", "createBookmark", "member", { method: "post", scope: "write", body: true }),
     admin: operationOf("/api/v1/members", "listMembers", "admin", { scope: "read" }),
-    owner: operationOf("/api/v1/workspace", "getWorkspace", "owner", { scope: "read" }),
+    owner: operationOf("/api/v1/owner-check", "checkOwner", "owner", { scope: "read" }),
     unscoped: operationOf("/api/v1/tokens", "listTokens", "account"),
     instance: operationOf("/api/v1/instance/accounts", "listAccounts", "instanceAdmin"),
     gated: operationOf("/api/v1/teams", "listTeams", "member", { scope: "read", entitlement: "teams.manage" }),
@@ -254,7 +254,7 @@ describe("the failure scenario (T3): an anonymous caller of an operation that re
 
   it.each([
     ["/api/v1/members"],
-    ["/api/v1/workspace"],
+    ["/api/v1/owner-check"],
     ["/api/v1/account-check"],
     ["/api/v1/instance/accounts"],
   ])("answers 401 on %s too", async (path) => {
@@ -416,7 +416,7 @@ describe("stage 7: tenant resolution", () => {
     const stranger = setup({
       resolver: { available: true, resolve: () => Promise.resolve(undefined) },
     });
-    for (const path of ["/api/v1/bookmarks", "/api/v1/members", "/api/v1/workspace"]) {
+    for (const path of ["/api/v1/bookmarks", "/api/v1/members", "/api/v1/owner-check"]) {
       const missing = await stranger.server.fetch(get(path, cookieOf("owner")));
       expect(missing.status, path).toBe(404);
       expect(await codeOf(missing), path).toBe("not_found");
@@ -465,7 +465,7 @@ describe("stage 7: tenant resolution", () => {
     const { server, seen } = setup({
       resolver: { available: true, resolve: () => Promise.resolve({ workspaceId: WORKSPACE, memberId: MEMBER_ID, role: "owner" }) },
     });
-    const response = await server.fetch(get("/api/v1/workspace", { authorization: "Bearer slb_other_workspace" }));
+    const response = await server.fetch(get("/api/v1/owner-check", { authorization: "Bearer slb_other_workspace" }));
     expect(response.status).toBe(500);
     expect(seen).toEqual([]);
   });
@@ -488,9 +488,9 @@ describe("stage 9: authorization", () => {
     ["/api/v1/members", "member", 403],
     ["/api/v1/members", "admin", 200],
     ["/api/v1/members", "owner", 200],
-    ["/api/v1/workspace", "member", 403],
-    ["/api/v1/workspace", "admin", 403],
-    ["/api/v1/workspace", "owner", 200],
+    ["/api/v1/owner-check", "member", 403],
+    ["/api/v1/owner-check", "admin", 403],
+    ["/api/v1/owner-check", "owner", 200],
   ];
 
   it.each(MATRIX)("%s as %s answers %s, in the order owner above admin above member", async (path, who, status) => {
@@ -546,8 +546,8 @@ describe("stage 9: authorization", () => {
 
     it("applies the role of the account in the bound workspace to a token", async () => {
       const { server } = setup();
-      expect((await server.fetch(get("/api/v1/workspace", { authorization: "Bearer slb_member_write" }))).status).toBe(403);
-      expect((await server.fetch(get("/api/v1/workspace", { authorization: "Bearer slb_owner_write" }))).status).toBe(200);
+      expect((await server.fetch(get("/api/v1/owner-check", { authorization: "Bearer slb_member_write" }))).status).toBe(403);
+      expect((await server.fetch(get("/api/v1/owner-check", { authorization: "Bearer slb_owner_write" }))).status).toBe(200);
     });
   });
 
@@ -673,7 +673,7 @@ describe("stage 9: declared re-authentication and completed second factor (T18)"
       ["/api/v1/account-check", "member"],
       ["/api/v1/bookmarks", "member"],
       ["/api/v1/members", "admin"],
-      ["/api/v1/workspace", "owner"],
+      ["/api/v1/owner-check", "owner"],
       ["/api/v1/instance/accounts", "instanceAdmin"],
       ["/api/v1/tokens", "member"],
     ] as const)("answers 401 mfa_required on %s, before the handler", async (path, who) => {

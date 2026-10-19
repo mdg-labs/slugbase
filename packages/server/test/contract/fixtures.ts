@@ -97,6 +97,14 @@ export const FIXTURES: ContractFixtures = {
   // 404 whoever holds it (the session tests walk that). The walker that switches is a member of the workspace it names (the contract test seeds
   // it), so the valid request is the declared 204.
   setActiveWorkspace: { body: { workspaceId: WALKER_WORKSPACE_ID } },
+  // Tenant-scoped operations that act in the workspace of the request and take no identifier of any workspace, so there is no workspace B
+  // identifier to put in them: the walker that calls each is the owner of a workspace of its own (the contract test seeds it, with its settings
+  // row), and the roles below are the member of that workspace and an account with none. What the matrix shows of them, that no request
+  // reaches a workspace other than its own, is run by the workspace route tests.
+  getWorkspace: {},
+  renameWorkspace: { body: { name: "Walker's renamed workspace" } },
+  getWorkspaceSettings: {},
+  updateWorkspaceSettings: { body: { aiEnabled: false } },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

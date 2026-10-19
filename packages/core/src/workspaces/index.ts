@@ -14,3 +14,18 @@ export type {
   WorkspaceCreationRequest,
   WorkspaceStore,
 } from "./create.ts";
+export { changeWorkspaceSettings, renameWorkspace } from "./manage.ts";
+export type {
+  WorkspaceAdministrationDependencies,
+  WorkspaceAdministrationStore,
+  WorkspaceChangeAsk,
+  WorkspaceRenameAsk,
+  WorkspaceRenameOutcome,
+  WorkspaceRenameRequest,
+  WorkspaceRenameResult,
+  WorkspaceSettings,
+  WorkspaceSettingsAsk,
+  WorkspaceSettingsChange,
+  WorkspaceSettingsOutcome,
+  WorkspaceSettingsPatch,
+} from "./manage.ts";

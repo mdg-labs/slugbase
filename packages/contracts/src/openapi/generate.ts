@@ -167,7 +167,7 @@ class Converter {
 function objectParameters(
   converter: Converter,
   schema: z.ZodObject,
-  location: "path" | "query",
+  location: "path" | "query" | "header",
 ): JsonObject[] {
   const converted = converter.convert(schema, "input");
   if (converted === undefined) {
@@ -247,7 +247,7 @@ function checkDeclaration(raw: unknown, index: number, seenIds: Set<string>, see
   if (request !== undefined && !isRecord(request)) {
     need("request must be an object");
   } else {
-    for (const part of ["params", "query"] as const) {
+    for (const part of ["params", "query", "headers"] as const) {
       const schema = request?.[part];
       if (schema !== undefined && !(schema instanceof z.ZodObject)) {
         need(`request.${part} must be a Zod object schema`);
@@ -371,6 +371,9 @@ function buildOperation(op: OperationDefinition, converter: Converter): JsonObje
   }
   if (op.request?.query !== undefined) {
     parameters.push(...objectParameters(converter, op.request.query, "query"));
+  }
+  if (op.request?.headers !== undefined) {
+    parameters.push(...objectParameters(converter, op.request.headers, "header"));
   }
   if (parameters.length > 0) {
     entry["parameters"] = parameters;

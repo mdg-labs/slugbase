@@ -363,11 +363,11 @@ The post-sign-in landing page:
 
 Available to admins and owners in **Settings → Workspace** (doc 03):
 
-- **General**: name; delete workspace (owner).
+- **General**: name (a rename is the audited `workspace.renamed` event with the old and new name, and a stale tab's rename is refused, doc 04 §2.4); delete workspace (owner).
 - **Members**: list with role, teams, joined date, last active (the member's most recent request in this workspace); invite; change role; remove (with the §3.6 content choice); transfer ownership; pending invitations with resend/revoke; seat usage (Cloud, via slot).
 - **Teams**: create, rename, describe, delete; manage team members.
 - **Audit log** (subject to `audit.log`): read-only, with filters by actor, action and date range. Recorded actions (each exactly once, from one catalog of dotted action names grouped into categories): sign-ins and token events are **not** workspace audit events (they are account security events, shown under Account → Security); workspace events are workspace creation and renaming, membership changes (added, removed, left, role changed, ownership transferred), invitations (created, resent, link created, revoked, accepted), team changes, share grants and revocations (single and bulk), bulk bookmark deletes, imports, exports, settings changes (including the AI toggle), an instance admin adding themselves as a member (§11.1), workspace deletion request, billing changes (Cloud). Each event: time, actor (the label at the time; the account reference is removed when the account is deleted), action, target type and ID, a small metadata object validated per action (never secrets, email text, or URLs and titles beyond names). Newest first, with "load more" pagination (Q42). Retention is `AUDIT_RETENTION_DAYS` (default 365, `0` keeps events forever, Q53).
-- **AI suggestions**: an enable toggle for the workspace (default on when the AI adapter is configured and `ai.suggestions` is granted); a change is an audited settings change. No credentials or models in the workspace UI — those are operator configuration (D22).
+- **AI suggestions**: an enable toggle for the workspace (default on when the AI adapter is configured and `ai.suggestions` is granted); a change is an audited settings change (`workspace.settings_changed`: the setting and its old and new value). No credentials or models in the workspace UI — those are operator configuration (D22).
 - **No SMTP or OIDC panels** in the workspace UI on either edition: they are operator configuration. The CE instance admin sees their *status* in the admin area (§11).
 
 ---
