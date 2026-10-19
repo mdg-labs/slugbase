@@ -58,17 +58,19 @@ async function account(): Promise<string> {
 interface Workspace {
   readonly workspaceId: string;
   readonly members: readonly { readonly accountId: string; readonly role: Role }[];
+  readonly tokenHashes: readonly Buffer[];
 }
 
 /** A workspace with one member of each role given, in that order, its settings row, one token per member and two audit events. */
 async function workspaceOf(...roles: Role[]): Promise<Workspace> {
   const workspaceId = await seedWorkspace(db, { name: "Deletion test" });
   const members: { accountId: string; role: Role }[] = [];
+  const tokenHashes: Buffer[] = [];
   for (const role of roles) {
     const accountId = await account();
     await seedMember(db, { workspaceId, accountId, role });
     members.push({ accountId, role });
-    await seedToken(accountId, workspaceId);
+    tokenHashes.push((await seedToken(accountId, workspaceId)).hash);
   }
   await asSystem(db, async (tx) => {
     await tx`INSERT INTO workspace_settings (workspace_id) VALUES (${workspaceId})`;
@@ -76,7 +78,7 @@ async function workspaceOf(...roles: Role[]): Promise<Workspace> {
       await tx`INSERT INTO audit_events (id, workspace_id, actor_type, actor_label, action) VALUES (${freshId()}, ${workspaceId}, 'system', 'Test', 'workspace.renamed')`;
     }
   });
-  return { workspaceId, members };
+  return { workspaceId, members, tokenHashes };
 }
 
 function who(workspace: Workspace, index: number): string {
@@ -87,14 +89,14 @@ function who(workspace: Workspace, index: number): string {
   return member.accountId;
 }
 
-async function seedToken(accountId: string, workspaceId: string): Promise<string> {
+async function seedToken(accountId: string, workspaceId: string): Promise<{ id: string; hash: Buffer }> {
   const id = freshId();
   const token = freshToken();
   const outcome = await inTenant({ accountId }, (tx) =>
     apiTokenRepository(tx).create({ id, workspaceId, name: `CI ${id}`, scope: "read", tokenHash: token.hash, tokenPrefix: "abcdef", expiresInDays: 90, limit: 10 }),
   );
   expect(outcome.kind).toBe("created");
-  return id;
+  return { id, hash: token.hash };
 }
 
 async function seedSession(accountId: string, activeWorkspaceId: string | null): Promise<string> {
@@ -199,6 +201,7 @@ describe("workspaceRepository.markDeleting", () => {
     const other = await workspaceOf("owner");
     await seedMember(db, { workspaceId: other.workspaceId, accountId: who(a, 2), role: "member" });
     const otherToken = await seedToken(who(a, 2), other.workspaceId);
+    expect(a.tokenHashes).toHaveLength(3);
     const otherChecksum = await content(other.workspaceId);
     const sessionOfOwner = await seedSession(who(a, 0), a.workspaceId);
     const sessionOfMember = await seedSession(who(a, 2), a.workspaceId);
@@ -216,7 +219,7 @@ describe("workspaceRepository.markDeleting", () => {
     const tokens = await asSystem(db, (tx) => tx<{ workspace_id: string; revoked: boolean }[]>`SELECT workspace_id, revoked_at IS NOT NULL AS revoked FROM api_tokens`);
     expect(tokens.filter((row) => row.workspace_id === a.workspaceId).map((row) => row.revoked)).toEqual([true, true, true]);
     expect(tokens.find((row) => row.workspace_id === other.workspaceId && row.revoked)).toBeUndefined();
-    expect(await asSystem(db, (tx) => tx`SELECT 1 FROM api_tokens WHERE id = ${otherToken} AND revoked_at IS NULL`)).toHaveLength(1);
+    expect(await asSystem(db, (tx) => tx`SELECT 1 FROM api_tokens WHERE id = ${otherToken.id} AND revoked_at IS NULL`)).toHaveLength(1);
     expect(await queued(QUEUE)).toEqual([{ workspaceId: a.workspaceId }]);
     expect(await content(other.workspaceId)).toBe(otherChecksum);
 
@@ -235,9 +238,12 @@ describe("workspaceRepository.markDeleting", () => {
     }));
     expect([...reads.workspaces]).toEqual([]);
     expect(reads.memberWorkspaces.map((row) => row["app_member_workspace_ids"])).not.toContain(a.workspaceId);
-    const lookup = await db.app<{ token_id: string }[]>`
-      SELECT token_id FROM sys_api_token_lookup(${freshToken().hash}, NULL)`;
-    expect([...lookup]).toEqual([]);
+    for (const hash of a.tokenHashes) {
+      const lookup = await db.app<{ token_id: string }[]>`SELECT token_id FROM sys_api_token_lookup(${hash}, NULL)`;
+      expect([...lookup]).toEqual([]);
+    }
+    const control = await db.app<{ token_id: string }[]>`SELECT token_id FROM sys_api_token_lookup(${otherToken.hash}, NULL)`;
+    expect(control.map((row) => row.token_id)).toEqual([otherToken.id]);
   });
 
   it("refuses an admin and a member, and a second request, and changes and queues nothing", async () => {
