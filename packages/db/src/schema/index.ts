@@ -1,4 +1,5 @@
 export { accounts } from "./accounts.ts";
+export { auditEvents } from "./audit.ts";
 export { sessions } from "./sessions.ts";
 export { mfaBackupCodes } from "./mfa.ts";
 export { apiTokens } from "./api-tokens.ts";

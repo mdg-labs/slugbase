@@ -48,10 +48,10 @@ afterEach(async () => {
   await Promise.all(started.splice(0).map((worker) => worker.shutdown()));
 });
 
-function ceWorker() {
+function ceWorker(env: Record<string, string> = {}) {
   const logger = recordingLogger();
   const created = createWorker({
-    config: loadConfig("worker", { ...productionEnv(), NODE_ENV: "test", DATABASE_URL: appUrl() }).config,
+    config: loadConfig("worker", { ...productionEnv(), NODE_ENV: "test", DATABASE_URL: appUrl(), ...env }).config,
     adapters: adapters(),
     modules: [],
     logger,
@@ -223,8 +223,98 @@ describe("the retention purge of a worker without modules", () => {
 
     await until(() => purgeLogs(logger).length > 0, 15_000, "the purge job to run");
     expect(await sessionIds()).toEqual([live, otherLive].sort());
-    expect(purgeLogs(logger).map((entry) => entry.fields)).toEqual([{ deleted: { sessions: 3, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0 } }]);
+    expect(purgeLogs(logger).map((entry) => entry.fields)).toEqual([{ deleted: { sessions: 3, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0, audit_events: 0 } }]);
     await expectOnlyEnqueuedRuns(since, [run]);
+  });
+
+  describe("the audit log", () => {
+    async function seedWorkspace(): Promise<string> {
+      const id = randomUUID();
+      await database().owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        await tx`INSERT INTO workspaces (id, name) VALUES (${id}, 'Audited workspace')`;
+      });
+      return id;
+    }
+
+    async function seedAuditEvent(workspaceId: string, ageDays: number): Promise<string> {
+      const id = randomUUID();
+      await database().owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        await tx`
+          INSERT INTO audit_events (id, workspace_id, actor_type, actor_label, action, metadata, created_at)
+          VALUES (${id}, ${workspaceId}, 'system', 'SlugBase', 'workspace.created', '{}'::jsonb, now() - ${ageDays} * interval '1 day')`;
+      });
+      return id;
+    }
+
+    async function auditIds(): Promise<string[]> {
+      const rows = await database().owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        return tx<{ id: string }[]>`SELECT id FROM audit_events ORDER BY id`;
+      });
+      return rows.map((row) => row.id);
+    }
+
+    async function clearAuditEvents(): Promise<void> {
+      await database().owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        await tx`DELETE FROM audit_events`;
+      });
+    }
+
+    async function runOnce(env: Record<string, string>): Promise<ReturnType<typeof purgeLogs>> {
+      await clearSessions();
+      const { created, logger } = ceWorker(env);
+      const running = await startWithoutHourlySchedule(created);
+      const job = created.jobs.find((candidate) => candidate.name === JOB);
+      if (job === undefined) {
+        throw new Error("the worker registers no retention job");
+      }
+      await enqueueRun(running, job);
+      await until(() => purgeLogs(logger).length > 0, 15_000, "the purge job to run");
+      return purgeLogs(logger);
+    }
+
+    it("deletes the events older than AUDIT_RETENTION_DAYS when the job runs, keeps the newer ones and logs the count", async () => {
+      await clearAuditEvents();
+      const workspaceId = await seedWorkspace();
+      await seedAuditEvent(workspaceId, 90);
+      await seedAuditEvent(workspaceId, 31);
+      const recent = await seedAuditEvent(workspaceId, 29);
+      const fresh = await seedAuditEvent(workspaceId, 0);
+
+      const logs = await runOnce({ AUDIT_RETENTION_DAYS: "30" });
+
+      expect(logs.map((entry) => entry.fields)).toEqual([
+        { deleted: { sessions: 0, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0, audit_events: 2 } },
+      ]);
+      expect(await auditIds()).toEqual([recent, fresh].sort());
+    });
+
+    it("keeps every event with AUDIT_RETENTION_DAYS=0", async () => {
+      await clearAuditEvents();
+      const workspaceId = await seedWorkspace();
+      const old = await seedAuditEvent(workspaceId, 4000);
+
+      const logs = await runOnce({ AUDIT_RETENTION_DAYS: "0" });
+
+      expect(logs.map((entry) => entry.fields)).toEqual([
+        { deleted: { sessions: 0, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0, audit_events: 0 } },
+      ]);
+      expect(await auditIds()).toEqual([old]);
+    });
+
+    it("keeps events for a year when AUDIT_RETENTION_DAYS is not set", async () => {
+      await clearAuditEvents();
+      const workspaceId = await seedWorkspace();
+      await seedAuditEvent(workspaceId, 366);
+      const kept = await seedAuditEvent(workspaceId, 364);
+
+      await runOnce({});
+
+      expect(await auditIds()).toEqual([kept]);
+    });
   });
 
   it("finishes a backlog of more than one batch across runs", async () => {
@@ -250,8 +340,8 @@ describe("the retention purge of a worker without modules", () => {
     await until(() => purgeLogs(logger).length === 2, 15_000, "the second run");
     expect(await sessionIds()).toEqual([live]);
     expect(purgeLogs(logger).map((entry) => entry.fields)).toEqual([
-      { deleted: { sessions: BATCH, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0 } },
-      { deleted: { sessions: extra, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0 } },
+      { deleted: { sessions: BATCH, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0, audit_events: 0 } },
+      { deleted: { sessions: extra, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0, audit_events: 0 } },
     ]);
     await expectOnlyEnqueuedRuns(since, [first, second]);
   }, 60_000);

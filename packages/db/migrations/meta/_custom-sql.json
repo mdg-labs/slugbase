@@ -1,4 +1,4 @@
 {
-  "sha256": "8ab09ea9fac99296534cdb73b97aad107f8c1cb65d9d1bb91d11db1254581ccb",
-  "migration": "20261018181219_add_oidc_first_login"
+  "sha256": "6b894c5f2582f7a8589e590995db199fc9778f8d0c96b97b727f82326628ffa6",
+  "migration": "20261019004644_add_member_roles"
 }

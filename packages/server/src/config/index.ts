@@ -32,6 +32,7 @@ export {
   originFragment,
   passwordPolicyFragment,
   registrationFragment,
+  retentionFragment,
   runtimeFragment,
   secretsFragment,
   serverMigrationFragment,

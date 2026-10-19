@@ -196,6 +196,16 @@ export const mfaFragment = envFragment({
 });
 
 /**
+ * How long a workspace's audit events are kept (doc 05 section 6, Q53), for the server and the worker; the
+ * worker runs the retention purge. `0` keeps them forever; the day count is capped at 100 years.
+ */
+export const retentionFragment = envFragment({
+  shape: {
+    AUDIT_RETENTION_DAYS: envInteger({ min: 0, max: 36_500 }).default(365),
+  },
+});
+
+/**
  * The internal listener for `/metrics` (doc 01 section 12), for the server and
  * the worker. Unset means there is none: nothing exposes metrics by default (D27).
  */

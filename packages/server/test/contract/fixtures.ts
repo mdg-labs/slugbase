@@ -10,13 +10,14 @@ export const WALKER_ACCOUNT = { email: "walker@example.test", password: "a passw
 /** A session id no account holds: the walker's request to revoke it is the declared 404. */
 export const UNKNOWN_SESSION_ID = "0192f3a0-cccc-7000-8000-000000000001";
 
-/** The workspace the walker that creates an API token is a member of. */
+/** The workspace the walker that creates an API token, or switches its active workspace, is a member of. */
 export const WALKER_WORKSPACE_ID = "0192f3a0-cccc-7000-8000-0000000000f1";
 
 /** A token id no account holds: the walker's request to revoke it is the declared 404. */
 export const UNKNOWN_API_TOKEN_ID = "0192f3a0-cccc-7000-8000-000000000002";
 
 /** An identity id no account holds: the walker's request to unlink it is the declared 404. */
+export const UNKNOWN_MEMBER_ID = "0192f3a0-cccc-7000-8000-000000000004";
 export const UNKNOWN_IDENTITY_ID = "0192f3a0-cccc-7000-8000-000000000003";
 
 export const FIXTURES: ContractFixtures = {
@@ -88,6 +89,29 @@ export const FIXTURES: ContractFixtures = {
   // The walker has none, so a valid unlink names an identity that is not its own, which is the declared 404 whoever holds it.
   listIdentities: {},
   unlinkIdentity: { path: { id: UNKNOWN_IDENTITY_ID }, status: 404 },
+  // Account-level operations: no workspace or other account's identifier is part of them, and the workspaces they act on are the walker's own.
+  // The walker's server leaves workspace creation at its closed default, so the valid creation is the declared 403; the creation itself is walked
+  // by the workspace route tests.
+  listWorkspaces: {},
+  createWorkspace: { body: { name: "Walker workspace" }, status: 403 },
+  // An account-level operation: the workspace it names must be one the account belongs to, and a workspace of another account answers the declared
+  // 404 whoever holds it (the session tests walk that). The walker that switches is a member of the workspace it names (the contract test seeds
+  // it), so the valid request is the declared 204.
+  setActiveWorkspace: { body: { workspaceId: WALKER_WORKSPACE_ID } },
+  // Tenant-scoped operations that act in the workspace of the request and take no identifier of any workspace, so there is no workspace B
+  // identifier to put in them: the walker that calls each is the owner of a workspace of its own (the contract test seeds it, with its settings
+  // row), and the roles below are the member of that workspace and an account with none. What the matrix shows of them, that no request
+  // reaches a workspace other than its own, is run by the workspace route tests.
+  getWorkspace: {},
+  renameWorkspace: { body: { name: "Walker's renamed workspace" } },
+  getWorkspaceSettings: {},
+  updateWorkspaceSettings: { body: { aiEnabled: false } },
+  // Tenant-scoped operations of the workspace of the request. The list names no identifier. The role change names a member by account
+  // identifier, and the walker cannot know the identifier of a member of the workspace it owns, so its valid request names an account that is no
+  // member of it, which is the declared 404 whoever holds it, and so is a member of workspace B; the route tests change roles, and the matrix puts the
+  // members of workspace B in it.
+  listMembers: {},
+  updateMember: { path: { accountId: UNKNOWN_MEMBER_ID }, body: { role: "admin" }, status: 404, foreign: { path: { accountId: UNKNOWN_MEMBER_ID }, body: { role: "admin" } } },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

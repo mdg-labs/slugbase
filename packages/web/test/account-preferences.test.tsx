@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-libra
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createWebApp, type WebExtension } from "../src/index.ts";
-import { ACCOUNT_BODY, CONFIG_BODY, ME_PATH, SESSION_PATH, json, problem, renderApp, signedIn, stubBrowserApis } from "./support.tsx";
+import { ACCOUNT_BODY, CONFIG_BODY, ME_PATH, SESSION_PATH, json, meOf, problem, renderApp, signedIn, stubBrowserApis } from "./support.tsx";
 
 // /settings/account/preferences (doc 03 section 11.4) and the preferences the app applies from the account it
 // loads at start. The failure scenarios are a theme or accent that shows but is not kept, a change reported as
@@ -25,7 +25,7 @@ interface Server {
 }
 
 function me(account: Account): ComponentTypes["schemas"]["Me"] {
-  return { account, memberships: [], activeWorkspaceId: null };
+  return meOf(account);
 }
 
 /** A server with a signed-in account that applies each update to the account it holds, as the real one does. */

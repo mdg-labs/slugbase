@@ -147,6 +147,10 @@ const MIGRATIONS: readonly MigrationChain[] = [];
 // carry the link. A key the operator sets wins.
 const REGISTRATION_DEFAULTS: RegistrationSettings = { publicRegistration: false, emailVerificationRequired: false };
 
+// Whether ordinary accounts may create workspaces (doc 02 section 3.2): CE leaves it to the instance admin, who
+// creates them from the admin area; the managed composition passes true. No edition flag decides it (D4).
+const ALLOW_WORKSPACE_CREATION = false;
+
 const RATE_LIMIT_POOL_SIZE = 4;
 
 // The templates are the ones of `@slugbase/email`, with every link on the deployment's own origin. A
@@ -193,9 +197,10 @@ function composeIdentity(config: ServerConfig | WorkerConfig, egress: EgressPort
 // Sentry-protocol adapter when the operator set `ERROR_REPORT_DSN`, and the
 // no-op default (errors are logged only) when not. Egress is always on (doc 01
 // section 6): the adapter that resolves, validates and pins every outbound request.
-// No account has a workspace until the workspace tables exist, so the tenant resolver puts every
-// request at account level; sign-in and the session cookie are served by `createServer` itself,
-// on `DATABASE_URL`.
+// The composition leaves the tenant resolver to `createServer`: the account-only resolver below
+// stands for "no choice made", and `createServer` replaces it with the membership resolver, which
+// puts each request in the principal's active workspace through its memberships (doc 01 section
+// 5.2). Sign-in and the session cookie are served by `createServer` itself, on `DATABASE_URL`.
 // The rate limiter keeps its tokens in Postgres through the system operation of
 // `@slugbase/db`, on a small pool of its own as the role of `DATABASE_URL`; the
 // pool connects on the first limited request, not at start-up. Its limits are the
@@ -248,6 +253,7 @@ async function runServer(config: ServerConfig, trap: SignalTrap): Promise<void> 
     modules: [],
     migrations: MIGRATIONS,
     registrationDefaults: REGISTRATION_DEFAULTS,
+    allowWorkspaceCreation: ALLOW_WORKSPACE_CREATION,
     logger,
     buildInfo: loadBuildInfo(BUILD_INFO_FILE),
     ...(serveWeb ? { webRoot: WEB_ROOT } : {}),

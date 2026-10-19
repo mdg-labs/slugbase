@@ -870,5 +870,69 @@
         "action": "Sicherheitseinstellungen öffnen"
       }
     }
+  },
+  "workspaces": {
+    "switcher": {
+      "label": "Workspace",
+      "none": "Kein Workspace",
+      "unavailable": "Workspace nicht verfügbar",
+      "groupLabel": "Workspaces",
+      "new": "Neuer Workspace",
+      "settings": "Workspace-Einstellungen",
+      "loadFailed": "Deine Workspaces konnten nicht geladen werden.",
+      "retry": "Erneut versuchen",
+      "empty": "Noch keine weiteren Workspaces."
+    },
+    "switch": {
+      "failed": {
+        "title": "Der Workspace wurde nicht gewechselt",
+        "unavailable": "Du bist weiterhin im selben Workspace. Versuche es erneut.",
+        "notAMember": "Du bist kein Mitglied dieses Workspace mehr."
+      }
+    },
+    "create": {
+      "title": "Neuer Workspace",
+      "description": "Ein Workspace enthält deine Lesezeichen, Ordner und Mitglieder.",
+      "close": "Schließen",
+      "dismiss": "Später",
+      "cancel": "Abbrechen",
+      "submit": "Workspace erstellen",
+      "name": {
+        "label": "Name",
+        "required": "Gib einen Namen ein."
+      },
+      "error": {
+        "invalidName": "Verwende einen Namen mit 1 bis 64 Zeichen.",
+        "unverified": "Bestätige deine E-Mail-Adresse, um einen Workspace zu erstellen.",
+        "notAllowed": "Auf diesem Server können Konten keine Workspaces erstellen.",
+        "limitReached": "Du hast die Höchstzahl an Workspaces für dein Konto erreicht.",
+        "unavailable": "Der Workspace konnte nicht erstellt werden. Versuche es gleich noch einmal."
+      },
+      "created": "„{name}“ wurde erstellt.",
+      "notOpened": "Der neue Workspace wurde nicht geöffnet",
+      "retry": "Erneut versuchen"
+    }
+  },
+  "noWorkspace": {
+    "retry": "Erneut versuchen",
+    "signedInAs": "Angemeldet als {email}",
+    "open": "{name} öffnen",
+    "loadFailed": {
+      "title": "Dein Konto konnte nicht geladen werden",
+      "description": "Versuche es erneut. Wenn das so bleibt, sag deiner Administration Bescheid."
+    },
+    "choose": {
+      "title": "Workspace auswählen",
+      "description": "Du bist Mitglied dieser Workspaces, aber keiner ist geöffnet."
+    },
+    "create": {
+      "title": "Du bist noch in keinem Workspace",
+      "description": "Erstelle einen Workspace, um Lesezeichen zu speichern.",
+      "action": "Workspace erstellen"
+    },
+    "waiting": {
+      "title": "Warten auf eine Einladung",
+      "description": "Bitte die Eigentümerin oder den Eigentümer eines Workspace, dich einzuladen. Er erscheint hier, sobald du annimmst."
+    }
   }
 }

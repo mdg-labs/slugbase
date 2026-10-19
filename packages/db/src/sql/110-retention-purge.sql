@@ -33,14 +33,24 @@
 -- or expired token from the moment it is one, so deleting the row later changes
 -- no answer. The grants it needs are in 190-credential-tokens.sql.
 --
--- It takes no argument, so a caller cannot widen what it deletes, and it uses no
--- dynamic SQL. It is entered in src/system/registry.ts. slugbase_system, the
+-- audit_events: workspace events (those with a workspace) created more than
+-- p_audit_retention_days days ago, which is the operator's AUDIT_RETENTION_DAYS (Q53). 0 keeps
+-- them forever and deletes none; a negative number or NULL is refused. Events of a deployment
+-- with no workspace are not deleted. Nothing locks an audit row (the application role cannot
+-- update one), so the batch is selected without a row lock, which slugbase_system holds no
+-- UPDATE privilege for. The grants it needs are in 250-audit-events.sql.
+--
+-- Every other rule is fixed in the function, and its one argument only chooses how
+-- long audit events stay, so a caller cannot widen what the other tables lose; it
+-- uses no dynamic SQL. The overload without an argument keeps working for a replica
+-- of the previous release during a rolling deploy and deletes no audit event (it
+-- passes 0). Both are entered in src/system/registry.ts. slugbase_system, the
 -- owner, already holds DELETE on sessions (060-accounts-sessions.sql) and holds
 -- DELETE on api_tokens (150-api-tokens.sql); slugbase_app reaches neither table
 -- for a delete except through this function.
 GRANT CREATE ON SCHEMA public TO slugbase_system;
 
-CREATE OR REPLACE FUNCTION public.sys_retention_purge()
+CREATE OR REPLACE FUNCTION public.sys_retention_purge(p_audit_retention_days integer)
   RETURNS TABLE (table_name text, deleted bigint)
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
   SET search_path = pg_catalog, public, pg_temp
@@ -52,6 +62,11 @@ DECLARE
   c_credential_token_retention CONSTANT interval := interval '7 days';
   v_deleted bigint;
 BEGIN
+  IF p_audit_retention_days IS NULL OR p_audit_retention_days < 0 THEN
+    RAISE EXCEPTION 'sys_retention_purge needs an audit retention of 0 (keep forever) or a number of days'
+      USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
   DELETE FROM public.sessions
   WHERE id IN (
     SELECT s.id FROM public.sessions s
@@ -91,10 +106,36 @@ BEGIN
   );
   GET DIAGNOSTICS v_deleted = ROW_COUNT;
   RETURN QUERY SELECT 'credential_tokens'::text, v_deleted;
+
+  v_deleted := 0;
+  IF p_audit_retention_days > 0 THEN
+    DELETE FROM public.audit_events
+    WHERE id IN (
+      SELECT e.id FROM public.audit_events e
+      WHERE e.workspace_id IS NOT NULL AND e.created_at <= v_now - p_audit_retention_days * interval '1 day'
+      LIMIT c_batch
+    );
+    GET DIAGNOSTICS v_deleted = ROW_COUNT;
+  END IF;
+  RETURN QUERY SELECT 'audit_events'::text, v_deleted;
 END
 $$;
 
+-- The overload of the previous release: the same purge with the audit log kept.
+CREATE OR REPLACE FUNCTION public.sys_retention_purge()
+  RETURNS TABLE (table_name text, deleted bigint)
+  LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+  SET search_path = pg_catalog, public, pg_temp
+  AS $$
+BEGIN
+  RETURN QUERY SELECT * FROM public.sys_retention_purge(0);
+END
+$$;
+
+ALTER FUNCTION public.sys_retention_purge(integer) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_retention_purge() OWNER TO slugbase_system;
 REVOKE CREATE ON SCHEMA public FROM slugbase_system;
+REVOKE ALL ON FUNCTION public.sys_retention_purge(integer) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sys_retention_purge() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.sys_retention_purge(integer) TO slugbase_app;
 GRANT EXECUTE ON FUNCTION public.sys_retention_purge() TO slugbase_app;

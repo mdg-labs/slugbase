@@ -91,12 +91,12 @@ describe("the accounts table", () => {
     ).rejects.toMatchObject({ code: "23505" });
   });
 
-  it("has row-level security enabled and forced, with the own-row policy", async () => {
+  it("has row-level security enabled and forced, with the own-row policy and the policy that adds the members of the active workspace to a read", async () => {
     const rows = await db.owner<{ enabled: boolean; forced: boolean; policies: string[] }[]>`
       SELECT c.relrowsecurity AS enabled, c.relforcerowsecurity AS forced,
-             coalesce((SELECT array_agg(p.polname) FROM pg_policy p WHERE p.polrelid = c.oid), '{}') AS policies
+             coalesce((SELECT array_agg(p.polname ORDER BY p.polname) FROM pg_policy p WHERE p.polrelid = c.oid), '{}') AS policies
       FROM pg_class c WHERE c.oid = 'public.accounts'::regclass`;
-    expect([...rows]).toEqual([{ enabled: true, forced: true, policies: ["accounts_tenant"] }]);
+    expect([...rows]).toEqual([{ enabled: true, forced: true, policies: ["accounts_tenant", "accounts_tenant_co_members"] }]);
   });
 
   it("shows slugbase_app only its own row", async () => {

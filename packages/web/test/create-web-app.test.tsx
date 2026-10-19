@@ -1,7 +1,20 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createWebApp, useConfig } from "../src/index.ts";
-import { CONFIG_BODY, ME_PATH, PRODUCT_NAME, SESSION_PATH, json, problem, renderApp, signedIn, stubMatchMedia } from "./support.tsx";
+import {
+  CONFIG_BODY,
+  ME_PATH,
+  PRODUCT_NAME,
+  SESSION_BODY,
+  SESSION_PATH,
+  WORKSPACES_PATH,
+  WORKSPACE_LIST_BODY,
+  json,
+  problem,
+  renderApp,
+  signedIn,
+  stubMatchMedia,
+} from "./support.tsx";
 
 const WELCOME = `Welcome to ${PRODUCT_NAME}`;
 const WELCOME_DE = `Willkommen bei ${PRODUCT_NAME}`;
@@ -14,6 +27,24 @@ function stubTransport(handler: Transport) {
   const fetch = vi.fn<Transport>(handler);
   vi.stubGlobal("fetch", fetch);
   return fetch;
+}
+
+/** A signed-in visitor whose account cannot be loaded, so the interface has no account preference: the browser's languages, then the default. */
+function withoutAccount(config: object): Transport {
+  return (request) => {
+    switch (new URL(request.url).pathname) {
+      case "/api/config":
+        return Promise.resolve(json(config));
+      case SESSION_PATH:
+        return Promise.resolve(json(SESSION_BODY));
+      case WORKSPACES_PATH:
+        return Promise.resolve(json(WORKSPACE_LIST_BODY));
+      case ME_PATH:
+        return Promise.resolve(problem(400, "bad_request", "req-me"));
+      default:
+        return Promise.reject(new Error("unexpected call"));
+    }
+  };
 }
 
 beforeEach(() => {
@@ -40,7 +71,7 @@ describe("createWebApp", () => {
     await renderApp(<App />);
 
     expect(await screen.findByRole("heading", { name: WELCOME })).toBeTruthy();
-    expect(fetch.mock.calls.map(([request]) => new URL(request.url).pathname)).toEqual(["/api/config", SESSION_PATH, ME_PATH]);
+    expect(fetch.mock.calls.map(([request]) => new URL(request.url).pathname)).toEqual(["/api/config", SESSION_PATH, ME_PATH, WORKSPACES_PATH]);
   });
 
   it("renders nothing of the product while the configuration is on its way", async () => {
@@ -127,7 +158,7 @@ describe("createWebApp", () => {
   });
 
   it("renders the root view in English with lang=en for an English browser", async () => {
-    stubTransport(() => Promise.resolve(json(CONFIG_BODY)));
+    stubTransport(withoutAccount(CONFIG_BODY));
     const App = createWebApp({ extensions: [] });
 
     await renderApp(<App />);
@@ -138,7 +169,7 @@ describe("createWebApp", () => {
 
   it("renders the root view in German with lang=de for a German browser", async () => {
     vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["de-AT"]);
-    stubTransport(() => Promise.resolve(json(CONFIG_BODY)));
+    stubTransport(withoutAccount(CONFIG_BODY));
     const App = createWebApp({ extensions: [] });
 
     await renderApp(<App />);
@@ -151,7 +182,7 @@ describe("createWebApp", () => {
 
   it("uses the server's default locale when the browser accepts none of the catalogs", async () => {
     vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["fr-FR"]);
-    stubTransport(() => Promise.resolve(json({ ...CONFIG_BODY, defaultLocale: "de" })));
+    stubTransport(withoutAccount({ ...CONFIG_BODY, defaultLocale: "de" }));
     const App = createWebApp({ extensions: [] });
 
     await renderApp(<App />);

@@ -5,7 +5,7 @@ import { uuidv7 } from "./uuidv7.ts";
 
 // The personal workspace of a registered account (doc 02 section 2.2): the core service run against the
 // writer of the transaction that verifies the address, or that registers the account on a deployment that
-// does not require verification. The `workspace.created` event is queued in that same transaction.
+// does not require verification. The `workspace.created` event is queued and its audit event written in that same transaction.
 
 function storeOf(writer: PersonalWorkspaceWriter): PersonalWorkspaceStore {
   return {

@@ -137,6 +137,12 @@ export type OperationResponses = { [S in OtherResponseStatus]?: JsonResponse | E
 export interface OperationRequest {
   readonly params?: z.ZodObject;
   readonly query?: z.ZodObject;
+  /**
+   * The request headers the operation reads besides the ones every request carries, published as header
+   * parameters of the document (an `If-Match` precondition, doc 04 section 2.4). The request pipeline does
+   * not parse them: the handler reads the ones it declares.
+   */
+  readonly headers?: z.ZodObject;
   /** Object bodies must be strict: unknown fields are a 422 (doc 04 section 2.3). */
   readonly body?: z.ZodType;
 }

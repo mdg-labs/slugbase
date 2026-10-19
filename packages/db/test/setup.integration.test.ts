@@ -1,3 +1,4 @@
+import type { AuditRecord } from "@slugbase/core";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createAuthStore, type AuthStore, type CompleteSetup } from "../src/index.ts";
 import { systemOperations } from "../src/system/registry.ts";
@@ -42,8 +43,12 @@ beforeEach(async () => {
   await db.owner`TRUNCATE accounts, workspaces, instance_state CASCADE`;
 });
 
-/** Deletes every account the way the owner can: one own row at a time, as the policy of `accounts` allows. */
+/**
+ * Deletes every account the way the owner can: one own row at a time, as the policy of `accounts` allows. The workspaces go first, with
+ * their memberships: an account that is the only owner of a workspace that stays cannot be deleted (the workspace would have no owner).
+ */
 async function deleteAccounts(): Promise<void> {
+  await asSystem(db, (tx) => tx`DELETE FROM workspaces`);
   const ids = await asSystem(db, (tx) => tx<{ id: string }[]>`SELECT id FROM accounts`);
   for (const { id } of ids) {
     await db.owner.begin(async (tx) => {
@@ -147,12 +152,12 @@ describe("the setup tables", () => {
     await expect(db.app`SELECT * FROM instance_state`).rejects.toMatchObject({ code: "42501" });
   });
 
-  it("give workspace_settings forced row-level security, a read for the application role and an updated_at trigger", async () => {
+  it("give workspace_settings forced row-level security, a read for the application role, a write of the setting columns alone and an updated_at trigger", async () => {
     const [security] = await db.owner<{ enabled: boolean; forced: boolean; policies: string[] }[]>`
       SELECT c.relrowsecurity AS enabled, c.relforcerowsecurity AS forced,
              (SELECT array_agg(p.polname ORDER BY p.polname) FROM pg_policy p WHERE p.polrelid = c.oid) AS policies
       FROM pg_class c WHERE c.oid = 'public.workspace_settings'::regclass`;
-    expect(security).toEqual({ enabled: true, forced: true, policies: ["workspace_settings_tenant"] });
+    expect(security).toEqual({ enabled: true, forced: true, policies: ["workspace_settings_tenant", "workspace_settings_tenant_update"] });
     const privileges = await db.owner<{ privilege: string }[]>`
       SELECT p AS privilege FROM unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) AS p
       WHERE has_table_privilege('slugbase_app', 'public.workspace_settings', p)`;
@@ -537,5 +542,72 @@ describe("the jobs of a setup", () => {
 
     expect(await counts()).toEqual(NOTHING);
     expect(await queued()).toEqual([]);
+  });
+});
+
+describe("the audit events of a setup", () => {
+  function eventFor(setup: CompleteSetup, overrides: Partial<AuditRecord> = {}): AuditRecord {
+    return {
+      id: freshId(),
+      workspaceId: setup.workspaceId,
+      actorType: "account",
+      actorAccountId: setup.accountId,
+      actorLabel: setup.displayName,
+      actorTokenId: null,
+      action: "workspace.created",
+      entityType: "workspace",
+      entityId: setup.workspaceId,
+      metadata: { name: setup.workspaceName },
+      ipPrefix: setup.ipPrefix,
+      ...overrides,
+    };
+  }
+
+  async function auditRows(): Promise<{ id: string; workspace_id: string; actor_account_id: string | null; action: string; metadata: unknown }[]> {
+    return asSystem(db, (tx) => tx`SELECT id, workspace_id, actor_account_id, action, metadata FROM audit_events ORDER BY id`);
+  }
+
+  it("writes the events it carries in the transaction that creates the workspace", async () => {
+    const setup = request();
+    const event = eventFor(setup);
+
+    expect(await store.completeSetup({ ...setup, audit: [event] })).toBe("completed");
+
+    expect(await auditRows()).toEqual([
+      { id: event.id, workspace_id: setup.workspaceId, actor_account_id: setup.accountId, action: "workspace.created", metadata: { name: "First workspace" } },
+    ]);
+  });
+
+  it("writes none when setup is already completed, and none when the token is wrong", async () => {
+    expect(await store.completeSetup(request({ audit: [] }))).toBe("completed");
+    const second = request();
+    expect(await store.completeSetup({ ...second, audit: [eventFor(second)] })).toBe("setup_completed");
+    expect(await auditRows()).toEqual([]);
+
+    await db.owner`TRUNCATE accounts, workspaces, instance_state CASCADE`;
+    const guarded = request({ tokenRequired: true, tokenHash: freshToken().hash });
+    expect(await store.completeSetup({ ...guarded, audit: [eventFor(guarded)] })).toBe("forbidden");
+    expect(await auditRows()).toEqual([]);
+  });
+
+  it("leaves no account when an event names another workspace than the one the setup creates", async () => {
+    const setup = request();
+    const foreign = eventFor(setup, { workspaceId: freshId() });
+
+    await expect(store.completeSetup({ ...setup, audit: [foreign] })).rejects.toBeInstanceOf(RangeError);
+
+    expect(await counts()).toEqual(NOTHING);
+    expect(await auditRows()).toEqual([]);
+  });
+
+  it("leaves no account, workspace or session when an event cannot be written", async () => {
+    const setup = request();
+    const invalid = eventFor(setup, { action: "x".repeat(65) as AuditRecord["action"] });
+
+    await expect(store.completeSetup({ ...setup, audit: [invalid] })).rejects.toMatchObject({ code: "23514" });
+
+    expect(await counts()).toEqual(NOTHING);
+    expect(await auditRows()).toEqual([]);
+    expect(await store.setupPending()).toBe(true);
   });
 });

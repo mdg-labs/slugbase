@@ -9,8 +9,9 @@ import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 // Retention (doc 05 section 6): sys_retention_purge() deletes what has outlived
 // its retention, a batch of 5 000 rows per table per call, and answers how many
 // it deleted per table. The rules so far: expired sessions, API tokens that
-// were revoked or expired more than 30 days ago, OIDC login states past their expiry, and credential
-// tokens that were used or expired more than 7 days ago.
+// were revoked or expired more than 30 days ago, OIDC login states past their expiry, credential
+// tokens that were used or expired more than 7 days ago, and workspace audit events older than the
+// retention the operator chose (365 days unless told otherwise, 0 keeps them forever).
 
 const HOOK_TIMEOUT_MS = 300_000;
 const HOUR_MS = 3_600_000;
@@ -18,7 +19,9 @@ const DAY_MS = 24 * HOUR_MS;
 const BATCH = 5_000;
 const TOKEN_RETENTION_DAYS = 30;
 const CREDENTIAL_TOKEN_RETENTION_DAYS = 7;
-const FUNCTION = "public.sys_retention_purge()";
+const FUNCTION = "public.sys_retention_purge(integer)";
+const PREVIOUS_FUNCTION = "public.sys_retention_purge()";
+const AUDIT_RETENTION_DAYS = 365;
 
 let db: TestDatabase;
 let store: RetentionStore;
@@ -74,13 +77,14 @@ async function seedSession(session: SeedSession): Promise<string> {
   return id;
 }
 
-/** What a purge answers when it deleted `sessions` sessions, `apiTokens` API tokens, `loginStates` OIDC login states and `credentialTokens` credential tokens, in the order of doc 05 section 6. */
-function counts(sessions: number, apiTokens = 0, loginStates = 0, credentialTokens = 0): { table: string; deleted: number }[] {
+/** What a purge answers when it deleted `sessions` sessions, `apiTokens` API tokens, `loginStates` OIDC login states, `credentialTokens` credential tokens and `auditEvents` audit events, in the order of doc 05 section 6. */
+function counts(sessions: number, apiTokens = 0, loginStates = 0, credentialTokens = 0, auditEvents = 0): { table: string; deleted: number }[] {
   return [
     { table: "sessions", deleted: sessions },
     { table: "api_tokens", deleted: apiTokens },
     { table: "oidc_login_states", deleted: loginStates },
     { table: "credential_tokens", deleted: credentialTokens },
+    { table: "audit_events", deleted: auditEvents },
   ];
 }
 
@@ -453,30 +457,161 @@ describe("purging used and expired credential tokens", () => {
   });
 });
 
+describe("purging audit events", () => {
+  let workspaceId: string;
+
+  interface SeedAuditEvent {
+    /** How many days ago the event was recorded. */
+    readonly ageDays: number;
+    /** Left null for a deployment-level event, which has no workspace. */
+    readonly workspace?: string | null;
+  }
+
+  async function seedAuditEvent(event: SeedAuditEvent): Promise<string> {
+    const id = freshId();
+    const target = event.workspace === undefined ? workspaceId : event.workspace;
+    await asSystem(db, (tx) => tx`
+      INSERT INTO audit_events (id, workspace_id, actor_type, actor_label, action, metadata, created_at)
+      VALUES (${id}, ${target}, 'system', 'SlugBase', 'workspace.created', '{}'::jsonb, now() - ${event.ageDays} * interval '1 day')`);
+    return id;
+  }
+
+  async function remainingAuditEvents(): Promise<string[]> {
+    const rows = await asSystem(db, (tx) => tx<{ id: string }[]>`SELECT id FROM audit_events`);
+    return rows.map((row) => row.id).sort();
+  }
+
+  async function clearAuditEvents(): Promise<void> {
+    await clearSessions();
+    await asSystem(db, (tx) => tx`DELETE FROM audit_events`);
+  }
+
+  beforeAll(async () => {
+    workspaceId = await seedWorkspace(db, { name: "Audited" });
+  }, HOOK_TIMEOUT_MS);
+
+  it("deletes the events older than the retention and keeps the newer ones, counting what it deleted", async () => {
+    await clearAuditEvents();
+    await seedAuditEvent({ ageDays: AUDIT_RETENTION_DAYS + 30 });
+    await seedAuditEvent({ ageDays: AUDIT_RETENTION_DAYS + 1 });
+    const recent = await seedAuditEvent({ ageDays: AUDIT_RETENTION_DAYS - 1 });
+    const fresh = await seedAuditEvent({ ageDays: 0 });
+
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 2));
+
+    expect(await remainingAuditEvents()).toEqual([recent, fresh].sort());
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 0));
+  });
+
+  it("deletes the events of every workspace", async () => {
+    await clearAuditEvents();
+    const other = await seedWorkspace(db, { name: "Other audited" });
+    await seedAuditEvent({ ageDays: 400 });
+    await seedAuditEvent({ ageDays: 400, workspace: other });
+
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 2));
+    expect(await remainingAuditEvents()).toEqual([]);
+  });
+
+  it("keeps an event with no workspace, which is a deployment-level one", async () => {
+    await clearAuditEvents();
+    const deployment = await seedAuditEvent({ ageDays: 1000, workspace: null });
+
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 0));
+    expect(await remainingAuditEvents()).toEqual([deployment]);
+  });
+
+  it("uses the retention the store was opened with: a shorter one deletes more, 0 deletes none", async () => {
+    await clearAuditEvents();
+    const month = await seedAuditEvent({ ageDays: 40 });
+    const old = await seedAuditEvent({ ageDays: 400 });
+
+    const forever = createRetentionStore({ url: appUrl(db), poolSize: 1, auditRetentionDays: 0 });
+    const monthly = createRetentionStore({ url: appUrl(db), poolSize: 1, auditRetentionDays: 30 });
+    try {
+      expect(await forever.purge()).toEqual(counts(0, 0, 0, 0, 0));
+      expect(await remainingAuditEvents()).toEqual([month, old].sort());
+      expect(await monthly.purge()).toEqual(counts(0, 0, 0, 0, 2));
+      expect(await remainingAuditEvents()).toEqual([]);
+    } finally {
+      await forever.close();
+      await monthly.close();
+    }
+  });
+
+  it("deletes one batch of 5 000 per call and finishes the rest on the next calls", async () => {
+    await clearAuditEvents();
+    const extra = 7;
+    await asSystem(db, (tx) => tx`
+      INSERT INTO audit_events (id, workspace_id, actor_type, actor_label, action, metadata, created_at)
+      SELECT gen_random_uuid(), ${workspaceId}, 'system', 'SlugBase', 'workspace.created', '{}'::jsonb, now() - interval '400 days'
+      FROM generate_series(1, ${BATCH + extra})`);
+
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, BATCH));
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, extra));
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 0));
+  });
+
+  it("refuses a negative retention and a missing one, and deletes nothing", async () => {
+    await clearAuditEvents();
+    const old = await seedAuditEvent({ ageDays: 400 });
+
+    await expect(db.app`SELECT * FROM sys_retention_purge(-1)`).rejects.toMatchObject({ code: "22023" });
+    await expect(db.app`SELECT * FROM sys_retention_purge(NULL::integer)`).rejects.toMatchObject({ code: "22023" });
+
+    expect(await remainingAuditEvents()).toEqual([old]);
+  });
+
+  it("is not reachable by slugbase_app except through the purge: it can neither update nor delete an event", async () => {
+    await expect(db.app.unsafe("DELETE FROM public.audit_events")).rejects.toMatchObject({ code: "42501" });
+    await expect(db.app.unsafe("UPDATE public.audit_events SET action = 'x'")).rejects.toMatchObject({ code: "42501" });
+    const rows = await db.owner<{ app: boolean; system: boolean }[]>`
+      SELECT has_table_privilege('slugbase_app', 'public.audit_events', 'DELETE') AS app,
+             has_table_privilege('slugbase_system', 'public.audit_events', 'DELETE') AS system`;
+    expect([...rows]).toEqual([{ app: false, system: true }]);
+  });
+
+  it("is left alone by the overload of the previous release, which keeps the audit log whatever its age", async () => {
+    await clearAuditEvents();
+    const old = await seedAuditEvent({ ageDays: 4000 });
+
+    const rows = await db.app<{ table_name: string; deleted: string }[]>`SELECT table_name, deleted::text AS deleted FROM sys_retention_purge()`;
+
+    expect(rows.map((row) => ({ table: row.table_name, deleted: Number(row.deleted) }))).toEqual(counts(0));
+    expect(await remainingAuditEvents()).toEqual([old]);
+  });
+});
+
 describe("sys_retention_purge()", () => {
-  it("is a SECURITY DEFINER function of slugbase_system with a pinned search_path, in the registry", async () => {
-    const rows = await db.owner<{ definer: boolean; owner: string; config: string[]; language: string }[]>`
-      SELECT prosecdef AS definer, pg_get_userbyid(proowner) AS owner, proconfig AS config, l.lanname AS language
-      FROM pg_proc p JOIN pg_language l ON l.oid = p.prolang
-      WHERE p.oid = ${FUNCTION}::regprocedure`;
-    expect([...rows]).toEqual([
-      { definer: true, owner: "slugbase_system", config: ["search_path=pg_catalog, public, pg_temp"], language: "plpgsql" },
-    ]);
+  const SIGNATURES = [FUNCTION, PREVIOUS_FUNCTION] as const;
+
+  it("is a SECURITY DEFINER function of slugbase_system with a pinned search_path, in the registry, in each overload", async () => {
+    for (const signature of SIGNATURES) {
+      const rows = await db.owner<{ definer: boolean; owner: string; config: string[]; language: string }[]>`
+        SELECT prosecdef AS definer, pg_get_userbyid(proowner) AS owner, proconfig AS config, l.lanname AS language
+        FROM pg_proc p JOIN pg_language l ON l.oid = p.prolang
+        WHERE p.oid = ${signature}::regprocedure`;
+      expect([...rows]).toEqual([
+        { definer: true, owner: "slugbase_system", config: ["search_path=pg_catalog, public, pg_temp"], language: "plpgsql" },
+      ]);
+    }
     expect(systemOperations).toContain("sys_retention_purge");
   });
 
-  it("lets slugbase_app run it and nobody else but the owner", async () => {
-    const rows = await db.owner<{ app: boolean; public: boolean }[]>`
-      SELECT has_function_privilege('slugbase_app', ${FUNCTION}::regprocedure, 'EXECUTE') AS app,
-             EXISTS (SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
-                     WHERE p.oid = ${FUNCTION}::regprocedure AND a.grantee = 0) AS public`;
-    expect([...rows]).toEqual([{ app: true, public: false }]);
+  it("lets slugbase_app run it and nobody else but the owner, in each overload", async () => {
+    for (const signature of SIGNATURES) {
+      const rows = await db.owner<{ app: boolean; public: boolean }[]>`
+        SELECT has_function_privilege('slugbase_app', ${signature}::regprocedure, 'EXECUTE') AS app,
+               EXISTS (SELECT 1 FROM pg_proc p, aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) a
+                       WHERE p.oid = ${signature}::regprocedure AND a.grantee = 0) AS public`;
+      expect([...rows]).toEqual([{ app: true, public: false }]);
+    }
   });
 
-  it("takes no argument, so a caller cannot widen what it deletes", async () => {
-    const rows = await db.owner<{ args: number }[]>`
-      SELECT pronargs::int AS args FROM pg_proc WHERE oid = ${FUNCTION}::regprocedure`;
-    expect([...rows]).toEqual([{ args: 0 }]);
+  it("takes one argument, which only chooses how long audit events stay", async () => {
+    const rows = await db.owner<{ args: number; names: string[] }[]>`
+      SELECT pronargs::int AS args, proargnames AS names FROM pg_proc WHERE oid = ${FUNCTION}::regprocedure`;
+    expect([...rows]).toEqual([{ args: 1, names: ["p_audit_retention_days", "table_name", "deleted"] }]);
   });
 
   it("gives slugbase_app no privilege on sessions: the purge is the only way it removes one", async () => {

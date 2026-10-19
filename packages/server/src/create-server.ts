@@ -40,6 +40,8 @@ import { apiConfigRoute } from "./routes/meta/config.ts";
 import { apiDocs } from "./routes/meta/docs.ts";
 import { isOpenApiDocument, openApiRoute } from "./routes/meta/openapi.ts";
 import { setupRoutes } from "./routes/setup/index.ts";
+import { memberRoutes } from "./routes/members/index.ts";
+import { workspaceRoutes } from "./routes/workspaces/index.ts";
 import { checkRegistrations, type ContractDocument } from "./routes/register.ts";
 import { WebRootError, serveWebRoot } from "./routes/static.ts";
 import type { JobDefinition, ScheduleDefinition } from "./worker/job.ts";
@@ -151,6 +153,12 @@ export interface CreateServerOptions {
    * is closed and verification is not required, the Community Edition's.
    */
   readonly registrationDefaults?: RegistrationSettings;
+  /**
+   * Whether ordinary accounts may create workspaces on this deployment: the composition root's choice, never an
+   * edition flag (D4, doc 02 section 3.2). By default they may not, the Community Edition's; the managed
+   * composition passes `true`. The instance setting that overrides it follows.
+   */
+  readonly allowWorkspaceCreation?: boolean;
   /**
    * The instant, in milliseconds, the re-authentication window of doc 04 section 4.4 is measured against;
    * by default the system clock. A test passes a clock it moves.
@@ -502,6 +510,10 @@ export function createServer(options: CreateServerOptions): Server {
   builtInRoutes.push(...profileRoutes({ withTenant: context.withTenant }));
   // So is the change of the account's email address: the request records the address and queues its two mails, and the two links redeem anonymously.
   builtInRoutes.push(...emailChangeRoutes({ store: authStore, mail: adapters.mail }));
+  // So are the account's workspaces: listed, with the creation policy the composition root supplied, created and switched to in an account-level transaction.
+  builtInRoutes.push(...workspaceRoutes({ withTenant: context.withTenant, creationAllowed: options.allowWorkspaceCreation ?? false }));
+  // So are the members of the active workspace: listed with the co-member projection of their accounts, and their roles changed under the last-owner rule the database enforces.
+  builtInRoutes.push(...memberRoutes({ cursorSecret: config.SESSION_SECRET, cookie: sessionCookieSpec(config.APP_ORIGIN) }));
   // So are the account's personal API tokens: created, listed and revoked in an account-level transaction on the account's own rows.
   builtInRoutes.push(...apiTokenRoutes({ withTenant: context.withTenant, cursorSecret: config.SESSION_SECRET }));
   // So are the identities linked to the account: listed in an account-level transaction, unlinked by a system operation that checks the account keeps another way to sign in.

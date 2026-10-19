@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createWebApp } from "../src/index.ts";
-import { ACCOUNT_BODY, CONFIG_BODY, ME_PATH, SESSION_BODY, SESSION_PATH, json, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
+import { ACCOUNT_BODY, CONFIG_BODY, ME_PATH, SESSION_BODY, SESSION_PATH, WORKSPACES_PATH, WORKSPACE_LIST_BODY, json, meOf, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
 // The email row of /settings/account and the two pages the emailed links open (doc 03 sections 1.7 and 11.1, doc 02
 // section 2.6) over a stubbed transport. The failure scenarios are a link that is redeemed twice, an answer that tells
@@ -68,6 +68,9 @@ function stubServer({ pending = null, mail = true, request, cancelPending, confi
   const calls: Call[] = [];
   vi.stubGlobal("fetch", async (incoming: Request) => {
     const { pathname } = new URL(incoming.url);
+    if (pathname === WORKSPACES_PATH) {
+      return json(WORKSPACE_LIST_BODY);
+    }
     const text = await incoming.clone().text();
     calls.push({ method: incoming.method, path: pathname, body: text === "" ? undefined : (JSON.parse(text) as unknown) });
     const count = calls.filter((call) => call.path === pathname).length;
@@ -80,7 +83,7 @@ function stubServer({ pending = null, mail = true, request, cancelPending, confi
         await gate;
         return signedOut
           ? problem(401, "unauthenticated", "req-me")
-          : json({ account: { ...ACCOUNT_BODY, locale, pendingEmail: held }, memberships: [], activeWorkspaceId: null });
+          : json(meOf({ ...ACCOUNT_BODY, locale, pendingEmail: held }));
       case REAUTH_PATH:
         return noContent();
       case REQUEST_PATH: {

@@ -160,7 +160,22 @@ export async function seedApiToken(database: TestDatabase, options: SeedTokenOpt
   return { id, value: token.value };
 }
 
+/**
+ * Ends the membership of the account in the workspace. A workspace always has an owner and the database refuses to remove the last one, so
+ * when the account is the only owner a new owner joins first: what the tests look at is the account's membership ending.
+ */
 export async function removeMembership(database: TestDatabase, workspaceId: string, accountId: string): Promise<void> {
+  const [owners] = await database.owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    return tx<{ others: string; leaving: boolean }[]>`
+      SELECT count(*) FILTER (WHERE role = 'owner' AND account_id <> ${accountId})::text AS others,
+             coalesce(bool_or(role = 'owner' AND account_id = ${accountId}), false) AS leaving
+      FROM workspace_members WHERE workspace_id = ${workspaceId}`;
+  });
+  if (owners?.leaving === true && owners.others === "0") {
+    const successor = await seedAccount(database, { password: null });
+    await seedMembership(database, { workspaceId, accountId: successor.id, role: "owner" });
+  }
   await database.owner.begin(async (tx) => {
     await tx`SET LOCAL ROLE slugbase_system`;
     await tx`DELETE FROM workspace_members WHERE workspace_id = ${workspaceId} AND account_id = ${accountId}`;

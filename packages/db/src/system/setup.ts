@@ -1,4 +1,6 @@
+import type { AuditRecord } from "@slugbase/core";
 import type postgres from "postgres";
+import { insertAuditRecords } from "./audit.ts";
 import { enqueueInTransaction, type QueuedJob } from "./queue.ts";
 
 // The wrappers of the system operations behind first-run setup (doc 05 section
@@ -40,6 +42,8 @@ export interface CompleteSetup {
   readonly userAgent: string | null;
   /** Jobs queued in the same transaction, only when the setup completes (doc 01 section 8.1). */
   readonly jobs?: readonly QueuedJob[];
+  /** Audit events of the new workspace, written in the same transaction, only when the setup completes (doc 05 section 2.9). */
+  readonly audit?: readonly AuditRecord[];
 }
 
 export interface SetupStore {
@@ -54,8 +58,9 @@ export interface SetupStore {
   /**
    * Creates the first account as a verified instance admin, its workspace with the owner membership
    * and the settings row, and a full session whose active workspace is the new one, exactly once and
-   * all in one transaction, with the jobs it carries queued in that transaction. Any other outcome, and a job
-   * that cannot be queued, leaves the database as it was.
+   * all in one transaction, with the jobs it carries queued and the audit events it carries written in that
+   * transaction. Any other outcome, and a job that cannot be queued or an event that cannot be written, leaves
+   * the database as it was.
    */
   completeSetup(setup: CompleteSetup): Promise<SetupOutcome>;
 }
@@ -111,7 +116,7 @@ export function bindSetupStore(client: postgres.Sql): SetupStore {
       if (setup.tokenHash !== null) {
         assertHash(setup.tokenHash, "tokenHash");
       }
-      const { jobs = [] } = setup;
+      const { jobs = [], audit = [] } = setup;
       return client.begin(async (tx) => {
         const rows = await tx<OutcomeRow[]>`
           SELECT sys_complete_setup(
@@ -136,6 +141,7 @@ export function bindSetupStore(client: postgres.Sql): SetupStore {
           throw new Error("sys_complete_setup returned an outcome outside completed, setup_completed and forbidden");
         }
         if (row.outcome === "completed") {
+          await insertAuditRecords(tx, { accountId: setup.accountId, workspaceId: setup.workspaceId }, audit);
           for (const job of jobs) {
             await enqueueInTransaction(tx, job);
           }

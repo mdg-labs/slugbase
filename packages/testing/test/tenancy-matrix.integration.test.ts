@@ -41,19 +41,27 @@ const classification = classifyOperations(document);
 describe("the matrix over the committed contract and the repository registry", () => {
   // This package-level test exercises the runner with no server. The API mode
   // over the real middleware chain, through an in-process createServer, runs in
-  // packages/server/test/contract/ (matrixRequest). Here any request the matrix
-  // makes fails the test, so a tenant-scoped operation cannot go unexercised.
-  const noServer = (call: ApiCall): Promise<ApiResponse> =>
-    Promise.reject(new Error(`this test runs no server, yet the matrix requested ${call.operation.operationId}`));
+  // packages/server/test/contract/ (matrixRequest), where the answers are held
+  // to account. Here a fixed responder stands in for the server, so what the
+  // test proves is the runner's own part: the classification of the document
+  // and that every tenant-scoped operation is called by every principal of A,
+  // the role change once for each member of B. The responder answers as the
+  // chain does for a member of B: 403 to a token (the role change declares no
+  // scope) and to a plain member (below the admin policy), 404 to the rest.
+  const answersAsTheChainDoes = (call: ApiCall): Promise<ApiResponse> =>
+    Promise.resolve({ status: "scope" in call.principal || call.principal.role === "member" ? 403 : 404 });
 
-  it(`API mode classifies the ${String(classification.summary.total)} operations of openapi.json and finds no tenant-scoped one in Phase 1`, async () => {
-    const report = await runApiMatrix({ document, fixture: scoped.fixture, request: noServer });
+  it(`API mode classifies the ${String(classification.summary.total)} operations of openapi.json and calls each tenant-scoped one once for every principal of A`, async () => {
+    const report = await runApiMatrix({ document, fixture: scoped.fixture, request: answersAsTheChainDoes, mapping: { accountId: "member" } });
     expect(classification.problems).toEqual([]);
     expect(report.classified.total).toBe(classification.operations.length);
     expect(report.classified.total).toBeGreaterThan(0);
     expect(Object.values(report.classified.byKind).reduce((sum, count) => sum + count, 0)).toBe(report.classified.total);
-    expect(report.classified.byKind["tenant-scoped"]).toBe(0);
-    expect(report.attempts).toBe(0);
+    // The operations on /workspace and /workspace/settings and the members list act in the workspace of the request and take no identifier of B;
+    // the role change names a member by account identifier.
+    expect(report.classified.byKind["tenant-scoped"]).toBe(6);
+    // Three sessions and six tokens of A, once on each of the five operations that name no member and once for each of the three members of B on the sixth.
+    expect(report.attempts).toBe(9 * 5 + 9 * 3);
     assertMatrixPassed(report);
   });
 

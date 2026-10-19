@@ -16,6 +16,11 @@ const NOT_ACCEPTED = "it is not accepted";
 const DECLARE = "CREATE OR REPLACE FUNCTION public.set_updated_at() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.updated_at := now(); RETURN NEW; END $$;";
 const TRIGGER = "CREATE TRIGGER bookmarks_set_updated_at BEFORE UPDATE ON public.bookmarks FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();";
 const REPLACE = TRIGGER.replace("CREATE", "CREATE OR REPLACE");
+const DEFERRED = "CREATE CONSTRAINT TRIGGER bookmarks_keep_one AFTER DELETE OR UPDATE ON public.bookmarks DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();";
+const PLAIN_KEEP = "CREATE TRIGGER bookmarks_keep_one BEFORE UPDATE ON public.bookmarks FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();";
+const DEFERRED_SET_UPDATED_AT = DEFERRED.replace("bookmarks_keep_one", "bookmarks_set_updated_at");
+const DROP_PLAIN = "DROP TRIGGER IF EXISTS bookmarks_set_updated_at ON public.bookmarks;";
+const DROP_DEFERRED = "DROP TRIGGER IF EXISTS bookmarks_keep_one ON public.bookmarks;";
 const DECLARE_OTHER = DECLARE.replace("set_updated_at", "set_other");
 const REPLACE_OTHER = REPLACE.replace("set_updated_at()", "set_other()");
 const UNREADABLE = "DO $$ BEGIN NULL; END $$;";
@@ -59,13 +64,13 @@ function operationsOf(sql: string): Operation[] {
 describe("how the statement reader places CREATE TRIGGER", () => {
   it("reads a BEFORE UPDATE row trigger by its table and the function it executes", () => {
     expect(operationsOf(TRIGGER)).toEqual([
-      { kind: "creates-trigger", table: BOOKMARKS_TABLE, name: "bookmarks_set_updated_at", fn: SET_UPDATED_AT, replace: false },
+      { kind: "creates-trigger", table: BOOKMARKS_TABLE, name: "bookmarks_set_updated_at", fn: SET_UPDATED_AT, form: "plain", replace: false },
     ]);
   });
 
   it("reads the same trigger written in lower case, quoted, unqualified and OR REPLACE", () => {
     expect(operationsOf('create or replace trigger "t" before update on "bookmarks" for each row execute function "set_updated_at"();')).toEqual([
-      { kind: "creates-trigger", table: BOOKMARKS_TABLE, name: "t", fn: SET_UPDATED_AT, replace: true },
+      { kind: "creates-trigger", table: BOOKMARKS_TABLE, name: "t", fn: SET_UPDATED_AT, form: "plain", replace: true },
     ]);
   });
 
@@ -122,6 +127,195 @@ describe("how the statement reader places CREATE TRIGGER", () => {
   ])("does not read %s", (_name, sql) => {
     expect(operationsOf(sql).map(({ kind }) => kind)).not.toContain("creates-trigger");
     expect(operationsOf(sql).map(({ kind }) => kind)).toContain("unknown");
+  });
+});
+
+describe("how the statement reader places CREATE CONSTRAINT TRIGGER", () => {
+  it("reads an AFTER DELETE OR UPDATE deferred row trigger by its table and the function it executes", () => {
+    expect(operationsOf(DEFERRED)).toEqual([{ kind: "creates-trigger", table: BOOKMARKS_TABLE, name: "bookmarks_keep_one", fn: SET_UPDATED_AT, form: "constraint", replace: false }]);
+  });
+
+  it("reads the same trigger written in lower case, quoted and unqualified", () => {
+    expect(
+      operationsOf('create constraint trigger "t" after delete or update on "bookmarks" deferrable initially deferred for each row execute function "set_updated_at"();'),
+    ).toEqual([{ kind: "creates-trigger", table: BOOKMARKS_TABLE, name: "t", fn: SET_UPDATED_AT, form: "constraint", replace: false }]);
+  });
+
+  it("does not read CREATE OR REPLACE CONSTRAINT TRIGGER, which PostgreSQL does not have", () => {
+    expect(operationsOf(DEFERRED.replace("CREATE", "CREATE OR REPLACE")).map(({ kind }) => kind)).toEqual(["unknown"]);
+  });
+
+  it("reads the name and the table of a constraint trigger as PostgreSQL does", () => {
+    const [operation] = operationsOf(DEFERRED.replace("bookmarks_keep_one", "Keep_One").replace("public.bookmarks", "a".repeat(64)));
+    expect(operation).toMatchObject({ kind: "creates-trigger", name: "keep_one", table: { schema: "public", name: "a".repeat(63) } });
+  });
+
+  it("reads a plain constraint trigger with a name outside printable ASCII", () => {
+    expect(operationsOf(DEFERRED.replace("bookmarks_keep_one", '"t\u00e9"')).map(({ kind }) => kind)).toEqual(["creates-trigger"]);
+  });
+
+  it.each([
+    ["an AFTER UPDATE trigger", DEFERRED.replace("DELETE OR ", "")],
+    ["an AFTER DELETE trigger", DEFERRED.replace(" OR UPDATE", "")],
+    ["an AFTER INSERT OR UPDATE trigger", DEFERRED.replace("DELETE", "INSERT")],
+    ["a trigger on UPDATE OF columns", DEFERRED.replace("UPDATE ON", "UPDATE OF title ON")],
+    ["a BEFORE trigger", DEFERRED.replace("AFTER", "BEFORE")],
+    ["a trigger that is deferrable and initially immediate", DEFERRED.replace("INITIALLY DEFERRED", "INITIALLY IMMEDIATE")],
+    ["a trigger that is not deferrable", DEFERRED.replace("DEFERRABLE INITIALLY DEFERRED ", "")],
+    ["a trigger that is deferrable and states no initial mode", DEFERRED.replace("INITIALLY DEFERRED ", "")],
+    ["a trigger that names a referenced table", DEFERRED.replace("DEFERRABLE", "FROM public.folders DEFERRABLE")],
+    ["a statement trigger", DEFERRED.replace("FOR EACH ROW", "FOR EACH STATEMENT")],
+    ["a trigger with a WHEN condition", DEFERRED.replace("FOR EACH ROW", "FOR EACH ROW WHEN (old.title IS DISTINCT FROM new.title)")],
+    ["a trigger with an argument", DEFERRED.replace("set_updated_at()", "set_updated_at('x')")],
+    ["a trigger that executes a procedure", DEFERRED.replace("FUNCTION", "PROCEDURE")],
+    ["a constraint trigger without a function", "CREATE CONSTRAINT TRIGGER t AFTER DELETE OR UPDATE ON bookmarks DEFERRABLE INITIALLY DEFERRED FOR EACH ROW;"],
+  ])("does not read %s", (_name, sql) => {
+    expect(operationsOf(sql).map(({ kind }) => kind)).not.toContain("creates-trigger");
+    expect(operationsOf(sql).map(({ kind }) => kind)).toContain("unknown");
+  });
+});
+
+describe("how the statement reader places DROP TRIGGER", () => {
+  it("reads the trigger and the table it names as PostgreSQL does", () => {
+    expect(operationsOf(DROP_DEFERRED)).toEqual([{ kind: "drops-trigger", table: BOOKMARKS_TABLE, name: "bookmarks_keep_one" }]);
+    expect(operationsOf('drop trigger "T" on S."T"')).toEqual([{ kind: "drops-trigger", table: { schema: "s", name: "T" }, name: "T" }]);
+    expect(operationsOf(`DROP TRIGGER ${"a".repeat(70)} ON ${"b".repeat(70)}`)).toEqual([
+      { kind: "drops-trigger", table: { schema: "public", name: "b".repeat(63) }, name: "a".repeat(63) },
+    ]);
+  });
+
+  it.each([
+    ["a DROP TRIGGER with CASCADE", "DROP TRIGGER t ON bookmarks CASCADE;"],
+    ["a DROP TRIGGER with RESTRICT", "DROP TRIGGER t ON bookmarks RESTRICT;"],
+    ["a DROP TRIGGER without a table", "DROP TRIGGER t;"],
+    ["a DROP TRIGGER of two triggers", "DROP TRIGGER t, u ON bookmarks;"],
+    ["a DROP TRIGGER named with a character outside printable ASCII", 'DROP TRIGGER "t\u00e9" ON bookmarks;'],
+    ["a DROP EVENT TRIGGER", "DROP EVENT TRIGGER t;"],
+  ])("does not read %s", (_name, sql) => {
+    expect(operationsOf(sql).map(({ kind }) => kind)).toEqual(["unknown"]);
+  });
+});
+
+describe("what the expand/contract rule says about CREATE CONSTRAINT TRIGGER", () => {
+  it.each([
+    ["in the migration that declares the trigger function", `${DECLARE}\n${DEFERRED}`],
+    ["after the drop that makes it replayable", `${DECLARE}\n${DROP_DEFERRED}\n${DEFERRED}`],
+    ["twice, as the migrations of this repository replay it", `${DECLARE}\n${DROP_DEFERRED}\n${DEFERRED}\n${DROP_DEFERRED}\n${DEFERRED}`],
+  ])("accepts a constraint trigger %s", async (_name, sql) => {
+    expect(await added(sql)).toEqual([]);
+  });
+
+  it("accepts a constraint trigger in a later migration than the one that declares its function, and its replay in another", async () => {
+    expect(await addedAfter(DECLARE, DEFERRED)).toEqual([]);
+    expect(await addedAfter(`${DECLARE}\n${DEFERRED}`, `${DROP_DEFERRED}\n${DEFERRED}`)).toEqual([]);
+  });
+
+  it("accepts the replay of a constraint trigger of the release", async () => {
+    const repository = new GitPackage();
+    repositories.push(repository);
+    repository.migration("20260101000000_add_function", `${DECLARE}\n${DEFERRED}`, BOOKMARKS);
+    repository.commit("release");
+    repository.tag("v1.0.0");
+    repository.migration(SECOND, `${DROP_DEFERRED}\n${DEFERRED}`);
+    expect(await inspect(repository)).toEqual([]);
+  });
+
+  it.each([
+    ["a function no migration declares", DEFERRED],
+    ["a function that returns something other than trigger", `${DECLARE.replace("RETURNS trigger", "RETURNS integer")}\n${DEFERRED}`],
+    ["a function with an argument", `${DECLARE.replace("set_updated_at()", "set_updated_at(a integer)")}\n${DEFERRED}`],
+  ])("rejects a constraint trigger that executes %s", async (_name, sql) => {
+    const findings = await added(sql);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("trigger function");
+    expect(findings[0]?.message).toContain(NOT_ACCEPTED);
+  });
+
+  it("rejects a drop that the file does not follow with the trigger again, for a trigger the chain created", async () => {
+    const findings = await addedAfter(`${DECLARE}\n${DEFERRED}`, DROP_DEFERRED);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("drops trigger bookmarks_keep_one on bookmarks, which executes set_updated_at() now, and does not create it again in the same file");
+    expect(findings[0]?.message).toContain(NOT_ACCEPTED);
+  });
+
+  it("rejects a trigger dropped twice and not created again, for a trigger the chain created", async () => {
+    const findings = await addedAfter(`${DECLARE}\n${DEFERRED}`, `${DROP_DEFERRED}\n${DROP_DEFERRED}`);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("drops trigger bookmarks_keep_one on bookmarks, which executes set_updated_at() now, and does not create it again in the same file");
+    expect(findings[0]?.message).toContain(NOT_ACCEPTED);
+  });
+
+  it("rejects a drop that is followed by the trigger with another function", async () => {
+    const findings = await addedAfter(`${DECLARE}\n${DECLARE_OTHER}\n${DEFERRED}`, `${DROP_DEFERRED}\n${DEFERRED.replace("set_updated_at()", "set_other()")}`);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("replaces trigger bookmarks_keep_one on bookmarks, which executes set_updated_at() now, with one that executes set_other()");
+  });
+
+  it("accepts the drop of a trigger the chain never created, as the no-op it is with IF EXISTS", async () => {
+    expect(await added(DROP_DEFERRED)).toEqual([]);
+  });
+
+  it("rejects a drop after a statement this check cannot read, which may have changed the trigger", async () => {
+    const findings = await addedAfter(`${DECLARE}\n${UNREADABLE}`, `${DROP_DEFERRED}\n${DEFERRED}`);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("drops trigger bookmarks_keep_one on bookmarks, which this check cannot show is not a trigger of");
+  });
+
+  it("still rejects a call of the function a constraint trigger names", async () => {
+    const findings = await added(`${DECLARE}\n${DEFERRED}\nSELECT public.set_updated_at();`);
+    expect(findings.length).toBeGreaterThan(0);
+    expect(findings.every(({ message }) => message.includes(NOT_ACCEPTED))).toBe(true);
+  });
+
+  describe("when the trigger is made again in the other form", () => {
+    const released = (shipped: string, sql: string): Promise<readonly Finding[]> => {
+      const repository = new GitPackage();
+      repositories.push(repository);
+      repository.migration("20260101000000_add_function", shipped, BOOKMARKS);
+      repository.commit("release");
+      repository.tag("v1.0.0");
+      repository.migration(SECOND, sql);
+      return inspect(repository);
+    };
+    const AS_PLAIN = "which is a deferred constraint trigger AFTER DELETE OR UPDATE now, with a BEFORE UPDATE row trigger";
+    const AS_CONSTRAINT = "which is a BEFORE UPDATE row trigger now, with a deferred constraint trigger AFTER DELETE OR UPDATE";
+
+    it.each([
+      ["in the migration that creates it", () => added(`${DECLARE}\n${DEFERRED}\n${DROP_DEFERRED}\n${PLAIN_KEEP}`)],
+      ["in a later migration", () => addedAfter(`${DECLARE}\n${DEFERRED}`, `${DROP_DEFERRED}\n${PLAIN_KEEP}`)],
+      ["in a migration after the release", () => released(`${DECLARE}\n${DEFERRED}`, `${DROP_DEFERRED}\n${PLAIN_KEEP}`)],
+      ["by CREATE OR REPLACE TRIGGER, with no drop", () => released(`${DECLARE}\n${DEFERRED}`, PLAIN_KEEP.replace("CREATE", "CREATE OR REPLACE"))],
+    ])("rejects a constraint trigger made a plain BEFORE UPDATE trigger %s", async (_name, run) => {
+      const findings = await run();
+      expect(findings).toHaveLength(1);
+      expect(findings[0]?.message).toContain(`replaces trigger bookmarks_keep_one on bookmarks, ${AS_PLAIN}`);
+      expect(findings[0]?.message).toContain("the previous release still relies on the trigger");
+      expect(findings[0]?.message).toContain(NOT_ACCEPTED);
+    });
+
+    it.each([
+      ["in the migration that creates it", () => added(`${DECLARE}\n${TRIGGER}\n${DROP_PLAIN}\n${DEFERRED_SET_UPDATED_AT}`)],
+      ["in a later migration", () => addedAfter(`${DECLARE}\n${TRIGGER}`, `${DROP_PLAIN}\n${DEFERRED_SET_UPDATED_AT}`)],
+      ["in a migration after the release", () => released(`${DECLARE}\n${TRIGGER}`, `${DROP_PLAIN}\n${DEFERRED_SET_UPDATED_AT}`)],
+    ])("rejects a plain BEFORE UPDATE trigger made a constraint trigger %s", async (_name, run) => {
+      const findings = await run();
+      expect(findings).toHaveLength(1);
+      expect(findings[0]?.message).toContain(`replaces trigger bookmarks_set_updated_at on bookmarks, ${AS_CONSTRAINT}`);
+      expect(findings[0]?.message).toContain(NOT_ACCEPTED);
+    });
+
+    it("rejects a constraint trigger dropped twice and made a plain BEFORE UPDATE trigger", async () => {
+      const findings = await addedAfter(`${DECLARE}\n${DEFERRED}`, `${DROP_DEFERRED}\n${DROP_DEFERRED}\n${PLAIN_KEEP}`);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]?.message).toContain(`replaces trigger bookmarks_keep_one on bookmarks, ${AS_PLAIN}`);
+      expect(findings[0]?.message).toContain(NOT_ACCEPTED);
+    });
+
+    it("accepts the trigger made again in the form it has, whichever form that is", async () => {
+      expect(await released(`${DECLARE}\n${DEFERRED}`, `${DROP_DEFERRED}\n${DEFERRED}`)).toEqual([]);
+      expect(await released(`${DECLARE}\n${TRIGGER}`, `${DROP_PLAIN}\n${TRIGGER}`)).toEqual([]);
+      expect(await released(`${DECLARE}\n${TRIGGER}`, REPLACE)).toEqual([]);
+    });
   });
 });
 
@@ -230,7 +424,6 @@ describe("what the expand/contract rule says about CREATE OR REPLACE TRIGGER", (
 
   it.each([
     ["a statement it cannot read", () => addedAfter(`${DECLARE}\n${UNREADABLE}`, REPLACE)],
-    ["a DROP TRIGGER", () => addedAfter(`${DECLARE}\n${TRIGGER}\nDROP TRIGGER bookmarks_set_updated_at ON bookmarks;`, REPLACE)],
     ["a trigger of another shape", () => addedAfter(`${DECLARE}\n${TRIGGER.replace("BEFORE UPDATE", "BEFORE INSERT")}`, REPLACE)],
     ["a rename of a table", () => addedAfter(`${DECLARE}\n${TRIGGER}\nALTER TABLE bookmarks RENAME TO links;`, REPLACE.replace("public.bookmarks", "links"))],
     ["a move of a table to another schema", () => addedAfter(`${DECLARE}\n${TRIGGER}\nALTER TABLE bookmarks SET SCHEMA archive;`, REPLACE.replace("public.bookmarks", "archive.bookmarks"))],

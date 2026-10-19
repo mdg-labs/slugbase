@@ -1,0 +1,104 @@
+// The audit catalog (doc 05 section 2.9, doc 02 section 10, doc 01 section 4 step 12): the actions a
+// workspace's audit log records, each named in the dotted style of the domain events and each with the
+// metadata it may carry. Metadata is validated before a row exists and is a closed object: a key the
+// catalog does not declare is refused, so a secret, an email address or a URL has no field to travel in
+// (doc 10 T7). Adding an action is a change to this file and to the list of recorded actions in doc 02
+// section 10. The catalog holds the actions that are recorded so far.
+
+/** The groups the audit log filters by. */
+export const AUDIT_CATEGORIES = ["workspace", "member"] as const;
+
+export type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
+
+/** The kinds of field a metadata object holds: a text of bounded length, or an identifier. */
+export type AuditMetadataField =
+  | { readonly type: "text"; readonly minLength: number; readonly maxLength: number }
+  | { readonly type: "uuid" };
+
+export interface AuditActionDefinition {
+  readonly category: AuditCategory;
+  readonly metadata: Readonly<Record<string, AuditMetadataField>>;
+}
+
+/** A workspace's name has 1 to 64 characters (doc 02 section 3.1); the metadata of its creation records it. */
+const WORKSPACE_NAME: AuditMetadataField = { type: "text", minLength: 1, maxLength: 64 };
+
+/** The name of a setting and the value it had or has, as text: a flag is `true` or `false`. */
+const SETTING_NAME: AuditMetadataField = { type: "text", minLength: 1, maxLength: 64 };
+const SETTING_VALUE: AuditMetadataField = { type: "text", minLength: 1, maxLength: 64 };
+
+/** A member's role: `owner`, `admin` or `member`. */
+const MEMBER_ROLE: AuditMetadataField = { type: "text", minLength: 5, maxLength: 6 };
+
+export const AUDIT_ACTIONS = {
+  "workspace.created": { category: "workspace", metadata: { name: WORKSPACE_NAME } },
+  "workspace.renamed": { category: "workspace", metadata: { from: WORKSPACE_NAME, to: WORKSPACE_NAME } },
+  "workspace.settings_changed": { category: "workspace", metadata: { setting: SETTING_NAME, from: SETTING_VALUE, to: SETTING_VALUE } },
+  "member.role_changed": { category: "member", metadata: { from: MEMBER_ROLE, to: MEMBER_ROLE } },
+} as const satisfies Record<string, AuditActionDefinition>;
+
+export type AuditAction = keyof typeof AUDIT_ACTIONS;
+
+export const AUDIT_ACTION_NAMES = Object.keys(AUDIT_ACTIONS) as readonly AuditAction[];
+
+/** The metadata of the action `Name`, field by field. */
+export type AuditMetadata<Name extends AuditAction = AuditAction> = {
+  readonly [Key in keyof (typeof AUDIT_ACTIONS)[Name]["metadata"]]: string;
+};
+
+export function isAuditAction(value: unknown): value is AuditAction {
+  return typeof value === "string" && Object.hasOwn(AUDIT_ACTIONS, value);
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Thrown when an audit event is not the one the catalog describes; the message names fields, never values. */
+export class AuditMetadataError extends Error {
+  constructor(problem: string) {
+    super(`the audit event ${problem}`);
+    this.name = "AuditMetadataError";
+  }
+}
+
+/** Whether `value` is a UUID, which the audit row holds as such. */
+export function isAuditIdentifier(value: unknown): value is string {
+  return typeof value === "string" && UUID.test(value);
+}
+
+function fits(field: AuditMetadataField, value: unknown): boolean {
+  if (typeof value !== "string") {
+    return false;
+  }
+  if (field.type === "uuid") {
+    return UUID.test(value);
+  }
+  // PostgreSQL counts a character as one code point, as Array.from does.
+  const length = Array.from(value).length;
+  return length >= field.minLength && length <= field.maxLength;
+}
+
+/** The metadata of the action `name` as the catalog declares it: exactly its fields, each of its kind; anything else throws. */
+export function parseAuditMetadata<Name extends AuditAction>(name: Name, value: unknown): AuditMetadata<Name> {
+  if (!isAuditAction(name)) {
+    throw new AuditMetadataError("names an action outside the catalog");
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new AuditMetadataError(`of ${name} must have metadata that is an object`);
+  }
+  const fields: Readonly<Record<string, AuditMetadataField>> = AUDIT_ACTIONS[name].metadata;
+  const given = value as Readonly<Record<string, unknown>>;
+  for (const key of Object.keys(given)) {
+    if (!Object.hasOwn(fields, key)) {
+      throw new AuditMetadataError(`of ${name} has the metadata field ${key}, which the catalog does not declare`);
+    }
+  }
+  const parsed: Record<string, string> = {};
+  for (const [key, field] of Object.entries(fields)) {
+    const item = given[key];
+    if (!fits(field, item)) {
+      throw new AuditMetadataError(`of ${name} has no valid metadata field ${key}`);
+    }
+    parsed[key] = item as string;
+  }
+  return parsed as AuditMetadata<Name>;
+}

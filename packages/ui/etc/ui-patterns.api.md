@@ -98,6 +98,7 @@ export interface AppShellProps {
     labels: AppShellLabels;
     navigation: ReactNode;
     productName: string;
+    workspaceSwitcher?: WorkspaceSwitcherProps;
 }
 
 // @public
@@ -589,6 +590,51 @@ export interface WizardProps {
     stepLabel: string;
     stepTitle: ReactNode;
     title: ReactNode;
+}
+
+// @public
+export interface WorkspaceSwitcherAction {
+    icon?: ReactNode;
+    id: string;
+    // (undocumented)
+    label: string;
+    // (undocumented)
+    onSelect: () => void;
+}
+
+// @public
+export interface WorkspaceSwitcherItem {
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    name: string;
+}
+
+// @public
+export interface WorkspaceSwitcherProps {
+    // (undocumented)
+    actions: readonly WorkspaceSwitcherAction[];
+    active: WorkspaceSwitcherItem | undefined;
+    disabled?: boolean;
+    emptyMessage: string;
+    // (undocumented)
+    errorMessage: string;
+    fallbackName: string;
+    // (undocumented)
+    groupLabel: string;
+    label: string;
+    listState: "loading" | "ready" | "error";
+    loading?: boolean;
+    // (undocumented)
+    loadingLabel: string;
+    // (undocumented)
+    onRetry: () => void;
+    // (undocumented)
+    onSelect: (workspaceId: string) => void;
+    plan?: ReactNode;
+    // (undocumented)
+    retryLabel: string;
+    workspaces: readonly WorkspaceSwitcherItem[];
 }
 
 // (No @packageDocumentation comment for this package)

@@ -62,17 +62,19 @@ describe("defineScopedRepository", () => {
 });
 
 describe("the package entry point", () => {
-  it("exports withTenant through createDatabase, the repository helper, the account repositories, the credential token repository and the rate-limit store, and no raw handle", () => {
+  it("exports withTenant through createDatabase, the repository helper, the account repositories, the credential token repository, the audit event and workspace repositories and the rate-limit store, and no raw handle", () => {
     expect(Object.keys(entry).sort()).toEqual(
       [
         "ACCENT_PRESETS",
         "CE_CHAIN",
         "ConnectionRoleError",
         "MigrationError",
+        "OWNER_REQUIRED_CONSTRAINT",
         "TenantContextError",
         "accountIdentityRepository",
         "accountProfileRepository",
         "apiTokenRepository",
+        "auditEventRepository",
         "connectionRole",
         "createAuthStore",
         "createDatabase",
@@ -81,10 +83,13 @@ describe("the package entry point", () => {
         "credentialTokenRepository",
         "defineScopedRepository",
         "emailChangeRepository",
+        "isLastOwnerViolation",
         "listRepositoryMethods",
+        "memberRepository",
         "membershipRepository",
         "migrate",
         "migrationLevel",
+        "workspaceRepository",
       ].sort(),
     );
     const database = entry.createDatabase({ url: "postgres://u:p@127.0.0.1:1/none", poolSize: 1 });

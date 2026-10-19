@@ -4,12 +4,20 @@
 
 ```ts
 
+import type { AuditRecord } from '@slugbase/core';
 import type { CredentialTokenPurpose } from '@slugbase/core';
 import { InferInsertModel } from 'drizzle-orm';
 import { InferSelectModel } from 'drizzle-orm';
+import type { MemberRoleStore } from '@slugbase/core';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import { SQL } from 'drizzle-orm';
+import type { WorkspaceAdministrationStore } from '@slugbase/core';
+import type { WorkspaceRenameRequest } from '@slugbase/core';
+import type { WorkspaceRenameResult } from '@slugbase/core';
+import type { WorkspaceSettings } from '@slugbase/core';
+import type { WorkspaceSettingsChange } from '@slugbase/core';
+import type { WorkspaceSettingsPatch } from '@slugbase/core';
 
 // @public (undocumented)
 export const ACCENT_PRESETS: readonly ["periwinkle", "violet", "rose", "amber", "green", "teal"];
@@ -171,6 +179,14 @@ export function apiTokenRepository(tx: TenantTx): ApiTokenRepository;
 export type ApiTokenScope = "read" | "read-write";
 
 // @public (undocumented)
+export interface AuditEventRepository {
+    insert(record: AuditRecord): Promise<void>;
+}
+
+// @public (undocumented)
+export function auditEventRepository(tx: TenantTx): AuditEventRepository;
+
+// @public (undocumented)
 export interface AuthStore extends SetupStore, MfaStore, OidcStore, RegistrationStore, EmailVerificationStore, PasswordResetStore, EmailChangeStore {
     changePassword(change: PasswordChange): Promise<boolean>;
     close(): Promise<void>;
@@ -240,6 +256,7 @@ export type CodeReauthenticationOutcome =
 // @public (undocumented)
 export interface CompleteSetup {
     readonly accountId: string;
+    readonly audit?: readonly AuditRecord[];
     // (undocumented)
     readonly displayName: string;
     readonly email: string;
@@ -431,6 +448,9 @@ export type InsertValues<T extends WorkspaceTable> = Omit<InferInsertModel<T>, "
 };
 
 // @public
+export function isLastOwnerViolation(error: unknown): boolean;
+
+// @public
 export function listRepositoryMethods(): readonly RepositoryMethodEntry[];
 
 // @public
@@ -442,6 +462,16 @@ export interface LoginCandidate {
     // (undocumented)
     readonly passwordHash: string | null;
 }
+
+// @public (undocumented)
+export interface MemberRepository extends MemberRoleStore {
+    list(afterAccountId: string | null, limit: number): Promise<readonly WorkspaceMember[]>;
+    member(accountId: string): Promise<WorkspaceMember | undefined>;
+    rotateSession(sessionId: string, tokenHash: Uint8Array): Promise<boolean>;
+}
+
+// @public (undocumented)
+export function memberRepository(tx: TenantTx): MemberRepository;
 
 // @public
 export type MemberRole = "owner" | "admin" | "member";
@@ -633,6 +663,10 @@ export interface NewOidcLoginState {
 export interface NewPersonalWorkspace {
     // (undocumented)
     readonly accountId: string;
+    readonly audit?: (created: {
+        readonly name: string;
+        readonly displayName: string;
+    }) => AuditRecord;
     readonly jobs: readonly QueuedJob[];
     readonly nameSuffix: string;
     readonly workspaceId: string;
@@ -664,6 +698,13 @@ export interface NewSession {
     readonly replacedTokenHash: Buffer | null;
     readonly tokenHash: Buffer;
     readonly userAgent: string | null;
+}
+
+// @public (undocumented)
+export interface NewWorkspace {
+    readonly id: string;
+    readonly jobs: readonly QueuedJob[];
+    readonly name: string;
 }
 
 // @public
@@ -699,6 +740,9 @@ export interface Onboarding {
     // (undocumented)
     readonly importDone: boolean;
 }
+
+// @public
+export const OWNER_REQUIRED_CONSTRAINT = "workspace_members_owner_required";
 
 // @public
 export interface PasswordChange {
@@ -829,6 +873,7 @@ export interface RetentionStore {
 
 // @public (undocumented)
 export interface RetentionStoreOptions {
+    auditRetentionDays?: number;
     poolSize?: number;
     url: string;
 }
@@ -999,6 +1044,61 @@ export interface VerifiedEmail {
     // (undocumented)
     readonly accountId: string;
     readonly next: "done" | "mfa";
+}
+
+// @public
+export interface WorkspaceDetail {
+    // (undocumented)
+    readonly createdAt: Date;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly memberCount: number;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly role: MemberRole;
+    readonly version: number;
+}
+
+// @public
+export interface WorkspaceMember {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly displayName: string;
+    // (undocumented)
+    readonly email: string;
+    // (undocumented)
+    readonly joinedAt: Date;
+    readonly lastActiveAt: Date | null;
+    // (undocumented)
+    readonly role: MemberRole;
+}
+
+// @public (undocumented)
+export interface WorkspaceRepository extends WorkspaceAdministrationStore {
+    changeSettings(patch: WorkspaceSettingsPatch): Promise<WorkspaceSettingsChange | undefined>;
+    create(workspace: NewWorkspace): Promise<boolean>;
+    current(): Promise<WorkspaceDetail | undefined>;
+    list(): Promise<readonly WorkspaceSummary[]>;
+    rename(request: WorkspaceRenameRequest): Promise<WorkspaceRenameResult>;
+    setActive(sessionId: string, workspaceId: string): Promise<boolean>;
+    settings(): Promise<WorkspaceSettings | undefined>;
+}
+
+// @public (undocumented)
+export function workspaceRepository(tx: TenantTx): WorkspaceRepository;
+
+// @public
+export interface WorkspaceSummary {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly memberCount: number;
+    // (undocumented)
+    readonly name: string;
+    readonly role: MemberRole;
 }
 
 // @public

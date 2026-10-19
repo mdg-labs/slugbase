@@ -1,44 +1,22 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
-import { isSessionEnded } from "../api/client.ts";
-import { meQuery } from "../account/me.ts";
-import { isMfaRequired, mfaPath } from "../auth/mfa.ts";
-import { sessionQuery } from "../auth/session.ts";
-import { isSetupRequired } from "../config/setup-state.ts";
+import { requireAccount } from "../account/require-account.ts";
 import { AppLayout } from "../shell/app-layout.tsx";
 
+// The pages about the account itself are open to an account with no workspace to act in.
+const ACCOUNT_PATH = "/settings/account";
+
+function isAccountPage(pathname: string): boolean {
+  return pathname === ACCOUNT_PATH || pathname.startsWith(`${ACCOUNT_PATH}/`);
+}
+
 export const Route = createFileRoute("/_app")({
-  // Every page of the app needs a session: a visitor without one is sent to sign in, and comes back to
-  // the page they asked for. A check that fails for any other reason is not a signed-in visitor either,
-  // so the error page shows instead of the app. While the instance has no account there is no session to
-  // check and nobody to sign in: the visitor is sent to set it up.
+  // Every page of the app needs a session (see `requireAccount`). An account that acts in no workspace has
+  // nothing to show on the pages of a workspace: it is sent to the page that says what to do about that.
   beforeLoad: async ({ context, location }) => {
-    if (isSetupRequired(context.queryClient)) {
+    const me = await requireAccount({ context, location });
+    if (me?.activeWorkspaceId === null && !isAccountPage(location.pathname)) {
       // eslint-disable-next-line @typescript-eslint/only-throw-error -- the router takes a thrown redirect (#82)
-      throw redirect({ to: "/setup", replace: true });
-    }
-    try {
-      await context.queryClient.query({ ...sessionQuery(context.api), staleTime: "static" });
-    } catch (error) {
-      if (isMfaRequired(error)) {
-        // eslint-disable-next-line @typescript-eslint/only-throw-error -- the router takes a thrown redirect (#82)
-        throw redirect({ href: mfaPath(location.href), replace: true });
-      }
-      if (isSessionEnded(error)) {
-        // eslint-disable-next-line @typescript-eslint/only-throw-error -- the router takes a thrown redirect (#82)
-        throw redirect({ to: "/login", search: { next: location.href }, replace: true });
-      }
-      throw error;
-    }
-    // The account carries the preferences that shape the first render: language, theme, accent, shortcuts.
-    // It is not a gate: when it cannot be loaded the interface keeps what the browser remembers, and the
-    // pages that need the account ask again and show their own failure.
-    try {
-      await context.queryClient.query({ ...meQuery(context.api), retry: false, staleTime: "static" });
-    } catch (error) {
-      if (isSessionEnded(error)) {
-        // eslint-disable-next-line @typescript-eslint/only-throw-error -- the router takes a thrown redirect (#82)
-        throw redirect({ to: "/login", search: { next: location.href }, replace: true });
-      }
+      throw redirect({ to: "/no-workspace", replace: true });
     }
   },
   component: AppLayout,

@@ -56,6 +56,27 @@ describe("provisionPersonalWorkspace", () => {
     expect(request?.events[0]?.eventId).not.toBe(request?.workspaceId);
   });
 
+  it("hands the store the audit event of the workspace to write once it knows the name the database gave it", async () => {
+    const { store, requests } = memoryStore();
+
+    await provisionPersonalWorkspace({ store, newId: ids() }, ACCOUNT);
+
+    const request = requests[0];
+    const record = request?.audit({ name: "Ada's workspace", displayName: "Ada" });
+    expect(record).toMatchObject({
+      workspaceId: request?.workspaceId,
+      actorType: "account",
+      actorAccountId: ACCOUNT,
+      actorLabel: "Ada",
+      action: "workspace.created",
+      entityType: "workspace",
+      entityId: request?.workspaceId,
+      metadata: { name: "Ada's workspace" },
+      ipPrefix: null,
+    });
+    expect(record?.id).not.toBe(request?.workspaceId);
+  });
+
   it("is idempotent: the second call for one account writes nothing and reports that the workspace exists", async () => {
     const { store, created } = memoryStore();
     const deps = { store, newId: ids() };

@@ -19,6 +19,7 @@ import { Slot, useExtensions } from "../extensions/index.ts";
 import { docsUrl } from "./docs-url.ts";
 import { EmailUnverifiedBanner } from "./banners.tsx";
 import { OfflineBanner } from "./offline-banner.tsx";
+import { useWorkspaceSwitcher } from "./workspace-switcher.tsx";
 
 function AppLayoutShell(): ReactElement {
   const { t } = useTranslation();
@@ -28,6 +29,7 @@ function AppLayoutShell(): ReactElement {
   const signOut = useSignOut();
   const router = useRouter();
   const updatePreferences = useUpdatePreferences();
+  const { switcher, dialog } = useWorkspaceSwitcher();
   const inSettings = pathname === "/settings" || pathname.startsWith("/settings/");
   const accountItems = [
     {
@@ -120,7 +122,9 @@ function AppLayoutShell(): ReactElement {
         </SidebarMenu>
       }
       productName={product.name}
+      workspaceSwitcher={switcher}
     >
+      {dialog}
       <OfflineBanner />
       <EmailUnverifiedBanner />
       <Slot name="banner.entitlement" />

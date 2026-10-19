@@ -117,6 +117,182 @@ export interface ApiToken {
     readonly value: string;
 }
 
+// @public (undocumented)
+export const AUDIT_ACTION_NAMES: readonly AuditAction[];
+
+// @public (undocumented)
+export const AUDIT_ACTIONS: {
+    readonly "workspace.created": {
+        readonly category: "workspace";
+        readonly metadata: {
+            readonly name: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
+    };
+    readonly "workspace.renamed": {
+        readonly category: "workspace";
+        readonly metadata: {
+            readonly from: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+            readonly to: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
+    };
+    readonly "workspace.settings_changed": {
+        readonly category: "workspace";
+        readonly metadata: {
+            readonly setting: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+            readonly from: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+            readonly to: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
+    };
+    readonly "member.role_changed": {
+        readonly category: "member";
+        readonly metadata: {
+            readonly from: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+            readonly to: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
+    };
+};
+
+// @public
+export const AUDIT_CATEGORIES: readonly ["workspace", "member"];
+
+// @public (undocumented)
+export type AuditAction = keyof typeof AUDIT_ACTIONS;
+
+// @public (undocumented)
+export interface AuditActionDefinition {
+    // (undocumented)
+    readonly category: AuditCategory;
+    // (undocumented)
+    readonly metadata: Readonly<Record<string, AuditMetadataField>>;
+}
+
+// @public
+export type AuditActor = {
+    readonly type: "account";
+    readonly accountId: string;
+    readonly label: string;
+} | {
+    readonly type: "api_token";
+    readonly accountId: string;
+    readonly tokenId: string;
+    readonly label: string;
+} | {
+    readonly type: "system";
+    readonly label: string;
+};
+
+// @public (undocumented)
+export type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
+
+// @public (undocumented)
+export interface AuditEventInput<Name extends AuditAction = AuditAction> {
+    // (undocumented)
+    readonly action: Name;
+    // (undocumented)
+    readonly actor: AuditActor;
+    readonly entity?: {
+        readonly type: string;
+        readonly id: string;
+    };
+    readonly ipPrefix: string | null;
+    // (undocumented)
+    readonly metadata: AuditMetadata<Name>;
+    readonly workspaceId: string;
+}
+
+// @public
+export type AuditMetadata<Name extends AuditAction = AuditAction> = {
+    readonly [Key in keyof (typeof AUDIT_ACTIONS)[Name]["metadata"]]: string;
+};
+
+// @public
+export class AuditMetadataError extends Error {
+    constructor(problem: string);
+}
+
+// @public
+export type AuditMetadataField = {
+    readonly type: "text";
+    readonly minLength: number;
+    readonly maxLength: number;
+} | {
+    readonly type: "uuid";
+};
+
+// @public
+export interface AuditRecord {
+    // (undocumented)
+    readonly action: AuditAction;
+    // (undocumented)
+    readonly actorAccountId: string | null;
+    // (undocumented)
+    readonly actorLabel: string;
+    // (undocumented)
+    readonly actorTokenId: string | null;
+    // (undocumented)
+    readonly actorType: AuditActor["type"];
+    // (undocumented)
+    readonly entityId: string | null;
+    // (undocumented)
+    readonly entityType: string | null;
+    readonly id: string;
+    // (undocumented)
+    readonly ipPrefix: string | null;
+    // (undocumented)
+    readonly metadata: Readonly<Record<string, string>>;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface AuditStore {
+    insert(record: AuditRecord): Promise<void>;
+}
+
+// @public (undocumented)
+export interface AuditWriter {
+    write<Name extends AuditAction>(event: AuditEventInput<Name>): Promise<void>;
+}
+
+// @public (undocumented)
+export interface AuditWriterDependencies {
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: AuditStore;
+}
+
 // @public
 export function autoCreateAllowed(email: string, allowedDomains: readonly string[]): boolean;
 
@@ -150,6 +326,9 @@ export interface BreachedPasswords {
 }
 
 // @public
+export function canCreateWorkspace(input: WorkspaceCreationPolicy): boolean;
+
+// @public
 export interface ChallengePort extends Port {
     // (undocumented)
     verify(solution: string | undefined): Promise<ChallengeVerdict>;
@@ -160,6 +339,12 @@ export interface ChallengeVerdict {
     // (undocumented)
     readonly ok: boolean;
 }
+
+// @public
+export function changeMemberRole(input: MemberRoleDependencies, ask: MemberRoleAsk): Promise<MemberRoleOutcome>;
+
+// @public
+export function changeWorkspaceSettings(input: WorkspaceAdministrationDependencies, ask: WorkspaceSettingsAsk): Promise<WorkspaceSettingsOutcome>;
 
 // @public
 export interface ClientErrorReportPort extends Port {
@@ -174,11 +359,17 @@ export interface ClientErrorReportRequest {
     readonly workspaceId: string | undefined;
 }
 
+// @public (undocumented)
+export function createAuditWriter(input: AuditWriterDependencies): AuditWriter;
+
 // @public
 export function createBreachedPasswords(records: Uint8Array): BreachedPasswords;
 
 // @public (undocumented)
 export function createPasswordPolicy(input?: PasswordPolicyOptions): PasswordPolicy;
+
+// @public
+export function createWorkspace(input: WorkspaceCreationDependencies, ask: WorkspaceCreationAsk): Promise<WorkspaceCreationOutcome>;
 
 // @public
 export const CREDENTIAL_TOKEN_BYTES = 32;
@@ -465,6 +656,9 @@ export interface IdentityProviderInfo {
 }
 
 // @public (undocumented)
+export function isAuditAction(value: unknown): value is AuditAction;
+
+// @public (undocumented)
 export function isDomainEventName(value: unknown): value is DomainEventName;
 
 // @public
@@ -490,6 +684,62 @@ export interface MailPort extends Port {
 
 // @public
 export const MAX_API_TOKENS_PER_USER = 10;
+
+// @public (undocumented)
+export interface MemberRoleAsk {
+    // (undocumented)
+    readonly actor: AuditActor;
+    readonly actorAccountId: string;
+    readonly ipPrefix: string | null;
+    // (undocumented)
+    readonly role: WorkspaceRole;
+    // (undocumented)
+    readonly targetAccountId: string;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface MemberRoleDependencies {
+    readonly audit: AuditWriter;
+    // (undocumented)
+    readonly store: MemberRoleStore;
+}
+
+// @public (undocumented)
+export type MemberRoleOutcome =
+/** The role was replaced; `self` says the member is the account that asked. */
+    {
+    readonly kind: "changed";
+    readonly from: WorkspaceRole;
+    readonly to: WorkspaceRole;
+    readonly self: boolean;
+}
+/** The member already has the role; nothing was written. */
+| {
+    readonly kind: "unchanged";
+    readonly role: WorkspaceRole;
+}
+/** The account that asks may not make this change; nothing was written. */
+| {
+    readonly kind: "forbidden";
+}
+/** The workspace has no such member, or cannot be reached. */
+| {
+    readonly kind: "not_found";
+};
+
+// @public
+export interface MemberRoles {
+    readonly actor: WorkspaceRole | undefined;
+    readonly target: WorkspaceRole | undefined;
+}
+
+// @public (undocumented)
+export interface MemberRoleStore {
+    roles(targetAccountId: string): Promise<MemberRoles | undefined>;
+    setRole(targetAccountId: string, role: WorkspaceRole): Promise<boolean>;
+}
 
 // @public
 export function newOidcHandshake(): OidcHandshake;
@@ -550,6 +800,9 @@ export interface OtpauthOptions {
 export function otpauthUri(input: OtpauthOptions): string;
 
 // @public
+export function parseAuditMetadata<Name extends AuditAction>(name: Name, value: unknown): AuditMetadata<Name>;
+
+// @public
 export function parseDomainEventPayload<Name extends DomainEventName>(name: Name, value: unknown): DomainEventPayload<Name>;
 
 // @public
@@ -588,6 +841,10 @@ export type PersonalWorkspaceOutcome = "created" | "exists";
 export interface PersonalWorkspaceRequest {
     // (undocumented)
     readonly accountId: string;
+    readonly audit: (created: {
+        readonly name: string;
+        readonly displayName: string;
+    }) => AuditRecord;
     readonly events: readonly DomainEvent<"workspace.created">[];
     // (undocumented)
     readonly nameSuffix: string;
@@ -620,6 +877,9 @@ export class PortUnavailable extends Error {
 
 // @public
 export type PortUnavailableCode = Extract<ProblemCode, "unavailable" | "mail_unavailable" | "ai_unavailable">;
+
+// @public
+export function prepareAuditRecord<Name extends AuditAction>(event: AuditEventInput<Name>, newId: () => string): AuditRecord;
 
 // @public
 export function provisionPersonalWorkspace(input: PersonalWorkspaceDependencies, accountId: string): Promise<PersonalWorkspaceOutcome>;
@@ -673,6 +933,9 @@ export type RegistrationUnavailable = "registration_closed" | "mail_unavailable"
 
 // @public
 export function registrationUnavailable(settings: RegistrationSettings, mailAvailable: boolean): RegistrationUnavailable | undefined;
+
+// @public
+export function renameWorkspace(input: WorkspaceAdministrationDependencies, ask: WorkspaceRenameAsk): Promise<WorkspaceRenameOutcome>;
 
 // @public
 export function safeReturnTo(value: string | undefined): string;
@@ -778,8 +1041,170 @@ export const USER_AGENT_MAX_LENGTH = 256;
 // @public
 export function verifyTotp(secret: Uint8Array, code: string, nowMs: number): number | undefined;
 
+// @public
+export const WORKSPACE_NAME_MAX_LENGTH = 64;
+
+// @public (undocumented)
+export interface WorkspaceAdministrationDependencies {
+    readonly audit: AuditWriter;
+    // (undocumented)
+    readonly store: WorkspaceAdministrationStore;
+}
+
+// @public (undocumented)
+export interface WorkspaceAdministrationStore {
+    changeSettings(patch: WorkspaceSettingsPatch): Promise<WorkspaceSettingsChange | undefined>;
+    rename(request: WorkspaceRenameRequest): Promise<WorkspaceRenameResult>;
+}
+
+// @public (undocumented)
+export interface WorkspaceChangeAsk {
+    // (undocumented)
+    readonly actor: AuditActor;
+    readonly ipPrefix: string | null;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface WorkspaceCreationAsk extends WorkspaceCreationPolicy {
+    // (undocumented)
+    readonly accountId: string;
+    readonly displayName: string;
+    readonly ipPrefix: string | null;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public (undocumented)
+export interface WorkspaceCreationDependencies {
+    readonly audit: AuditWriter;
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: WorkspaceStore;
+}
+
+// @public (undocumented)
+export type WorkspaceCreationOutcome = {
+    readonly kind: "created";
+    readonly workspaceId: string;
+}
+/** The deployment does not let accounts create workspaces. */
+| {
+    readonly kind: "not_allowed";
+} | {
+    readonly kind: "unverified";
+}
+/** The account does not exist or is disabled. */
+| {
+    readonly kind: "unavailable";
+};
+
+// @public (undocumented)
+export interface WorkspaceCreationPolicy {
+    readonly creationAllowed: boolean;
+    // (undocumented)
+    readonly emailVerified: boolean;
+}
+
+// @public (undocumented)
+export interface WorkspaceCreationRequest {
+    readonly accountId: string;
+    readonly events: readonly DomainEvent<"workspace.created">[];
+    // (undocumented)
+    readonly name: string;
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface WorkspaceRenameAsk extends WorkspaceChangeAsk {
+    // (undocumented)
+    readonly expectedVersions: readonly number[] | undefined;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public (undocumented)
+export type WorkspaceRenameOutcome = Exclude<WorkspaceRenameResult, {
+    readonly kind: "renamed";
+}> | {
+    readonly kind: "renamed";
+    readonly version: number;
+};
+
+// @public (undocumented)
+export interface WorkspaceRenameRequest {
+    readonly expectedVersions: readonly number[] | undefined;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public (undocumented)
+export type WorkspaceRenameResult =
+/** The name was replaced and the version moved to `version`. */
+    {
+    readonly kind: "renamed";
+    readonly previousName: string;
+    readonly version: number;
+}
+/** The name is the one the workspace has; nothing was written and the version is `version`. */
+| {
+    readonly kind: "unchanged";
+    readonly version: number;
+}
+/** The workspace is at `version`, which the caller did not accept; nothing was written. */
+| {
+    readonly kind: "stale";
+    readonly version: number;
+}
+/** The workspace of the transaction cannot be reached. */
+| {
+    readonly kind: "unavailable";
+};
+
 // @public (undocumented)
 export type WorkspaceRole = "owner" | "admin" | "member";
+
+// @public
+export interface WorkspaceSettings {
+    // (undocumented)
+    readonly aiEnabled: boolean;
+}
+
+// @public (undocumented)
+export interface WorkspaceSettingsAsk extends WorkspaceChangeAsk {
+    // (undocumented)
+    readonly patch: WorkspaceSettingsPatch;
+}
+
+// @public (undocumented)
+export interface WorkspaceSettingsChange {
+    readonly current: WorkspaceSettings;
+    readonly previous: WorkspaceSettings;
+}
+
+// @public (undocumented)
+export type WorkspaceSettingsOutcome = {
+    readonly kind: "changed";
+    readonly settings: WorkspaceSettings;
+} | {
+    readonly kind: "unchanged";
+    readonly settings: WorkspaceSettings;
+}
+/** The workspace has no settings row. */
+| {
+    readonly kind: "unavailable";
+};
+
+// @public
+export type WorkspaceSettingsPatch = {
+    readonly [Key in keyof WorkspaceSettings]?: WorkspaceSettings[Key];
+};
+
+// @public (undocumented)
+export interface WorkspaceStore {
+    create(request: WorkspaceCreationRequest): Promise<boolean>;
+}
 
 // (No @packageDocumentation comment for this package)
 

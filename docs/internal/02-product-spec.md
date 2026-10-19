@@ -111,7 +111,7 @@ A workspace has a name (1–64 characters), a generated colour and monogram, an 
 
 - An instance admin creates workspaces from the admin area (§11) on any deployment.
 - Whether *ordinary* accounts may create their own workspaces is the instance setting `allow_workspace_creation`. Its default is supplied by the composition root, never by an edition flag (D4, Q94): off in the CE composition, on in the Cloud composition. Once an instance admin sets it, the stored value overrides the default on the very next request.
-- Where creation is allowed, any verified account can create a workspace from the workspace switcher, subject to `workspaces.ownMax` (Cloud Free: one owned workspace). The creator becomes owner. Hitting the limit shows the upgrade path (doc 06), not an error; the workspace list reports whether the account can create one, so the UI hides or replaces the action.
+- Where creation is allowed, any verified account can create a workspace from the workspace switcher, subject to `workspaces.ownMax` (Cloud Free: one owned workspace). The creator becomes owner, the creation is recorded as the `workspace.created` audit event of the new workspace, and the active workspace does not change. Hitting the limit shows the upgrade path (doc 06), not an error; the workspace list reports whether the account can create one (`canCreate`: creation is allowed and the address is verified), so the UI hides or replaces the action.
 
 ### 3.3 Roles
 
@@ -129,7 +129,7 @@ A workspace has a name (1–64 characters), a generated colour and monogram, an 
 | Promote to owner, transfer ownership, demote an owner | ✓ | — | — |
 | Delete the workspace | ✓ | — | — |
 
-A workspace always has at least one owner; the last owner cannot leave, be removed or be demoted. Several owners are allowed. **Transfer ownership** promotes another member to owner and, optionally, demotes the transferring owner to admin, with a typed confirmation of the recipient's name.
+A workspace always has at least one owner; the last owner cannot leave, be removed or be demoted, and the database enforces it (doc 05 §2.2), so two owners demoting each other at the same moment leave exactly one. Several owners are allowed. An admin who tries to promote a member, or themselves, to owner, or to change an owner's role, is refused; a role change of one's own rotates the session's token (doc 04 §4.3). **Transfer ownership** promotes another member to owner and, optionally, demotes the transferring owner to admin, with a typed confirmation of the recipient's name.
 
 ### 3.4 Invitations
 
@@ -363,11 +363,11 @@ The post-sign-in landing page:
 
 Available to admins and owners in **Settings → Workspace** (doc 03):
 
-- **General**: name; delete workspace (owner).
+- **General**: name (a rename is the audited `workspace.renamed` event with the old and new name, and a stale tab's rename is refused, doc 04 §2.4); delete workspace (owner).
 - **Members**: list with role, teams, joined date, last active (the member's most recent request in this workspace); invite; change role; remove (with the §3.6 content choice); transfer ownership; pending invitations with resend/revoke; seat usage (Cloud, via slot).
 - **Teams**: create, rename, describe, delete; manage team members.
 - **Audit log** (subject to `audit.log`): read-only, with filters by actor, action and date range. Recorded actions (each exactly once, from one catalog of dotted action names grouped into categories): sign-ins and token events are **not** workspace audit events (they are account security events, shown under Account → Security); workspace events are workspace creation and renaming, membership changes (added, removed, left, role changed, ownership transferred), invitations (created, resent, link created, revoked, accepted), team changes, share grants and revocations (single and bulk), bulk bookmark deletes, imports, exports, settings changes (including the AI toggle), an instance admin adding themselves as a member (§11.1), workspace deletion request, billing changes (Cloud). Each event: time, actor (the label at the time; the account reference is removed when the account is deleted), action, target type and ID, a small metadata object validated per action (never secrets, email text, or URLs and titles beyond names). Newest first, with "load more" pagination (Q42). Retention is `AUDIT_RETENTION_DAYS` (default 365, `0` keeps events forever, Q53).
-- **AI suggestions**: an enable toggle for the workspace (default on when the AI adapter is configured and `ai.suggestions` is granted); a change is an audited settings change. No credentials or models in the workspace UI — those are operator configuration (D22).
+- **AI suggestions**: an enable toggle for the workspace (default on when the AI adapter is configured and `ai.suggestions` is granted); a change is an audited settings change (`workspace.settings_changed`: the setting and its old and new value). No credentials or models in the workspace UI — those are operator configuration (D22).
 - **No SMTP or OIDC panels** in the workspace UI on either edition: they are operator configuration. The CE instance admin sees their *status* in the admin area (§11).
 
 ---

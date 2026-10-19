@@ -14,7 +14,10 @@
 // PUBLIC, GRANT EXECUTE ON FUNCTION ... TO slugbase_app, and GRANT CREATE ON
 // SCHEMA ... TO slugbase_system with the REVOKE CREATE that takes it back.
 // CREATE [OR REPLACE] TRIGGER ... BEFORE UPDATE ... FOR EACH ROW EXECUTE FUNCTION f()
-// is read the same way, by its whole shape.
+// and CREATE CONSTRAINT TRIGGER ... AFTER DELETE OR UPDATE ... DEFERRABLE INITIALLY
+// DEFERRED FOR EACH ROW EXECUTE FUNCTION f() are read the same way, by their whole shape,
+// and DROP TRIGGER [IF EXISTS] name ON table, which a constraint trigger needs to be
+// created again (PostgreSQL has no CREATE OR REPLACE for it).
 
 export interface TableName {
   schema: string;
@@ -57,11 +60,15 @@ export type Operation =
   | { kind: "alters-function-owner"; fn: FunctionIdentity }
   | { kind: "grants-function-execute"; fn: FunctionIdentity }
   | { kind: "revokes-function-public"; fn: FunctionIdentity }
-  // CREATE [OR REPLACE] TRIGGER name BEFORE UPDATE ON table FOR EACH ROW EXECUTE FUNCTION fn(): the one trigger form read, whose function is
+  // CREATE [OR REPLACE] TRIGGER name BEFORE UPDATE ON table FOR EACH ROW EXECUTE FUNCTION fn(), and CREATE CONSTRAINT TRIGGER name
+  // AFTER DELETE OR UPDATE ON table DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION fn(): the two trigger forms read, whose function is
   // named without a call the migration could run. A trigger body runs on a row write, which a migration does not make (D25). name is the
   // trigger's name as PostgreSQL compares it (see `triggerName`); with replace, the statement takes the place of a trigger of that name on
   // that table, whatever shape it has.
-  | { kind: "creates-trigger"; table: TableName; name: string; fn: FunctionIdentity; replace: boolean }
+  | { kind: "creates-trigger"; table: TableName; name: string; fn: FunctionIdentity; form: TriggerForm; replace: boolean }
+  // DROP TRIGGER [IF EXISTS] name ON table, named as `creates-trigger` names its trigger. The rule accepts it only where the same file creates
+  // the trigger again with the function and the form it had.
+  | { kind: "drops-trigger"; table: TableName; name: string }
   | { kind: "grants-schema-create"; schema: string }
   | { kind: "revokes-schema-create"; schema: string }
   | { kind: "data-change"; statement: string }
@@ -680,7 +687,34 @@ function drop(cursor: Cursor): Operation[] {
       ? [{ kind: "safe" }]
       : unknown("DROP POLICY this check cannot read");
   }
+  if (cursor.take("trigger")) {
+    return dropTrigger(cursor);
+  }
   return unknown("a DROP form this check does not read");
+}
+
+/**
+ * DROP TRIGGER [IF EXISTS] name ON table, read by its whole shape: no CASCADE or RESTRICT, and a trigger and
+ * table name PostgreSQL and this check spell alike (printable ASCII). It drops the trigger of that name and
+ * table, so the operation names it as `creates-trigger` does.
+ */
+function dropTrigger(cursor: Cursor): Operation[] {
+  const problem = unknown("DROP TRIGGER other than `DROP TRIGGER [IF EXISTS] name ON table`");
+  cursor.take("if", "exists");
+  const start = cursor.position;
+  const name = triggerName(cursor.peek());
+  if (name === undefined || cursor.identifier() === undefined || !cursor.take("on")) {
+    return problem;
+  }
+  const tableStart = cursor.position;
+  if (cursor.tableName() === undefined || !cursor.done()) {
+    return problem;
+  }
+  const written = cursor.tokens.slice(start, cursor.position).filter((token) => token.kind === "word" || token.kind === "ident");
+  if (written.some((token) => !PRINTABLE_ASCII.test(token.kind === "word" ? token.raw : token.text))) {
+    return unknown("DROP TRIGGER named with a character outside printable ASCII, whose name PostgreSQL may spell differently from the way this check compares names");
+  }
+  return [{ kind: "drops-trigger", table: triggerTable(cursor.tokens.slice(tableStart, cursor.position)), name }];
 }
 
 function create(cursor: Cursor): Operation[] {
@@ -689,7 +723,11 @@ function create(cursor: Cursor): Operation[] {
     return createFunction(cursor, replace);
   }
   if (cursor.take("trigger")) {
-    return createTrigger(cursor, replace);
+    return createTrigger(cursor, replace, PLAIN_TRIGGER);
+  }
+  // PostgreSQL has no CREATE OR REPLACE CONSTRAINT TRIGGER; the form falls through to the OR REPLACE statements this check does not read.
+  if (!replace && cursor.take("constraint", "trigger")) {
+    return createTrigger(cursor, replace, CONSTRAINT_TRIGGER);
   }
   if (replace) {
     return unknown("a CREATE OR REPLACE form this check does not read");
@@ -772,30 +810,64 @@ function triggerTable(tokens: readonly Token[]): TableName {
 }
 
 /**
- * CREATE [OR REPLACE] TRIGGER name BEFORE UPDATE ON table FOR EACH ROW EXECUTE FUNCTION fn(), read by its
- * whole shape. The function runs on a row write, never when the trigger is created, and the shape names it
- * without arguments, a condition or a column list. The rule accepts it only for a trigger function the
+ * What decides when and how a trigger fires: its timing, events, level, deferrability and condition. The reader accepts two shapes only,
+ * each with a fixed timing, event list, level and no column list or WHEN condition, so the shape it read is the whole form: `plain` is
+ * BEFORE UPDATE FOR EACH ROW, `constraint` is a constraint trigger AFTER DELETE OR UPDATE DEFERRABLE INITIALLY DEFERRED FOR EACH ROW.
+ */
+export type TriggerForm = "plain" | "constraint";
+
+interface TriggerShape {
+  /** The form this shape is. */
+  readonly kind: TriggerForm;
+  /** What the statement says after the trigger's name, up to the table. */
+  readonly head: readonly string[];
+  /** What it says after the table, up to the function. */
+  readonly tail: readonly string[];
+  /** The form as the reader reports it when the statement is another one. */
+  readonly form: string;
+}
+
+const PLAIN_TRIGGER: TriggerShape = {
+  kind: "plain",
+  head: ["before", "update", "on"],
+  tail: ["for", "each", "row", "execute", "function"],
+  form: "`CREATE TRIGGER name BEFORE UPDATE ON table FOR EACH ROW EXECUTE FUNCTION function()`",
+};
+
+const CONSTRAINT_TRIGGER: TriggerShape = {
+  kind: "constraint",
+  head: ["after", "delete", "or", "update", "on"],
+  tail: ["deferrable", "initially", "deferred", "for", "each", "row", "execute", "function"],
+  form: "`CREATE CONSTRAINT TRIGGER name AFTER DELETE OR UPDATE ON table DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION function()`",
+};
+
+/**
+ * CREATE [OR REPLACE] TRIGGER name BEFORE UPDATE ON table FOR EACH ROW EXECUTE FUNCTION fn() and
+ * CREATE CONSTRAINT TRIGGER name AFTER DELETE OR UPDATE ON table DEFERRABLE INITIALLY DEFERRED
+ * FOR EACH ROW EXECUTE FUNCTION fn(), each read by its whole shape. The function runs on a row write, at the
+ * statement or at the commit, never when the trigger is created, and the shape names it without arguments,
+ * a condition or a column list. The rule accepts it only for a trigger function the
  * chain declares, and OR REPLACE only over the trigger of that name and table that the chain created with
  * the same function (the statement again), or where it has read every earlier statement and so can show
  * there is no such trigger: PostgreSQL replaces a trigger of any timing, event, condition and function, so
  * the operation carries the trigger's name and the flag. The trigger is identified by its name and table,
  * the schema and the name of the table each compared as PostgreSQL compares a name (see `triggerName`). A trigger of any other timing or event, a
- * constraint trigger and an event trigger (which fires on DDL, so inside a migration) are not read, and
+ * constraint trigger of another shape and an event trigger (which fires on DDL, so inside a migration) are not read, and
  * neither is an OR REPLACE whose trigger or table name has a character outside printable ASCII, since the
  * names the rule compares are ASCII.
  */
-function createTrigger(cursor: Cursor, replace: boolean): Operation[] {
-  const problem = unknown("CREATE TRIGGER other than `CREATE TRIGGER name BEFORE UPDATE ON table FOR EACH ROW EXECUTE FUNCTION function()`");
+function createTrigger(cursor: Cursor, replace: boolean, shape: TriggerShape): Operation[] {
+  const problem = unknown(`CREATE TRIGGER other than ${PLAIN_TRIGGER.form} or ${CONSTRAINT_TRIGGER.form}`);
   const start = cursor.position;
   const name = triggerName(cursor.peek());
-  if (name === undefined || cursor.identifier() === undefined || !cursor.take("before", "update", "on")) {
+  if (name === undefined || cursor.identifier() === undefined || !cursor.take(...shape.head)) {
     return problem;
   }
   const tableStart = cursor.position;
-  if (cursor.tableName() === undefined || !cursor.take("for", "each", "row", "execute", "function")) {
+  if (cursor.tableName() === undefined || !cursor.take(...shape.tail)) {
     return problem;
   }
-  const table = triggerTable(cursor.tokens.slice(tableStart, cursor.position - 5));
+  const table = triggerTable(cursor.tokens.slice(tableStart, cursor.position - shape.tail.length));
   const written = cursor.tokens.slice(start, cursor.position).filter((token) => token.kind === "word" || token.kind === "ident");
   if (replace && written.some((token) => !PRINTABLE_ASCII.test(token.kind === "word" ? token.raw : token.text))) {
     return unknown("CREATE OR REPLACE TRIGGER named with a character outside printable ASCII, whose name PostgreSQL may spell differently from the way this check compares names");
@@ -805,7 +877,7 @@ function createTrigger(cursor: Cursor, replace: boolean): Operation[] {
     return problem;
   }
   cursor.position += 2;
-  return cursor.done() ? [{ kind: "creates-trigger", table, name, fn: { name: fn, args: "" }, replace }] : problem;
+  return cursor.done() ? [{ kind: "creates-trigger", table, name, fn: { name: fn, args: "" }, form: shape.kind, replace }] : problem;
 }
 
 function createIndex(cursor: Cursor): Operation[] {

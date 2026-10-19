@@ -161,6 +161,7 @@ export function createServer(options: CreateServerOptions): Server;
 export interface CreateServerOptions {
     // (undocumented)
     readonly adapters: Adapters;
+    readonly allowWorkspaceCreation?: boolean;
     readonly authStore?: AuthStore;
     readonly buildInfo?: BuildInfo;
     // (undocumented)
@@ -336,6 +337,8 @@ export const envSchemas: {
     } & {
         TOTP_ISSUER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
     } & {
+        AUDIT_RETENTION_DAYS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
+    } & {
         METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
     } & {
         ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
@@ -378,6 +381,8 @@ export const envSchemas: {
     } & {
         DATABASE_URL: z.ZodString;
         SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+    } & {
+        AUDIT_RETENTION_DAYS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
     } & {
         METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
     } & {
@@ -952,6 +957,11 @@ export type ResponseResult<R> = {
 }[keyof R & number];
 
 // @public
+export const retentionFragment: EnvFragment<    {
+AUDIT_RETENTION_DAYS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
+}, object>;
+
+// @public
 export interface RetryPolicy {
     readonly backoff?: boolean;
     readonly delaySeconds?: number;
@@ -1133,6 +1143,8 @@ export const serverEnvSchema: EnvSchema<{
 } & {
     TOTP_ISSUER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
 } & {
+    AUDIT_RETENTION_DAYS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
+} & {
     METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 } & {
     ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
@@ -1195,6 +1207,8 @@ EMAIL_VERIFICATION_REQUIRED: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString
 BREACHED_PASSWORD_CHECK: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 }, object>, EnvFragment<    {
 TOTP_ISSUER: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
+}, object>, EnvFragment<    {
+AUDIT_RETENTION_DAYS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
 }, object>, EnvFragment<Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>, object>, EnvFragment<    {
 METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 }, object>, EnvFragment<    {
@@ -1350,6 +1364,8 @@ export const workerEnvSchema: EnvSchema<{
     DATABASE_URL: z.ZodString;
     SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
 } & {
+    AUDIT_RETENTION_DAYS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
+} & {
     METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 } & {
     ERROR_REPORT_DSN: z.ZodPreprocess<z.ZodOptional<z.ZodString>, unknown>;
@@ -1392,6 +1408,8 @@ ENCRYPTION_KEY_PREVIOUS: z.ZodPreprocess<z.ZodDefault<z.ZodPipe<z.ZodString, z.Z
 }, object>, EnvFragment<    {
 DATABASE_URL: z.ZodString;
 SLUGBASE_ALLOW_OWNER_CONNECTION: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>>;
+}, object>, EnvFragment<    {
+AUDIT_RETENTION_DAYS: z.ZodDefault<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>;
 }, object>, EnvFragment<Record<RateLimitKey, z.ZodType<RateLimitSpec, unknown, z.core.$ZodTypeInternals<RateLimitSpec, unknown>>>, object>, EnvFragment<    {
 METRICS_PORT: z.ZodPreprocess<z.ZodOptional<z.ZodPipe<z.ZodString, z.ZodTransform<number, string>>>, unknown>;
 }, object>, EnvFragment<    {

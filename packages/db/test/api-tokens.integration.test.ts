@@ -39,7 +39,8 @@ async function account(): Promise<string> {
 async function member(): Promise<{ accountId: string; workspaceId: string }> {
   const accountId = await account();
   const workspaceId = await seedWorkspace(db, { createdBy: accountId });
-  await seedMember(db, { workspaceId, accountId, role: "owner" });
+  // An admin: the tests that end the membership must not remove the last owner of the workspace.
+  await seedMember(db, { workspaceId, accountId, role: "admin" });
   return { accountId, workspaceId };
 }
 
