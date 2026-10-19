@@ -80,5 +80,16 @@
     "expiry": "Der Link funktioniert einmal und 1 Stunde lang.",
     "itWasYou": "Falls du das warst, musst du nichts tun.",
     "footer": "Du erhältst diese E-Mail, weil eine Änderung der E-Mail-Adresse deines {appName}-Kontos angefordert wurde."
+  },
+  "ownershipTransferred": {
+    "subject": "Du bist jetzt Eigentümer von {workspace} auf {appName}",
+    "greeting": "Hallo {name},",
+    "greetingAnonymous": "Hallo,",
+    "body": "Du wurdest zum Eigentümer des Workspace {workspace} auf {appName} gemacht.",
+    "bodyBy": "{owner} hat dich zum Eigentümer des Workspace {workspace} auf {appName} gemacht.",
+    "powers": "Als Eigentümer kannst du die Mitglieder und Einstellungen des Workspace verwalten, weitere Mitglieder zu Eigentümern machen und den Workspace löschen.",
+    "notExpected": "Falls du damit nicht gerechnet hast, frage den Eigentümer, der die Änderung vorgenommen hat.",
+    "action": "{appName} öffnen",
+    "footer": "Du erhältst diese E-Mail, weil du zum Eigentümer des {appName}-Workspace {workspace} gemacht wurdest."
   }
 }

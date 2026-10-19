@@ -112,6 +112,28 @@ export const FIXTURES: ContractFixtures = {
   // members of workspace B in it.
   listMembers: {},
   updateMember: { path: { accountId: UNKNOWN_MEMBER_ID }, body: { role: "admin" }, status: 404, foreign: { path: { accountId: UNKNOWN_MEMBER_ID }, body: { role: "admin" } } },
+  // The removal names a member by account identifier and the content choice may name a recipient, so its valid request is the declared 404
+  // for an account that is no member, and a recipient that is a member of workspace B is the same 404. The walker owns the workspace it acts in
+  // and leaving it would end its membership, so its valid request to leave names a recipient that is no member of it: the same declared 404, with
+  // nothing removed; the route tests end memberships.
+  removeMember: {
+    path: { accountId: UNKNOWN_MEMBER_ID },
+    body: { content: "transfer" },
+    status: 404,
+    foreign: { path: { accountId: UNKNOWN_MEMBER_ID }, body: { content: "transfer", transferTo: UNKNOWN_MEMBER_ID } },
+  },
+  leaveWorkspace: { body: { content: "transfer", transferTo: UNKNOWN_MEMBER_ID }, status: 404, foreign: { body: { content: "transfer", transferTo: UNKNOWN_MEMBER_ID } } },
+  // A tenant-scoped operation that acts in the workspace of the request and takes no identifier. The walker that calls it is the owner of a
+  // workspace of its own that no other operation uses, and it has just re-authenticated, so the valid request is the declared 202: it marks
+  // that workspace as being deleted, and the walker's other calls to the operation are refused before the handler.
+  deleteWorkspace: {},
+  // The transfer names a member by account identifier in its body and takes an owner's re-authenticated session, so its valid request is the declared
+  // 404 for an account that is no member of the workspace the walker owns, and a member of workspace B is the same 404; the route tests transfer ownership.
+  transferWorkspaceOwnership: {
+    body: { accountId: UNKNOWN_MEMBER_ID, demoteSelf: false },
+    status: 404,
+    foreign: { body: { accountId: UNKNOWN_MEMBER_ID, demoteSelf: false } },
+  },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

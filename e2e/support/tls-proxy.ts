@@ -20,14 +20,30 @@ export interface TlsProxyOptions {
  */
 export async function startTlsProxy({ port, upstream, keyFile, certFile }: TlsProxyOptions): Promise<() => Promise<void>> {
   const server = createServer({ key: readFileSync(keyFile), cert: readFileSync(certFile) }, (incoming, outgoing) => {
+    // A browser that cancels a navigation or a fetch closes the connection while the upstream is still
+    // working; the answer that arrives later has nowhere to go and is discarded.
+    let clientGone = false;
     const forwarded = httpRequest(
       { host: upstream.hostname, port: upstream.port, method: incoming.method, path: incoming.url, headers: incoming.headers },
       (answer) => {
+        if (clientGone || outgoing.destroyed || outgoing.writableEnded) {
+          answer.destroy();
+          return;
+        }
         outgoing.writeHead(answer.statusCode ?? 502, answer.statusMessage, answer.headers);
         pipeline(answer, outgoing, () => undefined);
       },
     );
+    outgoing.once("close", () => {
+      if (!outgoing.writableFinished) {
+        clientGone = true;
+        forwarded.destroy();
+      }
+    });
     forwarded.on("error", () => {
+      if (clientGone) {
+        return;
+      }
       if (!outgoing.headersSent) {
         outgoing.writeHead(502);
       }

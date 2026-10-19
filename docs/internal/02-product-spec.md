@@ -129,7 +129,7 @@ A workspace has a name (1–64 characters), a generated colour and monogram, an 
 | Promote to owner, transfer ownership, demote an owner | ✓ | — | — |
 | Delete the workspace | ✓ | — | — |
 
-A workspace always has at least one owner; the last owner cannot leave, be removed or be demoted, and the database enforces it (doc 05 §2.2), so two owners demoting each other at the same moment leave exactly one. Several owners are allowed. An admin who tries to promote a member, or themselves, to owner, or to change an owner's role, is refused; a role change of one's own rotates the session's token (doc 04 §4.3). **Transfer ownership** promotes another member to owner and, optionally, demotes the transferring owner to admin, with a typed confirmation of the recipient's name.
+A workspace always has at least one owner; the last owner cannot leave, be removed or be demoted, and the database enforces it (doc 05 §2.2), so two owners demoting each other at the same moment leave exactly one. Several owners are allowed. An admin who tries to promote a member, or themselves, to owner, or to change an owner's role, is refused; a role change of one's own rotates the session's token (doc 04 §4.3). **Transfer ownership** promotes another member to owner and, optionally, demotes the transferring owner to admin (the option "Stay as admin"), with a typed confirmation of the recipient's name and a fresh re-authentication; both role changes are one transaction, the caller's session token is rotated when their own role changes, and the new owner gets the "ownership transferred to you" email (§12).
 
 ### 3.4 Invitations
 
@@ -152,13 +152,15 @@ Leaving (self) and removal (by an admin) both revoke the membership. The member'
 - The remover (or, when leaving, the leaving member) chooses: **transfer** the member's bookmarks and folders to another member (default: the acting admin, or the workspace's longest-standing owner when the member leaves on their own), or **delete** them. Transfer keeps slugs; a slug that would collide with one the recipient already owns is cleared on the transferred bookmark and listed in the result.
 - The member's **tags** are private, so they are deleted — transferred bookmarks arrive without tags.
 - The member's **go preferences** are deleted; shares the member *received* are deleted; shares the member *granted* move with transferred content and are deleted with deleted content.
-- API tokens bound to the workspace are revoked.
+- API tokens bound to the workspace are revoked: they are deleted with the membership, in the same transaction, so they answer `401` from the next request.
+
+The membership ends immediately, in one transaction: it is deleted, `member.left` is queued in that transaction with the choice and the recipient, so the modules that own content apply the choice once they handle it (at least once, after the commit), and the audit log records `member.removed` (by an admin or owner) or `member.left` (by the member, including an admin who removes themself) with the choice and the recipient. The recipient must be another current member. The removed member's sessions act in their most recently active remaining workspace from the next request, or in none (§3.3).
 
 Users who want their content elsewhere export it first (§13).
 
 ### 3.7 Deleting a workspace
 
-Owner only, after a fresh re-authentication and typed confirmation of the workspace name. A deletion veto of the composition may refuse it (doc 01 §13.2; on Cloud, while a paid subscription is active, doc 06). Deleting marks the workspace as deleting, which hides it at once from every query and the switcher, revokes bound API tokens and moves every session that had it active to "no active workspace"; the request is answered as accepted and a background job then removes every row of the workspace (bookmarks, folders, tags, teams, shares, invitations, preferences, settings, audit events, caches) in batches (Q55). It is irreversible; the confirmation says so and offers export first.
+Owner only, after a fresh re-authentication and typed confirmation of the workspace name. A deletion veto of the composition may refuse it (doc 01 §13.2; on Cloud, while a paid subscription is active, doc 06). Deleting marks the workspace as deleting, which hides it at once from every query and the switcher, revokes bound API tokens and moves every session that had it active to "no active workspace"; the request is answered as accepted and a background job then removes every row of the workspace (bookmarks, folders, tags, teams, shares, invitations, preferences, settings, audit events, caches) in batches (Q55). The request is recorded in the workspace's audit log as `workspace.deletion_requested` before any row goes, and `workspace.deleted` is announced when the workspace row is gone. It is irreversible; the confirmation says so and offers export first.
 
 ---
 

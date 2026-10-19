@@ -88,6 +88,14 @@ export interface WorkspaceRepository extends WorkspaceAdministrationStore {
    * them. Undefined when the workspace has no settings row. Needs a transaction opened with a workspace.
    */
   changeSettings(patch: WorkspaceSettingsPatch): Promise<WorkspaceSettingsChange | undefined>;
+  /**
+   * Marks the workspace of the transaction as being deleted through `sys_workspace_mark_deleting`: it is hidden
+   * from every query and lookup, the sessions that had it active are pointed at none, the API tokens bound to
+   * it are revoked, and `jobs` are queued, all in the open transaction. False, with nothing written and
+   * nothing queued, when the account of the transaction is not an owner of the workspace or the workspace is
+   * already being deleted. Needs a transaction opened with a workspace.
+   */
+  markDeleting(jobs: readonly QueuedJob[]): Promise<boolean>;
 }
 
 interface ListedRow extends Record<string, unknown> {
@@ -99,6 +107,10 @@ interface ListedRow extends Record<string, unknown> {
 
 interface CreatedRow extends Record<string, unknown> {
   created: boolean;
+}
+
+interface MarkedRow extends Record<string, unknown> {
+  marked: boolean;
 }
 
 interface SwitchedRow extends Record<string, unknown> {
@@ -248,6 +260,23 @@ export function workspaceRepository(tx: TenantTx): WorkspaceRepository {
         }
       }
       return { previous, current };
+    },
+
+    async markDeleting(jobs) {
+      const workspaceId = workspaceOf(tx, "deleting the workspace");
+      const rows = await tenantHandle(tx).execute<MarkedRow>(sql`
+        SELECT public.sys_workspace_mark_deleting(${workspaceId}::uuid) AS marked`);
+      const row = rows[0];
+      if (rows.length !== 1 || row === undefined) {
+        throw new Error("sys_workspace_mark_deleting did not return exactly one row");
+      }
+      if (!row.marked) {
+        return false;
+      }
+      for (const job of jobs) {
+        await enqueueInTenantTransaction(tx, job);
+      }
+      return true;
     },
   };
 }

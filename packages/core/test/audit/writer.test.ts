@@ -51,14 +51,18 @@ function memoryStore(): { store: AuditStore; records: AuditRecord[] } {
 
 describe("the audit catalog", () => {
   it("groups the recorded actions by category and declares the metadata of each", () => {
-    expect(AUDIT_ACTION_NAMES).toEqual(["workspace.created", "workspace.renamed", "workspace.settings_changed", "member.role_changed"]);
+    expect(AUDIT_ACTION_NAMES).toEqual(["workspace.created", "workspace.renamed", "workspace.settings_changed", "workspace.deletion_requested", "workspace.ownership_transferred", "member.role_changed", "member.removed", "member.left"]);
     for (const name of AUDIT_ACTION_NAMES) {
       expect(AUDIT_ACTIONS[name].category).toBe(name.startsWith("member.") ? "member" : "workspace");
     }
     expect(Object.keys(AUDIT_ACTIONS["workspace.created"].metadata)).toEqual(["name"]);
     expect(Object.keys(AUDIT_ACTIONS["workspace.renamed"].metadata)).toEqual(["from", "to"]);
     expect(Object.keys(AUDIT_ACTIONS["workspace.settings_changed"].metadata)).toEqual(["setting", "from", "to"]);
+    expect(Object.keys(AUDIT_ACTIONS["workspace.deletion_requested"].metadata)).toEqual([]);
+    expect(Object.keys(AUDIT_ACTIONS["workspace.ownership_transferred"].metadata)).toEqual(["demoteSelf"]);
     expect(Object.keys(AUDIT_ACTIONS["member.role_changed"].metadata)).toEqual(["from", "to"]);
+    expect(Object.keys(AUDIT_ACTIONS["member.removed"].metadata)).toEqual(["content", "transferTo"]);
+    expect(Object.keys(AUDIT_ACTIONS["member.left"].metadata)).toEqual(["content", "transferTo"]);
   });
 
   it("knows its action names", () => {

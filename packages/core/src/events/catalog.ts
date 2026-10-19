@@ -12,6 +12,11 @@ export const ACCOUNT_CREATION_PATHS = ["self-registration", "invitation", "oidc"
 
 export type AccountCreationPath = (typeof ACCOUNT_CREATION_PATHS)[number];
 
+/** What happens to the content of a member who leaves or is removed (doc 02 section 3.6). */
+export const MEMBER_CONTENT_CHOICES = ["transfer", "delete"] as const;
+
+export type MemberContentChoice = (typeof MEMBER_CONTENT_CHOICES)[number];
+
 /** The kinds of field a payload holds. */
 export type DomainEventField =
   | { readonly type: "uuid" }
@@ -27,6 +32,25 @@ export const DOMAIN_EVENTS = {
     workspaceId: { type: "uuid" },
     /** The account the workspace was created for, which is its owner. */
     accountId: { type: "uuid" },
+  },
+  /**
+   * A workspace's rows are all gone: queued in the transaction of the deletion job that removes the workspace row,
+   * so it is announced exactly once, when the workspace no longer exists. A subscriber that holds data of its own
+   * about the workspace removes it, identified by `workspaceId`.
+   */
+  "workspace.deleted": {
+    workspaceId: { type: "uuid" },
+  },
+  /**
+   * A membership ended, by the member leaving or by an admin removing the member; it is queued in the transaction that
+   * deletes the membership. `transferTo` is the recipient the request resolved to, carried for `delete` as well, where
+   * it is not used.
+   */
+  "member.left": {
+    workspaceId: { type: "uuid" },
+    accountId: { type: "uuid" },
+    content: { type: "enum", values: MEMBER_CONTENT_CHOICES },
+    transferTo: { type: "uuid" },
   },
 } as const satisfies Record<string, Readonly<Record<string, DomainEventField>>>;
 

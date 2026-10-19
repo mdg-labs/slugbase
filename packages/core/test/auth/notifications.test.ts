@@ -17,7 +17,7 @@ describe("accountNotification", () => {
     ).toEqual({ template: "verifyEmail", to: "ada@example.test", locale: "en", data: { token: "abc", displayName: "Ada" } });
   });
 
-  it("names the password, the second-factor, the verification, the new sign-in, the password-reset and the email-change notifications", () => {
+  it("names the password, the second-factor, the verification, the new sign-in, the password-reset, the email-change and the ownership-transfer notifications", () => {
     expect(ACCOUNT_NOTIFICATIONS).toEqual([
       "passwordChanged",
       "mfaEnabled",
@@ -27,6 +27,7 @@ describe("accountNotification", () => {
       "passwordReset",
       "emailChange",
       "emailChangeNotice",
+      "ownershipTransferred",
     ]);
   });
 

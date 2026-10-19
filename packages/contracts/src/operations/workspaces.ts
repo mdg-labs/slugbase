@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
 import { WORKSPACE_ROLES } from "./me.ts";
+import { EndMembershipRequestSchema, MemberSchema, MembershipEndedSchema } from "./members.ts";
 
 // The workspaces tag of doc 04 section 10.4. The account-level operations list the workspaces the signed-in
 // account belongs to, create one and switch the session's active one; they act on the session's own account,
@@ -83,6 +84,13 @@ const EntityTagHeader = {
 export const SetActiveWorkspaceRequestSchema = z
   .strictObject({ workspaceId: z.uuid().describe("The workspace the session acts in from its next request on; one the account is a member of") })
   .meta({ id: "SetActiveWorkspaceRequest" });
+
+export const TransferOwnershipRequestSchema = z
+  .strictObject({
+    accountId: z.uuid().describe("The account identifier of the member who becomes an owner; another member of the workspace, not the caller"),
+    demoteSelf: z.boolean().describe("Whether the caller becomes an admin once the member is an owner; false leaves the caller an owner"),
+  })
+  .meta({ id: "TransferOwnershipRequest" });
 
 export const listWorkspaces = defineOperation({
   method: "get",
@@ -228,6 +236,82 @@ export const updateWorkspaceSettings = defineOperation({
     ),
     404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),
     422: problemResponse("The body did not pass validation (a value of the wrong type, or a field the operation does not declare)"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const leaveWorkspace = defineOperation({
+  method: "post",
+  path: "/api/v1/workspace/leave",
+  operationId: "leaveWorkspace",
+  tag: "workspaces",
+  summary: "Leave the active workspace",
+  auth: "member",
+  rate: "write",
+  request: { body: EndMembershipRequestSchema },
+  responses: {
+    200: jsonResponse(
+      "The caller's membership is ended at once and the recipient the request resolved to is returned. The content choice is queued with `member.left` and applied by the modules that own content once it is delivered after the call answers, not before. The session acts in another workspace, or in none, from its next request",
+      MembershipEndedSchema,
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    403: problemResponse("The request did not come from the application itself (cross_site_request), or the credential is an API token"),
+    404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted; or `transferTo` names an account that is not a member of it (the errors name transferTo)"),
+    409: problemResponse("The caller is the last owner of the workspace (last_owner); nothing is written"),
+    422: problemResponse("The body did not pass validation, or `transferTo` names the caller (the errors name transferTo)"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const deleteWorkspace = defineOperation({
+  method: "delete",
+  path: "/api/v1/workspace",
+  operationId: "deleteWorkspace",
+  tag: "workspaces",
+  summary: "Delete the active workspace",
+  auth: "owner",
+  rate: "write",
+  reauth: true,
+  responses: {
+    202: emptyResponse(
+      "The workspace is marked as being deleted and the request is recorded in its audit log, in one transaction. From that moment it is gone from the account's workspaces, its members' sessions act in another workspace or in none, and its API tokens are revoked; a background job then removes its rows in batches and announces `workspace.deleted` when the workspace row is gone. The deletion cannot be undone",
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"),
+    403: problemResponse("The request did not come from the application itself (cross_site_request), the credential is an API token, or the caller is not an owner of the workspace (forbidden)"),
+    404: problemResponse("The request acts in no workspace: the account has none, or the workspace is already being deleted"),
+    409: problemResponse(
+      "A deployment extension refuses the deletion (billing_active: the workspace owns an active paid subscription, which is cancelled first); nothing is changed and no audit event is written",
+    ),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable, or a deployment extension that is consulted before the deletion did not answer in time; nothing is changed"),
+  },
+});
+
+export const transferWorkspaceOwnership = defineOperation({
+  method: "post",
+  path: "/api/v1/workspace/transfer-ownership",
+  operationId: "transferWorkspaceOwnership",
+  tag: "workspaces",
+  summary: "Transfer the active workspace's ownership",
+  auth: "owner",
+  rate: "write",
+  reauth: true,
+  request: { body: TransferOwnershipRequestSchema },
+  responses: {
+    200: jsonResponse(
+      "The member is an owner of the workspace; when the caller asked to step down, the caller is an admin in the same transaction and the response carries the Set-Cookie header of the session's new token. The member is told by email, in their language, when the call made them an owner. When the member already is an owner and the caller stays one, nothing changes and nothing is written",
+      MemberSchema,
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"),
+    403: problemResponse("The request did not come from the application itself (cross_site_request), the credential is an API token, or the caller is not an owner of the workspace (forbidden)"),
+    404: problemResponse("The request acts in no workspace, or the account is not a member of it, whichever workspace it belongs to"),
+    409: problemResponse("The change would leave the workspace without an owner (last_owner); nothing is written"),
+    422: problemResponse("The body did not pass validation (an identifier that is not a UUID, a `demoteSelf` that is not a boolean, or a field the operation does not declare), or `accountId` names the caller (the errors name accountId)"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },

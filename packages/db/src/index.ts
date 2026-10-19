@@ -50,6 +50,9 @@ export type { RateLimitStore, RateLimitStoreOptions, RateLimitTake, RateLimitTak
 export { createRetentionStore } from "./system/retention.ts";
 export type { RetentionPurgeCount, RetentionStore, RetentionStoreOptions } from "./system/retention.ts";
 export type { QueuedJob, QueuedJobData } from "./system/queue.ts";
+export { createWorkspaceDeletionStore } from "./system/workspace-deletion.ts";
+export type { WorkspaceDeletionStore, WorkspaceDeletionStoreOptions } from "./system/workspace-deletion.ts";
+export { WORKSPACE_PURGE_BATCH_SIZE, workspacePurgeOrder } from "./purge-registry.ts";
 export { createAuthStore } from "./system/auth.ts";
 export type {
   ApiTokenPrincipalRecord,

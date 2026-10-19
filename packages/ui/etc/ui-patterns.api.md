@@ -163,6 +163,38 @@ export interface CheckboxFieldProps {
     onCheckedChange?: (checked: boolean) => void;
 }
 
+// @public (undocumented)
+export interface ChoiceCardOption {
+    description?: ReactNode;
+    // (undocumented)
+    disabled?: boolean;
+    // (undocumented)
+    label: ReactNode;
+    // (undocumented)
+    value: string;
+}
+
+// @public
+export function ChoiceCards(input: ChoiceCardsProps): ReactElement;
+
+// @public (undocumented)
+export interface ChoiceCardsProps {
+    // (undocumented)
+    className?: string;
+    description?: ReactNode;
+    // (undocumented)
+    disabled?: boolean;
+    error?: ReactNode;
+    label: ReactNode;
+    name?: string;
+    // (undocumented)
+    onValueChange: (value: string) => void;
+    // (undocumented)
+    options: readonly ChoiceCardOption[];
+    // (undocumented)
+    value: string;
+}
+
 export { CompassIcon }
 
 // @public
@@ -197,6 +229,33 @@ export interface CopyValueProps {
     label: string;
     // (undocumented)
     value: string;
+}
+
+// @public
+export function DangerZone(input: DangerZoneProps): ReactElement;
+
+// @public (undocumented)
+export interface DangerZoneItem {
+    actionLabel: ReactNode;
+    description: ReactNode;
+    // (undocumented)
+    disabled?: boolean;
+    id: string;
+    loading?: boolean;
+    onSelect: () => void;
+    title: ReactNode;
+}
+
+// @public (undocumented)
+export interface DangerZoneProps {
+    // (undocumented)
+    className?: string;
+    // (undocumented)
+    description?: ReactNode;
+    // (undocumented)
+    items: readonly DangerZoneItem[];
+    // (undocumented)
+    title: ReactNode;
 }
 
 // @public
@@ -325,6 +384,9 @@ export { LogOutIcon }
 export const MAIN_CONTENT_ID = "main-content";
 
 // @public
+export function matchesExpected(typed: string, expected: string): boolean;
+
+// @public
 export type PasswordScore = 0 | 1 | 2 | 3 | 4;
 
 // @public
@@ -340,8 +402,62 @@ export interface PasswordStrengthProps {
     scoreLabel: string;
 }
 
+// @public
+export function Picker(input: PickerProps): ReactElement;
+
+// @public (undocumented)
+export interface PickerOption {
+    description?: string;
+    // (undocumented)
+    label: string;
+    // (undocumented)
+    value: string;
+}
+
+// @public (undocumented)
+export interface PickerProps {
+    // (undocumented)
+    className?: string;
+    description?: ReactNode;
+    // (undocumented)
+    disabled?: boolean;
+    emptyLabel: ReactNode;
+    error?: ReactNode;
+    // (undocumented)
+    label: ReactNode;
+    // (undocumented)
+    onValueChange: (value: string) => void;
+    // (undocumented)
+    options: readonly PickerOption[];
+    placeholder?: string;
+    value: string | undefined;
+}
+
 // @public (undocumented)
 export type ResolvedTheme = "light" | "dark";
+
+// @public (undocumented)
+export interface RowAction {
+    destructive?: boolean;
+    // (undocumented)
+    disabled?: boolean;
+    icon?: ReactNode;
+    id: string;
+    // (undocumented)
+    label: string;
+    // (undocumented)
+    onSelect: () => void;
+}
+
+// @public
+export function RowActions(input: RowActionsProps): ReactElement | null;
+
+// @public (undocumented)
+export interface RowActionsProps {
+    // (undocumented)
+    actions: readonly RowAction[];
+    label: string;
+}
 
 // @public
 export function SecretInput(input: SecretInputProps): ReactElement;
@@ -413,6 +529,7 @@ export interface SelectFieldProps {
     // (undocumented)
     disabled?: boolean;
     error?: ReactNode;
+    hideLabel?: boolean;
     // (undocumented)
     label: ReactNode;
     name?: string;
@@ -565,6 +682,30 @@ export interface TotpProps {
 }
 
 export { TriangleAlertIcon }
+
+// @public
+export function TypedConfirm(input: TypedConfirmProps): ReactElement;
+
+// @public (undocumented)
+export interface TypedConfirmProps {
+    // (undocumented)
+    cancelLabel: ReactNode;
+    children?: ReactNode;
+    // (undocumented)
+    confirmLabel: ReactNode;
+    description: ReactNode;
+    destructive?: boolean;
+    error?: ReactNode;
+    expected: string;
+    inputLabel: ReactNode;
+    loading?: boolean;
+    onConfirm: () => void;
+    onOpenChange: (open: boolean) => void;
+    // (undocumented)
+    open: boolean;
+    // (undocumented)
+    title: ReactNode;
+}
 
 // @public
 export function Wizard(input: WizardProps): ReactElement;

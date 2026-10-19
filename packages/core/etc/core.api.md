@@ -10,7 +10,7 @@ import type { ProblemCode } from '@slugbase/contracts';
 export const ACCOUNT_CREATION_PATHS: readonly ["self-registration", "invitation", "oidc", "setup"];
 
 // @public
-export const ACCOUNT_NOTIFICATIONS: readonly ["passwordChanged", "mfaEnabled", "mfaDisabled", "verifyEmail", "newSignIn", "passwordReset", "emailChange", "emailChangeNotice"];
+export const ACCOUNT_NOTIFICATIONS: readonly ["passwordChanged", "mfaEnabled", "mfaDisabled", "verifyEmail", "newSignIn", "passwordReset", "emailChange", "emailChangeNotice", "ownershipTransferred"];
 
 // @public (undocumented)
 export type AccountCreationPath = (typeof ACCOUNT_CREATION_PATHS)[number];
@@ -167,6 +167,20 @@ export const AUDIT_ACTIONS: {
             };
         };
     };
+    readonly "workspace.deletion_requested": {
+        readonly category: "workspace";
+        readonly metadata: {};
+    };
+    readonly "workspace.ownership_transferred": {
+        readonly category: "workspace";
+        readonly metadata: {
+            readonly demoteSelf: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
+    };
     readonly "member.role_changed": {
         readonly category: "member";
         readonly metadata: {
@@ -179,6 +193,32 @@ export const AUDIT_ACTIONS: {
                 readonly type: "text";
                 readonly minLength: number;
                 readonly maxLength: number;
+            };
+        };
+    };
+    readonly "member.removed": {
+        readonly category: "member";
+        readonly metadata: {
+            readonly content: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+            readonly transferTo: {
+                readonly type: "uuid";
+            };
+        };
+    };
+    readonly "member.left": {
+        readonly category: "member";
+        readonly metadata: {
+            readonly content: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+            readonly transferTo: {
+                readonly type: "uuid";
             };
         };
     };
@@ -416,6 +456,26 @@ export const DOMAIN_EVENTS: {
             readonly type: "uuid";
         };
     };
+    readonly "workspace.deleted": {
+        readonly workspaceId: {
+            readonly type: "uuid";
+        };
+    };
+    readonly "member.left": {
+        readonly workspaceId: {
+            readonly type: "uuid";
+        };
+        readonly accountId: {
+            readonly type: "uuid";
+        };
+        readonly content: {
+            readonly type: "enum";
+            readonly values: readonly ["transfer", "delete"];
+        };
+        readonly transferTo: {
+            readonly type: "uuid";
+        };
+    };
 };
 
 // @public
@@ -526,6 +586,9 @@ export class EgressTimeout extends EgressError {
 export class EgressTooLarge extends EgressError {
     constructor();
 }
+
+// @public
+export function endMembership(input: MembershipEndDependencies, ask: MembershipEndAsk): Promise<MembershipEndOutcome>;
 
 // @public (undocumented)
 export interface ErrorReportContext {
@@ -685,6 +748,12 @@ export interface MailPort extends Port {
 // @public
 export const MAX_API_TOKENS_PER_USER = 10;
 
+// @public
+export const MEMBER_CONTENT_CHOICES: readonly ["transfer", "delete"];
+
+// @public (undocumented)
+export type MemberContentChoice = (typeof MEMBER_CONTENT_CHOICES)[number];
+
 // @public (undocumented)
 export interface MemberRoleAsk {
     // (undocumented)
@@ -739,6 +808,70 @@ export interface MemberRoles {
 export interface MemberRoleStore {
     roles(targetAccountId: string): Promise<MemberRoles | undefined>;
     setRole(targetAccountId: string, role: WorkspaceRole): Promise<boolean>;
+}
+
+// @public (undocumented)
+export interface MembershipEndAsk {
+    // (undocumented)
+    readonly actor: AuditActor;
+    readonly actorAccountId: string;
+    // (undocumented)
+    readonly content: MemberContentChoice;
+    readonly ipPrefix: string | null;
+    readonly targetAccountId: string;
+    readonly transferTo?: string;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface MembershipEndDependencies {
+    readonly audit: AuditWriter;
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: MembershipEndStore;
+}
+
+// @public (undocumented)
+export type MembershipEndOutcome =
+/** The membership was deleted; `transferTo` is the recipient the ask resolved to, `self` says the member is the account that asked. */
+    {
+    readonly kind: "ended";
+    readonly content: MemberContentChoice;
+    readonly transferTo: string;
+    readonly self: boolean;
+}
+/** The account that asks may not remove this member; nothing was written. */
+| {
+    readonly kind: "forbidden";
+}
+/** The workspace has no such member, or cannot be reached. */
+| {
+    readonly kind: "not_found";
+}
+/** The member is the owner the workspace has left; nothing was written. */
+| {
+    readonly kind: "last_owner";
+}
+/** The named recipient is no member of the workspace, which is answered like any account outside it; nothing was written. */
+| {
+    readonly kind: "recipient_not_found";
+}
+/** The named recipient is the member whose membership ends; nothing was written. */
+| {
+    readonly kind: "invalid_recipient";
+};
+
+// @public (undocumented)
+export interface MembershipEndRequest {
+    readonly accountId: string;
+    readonly events: readonly DomainEvent<"member.left">[];
+}
+
+// @public (undocumented)
+export interface MembershipEndStore extends MemberRoleStore {
+    end(request: MembershipEndRequest): Promise<boolean>;
+    longestStandingOwner(excludingAccountId: string): Promise<string | undefined>;
 }
 
 // @public
@@ -798,6 +931,50 @@ export interface OtpauthOptions {
 
 // @public
 export function otpauthUri(input: OtpauthOptions): string;
+
+// @public (undocumented)
+export interface OwnershipTransferAsk {
+    // (undocumented)
+    readonly actor: AuditActor;
+    readonly actorAccountId: string;
+    readonly demoteSelf: boolean;
+    readonly ipPrefix: string | null;
+    readonly targetAccountId: string;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface OwnershipTransferDependencies {
+    readonly audit: AuditWriter;
+    // (undocumented)
+    readonly store: MemberRoleStore;
+}
+
+// @public (undocumented)
+export type OwnershipTransferOutcome =
+/** The roles were changed and the event written; `promoted` says the recipient was not an owner before, `demoted` that the caller stepped down. */
+    {
+    readonly kind: "transferred";
+    readonly promoted: boolean;
+    readonly demoted: boolean;
+}
+/** The recipient is an owner already and the caller stays one; nothing was written. */
+| {
+    readonly kind: "unchanged";
+}
+/** The account that asks is not an owner; nothing was written. */
+| {
+    readonly kind: "forbidden";
+}
+/** The recipient is the account that asks; nothing was written. */
+| {
+    readonly kind: "invalid_recipient";
+}
+/** The workspace has no such member, the caller is none, or the workspace cannot be reached. */
+| {
+    readonly kind: "not_found";
+};
 
 // @public
 export function parseAuditMetadata<Name extends AuditAction>(name: Name, value: unknown): AuditMetadata<Name>;
@@ -938,6 +1115,9 @@ export function registrationUnavailable(settings: RegistrationSettings, mailAvai
 export function renameWorkspace(input: WorkspaceAdministrationDependencies, ask: WorkspaceRenameAsk): Promise<WorkspaceRenameOutcome>;
 
 // @public
+export function requestWorkspaceDeletion<Code extends string>(input: WorkspaceDeletionDependencies<Code>, ask: WorkspaceDeletionAsk): Promise<WorkspaceDeletionOutcome<Code>>;
+
+// @public
 export function safeReturnTo(value: string | undefined): string;
 
 // @public (undocumented)
@@ -1030,6 +1210,9 @@ export function totpCode(secret: Uint8Array, step: number): string;
 export function totpStep(nowMs: number): number;
 
 // @public
+export function transferOwnership(input: OwnershipTransferDependencies, ask: OwnershipTransferAsk): Promise<OwnershipTransferOutcome>;
+
+// @public
 export function truncateUserAgent(userAgent: string | null | undefined): string | null;
 
 // @public
@@ -1114,6 +1297,60 @@ export interface WorkspaceCreationRequest {
     // (undocumented)
     readonly name: string;
     readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface WorkspaceDeletionAsk {
+    readonly actor: Extract<AuditActor, {
+        type: "account";
+    }>;
+    readonly ipPrefix: string | null;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface WorkspaceDeletionDependencies<Code extends string> {
+    readonly audit: AuditWriter;
+    readonly guard: (input: WorkspaceDeletionGuardInput) => Promise<WorkspaceDeletionGuardResult<Code>>;
+    // (undocumented)
+    readonly store: WorkspaceDeletionStore;
+}
+
+// @public (undocumented)
+export interface WorkspaceDeletionGuardInput {
+    readonly accountId: string;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public
+export type WorkspaceDeletionGuardResult<Code extends string = string> = {
+    readonly outcome: "allow";
+} | {
+    readonly outcome: "refuse";
+    readonly code: Code;
+};
+
+// @public (undocumented)
+export type WorkspaceDeletionOutcome<Code extends string> =
+/** The workspace is marked, the job is queued and the request is in the audit log. */
+    {
+    readonly kind: "requested";
+}
+/** The guard refused with `code`; nothing was written. */
+| {
+    readonly kind: "refused";
+    readonly code: Code;
+}
+/** The workspace cannot be marked: the caller is no owner of it or it is already being deleted; nothing was written. */
+| {
+    readonly kind: "unavailable";
+};
+
+// @public (undocumented)
+export interface WorkspaceDeletionStore {
+    markDeleting(): Promise<boolean>;
 }
 
 // @public (undocumented)

@@ -92,6 +92,12 @@ export function stubWorkspaceServer(options: WorkspaceServerOptions = {}) {
         canCreate: options.canCreate ?? false,
       });
     }
+    if (pathname === "/api/v1/workspace" && request.method === "GET") {
+      const current = members.find(({ id }) => id === active);
+      return current === undefined
+        ? problem(404, "not_found", "req-workspace")
+        : json({ ...current, role: "owner", memberCount: 1, createdAt: "2026-09-01T08:00:00.000Z", version: 1 }, { headers: { ETag: '"1"' } });
+    }
     if (pathname === WORKSPACES_PATH && request.method === "POST") {
       if (options.post !== undefined) {
         return options.post(request, count);

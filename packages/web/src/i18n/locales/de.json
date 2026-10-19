@@ -39,7 +39,10 @@
       "profile": "Profil",
       "preferences": "Voreinstellungen",
       "security": "Sicherheit",
-      "tokens": "API-Tokens"
+      "tokens": "API-Tokens",
+      "workspace": "Workspace",
+      "general": "Allgemein",
+      "members": "Mitglieder"
     },
     "account": {
       "title": "Profil",
@@ -470,6 +473,134 @@
         "nameTaken": "Du hast bereits ein Token mit diesem Namen. Wähle einen anderen Namen.",
         "reauthRequired": "Bestätige, dass du es bist, um fortzufahren.",
         "unavailable": "Das hat nicht geklappt. Versuche es gleich noch einmal."
+      }
+    },
+    "workspace": {
+      "title": "Allgemein",
+      "loadFailed": {
+        "title": "Der Workspace konnte nicht geladen werden"
+      },
+      "section": {
+        "title": "Name des Workspace",
+        "description": "Der Name, den Mitglieder im Workspace-Wechsler sehen."
+      },
+      "monogram": {
+        "caption": "Das Monogramm entsteht aus dem Namen."
+      },
+      "name": {
+        "label": "Name",
+        "readOnly": "Nur Admins und Eigentümer können den Workspace umbenennen.",
+        "error": {
+          "required": "Gib einen Namen ein.",
+          "tooLong": "Verwende höchstens 64 Zeichen.",
+          "invalid": "Verwende einen Namen mit 1 bis 64 Zeichen."
+        }
+      },
+      "save": "Speichern",
+      "saved": "Workspace umbenannt",
+      "stale": {
+        "title": "Der Workspace wurde geändert",
+        "description": "Jemand hat diesen Workspace geändert, nachdem du ihn geöffnet hast. Deine Änderung wurde nicht gespeichert. Lade neu, um den aktuellen Namen zu sehen.",
+        "reload": "Neu laden"
+      },
+      "forbidden": "Du darfst diesen Workspace nicht mehr ändern.",
+      "saveFailed": "Der Name konnte nicht gespeichert werden. Versuche es erneut.",
+      "danger": {
+        "title": "Gefahrenbereich"
+      },
+      "leave": {
+        "item": {
+          "title": "Workspace verlassen",
+          "description": "Du verlierst sofort den Zugriff auf diesen Workspace. Du wählst, was mit deinen Lesezeichen und Ordnern geschieht."
+        },
+        "action": "Workspace verlassen",
+        "lastOwner": {
+          "text": "Du bist der letzte Eigentümer dieses Workspace und kannst ihn deshalb noch nicht verlassen.",
+          "link": "Übertrage zuerst das Eigentum."
+        },
+        "dialog": {
+          "title": "{name} verlassen",
+          "description": "Du verlierst sofort den Zugriff auf diesen Workspace. Wähle, was mit deinen Lesezeichen und Ordnern geschieht."
+        },
+        "confirm": {
+          "title": "{name} verlassen?",
+          "transfer": "Du verlierst sofort den Zugriff auf diesen Workspace, und deine API-Tokens dafür funktionieren nicht mehr. Deine Lesezeichen und Ordner gehen an {recipient}; deine Tags und Go-Einstellungen werden gelöscht. Das lässt sich nicht rückgängig machen.",
+          "delete": "Du verlierst sofort den Zugriff auf diesen Workspace, und deine API-Tokens dafür funktionieren nicht mehr. Deine Lesezeichen, Ordner, Tags und Go-Einstellungen werden gelöscht. Das lässt sich nicht rückgängig machen.",
+          "action": "Workspace verlassen"
+        },
+        "done": "Du hast {name} verlassen"
+      }
+    },
+    "members": {
+      "title": "Mitglieder",
+      "description": "Die Personen in diesem Workspace und was jede von ihnen tun darf.",
+      "column": {
+        "name": "Name",
+        "email": "E-Mail",
+        "role": "Rolle",
+        "joined": "Beigetreten",
+        "lastActive": "Zuletzt aktiv",
+        "actions": "Aktionen"
+      },
+      "you": "Du",
+      "never": "Nie",
+      "role": {
+        "owner": "Eigentümer",
+        "admin": "Admin",
+        "member": "Mitglied"
+      },
+      "roleOf": "Rolle von {name}",
+      "actionsFor": "Aktionen für {name}",
+      "action": {
+        "makeOwner": "Zum Eigentümer machen",
+        "makeAdmin": "Zum Admin machen",
+        "makeMember": "Zum Mitglied machen",
+        "transfer": "Eigentum übertragen",
+        "remove": "Aus dem Workspace entfernen"
+      },
+      "error": {
+        "lastOwner": "Ein Workspace braucht mindestens einen Eigentümer. Mache zuerst jemand anderen zum Eigentümer.",
+        "forbidden": "Du darfst diese Rolle nicht ändern.",
+        "notAMember": "Diese Person ist kein Mitglied des Workspace mehr."
+      },
+      "loadFailed": {
+        "title": "Die Mitglieder konnten nicht geladen werden"
+      },
+      "loadMore": "Mehr anzeigen",
+      "single": {
+        "title": "Du bist das einzige Mitglied",
+        "description": "Personen, die diesem Workspace beitreten, erscheinen hier mit ihrer Rolle."
+      },
+      "remove": {
+        "dialog": {
+          "title": "{name} entfernen",
+          "description": "{name} verliert sofort den Zugriff auf diesen Workspace. Wähle, was mit den Lesezeichen und Ordnern geschieht."
+        },
+        "confirm": {
+          "title": "{name} entfernen?",
+          "transfer": "{name} verliert sofort den Zugriff auf diesen Workspace, und die API-Tokens dafür funktionieren nicht mehr. Die Lesezeichen und Ordner gehen an {recipient}; die Tags und Go-Einstellungen werden gelöscht. Das lässt sich nicht rückgängig machen.",
+          "delete": "{name} verliert sofort den Zugriff auf diesen Workspace, und die API-Tokens dafür funktionieren nicht mehr. Die Lesezeichen, Ordner, Tags und Go-Einstellungen werden gelöscht. Das lässt sich nicht rückgängig machen.",
+          "action": "Mitglied entfernen"
+        },
+        "done": "{name} wurde aus dem Workspace entfernt"
+      },
+      "transfer": {
+        "title": "Eigentum an {name} übertragen?",
+        "description": "{name} wird Eigentümer dieses Workspace, kann seine Mitglieder und Einstellungen verwalten und ihn löschen. Eigentümer können auch weitere Mitglieder zu Eigentümern machen.",
+        "stayAdmin": "Als Admin bleiben",
+        "stayAdminNote": "Du wirst vom Eigentümer zum Admin, sobald {name} Eigentümer ist. Lass das aus, um Eigentümer zu bleiben.",
+        "confirmLabel": "Tippe {name} zur Bestätigung",
+        "action": "Eigentum übertragen",
+        "cancel": "Abbrechen",
+        "done": "{name} ist jetzt Eigentümer des Workspace",
+        "doneStepDown": "{name} ist jetzt Eigentümer des Workspace, und du bist Admin",
+        "error": {
+          "title": "Das Eigentum wurde nicht übertragen",
+          "reauthCancelled": "Bestätige, dass du es bist, um das Eigentum zu übertragen.",
+          "lastOwner": "Ein Workspace braucht mindestens einen Eigentümer. Das Eigentum wurde nicht geändert.",
+          "forbidden": "Nur ein Eigentümer kann das Eigentum übertragen. Die Seite wurde neu geladen.",
+          "notAMember": "Diese Person ist kein Mitglied des Workspace mehr. Die Liste wurde neu geladen."
+        }
       }
     }
   },
@@ -933,6 +1064,41 @@
     "waiting": {
       "title": "Warten auf eine Einladung",
       "description": "Bitte die Eigentümerin oder den Eigentümer eines Workspace, dich einzuladen. Er erscheint hier, sobald du annimmst."
+    }
+  },
+  "membership": {
+    "end": {
+      "close": "Schließen",
+      "cancel": "Abbrechen",
+      "continue": "Weiter",
+      "content": {
+        "label": "Was mit den Lesezeichen und Ordnern geschieht",
+        "note": "Private Tags und Go-Einstellungen werden in jedem Fall gelöscht.",
+        "transfer": {
+          "label": "Inhalte übertragen",
+          "description": "Die Lesezeichen und Ordner gehen an ein anderes Mitglied und behalten ihre Slugs. Ein Slug, den der Empfänger schon verwendet, wird am übertragenen Lesezeichen entfernt.",
+          "nobody": "Es gibt kein weiteres Mitglied im Workspace, das die Inhalte übernehmen könnte."
+        },
+        "delete": {
+          "label": "Inhalte löschen",
+          "description": "Die Lesezeichen und Ordner werden zusammen mit der Mitgliedschaft gelöscht. Das lässt sich nicht rückgängig machen."
+        }
+      },
+      "recipient": {
+        "label": "Übertragen an",
+        "placeholder": "Mitglieder suchen",
+        "empty": "Kein Mitglied passt"
+      },
+      "error": {
+        "title": "Es wurde nichts geändert",
+        "lastOwner": {
+          "leave": "Du bist der letzte Eigentümer dieses Workspace und kannst ihn deshalb nicht verlassen. Mache zuerst jemand anderen zum Eigentümer.",
+          "remove": "Diese Person ist der letzte Eigentümer des Workspace und kann deshalb nicht entfernt werden. Mache zuerst jemand anderen zum Eigentümer."
+        },
+        "forbidden": "Das darfst du nicht.",
+        "notAMember": "Diese Person ist kein Mitglied des Workspace mehr. Die Liste wurde neu geladen.",
+        "recipientGone": "Die Person, die die Inhalte übernehmen sollte, ist kein Mitglied des Workspace mehr. Wähle jemand anderen."
+      }
     }
   }
 }

@@ -129,7 +129,7 @@ describe("the workspace tables", () => {
     ]);
   });
 
-  it("give slugbase_app a read of both tables and a write of role and last_active_at on the memberships and of name and version on the workspaces alone", async () => {
+  it("give slugbase_app a read of both tables, a delete and a write of role and last_active_at on the memberships and a write of name and version on the workspaces alone", async () => {
     const privileges = await db.owner<{ table: string; privilege: string }[]>`
       SELECT t AS table, p AS privilege
       FROM unnest(ARRAY['workspaces', 'workspace_members']) AS t,
@@ -137,6 +137,7 @@ describe("the workspace tables", () => {
       WHERE has_table_privilege('slugbase_app', 'public.' || t, p)
       ORDER BY t, p`;
     expect([...privileges]).toEqual([
+      { table: "workspace_members", privilege: "DELETE" },
       { table: "workspace_members", privilege: "SELECT" },
       { table: "workspaces", privilege: "SELECT" },
     ]);
@@ -305,7 +306,10 @@ describe("the policies, with row-level security as the only guard (T1)", () => {
     expect([...renamedB]).toEqual([]);
     await expect(asApp(alice, workspaceA, (tx) => tx`UPDATE workspaces SET deleting_at = now() WHERE id = ${workspaceB}`)).rejects.toMatchObject({ code: "42501" });
     await expect(asApp(alice, workspaceA, (tx) => tx`UPDATE workspaces SET bookmark_count = 5 WHERE id = ${workspaceA}`)).rejects.toMatchObject({ code: "42501" });
-    await expect(asApp(alice, workspaceA, (tx) => tx`DELETE FROM workspace_members WHERE workspace_id = ${workspaceB}`)).rejects.toMatchObject({ code: "42501" });
+    const removedB = await asApp(alice, workspaceA, (tx) => tx`DELETE FROM workspace_members WHERE workspace_id = ${workspaceB} RETURNING account_id`);
+    expect([...removedB]).toEqual([]);
+    const removedBob = await asApp(alice, workspaceA, (tx) => tx`DELETE FROM workspace_members WHERE account_id = ${bob} AND workspace_id <> ${workspaceA} RETURNING account_id`);
+    expect([...removedBob]).toEqual([]);
     await expect(asApp(alice, workspaceA, (tx) => tx`DELETE FROM workspaces WHERE id = ${workspaceB}`)).rejects.toMatchObject({ code: "42501" });
     await expect(
       asApp(alice, workspaceA, (tx) => tx`INSERT INTO workspace_members (workspace_id, account_id, role) VALUES (${workspaceB}, ${alice}, 'owner')`),

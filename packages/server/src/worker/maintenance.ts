@@ -1,4 +1,4 @@
-import type { RateLimitStore, RetentionStore } from "@slugbase/db";
+import type { RateLimitStore, RetentionStore, WorkspaceDeletionStore } from "@slugbase/db";
 import { z } from "zod";
 import type { ModuleContribution } from "../create-server.ts";
 import { defineJob, defineSchedule } from "./job.ts";
@@ -15,6 +15,7 @@ const RETENTION_PURGE_CRON = "0 * * * *";
 export interface MaintenanceStores {
   readonly rateLimit: Pick<RateLimitStore, "purgeIdle">;
   readonly retention: Pick<RetentionStore, "purge">;
+  readonly workspaceDeletion: WorkspaceDeletionStore;
 }
 
 /**

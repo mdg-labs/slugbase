@@ -9,11 +9,12 @@ import type { Credentials, PolicyHooks } from "./walker.ts";
 // modules exist there is no real credential to send, so the stub world gives
 // the chain the two authenticators of stage 4 and the tenant resolver of stage
 // 7 over the two-workspace fixture: a cookie `slugbase_stub=session:<account>`
+// (a session that has not re-authenticated) or `slugbase_stub=fresh:<account>` (one that has, just now)
 // and a bearer `stub-token.<scope>.<account>`. The chain above them (policy,
 // scope, role, tenant) is the production code.
 
 const COOKIE = "slugbase_stub";
-const SESSION_COOKIE = new RegExp(`(?:^|;\\s*)${COOKIE}=session:([^;\\s]+)`);
+const SESSION_COOKIE = new RegExp(`(?:^|;\\s*)${COOKIE}=(session|fresh):([^;\\s]+)`);
 const BEARER_TOKEN = /^Bearer stub-token\.(read|read-write)\.(\S+)$/;
 
 /** An account no workspace has a member of. */
@@ -37,6 +38,11 @@ function sessionCredentials(accountId: string): Credentials {
   return { headers: { cookie: `${COOKIE}=session:${accountId}` } };
 }
 
+/** A session that re-authenticated just now, so the operations that declare re-authentication get as far as their handlers. */
+function freshSessionCredentials(accountId: string): Credentials {
+  return { headers: { cookie: `${COOKIE}=fresh:${accountId}` } };
+}
+
 function tokenCredentials(scope: TokenScope, accountId: string): Credentials {
   return { headers: { authorization: `Bearer stub-token.${scope}.${accountId}` } };
 }
@@ -52,7 +58,8 @@ export function createStubWorld(fixture: TenantFixture): StubWorld {
   const cookie: Authenticator = {
     credential: "cookie",
     authenticate: (header): Promise<SessionPrincipal | undefined> => {
-      const accountId = SESSION_COOKIE.exec(header)?.[1];
+      const match = SESSION_COOKIE.exec(header);
+      const accountId = match?.[2];
       if (accountId === undefined) {
         return Promise.resolve(undefined);
       }
@@ -63,6 +70,7 @@ export function createStubWorld(fixture: TenantFixture): StubWorld {
         accountId,
         activeWorkspaceId: membership?.workspaceId,
         instanceAdmin: accountId === INSTANCE_ADMIN_ACCOUNT,
+        ...(match?.[1] === "fresh" ? { reauthAt: new Date() } : {}),
       });
     },
   };
@@ -102,11 +110,11 @@ export function createStubWorld(fixture: TenantFixture): StubWorld {
   return {
     authenticators: [cookie, bearer],
     adapters: (config) => ({ ...adapters(config), tenantResolver: resolver, secretBox: testSecretBox(testKey("walker-1")) }),
-    credentialsOf: (principal) => (isFixtureToken(principal) ? tokenCredentials(principal.scope, principal.accountId) : sessionCredentials(principal.accountId)),
+    credentialsOf: (principal) => (isFixtureToken(principal) ? tokenCredentials(principal.scope, principal.accountId) : freshSessionCredentials(principal.accountId)),
     tokenOf: (scope) => tokenCredentials(scope, fixture.a.owner.accountId),
     hooks: {
       authorized: (operation) => authorized(operation.auth),
-      // The stub sessions carry no re-authentication, so every one of them is a session that has none.
+      // The `session:` stub sessions carry no re-authentication, so every one of them is a session that has none; the sessions of the matrix are fresh ones.
       withoutReauth: (operation) => authorized(operation.auth),
       tooLowRole: (operation) => {
         // The account just below the policy: a role below it, no workspace at all below `member` (answered 404), a non-admin below `instanceAdmin`.

@@ -311,6 +311,11 @@ export function createRateLimitStore(options: RateLimitStoreOptions): RateLimitS
 // @public
 export function createRetentionStore(options: RetentionStoreOptions): RetentionStore;
 
+// @public
+export function createWorkspaceDeletionStore(options: WorkspaceDeletionStoreOptions): WorkspaceDeletionStore & {
+    close(): Promise<void>;
+};
+
 // @public (undocumented)
 export interface CredentialTokenRepository {
     issue(token: NewCredentialToken): Promise<boolean>;
@@ -465,8 +470,11 @@ export interface LoginCandidate {
 
 // @public (undocumented)
 export interface MemberRepository extends MemberRoleStore {
+    enqueue(jobs: readonly QueuedJob[]): Promise<void>;
     list(afterAccountId: string | null, limit: number): Promise<readonly WorkspaceMember[]>;
+    longestStandingOwner(excludingAccountId: string): Promise<string | undefined>;
     member(accountId: string): Promise<WorkspaceMember | undefined>;
+    remove(accountId: string, jobs: readonly QueuedJob[]): Promise<boolean>;
     rotateSession(sessionId: string, tokenHash: Uint8Array): Promise<boolean>;
 }
 
@@ -1047,6 +1055,21 @@ export interface VerifiedEmail {
 }
 
 // @public
+export const WORKSPACE_PURGE_BATCH_SIZE = 1000;
+
+// @public (undocumented)
+export interface WorkspaceDeletionStore {
+    finish(workspaceId: string, jobs: readonly QueuedJob[]): Promise<boolean>;
+    purgeRows(workspaceId: string): Promise<Readonly<Record<string, number>>>;
+}
+
+// @public (undocumented)
+export interface WorkspaceDeletionStoreOptions {
+    poolSize?: number;
+    url: string;
+}
+
+// @public
 export interface WorkspaceDetail {
     // (undocumented)
     readonly createdAt: Date;
@@ -1076,12 +1099,16 @@ export interface WorkspaceMember {
     readonly role: MemberRole;
 }
 
+// @public
+export const workspacePurgeOrder: readonly string[];
+
 // @public (undocumented)
 export interface WorkspaceRepository extends WorkspaceAdministrationStore {
     changeSettings(patch: WorkspaceSettingsPatch): Promise<WorkspaceSettingsChange | undefined>;
     create(workspace: NewWorkspace): Promise<boolean>;
     current(): Promise<WorkspaceDetail | undefined>;
     list(): Promise<readonly WorkspaceSummary[]>;
+    markDeleting(jobs: readonly QueuedJob[]): Promise<boolean>;
     rename(request: WorkspaceRenameRequest): Promise<WorkspaceRenameResult>;
     setActive(sessionId: string, workspaceId: string): Promise<boolean>;
     settings(): Promise<WorkspaceSettings | undefined>;

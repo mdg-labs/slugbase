@@ -39,7 +39,10 @@
       "profile": "Profile",
       "preferences": "Preferences",
       "security": "Security",
-      "tokens": "API tokens"
+      "tokens": "API tokens",
+      "workspace": "Workspace",
+      "general": "General",
+      "members": "Members"
     },
     "account": {
       "title": "Profile",
@@ -470,6 +473,134 @@
         "nameTaken": "You already have a token with this name. Choose another name.",
         "reauthRequired": "Confirm it is you to continue.",
         "unavailable": "That did not work. Try again in a moment."
+      }
+    },
+    "workspace": {
+      "title": "General",
+      "loadFailed": {
+        "title": "The workspace could not be loaded"
+      },
+      "section": {
+        "title": "Workspace name",
+        "description": "The name members see in the workspace switcher."
+      },
+      "monogram": {
+        "caption": "The monogram is made from the name."
+      },
+      "name": {
+        "label": "Name",
+        "readOnly": "Only admins and owners can rename the workspace.",
+        "error": {
+          "required": "Enter a name.",
+          "tooLong": "Use at most 64 characters.",
+          "invalid": "Use a name with 1 to 64 characters."
+        }
+      },
+      "save": "Save",
+      "saved": "Workspace renamed",
+      "stale": {
+        "title": "The workspace changed",
+        "description": "Someone changed this workspace after you opened it, so your edit was not saved. Reload to see its current name.",
+        "reload": "Reload"
+      },
+      "forbidden": "You are no longer allowed to change this workspace.",
+      "saveFailed": "The name could not be saved. Try again.",
+      "danger": {
+        "title": "Danger zone"
+      },
+      "leave": {
+        "item": {
+          "title": "Leave workspace",
+          "description": "You lose access to this workspace right away. You choose what happens to your bookmarks and folders."
+        },
+        "action": "Leave workspace",
+        "lastOwner": {
+          "text": "You are the last owner of this workspace, so you cannot leave it yet.",
+          "link": "Transfer ownership first."
+        },
+        "dialog": {
+          "title": "Leave {name}",
+          "description": "You lose access to this workspace right away. Choose what happens to your bookmarks and folders."
+        },
+        "confirm": {
+          "title": "Leave {name}?",
+          "transfer": "You lose access to this workspace right away, and your API tokens for it stop working. Your bookmarks and folders go to {recipient}; your tags and go preferences are deleted. This cannot be undone.",
+          "delete": "You lose access to this workspace right away, and your API tokens for it stop working. Your bookmarks, folders, tags and go preferences are deleted. This cannot be undone.",
+          "action": "Leave workspace"
+        },
+        "done": "You left {name}"
+      }
+    },
+    "members": {
+      "title": "Members",
+      "description": "The people in this workspace, and what each of them can do.",
+      "column": {
+        "name": "Name",
+        "email": "Email",
+        "role": "Role",
+        "joined": "Joined",
+        "lastActive": "Last active",
+        "actions": "Actions"
+      },
+      "you": "You",
+      "never": "Never",
+      "role": {
+        "owner": "Owner",
+        "admin": "Admin",
+        "member": "Member"
+      },
+      "roleOf": "Role of {name}",
+      "actionsFor": "Actions for {name}",
+      "action": {
+        "makeOwner": "Make owner",
+        "makeAdmin": "Make admin",
+        "makeMember": "Make member",
+        "transfer": "Transfer ownership",
+        "remove": "Remove from workspace"
+      },
+      "error": {
+        "lastOwner": "A workspace needs at least one owner. Make someone else an owner first.",
+        "forbidden": "You are not allowed to change this role.",
+        "notAMember": "This person is no longer a member of the workspace."
+      },
+      "loadFailed": {
+        "title": "The members could not be loaded"
+      },
+      "loadMore": "Show more",
+      "single": {
+        "title": "You are the only member",
+        "description": "People who join this workspace will appear here with their role."
+      },
+      "remove": {
+        "dialog": {
+          "title": "Remove {name}",
+          "description": "{name} loses access to this workspace right away. Choose what happens to their bookmarks and folders."
+        },
+        "confirm": {
+          "title": "Remove {name}?",
+          "transfer": "{name} loses access to this workspace right away, and their API tokens for it stop working. Their bookmarks and folders go to {recipient}; their tags and go preferences are deleted. This cannot be undone.",
+          "delete": "{name} loses access to this workspace right away, and their API tokens for it stop working. Their bookmarks, folders, tags and go preferences are deleted. This cannot be undone.",
+          "action": "Remove member"
+        },
+        "done": "{name} was removed from the workspace"
+      },
+      "transfer": {
+        "title": "Transfer ownership to {name}?",
+        "description": "{name} becomes an owner of this workspace and can manage its members and settings and delete it. Owners can also make other members owners.",
+        "stayAdmin": "Stay as admin",
+        "stayAdminNote": "You step down from owner to admin once {name} is an owner. Leave this off to stay an owner.",
+        "confirmLabel": "Type {name} to confirm",
+        "action": "Transfer ownership",
+        "cancel": "Cancel",
+        "done": "{name} is now an owner of the workspace",
+        "doneStepDown": "{name} is now an owner of the workspace, and you are an admin",
+        "error": {
+          "title": "Ownership was not transferred",
+          "reauthCancelled": "Confirm it is you to transfer ownership.",
+          "lastOwner": "A workspace needs at least one owner. The ownership was not changed.",
+          "forbidden": "Only an owner can transfer ownership. The page has been reloaded.",
+          "notAMember": "This person is no longer a member of the workspace. The list has been reloaded."
+        }
       }
     }
   },
@@ -933,6 +1064,41 @@
     "waiting": {
       "title": "Waiting for an invitation",
       "description": "Ask the owner of a workspace to invite you. It appears here once you accept."
+    }
+  },
+  "membership": {
+    "end": {
+      "close": "Close",
+      "cancel": "Cancel",
+      "continue": "Continue",
+      "content": {
+        "label": "What happens to the bookmarks and folders",
+        "note": "Private tags and go preferences are deleted either way.",
+        "transfer": {
+          "label": "Transfer the content",
+          "description": "The bookmarks and folders go to another member and keep their slugs. A slug the recipient already uses is cleared on the transferred bookmark.",
+          "nobody": "There is nobody else in the workspace to receive the content."
+        },
+        "delete": {
+          "label": "Delete the content",
+          "description": "The bookmarks and folders are deleted together with the membership. This cannot be undone."
+        }
+      },
+      "recipient": {
+        "label": "Transfer to",
+        "placeholder": "Search members",
+        "empty": "No member matches"
+      },
+      "error": {
+        "title": "Nothing was changed",
+        "lastOwner": {
+          "leave": "You are the last owner of this workspace, so you cannot leave it. Make someone else an owner first.",
+          "remove": "This person is the last owner of the workspace, so they cannot be removed. Make someone else an owner first."
+        },
+        "forbidden": "You are not allowed to do that.",
+        "notAMember": "This person is no longer a member of the workspace. The list has been reloaded.",
+        "recipientGone": "The person chosen to receive the content is no longer a member of the workspace. Choose someone else."
+      }
     }
   }
 }

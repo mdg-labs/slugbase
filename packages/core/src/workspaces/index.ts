@@ -31,3 +31,22 @@ export type {
 } from "./manage.ts";
 export { changeMemberRole } from "./members.ts";
 export type { MemberRoleAsk, MemberRoleDependencies, MemberRoleOutcome, MemberRoleStore, MemberRoles } from "./members.ts";
+export { endMembership } from "./departure.ts";
+export type {
+  MembershipEndAsk,
+  MembershipEndDependencies,
+  MembershipEndOutcome,
+  MembershipEndRequest,
+  MembershipEndStore,
+} from "./departure.ts";
+export { requestWorkspaceDeletion } from "./delete.ts";
+export type {
+  WorkspaceDeletionAsk,
+  WorkspaceDeletionDependencies,
+  WorkspaceDeletionGuardInput,
+  WorkspaceDeletionGuardResult,
+  WorkspaceDeletionOutcome,
+  WorkspaceDeletionStore,
+} from "./delete.ts";
+export { transferOwnership } from "./ownership.ts";
+export type { OwnershipTransferAsk, OwnershipTransferDependencies, OwnershipTransferOutcome } from "./ownership.ts";
