@@ -77,14 +77,14 @@ describe("the workspace switcher in the sidebar header", () => {
     ]);
   });
 
-  it("offers neither New workspace nor Workspace settings where creation is off and the settings page does not exist yet", async () => {
+  it("offers Workspace settings but not New workspace where creation is off", async () => {
     stubWorkspaceServer({ canCreate: false });
     await mountApp();
 
     const menu = await openMenu();
 
     await within(menu).findByRole("menuitemradio", { name: "Team" });
-    expect(within(menu).queryByRole("menuitem")).toBeNull();
+    expect(within(menu).getAllByRole("menuitem").map((item) => item.textContent)).toEqual(["Workspace settings"]);
   });
 
   it("offers New workspace only when the list says the account can create one", async () => {
@@ -96,14 +96,14 @@ describe("the workspace switcher in the sidebar header", () => {
     expect(await within(menu).findByRole("menuitem", { name: "New workspace" })).toBeTruthy();
   });
 
-  it("offers Workspace settings once the app has that page, and goes there", async () => {
+  it("goes to the workspace settings from Workspace settings", async () => {
     stubWorkspaceServer();
-    await mountApp([{ id: "settings", routes: [{ path: "/settings/workspace", component: () => <h1>Workspace page</h1> }] }]);
+    await mountApp();
 
     await openMenu();
     await choose("menuitem", "Workspace settings");
 
-    expect(await screen.findByRole("heading", { name: "Workspace page" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 1, name: "General" })).toBeTruthy();
     expect(window.location.pathname).toBe("/settings/workspace");
   });
 

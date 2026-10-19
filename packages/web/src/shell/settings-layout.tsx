@@ -1,23 +1,30 @@
 import { SettingsNav, type SettingsNavGroup } from "@slugbase/ui/patterns";
+import { useQuery } from "@tanstack/react-query";
 import { Link, Outlet, useRouter, useRouterState } from "@tanstack/react-router";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
+import { meQuery } from "../account/me.ts";
 import { Slot } from "../extensions/index.ts";
 
 const PROFILE_PATH = "/settings/account";
 const PREFERENCES_PATH = "/settings/account/preferences";
 const SECURITY_PATH = "/settings/account/security";
 const TOKENS_PATH = "/settings/account/tokens";
+const GENERAL_PATH = "/settings/workspace";
 
 /**
  * The layout of the settings pages (doc 03 section 11): the settings navigation beside the page, a
- * Select of the same pages on a narrow screen. Each page adds its own entry as it arrives.
+ * Select of the same pages on a narrow screen. Each page adds its own entry as it arrives. The Workspace
+ * group is for an account that acts in a workspace; it lists the pages of the workspace that the account's
+ * role may open.
  */
 export function SettingsLayout(): ReactElement {
   const { t } = useTranslation();
   const router = useRouter();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const groups: readonly SettingsNavGroup[] = [
+  const me = useQuery(meQuery(router.options.context.api));
+  const inWorkspace = me.data !== undefined && me.data.activeWorkspaceId !== null;
+  const groups: SettingsNavGroup[] = [
     {
       id: "account",
       label: t("settings.nav.account"),
@@ -34,6 +41,13 @@ export function SettingsLayout(): ReactElement {
       ],
     },
   ];
+  if (inWorkspace) {
+    groups.push({
+      id: "workspace",
+      label: t("settings.nav.workspace"),
+      items: [{ id: "general", label: t("settings.nav.general"), link: <Link to={GENERAL_PATH} />, current: pathname === GENERAL_PATH }],
+    });
+  }
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-4 md:flex-row md:items-start md:p-6">
       <SettingsNav
@@ -50,6 +64,8 @@ export function SettingsLayout(): ReactElement {
             void router.navigate({ to: SECURITY_PATH });
           } else if (id === "tokens") {
             void router.navigate({ to: TOKENS_PATH });
+          } else if (id === "general") {
+            void router.navigate({ to: GENERAL_PATH });
           }
         }}
       />

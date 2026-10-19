@@ -13,8 +13,7 @@ const WORKSPACE_SETTINGS_PATH = "/settings/workspace";
 /**
  * What the sidebar header's workspace switcher shows and does (doc 03 "App shell"), and the create-workspace
  * dialog it opens, which the shell renders over the page. The active workspace comes from the account, the menu from
- * the list of workspaces, and a list that cannot be loaded says so rather than showing an empty one. The entry to the
- * workspace settings is offered once the app has that page.
+ * the list of workspaces, and a list that cannot be loaded says so rather than showing an empty one.
  */
 export function useWorkspaceSwitcher(): { switcher: WorkspaceSwitcherProps; dialog: ReactElement | null } {
   const { t } = useTranslation();
@@ -41,12 +40,12 @@ export function useWorkspaceSwitcher(): { switcher: WorkspaceSwitcherProps; dial
       },
     });
   }
-  if (WORKSPACE_SETTINGS_PATH in router.routesByPath) {
+  if (activeId !== undefined) {
     actions.push({
       id: "settings",
       label: t("workspaces.switcher.settings"),
       onSelect: () => {
-        void router.navigate({ href: WORKSPACE_SETTINGS_PATH });
+        void router.navigate({ to: WORKSPACE_SETTINGS_PATH });
       },
     });
   }

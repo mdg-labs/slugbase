@@ -1,0 +1,114 @@
+import { vi } from "vitest";
+import { ACCOUNT_BODY, CONFIG_BODY, ME_PATH, SESSION_BODY, SESSION_PATH, WORKSPACES_PATH, WORKSPACE_ID, json } from "./support.tsx";
+
+type Transport = (request: Request) => Promise<Response>;
+
+export const WORKSPACE_PATH = "/api/v1/workspace";
+
+export type Role = "owner" | "admin" | "member";
+
+export interface WorkspaceSettingsServerOptions {
+  /** The caller's role in the workspace. */
+  readonly role?: Role;
+  readonly name?: string;
+  readonly version?: number;
+  /** Answers `GET /workspace` instead of the workspace; `call` counts from 1. */
+  readonly get?: (call: number) => Response | Promise<Response>;
+  /** Answers `PATCH /workspace` instead of renaming; `call` counts from 1. */
+  readonly patch?: (call: number, request: Request) => Response | Promise<Response>;
+  /** Answers every other call, such as the members operations. */
+  readonly other?: Transport;
+  /** The account acts in no workspace. */
+  readonly noWorkspace?: boolean;
+}
+
+export interface Received {
+  readonly method: string;
+  readonly path: string;
+  readonly ifMatch: string | null;
+  readonly body: unknown;
+}
+
+/**
+ * A server with a signed-in account that is a member of one workspace with the given role. A rename applies as the
+ * real one does: it needs the version the workspace has and moves it by one.
+ */
+export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOptions = {}) {
+  const role: Role = options.role ?? "owner";
+  let name = options.name ?? "Ada's Workspace";
+  let version = options.version ?? 3;
+  const received: Received[] = [];
+  const counts = new Map<string, number>();
+
+  const workspace = () => ({
+    id: WORKSPACE_ID,
+    name,
+    role,
+    memberCount: 2,
+    createdAt: "2026-09-01T08:00:00.000Z",
+    version,
+  });
+  const me = () => ({
+    account: ACCOUNT_BODY,
+    memberships: [{ workspaceId: WORKSPACE_ID, name, role }],
+    activeWorkspaceId: options.noWorkspace === true ? null : WORKSPACE_ID,
+  });
+
+  const transport = vi.fn<Transport>(async (request) => {
+    const { pathname } = new URL(request.url);
+    if (pathname === "/api/config") {
+      return json(CONFIG_BODY);
+    }
+    if (pathname === SESSION_PATH) {
+      return json(SESSION_BODY);
+    }
+    const text = request.method === "GET" ? "" : await request.clone().text();
+    received.push({
+      method: request.method,
+      path: pathname,
+      ifMatch: request.headers.get("If-Match"),
+      body: text === "" ? undefined : (JSON.parse(text) as unknown),
+    });
+    const key = `${request.method} ${pathname}`;
+    const call = (counts.get(key) ?? 0) + 1;
+    counts.set(key, call);
+    if (pathname === ME_PATH && request.method === "GET") {
+      return json(me());
+    }
+    if (pathname === WORKSPACES_PATH && request.method === "GET") {
+      return json({ items: [{ id: WORKSPACE_ID, name, role, memberCount: 2 }], canCreate: false });
+    }
+    if (pathname === WORKSPACE_PATH && request.method === "GET") {
+      return options.get === undefined ? json(workspace(), { headers: { ETag: `"${String(version)}"` } }) : options.get(call);
+    }
+    if (pathname === WORKSPACE_PATH && request.method === "PATCH") {
+      if (options.patch !== undefined) {
+        return options.patch(call, request);
+      }
+      if (request.headers.get("If-Match") !== `"${String(version)}"`) {
+        return json(
+          { type: "https://slugbase.app/problems/precondition_failed", title: "x", status: 412, code: "precondition_failed", detail: "x", requestId: "req-412" },
+          { status: 412, contentType: "application/problem+json" },
+        );
+      }
+      name = ((JSON.parse(text) as { name: string }).name);
+      version += 1;
+      return json(workspace(), { headers: { ETag: `"${String(version)}"` } });
+    }
+    if (options.other !== undefined) {
+      return options.other(request);
+    }
+    throw new Error(`unexpected call ${request.method} ${pathname}`);
+  });
+  vi.stubGlobal("fetch", transport);
+
+  return {
+    fetch: transport,
+    received: (method: string, path: string): Received[] => received.filter((call) => call.method === method && call.path === path),
+    /** Another client renames the workspace: its version moves on without this page knowing. */
+    renameElsewhere: (next: string): void => {
+      name = next;
+      version += 1;
+    },
+  };
+}

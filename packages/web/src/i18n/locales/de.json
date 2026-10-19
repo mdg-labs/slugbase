@@ -39,7 +39,9 @@
       "profile": "Profil",
       "preferences": "Voreinstellungen",
       "security": "Sicherheit",
-      "tokens": "API-Tokens"
+      "tokens": "API-Tokens",
+      "workspace": "Workspace",
+      "general": "Allgemein"
     },
     "account": {
       "title": "Profil",
@@ -471,6 +473,37 @@
         "reauthRequired": "Bestätige, dass du es bist, um fortzufahren.",
         "unavailable": "Das hat nicht geklappt. Versuche es gleich noch einmal."
       }
+    },
+    "workspace": {
+      "title": "Allgemein",
+      "loadFailed": {
+        "title": "Der Workspace konnte nicht geladen werden"
+      },
+      "section": {
+        "title": "Name des Workspace",
+        "description": "Der Name, den Mitglieder im Workspace-Wechsler sehen."
+      },
+      "monogram": {
+        "caption": "Das Monogramm entsteht aus dem Namen."
+      },
+      "name": {
+        "label": "Name",
+        "readOnly": "Nur Admins und Eigentümer können den Workspace umbenennen.",
+        "error": {
+          "required": "Gib einen Namen ein.",
+          "tooLong": "Verwende höchstens 64 Zeichen.",
+          "invalid": "Verwende einen Namen mit 1 bis 64 Zeichen."
+        }
+      },
+      "save": "Speichern",
+      "saved": "Workspace umbenannt",
+      "stale": {
+        "title": "Der Workspace wurde geändert",
+        "description": "Jemand hat diesen Workspace geändert, nachdem du ihn geöffnet hast. Deine Änderung wurde nicht gespeichert. Lade neu, um den aktuellen Namen zu sehen.",
+        "reload": "Neu laden"
+      },
+      "forbidden": "Du darfst diesen Workspace nicht mehr ändern.",
+      "saveFailed": "Der Name konnte nicht gespeichert werden. Versuche es erneut."
     }
   },
   "configFailure": {

@@ -29,6 +29,7 @@ import { Route as AppSettingsAccountIndexRouteImport } from "./routes/_app/setti
 import { Route as AppSettingsAccountPreferencesRouteImport } from "./routes/_app/settings/account/preferences.tsx";
 import { Route as AppSettingsAccountSecurityRouteImport } from "./routes/_app/settings/account/security.tsx";
 import { Route as AppSettingsAccountTokensRouteImport } from "./routes/_app/settings/account/tokens.tsx";
+import { Route as AppSettingsWorkspaceIndexRouteImport } from "./routes/_app/settings/workspace/index.tsx";
 
 const AppRoute = AppRouteImport.update({
   id: "/_app",
@@ -132,6 +133,12 @@ const AppSettingsAccountTokensRoute =
     path: "/account/tokens",
     getParentRoute: () => AppSettingsRoute,
   } as any);
+const AppSettingsWorkspaceIndexRoute =
+  AppSettingsWorkspaceIndexRouteImport.update({
+    id: "/workspace/",
+    path: "/workspace/",
+    getParentRoute: () => AppSettingsRoute,
+  } as any);
 
 export interface FileRoutesByFullPath {
   "/": typeof AppIndexRoute;
@@ -153,6 +160,7 @@ export interface FileRoutesByFullPath {
   "/settings/account/security": typeof AppSettingsAccountSecurityRoute;
   "/settings/account/tokens": typeof AppSettingsAccountTokensRoute;
   "/settings/account/": typeof AppSettingsAccountIndexRoute;
+  "/settings/workspace/": typeof AppSettingsWorkspaceIndexRoute;
 }
 export interface FileRoutesByTo {
   "/forgot-password": typeof ForgotPasswordRoute;
@@ -173,6 +181,7 @@ export interface FileRoutesByTo {
   "/settings/account/security": typeof AppSettingsAccountSecurityRoute;
   "/settings/account/tokens": typeof AppSettingsAccountTokensRoute;
   "/settings/account": typeof AppSettingsAccountIndexRoute;
+  "/settings/workspace": typeof AppSettingsWorkspaceIndexRoute;
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport;
@@ -196,6 +205,7 @@ export interface FileRoutesById {
   "/_app/settings/account/security": typeof AppSettingsAccountSecurityRoute;
   "/_app/settings/account/tokens": typeof AppSettingsAccountTokensRoute;
   "/_app/settings/account/": typeof AppSettingsAccountIndexRoute;
+  "/_app/settings/workspace/": typeof AppSettingsWorkspaceIndexRoute;
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath;
@@ -218,7 +228,8 @@ export interface FileRouteTypes {
     | "/settings/account/preferences"
     | "/settings/account/security"
     | "/settings/account/tokens"
-    | "/settings/account/";
+    | "/settings/account/"
+    | "/settings/workspace/";
   fileRoutesByTo: FileRoutesByTo;
   to:
     | "/forgot-password"
@@ -238,7 +249,8 @@ export interface FileRouteTypes {
     | "/settings/account/preferences"
     | "/settings/account/security"
     | "/settings/account/tokens"
-    | "/settings/account";
+    | "/settings/account"
+    | "/settings/workspace";
   id:
     | "__root__"
     | "/_app"
@@ -260,7 +272,8 @@ export interface FileRouteTypes {
     | "/_app/settings/account/preferences"
     | "/_app/settings/account/security"
     | "/_app/settings/account/tokens"
-    | "/_app/settings/account/";
+    | "/_app/settings/account/"
+    | "/_app/settings/workspace/";
   fileRoutesById: FileRoutesById;
 }
 export interface RootRouteChildren {
@@ -419,6 +432,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AppSettingsAccountTokensRouteImport;
       parentRoute: typeof AppSettingsRoute;
     };
+    "/_app/settings/workspace/": {
+      id: "/_app/settings/workspace/";
+      path: "/workspace";
+      fullPath: "/settings/workspace/";
+      preLoaderRoute: typeof AppSettingsWorkspaceIndexRouteImport;
+      parentRoute: typeof AppSettingsRoute;
+    };
   }
 }
 
@@ -428,6 +448,7 @@ interface AppSettingsRouteChildren {
   AppSettingsAccountSecurityRoute: typeof AppSettingsAccountSecurityRoute;
   AppSettingsAccountTokensRoute: typeof AppSettingsAccountTokensRoute;
   AppSettingsAccountIndexRoute: typeof AppSettingsAccountIndexRoute;
+  AppSettingsWorkspaceIndexRoute: typeof AppSettingsWorkspaceIndexRoute;
 }
 
 const AppSettingsRouteChildren: AppSettingsRouteChildren = {
@@ -436,6 +457,7 @@ const AppSettingsRouteChildren: AppSettingsRouteChildren = {
   AppSettingsAccountSecurityRoute: AppSettingsAccountSecurityRoute,
   AppSettingsAccountTokensRoute: AppSettingsAccountTokensRoute,
   AppSettingsAccountIndexRoute: AppSettingsAccountIndexRoute,
+  AppSettingsWorkspaceIndexRoute: AppSettingsWorkspaceIndexRoute,
 };
 
 const AppSettingsRouteWithChildren = AppSettingsRoute._addFileChildren(

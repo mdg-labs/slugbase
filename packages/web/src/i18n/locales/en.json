@@ -39,7 +39,9 @@
       "profile": "Profile",
       "preferences": "Preferences",
       "security": "Security",
-      "tokens": "API tokens"
+      "tokens": "API tokens",
+      "workspace": "Workspace",
+      "general": "General"
     },
     "account": {
       "title": "Profile",
@@ -471,6 +473,37 @@
         "reauthRequired": "Confirm it is you to continue.",
         "unavailable": "That did not work. Try again in a moment."
       }
+    },
+    "workspace": {
+      "title": "General",
+      "loadFailed": {
+        "title": "The workspace could not be loaded"
+      },
+      "section": {
+        "title": "Workspace name",
+        "description": "The name members see in the workspace switcher."
+      },
+      "monogram": {
+        "caption": "The monogram is made from the name."
+      },
+      "name": {
+        "label": "Name",
+        "readOnly": "Only admins and owners can rename the workspace.",
+        "error": {
+          "required": "Enter a name.",
+          "tooLong": "Use at most 64 characters.",
+          "invalid": "Use a name with 1 to 64 characters."
+        }
+      },
+      "save": "Save",
+      "saved": "Workspace renamed",
+      "stale": {
+        "title": "The workspace changed",
+        "description": "Someone changed this workspace after you opened it, so your edit was not saved. Reload to see its current name.",
+        "reload": "Reload"
+      },
+      "forbidden": "You are no longer allowed to change this workspace.",
+      "saveFailed": "The name could not be saved. Try again."
     }
   },
   "configFailure": {
