@@ -64,7 +64,10 @@ existing line by adding its PR number.
 - **ignored declaration key** — a test fixture declares a field under a key the consuming type does not read (a top-level `body` where the stage reads `request.body`), the extra key compiles, and the declared check never runs — PR 479
 - **URL by prefix** — a check that a URL points at an expected host tests a string prefix (`startsWith(issuer)`) instead of the parsed origin, so a look-alike host (`https://idp.example.test.evil/`) passes — PR 484
 - **race window at the wrong point** — a concurrency test widens the race with a pause before the read it needs to overlap rather than between that read and the commit, so the overlap lasts only as long as one commit and the test flakes on a slow runner — PR 506
+- **lookup of a fresh key** — a negative assertion ("nothing resolves any more") looks up a freshly generated key (a new token hash) that was never stored, instead of the keys the fixture seeded, so it passes whatever the code under test does — PR 510
 
 ## Web UI
 
 - **degraded capability not gated** — a screen offers a flow whose server side silently does nothing when an optional capability is off (mail), instead of reading the feature flag the API publishes for it, so the user waits for a result that never comes — PR 500
+- **possessive in a shared string** — one catalog string serves two flows (acting on another member, and on oneself) but carries a third-person possessive ("their"), so the self flow addresses the viewer as someone else — PR 510
+- **data loaded for every viewer** — a component loads a whole paged list (walking every page) for every role, although it reads the result only for one role, so other viewers make every request for nothing — PR 510
