@@ -690,7 +690,7 @@ export function createServer(options: CreateServerOptions): Server {
     withTenant: context.withTenant,
     ...(options.now === undefined ? {} : { now: options.now }),
     entitlements: options.entitlements ?? (adapters.entitlements.available ? createEntitlementCheck(entitlementService) : denyEntitlements),
-    // Stage 9 asks the database whether the admin's account has a second factor, on the request's own account-level transaction.
+    // Stage 9 asks the database whether the admin's account has a second factor; the default check reads it in an account-level transaction of its own, not on the request's.
     secondFactor:
       options.secondFactor ??
       (({ accountId, requestId }) => context.withTenant({ accountId, requestId }, (tx) => instanceRepository(tx).secondFactorEnrolled())),

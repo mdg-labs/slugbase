@@ -393,6 +393,13 @@
       "when": 1792508676073,
       "tag": "20261020150436_add_instance_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1792510825910,
+      "tag": "20261020154025_add_instance_admin_comments",
+      "breakpoints": true
     }
   ]
 }

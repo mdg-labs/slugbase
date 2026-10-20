@@ -1,4 +1,4 @@
 {
-  "sha256": "08e34619b3627f27ce8c1bb5332dc960a60cd0477a25d1686a31d7bca92dbb3a",
-  "migration": "20261020150436_add_instance_settings"
+  "sha256": "82ce6b069dc0b668fa5229c0b196cd9eb1cc18bbe5b2c2371ab9d67dc7806ac2",
+  "migration": "20261020154025_add_instance_admin_comments"
 }

@@ -96,9 +96,10 @@ $$;
 -- sys_setup_audit(event_id, ip_prefix): the instance audit event 'instance.setup_completed' of first-run setup,
 -- written in the transaction that completes it (right after sys_complete_setup, which has no way to take the id
 -- the application generates). The actor is the account that setup recorded (instance_state.setup_by), never an
--- argument, and the event is written once: it answers false, and writes nothing, while setup is not completed, when
--- the account is gone and when the event exists, so a caller cannot forge one. The same advisory lock as the setup's
--- serialises two callers.
+-- argument, and the event is written at most once: it answers false, and writes nothing, while setup is not
+-- completed, when the account is gone and when the event exists. The caller still chooses the event id and the
+-- ip_prefix. On a deployment whose setup completed before this function existed there is no event yet, so the
+-- first call after the upgrade writes it. The same advisory lock as the setup's serialises two callers.
 CREATE OR REPLACE FUNCTION public.sys_setup_audit(p_event_id uuid, p_ip_prefix cidr)
   RETURNS boolean
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
