@@ -18,6 +18,12 @@ export const INSTANCE_AUDIT_ACTIONS = {
   // `owner` is how the first owner was chosen, `account` or `invitation`, and never who it is.
   "instance.workspace_created": { metadata: { owner: "text" } },
   "instance.workspace_deletion_requested": { metadata: {} },
+  // The account actions carry no metadata; all but the list name the account they act on as the entity.
+  "instance.accounts_viewed": { metadata: {} },
+  "instance.account_admin_granted": { metadata: {} },
+  "instance.account_admin_revoked": { metadata: {} },
+  "instance.account_disabled": { metadata: {} },
+  "instance.account_enabled": { metadata: {} },
 } as const;
 
 export type InstanceAuditAction = keyof typeof INSTANCE_AUDIT_ACTIONS;

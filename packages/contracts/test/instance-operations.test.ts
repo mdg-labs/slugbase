@@ -4,8 +4,10 @@ import {
   CreateInstanceWorkspaceRequestSchema,
   INSTANCE_DISPLAY_NAME_MAX_LENGTH,
   INSTANCE_SIGN_IN_NOTICE_MAX_LENGTH,
+  InstanceAccountSchema,
   InstanceSettingsSchema,
   InstanceStatusSchema,
+  UpdateInstanceAccountRequestSchema,
   InstanceWorkspaceCreatedSchema,
   InstanceWorkspaceSchema,
   UpdateInstanceSettingsRequestSchema,
@@ -13,8 +15,10 @@ import {
   deleteInstanceWorkspace,
   getInstanceSettings,
   getInstanceStatus,
+  listInstanceAccounts,
   listInstanceWorkspaces,
   sendInstanceTestMail,
+  updateInstanceAccount,
   updateInstanceSettings,
 } from "../src/operations/instance.ts";
 import { ApiConfigSchema } from "../src/operations/meta.ts";
@@ -243,5 +247,55 @@ describe("the instance workspace operations", () => {
       }).success,
     ).toBe(true);
     expect(InstanceWorkspaceCreatedSchema.safeParse({ ...created, token: "abc" }).success).toBe(false);
+  });
+});
+
+describe("the instance account operations", () => {
+  const problemOnly = (operation: Obj | undefined, statuses: readonly string[]): void => {
+    const responses = operation?.["responses"] as Record<string, Obj>;
+    for (const status of statuses) {
+      expect(Object.keys(responses[status]?.["content"] as Obj), status).toEqual(["application/problem+json"]);
+    }
+  };
+
+  it("list with the read bucket and change with the write bucket and re-authentication, both for the instance admin", () => {
+    const list = paths["/api/v1/instance/accounts"]?.["get"];
+    const change = paths["/api/v1/instance/accounts/{id}"]?.["patch"];
+    expect([listInstanceAccounts.operationId, updateInstanceAccount.operationId]).toEqual(["listInstanceAccounts", "updateInstanceAccount"]);
+    expect([list?.["x-slugbase-auth"], change?.["x-slugbase-auth"]]).toEqual(["instanceAdmin", "instanceAdmin"]);
+    expect([list?.["x-slugbase-rate"], change?.["x-slugbase-rate"]]).toEqual(["read", "write"]);
+    expect([list?.["x-slugbase-reauth"], change?.["x-slugbase-reauth"]]).toEqual([undefined, true]);
+    problemOnly(list, ["400", "401", "403", "429", "503"]);
+    problemOnly(change, ["400", "401", "403", "404", "422", "429", "503"]);
+  });
+
+  it("takes the flag, the disabled state or both, and nothing else", () => {
+    const parse = (body: unknown) => UpdateInstanceAccountRequestSchema.safeParse(body);
+    expect(parse({ isInstanceAdmin: true }).success).toBe(true);
+    expect(parse({ disabled: false }).success).toBe(true);
+    expect(parse({ isInstanceAdmin: false, disabled: true }).success).toBe(true);
+    expect(parse({}).success).toBe(false);
+    expect(parse({ isInstanceAdmin: "yes" }).success).toBe(false);
+    expect(parse({ disabled: true, emailVerified: true }).success).toBe(false);
+    expect(parse({ disabled: true, passwordHash: "x" }).success).toBe(false);
+  });
+
+  it("describes a closed account that has a place for no hash, secret or content", () => {
+    const listed = {
+      id: "0192f3a0-bbbb-7000-8000-0000000000aa",
+      displayName: "Ada",
+      email: "ada@example.test",
+      emailVerified: true,
+      mfaEnabled: false,
+      isInstanceAdmin: false,
+      disabled: false,
+      lastSignInAt: null,
+      workspaceCount: 2,
+    };
+    expect(InstanceAccountSchema.safeParse(listed).success).toBe(true);
+    expect(InstanceAccountSchema.safeParse({ ...listed, lastSignInAt: "2026-10-20T10:00:00.000Z" }).success).toBe(true);
+    expect(InstanceAccountSchema.safeParse({ ...listed, passwordHash: "x" }).success).toBe(false);
+    expect(InstanceAccountSchema.safeParse({ ...listed, mfaSecret: "x" }).success).toBe(false);
+    expect(InstanceAccountSchema.safeParse({ ...listed, bookmarkCount: 3 }).success).toBe(false);
   });
 });

@@ -26,6 +26,9 @@ export const UNKNOWN_TEAM_ID = "0192f3a0-cccc-7000-8000-000000000005";
 /** A workspace no instance holds: the walker's request to delete it is the declared 404. */
 export const UNKNOWN_WORKSPACE_ID = "0192f3a0-dddd-7000-8000-000000000008";
 
+/** An account no instance holds: the walker's request to change it is the declared 404. */
+export const UNKNOWN_ACCOUNT_ID = "0192f3a0-dddd-7000-8000-000000000009";
+
 /** The pending invitation the matrix seeds in workspace B, which the invitation operations of A name. */
 export const B_INVITATION_ID = "0192f3a0-cccc-7000-8000-000000000007";
 
@@ -191,6 +194,11 @@ export const FIXTURES: ContractFixtures = {
   listInstanceWorkspaces: {},
   createInstanceWorkspace: { body: { name: "Walker's instance workspace", ownerEmail: "walker-first-owner@example.test" } },
   deleteInstanceWorkspace: { path: { id: UNKNOWN_WORKSPACE_ID }, status: 404 },
+  // The account operations of the instance admin. The list names nothing. The change names an account by identifier, which an instance admin may
+  // name whoever it is, and the walker knows none it could disable or demote without taking the next call's caller away: its valid request names one
+  // that does not exist, the declared 404; the route tests change accounts.
+  listInstanceAccounts: {},
+  updateInstanceAccount: { path: { id: UNKNOWN_ACCOUNT_ID }, body: { disabled: true }, status: 404 },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

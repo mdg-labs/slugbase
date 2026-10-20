@@ -113,5 +113,13 @@
     "greetingAnonymous": "Hi,",
     "body": "This is a test email from your {appName} instance. If you can read it, the instance can send email.",
     "footer": "You are receiving this email because an instance administrator asked {appName} to send a test email to your address."
+  },
+  "accountDisabled": {
+    "subject": "Your {appName} account was disabled",
+    "greeting": "Hi {name},",
+    "greetingAnonymous": "Hi,",
+    "body": "An administrator of this {appName} instance disabled your account. You can no longer sign in, and your devices and API tokens have stopped working.",
+    "help": "If you think this is a mistake, contact the administrator of this {appName} instance.",
+    "footer": "You are receiving this email because an administrator of this {appName} instance disabled your account."
   }
 }

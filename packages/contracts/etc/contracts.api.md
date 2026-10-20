@@ -543,6 +543,20 @@ export interface ComponentTypes {
         InspectInvitationRequest: {
             token: string;
         };
+        InstanceAccount: {
+            disabled: boolean;
+            displayName: string;
+            email: string;
+            emailVerified: boolean;
+            id: string;
+            isInstanceAdmin: boolean;
+            lastSignInAt: string | null;
+            mfaEnabled: boolean;
+            workspaceCount: number;
+        };
+        InstanceAccountList: {
+            items: ComponentTypes["schemas"]["InstanceAccount"][];
+        };
         InstanceOwnerInvitation: {
             email: string;
             expiresAt: string;
@@ -802,6 +816,10 @@ export interface ComponentTypes {
             signinAlerts?: boolean;
             singleKeyShortcuts?: boolean;
             theme?: "light" | "dark" | "system";
+        };
+        UpdateInstanceAccountRequest: {
+            disabled?: boolean;
+            isInstanceAdmin?: boolean;
         };
         UpdateInstanceSettingsRequest: {
             allowWorkspaceCreation?: boolean | null;
@@ -1908,6 +1926,39 @@ export const INSTANCE_DISPLAY_NAME_MAX_LENGTH = 100;
 export const INSTANCE_SIGN_IN_NOTICE_MAX_LENGTH = 500;
 
 // @public (undocumented)
+export const InstanceAccountListSchema: z.ZodObject<{
+    items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        displayName: z.ZodString;
+        email: z.ZodString;
+        emailVerified: z.ZodBoolean;
+        mfaEnabled: z.ZodBoolean;
+        isInstanceAdmin: z.ZodBoolean;
+        disabled: z.ZodBoolean;
+        lastSignInAt: z.ZodNullable<z.ZodISODateTime>;
+        workspaceCount: z.ZodInt;
+    }, z.core.$strict>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const InstanceAccountParamsSchema: z.ZodObject<{
+    id: z.ZodUUID;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const InstanceAccountSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    displayName: z.ZodString;
+    email: z.ZodString;
+    emailVerified: z.ZodBoolean;
+    mfaEnabled: z.ZodBoolean;
+    isInstanceAdmin: z.ZodBoolean;
+    disabled: z.ZodBoolean;
+    lastSignInAt: z.ZodNullable<z.ZodISODateTime>;
+    workspaceCount: z.ZodInt;
+}, z.core.$strict>;
+
+// @public (undocumented)
 export const InstanceOwnerInvitationSchema: z.ZodObject<{
     id: z.ZodUUID;
     email: z.ZodString;
@@ -2263,6 +2314,37 @@ export const listIdentities: {
         readonly 401: ProblemResponse;
         readonly 403: ProblemResponse;
         readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const listInstanceAccounts: {
+    readonly method: "get";
+    readonly path: "/api/v1/instance/accounts";
+    readonly operationId: "listInstanceAccounts";
+    readonly tag: "instance";
+    readonly summary: "List every account of the instance";
+    readonly auth: "instanceAdmin";
+    readonly rate: "read";
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        displayName: z.ZodString;
+        email: z.ZodString;
+        emailVerified: z.ZodBoolean;
+        mfaEnabled: z.ZodBoolean;
+        isInstanceAdmin: z.ZodBoolean;
+        disabled: z.ZodBoolean;
+        lastSignInAt: z.ZodNullable<z.ZodISODateTime>;
+        workspaceCount: z.ZodInt;
+        }, z.core.$strict>>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
         readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
     };
@@ -4956,6 +5038,67 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    listInstanceAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["InstanceAccountList"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     listInstanceWorkspaces: {
         parameters: {
             query?: never;
@@ -6836,6 +6979,89 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    updateInstanceAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["UpdateInstanceAccountRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["InstanceAccount"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     updateInstanceSettings: {
         parameters: {
             query?: never;
@@ -7510,6 +7736,40 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/instance/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["listInstanceAccounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/instance/accounts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: OperationTypes["updateInstanceAccount"];
         trace?: never;
     };
     // (undocumented)
@@ -9275,6 +9535,53 @@ export const UpdateAccountRequestSchema: z.ZodObject<{
         importDone: z.ZodOptional<z.ZodBoolean>;
         checklistDismissed: z.ZodOptional<z.ZodBoolean>;
     }, z.core.$strict>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const updateInstanceAccount: {
+    readonly method: "patch";
+    readonly path: "/api/v1/instance/accounts/{id}";
+    readonly operationId: "updateInstanceAccount";
+    readonly tag: "instance";
+    readonly summary: "Grant or clear the instance-admin flag of an account, or disable or enable it";
+    readonly auth: "instanceAdmin";
+    readonly rate: "write";
+    readonly reauth: true;
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+        readonly body: z.ZodObject<{
+            isInstanceAdmin: z.ZodOptional<z.ZodBoolean>;
+            disabled: z.ZodOptional<z.ZodBoolean>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        id: z.ZodUUID;
+        displayName: z.ZodString;
+        email: z.ZodString;
+        emailVerified: z.ZodBoolean;
+        mfaEnabled: z.ZodBoolean;
+        isInstanceAdmin: z.ZodBoolean;
+        disabled: z.ZodBoolean;
+        lastSignInAt: z.ZodNullable<z.ZodISODateTime>;
+        workspaceCount: z.ZodInt;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const UpdateInstanceAccountRequestSchema: z.ZodObject<{
+    isInstanceAdmin: z.ZodOptional<z.ZodBoolean>;
+    disabled: z.ZodOptional<z.ZodBoolean>;
 }, z.core.$strict>;
 
 // @public (undocumented)

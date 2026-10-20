@@ -1011,6 +1011,88 @@
         ],
         "type": "object"
       },
+      "InstanceAccount": {
+        "additionalProperties": false,
+        "properties": {
+          "disabled": {
+            "description": "Whether the account is disabled: it cannot sign in, it has no session and its API tokens are refused",
+            "type": "boolean"
+          },
+          "displayName": {
+            "description": "The account's display name",
+            "type": "string"
+          },
+          "email": {
+            "description": "The account's address",
+            "type": "string"
+          },
+          "emailVerified": {
+            "description": "Whether the address was confirmed",
+            "type": "boolean"
+          },
+          "id": {
+            "description": "The account's identifier",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "isInstanceAdmin": {
+            "description": "Whether the account holds the instance-admin flag",
+            "type": "boolean"
+          },
+          "lastSignInAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When a complete sign-in last happened, RFC 3339 UTC; null while the account never signed in"
+          },
+          "mfaEnabled": {
+            "description": "Whether a second factor is enrolled and confirmed",
+            "type": "boolean"
+          },
+          "workspaceCount": {
+            "description": "How many workspaces, not being deleted, the account is a member of",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "displayName",
+          "email",
+          "emailVerified",
+          "mfaEnabled",
+          "isInstanceAdmin",
+          "disabled",
+          "lastSignInAt",
+          "workspaceCount"
+        ],
+        "type": "object"
+      },
+      "InstanceAccountList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "Every account, oldest first",
+            "items": {
+              "$ref": "#/components/schemas/InstanceAccount"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "type": "object"
+      },
       "InstanceOwnerInvitation": {
         "additionalProperties": false,
         "properties": {
@@ -2515,6 +2597,20 @@
         },
         "type": "object"
       },
+      "UpdateInstanceAccountRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "disabled": {
+            "description": "true disables the account, false enables it again; disabling deletes the target's sessions and refuses its API tokens",
+            "type": "boolean"
+          },
+          "isInstanceAdmin": {
+            "description": "true grants the instance-admin flag, false clears it; the target's sessions are deleted when the flag changes",
+            "type": "boolean"
+          }
+        },
+        "type": "object"
+      },
       "UpdateInstanceSettingsRequest": {
         "additionalProperties": false,
         "properties": {
@@ -3988,6 +4084,218 @@
         "x-slugbase-auth": "member",
         "x-slugbase-rate": "read",
         "x-slugbase-scope": "read"
+      }
+    },
+    "/api/v1/instance/accounts": {
+      "get": {
+        "operationId": "listInstanceAccounts",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstanceAccountList"
+                }
+              }
+            },
+            "description": "Every account, oldest first, with its name, address, whether the address was confirmed and a second factor is on, the instance-admin flag, whether it is disabled, its last sign-in and its workspace count; never a hash, a secret or the content of a workspace. Reading the list is written to the instance audit stream"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The session is not an instance admin's, or the account has no second factor enrolled, or the credential is an API token"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "List every account of the instance",
+        "tags": [
+          "instance"
+        ],
+        "x-slugbase-auth": "instanceAdmin",
+        "x-slugbase-rate": "read"
+      }
+    },
+    "/api/v1/instance/accounts/{id}": {
+      "patch": {
+        "operationId": "updateInstanceAccount",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The identifier of an account, as listed",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateInstanceAccountRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstanceAccount"
+                }
+              }
+            },
+            "description": "The account after the change; a field the request leaves out, or sets to the value the account already has, changes nothing. Granting or clearing the flag deletes every session of the account. Disabling it deletes every session, refuses its API tokens from the next request on and, where a mail adapter is configured, queues the email that tells it so; enabling it clears the state. Each change is written to the instance audit stream"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, the credential is an API token, or this deployment does not grant the instance-admin flag (forbidden). Nothing is written"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no account with that identifier"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body did not pass validation: a field the operation does not declare, neither field, or a value of the wrong type; or the change would leave the instance without an enabled instance admin: clearing the flag of, or disabling, the last one is refused as validation_failed with the field code last_instance_admin on isInstanceAdmin or disabled. Nothing is written"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Grant or clear the instance-admin flag of an account, or disable or enable it",
+        "tags": [
+          "instance"
+        ],
+        "x-slugbase-auth": "instanceAdmin",
+        "x-slugbase-rate": "write",
+        "x-slugbase-reauth": true
       }
     },
     "/api/v1/instance/mail/test": {

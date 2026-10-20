@@ -3,16 +3,22 @@ import {
   deleteInstanceWorkspace as deleteInstanceWorkspaceOperation,
   getInstanceSettings,
   getInstanceStatus,
+  listInstanceAccounts as listInstanceAccountsOperation,
   listInstanceWorkspaces as listInstanceWorkspacesOperation,
   sendInstanceTestMail,
+  updateInstanceAccount as updateInstanceAccountOperation,
   updateInstanceSettings,
 } from "@slugbase/contracts";
 import {
   createInstanceWorkspace,
   invitationLink,
+  listInstanceAccounts,
   listInstanceWorkspaces,
   requestInstanceWorkspaceDeletion,
+  updateInstanceAccount,
   type Adapters,
+  type InstanceAccount,
+  type InstanceAccountStore,
   type InstanceWorkspaceStore,
   type RegistrationSettings,
 } from "@slugbase/core";
@@ -59,6 +65,18 @@ import { route } from "../register.ts";
 // written, a guard that throws or times out is 503 from the dispatcher. The mark, the revocation of the workspace's tokens, the
 // sessions pointed at none, the `workspace.delete` job of `DELETE /api/v1/workspace` and the audit event are one transaction.
 //
+// GET /api/v1/instance/accounts and PATCH /api/v1/instance/accounts/{id} (doc 02 section 11.2, doc 04 section 10.10, doc 05
+// sections 3.3 and 7.1) list the accounts and change the instance-admin flag and the disabled state of one. Each goes through a
+// `sys_instance_*` function that repeats the admin check in the database and writes its instance audit event in the same call.
+// The list is the fields of an account the admin needs to find it and tell its state and nothing secret. The change needs a session
+// that re-authenticated within ten minutes (stage 9 judges that before the handler runs). Granting the flag is first put to the
+// composition's `instanceAdminGrant` check, which can refuse it (Q44): a refusal is 403 with nothing written. The flag and the
+// disabled state are applied by one database call that checks the admin once, in a transaction that is rolled back on any refusal:
+// `last_instance_admin` (422 `validation_failed` with that field code on the field refused) when the change would leave no enabled instance admin, decided by the database under
+// the advisory lock of the set of admins, and 404 for an account that does not exist. Changing the flag, or disabling, deletes the
+// target's sessions, so the next request of each answers 401; a disabled account's API tokens are refused by their lookup. When the
+// account is disabled and mail is configured the email that tells it so is queued in the same transaction.
+//
 // POST /api/v1/instance/mail/test queues a test message to the calling admin's address, as the `mail.send` job reads
 // the address when it runs, and writes `instance.test_mail_queued` in the transaction that queues it. A deployment
 // without a mail adapter answers `503 mail_unavailable` before anything is written.
@@ -76,12 +94,27 @@ export interface InstanceRoutesOptions {
   readonly registration: RegistrationSettings;
   /** `APP_ORIGIN`: the link of an owner invitation points to it. */
   readonly appOrigin: string;
+  /** Whether the flag may be granted; the composition's choice (Q44). Defaults to granting. */
+  readonly instanceAdminGrant?: InstanceAdminGrantCheck;
 }
 
+/** The composition's decision on granting the instance-admin flag (Q44): it may refuse, and by default it does not. */
+export type InstanceAdminGrantCheck = (subject: { readonly accountId: string; readonly targetAccountId: string }) => boolean | Promise<boolean>;
+
+/** The Community Edition grants the flag to whoever an instance admin names. */
+export const allowInstanceAdminGrant: InstanceAdminGrantCheck = () => true;
+
+const ADMIN_GRANT_REFUSED = "This deployment does not grant the instance-admin flag.";
+const NO_SUCH_ACCOUNT_TO_CHANGE = "There is no such account.";
+const LAST_INSTANCE_ADMIN = "The instance must keep an enabled instance admin.";
 const MAIL_UNAVAILABLE = "Email delivery is not available on this instance.";
 const NO_SUCH_ACCOUNT = "There is no account that can own the workspace.";
 const NO_SUCH_WORKSPACE = "There is no such workspace.";
 const DELETION_REFUSED = "The workspace cannot be deleted while its subscription is active; cancel the subscription first.";
+
+function accountBody({ id, displayName, email, emailVerified, mfaEnabled, isInstanceAdmin, disabled, lastSignInAt, workspaceCount }: InstanceAccount) {
+  return { id, displayName, email, emailVerified, mfaEnabled, isInstanceAdmin, disabled, lastSignInAt: lastSignInAt === null ? null : lastSignInAt.toISOString(), workspaceCount };
+}
 
 function sessionOf(context: ChainContext): { readonly accountId: string } {
   const principal = context.get("principal");
@@ -108,7 +141,26 @@ function workspaceStoreOf(tx: TenantTx): InstanceWorkspaceStore {
   };
 }
 
-export function instanceRoutes({ withTenant, databaseUrl, chains, buildInfo, adapters, registration, appOrigin }: InstanceRoutesOptions): RouteBinding[] {
+/** The account operations of the instance admin, bound to the account-level transaction of the request. */
+function accountStoreOf(tx: TenantTx): InstanceAccountStore {
+  const repository = instanceRepository(tx);
+  return {
+    listAccounts: (eventId, ipPrefix) => repository.listAccounts(eventId, ipPrefix),
+    updateAccount: (accountId, change, notify, eventIds, ipPrefix) =>
+      repository.updateAccount(accountId, change, eventIds, ipPrefix, change.disabled === true && notify ? [queueMailSend(uuidv7(), "accountDisabled", accountId)] : []),
+  };
+}
+
+export function instanceRoutes({
+  withTenant,
+  databaseUrl,
+  chains,
+  buildInfo,
+  adapters,
+  registration,
+  appOrigin,
+  instanceAdminGrant = allowInstanceAdminGrant,
+}: InstanceRoutesOptions): RouteBinding[] {
   return [
     route(getInstanceStatus).handle(async (_request, context) => {
       const principal = sessionOf(context);
@@ -237,6 +289,44 @@ export function instanceRoutes({ withTenant, databaseUrl, chains, buildInfo, ada
         case "unavailable":
           throw new ProblemError("not_found", NO_SUCH_WORKSPACE);
       }
+    }),
+
+    route(listInstanceAccountsOperation).handle(async (_request, context) => {
+      const { accountId } = sessionOf(context);
+      const accounts = await withTenant({ accountId, requestId: requestIdOf(context) }, (tx) =>
+        listInstanceAccounts({ store: accountStoreOf(tx), newId: uuidv7 }, { ipPrefix: networkPrefixOf(context.get("clientIp")) ?? null }),
+      );
+      return { status: 200, body: { items: accounts.map(accountBody) } };
+    }),
+
+    route(updateInstanceAccountOperation).handle(async ({ params, body }, context) => {
+      const { accountId } = sessionOf(context);
+      const targetAccountId = params.id.toLowerCase();
+      if (body.isInstanceAdmin === true && !(await instanceAdminGrant({ accountId, targetAccountId }))) {
+        throw new ProblemError("forbidden", ADMIN_GRANT_REFUSED);
+      }
+      const account = await withTenant({ accountId, requestId: requestIdOf(context) }, async (tx) => {
+        const outcome = await updateInstanceAccount(
+          { store: accountStoreOf(tx), newId: uuidv7 },
+          {
+            accountId: targetAccountId,
+            ...(body.isInstanceAdmin === undefined ? {} : { isInstanceAdmin: body.isInstanceAdmin }),
+            ...(body.disabled === undefined ? {} : { disabled: body.disabled }),
+            notify: adapters.mail.available,
+            ipPrefix: networkPrefixOf(context.get("clientIp")) ?? null,
+          },
+        );
+        // A refusal throws inside the transaction, which rolls back whatever the call wrote.
+        switch (outcome.kind) {
+          case "updated":
+            return outcome.account;
+          case "unknown_account":
+            throw new ProblemError("not_found", NO_SUCH_ACCOUNT_TO_CHANGE);
+          case "last_instance_admin":
+            throw new ProblemError("validation_failed", LAST_INSTANCE_ADMIN, { errors: [{ path: outcome.field, code: "last_instance_admin" }] });
+        }
+      });
+      return { status: 200, body: accountBody(account) };
     }),
   ];
 }

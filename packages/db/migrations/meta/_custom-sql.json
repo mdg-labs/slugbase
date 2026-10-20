@@ -1,4 +1,4 @@
 {
-  "sha256": "e8d7eb21e2dbfeaddad7eb24c01e1a2d1f79a24f54ef00e2087a22d76855e56d",
-  "migration": "20261020162020_add_instance_workspaces"
+  "sha256": "849faadaa7657f86ca188f7d8f13b8c5be2c35cfe0ef81b920f9fbeaab233224",
+  "migration": "20261020181448_add_instance_accounts"
 }

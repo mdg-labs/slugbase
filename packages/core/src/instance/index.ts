@@ -7,6 +7,16 @@ export {
 } from "./settings.ts";
 export type { InstanceSettingName, InstanceSettings, InstanceSettingsChange } from "./settings.ts";
 export { INSTANCE_TEST_MAIL_TEMPLATE, instanceTestMail } from "./test-mail.ts";
+export { listInstanceAccounts, updateInstanceAccount } from "./accounts.ts";
+export type {
+  InstanceAccount,
+  InstanceAccountAsk,
+  InstanceAccountChange,
+  InstanceAccountDependencies,
+  InstanceAccountStore,
+  InstanceAccountUpdateAsk,
+  InstanceAccountUpdateOutcome,
+} from "./accounts.ts";
 export { createInstanceWorkspace, listInstanceWorkspaces, requestInstanceWorkspaceDeletion } from "./workspaces.ts";
 export type {
   InstanceWorkspace,

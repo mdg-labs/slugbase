@@ -321,3 +321,85 @@ export const deleteInstanceWorkspace = defineOperation({
     503: problemResponse("The service is temporarily unavailable, or a deployment extension that is consulted before the deletion did not answer in time; nothing is changed"),
   },
 });
+
+export const InstanceAccountSchema = z
+  .strictObject({
+    id: z.uuid().describe("The account's identifier"),
+    displayName: z.string().describe("The account's display name"),
+    email: z.string().describe("The account's address"),
+    emailVerified: z.boolean().describe("Whether the address was confirmed"),
+    mfaEnabled: z.boolean().describe("Whether a second factor is enrolled and confirmed"),
+    isInstanceAdmin: z.boolean().describe("Whether the account holds the instance-admin flag"),
+    disabled: z.boolean().describe("Whether the account is disabled: it cannot sign in, it has no session and its API tokens are refused"),
+    lastSignInAt: z.iso.datetime().nullable().describe("When a complete sign-in last happened, RFC 3339 UTC; null while the account never signed in"),
+    workspaceCount: COUNT.describe("How many workspaces, not being deleted, the account is a member of"),
+  })
+  .meta({ id: "InstanceAccount" });
+
+export const InstanceAccountListSchema = z
+  .strictObject({
+    items: z.array(InstanceAccountSchema).describe("Every account, oldest first"),
+  })
+  .meta({ id: "InstanceAccountList" });
+
+export const InstanceAccountParamsSchema = z.strictObject({
+  id: z.uuid().describe("The identifier of an account, as listed"),
+});
+
+export const UpdateInstanceAccountRequestSchema = z
+  .strictObject({
+    isInstanceAdmin: z.boolean().optional().describe("true grants the instance-admin flag, false clears it; the target's sessions are deleted when the flag changes"),
+    disabled: z.boolean().optional().describe("true disables the account, false enables it again; disabling deletes the target's sessions and refuses its API tokens"),
+  })
+  .refine((request) => request.isInstanceAdmin !== undefined || request.disabled !== undefined, { message: "name at least one of isInstanceAdmin and disabled" })
+  .meta({ id: "UpdateInstanceAccountRequest" });
+
+export const listInstanceAccounts = defineOperation({
+  method: "get",
+  path: "/api/v1/instance/accounts",
+  operationId: "listInstanceAccounts",
+  tag: "instance",
+  summary: "List every account of the instance",
+  auth: "instanceAdmin",
+  rate: "read",
+  responses: {
+    200: jsonResponse(
+      "Every account, oldest first, with its name, address, whether the address was confirmed and a second factor is on, the instance-admin flag, whether it is disabled, its last sign-in and its workspace count; never a hash, a secret or the content of a workspace. Reading the list is written to the instance audit stream",
+      InstanceAccountListSchema,
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    403: problemResponse("The session is not an instance admin's, or the account has no second factor enrolled, or the credential is an API token"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const updateInstanceAccount = defineOperation({
+  method: "patch",
+  path: "/api/v1/instance/accounts/{id}",
+  operationId: "updateInstanceAccount",
+  tag: "instance",
+  summary: "Grant or clear the instance-admin flag of an account, or disable or enable it",
+  auth: "instanceAdmin",
+  rate: "write",
+  reauth: true,
+  request: { params: InstanceAccountParamsSchema, body: UpdateInstanceAccountRequestSchema },
+  responses: {
+    200: jsonResponse(
+      "The account after the change; a field the request leaves out, or sets to the value the account already has, changes nothing. Granting or clearing the flag deletes every session of the account. Disabling it deletes every session, refuses its API tokens from the next request on and, where a mail adapter is configured, queues the email that tells it so; enabling it clears the state. Each change is written to the instance audit stream",
+      InstanceAccountSchema,
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"),
+    403: problemResponse(
+      "The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, the credential is an API token, or this deployment does not grant the instance-admin flag (forbidden). Nothing is written",
+    ),
+    404: problemResponse("There is no account with that identifier"),
+    422: problemResponse(
+      "The body did not pass validation: a field the operation does not declare, neither field, or a value of the wrong type; or the change would leave the instance without an enabled instance admin: clearing the flag of, or disabling, the last one is refused as validation_failed with the field code last_instance_admin on isInstanceAdmin or disabled. Nothing is written",
+    ),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});

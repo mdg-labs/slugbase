@@ -526,6 +526,55 @@ describe("apps/slugbase main server and the instance admin workspace operations"
   }, 60_000);
 });
 
+describe("apps/slugbase main server and the instance admin account operations", () => {
+  let database: TestDatabase;
+
+  beforeAll(async () => {
+    database = await createTestDatabase();
+  }, 300_000);
+
+  afterAll(async () => {
+    await database.drop();
+  }, 300_000);
+
+  const env = (): Record<string, string> => ({
+    NODE_ENV: "test",
+    DATABASE_URL: databaseUrl(database),
+    DATABASE_MIGRATE_URL: databaseUrl(database, "owner"),
+    SETUP_ENABLED: "true",
+    SETUP_TOKEN_REQUIRED: "false",
+  });
+  const first = { displayName: "Ada", email: "ada@example.test", password: "a long enough password for ada", workspaceName: "Home" };
+
+  it("composes GET /api/v1/instance/accounts and PATCH /api/v1/instance/accounts/{id}: each asks for a credential, and each refuses the first admin, whom setup signs in without a second factor", async () => {
+    const ACCOUNTS = "/api/v1/instance/accounts";
+    const unknown = "0192f3a0-aaaa-7000-8000-00000000dead";
+    const { status, output, observed } = await runServer(env(), async (port) => {
+      const as = (cookie: string, method: string, path: string, body?: unknown): Promise<string> => {
+        const text = body === undefined ? "" : JSON.stringify(body);
+        const cookieHeader = cookie === "" ? "" : `Cookie: ${cookie}\r\n`;
+        return send(
+          port,
+          `${method} ${path} HTTP/1.1\r\nHost: localhost\r\nOrigin: ${valid.APP_ORIGIN}\r\n${cookieHeader}Content-Type: application/json\r\nContent-Length: ${String(Buffer.byteLength(text))}\r\nConnection: close\r\n\r\n${text}`,
+        );
+      };
+      const change = { disabled: true };
+      const anonymous = [await as("", "GET", ACCOUNTS), await as("", "PATCH", `${ACCOUNTS}/${unknown}`, change)];
+      const created = await post(port, "/api/v1/setup", first);
+      const cookie = /set-cookie: (__Host-slugbase_session=[A-Za-z0-9_-]+)/i.exec(created)?.[1] ?? "";
+      const signedIn = [await as(cookie, "GET", ACCOUNTS), await as(cookie, "PATCH", `${ACCOUNTS}/${unknown}`, change)];
+      return [...anonymous, ...signedIn].map((answer) => `${answer.split("\r\n")[0] ?? ""} ${/"code":"([a-z_]+)"/.exec(answer)?.[1] ?? ""}`).join("\n=====\n");
+    });
+    expect(status, output).toBe(0);
+    expect((observed ?? "").split("\n=====\n")).toEqual([
+      "HTTP/1.1 401 Unauthorized unauthenticated",
+      "HTTP/1.1 401 Unauthorized unauthenticated",
+      "HTTP/1.1 403 Forbidden forbidden",
+      "HTTP/1.1 403 Forbidden forbidden",
+    ]);
+  }, 60_000);
+});
+
 describe("apps/slugbase main server as a role that is not held by row-level security", () => {
   let database: TestDatabase;
 

@@ -205,6 +205,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/instance/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List every account of the instance */
+        get: operations["listInstanceAccounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instance/accounts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Grant or clear the instance-admin flag of an account, or disable or enable it */
+        patch: operations["updateInstanceAccount"];
+        trace?: never;
+    };
     "/api/v1/instance/mail/test": {
         parameters: {
             query?: never;
@@ -1291,6 +1325,33 @@ export interface components {
             /** @description The token of the invitation link, from the path of /invite/<token> */
             token: string;
         };
+        InstanceAccount: {
+            /** @description Whether the account is disabled: it cannot sign in, it has no session and its API tokens are refused */
+            disabled: boolean;
+            /** @description The account's display name */
+            displayName: string;
+            /** @description The account's address */
+            email: string;
+            /** @description Whether the address was confirmed */
+            emailVerified: boolean;
+            /**
+             * Format: uuid
+             * @description The account's identifier
+             */
+            id: string;
+            /** @description Whether the account holds the instance-admin flag */
+            isInstanceAdmin: boolean;
+            /** @description When a complete sign-in last happened, RFC 3339 UTC; null while the account never signed in */
+            lastSignInAt: string | null;
+            /** @description Whether a second factor is enrolled and confirmed */
+            mfaEnabled: boolean;
+            /** @description How many workspaces, not being deleted, the account is a member of */
+            workspaceCount: number;
+        };
+        InstanceAccountList: {
+            /** @description Every account, oldest first */
+            items: components["schemas"]["InstanceAccount"][];
+        };
         InstanceOwnerInvitation: {
             /** @description The address the invitation is for; only the account that holds it can accept */
             email: string;
@@ -1846,6 +1907,12 @@ export interface components {
              * @enum {string}
              */
             theme?: "light" | "dark" | "system";
+        };
+        UpdateInstanceAccountRequest: {
+            /** @description true disables the account, false enables it again; disabling deletes the target's sessions and refuses its API tokens */
+            disabled?: boolean;
+            /** @description true grants the instance-admin flag, false clears it; the target's sessions are deleted when the flag changes */
+            isInstanceAdmin?: boolean;
         };
         UpdateInstanceSettingsRequest: {
             /** @description true or false overrides the deployment's default, null clears the setting so the default applies again */
@@ -2786,6 +2853,164 @@ export interface operations {
                 };
             };
             /** @description The service is temporarily unavailable, or no entitlement source is configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listInstanceAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every account, oldest first, with its name, address, whether the address was confirmed and a second factor is on, the instance-admin flag, whether it is disabled, its last sign-in and its workspace count; never a hash, a secret or the content of a workspace. Reading the list is written to the instance audit stream */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceAccountList"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The session is not an instance admin's, or the account has no second factor enrolled, or the credential is an API token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateInstanceAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateInstanceAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description The account after the change; a field the request leaves out, or sets to the value the account already has, changes nothing. Granting or clearing the flag deletes every session of the account. Disabling it deletes every session, refuses its API tokens from the next request on and, where a mail adapter is configured, queues the email that tells it so; enabling it clears the state. Each change is written to the instance audit stream */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceAccount"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, the credential is an API token, or this deployment does not grant the instance-admin flag (forbidden). Nothing is written */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no account with that identifier */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation: a field the operation does not declare, neither field, or a value of the wrong type; or the change would leave the instance without an enabled instance admin: clearing the flag of, or disabling, the last one is refused as validation_failed with the field code last_instance_admin on isInstanceAdmin or disabled. Nothing is written */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
             503: {
                 headers: {
                     [name: string]: unknown;

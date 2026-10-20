@@ -172,6 +172,7 @@ export interface CreateServerOptions {
     readonly database?: Database;
     readonly entitlements?: EntitlementCheck;
     readonly hookTimeoutMs?: number;
+    readonly instanceAdminGrant?: InstanceAdminGrantCheck;
     // (undocumented)
     readonly logger: Logger;
     readonly migrations: readonly MigrationChain[];
@@ -506,6 +507,12 @@ export interface IdempotencyCheck<Payload extends JobPayload> {
     readonly payload: Payload;
     readonly state: () => Promise<unknown>;
 }
+
+// @public
+export type InstanceAdminGrantCheck = (subject: {
+    readonly accountId: string;
+    readonly targetAccountId: string;
+}) => boolean | Promise<boolean>;
 
 // @public (undocumented)
 export type IntersectUnion<Union> = (Union extends unknown ? (value: Union) => void : never) extends (value: infer Both) => void ? Both : never;

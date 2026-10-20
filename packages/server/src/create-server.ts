@@ -45,7 +45,7 @@ import { isOpenApiDocument, openApiRoute } from "./routes/meta/openapi.ts";
 import { setupRoutes } from "./routes/setup/index.ts";
 import { invitationRoutes } from "./routes/invitations/index.ts";
 import { entitlementRoutes } from "./routes/entitlements.ts";
-import { instanceRoutes } from "./routes/instance/index.ts";
+import { instanceRoutes, type InstanceAdminGrantCheck } from "./routes/instance/index.ts";
 import { memberRoutes } from "./routes/members/index.ts";
 import { workspaceRoutes } from "./routes/workspaces/index.ts";
 import { checkRegistrations, type ContractDocument } from "./routes/register.ts";
@@ -182,6 +182,13 @@ export interface CreateServerOptions {
    * account has a second factor enrolled from the database. A test passes a check of its own.
    */
   readonly secondFactor?: SecondFactorCheck;
+  /**
+   * Whether an instance admin may grant the instance-admin flag to an account (doc 04 section 10.10, Q44): the
+   * composition's choice, never an edition flag (D4). By default it may, the Community Edition's; a composition
+   * that must never have an admin passes a check that refuses, and `PATCH /instance/accounts/{id}` answers 403
+   * `forbidden` to a request that grants the flag, writing nothing.
+   */
+  readonly instanceAdminGrant?: InstanceAdminGrantCheck;
   /** How long a shutdown lets in-flight requests finish before cutting them (doc 01 section 3 rule 2). */
   readonly shutdownTimeoutMs?: number;
 }
@@ -558,6 +565,7 @@ export function createServer(options: CreateServerOptions): Server {
       adapters,
       registration,
       appOrigin: config.APP_ORIGIN,
+      ...(options.instanceAdminGrant === undefined ? {} : { instanceAdminGrant: options.instanceAdminGrant }),
     }),
   );
   // The signed-in account is part of the server like its sign-in: it reads the account's own rows and memberships.

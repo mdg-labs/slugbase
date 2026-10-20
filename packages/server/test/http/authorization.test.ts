@@ -186,14 +186,14 @@ function setup(options: SetupOptions = {}) {
     admin: operationOf("/api/v1/admin-check", "adminCheck", "admin", { scope: "read" }),
     owner: operationOf("/api/v1/owner-check", "checkOwner", "owner", { scope: "read" }),
     unscoped: operationOf("/api/v1/tokens", "listTokens", "account"),
-    instance: operationOf("/api/v1/instance/accounts", "listAccounts", "instanceAdmin"),
+    instance: operationOf("/api/v1/instance/probe", "listAccounts", "instanceAdmin"),
     gated: operationOf("/api/v1/teams", "listTeams", "member", { scope: "read", entitlement: "teams.manage" }),
     machine: operationOf("/api/v1/events", "receiveEvent", "machine", { method: "post", audience: "machine" }),
     form: operationOf("/api/v1/contact", "sendContact", "anonymous", { method: "post", audience: "marketing-form" }),
     partial: operationOf("/api/v1/test/partial", "checkPartial", "partial", { method: "post" }),
     changeTestPassword: operationOf("/api/v1/test/password", "changeTestPassword", "account", { method: "post", reauth: true }),
     deleteTestWorkspace: operationOf("/api/v1/workspace/delete", "deleteTestWorkspace", "owner", { method: "post", reauth: true }),
-    instanceReauth: operationOf("/api/v1/instance/accounts/delete", "deleteAccountAsAdmin", "instanceAdmin", { method: "post", reauth: true }),
+    instanceReauth: operationOf("/api/v1/instance/probe/delete", "deleteAccountAsAdmin", "instanceAdmin", { method: "post", reauth: true }),
   };
   const routes: RouteBinding[] = [
     ...Object.values(operations).map((operation): RouteBinding => ({
@@ -259,7 +259,7 @@ describe("the failure scenario (T3): an anonymous caller of an operation that re
     ["/api/v1/admin-check"],
     ["/api/v1/owner-check"],
     ["/api/v1/account-check"],
-    ["/api/v1/instance/accounts"],
+    ["/api/v1/instance/probe"],
   ])("answers 401 on %s too", async (path) => {
     const { server, seen } = setup();
     expect((await server.fetch(get(path))).status).toBe(401);
@@ -513,8 +513,8 @@ describe("stage 9: authorization", () => {
 
   it("admits an instance admin session only to an instanceAdmin operation", async () => {
     const { server, seen } = setup();
-    expect((await server.fetch(get("/api/v1/instance/accounts", cookieOf("instanceAdmin")))).status).toBe(200);
-    const refused = await server.fetch(get("/api/v1/instance/accounts", cookieOf("owner")));
+    expect((await server.fetch(get("/api/v1/instance/probe", cookieOf("instanceAdmin")))).status).toBe(200);
+    const refused = await server.fetch(get("/api/v1/instance/probe", cookieOf("owner")));
     expect(refused.status).toBe(403);
     expect(await codeOf(refused)).toBe("forbidden");
     expect(seen).toHaveLength(1);
@@ -529,7 +529,7 @@ describe("stage 9: authorization", () => {
           return Promise.resolve(false);
         },
       });
-      const response = await server.fetch(get("/api/v1/instance/accounts", cookieOf("instanceAdmin")));
+      const response = await server.fetch(get("/api/v1/instance/probe", cookieOf("instanceAdmin")));
       expect(response.status).toBe(403);
       expect(await codeOf(response)).toBe("forbidden");
       expect(seen).toEqual([]);
@@ -538,7 +538,7 @@ describe("stage 9: authorization", () => {
 
     it("refuses when the check cannot answer, rather than admitting the admin", async () => {
       const { server, seen } = setup({ secondFactor: () => Promise.reject(new Error("database down")) });
-      const response = await server.fetch(get("/api/v1/instance/accounts", cookieOf("instanceAdmin")));
+      const response = await server.fetch(get("/api/v1/instance/probe", cookieOf("instanceAdmin")));
       expect(response.status).toBe(500);
       expect(seen).toEqual([]);
     });
@@ -551,9 +551,9 @@ describe("stage 9: authorization", () => {
           return Promise.resolve(true);
         },
       });
-      expect((await server.fetch(get("/api/v1/instance/accounts", cookieOf("owner")))).status).toBe(403);
-      expect((await server.fetch(get("/api/v1/instance/accounts", { authorization: "Bearer slb_owner_write" }))).status).toBe(403);
-      expect((await server.fetch(get("/api/v1/instance/accounts", { cookie: "sid=instanceAdmin; state=partial" }))).status).toBe(401);
+      expect((await server.fetch(get("/api/v1/instance/probe", cookieOf("owner")))).status).toBe(403);
+      expect((await server.fetch(get("/api/v1/instance/probe", { authorization: "Bearer slb_owner_write" }))).status).toBe(403);
+      expect((await server.fetch(get("/api/v1/instance/probe", { cookie: "sid=instanceAdmin; state=partial" }))).status).toBe(401);
       expect(asked).toEqual([]);
     });
   });
@@ -577,7 +577,7 @@ describe("stage 9: authorization", () => {
 
     it("refuses a token on an operation that declares no scope with 403 forbidden", async () => {
       const { server, seen } = setup();
-      for (const path of ["/api/v1/tokens", "/api/v1/instance/accounts"]) {
+      for (const path of ["/api/v1/tokens", "/api/v1/instance/probe"]) {
         const response = await server.fetch(get(path, { authorization: "Bearer slb_owner_write" }));
         expect(response.status, path).toBe(403);
         expect(await codeOf(response)).toBe("forbidden");
@@ -651,12 +651,12 @@ describe("stage 9: declared re-authentication and completed second factor (T18)"
 
   it("asks an instance admin to re-authenticate on an instanceAdmin operation that declares it, and refuses a stale non-admin as forbidden", async () => {
     const { server, seen } = setup();
-    const stale = await server.fetch(post("/api/v1/instance/accounts/delete", { ...BROWSER_MUTATION, ...withState("instanceAdmin", "stale") }));
+    const stale = await server.fetch(post("/api/v1/instance/probe/delete", { ...BROWSER_MUTATION, ...withState("instanceAdmin", "stale") }));
     expect(stale.status).toBe(401);
     expect(await codeOf(stale)).toBe("reauth_required");
-    const outsider = await server.fetch(post("/api/v1/instance/accounts/delete", { ...BROWSER_MUTATION, ...withState("owner", "stale") }));
+    const outsider = await server.fetch(post("/api/v1/instance/probe/delete", { ...BROWSER_MUTATION, ...withState("owner", "stale") }));
     expect(outsider.status).toBe(403);
-    const fresh = await server.fetch(post("/api/v1/instance/accounts/delete", { ...BROWSER_MUTATION, ...withState("instanceAdmin", "fresh") }));
+    const fresh = await server.fetch(post("/api/v1/instance/probe/delete", { ...BROWSER_MUTATION, ...withState("instanceAdmin", "fresh") }));
     expect(fresh.status).toBe(200);
     expect(seen.map((entry) => entry.operationId)).toEqual(["deleteAccountAsAdmin"]);
   });
@@ -715,7 +715,7 @@ describe("stage 9: declared re-authentication and completed second factor (T18)"
       ["/api/v1/bookmarks", "member"],
       ["/api/v1/admin-check", "admin"],
       ["/api/v1/owner-check", "owner"],
-      ["/api/v1/instance/accounts", "instanceAdmin"],
+      ["/api/v1/instance/probe", "instanceAdmin"],
       ["/api/v1/tokens", "member"],
     ] as const)("answers 401 mfa_required on %s, before the handler", async (path, who) => {
       const { server, seen } = setup();
@@ -780,8 +780,8 @@ describe("stage 9: declared re-authentication and completed second factor (T18)"
     }
 
     it("refuses an instance admin session when the chain is given no second-factor check, rather than admitting it", async () => {
-      const { app, handled } = chainWith(session("instanceAdmin"), operationOf("/api/v1/instance/accounts", "listAccounts", "instanceAdmin"));
-      const response = await app.request("http://localhost/api/v1/instance/accounts");
+      const { app, handled } = chainWith(session("instanceAdmin"), operationOf("/api/v1/instance/probe", "listAccounts", "instanceAdmin"));
+      const response = await app.request("http://localhost/api/v1/instance/probe");
       expect(response.status).toBe(403);
       expect(await codeOf(response)).toBe("forbidden");
       expect(handled).toEqual([]);

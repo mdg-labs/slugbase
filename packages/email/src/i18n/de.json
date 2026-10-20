@@ -113,5 +113,13 @@
     "greetingAnonymous": "Hallo,",
     "body": "Das ist eine Testmail deiner {appName}-Instanz. Wenn du sie lesen kannst, kann die Instanz E-Mails versenden.",
     "footer": "Du erhältst diese E-Mail, weil eine Instanzadministration {appName} gebeten hat, eine Testmail an deine Adresse zu senden."
+  },
+  "accountDisabled": {
+    "subject": "Dein {appName}-Konto wurde deaktiviert",
+    "greeting": "Hallo {name},",
+    "greetingAnonymous": "Hallo,",
+    "body": "Eine Administration dieser {appName}-Instanz hat dein Konto deaktiviert. Du kannst dich nicht mehr anmelden, und deine Geräte und API-Tokens funktionieren nicht mehr.",
+    "help": "Wenn du glaubst, dass das ein Irrtum ist, wende dich an die Administration dieser {appName}-Instanz.",
+    "footer": "Du erhältst diese E-Mail, weil eine Administration dieser {appName}-Instanz dein Konto deaktiviert hat."
   }
 }

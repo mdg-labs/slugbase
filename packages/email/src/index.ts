@@ -1,3 +1,4 @@
+import { ACCOUNT_DISABLED_TEMPLATE, accountDisabled } from "./templates/account-disabled.ts";
 import { EMAIL_CHANGE_NOTICE_TEMPLATE, emailChangeNotice } from "./templates/email-change-notice.ts";
 import { EMAIL_CHANGE_TEMPLATE, emailChange } from "./templates/email-change.ts";
 import { INVITATION_TEMPLATE, invitation } from "./templates/invitation.ts";
@@ -43,5 +44,6 @@ export function createMailTemplates({ appOrigin }: MailTemplateOptions): MailTem
     [OWNERSHIP_TRANSFERRED_TEMPLATE]: ownershipTransferred(options),
     [INVITATION_TEMPLATE]: invitation(options),
     [TEST_MAIL_TEMPLATE]: testMail(options),
+    [ACCOUNT_DISABLED_TEMPLATE]: accountDisabled(options),
   };
 }

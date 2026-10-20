@@ -42,7 +42,7 @@ Setup is protected by possession of the deployment: the setup screen shows only 
 - **MFA step**: if the account has TOTP enrolled, a successful password check yields a short-lived (5 min) pending-MFA session that can only complete the MFA step or sign out; a TOTP code or one backup code completes sign-in. A code already used for the current 30 s step is rejected (replay protection). Five failed codes end the pending session.
 - **OIDC**: §2.8. A successful OIDC sign-in never asks for SlugBase TOTP (the provider is trusted for that factor).
 - **"Remember me"** chooses the 90-day sliding session instead of the 30-day one (§16).
-- **Session rotation**: a new session token is issued on sign-in, on MFA completion, on password change, on enabling/disabling MFA and on instance-admin promotion; the previous token is deleted.
+- **Session rotation**: a new session token is issued on sign-in, on MFA completion, on password change, on enabling/disabling MFA and on instance-admin promotion; the previous token is deleted. When another instance admin grants or clears an account's instance-admin flag (§11.2) there is no token to rotate, so every session of that account is deleted and it signs in again.
 - **Unverified accounts** (when verification is required) are told to verify and offered a resend; they get no session.
 
 ### 2.4 Sessions
@@ -384,7 +384,7 @@ List all workspaces (name, owners, member count, bookmark count, created; never 
 
 ### 11.2 Accounts
 
-List all accounts (name, email, verified, MFA, last sign-in, workspace count). Actions: resend verification, mark verified, reset MFA (§2.7), send a password-reset link (or show a copyable one when mail is not configured; the link is never returned when it was mailed), disable/enable an account (a disabled account sees the generic sign-in error, its sessions are revoked and its API tokens stop working; the account is emailed), delete an account (same rules as §2.10, with ownership resolution forced first), promote/demote instance admin (at least one instance admin must remain; granting or clearing the flag ends the target's sessions).
+List all accounts (name, email, verified, MFA, last sign-in, workspace count). Actions: resend verification, mark verified, reset MFA (§2.7), send a password-reset link (or show a copyable one when mail is not configured; the link is never returned when it was mailed), disable/enable an account (a disabled account sees the generic sign-in error, its sessions are revoked and its API tokens stop working; the account is emailed), delete an account (same rules as §2.10, with ownership resolution forced first), promote/demote instance admin (at least one instance admin must remain; granting or clearing the flag ends the target's sessions). The admin who must remain is one who is not disabled: clearing the flag of the last enabled admin, or disabling them, is refused (`422 validation_failed`, field code `last_instance_admin`), and an admin who is disabled does not count as another one. Disabling deletes every session of the account at once and refuses its API tokens for as long as it is disabled (they work again if the account is enabled and were not revoked); a request that changes nothing, such as disabling a disabled account, writes no event and sends no email. The "account disabled" email is queued when mail is configured and is sent in the account's language; enabling sends none. A composition can refuse to grant the flag at all (Q44); the Community Edition does not.
 
 ### 11.3 Instance settings and status
 

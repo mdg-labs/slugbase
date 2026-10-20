@@ -407,6 +407,13 @@
       "when": 1792513220051,
       "tag": "20261020162020_add_instance_workspaces",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1792520088428,
+      "tag": "20261020181448_add_instance_accounts",
+      "breakpoints": true
     }
   ]
 }

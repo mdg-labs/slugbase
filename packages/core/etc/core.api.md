@@ -22,7 +22,7 @@ export const ACCOUNT_CREATION_PATHS: readonly ["self-registration", "invitation"
 export const ACCOUNT_LIMIT_ENTITLEMENTS: readonly AccountLimitEntitlement[];
 
 // @public
-export const ACCOUNT_NOTIFICATIONS: readonly ["passwordChanged", "mfaEnabled", "mfaDisabled", "verifyEmail", "newSignIn", "passwordReset", "emailChange", "emailChangeNotice", "ownershipTransferred"];
+export const ACCOUNT_NOTIFICATIONS: readonly ["passwordChanged", "mfaEnabled", "mfaDisabled", "verifyEmail", "newSignIn", "passwordReset", "emailChange", "emailChangeNotice", "ownershipTransferred", "accountDisabled"];
 
 // @public (undocumented)
 export type AccountCreationPath = (typeof ACCOUNT_CREATION_PATHS)[number];
@@ -1071,6 +1071,21 @@ export const INSTANCE_AUDIT_ACTIONS: {
     readonly "instance.workspace_deletion_requested": {
         readonly metadata: {};
     };
+    readonly "instance.accounts_viewed": {
+        readonly metadata: {};
+    };
+    readonly "instance.account_admin_granted": {
+        readonly metadata: {};
+    };
+    readonly "instance.account_admin_revoked": {
+        readonly metadata: {};
+    };
+    readonly "instance.account_disabled": {
+        readonly metadata: {};
+    };
+    readonly "instance.account_enabled": {
+        readonly metadata: {};
+    };
 };
 
 // @public
@@ -1078,6 +1093,83 @@ export const INSTANCE_SETTING_NAMES: readonly ["allowWorkspaceCreation", "displa
 
 // @public
 export const INSTANCE_TEST_MAIL_TEMPLATE = "testMail";
+
+// @public
+export interface InstanceAccount {
+    // (undocumented)
+    readonly disabled: boolean;
+    // (undocumented)
+    readonly displayName: string;
+    // (undocumented)
+    readonly email: string;
+    // (undocumented)
+    readonly emailVerified: boolean;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly isInstanceAdmin: boolean;
+    readonly lastSignInAt: Date | null;
+    // (undocumented)
+    readonly mfaEnabled: boolean;
+    readonly workspaceCount: number;
+}
+
+// @public (undocumented)
+export interface InstanceAccountAsk {
+    readonly ipPrefix: string | null;
+}
+
+// @public
+export interface InstanceAccountChange {
+    // (undocumented)
+    readonly disabled?: boolean;
+    // (undocumented)
+    readonly isInstanceAdmin?: boolean;
+}
+
+// @public (undocumented)
+export interface InstanceAccountDependencies {
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: InstanceAccountStore;
+}
+
+// @public
+export interface InstanceAccountStore {
+    listAccounts(eventId: string, ipPrefix: string | null): Promise<readonly InstanceAccount[]>;
+    updateAccount(accountId: string, change: InstanceAccountChange, notify: boolean, eventIds: {
+        readonly admin: string;
+        readonly disabled: string;
+    }, ipPrefix: string | null): Promise<InstanceAccountUpdateOutcome>;
+}
+
+// @public (undocumented)
+export interface InstanceAccountUpdateAsk extends InstanceAccountAsk {
+    // (undocumented)
+    readonly accountId: string;
+    readonly disabled?: boolean;
+    readonly isInstanceAdmin?: boolean;
+    readonly notify: boolean;
+}
+
+// @public
+export type InstanceAccountUpdateOutcome =
+/** Every field the ask named is in the state it names; `adminChanged` and `disabledChanged` say which of them moved. */
+    {
+    readonly kind: "updated";
+    readonly account: InstanceAccount;
+    readonly adminChanged: boolean;
+    readonly disabledChanged: boolean;
+}
+/** The account does not exist; nothing was written. */
+| {
+    readonly kind: "unknown_account";
+}
+/** The change would leave the instance without an enabled instance admin; `field` is the one of the ask it refused. */
+| {
+    readonly kind: "last_instance_admin";
+    readonly field: "isInstanceAdmin" | "disabled";
+};
 
 // @public (undocumented)
 export type InstanceAuditAction = keyof typeof INSTANCE_AUDIT_ACTIONS;
@@ -1697,6 +1789,9 @@ export function isEntitlementKey(key: string): key is EntitlementKey;
 export function isInstanceAuditAction(value: unknown): value is InstanceAuditAction;
 
 // @public
+export function listInstanceAccounts(input: InstanceAccountDependencies, ask: InstanceAccountAsk): Promise<readonly InstanceAccount[]>;
+
+// @public
 export function listInstanceWorkspaces(input: InstanceWorkspaceDependencies, ask: InstanceWorkspaceAsk): Promise<readonly InstanceWorkspace[]>;
 
 // @public
@@ -2258,6 +2353,9 @@ export function unconfigured(): Adapters;
 
 // @public
 export const UNSET_INSTANCE_SETTINGS: InstanceSettings;
+
+// @public
+export function updateInstanceAccount(input: InstanceAccountDependencies, ask: InstanceAccountUpdateAsk): Promise<InstanceAccountUpdateOutcome>;
 
 // @public
 export const USER_AGENT_MAX_LENGTH = 256;

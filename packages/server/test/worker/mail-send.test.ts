@@ -34,6 +34,11 @@ describe("the mail.send job", () => {
     expect(() => mailSendJob.parse({ template: "testMail", accountId: ACCOUNT, to: "a@example.test" })).toThrow();
   });
 
+  it("queues the account-disabled template with the account's identifier only: the address and the language are read when the job runs", () => {
+    expect(queueMailSend(JOB_ID, "accountDisabled", ACCOUNT)).toEqual({ id: JOB_ID, queue: "mail.send", data: { template: "accountDisabled", accountId: ACCOUNT } });
+    expect(() => mailSendJob.parse({ template: "accountDisabled", accountId: ACCOUNT, to: "a@example.test" })).toThrow();
+  });
+
   it("queues the emailChange template with the account's identifier only: the address it concerns is read and the tokens made when the job runs", () => {
     expect(queueMailSend(JOB_ID, "emailChange", ACCOUNT)).toEqual({ id: JOB_ID, queue: "mail.send", data: { template: "emailChange", accountId: ACCOUNT } });
     expect(() => mailSendJob.parse({ template: "emailChange", accountId: ACCOUNT, token: "x".repeat(43) })).toThrow();
