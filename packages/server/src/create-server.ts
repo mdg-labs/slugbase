@@ -2,7 +2,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { createAdaptorServer, type ServerType } from "@hono/node-server";
 import { getHealth, getReady, getVersion } from "@slugbase/contracts";
 import { createEntitlementCheck, createEntitlementService, createPasswordPolicy, loadBreachedPasswords, sessionCookieSpec, type Adapters, type RegistrationSettings } from "@slugbase/core";
-import { createAuthStore, createDatabase, entitlementRepository, type AuthStore, type Database, type MigrationChain } from "@slugbase/db";
+import { createAuthStore, createDatabase, entitlementRepository, instanceRepository, type AuthStore, type Database, type MigrationChain } from "@slugbase/db";
 import { Hono } from "hono";
 import { DEVELOPMENT_BUILD_INFO, type BuildInfo } from "./build-info.ts";
 import { renderQrSvg } from "./auth/qr.ts";
@@ -13,7 +13,7 @@ import { createMembershipTenantResolver, defersToMembershipResolver } from "./au
 import { createTokenRedeemLimit } from "./auth/token-redeem-limit.ts";
 import { createRateLimitRegistry, type ServerConfig, type WorkerConfig } from "./config/index.ts";
 import type { Authenticator } from "./http/authenticate.ts";
-import { denyEntitlements, type EntitlementCheck } from "./http/authorize.ts";
+import { denyEntitlements, type EntitlementCheck, type SecondFactorCheck } from "./http/authorize.ts";
 import { bodyLimits } from "./http/body-limits.ts";
 import {
   RouteTable,
@@ -45,6 +45,7 @@ import { isOpenApiDocument, openApiRoute } from "./routes/meta/openapi.ts";
 import { setupRoutes } from "./routes/setup/index.ts";
 import { invitationRoutes } from "./routes/invitations/index.ts";
 import { entitlementRoutes } from "./routes/entitlements.ts";
+import { instanceRoutes } from "./routes/instance/index.ts";
 import { memberRoutes } from "./routes/members/index.ts";
 import { workspaceRoutes } from "./routes/workspaces/index.ts";
 import { checkRegistrations, type ContractDocument } from "./routes/register.ts";
@@ -175,6 +176,11 @@ export interface CreateServerOptions {
    * declared entitlement is refused (`403 entitlement_required`). A test passes a check of its own.
    */
   readonly entitlements?: EntitlementCheck;
+  /**
+   * Replaces the second-factor check of stage 9 (doc 04 section 10.10, Q45), which by default reads whether the
+   * account has a second factor enrolled from the database. A test passes a check of its own.
+   */
+  readonly secondFactor?: SecondFactorCheck;
   /** How long a shutdown lets in-flight requests finish before cutting them (doc 01 section 3 rule 2). */
   readonly shutdownTimeoutMs?: number;
 }
@@ -540,6 +546,18 @@ export function createServer(options: CreateServerOptions): Server {
     },
   });
   builtInRoutes.push(...entitlementRoutes({ withTenant: context.withTenant, service: entitlementService }));
+  // The CE instance admin's operations are part of the server and mounted in every composition: the policy admits no one on a deployment
+  // where no account holds the flag (Q44), so a composition needs no switch of its own.
+  builtInRoutes.push(
+    ...instanceRoutes({
+      withTenant: context.withTenant,
+      databaseUrl: config.DATABASE_URL,
+      chains: () => migrationSets,
+      buildInfo,
+      adapters,
+      registration,
+    }),
+  );
   // The signed-in account is part of the server like its sign-in: it reads the account's own rows and memberships.
   builtInRoutes.push(...profileRoutes({ withTenant: context.withTenant }));
   // So is the change of the account's email address: the request records the address and queues its two mails, and the two links redeem anonymously.
@@ -671,6 +689,10 @@ export function createServer(options: CreateServerOptions): Server {
     withTenant: context.withTenant,
     ...(options.now === undefined ? {} : { now: options.now }),
     entitlements: options.entitlements ?? (adapters.entitlements.available ? createEntitlementCheck(entitlementService) : denyEntitlements),
+    // Stage 9 asks the database whether the admin's account has a second factor, on the request's own account-level transaction.
+    secondFactor:
+      options.secondFactor ??
+      (({ accountId, requestId }) => context.withTenant({ accountId, requestId }, (tx) => instanceRepository(tx).secondFactorEnrolled())),
     responseValidation,
     metrics,
   }, chainStages);

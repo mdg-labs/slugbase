@@ -323,7 +323,17 @@ describe("POST /api/v1/setup", () => {
         await tx`SET LOCAL ROLE slugbase_system`;
         return tx<AuditRow[]>`
           SELECT workspace_id, actor_type, actor_account_id, actor_label, action, entity_type, entity_id, metadata, host(ip_prefix) AS ip_prefix
-          FROM audit_events ORDER BY created_at, id`;
+          FROM audit_events WHERE workspace_id IS NOT NULL ORDER BY created_at, id`;
+      });
+      return [...rows];
+    }
+
+    async function instanceRows(): Promise<{ actor_account_id: string | null; actor_label: string; action: string; metadata: unknown; ip_prefix: string | null }[]> {
+      const rows = await database().owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        return tx<{ actor_account_id: string | null; actor_label: string; action: string; metadata: unknown; ip_prefix: string | null }[]>`
+          SELECT actor_account_id, actor_label, action, metadata, host(ip_prefix) AS ip_prefix
+          FROM audit_events WHERE workspace_id IS NULL ORDER BY created_at, id`;
       });
       return [...rows];
     }
@@ -362,13 +372,17 @@ describe("POST /api/v1/setup", () => {
         },
       ]);
       expect(await workspaceJobs()).toEqual([{ eventId: expect.stringMatching(/^[0-9a-f-]{36}$/) as string, workspaceId, accountId }]);
+      // The instance audit stream records the setup, for the account it made.
+      expect(await instanceRows()).toEqual([
+        { actor_account_id: accountId, actor_label: "First Admin", action: "instance.setup_completed", metadata: {}, ip_prefix: "203.0.0.0" },
+      ]);
     });
 
     it("holds no secret: not the password, its hash, the session token or the setup token", async () => {
       const served = serve({ SETUP_TOKEN_REQUIRED: "false" });
       expect((await setup(served, { body: { ...BODY, setupToken: "a setup token that must not be recorded" } })).status).toBe(201);
 
-      const text = JSON.stringify(await auditRows()) + JSON.stringify(await workspaceJobs());
+      const text = JSON.stringify(await auditRows()) + JSON.stringify(await instanceRows()) + JSON.stringify(await workspaceJobs());
       for (const secret of [BODY.password, "$argon2id$", "a setup token that must not be recorded", "admin@example.test"]) {
         expect(text).not.toContain(secret);
       }
@@ -377,11 +391,12 @@ describe("POST /api/v1/setup", () => {
     it("writes and queues nothing when setup is already completed", async () => {
       const served = serve({ SETUP_TOKEN_REQUIRED: "false" });
       expect((await setup(served)).status).toBe(201);
-      const before = { audit: await auditRows(), jobs: await workspaceJobs() };
+      const before = { audit: await auditRows(), instance: await instanceRows(), jobs: await workspaceJobs() };
 
       expect((await setup(served)).status).toBe(403);
 
-      expect({ audit: await auditRows(), jobs: await workspaceJobs() }).toEqual(before);
+      expect({ audit: await auditRows(), instance: await instanceRows(), jobs: await workspaceJobs() }).toEqual(before);
+      expect(before.instance).toHaveLength(1);
     });
 
     it("writes and queues nothing for a wrong setup token", async () => {
@@ -390,6 +405,7 @@ describe("POST /api/v1/setup", () => {
       expect((await setup(served, { body: { ...BODY, setupToken: "wrong" } })).status).toBe(403);
 
       expect(await auditRows()).toEqual([]);
+      expect(await instanceRows()).toEqual([]);
       expect(await workspaceJobs()).toEqual([]);
     });
   });

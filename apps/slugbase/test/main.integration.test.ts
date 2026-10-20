@@ -436,6 +436,45 @@ describe("apps/slugbase main server and public registration", () => {
   }, 60_000);
 });
 
+describe("apps/slugbase main server and the instance admin operations", () => {
+  let database: TestDatabase;
+
+  beforeAll(async () => {
+    database = await createTestDatabase();
+  }, 300_000);
+
+  afterAll(async () => {
+    await database.drop();
+  }, 300_000);
+
+  const env = (): Record<string, string> => ({
+    NODE_ENV: "test",
+    DATABASE_URL: databaseUrl(database),
+    DATABASE_MIGRATE_URL: databaseUrl(database, "owner"),
+    SETUP_ENABLED: "true",
+    SETUP_TOKEN_REQUIRED: "false",
+  });
+  const first = { displayName: "Ada", email: "ada@example.test", password: "a long enough password for ada", workspaceName: "Home" };
+  const STATUS = "/api/v1/instance/status";
+
+  it("composes GET /api/v1/instance/status: it asks for a credential, and refuses the first admin, whom setup signs in without a second factor", async () => {
+    const { status, output, observed } = await runServer(env(), async (port) => {
+      const anonymous = await get(port, STATUS);
+      const created = await post(port, "/api/v1/setup", first);
+      const cookie = /set-cookie: (__Host-slugbase_session=[A-Za-z0-9_-]+)/i.exec(created)?.[1] ?? "";
+      const signedIn = await send(port, `GET ${STATUS} HTTP/1.1\r\nHost: localhost\r\nCookie: ${cookie}\r\nConnection: close\r\n\r\n`);
+      return `${anonymous}\n=====\n${created.split("\r\n")[0] ?? ""}\n=====\n${signedIn}`;
+    });
+    expect(status, output).toBe(0);
+    const [anonymous = "", created = "", signedIn = ""] = (observed ?? "").split("\n=====\n");
+    expect(anonymous).toMatch(/^HTTP\/1\.1 401 /);
+    expect(anonymous).toContain('"code":"unauthenticated"');
+    expect(created).toMatch(/^HTTP\/1\.1 201 /);
+    expect(signedIn).toMatch(/^HTTP\/1\.1 403 /);
+    expect(signedIn).toContain('"code":"forbidden"');
+  }, 60_000);
+});
+
 describe("apps/slugbase main server as a role that is not held by row-level security", () => {
   let database: TestDatabase;
 

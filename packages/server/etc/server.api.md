@@ -180,6 +180,7 @@ export interface CreateServerOptions {
     readonly now?: () => number;
     readonly openApiDocument?: ContractDocument;
     readonly registrationDefaults?: RegistrationSettings;
+    readonly secondFactor?: SecondFactorCheck;
     readonly shutdownTimeoutMs?: number;
     readonly webRoot?: string;
 }
@@ -1086,6 +1087,12 @@ export interface SeatCheckInput {
     // (undocumented)
     readonly workspaceId: string;
 }
+
+// @public
+export type SecondFactorCheck = (subject: {
+    readonly accountId: string;
+    readonly requestId: string;
+}) => Promise<boolean>;
 
 // @public
 export const secretsFragment: EnvFragment<    {

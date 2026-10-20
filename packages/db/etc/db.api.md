@@ -10,6 +10,7 @@ import type { CredentialTokenPurpose } from '@slugbase/core';
 import type { EntitlementVersionWriter } from '@slugbase/core';
 import { InferInsertModel } from 'drizzle-orm';
 import { InferSelectModel } from 'drizzle-orm';
+import { InstanceAuditEvent } from '@slugbase/core';
 import type { InvitationAcceptResult } from '@slugbase/core';
 import type { InvitationIdentityResult } from '@slugbase/core';
 import type { InvitationInspectStore } from '@slugbase/core';
@@ -279,6 +280,7 @@ export interface CompleteSetup {
     // (undocumented)
     readonly displayName: string;
     readonly email: string;
+    readonly instanceEventId: string;
     readonly ipPrefix: string | null;
     readonly jobs?: readonly QueuedJob[];
     // (undocumented)
@@ -526,6 +528,24 @@ export type InsertValues<T extends WorkspaceTable> = Omit<InferInsertModel<T>, "
 };
 
 // @public
+export interface InstanceCounts {
+    readonly accounts: number;
+    readonly activeSessions: number;
+    readonly workspaces: number;
+}
+
+// @public (undocumented)
+export interface InstanceRepository {
+    jobHealth(): Promise<JobHealth>;
+    listAudit(limit: number, afterId?: string): Promise<readonly InstanceAuditEvent[]>;
+    secondFactorEnrolled(): Promise<boolean>;
+    status(eventId: string, ipPrefix: string | null): Promise<InstanceCounts>;
+}
+
+// @public (undocumented)
+export function instanceRepository(tx: TenantTx): InstanceRepository;
+
+// @public
 export interface InvitationAcceptanceRepository {
     accept(tokenHash: Buffer, seatLimit: number | null): Promise<InvitationAcceptResult>;
     enqueue(jobs: readonly QueuedJob[]): Promise<void>;
@@ -583,6 +603,12 @@ export function invitationRepository(tx: TenantTx): InvitationRepository;
 
 // @public
 export function isLastOwnerViolation(error: unknown): boolean;
+
+// @public
+export interface JobHealth {
+    readonly failed: number;
+    readonly queueDepth: number;
+}
 
 // @public
 export function listRepositoryMethods(): readonly RepositoryMethodEntry[];

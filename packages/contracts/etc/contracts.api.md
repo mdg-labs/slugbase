@@ -530,6 +530,35 @@ export interface ComponentTypes {
         InspectInvitationRequest: {
             token: string;
         };
+        InstanceStatus: {
+            counts: {
+                accounts: number;
+                activeSessions: number;
+                workspaces: number;
+            };
+            jobs: {
+                failed: number;
+                queueDepth: number;
+            };
+            migrations: {
+                applied: number;
+                expected: number;
+            };
+            oidcProviders: {
+                name: string;
+                slug: string;
+            }[];
+            ports: {
+                ai: boolean;
+                errorReporting: boolean;
+                mail: boolean;
+            };
+            signIn: {
+                emailVerificationRequired: boolean;
+                publicRegistration: boolean;
+            };
+            version: string;
+        };
         Invitation: {
             createdAt: string;
             email: string;
@@ -1361,6 +1390,53 @@ export const getHealth: {
 };
 
 // @public (undocumented)
+export const getInstanceStatus: {
+    readonly method: "get";
+    readonly path: "/api/v1/instance/status";
+    readonly operationId: "getInstanceStatus";
+    readonly tag: "instance";
+    readonly summary: "Read the status of the instance";
+    readonly auth: "instanceAdmin";
+    readonly rate: "read";
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        version: z.ZodString;
+        migrations: z.ZodObject<{
+        expected: z.ZodInt;
+        applied: z.ZodInt;
+        }, z.core.$strict>;
+        ports: z.ZodObject<{
+        mail: z.ZodBoolean;
+        ai: z.ZodBoolean;
+        errorReporting: z.ZodBoolean;
+        }, z.core.$strict>;
+        oidcProviders: z.ZodArray<z.ZodObject<{
+        slug: z.ZodString;
+        name: z.ZodString;
+        }, z.core.$strict>>;
+        signIn: z.ZodObject<{
+        publicRegistration: z.ZodBoolean;
+        emailVerificationRequired: z.ZodBoolean;
+        }, z.core.$strict>;
+        counts: z.ZodObject<{
+        accounts: z.ZodInt;
+        workspaces: z.ZodInt;
+        activeSessions: z.ZodInt;
+        }, z.core.$strict>;
+        jobs: z.ZodObject<{
+        queueDepth: z.ZodInt;
+        failed: z.ZodInt;
+        }, z.core.$strict>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
 export const getMe: {
     readonly method: "get";
     readonly path: "/api/v1/me";
@@ -1677,6 +1753,37 @@ export const inspectInvitation: {
 // @public (undocumented)
 export const InspectInvitationRequestSchema: z.ZodObject<{
     token: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const InstanceStatusSchema: z.ZodObject<{
+    version: z.ZodString;
+    migrations: z.ZodObject<{
+        expected: z.ZodInt;
+        applied: z.ZodInt;
+    }, z.core.$strict>;
+    ports: z.ZodObject<{
+        mail: z.ZodBoolean;
+        ai: z.ZodBoolean;
+        errorReporting: z.ZodBoolean;
+    }, z.core.$strict>;
+    oidcProviders: z.ZodArray<z.ZodObject<{
+        slug: z.ZodString;
+        name: z.ZodString;
+    }, z.core.$strict>>;
+    signIn: z.ZodObject<{
+        publicRegistration: z.ZodBoolean;
+        emailVerificationRequired: z.ZodBoolean;
+    }, z.core.$strict>;
+    counts: z.ZodObject<{
+        accounts: z.ZodInt;
+        workspaces: z.ZodInt;
+        activeSessions: z.ZodInt;
+    }, z.core.$strict>;
+    jobs: z.ZodObject<{
+        queueDepth: z.ZodInt;
+        failed: z.ZodInt;
+    }, z.core.$strict>;
 }, z.core.$strict>;
 
 // @public
@@ -3690,6 +3797,67 @@ export interface OperationTypes {
                 };
             };
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    getInstanceStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["InstanceStatus"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6682,6 +6850,23 @@ export interface paths {
             cookie?: never;
         };
         get: OperationTypes["getEntitlements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/instance/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["getInstanceStatus"];
         put?: never;
         post?: never;
         delete?: never;

@@ -961,6 +961,166 @@
         ],
         "type": "object"
       },
+      "InstanceStatus": {
+        "additionalProperties": false,
+        "properties": {
+          "counts": {
+            "additionalProperties": false,
+            "description": "What the instance holds",
+            "properties": {
+              "accounts": {
+                "description": "Every account, disabled ones included",
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "activeSessions": {
+                "description": "The complete sessions that have not expired",
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "workspaces": {
+                "description": "The workspaces that are not being deleted",
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "accounts",
+              "workspaces",
+              "activeSessions"
+            ],
+            "type": "object"
+          },
+          "jobs": {
+            "additionalProperties": false,
+            "description": "The health of the background jobs",
+            "properties": {
+              "failed": {
+                "description": "Background jobs that failed and are still on record",
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "queueDepth": {
+                "description": "Background jobs that are due and waiting for a worker",
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "queueDepth",
+              "failed"
+            ],
+            "type": "object"
+          },
+          "migrations": {
+            "additionalProperties": false,
+            "description": "The migration level of the database",
+            "properties": {
+              "applied": {
+                "description": "The migrations of those that the database has recorded",
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "expected": {
+                "description": "The migrations this build ships, across every chain it composes",
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "expected",
+              "applied"
+            ],
+            "type": "object"
+          },
+          "oidcProviders": {
+            "description": "The OIDC providers that are enabled and answered discovery, by slug and name only",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "description": "The name the sign-in page shows",
+                  "type": "string"
+                },
+                "slug": {
+                  "description": "The provider's slug",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "slug",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "ports": {
+            "additionalProperties": false,
+            "description": "Which optional ports the deployment configures; never the configuration itself",
+            "properties": {
+              "ai": {
+                "description": "Whether an AI adapter is configured",
+                "type": "boolean"
+              },
+              "errorReporting": {
+                "description": "Whether server error reporting is configured",
+                "type": "boolean"
+              },
+              "mail": {
+                "description": "Whether a mail adapter is configured",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "mail",
+              "ai",
+              "errorReporting"
+            ],
+            "type": "object"
+          },
+          "signIn": {
+            "additionalProperties": false,
+            "description": "The registration settings in force",
+            "properties": {
+              "emailVerificationRequired": {
+                "description": "The value of EMAIL_VERIFICATION_REQUIRED in force, the composition's default when the operator left it unset",
+                "type": "boolean"
+              },
+              "publicRegistration": {
+                "description": "The value of PUBLIC_REGISTRATION in force, the composition's default when the operator left it unset",
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "publicRegistration",
+              "emailVerificationRequired"
+            ],
+            "type": "object"
+          },
+          "version": {
+            "description": "The version of the running build",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "migrations",
+          "ports",
+          "oidcProviders",
+          "signIn",
+          "counts",
+          "jobs"
+        ],
+        "type": "object"
+      },
       "Invitation": {
         "additionalProperties": false,
         "properties": {
@@ -3557,6 +3717,90 @@
         "x-slugbase-auth": "member",
         "x-slugbase-rate": "read",
         "x-slugbase-scope": "read"
+      }
+    },
+    "/api/v1/instance/status": {
+      "get": {
+        "operationId": "getInstanceStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstanceStatus"
+                }
+              }
+            },
+            "description": "The version and migration level, the configured ports, the detected OIDC providers, the registration settings, the counts and the health of the background jobs; never a credential, a URL with credentials or a secret"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The session is not an instance admin's, or the account has no second factor enrolled, or the credential is an API token"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Read the status of the instance",
+        "tags": [
+          "instance"
+        ],
+        "x-slugbase-auth": "instanceAdmin",
+        "x-slugbase-rate": "read"
       }
     },
     "/api/v1/invitations": {
@@ -8356,6 +8600,9 @@
     },
     {
       "name": "entitlements"
+    },
+    {
+      "name": "instance"
     },
     {
       "name": "invitations"

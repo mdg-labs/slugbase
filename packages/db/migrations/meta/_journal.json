@@ -379,6 +379,13 @@
       "when": 1792486130208,
       "tag": "20261020084850_add_entitlement_version_bump",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1792501923233,
+      "tag": "20261020131203_add_instance_admin",
+      "breakpoints": true
     }
   ]
 }

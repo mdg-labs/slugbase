@@ -116,6 +116,8 @@ interface Seen {
 
 interface SetupOptions {
   readonly authenticators?: boolean;
+  /** Replaces the second-factor check; by default only the instance admin of the fixture has a second factor. */
+  readonly secondFactor?: (subject: { readonly accountId: string; readonly requestId: string }) => Promise<boolean>;
   readonly resolver?: TenantResolver;
   readonly now?: () => number;
   readonly extraRoutes?: (handler: (id: string) => RouteBinding["handler"]) => readonly RouteBinding[];
@@ -220,6 +222,7 @@ function setup(options: SetupOptions = {}) {
         return database.withTenant(context, fn);
       },
     },
+    secondFactor: options.secondFactor ?? (({ accountId }) => Promise.resolve(accountId === ACCOUNTS.instanceAdmin)),
     ...(options.now === undefined ? {} : { now: options.now }),
   });
   return { server, seen, cookieCalls, bearerCalls, resolved, transactions, operations };
@@ -517,6 +520,44 @@ describe("stage 9: authorization", () => {
     expect(seen).toHaveLength(1);
   });
 
+  describe("the instanceAdmin policy and the second factor (Q45)", () => {
+    it("refuses an admin whose account has no second factor with 403 forbidden, and asks the check once, for that account", async () => {
+      const asked: { accountId: string; requestId: string }[] = [];
+      const { server, seen } = setup({
+        secondFactor: (subject) => {
+          asked.push(subject);
+          return Promise.resolve(false);
+        },
+      });
+      const response = await server.fetch(get("/api/v1/instance/accounts", cookieOf("instanceAdmin")));
+      expect(response.status).toBe(403);
+      expect(await codeOf(response)).toBe("forbidden");
+      expect(seen).toEqual([]);
+      expect(asked).toEqual([{ accountId: ACCOUNTS.instanceAdmin, requestId: expect.any(String) as string }]);
+    });
+
+    it("refuses when the check cannot answer, rather than admitting the admin", async () => {
+      const { server, seen } = setup({ secondFactor: () => Promise.reject(new Error("database down")) });
+      const response = await server.fetch(get("/api/v1/instance/accounts", cookieOf("instanceAdmin")));
+      expect(response.status).toBe(500);
+      expect(seen).toEqual([]);
+    });
+
+    it("does not ask the check for a session without the flag, a token or a pending session, which are refused before it", async () => {
+      const asked: string[] = [];
+      const { server } = setup({
+        secondFactor: ({ accountId }) => {
+          asked.push(accountId);
+          return Promise.resolve(true);
+        },
+      });
+      expect((await server.fetch(get("/api/v1/instance/accounts", cookieOf("owner")))).status).toBe(403);
+      expect((await server.fetch(get("/api/v1/instance/accounts", { authorization: "Bearer slb_owner_write" }))).status).toBe(403);
+      expect((await server.fetch(get("/api/v1/instance/accounts", { cookie: "sid=instanceAdmin; state=partial" }))).status).toBe(401);
+      expect(asked).toEqual([]);
+    });
+  });
+
   describe("API tokens", () => {
     it("refuses a read-only token on a write operation with 403 token_scope", async () => {
       const { server, seen } = setup();
@@ -737,6 +778,14 @@ describe("stage 9: declared re-authentication and completed second factor (T18)"
       );
       return { app, handled };
     }
+
+    it("refuses an instance admin session when the chain is given no second-factor check, rather than admitting it", async () => {
+      const { app, handled } = chainWith(session("instanceAdmin"), operationOf("/api/v1/instance/accounts", "listAccounts", "instanceAdmin"));
+      const response = await app.request("http://localhost/api/v1/instance/accounts");
+      expect(response.status).toBe(403);
+      expect(await codeOf(response)).toBe("forbidden");
+      expect(handled).toEqual([]);
+    });
 
     it("refuses an API token on an operation that declares reauth even when the operation also declares a scope", async () => {
       const { app, handled } = chainWith(token("owner", "read-write"), operationOf("/api/v1/tokens/new", "createToken", "account", { scope: "write", reauth: true }));

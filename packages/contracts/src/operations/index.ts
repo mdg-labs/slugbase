@@ -3,17 +3,19 @@ import { completeOidcSignIn, forgotPassword, login, logout, register, resendVeri
 import { cancelEmailChange, cancelPendingEmailChange, changePassword, confirmEmailChange, confirmMfaEnrollment, createApiToken, deleteMe, disableMfa, getMe, listApiTokens, listIdentities, listSessions, reauthenticate, regenerateMfaBackupCodes, requestEmailChange, revokeApiToken, revokeSession, revokeSessions, startMfaEnrollment, unlinkIdentity, updateMe } from "./me.ts";
 import { acceptInvitation, createInvitation, createInvitationLink, inspectInvitation, listInvitations, resendInvitation, revokeInvitation } from "./invitations.ts";
 import { getEntitlements } from "./entitlements.ts";
+import { getInstanceStatus } from "./instance.ts";
 import { listMembers, removeMember, updateMember } from "./members.ts";
 import { getApiConfig, getHealth, getOpenApiDocument, getReady, getVersion } from "./meta.ts";
 import { completeSetup, getSetupStatus } from "./setup.ts";
 import { createWorkspace, deleteWorkspace, getWorkspace, getWorkspaceSettings, leaveWorkspace, listWorkspaces, renameWorkspace, setActiveWorkspace, transferWorkspaceOwnership, updateWorkspaceSettings } from "./workspaces.ts";
 
 /** Every operation the generator publishes. A new tag file adds its operations here. */
-export const operations: readonly OperationDefinition[] = [getHealth, getReady, getVersion, getApiConfig, getOpenApiDocument, login, register, verifyEmail, resendVerifyEmail, forgotPassword, resetPassword, verifyMfa, logout, startOidcSignIn, completeOidcSignIn, getMe, updateMe, listSessions, revokeSession, revokeSessions, reauthenticate, changePassword, requestEmailChange, confirmEmailChange, cancelEmailChange, cancelPendingEmailChange, startMfaEnrollment, confirmMfaEnrollment, regenerateMfaBackupCodes, disableMfa, listApiTokens, createApiToken, revokeApiToken, listIdentities, unlinkIdentity, getSetupStatus, completeSetup, listWorkspaces, createWorkspace, setActiveWorkspace, getWorkspace, renameWorkspace, getWorkspaceSettings, updateWorkspaceSettings, listMembers, updateMember, removeMember, leaveWorkspace, deleteWorkspace, transferWorkspaceOwnership, getEntitlements, deleteMe, createInvitation, listInvitations, resendInvitation, createInvitationLink, revokeInvitation, inspectInvitation, acceptInvitation];
+export const operations: readonly OperationDefinition[] = [getHealth, getReady, getVersion, getApiConfig, getOpenApiDocument, login, register, verifyEmail, resendVerifyEmail, forgotPassword, resetPassword, verifyMfa, logout, startOidcSignIn, completeOidcSignIn, getMe, updateMe, listSessions, revokeSession, revokeSessions, reauthenticate, changePassword, requestEmailChange, confirmEmailChange, cancelEmailChange, cancelPendingEmailChange, startMfaEnrollment, confirmMfaEnrollment, regenerateMfaBackupCodes, disableMfa, listApiTokens, createApiToken, revokeApiToken, listIdentities, unlinkIdentity, getSetupStatus, completeSetup, listWorkspaces, createWorkspace, setActiveWorkspace, getWorkspace, renameWorkspace, getWorkspaceSettings, updateWorkspaceSettings, listMembers, updateMember, removeMember, leaveWorkspace, deleteWorkspace, transferWorkspaceOwnership, getEntitlements, deleteMe, createInvitation, listInvitations, resendInvitation, createInvitationLink, revokeInvitation, inspectInvitation, acceptInvitation, getInstanceStatus];
 
 export * from "./auth.ts";
 export * from "./define.ts";
 export * from "./entitlements.ts";
+export * from "./instance.ts";
 export * from "./invitations.ts";
 export * from "./me.ts";
 export * from "./members.ts";

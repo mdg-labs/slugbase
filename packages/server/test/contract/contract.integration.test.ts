@@ -61,6 +61,9 @@ function serve(modules: readonly ServerModule[], document?: TestDocument, option
     database: tenantDatabase(database()),
     ...(document === undefined ? {} : { openApiDocument: document }),
     ...(options.entitlements === undefined ? {} : { entitlements: options.entitlements }),
+    // The stub world names its own instance admin, which the database knows nothing of; the walk of the committed document signs real accounts in and
+    // leaves the check to the database.
+    ...(options.memberships === true ? {} : { secondFactor: world.secondFactor }),
   });
 }
 
@@ -95,8 +98,8 @@ describe("the walker over the committed document", () => {
   async function sessionHooks(server: Server, unentitled: Set<string>): Promise<PolicyHooks> {
     await seedAccount(database(), WALKER_ACCOUNT);
     const needsReauth = new Set(readOperations(committed).operations.filter((operation) => operation.reauth === true).map((operation) => operation.operationId));
-    const signIn = async (email: string, reauthenticate: boolean, member = false, role?: "owner" | "member", entitled = true): Promise<string> => {
-      const account = await seedAccount(database(), { email, password: WALKER_ACCOUNT.password });
+    const signIn = async (email: string, reauthenticate: boolean, member = false, role?: "owner" | "member", entitled = true, instanceAdmin = false): Promise<string> => {
+      const account = await seedAccount(database(), { email, password: WALKER_ACCOUNT.password, instanceAdmin });
       if (!entitled) {
         unentitled.add(account.id);
       }
@@ -128,6 +131,13 @@ describe("the walker over the committed document", () => {
       const cookie = /^(__Host-slugbase_session=[A-Za-z0-9_-]{43});/.exec(response.headers.get("set-cookie") ?? "")?.[1];
       if (response.status !== 200 || cookie === undefined) {
         throw new Error(`the walker could not sign in: ${String(response.status)}`);
+      }
+      if (instanceAdmin) {
+        // An instance admin needs a second factor besides the flag. The sign-in above came first, so the session is a complete one, as it is after the code is accepted.
+        await database().owner.begin(async (tx) => {
+          await tx`SELECT set_config('app.account_id', ${account.id}, true)`;
+          await tx`UPDATE accounts SET mfa_enabled_at = now(), mfa_secret = ${Buffer.from("sealed")}, mfa_secret_key_id = 'key-1' WHERE id = ${account.id}`;
+        });
       }
       if (reauthenticate) {
         const reauth = await server.fetch(
@@ -162,6 +172,12 @@ describe("the walker over the committed document", () => {
           // An owner of a workspace of its own whose account the entitlement source does not hold the entitlement for: the policy admits it, the entitlement does not.
           without.set(operationId, await signIn(`walker-${operationId}-unentitled@example.test`.toLowerCase(), false, false, "owner", false));
         }
+        continue;
+      }
+      if (kind === "process" && policy === "instanceAdmin") {
+        // An instance admin with a second factor, and the account just below the policy: an ordinary one.
+        cookies.set(operationId, await signIn(`walker-${operationId}@example.test`.toLowerCase(), needsReauth.has(operationId), false, undefined, true, true));
+        below.set(operationId, await signIn(`walker-${operationId}-below@example.test`.toLowerCase(), false));
         continue;
       }
       if (kind !== "account-level") {
@@ -211,11 +227,12 @@ describe("the walker over the committed document", () => {
     expect(report.failures.filter((failure) => !teamRefusal(failure))).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each anonymous operation and for the sign-in; each of the forty operations that need a session
+    // One valid request for each anonymous operation and for the sign-in; each of the forty-one operations that need a session
     // also answers 401 without one, each of the ten that declare re-authentication answers 401 reauth_required without it, and each of
     // the sixteen that need a role in the workspace answers the principal just below it (404 below member, 403 below admin), and each of the eight
-    // that name a member, a recipient, a team or an invitation answers for one of workspace B; each of the four that declare an entitlement answers 403 to an account without it.
-    expect(report.calls).toBe(operations.length + 78);
+    // that name a member, a recipient, a team or an invitation answers for one of workspace B; each of the four that declare an entitlement answers 403 to an account without it;
+    // and the instance operation answers 403 to the ordinary account just below its policy.
+    expect(report.calls).toBe(operations.length + 80);
   }, WALK_TIMEOUT_MS);
 });
 

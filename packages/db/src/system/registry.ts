@@ -78,4 +78,7 @@ export const systemOperations: readonly string[] = [
   "sys_oidc_state_take",
   "sys_invitation_accept_with_identity",
   "sys_workspace_bump_entitlement_version",
+  "sys_instance_status",
+  "sys_list_instance_audit",
+  "sys_setup_audit",
 ];

@@ -1035,6 +1035,39 @@ export function inspectInvitation(input: {
     readonly token: string;
 }): Promise<InvitationInspectOutcome>;
 
+// @public (undocumented)
+export const INSTANCE_AUDIT_ACTION_NAMES: readonly InstanceAuditAction[];
+
+// @public (undocumented)
+export const INSTANCE_AUDIT_ACTIONS: {
+    readonly "instance.setup_completed": {
+        readonly metadata: {};
+    };
+    readonly "instance.status_viewed": {
+        readonly metadata: {};
+    };
+};
+
+// @public (undocumented)
+export type InstanceAuditAction = keyof typeof INSTANCE_AUDIT_ACTIONS;
+
+// @public
+export interface InstanceAuditEvent {
+    // (undocumented)
+    readonly action: InstanceAuditAction;
+    readonly actorAccountId: string | null;
+    readonly actorLabel: string;
+    // (undocumented)
+    readonly createdAt: Date;
+    // (undocumented)
+    readonly entityId: string | null;
+    // (undocumented)
+    readonly entityType: string | null;
+    // (undocumented)
+    readonly id: string;
+    readonly ipPrefix: string | null;
+}
+
 // @public
 export const INVITATION_ROLES: readonly ["admin", "member"];
 
@@ -1483,6 +1516,9 @@ export function isDomainEventName(value: unknown): value is DomainEventName;
 
 // @public
 export function isEntitlementKey(key: string): key is EntitlementKey;
+
+// @public (undocumented)
+export function isInstanceAuditAction(value: unknown): value is InstanceAuditAction;
 
 // @public
 export function listInvitations(input: Pick<InvitationActionDependencies, "store">, ask: {

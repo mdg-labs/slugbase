@@ -172,6 +172,10 @@ export const FIXTURES: ContractFixtures = {
   // acceptance without a credential, which is the registration form. The redemptions themselves are walked by the invitation acceptance tests.
   inspectInvitation: { body: { token: "A".repeat(43) }, status: 410 },
   acceptInvitation: { body: { token: "A".repeat(43), displayName: "Walker", password: "a password for the walker" }, status: 410 },
+  // An instance admin's operation: it names no workspace, account or other identifier, so there is none of workspace B or of another account to put in it.
+  // The walker that calls it is an instance admin with a second factor on a complete session (the contract test makes it), and the account below the
+  // policy is an ordinary one; the instance suite shows that a token, a pending session and an admin without a second factor are refused.
+  getInstanceStatus: {},
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

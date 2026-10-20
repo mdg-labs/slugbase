@@ -28,6 +28,8 @@ export interface StubWorld {
   /** The adapters of the server under test: unconfigured ports, the in-memory rate limiter and the stub tenant resolver. */
   adapters(config?: ModuleContext["config"]): Adapters;
   readonly hooks: PolicyHooks;
+  /** The second-factor check of the server under test: only the instance admin of the stub world has a second factor enrolled. */
+  readonly secondFactor: (subject: { readonly accountId: string }) => Promise<boolean>;
   /** What a fixture principal sends: its session cookie, or for a token its bearer header. */
   credentialsOf(principal: FixturePrincipal): Credentials;
   /** A bearer token of the given scope, of the owner of workspace A. */
@@ -109,6 +111,7 @@ export function createStubWorld(fixture: TenantFixture): StubWorld {
 
   return {
     authenticators: [cookie, bearer],
+    secondFactor: ({ accountId }) => Promise.resolve(accountId === INSTANCE_ADMIN_ACCOUNT),
     adapters: (config) => ({ ...adapters(config), tenantResolver: resolver, secretBox: testSecretBox(testKey("walker-1")) }),
     credentialsOf: (principal) => (isFixtureToken(principal) ? tokenCredentials(principal.scope, principal.accountId) : freshSessionCredentials(principal.accountId)),
     tokenOf: (scope) => tokenCredentials(scope, fixture.a.owner.accountId),

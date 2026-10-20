@@ -205,6 +205,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/instance/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the status of the instance */
+        get: operations["getInstanceStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/invitations": {
         parameters: {
             query?: never;
@@ -1182,6 +1199,56 @@ export interface components {
         InspectInvitationRequest: {
             /** @description The token of the invitation link, from the path of /invite/<token> */
             token: string;
+        };
+        InstanceStatus: {
+            /** @description What the instance holds */
+            counts: {
+                /** @description Every account, disabled ones included */
+                accounts: number;
+                /** @description The complete sessions that have not expired */
+                activeSessions: number;
+                /** @description The workspaces that are not being deleted */
+                workspaces: number;
+            };
+            /** @description The health of the background jobs */
+            jobs: {
+                /** @description Background jobs that failed and are still on record */
+                failed: number;
+                /** @description Background jobs that are due and waiting for a worker */
+                queueDepth: number;
+            };
+            /** @description The migration level of the database */
+            migrations: {
+                /** @description The migrations of those that the database has recorded */
+                applied: number;
+                /** @description The migrations this build ships, across every chain it composes */
+                expected: number;
+            };
+            /** @description The OIDC providers that are enabled and answered discovery, by slug and name only */
+            oidcProviders: {
+                /** @description The name the sign-in page shows */
+                name: string;
+                /** @description The provider's slug */
+                slug: string;
+            }[];
+            /** @description Which optional ports the deployment configures; never the configuration itself */
+            ports: {
+                /** @description Whether an AI adapter is configured */
+                ai: boolean;
+                /** @description Whether server error reporting is configured */
+                errorReporting: boolean;
+                /** @description Whether a mail adapter is configured */
+                mail: boolean;
+            };
+            /** @description The registration settings in force */
+            signIn: {
+                /** @description The value of EMAIL_VERIFICATION_REQUIRED in force, the composition's default when the operator left it unset */
+                emailVerificationRequired: boolean;
+                /** @description The value of PUBLIC_REGISTRATION in force, the composition's default when the operator left it unset */
+                publicRegistration: boolean;
+            };
+            /** @description The version of the running build */
+            version: string;
         };
         Invitation: {
             /**
@@ -2549,6 +2616,73 @@ export interface operations {
                 };
             };
             /** @description The service is temporarily unavailable, or no entitlement source is configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getInstanceStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The version and migration level, the configured ports, the detected OIDC providers, the registration settings, the counts and the health of the background jobs; never a credential, a URL with credentials or a secret */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceStatus"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The session is not an instance admin's, or the account has no second factor enrolled, or the credential is an API token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
             503: {
                 headers: {
                     [name: string]: unknown;
