@@ -2008,7 +2008,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The browser is sent to the provider with a PKCE challenge (S256), a state and a nonce, and receives the pre-auth cookie; for the reauth intent the provider is asked to ask for the credentials again. When the provider is unknown or unavailable, the link or reauth intent comes without a complete session, from another site or without a Sec-Fetch-Site header, or the invite intent carries a text that is not an invitation token, the browser is sent to /login?error=oidc_failed instead, the same answer a failed callback gives */
+            /** @description The browser is sent to the provider with a PKCE challenge (S256), a state and a nonce, and receives the pre-auth cookie; for the reauth intent the provider is asked to ask for the credentials again. When the provider is unknown or unavailable, the link or reauth intent comes without a complete session, a link, reauth or invite start comes from another site or without a Sec-Fetch-Site header, or the invite intent carries a text that is not an invitation token, the browser is sent to /login?error=oidc_failed instead, the same answer a failed callback gives */
             302: {
                 headers: {
                     /** @description Where the browser goes next: the provider's authorization endpoint, or /login?error=oidc_failed when the handshake cannot start */
