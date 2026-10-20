@@ -13,6 +13,8 @@ import { DomainEvent } from '@slugbase/core';
 import { DomainEventName } from '@slugbase/core';
 import { DomainEventPayload } from '@slugbase/core';
 import { EmptyResponse } from '@slugbase/contracts';
+import { EntitlementCheck } from '@slugbase/core';
+import { EntitlementSubject } from '@slugbase/core';
 import { IdentityProviderConfig } from '@slugbase/core';
 import { JsonResponse } from '@slugbase/contracts';
 import { MigrateResult } from '@slugbase/db';
@@ -261,16 +263,9 @@ export type DeletionRefusalCode = (typeof DELETION_REFUSAL_CODES)[number];
 // @public
 export const DEVELOPMENT_BUILD_INFO: BuildInfo;
 
-// @public
-export type EntitlementCheck = (entitlement: string, subject: EntitlementSubject) => boolean | Promise<boolean>;
+export { EntitlementCheck }
 
-// @public
-export interface EntitlementSubject {
-    // (undocumented)
-    readonly accountId: string;
-    // (undocumented)
-    readonly workspaceId?: string;
-}
+export { EntitlementSubject }
 
 // @public
 export function envBoolean(): z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>;

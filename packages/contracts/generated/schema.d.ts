@@ -188,6 +188,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/entitlements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the active workspace's entitlements and usage */
+        get: operations["getEntitlements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/invitations": {
         parameters: {
             query?: never;
@@ -1090,6 +1107,42 @@ export interface components {
              * @description The account identifier of the member who receives the content; another current member of the workspace and not the one who departs. Left out, it is the account that removes the member, or the longest-standing owner when the member leaves on their own
              */
             transferTo?: string;
+        };
+        EntitlementSet: {
+            /** @description Whether AI suggestions may be requested in the workspace */
+            "ai.suggestions": boolean;
+            /** @description Whether the audit log may be read; events are written whatever this says */
+            "audit.log": boolean;
+            /** @description How many bookmarks the workspace may hold, plan-archived ones not counted */
+            "bookmarks.max": number | "unlimited";
+            /** @description Whether invitations may be created, listed, resent, linked and accepted */
+            "members.invite": boolean;
+            /** @description How many members the workspace may have; accepted invitations count, pending ones do not */
+            "seats.max": number | "unlimited";
+            /** @description Whether bookmarks and folders may be shared with individual members */
+            "sharing.members": boolean;
+            /** @description Whether sharing with teams is available */
+            "sharing.teams": boolean;
+            /** @description Whether teams may be administered */
+            "teams.manage": boolean;
+            /** @description How many workspaces the acting account may own; scoped to the account, not to the workspace */
+            "workspaces.ownMax": number | "unlimited";
+        };
+        EntitlementUsage: {
+            /** @description The workspace's bookmarks that are not plan-archived, as its bookmark_count says */
+            "bookmarks.used": number;
+            /** @description The members of the workspace */
+            "seats.used": number;
+            /** @description The workspaces the acting account owns, without one being deleted */
+            "workspaces.owned": number;
+        };
+        Entitlements: {
+            /** @description The value of every entitlement for the workspace the request acts in and the acting account */
+            entitlements: components["schemas"]["EntitlementSet"];
+            /** @description Whether an upgrade path exists for the workspace; false on a deployment that sells no plans */
+            upgradeAvailable: boolean;
+            /** @description What the limits are compared with */
+            usage: components["schemas"]["EntitlementUsage"];
         };
         ForgotPasswordRequest: {
             /**
@@ -2429,6 +2482,73 @@ export interface operations {
                 };
             };
             /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getEntitlements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The entitlements of the workspace the request acts in and of the acting account, the usage counters and whether an upgrade path exists */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Entitlements"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable, or no entitlement source is configured */
             503: {
                 headers: {
                     [name: string]: unknown;

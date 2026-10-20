@@ -19,6 +19,9 @@ export function acceptInvitationWithIdentity(input: InvitationIdentityDependenci
 export const ACCOUNT_CREATION_PATHS: readonly ["self-registration", "invitation", "oidc", "setup"];
 
 // @public
+export const ACCOUNT_LIMIT_ENTITLEMENTS: readonly AccountLimitEntitlement[];
+
+// @public
 export const ACCOUNT_NOTIFICATIONS: readonly ["passwordChanged", "mfaEnabled", "mfaDisabled", "verifyEmail", "newSignIn", "passwordReset", "emailChange", "emailChangeNotice", "ownershipTransferred"];
 
 // @public (undocumented)
@@ -106,6 +109,22 @@ export interface AccountDeletionWorkspace {
     readonly name: string;
 }
 
+// @public
+export interface AccountEntitlementSet {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly values: AccountEntitlementValues;
+}
+
+// @public
+export type AccountEntitlementValues = {
+    readonly [K in AccountLimitEntitlement]: EntitlementLimit;
+};
+
+// @public
+export type AccountLimitEntitlement = "workspaces.ownMax";
+
 // @public (undocumented)
 export type AccountNotification = (typeof ACCOUNT_NOTIFICATIONS)[number];
 
@@ -124,6 +143,8 @@ export interface Adapters {
     readonly clientErrorReport: ClientErrorReportPort;
     // (undocumented)
     readonly egress: EgressPort;
+    // (undocumented)
+    readonly entitlements: EntitlementSource;
     // (undocumented)
     readonly errors: ErrorReportPort;
     // (undocumented)
@@ -547,6 +568,12 @@ export function createAuditWriter(input: AuditWriterDependencies): AuditWriter;
 export function createBreachedPasswords(records: Uint8Array): BreachedPasswords;
 
 // @public
+export function createEntitlementCheck(service: EntitlementService): EntitlementCheck;
+
+// @public (undocumented)
+export function createEntitlementService(input: EntitlementServiceOptions): EntitlementService;
+
+// @public
 export function createInvitationLink(input: Omit<InvitationActionDependencies, "newId">, ask: InvitationActionAsk): Promise<InvitationLinkOutcome>;
 
 // @public (undocumented)
@@ -754,6 +781,94 @@ export class EgressTooLarge extends EgressError {
 // @public
 export function endMembership(input: MembershipEndDependencies, ask: MembershipEndAsk): Promise<MembershipEndOutcome>;
 
+// @public
+export const ENTITLEMENT_CATALOG: Readonly<Record<EntitlementKey, EntitlementDefinition>>;
+
+// @public
+export type EntitlementCheck = (entitlement: string, subject: EntitlementSubject, request: object) => boolean | Promise<boolean>;
+
+// @public (undocumented)
+export interface EntitlementDefinition {
+    // (undocumented)
+    readonly scope: EntitlementScope;
+    // (undocumented)
+    readonly type: EntitlementType;
+}
+
+// @public (undocumented)
+export type EntitlementKey = WorkspaceEntitlement | AccountLimitEntitlement;
+
+// @public
+export type EntitlementLimit = number | "unlimited";
+
+// @public (undocumented)
+export type EntitlementScope = "workspace" | "account";
+
+// @public (undocumented)
+export interface EntitlementService {
+    forRequest(request: object, accountId: string): RequestEntitlements;
+}
+
+// @public (undocumented)
+export interface EntitlementServiceOptions {
+    readonly cacheSize?: number;
+    // (undocumented)
+    readonly source: EntitlementSource;
+    // (undocumented)
+    readonly versions: EntitlementVersions;
+}
+
+// @public
+export interface EntitlementSet {
+    // (undocumented)
+    readonly upgradeAvailable: boolean;
+    // (undocumented)
+    readonly values: WorkspaceEntitlementValues;
+    readonly version: number;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public
+export interface EntitlementSource extends Port {
+    forAccount(accountId: string): Promise<AccountEntitlementValues>;
+    forWorkspace(workspaceId: string): Promise<WorkspaceEntitlementGrant>;
+}
+
+// @public
+export class EntitlementSourceError extends Error {
+    constructor(message: string);
+}
+
+// @public
+export interface EntitlementSubject {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly workspaceId?: string;
+}
+
+// @public (undocumented)
+export type EntitlementType = "flag" | "limit";
+
+// @public
+export class EntitlementVersionError extends Error {
+    constructor();
+}
+
+// @public
+export interface EntitlementVersions {
+    read(request: {
+        readonly accountId: string;
+        readonly workspaceId: string;
+    }): Promise<number | undefined>;
+}
+
+// @public
+export interface EntitlementVersionWriter {
+    bump(): Promise<number | undefined>;
+}
+
 // @public (undocumented)
 export interface ErrorReportContext {
     // (undocumented)
@@ -770,6 +885,12 @@ export interface ErrorReportPort extends Port {
 
 // @public
 export function federatedDisplayName(name: string | undefined, email: string): string;
+
+// @public
+export const FLAG_ENTITLEMENTS: readonly FlagEntitlement[];
+
+// @public
+export type FlagEntitlement = "ai.suggestions" | "sharing.members" | "sharing.teams" | "members.invite" | "teams.manage" | "audit.log";
 
 // @public
 export function generateApiToken(): ApiToken;
@@ -1361,6 +1482,9 @@ export function isAuditAction(value: unknown): value is AuditAction;
 export function isDomainEventName(value: unknown): value is DomainEventName;
 
 // @public
+export function isEntitlementKey(key: string): key is EntitlementKey;
+
+// @public
 export function listInvitations(input: Pick<InvitationActionDependencies, "store">, ask: {
     readonly afterId: string | null;
     readonly limit: number;
@@ -1653,10 +1777,16 @@ export type OwnershipTransferOutcome =
 };
 
 // @public
+export function parseAccountEntitlements(answer: unknown): AccountEntitlementValues;
+
+// @public
 export function parseAuditMetadata<Name extends AuditAction>(name: Name, value: unknown): AuditMetadata<Name>;
 
 // @public
 export function parseDomainEventPayload<Name extends DomainEventName>(name: Name, value: unknown): DomainEventPayload<Name>;
+
+// @public
+export function parseWorkspaceEntitlements(answer: unknown): WorkspaceEntitlementValues;
 
 // @public
 export const PASSWORD_MAX_LENGTH = 256;
@@ -1790,6 +1920,12 @@ export function registrationUnavailable(settings: RegistrationSettings, mailAvai
 // @public
 export function renameWorkspace(input: WorkspaceAdministrationDependencies, ask: WorkspaceRenameAsk): Promise<WorkspaceRenameOutcome>;
 
+// @public (undocumented)
+export interface RequestEntitlements {
+    forAccount(): Promise<AccountEntitlementSet>;
+    forWorkspace(workspaceId: string): Promise<EntitlementSet | undefined>;
+}
+
 // @public
 export function requestWorkspaceDeletion<Code extends string>(input: WorkspaceDeletionDependencies<Code>, ask: WorkspaceDeletionAsk): Promise<WorkspaceDeletionOutcome<Code>>;
 
@@ -1905,6 +2041,12 @@ export const USER_AGENT_MAX_LENGTH = 256;
 
 // @public
 export function verifyTotp(secret: Uint8Array, code: string, nowMs: number): number | undefined;
+
+// @public
+export function withEntitlementChange<T>(writer: EntitlementVersionWriter, change: () => Promise<T>): Promise<T>;
+
+// @public
+export const WORKSPACE_LIMIT_ENTITLEMENTS: readonly WorkspaceLimitEntitlement[];
 
 // @public
 export const WORKSPACE_NAME_MAX_LENGTH = 64;
@@ -2034,6 +2176,26 @@ export type WorkspaceDeletionOutcome<Code extends string> =
 export interface WorkspaceDeletionStore {
     markDeleting(): Promise<boolean>;
 }
+
+// @public (undocumented)
+export type WorkspaceEntitlement = FlagEntitlement | WorkspaceLimitEntitlement;
+
+// @public
+export interface WorkspaceEntitlementGrant {
+    readonly upgradeAvailable: boolean;
+    // (undocumented)
+    readonly values: WorkspaceEntitlementValues;
+}
+
+// @public
+export type WorkspaceEntitlementValues = {
+    readonly [K in FlagEntitlement]: boolean;
+} & {
+    readonly [K in WorkspaceLimitEntitlement]: EntitlementLimit;
+};
+
+// @public
+export type WorkspaceLimitEntitlement = "bookmarks.max" | "seats.max";
 
 // @public (undocumented)
 export interface WorkspaceRenameAsk extends WorkspaceChangeAsk {

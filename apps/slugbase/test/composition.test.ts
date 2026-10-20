@@ -61,6 +61,20 @@ describe("the CE adapters of the composition root", () => {
     expect(warnings).toEqual(["Mail is not configured; the message was not sent"]);
   });
 
+  it("select the full entitlement source of the Community Edition, for the server and the worker alike (doc 01 section 7.5)", async () => {
+    for (const [process, env] of [
+      ["server", configured],
+      ["worker", environment],
+    ] as const) {
+      const adapters = composeAdapters(loadConfig(process, env).config, logger);
+      expect(adapters.entitlements.available, process).toBe(true);
+      const { values, upgradeAvailable } = await adapters.entitlements.forWorkspace("0192f3a0-aaaa-7000-8000-000000000001");
+      expect(Object.values(values).every((value) => value === true || value === "unlimited"), process).toBe(true);
+      expect(upgradeAvailable, process).toBe(false);
+      expect(await adapters.entitlements.forAccount("0192f3a0-cccc-7000-8000-000000000003"), process).toEqual({ "workspaces.ownMax": "unlimited" });
+    }
+  });
+
   it("leave every other port at its unconfigured default", () => {
     const config = loadConfig("server", configured).config;
     const adapters = composeAdapters(config, logger);

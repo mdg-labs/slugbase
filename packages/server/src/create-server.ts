@@ -1,8 +1,8 @@
 import { setTimeout as sleep } from "node:timers/promises";
 import { createAdaptorServer, type ServerType } from "@hono/node-server";
 import { getHealth, getReady, getVersion } from "@slugbase/contracts";
-import { createPasswordPolicy, loadBreachedPasswords, sessionCookieSpec, type Adapters, type RegistrationSettings } from "@slugbase/core";
-import { createAuthStore, createDatabase, type AuthStore, type Database, type MigrationChain } from "@slugbase/db";
+import { createEntitlementCheck, createEntitlementService, createPasswordPolicy, loadBreachedPasswords, sessionCookieSpec, type Adapters, type RegistrationSettings } from "@slugbase/core";
+import { createAuthStore, createDatabase, entitlementRepository, type AuthStore, type Database, type MigrationChain } from "@slugbase/db";
 import { Hono } from "hono";
 import { DEVELOPMENT_BUILD_INFO, type BuildInfo } from "./build-info.ts";
 import { renderQrSvg } from "./auth/qr.ts";
@@ -13,7 +13,7 @@ import { createMembershipTenantResolver, defersToMembershipResolver } from "./au
 import { createTokenRedeemLimit } from "./auth/token-redeem-limit.ts";
 import { createRateLimitRegistry, type ServerConfig, type WorkerConfig } from "./config/index.ts";
 import type { Authenticator } from "./http/authenticate.ts";
-import type { EntitlementCheck } from "./http/authorize.ts";
+import { denyEntitlements, type EntitlementCheck } from "./http/authorize.ts";
 import { bodyLimits } from "./http/body-limits.ts";
 import {
   RouteTable,
@@ -44,6 +44,7 @@ import { apiDocs } from "./routes/meta/docs.ts";
 import { isOpenApiDocument, openApiRoute } from "./routes/meta/openapi.ts";
 import { setupRoutes } from "./routes/setup/index.ts";
 import { invitationRoutes } from "./routes/invitations/index.ts";
+import { entitlementRoutes } from "./routes/entitlements.ts";
 import { memberRoutes } from "./routes/members/index.ts";
 import { workspaceRoutes } from "./routes/workspaces/index.ts";
 import { checkRegistrations, type ContractDocument } from "./routes/register.ts";
@@ -169,10 +170,9 @@ export interface CreateServerOptions {
    */
   readonly now?: () => number;
   /**
-   * Decides the entitlement an operation declares (stage 9, doc 01 section 7.5): the composition's entitlement
-   * source. Without one every declared entitlement is refused (`403 entitlement_required`), so an operation
-   * that declares one, such as `POST /invitations` with `members.invite`, answers that until the composition
-   * supplies the source.
+   * Replaces the entitlement check of stage 9 (doc 01 section 7.5). By default the engine over the
+   * composition's `entitlements` adapter decides, and with no source configured (`available: false`) every
+   * declared entitlement is refused (`403 entitlement_required`). A test passes a check of its own.
    */
   readonly entitlements?: EntitlementCheck;
   /** How long a shutdown lets in-flight requests finish before cutting them (doc 01 section 3 rule 2). */
@@ -263,6 +263,7 @@ const ADAPTER_PORTS: Record<keyof Adapters, true> = {
   rateLimit: true,
   secretBox: true,
   tenantResolver: true,
+  entitlements: true,
 };
 
 const REQUIRED_ADAPTERS = Object.keys(ADAPTER_PORTS) as (keyof Adapters)[];
@@ -272,6 +273,9 @@ const DEFAULT_SHUTDOWN_TIMEOUT_MS = 25_000;
 const DEFAULT_SERVER_POOL_SIZE = 10;
 
 const DEFAULT_AUTH_POOL_SIZE = 4;
+
+// The request id of the transaction that reads a workspace's entitlement version: it writes nothing the audit trail follows.
+const ENTITLEMENT_VERSION_REQUEST = "entitlement-version";
 
 export function assertAdapters(adapters: Adapters): void {
   const missing = REQUIRED_ADAPTERS.filter((port) => {
@@ -526,6 +530,16 @@ export function createServer(options: CreateServerOptions): Server {
     adapters,
     withTenant: metrics.instrumentTenant(database.withTenant.bind(database)),
   });
+  // The entitlement engine is part of the server: it asks the composition's source for the values of the catalog, keyed by the
+  // version each workspace's row carries (doc 01 section 7.5). Stage 9 and `GET /entitlements` both read it.
+  const entitlementService = createEntitlementService({
+    source: adapters.entitlements,
+    versions: {
+      read: ({ accountId, workspaceId }) =>
+        context.withTenant({ accountId, workspaceId, requestId: ENTITLEMENT_VERSION_REQUEST }, (tx) => entitlementRepository(tx).version()),
+    },
+  });
+  builtInRoutes.push(...entitlementRoutes({ withTenant: context.withTenant, service: entitlementService }));
   // The signed-in account is part of the server like its sign-in: it reads the account's own rows and memberships.
   builtInRoutes.push(...profileRoutes({ withTenant: context.withTenant }));
   // So is the change of the account's email address: the request records the address and queues its two mails, and the two links redeem anonymously.
@@ -656,7 +670,7 @@ export function createServer(options: CreateServerOptions): Server {
       : adapters.tenantResolver,
     withTenant: context.withTenant,
     ...(options.now === undefined ? {} : { now: options.now }),
-    ...(options.entitlements === undefined ? {} : { entitlements: options.entitlements }),
+    entitlements: options.entitlements ?? (adapters.entitlements.available ? createEntitlementCheck(entitlementService) : denyEntitlements),
     responseValidation,
     metrics,
   }, chainStages);

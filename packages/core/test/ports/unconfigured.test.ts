@@ -20,6 +20,7 @@ const PORTS: Record<
   rateLimit: { methods: ["consume"], behaviour: "rejects", code: "unavailable" },
   secretBox: { methods: ["needsRotation", "open", "reseal", "seal"], behaviour: "rejects", code: "unavailable" },
   tenantResolver: { methods: ["resolve"], behaviour: "rejects", code: "unavailable" },
+  entitlements: { methods: ["forAccount", "forWorkspace"], behaviour: "rejects", code: "unavailable" },
 };
 
 function call(port: object, method: string): Promise<unknown> {

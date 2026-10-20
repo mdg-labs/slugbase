@@ -660,6 +660,28 @@ describe("CLAUDE.md sweeps", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
   it("sweep-html lists nothing", () => {
     expect(sweep(["dangerouslySetInnerHTML", "innerHTML"], "packages/**/*.tsx")).toEqual([]);
   });
+
+  // D4 and doc 01 section 7.5: nothing decides by edition, and the values of the entitlement catalog reach the
+  // product only through the engine, which reads them from the composition's source.
+  it("sweep-edition finds no edition flag in the packages and apps", () => {
+    const flags = ["isCloud", "SLUGBASE_EDITION", "isCommunityEdition"];
+    expect([...sweep(flags, "packages/**/*.ts"), ...sweep(flags, "packages/**/*.tsx"), ...sweep(flags, "apps/**/*.ts"), ...sweep(flags, "apps/**/*.tsx")]).toEqual([]);
+  });
+
+  it("sweep-entitlement-source reads an EntitlementSource only in the engine and the request scope the route reads", () => {
+    const isTest = (file: string): boolean => /(^|\/)test\//.test(file) || /\.test\.tsx?$/.test(file);
+    const readers = [...sweep(["forWorkspace(", "forAccount("], "packages/**/*.ts"), ...sweep(["forWorkspace(", "forAccount("], "apps/**/*.ts")].filter((file) => !isTest(file));
+    expect(readers.sort()).toEqual(
+      [
+        // the engine asks the source, and the request scope it returns is asked by the route that reports the set
+        "packages/core/src/entitlements/engine.ts",
+        "packages/server/src/routes/entitlements.ts",
+        // the port and the test double declare the two methods
+        "packages/core/src/ports/entitlements.ts",
+        "packages/testing/src/entitlements.ts",
+      ].sort(),
+    );
+  });
 });
 
 describe("raw outbound matcher (T6)", () => {

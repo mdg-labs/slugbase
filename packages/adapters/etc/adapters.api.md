@@ -7,6 +7,7 @@
 import { EgressPort } from '@slugbase/core';
 import { EgressRequest } from '@slugbase/core';
 import { EgressResponse } from '@slugbase/core';
+import type { EntitlementSource } from '@slugbase/core';
 import type { ErrorReportPort } from '@slugbase/core';
 import { IdentityPort } from '@slugbase/core';
 import { IdentityProviderConfig } from '@slugbase/core';
@@ -35,6 +36,9 @@ export interface CreateEgressOptions {
         readonly dnsServers?: readonly string[];
     };
 }
+
+// @public
+export function createFullEntitlementSource(): EntitlementSource;
 
 // @public
 export function createLogOnlyMail(options: {

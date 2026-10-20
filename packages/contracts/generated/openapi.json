@@ -712,6 +712,141 @@
         ],
         "type": "object"
       },
+      "EntitlementSet": {
+        "additionalProperties": false,
+        "properties": {
+          "ai.suggestions": {
+            "description": "Whether AI suggestions may be requested in the workspace",
+            "type": "boolean"
+          },
+          "audit.log": {
+            "description": "Whether the audit log may be read; events are written whatever this says",
+            "type": "boolean"
+          },
+          "bookmarks.max": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "const": "unlimited",
+                "type": "string"
+              }
+            ],
+            "description": "How many bookmarks the workspace may hold, plan-archived ones not counted"
+          },
+          "members.invite": {
+            "description": "Whether invitations may be created, listed, resent, linked and accepted",
+            "type": "boolean"
+          },
+          "seats.max": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "const": "unlimited",
+                "type": "string"
+              }
+            ],
+            "description": "How many members the workspace may have; accepted invitations count, pending ones do not"
+          },
+          "sharing.members": {
+            "description": "Whether bookmarks and folders may be shared with individual members",
+            "type": "boolean"
+          },
+          "sharing.teams": {
+            "description": "Whether sharing with teams is available",
+            "type": "boolean"
+          },
+          "teams.manage": {
+            "description": "Whether teams may be administered",
+            "type": "boolean"
+          },
+          "workspaces.ownMax": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "const": "unlimited",
+                "type": "string"
+              }
+            ],
+            "description": "How many workspaces the acting account may own; scoped to the account, not to the workspace"
+          }
+        },
+        "required": [
+          "bookmarks.max",
+          "seats.max",
+          "workspaces.ownMax",
+          "ai.suggestions",
+          "sharing.members",
+          "sharing.teams",
+          "members.invite",
+          "teams.manage",
+          "audit.log"
+        ],
+        "type": "object"
+      },
+      "EntitlementUsage": {
+        "additionalProperties": false,
+        "properties": {
+          "bookmarks.used": {
+            "description": "The workspace's bookmarks that are not plan-archived, as its bookmark_count says",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "seats.used": {
+            "description": "The members of the workspace",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "workspaces.owned": {
+            "description": "The workspaces the acting account owns, without one being deleted",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bookmarks.used",
+          "seats.used",
+          "workspaces.owned"
+        ],
+        "type": "object"
+      },
+      "Entitlements": {
+        "additionalProperties": false,
+        "properties": {
+          "entitlements": {
+            "$ref": "#/components/schemas/EntitlementSet",
+            "description": "The value of every entitlement for the workspace the request acts in and the acting account"
+          },
+          "upgradeAvailable": {
+            "description": "Whether an upgrade path exists for the workspace; false on a deployment that sells no plans",
+            "type": "boolean"
+          },
+          "usage": {
+            "$ref": "#/components/schemas/EntitlementUsage",
+            "description": "What the limits are compared with"
+          }
+        },
+        "required": [
+          "entitlements",
+          "usage",
+          "upgradeAvailable"
+        ],
+        "type": "object"
+      },
       "ForgotPasswordRequest": {
         "additionalProperties": false,
         "properties": {
@@ -3337,6 +3472,91 @@
         ],
         "x-slugbase-auth": "anonymous",
         "x-slugbase-rate": "reset"
+      }
+    },
+    "/api/v1/entitlements": {
+      "get": {
+        "operationId": "getEntitlements",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Entitlements"
+                }
+              }
+            },
+            "description": "The entitlements of the workspace the request acts in and of the acting account, the usage counters and whether an upgrade path exists"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace: the account has none, or the workspace is being deleted"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable, or no entitlement source is configured"
+          }
+        },
+        "summary": "Read the active workspace's entitlements and usage",
+        "tags": [
+          "entitlements"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-rate": "read",
+        "x-slugbase-scope": "read"
       }
     },
     "/api/v1/invitations": {
@@ -8133,6 +8353,9 @@
   "tags": [
     {
       "name": "auth"
+    },
+    {
+      "name": "entitlements"
     },
     {
       "name": "invitations"
