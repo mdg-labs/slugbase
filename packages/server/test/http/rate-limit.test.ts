@@ -356,6 +356,62 @@ describe("the rate-limit stage", () => {
     });
   });
 
+  describe("the per-account limit an anonymous operation takes itself", () => {
+    // The stage takes no account bucket for an anonymous operation, whatever credential the request carries; the handler of one
+    // that finds a session takes it through the context.
+    const redeem = route(limited("/api/v1/redeem", "redeem", "token_redeem"), async (context) => {
+      const principal = context.get("principal");
+      if (principal !== undefined) {
+        await context.get("takeAccountLimit")?.(context, principal.accountId);
+      }
+      return Response.json({ ok: true });
+    });
+
+    it("takes the address limit in the stage and the account limit only where the handler asks, under the account's identifier", async () => {
+      const { get, memory } = build([redeem]);
+
+      expect((await get("/api/v1/redeem")).status).toBe(200);
+      expect((await get("/api/v1/redeem", { "x-account": "a" })).status).toBe(200);
+
+      expect(memory.takes).toEqual([
+        { bucket: "token_redeem", key: "unknown" },
+        { bucket: "token_redeem", key: "unknown" },
+        { bucket: "token_redeem:account", key: "a" },
+      ]);
+    });
+
+    it("answers 429 rate_limited with Retry-After once the account has used its limit, whatever address the requests come from, and counts another account on its own", async () => {
+      const { get, rejections } = build([redeem], { env: { RATE_LIMIT_TOKEN_REDEEM_ACCOUNT: "2/hour", RATE_LIMIT_TOKEN_REDEEM_IP: "100/hour" }, hops: 1 });
+      const from = (address: string, account: string) => get("/api/v1/redeem", { "x-account": account, "x-forwarded-for": address });
+
+      expect((await from("203.0.113.1", "a")).status).toBe(200);
+      expect((await from("203.0.113.2", "a")).status).toBe(200);
+      const denied = await from("203.0.113.3", "a");
+
+      expect(denied.status).toBe(429);
+      expect(await denied.json()).toMatchObject({ code: "rate_limited", status: 429 });
+      expect(Number(denied.headers.get("retry-after"))).toBeGreaterThanOrEqual(1);
+      expect(rejections).toEqual(["token_redeem"]);
+      expect((await from("203.0.113.4", "b")).status).toBe(200);
+    });
+
+    it("is offered only on a route the stage limited, and fails closed when the bucket has no account limit", async () => {
+      let offered: unknown = "unset";
+      const unlimited = build([route(limited("/api/v1/open", "open", "none"), (context) => {
+        offered = context.get("takeAccountLimit");
+        return Response.json({ ok: true });
+      })]);
+      await unlimited.get("/api/v1/open");
+      expect(offered).toBeUndefined();
+
+      const { get } = build([route(limited("/api/v1/open", "open", "public"), async (context) => {
+        await context.get("takeAccountLimit")?.(context, "a");
+        return Response.json({ ok: true });
+      })]);
+      expect((await get("/api/v1/open")).status).toBe(503);
+    });
+  });
+
   describe("before authentication (T9)", () => {
     function rejectingBearer(): { readonly authenticator: Authenticator; readonly lookups: () => number } {
       let lookups = 0;

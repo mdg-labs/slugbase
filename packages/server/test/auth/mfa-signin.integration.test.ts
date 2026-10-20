@@ -279,9 +279,9 @@ describe("what a partial session may call", () => {
 
     const operations = readOperations(document).operations;
     const allowed = new Set(["verifyMfa", "logout"]);
-    // An anonymous operation never looks at the session, so it answers whoever holds a cookie.
+    // An anonymous operation is not refused by the stages for a partial session; acceptInvitation, whose token-only form needs a session, refuses it in its handler (see invitation-signup.integration.test.ts).
     const anonymous = operations.filter((operation) => operation.auth === "anonymous" || operation.auth === "machine").map((operation) => operation.operationId).sort();
-    expect(anonymous).toEqual(["cancelEmailChange", "completeOidcSignIn", "completeSetup", "confirmEmailChange", "forgotPassword", "getApiConfig", "getHealth", "getOpenApiDocument", "getReady", "getSetupStatus", "getVersion", "inspectInvitation", "login", "register", "resendVerifyEmail", "resetPassword", "startOidcSignIn", "verifyEmail"]);
+    expect(anonymous).toEqual(["acceptInvitation", "cancelEmailChange", "completeOidcSignIn", "completeSetup", "confirmEmailChange", "forgotPassword", "getApiConfig", "getHealth", "getOpenApiDocument", "getReady", "getSetupStatus", "getVersion", "inspectInvitation", "login", "register", "resendVerifyEmail", "resetPassword", "startOidcSignIn", "verifyEmail"]);
     expect(operations.filter((operation) => operation.auth === "partial").map((operation) => operation.operationId).sort()).toEqual(["logout", "verifyMfa"]);
 
     const refused: string[] = [];
@@ -319,6 +319,18 @@ describe("what a partial session may call", () => {
     const after = await get(world, ME, token);
     expect(after.status).toBe(401);
     expect(await problem(after)).toMatchObject({ code: "unauthenticated" });
+  });
+
+  it("is refused 401 mfa_required by the token-only form of accepting an invitation, which the contract declares anonymous", async () => {
+    const world = serve();
+    const { account } = await enrol(world);
+    const { token } = await startSignIn(world, account);
+
+    const refused = await post(world, "/api/v1/invitations/accept", token, { token: "A".repeat(43) });
+
+    expect(refused.status).toBe(401);
+    expect(await problem(refused)).toMatchObject({ code: "mfa_required" });
+    expect(await levels(account.id)).toContain("partial");
   });
 
   it("is refused once its five minutes are over", async () => {

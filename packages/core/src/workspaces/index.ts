@@ -93,3 +93,14 @@ export type {
   InvitationInspectStore,
   InvitationPreview,
 } from "./invitation-acceptance.ts";
+export { acceptInvitationWithAccount } from "./invitation-signup.ts";
+export type {
+  InvitationSignupAsk,
+  InvitationSignupDependencies,
+  InvitationSignupEvent,
+  InvitationSignupRecords,
+  InvitationSignupResult,
+  InvitationSignupSession,
+  InvitationSignupStore,
+  NewAccountAcceptance,
+} from "./invitation-signup.ts";

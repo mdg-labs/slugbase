@@ -53,6 +53,14 @@ export interface RateLimitState {
  */
 export type TakeEmailLimit = (context: ChainContext, key: string) => Promise<void>;
 
+/**
+ * Takes one token from the per-account limit of the operation's bucket under `accountId`, for an operation that
+ * is anonymous, so the stage takes no account limit for it, and whose handler finds the request signed in
+ * (accepting an invitation with the token alone). Throws `429 rate_limited` when the limit is empty and `503
+ * unavailable` when the limiter cannot decide.
+ */
+export type TakeAccountLimit = (context: ChainContext, accountId: string) => Promise<void>;
+
 export interface RateLimiting {
   /** Stage 3a: the per-IP take, before authentication. */
   readonly ipStage: RequestStage;
@@ -202,6 +210,19 @@ export function createRateLimiting({ limiter, registry, logger, errors, recordRe
     }
   };
 
+  // The limit an anonymous operation counts per account, once its handler knows the request is a session's.
+  const takeAccount: TakeAccountLimit = async (context, accountId) => {
+    const limited = limitedOperation(context);
+    const limit = limited?.limits.find((candidate) => candidate.scope === "account");
+    if (limited === undefined || limit === undefined) {
+      throw failure(context, limited?.bucket ?? "none", new Error("the operation's bucket has no account limit"));
+    }
+    const { denied } = await consume(context, limited.bucket, [{ limit, key: accountId }]);
+    if (denied) {
+      throw new ProblemError("rate_limited", DENIED_DETAIL);
+    }
+  };
+
   const ipStage: RequestStage = async (context, next) => {
     const refusal = await take(context, (limit) => limit.scope === "ip");
     return refusal ?? next();
@@ -214,6 +235,7 @@ export function createRateLimiting({ limiter, registry, logger, errors, recordRe
     }
     if (limitedOperation(context) !== undefined) {
       context.set("takeEmailLimit", takeEmail);
+      context.set("takeAccountLimit", takeAccount);
     }
     return next();
   };

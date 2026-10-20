@@ -93,6 +93,11 @@ export interface ChainEnv {
      * limit: the handler of such an operation takes it once it knows the address.
      */
     takeEmailLimit?: TakeEmailLimit;
+    /**
+     * Set with `takeEmailLimit`: the handler of an anonymous operation whose bucket has a per-account
+     * limit takes it once it knows the request is a signed-in account's.
+     */
+    takeAccountLimit?: (context: ChainContext, accountId: string) => Promise<void>;
     /** Set by the tenant-resolution stage: the active workspace's internal UUID. */
     workspaceId?: string;
     /** Set by the tenant-resolution stage when the resolver found a workspace for the principal. */

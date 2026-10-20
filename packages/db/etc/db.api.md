@@ -12,6 +12,8 @@ import { InferSelectModel } from 'drizzle-orm';
 import type { InvitationAcceptResult } from '@slugbase/core';
 import type { InvitationInspectStore } from '@slugbase/core';
 import type { InvitationManagementStore } from '@slugbase/core';
+import type { InvitationSignupResult } from '@slugbase/core';
+import type { InvitationSignupSession } from '@slugbase/core';
 import type { InvitationStore } from '@slugbase/core';
 import type { MemberRoleStore } from '@slugbase/core';
 import type { PgColumn } from 'drizzle-orm/pg-core';
@@ -202,7 +204,7 @@ export interface AuditEventRepository {
 export function auditEventRepository(tx: TenantTx): AuditEventRepository;
 
 // @public (undocumented)
-export interface AuthStore extends SetupStore, MfaStore, OidcStore, RegistrationStore, EmailVerificationStore, PasswordResetStore, EmailChangeStore, InvitationInspectStore {
+export interface AuthStore extends SetupStore, MfaStore, OidcStore, RegistrationStore, EmailVerificationStore, PasswordResetStore, EmailChangeStore, InvitationInspectStore, InvitationAccountStore {
     changePassword(change: PasswordChange): Promise<boolean>;
     close(): Promise<void>;
     createSession(session: NewSession): Promise<boolean>;
@@ -513,6 +515,19 @@ export interface InvitationAcceptanceRepository {
 // @public (undocumented)
 export function invitationAcceptanceRepository(tx: TenantTx): InvitationAcceptanceRepository;
 
+// @public (undocumented)
+export interface InvitationAccountStore {
+    acceptInvitationWithNewAccount(acceptance: NewInvitationAccount): Promise<InvitationSignupResult>;
+}
+
+// @public
+export interface InvitationAccountWrites {
+    // (undocumented)
+    readonly audit: readonly AuditRecord[];
+    // (undocumented)
+    readonly jobs: readonly QueuedJob[];
+}
+
 // @public
 export interface InvitationMailContext {
     // (undocumented)
@@ -733,6 +748,25 @@ export interface NewEmailChangeToken {
     readonly purpose: Extract<CredentialTokenPurpose, "email_change" | "email_change_cancel">;
     readonly tokenHash: Buffer;
     readonly ttlSeconds: number;
+}
+
+// @public (undocumented)
+export interface NewInvitationAccount {
+    readonly accountId: string;
+    // (undocumented)
+    readonly displayName: string;
+    // (undocumented)
+    readonly locale: string;
+    readonly onAccepted: (accepted: {
+        readonly workspaceId: string;
+        readonly role: WorkspaceRole;
+    }) => InvitationAccountWrites;
+    readonly passwordHash: string;
+    readonly seatLimit: number | null;
+    // (undocumented)
+    readonly session: InvitationSignupSession;
+    // (undocumented)
+    readonly tokenHash: Buffer;
 }
 
 // @public

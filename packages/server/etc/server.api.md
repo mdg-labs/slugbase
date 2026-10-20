@@ -76,6 +76,7 @@ export interface ChainEnv {
         principal?: Principal;
         rateLimit?: RateLimitState;
         takeEmailLimit?: TakeEmailLimit;
+        takeAccountLimit?: (context: ChainContext, accountId: string) => Promise<void>;
         workspaceId?: string;
         tenant?: RequestTenant;
         hooks?: HookDispatcher;

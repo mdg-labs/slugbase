@@ -15,12 +15,14 @@ export const acceptInvitation: {
     readonly path: "/api/v1/invitations/accept";
     readonly operationId: "acceptInvitation";
     readonly tag: "invitations";
-    readonly summary: "Accept an invitation as the invited account";
-    readonly auth: "account";
+    readonly summary: "Accept an invitation, as the invited account or by creating it";
+    readonly auth: "anonymous";
     readonly rate: "token_redeem";
     readonly request: {
         readonly body: z.ZodObject<{
             token: z.ZodString;
+            displayName: z.ZodOptional<z.ZodString>;
+            password: z.ZodOptional<z.ZodString>;
         }, z.core.$strict>;
     };
     readonly responses: {
@@ -32,6 +34,19 @@ export const acceptInvitation: {
         owner: "owner";
         }>;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 201: JsonResponse<z.ZodObject<{
+        workspaceId: z.ZodUUID;
+        role: z.ZodEnum<{
+        member: "member";
+        admin: "admin";
+        owner: "owner";
+        }>;
+        }, z.core.$strict>, {
+        "Set-Cookie": {
+        description: string;
+        schema: z.ZodString;
+        };
+        }>;
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;
         readonly 403: ProblemResponse;
@@ -46,6 +61,8 @@ export const acceptInvitation: {
 // @public (undocumented)
 export const AcceptInvitationRequestSchema: z.ZodObject<{
     token: z.ZodString;
+    displayName: z.ZodOptional<z.ZodString>;
+    password: z.ZodOptional<z.ZodString>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -358,6 +375,8 @@ export interface ComponentTypes {
     // (undocumented)
     schemas: {
         AcceptInvitationRequest: {
+            displayName?: string;
+            password?: string;
             token: string;
         };
         Account: {
@@ -2291,6 +2310,15 @@ export interface OperationTypes {
         responses: {
             200: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["InvitationAccepted"];
+                };
+            };
+            201: {
+                headers: {
+                    "Set-Cookie": string;
                     [name: string]: unknown;
                 };
                 content: {

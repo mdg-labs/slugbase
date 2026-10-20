@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
-import { WORKSPACE_ROLES } from "./me.ts";
+import { DisplayNameSchema, WORKSPACE_ROLES } from "./me.ts";
 
 // The invitations tag of doc 04 section 10.5: the operations that invite a person into the workspace the
 // request acts in, and the two that the invited person redeems the emailed token with. An invitation never grants the owner role (doc 02 section 3.4): the request schema has no such
@@ -216,6 +216,14 @@ export const InvitationPreviewSchema = z
 export const AcceptInvitationRequestSchema = z
   .strictObject({
     token: z.string().min(1).max(256).describe("The token of the invitation link, from the path of /invite/<token>"),
+    displayName: DisplayNameSchema.optional().describe(
+      "The display name of the account to create; surrounding whitespace is removed. Sent with the password, by a person whose invited address has no account, and never with a session",
+    ),
+    password: z.string().optional().describe("The password of the account to create, 12 to 256 characters. Sent with the display name, by a person whose invited address has no account"),
+  })
+  .refine((request) => (request.displayName === undefined) === (request.password === undefined), {
+    path: ["password"],
+    message: "The display name and the password are sent together or not at all",
   })
   .meta({ id: "AcceptInvitationRequest" });
 
@@ -256,26 +264,42 @@ export const acceptInvitation = defineOperation({
   path: "/api/v1/invitations/accept",
   operationId: "acceptInvitation",
   tag: "invitations",
-  summary: "Accept an invitation as the invited account",
-  auth: "account",
+  summary: "Accept an invitation, as the invited account or by creating it",
+  auth: "anonymous",
   rate: "token_redeem",
   request: { body: AcceptInvitationRequestSchema },
   responses: {
     200: jsonResponse(
-      "The token is redeemed, once: the account is a member of the invitation's workspace with exactly the invited role, the invitation is accepted and the session acts in the workspace from its next request on",
+      "A request with the token alone, from the signed-in account whose verified address is the invited one: the token is redeemed, once, the account is a member of the invitation's workspace with exactly the invited role, the invitation is accepted and the session acts in the workspace from its next request on",
       InvitationAcceptedSchema,
     ),
-    400: problemResponse("The request was malformed"),
-    401: problemResponse("There is no session, or its second factor is not complete"),
-    403: problemResponse(
-      "The request did not come from the application itself (cross_site_request), the credential is an API token, or the account's verified email address is not the invited one, an unverified address included (forbidden, field code invitation_email_mismatch). Nothing is written and the invitation stays pending",
+    201: jsonResponse(
+      "A request with the token, a display name and a password, for an invited address that has no account: the token is redeemed, once, and in one transaction the account exists, verified whatever the deployment requires of other accounts because the token proves the mailbox, with the invited address, no personal workspace and a full session; it is a member of the invitation's workspace with exactly the invited role, the invitation is accepted and the new session acts in the workspace. A session cookie the request carried is replaced",
+      InvitationAcceptedSchema,
+      {
+        headers: {
+          "Set-Cookie": {
+            description: "The session cookie: HttpOnly, SameSite=Lax, Path=/, Secure and __Host- prefixed when the deployment is served over https",
+            schema: z.string(),
+          },
+        },
+      },
     ),
-    409: problemResponse("The account is a member of the workspace already (already_member); nothing is written and the invitation stays pending"),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("A request with the token alone has no session (an API token is not one), or its second factor is not complete"),
+    403: problemResponse(
+      "The request did not come from the application itself (cross_site_request), or the account's verified email address is not the invited one, an unverified address included (forbidden, field code invitation_email_mismatch), or the deployment's registration policy refused the invited address for the account to create (registration_refused, one answer for every reason). Nothing is written and the invitation stays pending",
+    ),
+    409: problemResponse(
+      "The account is a member of the workspace already (already_member), or a request that creates an account found one holding the invited address (email_taken): the person signs in and accepts with the token alone. Nothing is written and the invitation stays pending",
+    ),
     410: problemResponse(
       "The token is unknown, expired (7 days), already used, revoked or replaced by a newer one, or its workspace is being deleted; all of them answer alike (token_expired) and nothing is changed",
     ),
-    422: problemResponse("The body did not pass validation, or the workspace has no seat left (seat_limit_reached); nothing is written and the invitation stays pending"),
-    429: rateLimitedResponse("Too many attempts from this address; Retry-After says when to try again"),
+    422: problemResponse(
+      "The body did not pass validation (a display name without a password or the reverse included), the password is outside 12 to 256 characters or is on the breached list (weak_password), or the workspace has no seat left (seat_limit_reached); nothing is written and the invitation stays pending",
+    ),
+    429: rateLimitedResponse("Too many attempts from this address, or from this account; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },
 });

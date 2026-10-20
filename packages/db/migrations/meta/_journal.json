@@ -344,6 +344,13 @@
       "when": 1792454114701,
       "tag": "20261019235514_add_account_deletion_created_lock",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1792455811852,
+      "tag": "20261020002331_add_invitation_signup",
+      "breakpoints": true
     }
   ]
 }

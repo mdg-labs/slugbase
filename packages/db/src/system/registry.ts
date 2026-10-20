@@ -74,4 +74,5 @@ export const systemOperations: readonly string[] = [
   "sys_invitation_invitee_locale",
   "sys_invitation_inspect",
   "sys_invitation_accept",
+  "sys_invitation_accept_new_account",
 ];

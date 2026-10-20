@@ -114,6 +114,7 @@ export function fakeAuthStore(overrides: Partial<AuthStore> = {}): AuthStore {
     cancelEmailChange: unexpected("cancelEmailChange"),
     emailVerified: unexpected("emailVerified"),
     inspectInvitation: unexpected("inspectInvitation"),
+    acceptInvitationWithNewAccount: unexpected("acceptInvitationWithNewAccount"),
     close: () => Promise.resolve(),
     ...overrides,
   };

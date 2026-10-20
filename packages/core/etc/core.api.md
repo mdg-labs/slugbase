@@ -10,6 +10,9 @@ import type { ProblemCode } from '@slugbase/contracts';
 export function acceptInvitation(input: InvitationAcceptDependencies, ask: InvitationAcceptAsk): Promise<InvitationAcceptOutcome>;
 
 // @public
+export function acceptInvitationWithAccount(input: InvitationSignupDependencies, ask: InvitationSignupAsk): Promise<InvitationSignupResult>;
+
+// @public
 export const ACCOUNT_CREATION_PATHS: readonly ["self-registration", "invitation", "oidc", "setup"];
 
 // @public
@@ -1168,6 +1171,70 @@ export type InvitationRevokeOutcome = {
 export type InvitationRole = (typeof INVITATION_ROLES)[number];
 
 // @public (undocumented)
+export interface InvitationSignupAsk {
+    // (undocumented)
+    readonly displayName: string;
+    // (undocumented)
+    readonly locale: string;
+    readonly passwordHash: string;
+    // (undocumented)
+    readonly seatLimit: number | null;
+    // (undocumented)
+    readonly session: InvitationSignupSession;
+    readonly token: string;
+}
+
+// @public (undocumented)
+export interface InvitationSignupDependencies {
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: InvitationSignupStore;
+}
+
+// @public (undocumented)
+export type InvitationSignupEvent = DomainEvent<"account.created"> | DomainEvent<"member.joined">;
+
+// @public
+export interface InvitationSignupRecords {
+    // (undocumented)
+    readonly audit: readonly AuditRecord[];
+    // (undocumented)
+    readonly events: readonly InvitationSignupEvent[];
+}
+
+// @public
+export type InvitationSignupResult = {
+    readonly kind: "accepted";
+    readonly workspaceId: string;
+    readonly invitationId: string;
+    readonly role: WorkspaceRole;
+}
+/** An unknown, used, revoked, replaced or expired token, or a workspace being deleted. */
+| {
+    readonly kind: "gone";
+} | {
+    readonly kind: "seat_limit_reached";
+}
+/** An account holds the invited address, or the address is reserved. */
+| {
+    readonly kind: "email_taken";
+};
+
+// @public
+export interface InvitationSignupSession {
+    readonly id: string;
+    readonly ipPrefix: string | null;
+    readonly replacedTokenHash: Buffer | null;
+    readonly tokenHash: Buffer;
+    readonly userAgent: string | null;
+}
+
+// @public (undocumented)
+export interface InvitationSignupStore {
+    acceptWithNewAccount(acceptance: NewAccountAcceptance): Promise<InvitationSignupResult>;
+}
+
+// @public (undocumented)
 export type InvitationStatus = "pending" | "accepted" | "revoked";
 
 // @public (undocumented)
@@ -1344,6 +1411,25 @@ export interface MembershipEndRequest {
 export interface MembershipEndStore extends MemberRoleStore {
     end(request: MembershipEndRequest): Promise<boolean>;
     longestStandingOwner(excludingAccountId: string): Promise<string | undefined>;
+}
+
+// @public (undocumented)
+export interface NewAccountAcceptance {
+    readonly accountId: string;
+    // (undocumented)
+    readonly displayName: string;
+    // (undocumented)
+    readonly locale: string;
+    readonly onAccepted: (accepted: {
+        readonly workspaceId: string;
+        readonly role: WorkspaceRole;
+    }) => InvitationSignupRecords;
+    readonly passwordHash: string;
+    readonly seatLimit: number | null;
+    // (undocumented)
+    readonly session: InvitationSignupSession;
+    // (undocumented)
+    readonly tokenHash: Buffer;
 }
 
 // @public (undocumented)
