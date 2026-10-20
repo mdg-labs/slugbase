@@ -1,5 +1,5 @@
 import type { ApiConfig } from "../config/config-context.tsx";
-import { safeNextPath } from "./next-path.ts";
+import { HOME_PATH, safeNextPath } from "./next-path.ts";
 
 /** What an OIDC handshake is for (doc 04 section 4.5). */
 export type OidcIntent = "login" | "link" | "reauth";
@@ -17,13 +17,25 @@ export function oidcProvidersOf(config: ApiConfig): readonly OidcProvider[] {
   return config.signIn?.oidc ?? [];
 }
 
+/** An invitation link carries its token in the path; the token goes only to the two invitation operations. */
+const INVITATION_PATH = /^\/invite(?![a-z0-9_-])/i;
+
+/**
+ * The page a handshake comes back to: a path of this origin, and never an invitation link, whose token must not
+ * reach a handshake record. A member who started on one comes back home.
+ */
+function returnPathOf(value: string): string {
+  const path = safeNextPath(value);
+  return INVITATION_PATH.test(path) ? HOME_PATH : path;
+}
+
 /**
  * The address that starts a handshake with a provider. `returnTo` is a path of this origin, which the server checks
  * again; the slug is the one the configuration lists and is encoded into the path.
  */
 export function oidcStartPath(provider: string, intent: OidcIntent, returnTo: string): string {
   const query = new URLSearchParams(intent === "login" ? {} : { intent });
-  query.set("returnTo", safeNextPath(returnTo));
+  query.set("returnTo", returnPathOf(returnTo));
   return `/api/v1/auth/oidc/${encodeURIComponent(provider)}/start?${query.toString()}`;
 }
 
@@ -35,5 +47,5 @@ export function currentReturnTo(): string {
     query.delete("error");
   }
   const rest = query.toString();
-  return safeNextPath(`${pathname}${rest === "" ? "" : `?${rest}`}${hash}`);
+  return returnPathOf(`${pathname}${rest === "" ? "" : `?${rest}`}${hash}`);
 }

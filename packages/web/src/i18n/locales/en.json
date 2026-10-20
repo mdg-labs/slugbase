@@ -1261,5 +1261,69 @@
         "recipientGone": "The person chosen to receive the content is no longer a member of the workspace. Choose someone else."
       }
     }
+  },
+  "invite": {
+    "title": "You are invited",
+    "description": "Accept your invitation to {product}.",
+    "summary": {
+      "workspace": "Workspace",
+      "invitedBy": "Invited by",
+      "role": "Role"
+    },
+    "expired": {
+      "title": "This invitation link does not work",
+      "description": "An invitation link works once and only for a limited time. Ask the person who invited you to send a new one.",
+      "action": "Go to sign in"
+    },
+    "error": {
+      "unavailable": "The invitation cannot be shown right now. Try again in a moment.",
+      "retry": "Try again",
+      "seatLimit": "This workspace has no free seat. Ask the person who invited you.",
+      "rateLimited": {
+        "unknown": "Too many attempts. Try again later.",
+        "seconds": "Too many attempts. Try again in {count, plural, one {# second} other {# seconds}}.",
+        "minutes": "Too many attempts. Try again in {count, plural, one {# minute} other {# minutes}}."
+      }
+    },
+    "join": {
+      "action": "Join {workspace}",
+      "signedInAs": "You are signed in as {email}.",
+      "alreadyMember": {
+        "title": "You are already a member of this workspace.",
+        "action": "Go to Home"
+      },
+      "error": {
+        "mismatch": {
+          "title": "This account cannot accept the invitation",
+          "description": "The invitation is for {email}. The account you are signed in with has to hold that address, verified."
+        },
+        "unavailable": "Joining is not possible right now. Try again in a moment."
+      }
+    },
+    "mismatch": {
+      "title": "This invitation is for another address",
+      "description": "You are signed in as {current}, and the invitation is for {invited}. Sign out to continue with the invited address.",
+      "action": "Sign out and continue"
+    },
+    "signIn": {
+      "description": "{email} already has an account. Sign in to join."
+    },
+    "signUp": {
+      "description": "Choose a name and a password to create your account.",
+      "name": {
+        "label": "Name",
+        "required": "Enter your name."
+      },
+      "email": {
+        "label": "Email",
+        "description": "The invitation was sent to this address, so the account uses it."
+      },
+      "submit": "Create account and join",
+      "error": {
+        "refused": "An account cannot be created with this invitation. Ask the person who invited you.",
+        "invalid": "Check your entries and try again.",
+        "unavailable": "Creating the account is not possible right now. Try again in a moment."
+      }
+    }
   }
 }

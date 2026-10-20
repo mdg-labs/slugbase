@@ -9,9 +9,10 @@ import { isSessionEnded } from "../api/client.ts";
  * Signs the member out: ends the session on the server, then takes them to the sign-in page and drops
  * every cached answer. While the server has not confirmed, nothing changes and the member is told so; a
  * session that had already ended is left to the session handler, which takes the member to sign in.
- * A second call while one is under way does nothing.
+ * A second call while one is under way does nothing. A page that carries on as a signed-out visitor passes
+ * `onSignedOut`: after the server confirmed and the cache was dropped it is called instead of the move to the sign-in page.
  */
-export function useSignOut(): () => void {
+export function useSignOut(onSignedOut?: () => void): () => void {
   const { t } = useTranslation();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -29,9 +30,14 @@ export function useSignOut(): () => void {
       }
       return;
     }
-    router.history.replace("/login");
-    queryClient.clear();
-  }, [queryClient, router, t]);
+    if (onSignedOut === undefined) {
+      router.history.replace("/login");
+      queryClient.clear();
+    } else {
+      queryClient.clear();
+      onSignedOut();
+    }
+  }, [onSignedOut, queryClient, router, t]);
 
   return useCallback(() => {
     if (running.current) {

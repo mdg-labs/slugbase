@@ -23,6 +23,7 @@ import { Route as App403RouteImport } from "./routes/_app/403.tsx";
 import { Route as AppSettingsRouteImport } from "./routes/_app/settings.tsx";
 import { Route as EmailChangeCancelRouteImport } from "./routes/email-change.cancel.tsx";
 import { Route as EmailChangeConfirmRouteImport } from "./routes/email-change.confirm.tsx";
+import { Route as InviteTokenRouteImport } from "./routes/invite.$token.tsx";
 import { Route as LoginMfaRouteImport } from "./routes/login_.mfa.tsx";
 import { Route as AppSettingsIndexRouteImport } from "./routes/_app/settings/index.tsx";
 import { Route as AppSettingsAccountIndexRouteImport } from "./routes/_app/settings/account/index.tsx";
@@ -101,6 +102,11 @@ const EmailChangeConfirmRoute = EmailChangeConfirmRouteImport.update({
   path: "/email-change/confirm",
   getParentRoute: () => rootRouteImport,
 } as any);
+const InviteTokenRoute = InviteTokenRouteImport.update({
+  id: "/invite/$token",
+  path: "/invite/$token",
+  getParentRoute: () => rootRouteImport,
+} as any);
 const LoginMfaRoute = LoginMfaRouteImport.update({
   id: "/login_/mfa",
   path: "/login/mfa",
@@ -161,6 +167,7 @@ export interface FileRoutesByFullPath {
   "/settings": typeof AppSettingsRouteWithChildren;
   "/email-change/cancel": typeof EmailChangeCancelRoute;
   "/email-change/confirm": typeof EmailChangeConfirmRoute;
+  "/invite/$token": typeof InviteTokenRoute;
   "/login/mfa": typeof LoginMfaRoute;
   "/settings/": typeof AppSettingsIndexRoute;
   "/settings/account/preferences": typeof AppSettingsAccountPreferencesRoute;
@@ -182,6 +189,7 @@ export interface FileRoutesByTo {
   "/403": typeof App403Route;
   "/email-change/cancel": typeof EmailChangeCancelRoute;
   "/email-change/confirm": typeof EmailChangeConfirmRoute;
+  "/invite/$token": typeof InviteTokenRoute;
   "/login/mfa": typeof LoginMfaRoute;
   "/": typeof AppIndexRoute;
   "/settings": typeof AppSettingsIndexRoute;
@@ -207,6 +215,7 @@ export interface FileRoutesById {
   "/_app/settings": typeof AppSettingsRouteWithChildren;
   "/email-change/cancel": typeof EmailChangeCancelRoute;
   "/email-change/confirm": typeof EmailChangeConfirmRoute;
+  "/invite/$token": typeof InviteTokenRoute;
   "/login_/mfa": typeof LoginMfaRoute;
   "/_app/": typeof AppIndexRoute;
   "/_app/settings/": typeof AppSettingsIndexRoute;
@@ -233,6 +242,7 @@ export interface FileRouteTypes {
     | "/settings"
     | "/email-change/cancel"
     | "/email-change/confirm"
+    | "/invite/$token"
     | "/login/mfa"
     | "/settings/"
     | "/settings/account/preferences"
@@ -254,6 +264,7 @@ export interface FileRouteTypes {
     | "/403"
     | "/email-change/cancel"
     | "/email-change/confirm"
+    | "/invite/$token"
     | "/login/mfa"
     | "/"
     | "/settings"
@@ -278,6 +289,7 @@ export interface FileRouteTypes {
     | "/_app/settings"
     | "/email-change/cancel"
     | "/email-change/confirm"
+    | "/invite/$token"
     | "/login_/mfa"
     | "/_app/"
     | "/_app/settings/"
@@ -300,6 +312,7 @@ export interface RootRouteChildren {
   VerifyEmailRoute: typeof VerifyEmailRoute;
   EmailChangeCancelRoute: typeof EmailChangeCancelRoute;
   EmailChangeConfirmRoute: typeof EmailChangeConfirmRoute;
+  InviteTokenRoute: typeof InviteTokenRoute;
   LoginMfaRoute: typeof LoginMfaRoute;
 }
 
@@ -401,6 +414,13 @@ declare module "@tanstack/react-router" {
       path: "/email-change/confirm";
       fullPath: "/email-change/confirm";
       preLoaderRoute: typeof EmailChangeConfirmRouteImport;
+      parentRoute: typeof rootRouteImport;
+    };
+    "/invite/$token": {
+      id: "/invite/$token";
+      path: "/invite/$token";
+      fullPath: "/invite/$token";
+      preLoaderRoute: typeof InviteTokenRouteImport;
       parentRoute: typeof rootRouteImport;
     };
     "/login_/mfa": {
@@ -513,6 +533,7 @@ const rootRouteChildren: RootRouteChildren = {
   VerifyEmailRoute: VerifyEmailRoute,
   EmailChangeCancelRoute: EmailChangeCancelRoute,
   EmailChangeConfirmRoute: EmailChangeConfirmRoute,
+  InviteTokenRoute: InviteTokenRoute,
   LoginMfaRoute: LoginMfaRoute,
 };
 export const routeTree = rootRouteImport

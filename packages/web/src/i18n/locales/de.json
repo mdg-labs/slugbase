@@ -1261,5 +1261,69 @@
         "recipientGone": "Die Person, die die Inhalte übernehmen sollte, ist kein Mitglied des Workspace mehr. Wähle jemand anderen."
       }
     }
+  },
+  "invite": {
+    "title": "Du bist eingeladen",
+    "description": "Nimm deine Einladung zu {product} an.",
+    "summary": {
+      "workspace": "Workspace",
+      "invitedBy": "Eingeladen von",
+      "role": "Rolle"
+    },
+    "expired": {
+      "title": "Dieser Einladungslink funktioniert nicht",
+      "description": "Ein Einladungslink funktioniert nur einmal und nur begrenzte Zeit. Bitte die Person, die dich eingeladen hat, um einen neuen.",
+      "action": "Zur Anmeldung"
+    },
+    "error": {
+      "unavailable": "Die Einladung kann gerade nicht angezeigt werden. Versuche es gleich noch einmal.",
+      "retry": "Erneut versuchen",
+      "seatLimit": "In diesem Workspace ist kein Platz mehr frei. Frage die Person, die dich eingeladen hat.",
+      "rateLimited": {
+        "unknown": "Zu viele Versuche. Versuche es später erneut.",
+        "seconds": "Zu viele Versuche. Versuche es in {count, plural, one {# Sekunde} other {# Sekunden}} erneut.",
+        "minutes": "Zu viele Versuche. Versuche es in {count, plural, one {# Minute} other {# Minuten}} erneut."
+      }
+    },
+    "join": {
+      "action": "{workspace} beitreten",
+      "signedInAs": "Du bist als {email} angemeldet.",
+      "alreadyMember": {
+        "title": "Du bist bereits Mitglied dieses Workspace.",
+        "action": "Zur Startseite"
+      },
+      "error": {
+        "mismatch": {
+          "title": "Mit diesem Konto lässt sich die Einladung nicht annehmen",
+          "description": "Die Einladung gilt für {email}. Das Konto, mit dem du angemeldet bist, muss diese Adresse haben und bestätigt haben."
+        },
+        "unavailable": "Der Beitritt ist gerade nicht möglich. Versuche es gleich noch einmal."
+      }
+    },
+    "mismatch": {
+      "title": "Diese Einladung gilt für eine andere Adresse",
+      "description": "Du bist als {current} angemeldet, die Einladung gilt für {invited}. Melde dich ab, um mit der eingeladenen Adresse fortzufahren.",
+      "action": "Abmelden und fortfahren"
+    },
+    "signIn": {
+      "description": "Für {email} gibt es schon ein Konto. Melde dich an, um beizutreten."
+    },
+    "signUp": {
+      "description": "Wähle einen Namen und ein Passwort, um dein Konto zu erstellen.",
+      "name": {
+        "label": "Name",
+        "required": "Gib deinen Namen ein."
+      },
+      "email": {
+        "label": "E-Mail",
+        "description": "Die Einladung ging an diese Adresse, deshalb verwendet das Konto sie."
+      },
+      "submit": "Konto erstellen und beitreten",
+      "error": {
+        "refused": "Mit dieser Einladung lässt sich kein Konto erstellen. Frage die Person, die dich eingeladen hat.",
+        "invalid": "Prüfe deine Eingaben und versuche es erneut.",
+        "unavailable": "Das Konto kann gerade nicht erstellt werden. Versuche es gleich noch einmal."
+      }
+    }
   }
 }
