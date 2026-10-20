@@ -8,6 +8,8 @@ import {
   type InstanceAuditEvent,
   type InstanceSettings,
   type InstanceSettingsChange,
+  type InstanceMembershipRequest,
+  type InstanceMembershipResult,
   type InstanceWorkspace,
   type InstanceWorkspaceCreation,
   type InstanceWorkspaceCreationResult,
@@ -117,6 +119,16 @@ export interface InstanceRepository {
    */
   markWorkspaceDeleting(workspaceId: string, eventId: string, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<boolean>;
   /**
+   * Makes the account of the transaction a member of the workspace with the member role through
+   * `sys_instance_add_membership`, which writes `member.instance_admin_joined` into the workspace's own audit log and
+   * `instance.workspace_joined` into the instance stream under the identifiers the caller generated (Q91), all in one
+   * call; `jobs` are queued in the same transaction, only when the membership is made. `unknown_workspace` for a
+   * workspace that does not exist or is being deleted and `already_member` for an account that holds a role in it, with
+   * nothing written or queued. Raises, writing nothing, when the account of the transaction is not an instance admin
+   * with a second factor. Works in an account-level transaction.
+   */
+  addMembership(request: Pick<InstanceMembershipRequest, "workspaceId" | "eventIds">, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<InstanceMembershipResult>;
+  /**
    * Every account, oldest first, with its name, address, whether the address was confirmed and a second factor is on,
    * the instance-admin flag, whether it is disabled, its last sign-in and its workspace count, and no hash, secret or
    * content, through `sys_instance_list_accounts`, which also writes the instance audit event
@@ -190,6 +202,10 @@ interface WorkspaceRow extends Record<string, unknown> {
 interface CreatedWorkspaceRow extends Record<string, unknown> {
   outcome: string;
   invitation_expires_at: string | null;
+}
+
+interface MembershipRow extends Record<string, unknown> {
+  outcome: string;
 }
 
 interface AccountColumns extends Record<string, unknown> {
@@ -456,6 +472,27 @@ export function instanceRepository(tx: TenantTx): InstanceRepository {
         await enqueueInTenantTransaction(tx, job);
       }
       return true;
+    },
+
+    async addMembership(request, ipPrefix, jobs) {
+      const rows = await tenantHandle(tx).execute<MembershipRow>(sql`
+        SELECT public.sys_instance_add_membership(${request.eventIds.workspace}::uuid, ${request.eventIds.instance}::uuid, ${ipPrefix}::cidr, ${request.workspaceId}::uuid) AS outcome`);
+      const row = rows[0];
+      if (rows.length !== 1 || row === undefined) {
+        throw new Error("sys_instance_add_membership did not return exactly one row");
+      }
+      switch (row.outcome) {
+        case "unknown_workspace":
+        case "already_member":
+          return { kind: row.outcome };
+        case "added":
+          for (const job of jobs) {
+            await enqueueInTenantTransaction(tx, job);
+          }
+          return { kind: "added" };
+        default:
+          throw new Error("sys_instance_add_membership answered an outcome it does not define");
+      }
     },
 
     async listAccounts(eventId, ipPrefix) {

@@ -18,6 +18,8 @@ export const INSTANCE_AUDIT_ACTIONS = {
   // `owner` is how the first owner was chosen, `account` or `invitation`, and never who it is.
   "instance.workspace_created": { metadata: { owner: "text" } },
   "instance.workspace_deletion_requested": { metadata: {} },
+  // The admin made themselves a member of the workspace the event names as entity; the workspace's own log holds the matching `member.instance_admin_joined`.
+  "instance.workspace_joined": { metadata: {} },
   // The account actions carry no metadata; all but the list name the account they act on as the entity.
   "instance.accounts_viewed": { metadata: {} },
   "instance.account_admin_granted": { metadata: {} },

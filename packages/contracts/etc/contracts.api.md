@@ -111,6 +111,36 @@ export const AccountSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
+export const addInstanceAdminMembership: {
+    readonly method: "post";
+    readonly path: "/api/v1/instance/workspaces/{id}/membership";
+    readonly operationId: "addInstanceAdminMembership";
+    readonly tag: "instance";
+    readonly summary: "Add the calling instance admin to a workspace as a member";
+    readonly auth: "instanceAdmin";
+    readonly rate: "write";
+    readonly reauth: true;
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 201: JsonResponse<z.ZodObject<{
+        workspaceId: z.ZodUUID;
+        role: z.ZodLiteral<"member">;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 409: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
 export const ANALYTICS_CONSENTS: readonly ["unset", "granted", "denied"];
 
 // @public
@@ -611,6 +641,10 @@ export interface ComponentTypes {
         };
         InstanceWorkspaceList: {
             items: ComponentTypes["schemas"]["InstanceWorkspace"][];
+        };
+        InstanceWorkspaceMembership: {
+            role: "member";
+            workspaceId: string;
         };
         InstanceWorkspaceOwner: {
             accountId: string;
@@ -2032,6 +2066,12 @@ export const InstanceWorkspaceListSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
+export const InstanceWorkspaceMembershipSchema: z.ZodObject<{
+    workspaceId: z.ZodUUID;
+    role: z.ZodLiteral<"member">;
+}, z.core.$strict>;
+
+// @public (undocumented)
 export const InstanceWorkspaceOwnerSchema: z.ZodObject<{
     accountId: z.ZodUUID;
     displayName: z.ZodString;
@@ -2907,6 +2947,85 @@ export interface OperationTypes {
                 };
             };
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    addInstanceAdminMembership: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["InstanceWorkspaceMembership"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7852,6 +7971,23 @@ export interface paths {
         put?: never;
         post?: never;
         delete: OperationTypes["deleteInstanceWorkspace"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/instance/workspaces/{id}/membership": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["addInstanceAdminMembership"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;

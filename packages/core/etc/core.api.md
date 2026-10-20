@@ -159,6 +159,12 @@ export interface Adapters {
     readonly tenantResolver: TenantResolver;
 }
 
+// @public
+export function addInstanceAdminMembership(input: InstanceWorkspaceDependencies, ask: InstanceWorkspaceAsk & {
+    readonly workspaceId: string;
+    readonly accountId: string;
+}): Promise<InstanceMembershipOutcome>;
+
 // @public (undocumented)
 export interface AiSuggestion {
     // (undocumented)
@@ -335,6 +341,16 @@ export const AUDIT_ACTIONS: {
         };
     };
     readonly "member.joined": {
+        readonly category: "member";
+        readonly metadata: {
+            readonly role: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
+    };
+    readonly "member.instance_admin_joined": {
         readonly category: "member";
         readonly metadata: {
             readonly role: {
@@ -1071,6 +1087,9 @@ export const INSTANCE_AUDIT_ACTIONS: {
     readonly "instance.workspace_deletion_requested": {
         readonly metadata: {};
     };
+    readonly "instance.workspace_joined": {
+        readonly metadata: {};
+    };
     readonly "instance.accounts_viewed": {
         readonly metadata: {};
     };
@@ -1191,6 +1210,33 @@ export interface InstanceAuditEvent {
     readonly ipPrefix: string | null;
     readonly metadata: Readonly<Record<string, string>>;
 }
+
+// @public (undocumented)
+export type InstanceMembershipOutcome = InstanceMembershipResult;
+
+// @public (undocumented)
+export interface InstanceMembershipRequest {
+    readonly eventIds: {
+        readonly workspace: string;
+        readonly instance: string;
+    };
+    readonly events: readonly DomainEvent<"member.joined">[];
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public
+export type InstanceMembershipResult = {
+    readonly kind: "added";
+}
+/** The workspace does not exist or is being deleted; nothing was written. */
+| {
+    readonly kind: "unknown_workspace";
+}
+/** The account holds a role in the workspace already; nothing was written. */
+| {
+    readonly kind: "already_member";
+};
 
 // @public (undocumented)
 export type InstanceSettingName = (typeof INSTANCE_SETTING_NAMES)[number];
@@ -1331,6 +1377,7 @@ export type InstanceWorkspaceOwnerSeat = {
 
 // @public
 export interface InstanceWorkspaceStore {
+    addMembership(request: InstanceMembershipRequest, ipPrefix: string | null): Promise<InstanceMembershipResult>;
     createWorkspace(request: InstanceWorkspaceCreation, eventId: string, ipPrefix: string | null): Promise<InstanceWorkspaceCreationResult>;
     listWorkspaces(eventId: string, ipPrefix: string | null): Promise<readonly InstanceWorkspace[]>;
     markWorkspaceDeleting(workspaceId: string, eventId: string, ipPrefix: string | null): Promise<boolean>;

@@ -2,10 +2,13 @@ import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   INVITATION_TTL_SECONDS,
+  addInstanceAdminMembership,
   createInstanceWorkspace,
   hashCredentialToken,
   listInstanceWorkspaces,
   requestInstanceWorkspaceDeletion,
+  type InstanceMembershipRequest,
+  type InstanceMembershipResult,
   type InstanceWorkspaceCreation,
   type InstanceWorkspaceCreationResult,
   type InstanceWorkspaceStore,
@@ -15,10 +18,11 @@ interface Recorded {
   readonly creations: { request: InstanceWorkspaceCreation; eventId: string; ipPrefix: string | null }[];
   readonly deletions: { workspaceId: string; eventId: string; ipPrefix: string | null }[];
   readonly lists: { eventId: string; ipPrefix: string | null }[];
+  readonly memberships: { request: InstanceMembershipRequest; ipPrefix: string | null }[];
 }
 
-function stubStore(options: { creation?: InstanceWorkspaceCreationResult; marked?: boolean } = {}): { store: InstanceWorkspaceStore; recorded: Recorded } {
-  const recorded: Recorded = { creations: [], deletions: [], lists: [] };
+function stubStore(options: { creation?: InstanceWorkspaceCreationResult; marked?: boolean; membership?: InstanceMembershipResult } = {}): { store: InstanceWorkspaceStore; recorded: Recorded } {
+  const recorded: Recorded = { creations: [], deletions: [], lists: [], memberships: [] };
   const store: InstanceWorkspaceStore = {
     listWorkspaces: (eventId, ipPrefix) => {
       recorded.lists.push({ eventId, ipPrefix });
@@ -31,6 +35,10 @@ function stubStore(options: { creation?: InstanceWorkspaceCreationResult; marked
     markWorkspaceDeleting: (workspaceId, eventId, ipPrefix) => {
       recorded.deletions.push({ workspaceId, eventId, ipPrefix });
       return Promise.resolve(options.marked ?? true);
+    },
+    addMembership: (request, ipPrefix) => {
+      recorded.memberships.push({ request, ipPrefix });
+      return Promise.resolve(options.membership ?? { kind: "added" });
     },
   };
   return { store, recorded };
@@ -160,5 +168,38 @@ describe("requestInstanceWorkspaceDeletion", () => {
   it("answers unavailable for a workspace the store cannot mark", async () => {
     const { store } = stubStore({ marked: false });
     expect(await requestInstanceWorkspaceDeletion({ store, newId, guard: () => Promise.resolve({ outcome: "allow" }) }, ask)).toEqual({ kind: "unavailable" });
+  });
+});
+
+describe("addInstanceAdminMembership", () => {
+  const ask = { workspaceId: "0192f3a0-bbbb-7000-8000-0000000000bb", accountId: OWNER, ipPrefix: "203.0.0.0/16" };
+
+  it("asks the store for the member role of the caller in the workspace, under a distinct identifier for each of the two logs", async () => {
+    const { store, recorded } = stubStore();
+
+    const outcome = await addInstanceAdminMembership({ store, newId }, ask);
+
+    expect(outcome).toEqual({ kind: "added" });
+    expect(recorded.memberships).toHaveLength(1);
+    const { request, ipPrefix } = recorded.memberships[0] ?? {};
+    expect(ipPrefix).toBe("203.0.0.0/16");
+    expect(request?.workspaceId).toBe(ask.workspaceId);
+    expect(request?.eventIds.workspace).not.toBe(request?.eventIds.instance);
+  });
+
+  it("announces member.joined for the caller with the member role, and for nobody else", async () => {
+    const { store, recorded } = stubStore();
+
+    await addInstanceAdminMembership({ store, newId }, ask);
+
+    expect(recorded.memberships[0]?.request.events).toEqual([
+      { eventId: expect.any(String) as string, name: "member.joined", payload: { workspaceId: ask.workspaceId, accountId: OWNER, role: "member" } },
+    ]);
+    expect(recorded.memberships[0]?.request.events[0]?.eventId).not.toBe(recorded.memberships[0]?.request.eventIds.workspace);
+  });
+
+  it.each([{ kind: "unknown_workspace" }, { kind: "already_member" }] as const)("passes the refusal %j on as the outcome", async (membership) => {
+    const { store } = stubStore({ membership });
+    expect(await addInstanceAdminMembership({ store, newId }, ask)).toEqual(membership);
   });
 });

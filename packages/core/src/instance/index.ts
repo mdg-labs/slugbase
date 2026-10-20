@@ -17,8 +17,11 @@ export type {
   InstanceAccountUpdateAsk,
   InstanceAccountUpdateOutcome,
 } from "./accounts.ts";
-export { createInstanceWorkspace, listInstanceWorkspaces, requestInstanceWorkspaceDeletion } from "./workspaces.ts";
+export { addInstanceAdminMembership, createInstanceWorkspace, listInstanceWorkspaces, requestInstanceWorkspaceDeletion } from "./workspaces.ts";
 export type {
+  InstanceMembershipOutcome,
+  InstanceMembershipRequest,
+  InstanceMembershipResult,
   InstanceWorkspace,
   InstanceWorkspaceAsk,
   InstanceWorkspaceCreation,

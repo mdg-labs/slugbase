@@ -1,4 +1,4 @@
-import type { InstanceWorkspaceCreation } from "@slugbase/core";
+import { parseAuditMetadata, type InstanceWorkspaceCreation } from "@slugbase/core";
 import type postgres from "postgres";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -33,6 +33,7 @@ const CHECK_VIOLATION = "23514";
 const UNIQUE_VIOLATION = "23505";
 const DELETE_QUEUE = "workspace.delete";
 const EVENT_QUEUE = "event.workspace.created";
+const JOINED_QUEUE = "event.member.joined";
 
 let db: TestDatabase;
 let store: AuthStore;
@@ -63,7 +64,8 @@ beforeAll(async () => {
       retry_delay_max int, policy text NOT NULL, dead_letter text, heartbeat_seconds int);
     INSERT INTO pgboss.queue VALUES
       ('${DELETE_QUEUE}', 3600, 900, 3600, 3, 5, true, NULL, 'standard', NULL, NULL),
-      ('${EVENT_QUEUE}', 3600, 900, 3600, 3, 5, true, NULL, 'standard', NULL, NULL);`);
+      ('${EVENT_QUEUE}', 3600, 900, 3600, 3, 5, true, NULL, 'standard', NULL, NULL),
+      ('${JOINED_QUEUE}', 3600, 900, 3600, 3, 5, true, NULL, 'standard', NULL, NULL);`);
 }, HOOK_TIMEOUT_MS);
 
 beforeEach(async () => {
@@ -206,8 +208,10 @@ async function workspaceOf(owner: string, ...others: readonly [string, Role][]):
 }
 
 describe("the system operations are entered in the registry", () => {
-  it("lists the three functions this change adds", () => {
-    expect(systemOperations).toEqual(expect.arrayContaining(["sys_instance_list_workspaces", "sys_instance_create_workspace", "sys_instance_delete_workspace"]));
+  it("lists the functions of the workspace operations", () => {
+    expect(systemOperations).toEqual(
+      expect.arrayContaining(["sys_instance_list_workspaces", "sys_instance_create_workspace", "sys_instance_delete_workspace", "sys_instance_add_membership"]),
+    );
   });
 });
 
@@ -597,5 +601,342 @@ describe("sys_instance_delete_workspace", () => {
     );
     expect(await refusedWith(db.app`SELECT sys_instance_delete_workspace(${freshId()}::uuid, NULL::cidr, ${other.workspaceId}::uuid)`)).toBe(INSUFFICIENT_PRIVILEGE);
     expect((await jobsOf(DELETE_QUEUE)).length).toBe(0);
+  });
+});
+
+describe("sys_instance_add_membership", () => {
+  interface MemberRow {
+    account_id: string;
+    role: string;
+  }
+  interface LogRow {
+    id: string;
+    actor_type: string;
+    actor_account_id: string | null;
+    actor_label: string;
+    action: string;
+    entity_type: string | null;
+    entity_id: string | null;
+    metadata: Record<string, unknown>;
+    ip_prefix: string | null;
+  }
+
+  const membersOf = async (workspaceId: string): Promise<MemberRow[]> => [
+    ...(await asSystem(db, (tx) => tx<MemberRow[]>`SELECT account_id, role::text AS role FROM workspace_members WHERE workspace_id = ${workspaceId} ORDER BY joined_at, account_id`)),
+  ];
+  const logOf = async (workspaceId: string): Promise<LogRow[]> => [
+    ...(await asSystem(
+      db,
+      (tx) => tx<LogRow[]>`
+        SELECT id, actor_type, actor_account_id, actor_label, action, entity_type, entity_id, metadata, ip_prefix::text AS ip_prefix
+        FROM audit_events WHERE workspace_id = ${workspaceId} ORDER BY created_at, id`,
+    )),
+  ];
+  const joinedJob = (workspaceId: string, accountId: string, eventId = freshId()): QueuedJob => ({
+    id: eventId,
+    queue: JOINED_QUEUE,
+    data: { eventId, workspaceId, accountId, role: "member" },
+  });
+  const ids = () => ({ workspace: freshId(), instance: freshId() });
+  const add = (accountId: string, workspaceId: string, eventIds = ids(), ipPrefix: string | null = null, jobs: readonly QueuedJob[] = []) =>
+    withTenant(accountId, (tx) => instanceRepository(tx).addMembership({ workspaceId, eventIds }, ipPrefix, jobs));
+
+  /** Resolves when a backend of this database waits for a lock. The text of another role's statement is hidden from the owner, so the wait is all that can be told. */
+  async function waitForLockWait(): Promise<void> {
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      const rows = await db.owner<{ waiting: number }[]>`
+        SELECT count(DISTINCT l.pid)::int AS waiting
+        FROM pg_locks l JOIN pg_stat_activity s ON s.pid = l.pid
+        WHERE NOT l.granted AND s.datname = current_database()`;
+      if ((rows[0]?.waiting ?? 0) > 0) {
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    throw new Error("no statement ever waited for a lock");
+  }
+
+  function gate(): { opened: Promise<void>; open: () => void } {
+    let open: () => void = () => undefined;
+    const opened = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    return { opened, open };
+  }
+
+  it("makes the caller a member with the member role and writes the workspace's own event and the instance event, under the identifiers the caller generated", async () => {
+    const caller = await admin();
+    const owner = await account();
+    const workspaceId = await workspaceOf(owner.id);
+    const eventIds = ids();
+    const label = (await asSystem(db, (tx) => tx<{ display_name: string }[]>`SELECT display_name FROM accounts WHERE id = ${caller}`))[0]?.display_name;
+    const instanceBefore = (await instanceEvents()).length;
+
+    const result = await add(caller, workspaceId, eventIds, "203.0.0.0/16");
+
+    expect(result).toEqual({ kind: "added" });
+    expect((await membersOf(workspaceId)).map((member) => [member.account_id, member.role]).sort()).toEqual([[caller, "member"], [owner.id, "owner"]].sort());
+    expect(await logOf(workspaceId)).toEqual([
+      {
+        id: eventIds.workspace,
+        actor_type: "account",
+        actor_account_id: caller,
+        actor_label: label,
+        action: "member.instance_admin_joined",
+        entity_type: "member",
+        entity_id: caller,
+        metadata: { role: "member" },
+        ip_prefix: "203.0.0.0/16",
+      },
+    ]);
+    // The row is one the workspace catalog describes: the audit log reads it back and the metadata is the closed object of member.instance_admin_joined.
+    expect(parseAuditMetadata("member.instance_admin_joined", (await logOf(workspaceId))[0]?.metadata)).toEqual({ role: "member" });
+    const instance = await instanceEvents();
+    expect(instance).toHaveLength(instanceBefore + 1);
+    expect(instance.at(-1)).toEqual({
+      id: eventIds.instance,
+      actor_account_id: caller,
+      action: "instance.workspace_joined",
+      entity_type: "workspace",
+      entity_id: workspaceId,
+      metadata: {},
+      ip_prefix: "203.0.0.0/16",
+    });
+  });
+
+  it("lets the owners of the workspace read the event as tenants, and the admin the membership gives the same view as any member and no more", async () => {
+    const caller = await admin();
+    const owner = await account();
+    const workspaceId = await workspaceOf(owner.id);
+    const eventIds = ids();
+    await add(caller, workspaceId, eventIds);
+
+    const seen = await appAs(owner.id, workspaceId, (tx) => tx<{ id: string; action: string }[]>`SELECT id, action FROM audit_events WHERE workspace_id = ${workspaceId}`);
+    expect(seen.map((row) => [row.id, row.action])).toEqual([[eventIds.workspace, "member.instance_admin_joined"]]);
+    // An owner reading the log can tell the operator privilege from an invitation acceptance: the action is not member.joined.
+    expect(seen.map((row) => row.action)).not.toContain("member.joined");
+    // The instance event is in no tenant's view.
+    const instanceSeen = await appAs(owner.id, workspaceId, (tx) => tx`SELECT id FROM audit_events WHERE id = ${eventIds.instance}`);
+    expect(instanceSeen).toHaveLength(0);
+    expect((await withTenant(caller, (tx) => workspaceRepository(tx).list())).map((workspace) => workspace.id)).toEqual([workspaceId]);
+  });
+
+  it("queues the jobs it is given, in the same transaction, when the membership is made", async () => {
+    const caller = await admin();
+    const workspaceId = await workspaceOf((await account()).id);
+    const job = joinedJob(workspaceId, caller);
+
+    await add(caller, workspaceId, ids(), null, [job]);
+
+    expect((await jobsOf(JOINED_QUEUE)).map((row) => row.data)).toEqual([job.data]);
+  });
+
+  it("adds a workspace that waits for its first owner as a member, not as its owner", async () => {
+    const caller = await admin();
+    const request = invited("waiting-owner@example.test");
+    await create(caller, request);
+
+    expect(await add(caller, request.workspaceId)).toEqual({ kind: "added" });
+
+    expect(await membersOf(request.workspaceId)).toEqual([{ account_id: caller, role: "member" }]);
+    expect(await ownersOf(request.workspaceId)).toEqual([]);
+  });
+
+  it("adds the calling admin and nobody else: another admin's call leaves the first admin out", async () => {
+    const first = await admin();
+    const second = await admin();
+    const workspaceId = await workspaceOf((await account()).id);
+
+    expect(await add(second, workspaceId)).toEqual({ kind: "added" });
+
+    const members = (await membersOf(workspaceId)).map((member) => member.account_id);
+    expect(members).toContain(second);
+    expect(members).not.toContain(first);
+    expect((await logOf(workspaceId)).map((event) => event.actor_account_id)).toEqual([second]);
+  });
+
+  it.each(["owner", "admin", "member"] as const)("answers already_member for an account that holds the %s role, writing and queuing nothing", async (role) => {
+    const caller = await admin();
+    const owner = await account();
+    const workspaceId = await workspaceOf(owner.id, [caller, role]);
+    const instance = await instanceEvents();
+    const log = await logOf(workspaceId);
+    const members = await membersOf(workspaceId);
+
+    expect(await add(caller, workspaceId, ids(), null, [joinedJob(workspaceId, caller)])).toEqual({ kind: "already_member" });
+
+    expect(await membersOf(workspaceId)).toEqual(members);
+    expect(await logOf(workspaceId)).toEqual(log);
+    expect(await instanceEvents()).toEqual(instance);
+    expect(await jobsOf(JOINED_QUEUE)).toEqual([]);
+  });
+
+  it("answers unknown_workspace for a workspace that does not exist or is being deleted, writing and queuing nothing", async () => {
+    const caller = await admin();
+    const going = await seedWorkspace(db, { name: "Going", deletingAt: new Date() });
+    const instance = await instanceEvents();
+
+    expect(await add(caller, going, ids(), null, [joinedJob(going, caller)])).toEqual({ kind: "unknown_workspace" });
+    const missing = freshId();
+    expect(await add(caller, missing, ids(), null, [joinedJob(missing, caller)])).toEqual({ kind: "unknown_workspace" });
+
+    expect(await membersOf(going)).toEqual([]);
+    expect(await logOf(going)).toEqual([]);
+    expect(await instanceEvents()).toEqual(instance);
+    expect(await jobsOf(JOINED_QUEUE)).toEqual([]);
+  });
+
+  it.each([
+    ["a member who holds no flag", { mfa: true }],
+    ["an admin who has no second factor enrolled", { admin: true }],
+    ["a disabled admin", { admin: true, mfa: true, disabled: true }],
+    ["an account with neither", {}],
+  ] satisfies [string, Options][])("is refused to %s, which becomes no member and writes and queues nothing", async (_name, options) => {
+    const caller = await account(options);
+    const workspaceId = await workspaceOf((await account()).id);
+    const instance = await instanceEvents();
+
+    expect(await refusedWith(add(caller.id, workspaceId, ids(), null, [joinedJob(workspaceId, caller.id)]))).toBe(INSUFFICIENT_PRIVILEGE);
+    // The refusal comes before the workspace is looked up, so it is the same for a workspace that does not exist.
+    expect(await refusedWith(add(caller.id, freshId()))).toBe(INSUFFICIENT_PRIVILEGE);
+
+    expect((await membersOf(workspaceId)).map((member) => member.account_id)).not.toContain(caller.id);
+    expect(await logOf(workspaceId)).toEqual([]);
+    expect(await instanceEvents()).toEqual(instance);
+    expect(await jobsOf(JOINED_QUEUE)).toEqual([]);
+  });
+
+  it("raises when no account is set for the transaction, and for a missing identifier", async () => {
+    const workspaceId = await workspaceOf((await account()).id);
+    expect(await refusedWith(db.app`SELECT sys_instance_add_membership(${freshId()}::uuid, ${freshId()}::uuid, NULL::cidr, ${workspaceId}::uuid)`)).toBe(INSUFFICIENT_PRIVILEGE);
+    const caller = await admin();
+    for (const eventIds of [{ workspace: null, instance: freshId() }, { workspace: freshId(), instance: null }]) {
+      expect(await refusedWith(add(caller, workspaceId, eventIds as unknown as ReturnType<typeof ids>))).toBe(INVALID_PARAMETER);
+    }
+    expect(await refusedWith(add(caller, null as unknown as string))).toBe(INVALID_PARAMETER);
+    expect(await membersOf(workspaceId)).toHaveLength(1);
+  });
+
+  it("is atomic: a job that cannot be queued rolls back the membership and both audit events", async () => {
+    const caller = await admin();
+    const workspaceId = await workspaceOf((await account()).id);
+    const instance = await instanceEvents();
+
+    await expect(add(caller, workspaceId, ids(), null, [{ id: freshId(), queue: "no.such.queue", data: {} }])).rejects.toThrow(/does not exist/);
+
+    expect((await membersOf(workspaceId)).map((member) => member.account_id)).not.toContain(caller);
+    expect(await logOf(workspaceId)).toEqual([]);
+    expect(await instanceEvents()).toEqual(instance);
+  });
+
+  it("is atomic: an event identifier that is taken rolls back the membership", async () => {
+    const caller = await admin();
+    const workspaceId = await workspaceOf((await account()).id);
+    const taken = freshId();
+    await add(caller, await workspaceOf((await account()).id), { workspace: taken, instance: freshId() });
+    const instance = await instanceEvents();
+
+    expect(await refusedWith(add(caller, workspaceId, { workspace: taken, instance: freshId() }))).toBe(UNIQUE_VIOLATION);
+    expect(await refusedWith(add(caller, workspaceId, { workspace: freshId(), instance: taken }))).toBe(UNIQUE_VIOLATION);
+
+    expect((await membersOf(workspaceId)).map((member) => member.account_id)).not.toContain(caller);
+    expect(await logOf(workspaceId)).toEqual([]);
+    expect(await instanceEvents()).toEqual(instance);
+  });
+
+  it("is not a way for a tenant to join: the application role cannot insert the membership or the instance event itself", async () => {
+    const caller = await admin();
+    const workspaceId = await workspaceOf((await account()).id);
+
+    const refusedMember = await refusedWith(
+      appAs(caller, workspaceId, (tx) => tx`INSERT INTO workspace_members (workspace_id, account_id, role) VALUES (${workspaceId}, ${caller}, 'member')`),
+    );
+    const refusedInstance = await refusedWith(
+      appAs(
+        caller,
+        undefined,
+        (tx) => tx`INSERT INTO audit_events (id, workspace_id, actor_type, actor_account_id, actor_label, action, metadata) VALUES (${freshId()}, NULL, 'account', ${caller}, 'x', 'instance.workspace_joined', '{}')`,
+      ),
+    );
+
+    expect(refusedMember).toBeDefined();
+    expect(refusedInstance).toBeDefined();
+    expect((await membersOf(workspaceId)).map((member) => member.account_id)).not.toContain(caller);
+  });
+
+  it("waits for a deletion that is already marking the workspace: whichever commits first, the membership either is refused or is there with both events", async () => {
+    const caller = await admin();
+    const other = await admin();
+    const workspaceId = await workspaceOf((await account()).id);
+    const held = gate();
+    const made = gate();
+    const eventIds = ids();
+
+    const adding = withTenant(caller, async (tx) => {
+      const result = await instanceRepository(tx).addMembership({ workspaceId, eventIds }, null, []);
+      made.open();
+      await held.opened;
+      return result;
+    });
+    // The membership is made and not committed; the deletion has to wait for the lock of the workspace row.
+    await made.opened;
+    const deleting = withTenant(other, (tx) => instanceRepository(tx).markWorkspaceDeleting(workspaceId, freshId(), null, []));
+    await waitForLockWait();
+    held.open();
+
+    expect(await adding).toEqual({ kind: "added" });
+    expect(await deleting).toBe(true);
+    expect((await membersOf(workspaceId)).map((member) => member.account_id)).toContain(caller);
+    expect((await logOf(workspaceId)).map((event) => event.id)).toEqual([eventIds.workspace]);
+  });
+
+  it("is refused for a workspace whose deletion committed first, and leaves nothing behind", async () => {
+    const caller = await admin();
+    const other = await admin();
+    const workspaceId = await workspaceOf((await account()).id);
+    const held = gate();
+    const marked = gate();
+
+    const deleting = withTenant(other, async (tx) => {
+      const done = await instanceRepository(tx).markWorkspaceDeleting(workspaceId, freshId(), null, []);
+      marked.open();
+      await held.opened;
+      return done;
+    });
+    await marked.opened;
+    const adding = add(caller, workspaceId);
+    await waitForLockWait();
+    held.open();
+
+    expect(await deleting).toBe(true);
+    expect(await adding).toEqual({ kind: "unknown_workspace" });
+    expect((await membersOf(workspaceId)).map((member) => member.account_id)).not.toContain(caller);
+    expect(await logOf(workspaceId)).toEqual([]);
+  });
+
+  it("checks the admin again under its lock: a demotion that commits while the call waits ends the call, and no membership or event is left", async () => {
+    const caller = await admin();
+    const demoter = await admin();
+    const workspaceId = await workspaceOf((await account()).id);
+    const instance = await instanceEvents();
+    const held = gate();
+    const demoted = gate();
+
+    const demoting = withTenant(demoter, async (tx) => {
+      const outcome = await instanceRepository(tx).updateAccount(caller, { isInstanceAdmin: false }, { admin: freshId(), disabled: freshId() }, null, []);
+      demoted.open();
+      await held.opened;
+      return outcome;
+    });
+    await demoted.opened;
+    const adding = refusedWith(add(caller, workspaceId));
+    await waitForLockWait();
+    held.open();
+
+    expect((await demoting).kind).toBe("updated");
+    expect(await adding).toBe(INSUFFICIENT_PRIVILEGE);
+    expect((await membersOf(workspaceId)).map((member) => member.account_id)).not.toContain(caller);
+    expect(await logOf(workspaceId)).toEqual([]);
+    expect((await instanceEvents()).filter((event) => event.action === "instance.workspace_joined")).toEqual(instance.filter((event) => event.action === "instance.workspace_joined"));
   });
 });

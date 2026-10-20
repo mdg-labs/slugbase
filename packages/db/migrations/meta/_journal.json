@@ -414,6 +414,13 @@
       "when": 1792520088428,
       "tag": "20261020181448_add_instance_accounts",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1792524826715,
+      "tag": "20261020193346_add_instance_membership",
+      "breakpoints": true
     }
   ]
 }

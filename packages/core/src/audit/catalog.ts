@@ -48,6 +48,9 @@ export const AUDIT_ACTIONS = {
   "member.removed": { category: "member", metadata: { content: CONTENT_CHOICE, transferTo: { type: "uuid" } } },
   "member.left": { category: "member", metadata: { content: CONTENT_CHOICE, transferTo: { type: "uuid" } } },
   "member.joined": { category: "member", metadata: { role: MEMBER_ROLE } },
+  // An instance admin made themselves a member of the workspace (doc 02 section 11.1). It is its own action, not a `member.joined`, so the
+  // owners who read the log can tell an operator's privilege from an invitation accepted; the instance stream holds the matching event.
+  "member.instance_admin_joined": { category: "member", metadata: { role: MEMBER_ROLE } },
   // The invited address is personal data and has no field: the event names the invitation and the role it grants.
   "invitation.created": { category: "invitation", metadata: { role: MEMBER_ROLE } },
   "invitation.resent": { category: "invitation", metadata: { role: MEMBER_ROLE } },

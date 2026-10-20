@@ -326,6 +326,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/instance/workspaces/{id}/membership": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add the calling instance admin to a workspace as a member */
+        post: operations["addInstanceAdminMembership"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/invitations": {
         parameters: {
             query?: never;
@@ -1461,6 +1478,18 @@ export interface components {
         InstanceWorkspaceList: {
             /** @description Every workspace that is not being deleted, newest first */
             items: components["schemas"]["InstanceWorkspace"][];
+        };
+        InstanceWorkspaceMembership: {
+            /**
+             * @description The role the membership has: always member, whatever the admin may be elsewhere
+             * @constant
+             */
+            role: "member";
+            /**
+             * Format: uuid
+             * @description The workspace the calling admin is now a member of
+             */
+            workspaceId: string;
         };
         InstanceWorkspaceOwner: {
             /**
@@ -3522,6 +3551,93 @@ export interface operations {
                 };
             };
             /** @description The service is temporarily unavailable, or a deployment extension that is consulted before the deletion did not answer in time; nothing is changed */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    addInstanceAdminMembership: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The calling admin is a member of the workspace with the member role, and nothing more: the membership gives what any member has. It is written to the workspace's own audit log as member.instance_admin_joined, where its owners read it as distinct from an accepted invitation, and to the instance audit stream as instance.workspace_joined, and member.joined is announced, all in one transaction. The admin's session is not moved to the workspace */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceWorkspaceMembership"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no workspace with that identifier, or it is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The calling account is a member of the workspace already, with any role (already_member); nothing is written */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
             503: {
                 headers: {
                     [name: string]: unknown;

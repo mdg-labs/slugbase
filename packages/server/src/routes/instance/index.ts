@@ -1,4 +1,5 @@
 import {
+  addInstanceAdminMembership as addInstanceAdminMembershipOperation,
   createInstanceWorkspace as createInstanceWorkspaceOperation,
   deleteInstanceWorkspace as deleteInstanceWorkspaceOperation,
   getInstanceSettings,
@@ -10,6 +11,7 @@ import {
   updateInstanceSettings,
 } from "@slugbase/contracts";
 import {
+  addInstanceAdminMembership,
   createInstanceWorkspace,
   invitationLink,
   listInstanceAccounts,
@@ -65,6 +67,14 @@ import { route } from "../register.ts";
 // written, a guard that throws or times out is 503 from the dispatcher. The mark, the revocation of the workspace's tokens, the
 // sessions pointed at none, the `workspace.delete` job of `DELETE /api/v1/workspace` and the audit event are one transaction.
 //
+// POST /api/v1/instance/workspaces/{id}/membership (doc 02 section 11.1, doc 05 section 3.3, doc 10 T15) adds the calling admin to a
+// workspace as a member, the explicit way into one that the list never gives. It needs a session that re-authenticated within ten
+// minutes (stage 9 judges that before the handler runs). One `sys_instance_add_membership` call makes the membership and writes
+// `member.instance_admin_joined` into the workspace's own audit log and `instance.workspace_joined` into the instance stream; `member.joined` is
+// queued in the same transaction, so each exists exactly when the others do. The admin is added and nobody else, whichever admin
+// asks: the account is the one of the session. 409 `already_member` for an account that holds any role in the workspace, and 404
+// for a workspace that does not exist or is being deleted, with nothing written in either case. The session is not moved to the workspace.
+//
 // GET /api/v1/instance/accounts and PATCH /api/v1/instance/accounts/{id} (doc 02 section 11.2, doc 04 section 10.10, doc 05
 // sections 3.3 and 7.1) list the accounts and change the instance-admin flag and the disabled state of one. Each goes through a
 // `sys_instance_*` function that repeats the admin check in the database and writes its instance audit event in the same call.
@@ -110,6 +120,7 @@ const LAST_INSTANCE_ADMIN = "The instance must keep an enabled instance admin.";
 const MAIL_UNAVAILABLE = "Email delivery is not available on this instance.";
 const NO_SUCH_ACCOUNT = "There is no account that can own the workspace.";
 const NO_SUCH_WORKSPACE = "There is no such workspace.";
+const ALREADY_MEMBER = "You are a member of this workspace already.";
 const DELETION_REFUSED = "The workspace cannot be deleted while its subscription is active; cancel the subscription first.";
 
 function accountBody({ id, displayName, email, emailVerified, mfaEnabled, isInstanceAdmin, disabled, lastSignInAt, workspaceCount }: InstanceAccount) {
@@ -138,6 +149,12 @@ function workspaceStoreOf(tx: TenantTx): InstanceWorkspaceStore {
       ),
     markWorkspaceDeleting: (workspaceId, eventId, ipPrefix) =>
       repository.markWorkspaceDeleting(workspaceId, eventId, ipPrefix, [{ id: uuidv7(), queue: WORKSPACE_DELETE_JOB, data: { workspaceId } }]),
+    addMembership: (request, ipPrefix) =>
+      repository.addMembership(
+        request,
+        ipPrefix,
+        request.events.map((event) => queueDomainEvent(event.eventId, event.name, event.payload)),
+      ),
   };
 }
 
@@ -262,6 +279,22 @@ export function instanceRoutes({
               : { id: invitation.id, email: invitation.email, expiresAt: invitation.expiresAt.toISOString(), link: invitationLink(appOrigin, invitation.token) },
         },
       };
+    }),
+
+    route(addInstanceAdminMembershipOperation).handle(async ({ params }, context) => {
+      const { accountId } = sessionOf(context);
+      const workspaceId = params.id.toLowerCase();
+      const outcome = await withTenant({ accountId, requestId: requestIdOf(context) }, (tx) =>
+        addInstanceAdminMembership({ store: workspaceStoreOf(tx), newId: uuidv7 }, { workspaceId, accountId, ipPrefix: networkPrefixOf(context.get("clientIp")) ?? null }),
+      );
+      switch (outcome.kind) {
+        case "added":
+          return { status: 201, body: { workspaceId, role: "member" } };
+        case "already_member":
+          throw new ProblemError("already_member", ALREADY_MEMBER);
+        case "unknown_workspace":
+          throw new ProblemError("not_found", NO_SUCH_WORKSPACE);
+      }
     }),
 
     route(deleteInstanceWorkspaceOperation).handle(async ({ params }, context) => {

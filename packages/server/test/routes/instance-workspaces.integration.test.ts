@@ -12,7 +12,9 @@ import { HOOK_TIMEOUT_MS, SESSION_COOKIE, bearer, send, workspaceHarness, type P
 // workspace's name, owners, member count and creation time, or that opens a workspace the admin is not a member of;
 // an owner invitation that the public invitation operation can write, or whose token is stored or returned twice; a
 // creation that leaves a half-made workspace behind when the owner is refused; and a deletion that skips the
-// re-authentication or the deletion guard, or is marked or queued when either refuses.
+// re-authentication or the deletion guard, or is marked or queued when either refuses; and, for the membership, a way
+// to gain access to a workspace without the membership and the events in its own log and the instance stream (doc 10
+// T15), an admin who is added by another admin's call, and a workspace that is being deleted that takes the admin in.
 
 const LIST = "/api/v1/instance/workspaces";
 const WORKSPACES = "/api/v1/workspaces";
@@ -20,6 +22,9 @@ const INVITATIONS = "/api/v1/invitations";
 const LOGIN = "/api/v1/auth/login";
 const DELETE_JOB = "workspace.delete";
 const EVENT_JOB = "event.workspace.created";
+const JOINED_JOB = "event.member.joined";
+const MEMBERS = "/api/v1/members";
+const ACTIVE_WORKSPACE = "/api/v1/session/active-workspace";
 
 const database = useTestDatabase();
 const harness = workspaceHarness(database);
@@ -28,7 +33,7 @@ beforeAll(() => harness.start(), HOOK_TIMEOUT_MS);
 afterAll(() => harness.stop());
 
 beforeEach(async () => {
-  await database().owner`DELETE FROM pgboss.job WHERE name IN (${DELETE_JOB}, ${EVENT_JOB})`;
+  await database().owner`DELETE FROM pgboss.job WHERE name IN (${DELETE_JOB}, ${EVENT_JOB}, ${JOINED_JOB})`;
 });
 
 const codeOf = async (response: Response): Promise<string> => ((await response.json()) as { code: string }).code;
@@ -425,6 +430,265 @@ describe("DELETE /instance/workspaces/{id}", () => {
     expect(mine.items.map((item) => item.id)).toContain(workspaceId);
     expect(await jobs(DELETE_JOB)).toEqual([]);
     expect(await instanceEvents()).toEqual(events);
+  });
+});
+
+describe("POST /instance/workspaces/{id}/membership", () => {
+  const join = (world: World, as: { cookie: string }, workspaceId: string, headers: Record<string, string> = {}) =>
+    send(world, "POST", `${LIST}/${workspaceId}/membership`, { cookie: as.cookie, ...headers });
+
+  interface LogRow {
+    actor_account_id: string | null;
+    actor_label: string;
+    action: string;
+    entity_type: string | null;
+    entity_id: string | null;
+    metadata: Record<string, unknown>;
+  }
+
+  async function workspaceLog(workspaceId: string): Promise<LogRow[]> {
+    const rows = await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      return tx<LogRow[]>`
+        SELECT actor_account_id, actor_label, action, entity_type, entity_id, metadata
+        FROM audit_events WHERE workspace_id = ${workspaceId} ORDER BY created_at, id`;
+    });
+    return [...rows];
+  }
+
+  const joinedEvents = async (workspaceId: string) =>
+    (await instanceEvents()).filter((event) => event.action === "instance.workspace_joined" && event.entity_id === workspaceId);
+
+  async function memberList(world: World, as: { cookie: string }): Promise<{ accountId: string; role: string }[]> {
+    const response = await send(world, "GET", MEMBERS, { cookie: as.cookie });
+    expect(response.status).toBe(200);
+    return ((await response.json()) as { items: { accountId: string; role: string }[] }).items;
+  }
+
+  it("answers 201 and makes the caller a member of the workspace: its owners see it in GET /members, with the member role and nothing more", async () => {
+    const world = harness.serve();
+    const root = await admin(world);
+    const owner = await harness.person(world);
+    const { workspaceId } = await harness.workspaceOf([{ person: owner, role: "owner" }]);
+    expect(await harness.rolesOf(workspaceId)).toEqual({ [owner.account.id]: "owner" });
+
+    const response = await join(world, root, workspaceId);
+
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({ workspaceId, role: "member" });
+    expect(await harness.rolesOf(workspaceId)).toEqual({ [owner.account.id]: "owner", [root.accountId]: "member" });
+    const seenByOwner = await memberList(world, owner);
+    expect(seenByOwner.find((member) => member.accountId === root.accountId)).toMatchObject({ role: "member" });
+    // The membership is a member's: the workspace is in the admin's list, and the roles above member stay closed to it.
+    const mine = (await (await send(world, "GET", WORKSPACES, { cookie: root.cookie })).json()) as { items: { id: string; role: string }[] };
+    expect(mine.items.find((item) => item.id === workspaceId)?.role).toBe("member");
+    expect((await send(world, "POST", INVITATIONS, { cookie: root.cookie }, { email: "someone@example.test", role: "member" })).status).not.toBe(201);
+  });
+
+  it("writes member.instance_admin_joined into the workspace's own log and instance.workspace_joined into the instance stream, and announces member.joined", async () => {
+    const world = harness.serve();
+    const root = await admin(world);
+    const owner = await harness.person(world);
+    const { workspaceId } = await harness.workspaceOf([{ person: owner, role: "owner" }]);
+    const logBefore = await workspaceLog(workspaceId);
+
+    await join(world, root, workspaceId);
+
+    const log = (await workspaceLog(workspaceId)).slice(logBefore.length);
+    expect(log).toEqual([
+      { actor_account_id: root.accountId, actor_label: "Test account", action: "member.instance_admin_joined", entity_type: "member", entity_id: root.accountId, metadata: { role: "member" } },
+    ]);
+    expect(log.map((event) => event.action)).not.toContain("member.joined");
+    expect(await joinedEvents(workspaceId)).toEqual([
+      { actor_account_id: root.accountId, action: "instance.workspace_joined", entity_type: "workspace", entity_id: workspaceId, metadata: {} },
+    ]);
+    expect(await jobs(JOINED_JOB)).toEqual([{ eventId: expect.any(String) as string, workspaceId, accountId: root.accountId, role: "member" }]);
+  });
+
+  it("does not move the session to the workspace: the admin switches to it as any member does", async () => {
+    const world = harness.serve();
+    const root = await admin(world);
+    const owner = await harness.person(world);
+    const { workspaceId } = await harness.workspaceOf([{ person: owner, role: "owner" }]);
+    expect((await send(world, "PUT", ACTIVE_WORKSPACE, { cookie: root.cookie }, { workspaceId })).status).toBe(404);
+
+    await join(world, root, workspaceId);
+
+    expect((await send(world, "PUT", ACTIVE_WORKSPACE, { cookie: root.cookie }, { workspaceId })).status).toBe(204);
+    expect((await memberList(world, root)).map((member) => member.accountId)).toContain(root.accountId);
+  });
+
+  it("adds a workspace that waits for its first owner as a member and leaves it without an owner", async () => {
+    const world = harness.serve();
+    const root = await admin(world);
+    const created = await send(world, "POST", LIST, { cookie: root.cookie }, { name: "Waiting", ownerEmail: "first-owner@example.test" });
+    const { id } = (await created.json()) as { id: string };
+
+    expect((await join(world, root, id)).status).toBe(201);
+
+    expect(await harness.rolesOf(id)).toEqual({ [root.accountId]: "member" });
+  });
+
+  it("adds the admin whose session asks and nobody else: another admin's request leaves the first admin out of the workspace", async () => {
+    const world = harness.serve();
+    const first = await admin(world);
+    const second = await admin(world);
+    const owner = await harness.person(world);
+    const { workspaceId } = await harness.workspaceOf([{ person: owner, role: "owner" }]);
+
+    expect((await join(world, second, workspaceId)).status).toBe(201);
+
+    expect(await harness.rolesOf(workspaceId)).toEqual({ [owner.account.id]: "owner", [second.accountId]: "member" });
+    expect(await harness.rolesOf(workspaceId)).not.toHaveProperty(first.accountId);
+    expect((await workspaceLog(workspaceId)).map((event) => event.actor_account_id)).toEqual([second.accountId]);
+    expect((await joinedEvents(workspaceId)).map((event) => event.actor_account_id)).toEqual([second.accountId]);
+  });
+
+  it.each(["owner", "admin", "member"] as const)("answers 409 already_member to an admin who is %s of the workspace already, writing and queuing nothing", async (role) => {
+    const world = harness.serve();
+    const root = await admin(world);
+    const owner = await harness.person(world);
+    const { workspaceId } = await harness.workspaceOf([
+      { person: owner, role: "owner" },
+      { person: root.person, role },
+    ]);
+    const log = await workspaceLog(workspaceId);
+    const events = await instanceEvents();
+
+    const response = await join(world, root, workspaceId);
+
+    expect(response.status).toBe(409);
+    expect(await codeOf(response)).toBe("already_member");
+    expect(await harness.rolesOf(workspaceId)).toEqual({ [owner.account.id]: "owner", [root.accountId]: role });
+    expect(await workspaceLog(workspaceId)).toEqual(log);
+    expect(await instanceEvents()).toEqual(events);
+    expect(await jobs(JOINED_JOB)).toEqual([]);
+  });
+
+  it("answers 409 to the second of two requests, which leaves one membership and one event of each log", async () => {
+    const world = harness.serve();
+    const root = await admin(world);
+    const owner = await harness.person(world);
+    const { workspaceId } = await harness.workspaceOf([{ person: owner, role: "owner" }]);
+
+    const answers = await Promise.all([join(world, root, workspaceId), join(world, root, workspaceId)]);
+
+    expect(answers.map((answer) => answer.status).sort()).toEqual([201, 409]);
+    expect((await workspaceLog(workspaceId)).filter((event) => event.action === "member.instance_admin_joined")).toHaveLength(1);
+    expect(await joinedEvents(workspaceId)).toHaveLength(1);
+    expect(await jobs(JOINED_JOB)).toHaveLength(1);
+  });
+
+  it("answers 404 for a workspace that is being deleted or does not exist, writing and queuing nothing", async () => {
+    const world = harness.serve();
+    const root = await admin(world);
+    const owner = await harness.person(world);
+    const { workspaceId } = await harness.workspaceOf([{ person: owner, role: "owner" }]);
+    expect((await send(world, "DELETE", `${LIST}/${workspaceId}`, { cookie: root.cookie })).status).toBe(202);
+    const events = await instanceEvents();
+    const log = await workspaceLog(workspaceId);
+    const roles = await harness.rolesOf(workspaceId);
+
+    const going = await join(world, root, workspaceId);
+    const unknown = await join(world, root, "0192f3a0-aaaa-7000-8000-00000000dead");
+
+    expect(going.status).toBe(404);
+    expect(await codeOf(going)).toBe("not_found");
+    expect(unknown.status).toBe(404);
+    expect(await codeOf(unknown)).toBe("not_found");
+    expect(await harness.rolesOf(workspaceId)).toEqual(roles);
+    expect(await workspaceLog(workspaceId)).toEqual(log);
+    expect(await instanceEvents()).toEqual(events);
+    expect(await jobs(JOINED_JOB)).toEqual([]);
+  });
+
+  it("answers 401 reauth_required to a session that has not re-authenticated within ten minutes, and adds nobody", async () => {
+    const world = harness.serve();
+    const stale = await caller(world, { flag: true, mfa: true });
+    const owner = await harness.person(world);
+    const { workspaceId } = await harness.workspaceOf([{ person: owner, role: "owner" }]);
+    const events = await instanceEvents();
+
+    const response = await join(world, stale, workspaceId);
+
+    expect(response.status).toBe(401);
+    expect(await codeOf(response)).toBe("reauth_required");
+    expect(await harness.rolesOf(workspaceId)).toEqual({ [owner.account.id]: "owner" });
+    expect(await workspaceLog(workspaceId)).toEqual([]);
+    expect(await instanceEvents()).toEqual(events);
+    expect(await jobs(JOINED_JOB)).toEqual([]);
+  });
+
+  describe("refuses everyone the instanceAdmin policy excludes, and gives access to nobody", () => {
+    async function target(world: World) {
+      const owner = await harness.person(world);
+      const { workspaceId } = await harness.workspaceOf([{ person: owner, role: "owner" }]);
+      return { owner, workspaceId };
+    }
+
+    async function nothingChanged(workspaceId: string, owner: Person, events: Awaited<ReturnType<typeof instanceEvents>>) {
+      expect(await harness.rolesOf(workspaceId)).toEqual({ [owner.account.id]: "owner" });
+      expect(await workspaceLog(workspaceId)).toEqual([]);
+      expect(await instanceEvents()).toEqual(events);
+      expect(await jobs(JOINED_JOB)).toEqual([]);
+    }
+
+    it("answers 401 without a credential", async () => {
+      const world = harness.serve();
+      const { owner, workspaceId } = await target(world);
+      const events = await instanceEvents();
+      const response = await send(world, "POST", `${LIST}/${workspaceId}/membership`, {});
+      expect(response.status).toBe(401);
+      expect(await codeOf(response)).toBe("unauthenticated");
+      await nothingChanged(workspaceId, owner, events);
+    });
+
+    it("answers 403 forbidden to an account that holds no flag, even with a second factor and a fresh re-authentication", async () => {
+      const world = harness.serve();
+      const { owner, workspaceId } = await target(world);
+      const ordinary = await harness.person(world);
+      await enrolSecondFactor(ordinary.account.id);
+      const events = await instanceEvents();
+      const response = await join(world, ordinary, workspaceId);
+      expect(response.status).toBe(403);
+      expect(await codeOf(response)).toBe("forbidden");
+      await nothingChanged(workspaceId, owner, events);
+    });
+
+    it("answers 403 forbidden to an instance admin who has no second factor enrolled", async () => {
+      const world = harness.serve();
+      const { owner, workspaceId } = await target(world);
+      const person = await harness.person(world);
+      await database().owner.begin(async (tx) => {
+        await tx`SELECT set_config('app.account_id', ${person.account.id}, true)`;
+        await tx`UPDATE accounts SET is_instance_admin = true WHERE id = ${person.account.id}`;
+      });
+      const events = await instanceEvents();
+      expect((await join(world, person, workspaceId)).status).toBe(403);
+      await nothingChanged(workspaceId, owner, events);
+    });
+
+    it("answers 403 forbidden to an API token, even of an admin with a second factor", async () => {
+      const world = harness.serve();
+      const root = await admin(world);
+      const { workspaceId: own } = await harness.workspaceOf([{ person: root.person, role: "owner" }]);
+      const value = await harness.token(own, root.person, "read-write");
+      const { owner, workspaceId } = await target(world);
+      const events = await instanceEvents();
+      const response = await send(world, "POST", `${LIST}/${workspaceId}/membership`, bearer(value));
+      expect(response.status).toBe(403);
+      await nothingChanged(workspaceId, owner, events);
+    });
+
+    it("answers 403 from another origin", async () => {
+      const world = harness.serve();
+      const root = await admin(world);
+      const { owner, workspaceId } = await target(world);
+      const events = await instanceEvents();
+      const response = await join(world, root, workspaceId, { origin: "https://evil.example" });
+      expect(response.status).toBe(403);
+      await nothingChanged(workspaceId, owner, events);
+    });
   });
 });
 

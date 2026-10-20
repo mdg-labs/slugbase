@@ -89,4 +89,5 @@ export const systemOperations: readonly string[] = [
   "sys_instance_delete_workspace",
   "sys_instance_list_accounts",
   "sys_instance_update_account",
+  "sys_instance_add_membership",
 ];

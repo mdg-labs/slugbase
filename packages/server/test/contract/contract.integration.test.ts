@@ -231,12 +231,12 @@ describe("the walker over the committed document", () => {
     expect(report.failures.filter((failure) => !teamRefusal(failure))).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each anonymous operation and for the sign-in; each of the forty-nine operations that need a session
-    // also answers 401 without one, each of the twelve that declare re-authentication answers 401 reauth_required without it, and each of
+    // One valid request for each anonymous operation and for the sign-in; each of the fifty operations that need a session
+    // also answers 401 without one, each of the thirteen that declare re-authentication answers 401 reauth_required without it, and each of
     // the sixteen that need a role in the workspace answers the principal just below it (404 below member, 403 below admin), and each of the eight
     // that name a member, a recipient, a team or an invitation answers for one of workspace B; each of the four that declare an entitlement answers 403 to an account without it;
-    // and each of the eight instance operations answers 403 to the ordinary account just below its policy.
-    expect(report.calls).toBe(operations.length + 98);
+    // and each of the nine instance operations answers 403 to the ordinary account just below its policy.
+    expect(report.calls).toBe(operations.length + 101);
   }, WALK_TIMEOUT_MS);
 });
 

@@ -1,4 +1,4 @@
 {
-  "sha256": "849faadaa7657f86ca188f7d8f13b8c5be2c35cfe0ef81b920f9fbeaab233224",
-  "migration": "20261020181448_add_instance_accounts"
+  "sha256": "230335496fde2125ebdc420c57fe747ccf6d7d36613e03e765044bde5efdf235",
+  "migration": "20261020193346_add_instance_membership"
 }

@@ -11,6 +11,12 @@ import { INVITATION_TTL_SECONDS } from "../workspaces/invitations.ts";
 // that checks the admin again in the database and writes the instance audit event in the same call, so this module
 // decides what is asked and what is returned, and never writes an event itself.
 //
+// The fourth, `addInstanceAdminMembership`, makes the calling admin a member of a workspace with the member role, which is
+// the explicit way into a workspace that listing never gives (doc 02 section 11.1, doc 10 T15). The membership, the
+// `member.instance_admin_joined` event in the workspace's own audit log (its owners read it) and the instance audit event are written by one
+// `sys_instance_add_membership` call, and the domain event `member.joined` is queued in the same transaction, so each exists
+// exactly when the others do.
+//
 // An owner invitation is the one invitation that carries the owner role (doc 02 section 11.1). Its token is made here
 // and only its hash is stored; the value is in the outcome, for the caller to hand to the admin once, and nowhere else.
 
@@ -71,6 +77,28 @@ export interface InstanceWorkspaceStore {
    * nothing queued, when the workspace does not exist or is already being deleted.
    */
   markWorkspaceDeleting(workspaceId: string, eventId: string, ipPrefix: string | null): Promise<boolean>;
+  /**
+   * Makes the account of the transaction a member of the workspace with the member role, writes `member.instance_admin_joined` into the
+   * workspace's audit log and `instance.workspace_joined` into the instance stream, and queues `request.events`, in the
+   * transaction the store is bound to.
+   */
+  addMembership(request: InstanceMembershipRequest, ipPrefix: string | null): Promise<InstanceMembershipResult>;
+}
+
+/** What `sys_instance_add_membership` answered. */
+export type InstanceMembershipResult =
+  | { readonly kind: "added" }
+  /** The workspace does not exist or is being deleted; nothing was written. */
+  | { readonly kind: "unknown_workspace" }
+  /** The account holds a role in the workspace already; nothing was written. */
+  | { readonly kind: "already_member" };
+
+export interface InstanceMembershipRequest {
+  readonly workspaceId: string;
+  /** UUIDv7 identifiers (Q91) of the `member.instance_admin_joined` event in the workspace's log and of the event in the instance stream. */
+  readonly eventIds: { readonly workspace: string; readonly instance: string };
+  /** Queued in the transaction that adds the membership, and only when it does. */
+  readonly events: readonly DomainEvent<"member.joined">[];
 }
 
 export interface InstanceWorkspaceDependencies {
@@ -188,4 +216,28 @@ export async function requestInstanceWorkspaceDeletion<Code extends string>(
     return { kind: "refused", code: verdict.code };
   }
   return (await store.markWorkspaceDeleting(ask.workspaceId, newId(), ask.ipPrefix)) ? { kind: "requested" } : { kind: "unavailable" };
+}
+
+export type InstanceMembershipOutcome = InstanceMembershipResult;
+
+/** The role the instance admin gets: the member role, whatever the workspace's owners hold (doc 02 section 11.1). */
+const INSTANCE_ADMIN_ROLE = "member";
+
+/**
+ * Adds the account of the transaction, an instance admin, to the workspace as a member. The policy and the fresh
+ * re-authentication are judged before this runs and the database checks the admin again; this announces
+ * `member.joined` with the role the membership was given, and only when it was made.
+ */
+export function addInstanceAdminMembership(
+  { store, newId }: InstanceWorkspaceDependencies,
+  ask: InstanceWorkspaceAsk & { readonly workspaceId: string; readonly accountId: string },
+): Promise<InstanceMembershipOutcome> {
+  return store.addMembership(
+    {
+      workspaceId: ask.workspaceId,
+      eventIds: { workspace: newId(), instance: newId() },
+      events: [{ eventId: newId(), name: "member.joined", payload: { workspaceId: ask.workspaceId, accountId: ask.accountId, role: INSTANCE_ADMIN_ROLE } }],
+    },
+    ask.ipPrefix,
+  );
 }

@@ -14,6 +14,8 @@ import { InstanceAccount } from '@slugbase/core';
 import { InstanceAccountChange } from '@slugbase/core';
 import { InstanceAccountUpdateOutcome } from '@slugbase/core';
 import { InstanceAuditEvent } from '@slugbase/core';
+import { InstanceMembershipRequest } from '@slugbase/core';
+import { InstanceMembershipResult } from '@slugbase/core';
 import { InstanceSettings } from '@slugbase/core';
 import { InstanceSettingsChange } from '@slugbase/core';
 import { InstanceWorkspace } from '@slugbase/core';
@@ -544,6 +546,7 @@ export interface InstanceCounts {
 
 // @public (undocumented)
 export interface InstanceRepository {
+    addMembership(request: Pick<InstanceMembershipRequest, "workspaceId" | "eventIds">, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<InstanceMembershipResult>;
     createWorkspace(request: InstanceWorkspaceCreation, eventId: string, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<InstanceWorkspaceCreationResult>;
     jobHealth(): Promise<JobHealth>;
     listAccounts(eventId: string, ipPrefix: string | null): Promise<readonly InstanceAccount[]>;

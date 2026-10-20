@@ -246,6 +246,13 @@ export const InstanceWorkspaceParamsSchema = z.strictObject({
   id: z.uuid().describe("The identifier of a workspace, as listed"),
 });
 
+export const InstanceWorkspaceMembershipSchema = z
+  .strictObject({
+    workspaceId: z.uuid().describe("The workspace the calling admin is now a member of"),
+    role: z.literal("member").describe("The role the membership has: always member, whatever the admin may be elsewhere"),
+  })
+  .meta({ id: "InstanceWorkspaceMembership" });
+
 export const listInstanceWorkspaces = defineOperation({
   method: "get",
   path: "/api/v1/instance/workspaces",
@@ -289,6 +296,33 @@ export const createInstanceWorkspace = defineOperation({
     422: problemResponse(
       "The body did not pass validation: a field the operation does not declare, a name that is blank or longer than 64 characters, neither or both of ownerAccountId and ownerEmail, or an ownerAccountId that is no account or is disabled (unknown_account). Nothing is written",
     ),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const addInstanceAdminMembership = defineOperation({
+  method: "post",
+  path: "/api/v1/instance/workspaces/{id}/membership",
+  operationId: "addInstanceAdminMembership",
+  tag: "instance",
+  summary: "Add the calling instance admin to a workspace as a member",
+  auth: "instanceAdmin",
+  rate: "write",
+  reauth: true,
+  request: { params: InstanceWorkspaceParamsSchema },
+  responses: {
+    201: jsonResponse(
+      "The calling admin is a member of the workspace with the member role, and nothing more: the membership gives what any member has. It is written to the workspace's own audit log as member.instance_admin_joined, where its owners read it as distinct from an accepted invitation, and to the instance audit stream as instance.workspace_joined, and member.joined is announced, all in one transaction. The admin's session is not moved to the workspace",
+      InstanceWorkspaceMembershipSchema,
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"),
+    403: problemResponse(
+      "The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden)",
+    ),
+    404: problemResponse("There is no workspace with that identifier, or it is being deleted"),
+    409: problemResponse("The calling account is a member of the workspace already, with any role (already_member); nothing is written"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },

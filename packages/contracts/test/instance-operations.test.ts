@@ -9,8 +9,10 @@ import {
   InstanceStatusSchema,
   UpdateInstanceAccountRequestSchema,
   InstanceWorkspaceCreatedSchema,
+  InstanceWorkspaceMembershipSchema,
   InstanceWorkspaceSchema,
   UpdateInstanceSettingsRequestSchema,
+  addInstanceAdminMembership,
   createInstanceWorkspace,
   deleteInstanceWorkspace,
   getInstanceSettings,
@@ -297,5 +299,36 @@ describe("the instance account operations", () => {
     expect(InstanceAccountSchema.safeParse({ ...listed, passwordHash: "x" }).success).toBe(false);
     expect(InstanceAccountSchema.safeParse({ ...listed, mfaSecret: "x" }).success).toBe(false);
     expect(InstanceAccountSchema.safeParse({ ...listed, bookmarkCount: 3 }).success).toBe(false);
+  });
+});
+
+describe("the instance membership operation", () => {
+  const operation = paths["/api/v1/instance/workspaces/{id}/membership"]?.["post"];
+  const responses = (operation?.["responses"] ?? {}) as Record<string, Obj>;
+
+  it("is POST /instance/workspaces/{id}/membership for the instance admin, with the write bucket and re-authentication", () => {
+    expect(addInstanceAdminMembership.operationId).toBe("addInstanceAdminMembership");
+    expect(operation?.["x-slugbase-auth"]).toBe("instanceAdmin");
+    expect(operation?.["x-slugbase-rate"]).toBe("write");
+    expect(operation?.["x-slugbase-reauth"]).toBe(true);
+  });
+
+  it("answers 201 with a body and every refusal as a problem document", () => {
+    expect(Object.keys(responses["201"]?.["content"] as Obj)).toEqual(["application/json"]);
+    for (const status of ["400", "401", "403", "404", "409", "429", "503"]) {
+      expect(Object.keys(responses[status]?.["content"] as Obj), status).toEqual(["application/problem+json"]);
+    }
+  });
+
+  it("takes no body, so the caller cannot name an account other than its own", () => {
+    expect(operation?.["requestBody"]).toBeUndefined();
+    expect((operation?.["parameters"] as Obj[]).map((parameter) => parameter["name"])).toEqual(["id"]);
+  });
+
+  it("describes a closed answer whose role is the member role and nothing else", () => {
+    const answer = { workspaceId: "0192f3a0-bbbb-7000-8000-0000000000bb", role: "member" };
+    expect(InstanceWorkspaceMembershipSchema.safeParse(answer).success).toBe(true);
+    expect(InstanceWorkspaceMembershipSchema.safeParse({ ...answer, role: "owner" }).success).toBe(false);
+    expect(InstanceWorkspaceMembershipSchema.safeParse({ ...answer, accountId: "0192f3a0-bbbb-7000-8000-0000000000aa" }).success).toBe(false);
   });
 });

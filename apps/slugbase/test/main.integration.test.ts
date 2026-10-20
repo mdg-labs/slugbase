@@ -495,7 +495,7 @@ describe("apps/slugbase main server and the instance admin workspace operations"
   });
   const first = { displayName: "Ada", email: "ada@example.test", password: "a long enough password for ada", workspaceName: "Home" };
 
-  it("composes GET, POST and DELETE /api/v1/instance/workspaces: each asks for a credential, and each refuses the first admin, whom setup signs in without a second factor", async () => {
+  it("composes GET, POST and DELETE /api/v1/instance/workspaces and POST /api/v1/instance/workspaces/{id}/membership: each asks for a credential, and each refuses the first admin, whom setup signs in without a second factor", async () => {
     const WORKSPACES = "/api/v1/instance/workspaces";
     const unknown = "0192f3a0-aaaa-7000-8000-00000000dead";
     const { status, output, observed } = await runServer(env(), async (port) => {
@@ -508,10 +508,20 @@ describe("apps/slugbase main server and the instance admin workspace operations"
         );
       };
       const request = { name: "Walker", ownerEmail: "owner@example.test" };
-      const anonymous = [await as("", "GET", WORKSPACES), await as("", "POST", WORKSPACES, request), await as("", "DELETE", `${WORKSPACES}/${unknown}`)];
+      const anonymous = [
+        await as("", "GET", WORKSPACES),
+        await as("", "POST", WORKSPACES, request),
+        await as("", "DELETE", `${WORKSPACES}/${unknown}`),
+        await as("", "POST", `${WORKSPACES}/${unknown}/membership`),
+      ];
       const created = await post(port, "/api/v1/setup", first);
       const cookie = /set-cookie: (__Host-slugbase_session=[A-Za-z0-9_-]+)/i.exec(created)?.[1] ?? "";
-      const signedIn = [await as(cookie, "GET", WORKSPACES), await as(cookie, "POST", WORKSPACES, request), await as(cookie, "DELETE", `${WORKSPACES}/${unknown}`)];
+      const signedIn = [
+        await as(cookie, "GET", WORKSPACES),
+        await as(cookie, "POST", WORKSPACES, request),
+        await as(cookie, "DELETE", `${WORKSPACES}/${unknown}`),
+        await as(cookie, "POST", `${WORKSPACES}/${unknown}/membership`),
+      ];
       return [...anonymous, ...signedIn].map((answer) => `${answer.split("\r\n")[0] ?? ""} ${/"code":"([a-z_]+)"/.exec(answer)?.[1] ?? ""}`).join("\n=====\n");
     });
     expect(status, output).toBe(0);
@@ -519,6 +529,8 @@ describe("apps/slugbase main server and the instance admin workspace operations"
       "HTTP/1.1 401 Unauthorized unauthenticated",
       "HTTP/1.1 401 Unauthorized unauthenticated",
       "HTTP/1.1 401 Unauthorized unauthenticated",
+      "HTTP/1.1 401 Unauthorized unauthenticated",
+      "HTTP/1.1 403 Forbidden forbidden",
       "HTTP/1.1 403 Forbidden forbidden",
       "HTTP/1.1 403 Forbidden forbidden",
       "HTTP/1.1 403 Forbidden forbidden",
