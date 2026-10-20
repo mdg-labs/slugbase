@@ -1,9 +1,11 @@
 import { completeOidcSignIn, startOidcSignIn } from "@slugbase/contracts";
 import {
   OIDC_FAILURE_CODE,
+  acceptInvitationWithIdentity,
   autoCreateAllowed,
   bindOidcState,
   federatedDisplayName,
+  hashCredentialToken,
   hashOidcState,
   newOidcHandshake,
   normalizeEmail,
@@ -18,6 +20,8 @@ import {
   type IdentityClaims,
   type IdentityPort,
   type IdentityProviderConfig,
+  type InvitationIdentityResult,
+  type InvitationSignupEvent,
   type OidcPreAuthCookieSpec,
   type RegistrationSettings,
   type SecretBoxPort,
@@ -29,6 +33,7 @@ import { readCookie, setSessionCookie } from "../../auth/cookie.ts";
 import { provisionWorkspaceIn } from "../../auth/personal-workspace.ts";
 import { assertRegistrationAllowed } from "../../auth/registration-gate.ts";
 import { hashSessionToken, newSessionToken } from "../../auth/session-token.ts";
+import type { TakeTokenRedeemLimit } from "../../auth/token-redeem-limit.ts";
 import { uuidv7 } from "../../auth/uuidv7.ts";
 import { queueDomainEvent } from "../../events/publish.ts";
 import type { ChainContext, RouteBinding } from "../../http/chain.ts";
@@ -59,6 +64,18 @@ import { route } from "../register.ts";
 // as for a linked identity: the provider is trusted for the second factor. Everything that can go wrong
 // ends on `/login` with the same failure code and nothing in the answer says which step refused, so the answer
 // reveals neither whether an account exists nor why a handshake failed; the reason goes to the log as a fixed word.
+// The `invite` intent accepts an invitation through the provider (doc 02 sections 2.8 and 3.4, Q31, Q32, doc 04 section
+// 4.5, doc 10 T9, T19 and T20). The start takes the invitation token in its own parameter, counts the redemption against
+// the `token_redeem` limits of the client address (and of the account of a complete session the browser carries) and keeps
+// only the token's hash with the handshake record, never the token and never in the `returnTo`; a text that is not a token
+// ends like any failed start. The callback consumes the record once, and accepts only when the identity port has verified
+// the ID token and the provider asserted `email_verified` for an address that is exactly the one the invitation names;
+// anything else accepts nothing, links nothing and creates nothing. Which account accepts is the database operation's
+// to decide: the account the identity is linked to, else the enabled account that holds the invited address verified (the
+// identity is linked to it), else an account created for the invited address, whatever the provider's `AUTO_CREATE`
+// says because the invitation authorises it (Q31), after the registration policy answered for the path `invitation`. The
+// link, the account, the membership, the accepted invitation and the session are one transaction. The browser comes
+// back with a full session that acts in the workspace joined, and any other outcome ends on the generic failure.
 // The PKCE verifier is sealed together with the instant the handshake began. A callback that cannot open it (its
 // secret-box key was removed meanwhile) ends like any other failure. A `reauth` callback hands that instant to
 // the identity port, which refuses an ID token that was authenticated before it (doc 04 section 4.5).
@@ -75,7 +92,13 @@ const SEALED_VERIFIER = /^(\d{1,16}):([A-Za-z0-9_-]{1,128})$/;
 export interface OidcRoutesOptions {
   readonly store: Pick<
     AuthStore,
-    "createOidcLoginState" | "consumeOidcLoginState" | "signInWithIdentity" | "linkIdentity" | "reauthenticateWithIdentity"
+    | "createOidcLoginState"
+    | "consumeOidcLoginState"
+    | "signInWithIdentity"
+    | "linkIdentity"
+    | "reauthenticateWithIdentity"
+    | "inspectInvitation"
+    | "acceptInvitationWithIdentity"
   >;
   readonly identity: Pick<IdentityPort, "begin" | "complete">;
   /** Seals the PKCE verifier while the handshake is in flight, and opens it at the callback. */
@@ -89,6 +112,8 @@ export interface OidcRoutesOptions {
   /** `SESSION_SECRET`: the pre-auth cookie is a keyed hash made with a key derived from it. */
   readonly sessionSecret: string;
   readonly sessionCookie: SessionCookieSpec;
+  /** Counts the redemption of an invitation token by a start of the `invite` intent against the `token_redeem` limits. */
+  readonly takeRedeemLimit: TakeTokenRedeemLimit;
   /** The instant, in milliseconds, a session's `reauth_at` is compared with; defaults to the system clock. */
   readonly now?: () => number;
 }
@@ -100,7 +125,6 @@ type Refusal =
   | "malformed_callback"
   | "foreign_browser"
   | "unknown_state"
-  | "unsupported_intent"
   | "exchange_failed"
   | "verifier_unreadable"
   | "invalid_token"
@@ -113,7 +137,9 @@ type Refusal =
   | "session_mismatch"
   | "reauth_required"
   | "identity_in_use"
-  | "unknown_account";
+  | "unknown_account"
+  | "invalid_invitation"
+  | `invitation_${Exclude<InvitationIdentityResult["kind"], "accepted">}`;
 
 function preAuthAttributes(spec: OidcPreAuthCookieSpec, maxAge: number): string {
   return `Max-Age=${String(maxAge)}; Path=/; HttpOnly; SameSite=Lax${spec.secure ? "; Secure" : ""}`;
@@ -149,15 +175,23 @@ function signedInSession(
 }
 
 // A browser says where a navigation came from (Sec-Fetch-Site). Only the application's own page (`same-origin`)
-// and the address bar or a bookmark (`none`) may start a link or a re-authentication. A page of another site, a
-// sibling subdomain included, may not, and neither may a request that carries no such header: a browser that
-// does not send it cannot show the request came from the application, so it fails closed there. Such a browser
-// cannot link or re-authenticate through a provider; a sign-in through a provider (`login`) is not affected. An
-// account with a password re-authenticates with it, one with a second factor and no password uses a code, and one
-// with neither cannot re-authenticate on that browser.
+// and the address bar or a bookmark (`none`) may start a link, a re-authentication or the acceptance of an
+// invitation. A page of another site, a sibling subdomain included, may not, and neither may a request that
+// carries no such header: a browser that does not send it cannot show the request came from the application, so it
+// fails closed there. Such a browser cannot link, re-authenticate or accept an invitation through a provider (it
+// accepts by signing in or registering on the invitation page); a sign-in through a provider (`login`) is not
+// affected. An account with a password re-authenticates with it, one with a second factor and no password uses a
+// code, and one with neither cannot re-authenticate on that browser.
 function fromTheApplication(context: ChainContext): boolean {
   const site = context.req.raw.headers.get("sec-fetch-site");
   return site === "same-origin" || site === "none";
+}
+
+/** The job of a domain event the acceptance queues. */
+function eventJob(event: InvitationSignupEvent) {
+  return event.name === "account.created"
+    ? queueDomainEvent(event.eventId, event.name, event.payload)
+    : queueDomainEvent(event.eventId, event.name, event.payload);
 }
 
 function refused(context: ChainContext, provider: string, reason: Refusal): void {
@@ -173,6 +207,7 @@ export function oidcRoutes({
   appOrigin,
   sessionSecret,
   sessionCookie,
+  takeRedeemLimit,
   now = Date.now,
 }: OidcRoutesOptions): RouteBinding[] {
   const preAuth = oidcPreAuthCookieSpec(appOrigin);
@@ -189,18 +224,8 @@ export function oidcRoutes({
     if (policy?.autoCreate !== true || !autoCreateAllowed(email, policy.allowedDomains)) {
       return undefined;
     }
-    const hooks = context.get("hooks");
-    if (hooks === undefined) {
-      throw new Error("the OIDC callback was reached without the hook dispatcher");
-    }
-    try {
-      await assertRegistrationAllowed(hooks, { email, path: "oidc" });
-    } catch (error) {
-      if (error instanceof ProblemError && error.code === "registration_refused") {
-        refused(context, provider, "registration_refused");
-        return undefined;
-      }
-      throw error;
+    if (!(await registrationAllowed(context, provider, email, "oidc"))) {
+      return undefined;
     }
     const accountId = uuidv7();
     return {
@@ -212,10 +237,106 @@ export function oidcRoutes({
     };
   };
 
+  // Whether the registration policy of the composed modules lets an account be created for the address by the path.
+  const registrationAllowed = async (context: ChainContext, provider: string, email: string, path: "oidc" | "invitation"): Promise<boolean> => {
+    const hooks = context.get("hooks");
+    if (hooks === undefined) {
+      throw new Error("the OIDC callback was reached without the hook dispatcher");
+    }
+    try {
+      await assertRegistrationAllowed(hooks, { email, path });
+    } catch (error) {
+      if (error instanceof ProblemError && error.code === "registration_refused") {
+        refused(context, provider, "registration_refused");
+        return false;
+      }
+      throw error;
+    }
+    return true;
+  };
+
+  // The callback of the `invite` intent, once the identity port has verified the ID token. Only an address the provider
+  // asserted as verified does anything, and the database operation accepts only when it is exactly the invited one; the
+  // registration policy is asked, for the path `invitation`, only when no account holds the invited address, which is
+  // the one case that can end in an account being created.
+  const acceptInvitationThrough = async (
+    context: ChainContext,
+    provider: string,
+    record: { readonly invitationTokenHash: Buffer | null; readonly returnTo: string },
+    claims: IdentityClaims,
+    cookieHeader: string | null,
+  ) => {
+    const email = claims.emailVerified ? normalizeEmail(claims.email) : "";
+    if (email === "") {
+      refused(context, provider, "unverified_email");
+      return failure;
+    }
+    const tokenHash = record.invitationTokenHash;
+    const invitation = tokenHash === null ? undefined : await store.inspectInvitation(tokenHash);
+    if (tokenHash === null || invitation === undefined) {
+      refused(context, provider, "invitation_gone");
+      return failure;
+    }
+    const mayCreate = !invitation.accountExists && (await registrationAllowed(context, provider, normalizeEmail(invitation.email), "invitation"));
+    const token = newSessionToken();
+    const carried = cookieHeader === null ? undefined : readCookie(cookieHeader, sessionCookie.name);
+    const outcome = await acceptInvitationWithIdentity(
+      {
+        store: {
+          acceptWithIdentity: (acceptance) =>
+            store.acceptInvitationWithIdentity({
+              ...acceptance,
+              onAccepted: (accepted) => {
+                const { audit, events } = acceptance.onAccepted(accepted);
+                return { audit, jobs: events.map(eventJob) };
+              },
+            }),
+        },
+        newId: uuidv7,
+      },
+      {
+        tokenHash,
+        provider,
+        subject: claims.subject,
+        email,
+        displayName: federatedDisplayName(claims.displayName, email),
+        locale: registrationLocale(context.req.raw.headers.get("accept-language")),
+        mayCreate,
+        // Seats are unlimited until the entitlement engine supplies a limit (doc 01 section 13.1).
+        seatLimit: null,
+        session: {
+          id: uuidv7(),
+          tokenHash: token.hash,
+          replacedTokenHash: carried === undefined ? null : (hashSessionToken(carried) ?? null),
+          ipPrefix: networkPrefixOf(context.get("clientIp")) ?? null,
+          userAgent: truncateUserAgent(context.req.raw.headers.get("user-agent")),
+        },
+      },
+    );
+    if (outcome.kind !== "accepted") {
+      refused(context, provider, `invitation_${outcome.kind}`);
+      return failure;
+    }
+    return { status: 302, headers: { Location: safeReturnTo(record.returnTo), "Set-Cookie": setSessionCookie(sessionCookie, token.value) } } as const;
+  };
+
   const start = route(startOidcSignIn).handle(async ({ params, query }, context) => {
     const intent = query.intent;
     let linkAccountId: string | null = null;
-    if (intent !== "login") {
+    let invitationTokenHash: Buffer | undefined;
+    if (intent === "invite") {
+      if (!fromTheApplication(context)) {
+        refused(context, params.provider, "cross_site_start");
+        return failure;
+      }
+      // The redemption is counted whether or not the text is a token, like every other redemption.
+      await takeRedeemLimit(context, signedInSession(context)?.accountId);
+      invitationTokenHash = query.invitation === undefined ? undefined : hashCredentialToken(query.invitation);
+      if (invitationTokenHash === undefined) {
+        refused(context, params.provider, "invalid_invitation");
+        return failure;
+      }
+    } else if (intent !== "login") {
       const session = signedInSession(context);
       if (session === undefined) {
         refused(context, params.provider, "no_session");
@@ -255,8 +376,11 @@ export function oidcRoutes({
       intent,
       nonce: handshake.nonce,
       codeVerifier: sealed,
-      returnTo: safeReturnTo(query.returnTo),
+      // The browser of an invitation comes back to Home, where the workspace it joined is the active one: a path of the
+      // request could carry the token into the record, so none is read.
+      returnTo: intent === "invite" ? "/" : safeReturnTo(query.returnTo),
       linkAccountId,
+      ...(invitationTokenHash === undefined ? {} : { invitationTokenHash }),
     });
     return {
       status: 302,
@@ -288,14 +412,10 @@ export function oidcRoutes({
     if (record === undefined) {
       return fail("unknown_state");
     }
-    // The invitation intent arrives with its own operation.
-    if (record.intent === "invite") {
-      return fail("unsupported_intent");
-    }
     // A link or a re-authentication is the work of the account that started it: the browser must still hold a
     // complete session of that account, not merely the pre-auth cookie of the handshake.
     let owner: ReturnType<typeof signedInSession>;
-    if (record.intent !== "login") {
+    if (record.intent === "link" || record.intent === "reauth") {
       owner = signedInSession(context);
       if (owner === undefined || owner.accountId !== record.linkAccountId) {
         return fail("session_mismatch");
@@ -338,6 +458,10 @@ export function oidcRoutes({
     }
     if (claims.providerId !== params.provider) {
       return fail("invalid_token");
+    }
+
+    if (record.intent === "invite") {
+      return acceptInvitationThrough(context, params.provider, record, claims, cookieHeader);
     }
 
     if (owner !== undefined) {

@@ -663,6 +663,105 @@
           "forbidden": "Nur ein Eigentümer kann das Eigentum übertragen. Die Seite wurde neu geladen.",
           "notAMember": "Diese Person ist kein Mitglied des Workspace mehr. Die Liste wurde neu geladen."
         }
+      },
+      "invitations": {
+        "title": "Einladungen",
+        "description": "Personen, die eingeladen wurden und noch nicht beigetreten sind.",
+        "invite": "Personen einladen",
+        "pending": "Ausstehend",
+        "expired": "Abgelaufen",
+        "column": {
+          "email": "E-Mail",
+          "role": "Rolle",
+          "invitedBy": "Eingeladen von",
+          "status": "Status",
+          "expires": "Läuft ab",
+          "actions": "Aktionen"
+        },
+        "invitedBy": {
+          "deleted": "Gelöschtes Konto",
+          "former": "Ehemaliges Mitglied",
+          "unknown": "Ein anderes Mitglied"
+        },
+        "actionsFor": "Aktionen für die Einladung von {email}",
+        "action": {
+          "resend": "Erneut senden",
+          "link": "Einladungslink kopieren",
+          "revoke": "Widerrufen"
+        },
+        "gone": "Diese Einladung ist nicht mehr ausstehend. Die Liste wurde neu geladen.",
+        "loadFailed": {
+          "title": "Die Einladungen konnten nicht geladen werden"
+        },
+        "empty": {
+          "title": "Keine ausstehenden Einladungen",
+          "description": "Personen, die du einlädst, erscheinen hier, bis sie beitreten."
+        },
+        "resend": {
+          "done": "Die Einladung für {email} wurde erneut gesendet",
+          "noMail": "Dieser Server kann keine E-Mails senden. Kopiere stattdessen den Einladungslink."
+        },
+        "revoke": {
+          "title": "Einladung für {email} widerrufen?",
+          "description": "Der Link in der Einladung funktioniert sofort nicht mehr. {email} kann später erneut eingeladen werden.",
+          "action": "Einladung widerrufen",
+          "cancel": "Abbrechen",
+          "done": "Die Einladung für {email} wurde widerrufen"
+        },
+        "link": {
+          "title": "Einladungslink",
+          "description": "Sende diesen Link an {email}. Er fügt die Person zum Workspace hinzu, sobald sie sich mit dieser Adresse anmeldet oder registriert.",
+          "label": "Einladungslink",
+          "copy": "Link kopieren",
+          "copied": "Link kopiert",
+          "note": "Dieser Link wird nur einmal angezeigt, und jeder frühere Link zu dieser Einladung funktioniert nicht mehr. Er läuft in 7 Tagen ab.",
+          "done": "Fertig",
+          "close": "Schließen"
+        },
+        "loading": "Einladungen werden geladen"
+      },
+      "invite": {
+        "title": "Personen einladen",
+        "description": "Lade Personen per E-Mail in diesen Workspace ein.",
+        "close": "Schließen",
+        "noMail": "Dieser Server kann keine E-Mails senden. Die Einladungen werden ohne E-Mail erstellt: Kopiere den Einladungslink jeder Einladung aus der Liste der ausstehenden Einladungen und sende ihn selbst.",
+        "emails": {
+          "label": "E-Mail-Adressen",
+          "description": "Trenne mehrere Adressen mit einem Komma oder drücke nach jeder die Eingabetaste.",
+          "placeholder": "name@example.org"
+        },
+        "addresses": "Einzuladende Adressen",
+        "remove": "Entfernen",
+        "removeAddress": "{address} entfernen",
+        "role": {
+          "label": "Rolle",
+          "admin": "Verwaltet Mitglieder, Einladungen und die Einstellungen des Workspace.",
+          "member": "Nutzt die Lesezeichen und Ordner des Workspace und kann weder Mitglieder noch Einstellungen verwalten."
+        },
+        "error": {
+          "required": "Gib mindestens eine E-Mail-Adresse ein.",
+          "invalid": "{address} ist keine gültige E-Mail-Adresse."
+        },
+        "cancel": "Abbrechen",
+        "submit": "Einladungen senden",
+        "result": {
+          "title": "Einladungen",
+          "summary": "{invited} von {total} eingeladen.",
+          "list": "Ergebnis je Adresse",
+          "invitedBadge": "Eingeladen",
+          "skippedBadge": "Übersprungen",
+          "failedBadge": "Fehlgeschlagen",
+          "sent": "Die Einladung wurde per E-Mail gesendet.",
+          "created": "Die Einladung wurde erstellt. Kopiere ihren Link aus den ausstehenden Einladungen.",
+          "alreadyMember": "Bereits Mitglied dieses Workspace.",
+          "invalid": "Keine gültige E-Mail-Adresse.",
+          "rateLimited": "Zu viele Anfragen. Versuche es in einer Weile erneut.",
+          "unavailable": "Der Server ist ausgelastet. Versuche es erneut.",
+          "failed": "Die Einladung konnte nicht erstellt werden.",
+          "requestId": "Anfrage-ID: {requestId}",
+          "tryAgain": "Fehlgeschlagene erneut versuchen",
+          "done": "Fertig"
+        }
       }
     }
   },
@@ -1160,6 +1259,73 @@
         "forbidden": "Das darfst du nicht.",
         "notAMember": "Diese Person ist kein Mitglied des Workspace mehr. Die Liste wurde neu geladen.",
         "recipientGone": "Die Person, die die Inhalte übernehmen sollte, ist kein Mitglied des Workspace mehr. Wähle jemand anderen."
+      }
+    }
+  },
+  "invite": {
+    "title": "Du bist eingeladen",
+    "description": "Nimm deine Einladung zu {product} an.",
+    "summary": {
+      "workspace": "Workspace",
+      "invitedBy": "Eingeladen von",
+      "role": "Rolle"
+    },
+    "expired": {
+      "title": "Dieser Einladungslink funktioniert nicht",
+      "description": "Ein Einladungslink funktioniert nur einmal und nur begrenzte Zeit. Bitte die Person, die dich eingeladen hat, um einen neuen.",
+      "action": "Zur Anmeldung"
+    },
+    "error": {
+      "unavailable": "Die Einladung kann gerade nicht angezeigt werden. Versuche es gleich noch einmal.",
+      "retry": "Erneut versuchen",
+      "seatLimit": "In diesem Workspace ist kein Platz mehr frei. Frage die Person, die dich eingeladen hat.",
+      "rateLimited": {
+        "unknown": "Zu viele Versuche. Versuche es später erneut.",
+        "seconds": "Zu viele Versuche. Versuche es in {count, plural, one {# Sekunde} other {# Sekunden}} erneut.",
+        "minutes": "Zu viele Versuche. Versuche es in {count, plural, one {# Minute} other {# Minuten}} erneut."
+      }
+    },
+    "join": {
+      "action": "{workspace} beitreten",
+      "signedInAs": "Du bist als {email} angemeldet.",
+      "alreadyMember": {
+        "title": "Du bist bereits Mitglied dieses Workspace.",
+        "action": "Zur Startseite"
+      },
+      "error": {
+        "mismatch": {
+          "title": "Mit diesem Konto lässt sich die Einladung nicht annehmen",
+          "description": "Die Einladung gilt für {email}. Das Konto, mit dem du angemeldet bist, muss diese Adresse haben und bestätigt haben."
+        },
+        "unavailable": "Der Beitritt ist gerade nicht möglich. Versuche es gleich noch einmal."
+      }
+    },
+    "mismatch": {
+      "title": "Diese Einladung gilt für eine andere Adresse",
+      "description": "Du bist als {current} angemeldet, die Einladung gilt für {invited}. Melde dich ab, um mit der eingeladenen Adresse fortzufahren.",
+      "action": "Abmelden und fortfahren"
+    },
+    "provider": {
+      "description": "Nutze ein Konto bei einem Anbieter, der {email} bestätigt hat."
+    },
+    "signIn": {
+      "description": "Für {email} gibt es schon ein Konto. Melde dich an, um beizutreten."
+    },
+    "signUp": {
+      "description": "Wähle einen Namen und ein Passwort, um dein Konto zu erstellen.",
+      "name": {
+        "label": "Name",
+        "required": "Gib deinen Namen ein."
+      },
+      "email": {
+        "label": "E-Mail",
+        "description": "Die Einladung ging an diese Adresse, deshalb verwendet das Konto sie."
+      },
+      "submit": "Konto erstellen und beitreten",
+      "error": {
+        "refused": "Mit dieser Einladung lässt sich kein Konto erstellen. Frage die Person, die dich eingeladen hat.",
+        "invalid": "Prüfe deine Eingaben und versuche es erneut.",
+        "unavailable": "Das Konto kann gerade nicht erstellt werden. Versuche es gleich noch einmal."
       }
     }
   }

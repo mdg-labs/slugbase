@@ -1,4 +1,5 @@
 import type {
+  InvitationAcceptResult,
   InvitationListing,
   InvitationManagementStore,
   InvitationRecord,
@@ -56,6 +57,13 @@ interface PresentRow extends Record<string, unknown> {
 
 interface LocaleRow extends Record<string, unknown> {
   locale: string | null;
+}
+
+interface AcceptedRow extends Record<string, unknown> {
+  outcome: string;
+  accepted_workspace_id: string | null;
+  accepted_invitation_id: string | null;
+  accepted_role: string | null;
 }
 
 interface IssuedRow extends Record<string, unknown> {
@@ -258,6 +266,55 @@ export function invitationRepository(tx: TenantTx): InvitationRepository {
       const current = await handle.execute<StatusRow>(sql`
         SELECT status FROM public.workspace_invitations WHERE id = ${invitationId}::uuid AND workspace_id = ${workspaceId}::uuid`);
       return current[0] !== undefined && statusOf(current[0].status) === "revoked" ? { kind: "already_revoked" } : { kind: "not_found" };
+    },
+
+    async enqueue(jobs) {
+      for (const job of jobs) {
+        await enqueueInTenantTransaction(tx, job);
+      }
+    },
+  };
+}
+
+/** What accepting an invitation needs of an account-level transaction: the operation and the queue of its events. */
+export interface InvitationAcceptanceRepository {
+  /**
+   * Accepts the invitation the token hash belongs to for the account of the transaction through
+   * `sys_invitation_accept`, which locks the workspace, the account and the invitation and does everything in one
+   * call. `seatLimit` is the seats the workspace may hold, null for no limit. Needs no workspace in the transaction.
+   */
+  accept(tokenHash: Buffer, seatLimit: number | null): Promise<InvitationAcceptResult>;
+  /** Queues `jobs` in the open transaction, so each exists exactly when the acceptance does. */
+  enqueue(jobs: readonly QueuedJob[]): Promise<void>;
+}
+
+export function invitationAcceptanceRepository(tx: TenantTx): InvitationAcceptanceRepository {
+  return {
+    async accept(tokenHash, seatLimit) {
+      if (tokenHash.length !== 32) {
+        throw new RangeError("tokenHash must be a 32-byte SHA-256 digest");
+      }
+      const rows = await tenantHandle(tx).execute<AcceptedRow>(sql`
+        SELECT outcome, accepted_workspace_id, accepted_invitation_id, accepted_role
+        FROM public.sys_invitation_accept(decode(${tokenHash.toString("hex")}, 'hex'), ${tx.accountId}::uuid, ${seatLimit}::int)`);
+      const row = rows[0];
+      if (rows.length !== 1 || row === undefined) {
+        throw new Error("sys_invitation_accept did not return exactly one row");
+      }
+      switch (row.outcome) {
+        case "accepted":
+          if (row.accepted_workspace_id === null || row.accepted_invitation_id === null || row.accepted_role === null) {
+            throw new Error("sys_invitation_accept accepted without naming the workspace, the invitation and the role");
+          }
+          return { kind: "accepted", workspaceId: row.accepted_workspace_id, invitationId: row.accepted_invitation_id, role: roleOf(row.accepted_role) };
+        case "gone":
+        case "email_mismatch":
+        case "already_member":
+        case "seat_limit_reached":
+          return { kind: row.outcome };
+        default:
+          throw new Error("sys_invitation_accept returned an outcome outside accepted, gone, email_mismatch, already_member and seat_limit_reached");
+      }
     },
 
     async enqueue(jobs) {

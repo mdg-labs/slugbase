@@ -96,6 +96,23 @@ describe("the provider buttons", () => {
   });
 
   it.each([
+    ["/invite/abc123tokenvalue", "an invitation link"],
+    ["/invite/abc123tokenvalue?x=1#frag", "an invitation link with a query and a fragment"],
+    ["/Invite/abc123tokenvalue", "an invitation link in another case"],
+    ["/a/../invite/abc123tokenvalue", "an invitation link behind a dot segment"],
+  ])("does not send %s to the provider start as the page to come back to (%s)", async (next) => {
+    stubServer([{ slug: "acme", name: "Acme SSO" }]);
+    await openLogin(`/login?next=${encodeURIComponent(next)}`);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Continue with Acme SSO" }));
+      await Promise.resolve();
+    });
+
+    expect(navigateTo).toHaveBeenCalledExactlyOnceWith("/api/v1/auth/oidc/acme/start?returnTo=%2F");
+  });
+
+  it.each([
     ["a configuration without a signIn document", undefined],
     ["an empty provider list", []],
   ] as const)("shows only the email and password form for %s", async (_name, providers) => {

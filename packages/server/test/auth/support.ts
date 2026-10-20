@@ -6,6 +6,7 @@ import { hashPassword } from "../../src/auth/password.ts";
 import { createAccountOnlyTenantResolver } from "../../src/auth/tenant-resolver.ts";
 import { createRateLimitRegistry } from "../../src/config/index.ts";
 import { createServer, type Server } from "../../src/create-server.ts";
+import type { EntitlementCheck } from "../../src/http/authorize.ts";
 import { appUrl, tenantDatabase } from "../contract/support.ts";
 import { memoryRateLimiter, type MemoryRateLimiter } from "../http/rate-limit-support.ts";
 import { adapters, recordingLogger, serverConfig } from "../support.ts";
@@ -277,10 +278,12 @@ export interface ServeOptions {
   readonly openLimits?: boolean;
   /** The mail port the server queues and checks `features.mail` against; the unconfigured one when absent. */
   readonly mail?: MailPort;
+  /** The entitlements the composition holds; none when absent. */
+  readonly entitlements?: EntitlementCheck;
 }
 
 /** The whole chain over the migrated database, as the sign-in suites run it. */
-export function serveAuth(database: TestDatabase, store: AuthStore, { env = {}, openLimits = true, mail }: ServeOptions = {}): AuthWorld {
+export function serveAuth(database: TestDatabase, store: AuthStore, { env = {}, openLimits = true, mail, entitlements }: ServeOptions = {}): AuthWorld {
   const config = serverConfig({
     NODE_ENV: "test",
     DATABASE_URL: appUrl(database),
@@ -297,6 +300,7 @@ export function serveAuth(database: TestDatabase, store: AuthStore, { env = {}, 
     logger: logs,
     database: tenantDatabase(database),
     authStore: store,
+    ...(entitlements === undefined ? {} : { entitlements }),
   });
   return { server, origin: config.APP_ORIGIN, logs, limiter };
 }

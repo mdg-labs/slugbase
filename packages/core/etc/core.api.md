@@ -7,6 +7,15 @@
 import type { ProblemCode } from '@slugbase/contracts';
 
 // @public
+export function acceptInvitation(input: InvitationAcceptDependencies, ask: InvitationAcceptAsk): Promise<InvitationAcceptOutcome>;
+
+// @public
+export function acceptInvitationWithAccount(input: InvitationSignupDependencies, ask: InvitationSignupAsk): Promise<InvitationSignupResult>;
+
+// @public
+export function acceptInvitationWithIdentity(input: InvitationIdentityDependencies, ask: InvitationIdentityAsk): Promise<InvitationIdentityResult>;
+
+// @public
 export const ACCOUNT_CREATION_PATHS: readonly ["self-registration", "invitation", "oidc", "setup"];
 
 // @public
@@ -301,6 +310,16 @@ export const AUDIT_ACTIONS: {
             };
             readonly transferTo: {
                 readonly type: "uuid";
+            };
+        };
+    };
+    readonly "member.joined": {
+        readonly category: "member";
+        readonly metadata: {
+            readonly role: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
             };
         };
     };
@@ -609,6 +628,18 @@ export const DOMAIN_EVENTS: {
             readonly type: "uuid";
         };
     };
+    readonly "member.joined": {
+        readonly workspaceId: {
+            readonly type: "uuid";
+        };
+        readonly accountId: {
+            readonly type: "uuid";
+        };
+        readonly role: {
+            readonly type: "enum";
+            readonly values: readonly ["owner", "admin", "member"];
+        };
+    };
 };
 
 // @public
@@ -762,6 +793,31 @@ export function hashCredentialToken(value: string): Buffer | undefined;
 export function hashOidcState(state: string): Buffer | undefined;
 
 // @public (undocumented)
+export interface IdentityAcceptance {
+    readonly accountId: string;
+    readonly displayName: string;
+    readonly email: string;
+    readonly identityId: string;
+    // (undocumented)
+    readonly locale: string;
+    readonly mayCreate: boolean;
+    readonly onAccepted: (accepted: {
+        readonly workspaceId: string;
+        readonly role: WorkspaceRole;
+        readonly accountId: string;
+        readonly displayName: string;
+        readonly created: boolean;
+    }) => InvitationIdentityRecords;
+    readonly provider: string;
+    readonly seatLimit: number | null;
+    // (undocumented)
+    readonly session: InvitationSignupSession;
+    readonly subject: string;
+    // (undocumented)
+    readonly tokenHash: Buffer;
+}
+
+// @public (undocumented)
 export interface IdentityBeginRequest {
     // (undocumented)
     readonly codeChallenge: string;
@@ -852,10 +908,66 @@ export interface IdentityProviderInfo {
 }
 
 // @public
+export function inspectInvitation(input: {
+    readonly store: InvitationInspectStore;
+}, ask: {
+    readonly token: string;
+}): Promise<InvitationInspectOutcome>;
+
+// @public
 export const INVITATION_ROLES: readonly ["admin", "member"];
 
 // @public
 export const INVITATION_TTL_SECONDS: number;
+
+// @public (undocumented)
+export interface InvitationAcceptAsk {
+    readonly actor: Extract<AuditActor, {
+        type: "account";
+    }>;
+    readonly ipPrefix: string | null;
+    readonly seatLimit: number | null;
+    readonly sessionId: string;
+    readonly token: string;
+}
+
+// @public (undocumented)
+export interface InvitationAcceptDependencies {
+    readonly audit: AuditWriter;
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: InvitationAcceptStore;
+}
+
+// @public (undocumented)
+export type InvitationAcceptOutcome = InvitationAcceptResult;
+
+// @public
+export type InvitationAcceptResult = {
+    readonly kind: "accepted";
+    readonly workspaceId: string;
+    readonly invitationId: string;
+    readonly role: WorkspaceRole;
+}
+/** An unknown, used, revoked, replaced or expired token, a workspace being deleted or an account that is gone or disabled. */
+| {
+    readonly kind: "gone";
+}
+/** The account's verified address is not the invited one, or the account's address is not verified. */
+| {
+    readonly kind: "email_mismatch";
+} | {
+    readonly kind: "already_member";
+} | {
+    readonly kind: "seat_limit_reached";
+};
+
+// @public
+export interface InvitationAcceptStore {
+    accept(tokenHash: Buffer, seatLimit: number | null): Promise<InvitationAcceptResult>;
+    activate(sessionId: string, workspaceId: string): Promise<boolean>;
+    queueEvents(events: readonly DomainEvent<"member.joined">[]): Promise<void>;
+}
 
 // @public (undocumented)
 export interface InvitationActionAsk {
@@ -901,6 +1013,96 @@ export interface InvitationDependencies {
     // (undocumented)
     readonly store: InvitationStore;
     readonly ttlSeconds: number;
+}
+
+// @public (undocumented)
+export interface InvitationIdentityAsk {
+    readonly displayName: string;
+    // (undocumented)
+    readonly email: string;
+    // (undocumented)
+    readonly locale: string;
+    // (undocumented)
+    readonly mayCreate: boolean;
+    // (undocumented)
+    readonly provider: string;
+    // (undocumented)
+    readonly seatLimit: number | null;
+    // (undocumented)
+    readonly session: InvitationSignupSession;
+    // (undocumented)
+    readonly subject: string;
+    // (undocumented)
+    readonly tokenHash: Buffer;
+}
+
+// @public (undocumented)
+export interface InvitationIdentityDependencies {
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: InvitationIdentityStore;
+}
+
+// @public
+export interface InvitationIdentityRecords {
+    // (undocumented)
+    readonly audit: readonly AuditRecord[];
+    // (undocumented)
+    readonly events: readonly InvitationSignupEvent[];
+}
+
+// @public
+export type InvitationIdentityResult = {
+    readonly kind: "accepted";
+    readonly workspaceId: string;
+    readonly invitationId: string;
+    readonly role: WorkspaceRole;
+    readonly accountId: string;
+    readonly created: boolean;
+}
+/** An unknown, used, revoked, replaced or expired token, a workspace being deleted or an account that is disabled. */
+| {
+    readonly kind: "gone";
+}
+/** The provider's address is not the invited one, or the account does not hold the invited address verified. */
+| {
+    readonly kind: "email_mismatch";
+} | {
+    readonly kind: "already_member";
+} | {
+    readonly kind: "seat_limit_reached";
+}
+/** An account that was not verified, or is disabled, holds the invited address, or it is reserved. */
+| {
+    readonly kind: "email_taken";
+}
+/** An account would have to be created and the registration policy did not allow it. */
+| {
+    readonly kind: "not_permitted";
+}
+/** The identity is linked to another account. */
+| {
+    readonly kind: "identity_in_use";
+};
+
+// @public (undocumented)
+export interface InvitationIdentityStore {
+    acceptWithIdentity(acceptance: IdentityAcceptance): Promise<InvitationIdentityResult>;
+}
+
+// @public (undocumented)
+export type InvitationInspectOutcome = {
+    readonly kind: "inspected";
+    readonly preview: InvitationPreview;
+}
+/** The text is not the token of a pending, unexpired invitation. */
+| {
+    readonly kind: "gone";
+};
+
+// @public (undocumented)
+export interface InvitationInspectStore {
+    inspectInvitation(tokenHash: Buffer): Promise<InvitationPreview | undefined>;
 }
 
 // @public
@@ -990,6 +1192,18 @@ export type InvitationOutcome =
 };
 
 // @public
+export interface InvitationPreview {
+    readonly accountExists: boolean;
+    // (undocumented)
+    readonly email: string;
+    readonly inviterName: string | null;
+    // (undocumented)
+    readonly role: WorkspaceRole;
+    // (undocumented)
+    readonly workspaceName: string;
+}
+
+// @public
 export interface InvitationRecord {
     // (undocumented)
     readonly createdAt: Date;
@@ -1058,6 +1272,70 @@ export type InvitationRevokeOutcome = {
 
 // @public (undocumented)
 export type InvitationRole = (typeof INVITATION_ROLES)[number];
+
+// @public (undocumented)
+export interface InvitationSignupAsk {
+    // (undocumented)
+    readonly displayName: string;
+    // (undocumented)
+    readonly locale: string;
+    readonly passwordHash: string;
+    // (undocumented)
+    readonly seatLimit: number | null;
+    // (undocumented)
+    readonly session: InvitationSignupSession;
+    readonly token: string;
+}
+
+// @public (undocumented)
+export interface InvitationSignupDependencies {
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: InvitationSignupStore;
+}
+
+// @public (undocumented)
+export type InvitationSignupEvent = DomainEvent<"account.created"> | DomainEvent<"member.joined">;
+
+// @public
+export interface InvitationSignupRecords {
+    // (undocumented)
+    readonly audit: readonly AuditRecord[];
+    // (undocumented)
+    readonly events: readonly InvitationSignupEvent[];
+}
+
+// @public
+export type InvitationSignupResult = {
+    readonly kind: "accepted";
+    readonly workspaceId: string;
+    readonly invitationId: string;
+    readonly role: WorkspaceRole;
+}
+/** An unknown, used, revoked, replaced or expired token, or a workspace being deleted. */
+| {
+    readonly kind: "gone";
+} | {
+    readonly kind: "seat_limit_reached";
+}
+/** An account holds the invited address, or the address is reserved. */
+| {
+    readonly kind: "email_taken";
+};
+
+// @public
+export interface InvitationSignupSession {
+    readonly id: string;
+    readonly ipPrefix: string | null;
+    readonly replacedTokenHash: Buffer | null;
+    readonly tokenHash: Buffer;
+    readonly userAgent: string | null;
+}
+
+// @public (undocumented)
+export interface InvitationSignupStore {
+    acceptWithNewAccount(acceptance: NewAccountAcceptance): Promise<InvitationSignupResult>;
+}
 
 // @public (undocumented)
 export type InvitationStatus = "pending" | "accepted" | "revoked";
@@ -1236,6 +1514,25 @@ export interface MembershipEndRequest {
 export interface MembershipEndStore extends MemberRoleStore {
     end(request: MembershipEndRequest): Promise<boolean>;
     longestStandingOwner(excludingAccountId: string): Promise<string | undefined>;
+}
+
+// @public (undocumented)
+export interface NewAccountAcceptance {
+    readonly accountId: string;
+    // (undocumented)
+    readonly displayName: string;
+    // (undocumented)
+    readonly locale: string;
+    readonly onAccepted: (accepted: {
+        readonly workspaceId: string;
+        readonly role: WorkspaceRole;
+    }) => InvitationSignupRecords;
+    readonly passwordHash: string;
+    readonly seatLimit: number | null;
+    // (undocumented)
+    readonly session: InvitationSignupSession;
+    // (undocumented)
+    readonly tokenHash: Buffer;
 }
 
 // @public (undocumented)

@@ -206,6 +206,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/invitations/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept an invitation, as the invited account or by creating it */
+        post: operations["acceptInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invitations/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read what an invitation link is for */
+        post: operations["inspectInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/invitations/{id}": {
         parameters: {
             query?: never;
@@ -797,6 +831,14 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        AcceptInvitationRequest: {
+            /** @description The display name of the account to create; surrounding whitespace is removed. Sent with the password, by a person whose invited address has no account, and never with a session */
+            displayName?: string;
+            /** @description The password of the account to create, 12 to 256 characters. Sent with the display name, by a person whose invited address has no account */
+            password?: string;
+            /** @description The token of the invitation link, from the path of /invite/<token> */
+            token: string;
+        };
         Account: {
             /** @description The accent colour, one of the six preset names; null when none was chosen, which shows the default */
             accent: ("periwinkle" | "violet" | "rose" | "amber" | "green" | "teal") | null;
@@ -1084,6 +1126,10 @@ export interface components {
             /** @description Passed as `cursor` to get the next page; null on the last page */
             nextCursor: string | null;
         };
+        InspectInvitationRequest: {
+            /** @description The token of the invitation link, from the path of /invite/<token> */
+            token: string;
+        };
         Invitation: {
             /**
              * Format: date-time
@@ -1116,6 +1162,18 @@ export interface components {
             status: "pending" | "accepted" | "revoked";
             /** @description The teams the invited person joins on accepting */
             teamIds: string[];
+        };
+        InvitationAccepted: {
+            /**
+             * @description The role the membership has: exactly the invited role
+             * @enum {string}
+             */
+            role: "owner" | "admin" | "member";
+            /**
+             * Format: uuid
+             * @description The workspace the account joined, which is the session's active workspace from the next request on
+             */
+            workspaceId: string;
         };
         InvitationLink: {
             /** @description The invitation, with the new expiry */
@@ -1166,6 +1224,21 @@ export interface components {
             status: "pending" | "accepted" | "revoked";
             /** @description The teams the invited person joins on accepting */
             teamIds: string[];
+        };
+        InvitationPreview: {
+            /** @description Whether an account holds the invited address, which tells the page to ask for a sign-in or for a sign-up */
+            accountExists: boolean;
+            /** @description The invited address; the account that accepts must hold it, verified */
+            email: string;
+            /** @description The display name of the account that sent the invitation, null once that account is deleted */
+            inviterName: string | null;
+            /**
+             * @description The role the invited person gets on accepting
+             * @enum {string}
+             */
+            role: "owner" | "admin" | "member";
+            /** @description The name of the workspace the invitation is into */
+            workspaceName: string;
         };
         LoginRequest: {
             /** @description The account's email address; case does not matter */
@@ -1869,7 +1942,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The handshake is over and the browser is sent on to the returnTo of the start, a path of this application. For the login intent, when the identity is linked to an account that can sign in, a new full session cookie is set; so it is for an identity nobody linked when the provider asserted its address as verified and either an enabled account that has verified that address gets the identity linked, or the provider allows accounts to be created, the address passes its allowed domains and the registration policy accepts it, and an account is created and the identity linked to it. For the link intent the identity is added to the account that started the handshake, which must be the account of the browser's current session, and no session changes. For the reauth intent the browser's current session, which must be a session of the account that started the handshake and of an account the provider's identity is linked to, counts as re-authenticated from now. For every other outcome (a missing, reused, expired or foreign state, a refusal by the provider, a token that fails validation, an identity nobody linked whose address the provider did not assert as verified or that neither links nor creates an account, an address held by an unverified account, a disabled account, a registration the policy refuses, a link or reauth in a browser whose session is not the one that started it, a link whose session has not re-authenticated within the last ten minutes at the callback, an identity already linked to another account) nothing is changed and the browser goes to /login?error=oidc_failed, one answer that does not say which. The pre-auth cookie is cleared either way */
+            /** @description The handshake is over and the browser is sent on to the returnTo of the start, a path of this application. For the login intent, when the identity is linked to an account that can sign in, a new full session cookie is set; so it is for an identity nobody linked when the provider asserted its address as verified and either an enabled account that has verified that address gets the identity linked, or the provider allows accounts to be created, the address passes its allowed domains and the registration policy accepts it, and an account is created and the identity linked to it. For the invite intent, when the provider asserts the invited address, and no other, as verified, the identity is linked to the account it belongs to or to the enabled account that holds the invited address verified, or an account is created for the invited address (whatever the provider's auto-create setting says, because the invitation authorises it, and when the registration policy accepts it), the account becomes a member of the invitation's workspace with exactly the invited role, the invitation is accepted, and a new full session cookie is set that acts in that workspace. For the link intent the identity is added to the account that started the handshake, which must be the account of the browser's current session, and no session changes. For the reauth intent the browser's current session, which must be a session of the account that started the handshake and of an account the provider's identity is linked to, counts as re-authenticated from now. For every other outcome (a missing, reused, expired or foreign state, a refusal by the provider, a token that fails validation, an identity nobody linked whose address the provider did not assert as verified or that neither links nor creates an account, an invite intent whose provider address is not the invited one or is not verified or whose invitation is no longer pending, an address held by an unverified account, a disabled account, a registration the policy refuses, a link or reauth in a browser whose session is not the one that started it, a link whose session has not re-authenticated within the last ten minutes at the callback, an identity already linked to another account) nothing is changed and the browser goes to /login?error=oidc_failed, one answer that does not say which. The pre-auth cookie is cleared either way */
             302: {
                 headers: {
                     /** @description A path of this application: the returnTo of the start, or /login?error=oidc_failed */
@@ -1924,7 +1997,8 @@ export interface operations {
         parameters: {
             query?: {
                 returnTo?: string;
-                intent?: "login" | "link" | "reauth";
+                intent?: "login" | "link" | "reauth" | "invite";
+                invitation?: string;
             };
             header?: never;
             path: {
@@ -1934,7 +2008,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The browser is sent to the provider with a PKCE challenge (S256), a state and a nonce, and receives the pre-auth cookie; for the reauth intent the provider is asked to ask for the credentials again. When the provider is unknown or unavailable, or the link or reauth intent comes without a complete session, from another site or without a Sec-Fetch-Site header, the browser is sent to /login?error=oidc_failed instead, the same answer a failed callback gives */
+            /** @description The browser is sent to the provider with a PKCE challenge (S256), a state and a nonce, and receives the pre-auth cookie; for the reauth intent the provider is asked to ask for the credentials again. When the provider is unknown or unavailable, the link or reauth intent comes without a complete session, a link, reauth or invite start comes from another site or without a Sec-Fetch-Site header, or the invite intent carries a text that is not an invitation token, the browser is sent to /login?error=oidc_failed instead, the same answer a failed callback gives */
             302: {
                 headers: {
                     /** @description Where the browser goes next: the provider's authorization endpoint, or /login?error=oidc_failed when the handshake cannot start */
@@ -1972,7 +2046,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Too many sign-in attempts from this address; Retry-After says when to try again */
+            /** @description Too many sign-in attempts from this address, or, for the invite intent, too many redemptions of invitation tokens from this address or by this account; Retry-After says when to try again */
             429: {
                 headers: {
                     /** @description Whole seconds to wait before the request can succeed */
@@ -2544,6 +2618,195 @@ export interface operations {
                 };
             };
             /** @description The service is temporarily unavailable, or an earlier request with the same Idempotency-Key is still running */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    acceptInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptInvitationRequest"];
+            };
+        };
+        responses: {
+            /** @description A request with the token alone, from the signed-in account whose verified address is the invited one: the token is redeemed, once, the account is a member of the invitation's workspace with exactly the invited role, the invitation is accepted and the session acts in the workspace from its next request on */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationAccepted"];
+                };
+            };
+            /** @description A request with the token, a display name and a password, for an invited address that has no account: the token is redeemed, once, and in one transaction the account exists, verified whatever the deployment requires of other accounts because the token proves the mailbox, with the invited address, no personal workspace and a full session; it is a member of the invitation's workspace with exactly the invited role, the invitation is accepted and the new session acts in the workspace. A session cookie the request carried is replaced */
+            201: {
+                headers: {
+                    /** @description The session cookie: HttpOnly, SameSite=Lax, Path=/, Secure and __Host- prefixed when the deployment is served over https */
+                    "Set-Cookie": string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationAccepted"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description A request with the token alone has no session (an API token is not one), or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), or the account's verified email address is not the invited one, an unverified address included (forbidden, field code invitation_email_mismatch), or the deployment's registration policy refused the invited address for the account to create (registration_refused, one answer for every reason). Nothing is written and the invitation stays pending */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The account is a member of the workspace already (already_member), or a request that creates an account found one holding the invited address (email_taken): the person signs in and accepts with the token alone. Nothing is written and the invitation stays pending */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The token is unknown, expired (7 days), already used, revoked or replaced by a newer one, or its workspace is being deleted; all of them answer alike (token_expired) and nothing is changed */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation (a display name without a password or the reverse included), the password is outside 12 to 256 characters or is on the breached list (weak_password), or the workspace has no seat left (seat_limit_reached); nothing is written and the invitation stays pending */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many attempts from this address, or from this account; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    inspectInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InspectInvitationRequest"];
+            };
+        };
+        responses: {
+            /** @description The invitation the token belongs to: the workspace's name, the inviter's name, the invited address, the role and whether an account holds the address. Nothing is changed and the token stays valid */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationPreview"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The token is unknown, expired (7 days), already used, revoked or replaced by a newer one, or its workspace is being deleted; all of them answer alike (token_expired) */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many attempts from this address; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
             503: {
                 headers: {
                     [name: string]: unknown;

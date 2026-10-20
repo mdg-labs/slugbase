@@ -23,6 +23,7 @@ existing line by adding its PR number.
 - **deny list by spelling** — a command deny list names one spelling of a forbidden form (`git add .`, `HEAD:main`) and misses an equivalent one (`git add ./`, a `+`-prefixed force refspec), so the forbidden command passes — PR 462
 - **two clocks** — a freshness check compares an instant stamped by one host's clock (the database) with one read from another (the application) and allows no difference, so a session stamped a moment ago reads as in the future and is refused — PR 462
 - **repeat erases the record** — a fail-closed lint records an object's prior state each time a statement names it, so a repeat that is valid SQL (a second `DROP … IF EXISTS`) overwrites the record with "unknown" and the later comparison and end-of-file check skip it — PR 506
+- **new branch skips the gate** — a handler gates some branches of a state-changing request with a cross-site check (Fetch Metadata) and a newly added branch that also changes state (an OIDC start intent that accepts an invitation) is left out, so a hostile page can drive that branch — PR 520
 - **floating image** — a rig meant for repeatable measurement pulls a floating tag (`latest`), so a re-run can measure a different build than the recorded baseline — PR 381
 
 - **uniqueness by raw string** — a duplicate check compares raw strings that the consumer normalises (a router path with and without a trailing slash), so two entries the consumer treats as one pass and one shadows the other — PR 422
@@ -58,6 +59,10 @@ existing line by adding its PR number.
 ## Optional capabilities
 
 - **renewal assumes delivery** — a write path replaces a credential on the assumption that an optional capability (mail) delivers the new one, so where the capability is off it ends the only working credential (a copied link) and delivers nothing, while a sibling path refuses the same case — PR 514
+
+## Shared helpers
+
+- **copy drops side duties** — a second copy of a shared routine (a rate-limit take) keeps its answers but leaves out the original's side duties (the rejection metric, the error report), so the copy's refusals and failures never reach monitoring — PR 520
 
 ## Tests
 

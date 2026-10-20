@@ -64,6 +64,9 @@ const authStore: AuthStore = {
   confirmEmailChange: unexpected,
   cancelEmailChange: unexpected,
   emailVerified: unexpected,
+  inspectInvitation: unexpected,
+  acceptInvitationWithNewAccount: unexpected,
+  acceptInvitationWithIdentity: unexpected,
   close: () => Promise.resolve(),
 };
 

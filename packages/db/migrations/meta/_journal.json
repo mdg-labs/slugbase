@@ -330,6 +330,48 @@
       "when": 1792437755121,
       "tag": "20261019192235_add_invitation_mail_ticket",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1792447484200,
+      "tag": "20261019220444_add_invitation_acceptance",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1792454114701,
+      "tag": "20261019235514_add_account_deletion_created_lock",
+      "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1792455811852,
+      "tag": "20261020002331_add_invitation_signup",
+      "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1792459185051,
+      "tag": "20261020011945_add_invitation_acceptance_key_lock",
+      "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1792462530756,
+      "tag": "20261020021530_add_invitation_dead_token_unlocked",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1792465100107,
+      "tag": "20261020025820_add_invitation_identity",
+      "breakpoints": true
     }
   ]
 }

@@ -107,6 +107,7 @@ describe("the login state", () => {
       codeVerifier: { ciphertext: new Uint8Array(40).fill(7), keyId: "k1" },
       returnTo: "/go/docs",
       linkAccountId: null,
+      invitationTokenHash: null,
     });
     expect(await store.consumeOidcLoginState(state.stateHash, "idp")).toBeUndefined();
   });

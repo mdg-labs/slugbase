@@ -301,6 +301,7 @@ describe("the OIDC sign-in redirects", () => {
       ["path", "provider", true],
       ["query", "returnTo", false],
       ["query", "intent", false],
+      ["query", "invitation", false],
     ]);
     expect(parameters(callback).map((parameter) => [parameter["in"], parameter["name"]])).toEqual([["path", "provider"]]);
     expect(OidcProviderParamsSchema.safeParse({ provider: "my-idp2" }).success).toBe(true);
@@ -312,9 +313,13 @@ describe("the OIDC sign-in redirects", () => {
     for (const intent of ["login", "link", "reauth"]) {
       expect(OidcStartQuerySchema.safeParse({ returnTo: "/go/docs", intent }).success, intent).toBe(true);
     }
-    // The invitation intent arrives with its own operation.
-    for (const intent of ["invite", "delete", ""]) {
+    for (const intent of ["delete", ""]) {
       expect(OidcStartQuerySchema.safeParse({ intent }).success, intent).toBe(false);
+    }
+    // The invitation intent carries the token, and only it does.
+    expect(OidcStartQuerySchema.safeParse({ intent: "invite", invitation: "a-token", returnTo: "/" }).success).toBe(true);
+    for (const query of [{ intent: "invite" }, { intent: "invite", invitation: "" }, { intent: "login", invitation: "a-token" }, { invitation: "a-token" }, { intent: "invite", invitation: "x".repeat(257) }]) {
+      expect(OidcStartQuerySchema.safeParse(query).success, JSON.stringify(query)).toBe(false);
     }
     expect(OidcStartQuerySchema.safeParse({ returnTo: "/go/docs", unknown: "x" }).success).toBe(false);
     expect(OidcStartQuerySchema.safeParse({ returnTo: "x".repeat(2049) }).success).toBe(false);

@@ -11,7 +11,8 @@ import { rateLimitKeyOf } from "./trusted-proxy.ts";
 // before it is authenticated (stage 3a), so a flood of unauthenticated or
 // bad-credential requests is throttled before any credential lookup. Once it is
 // authenticated it takes one from the buckets of its account and, for a bucket
-// that has one, its workspace (stage 6); whichever is empty first denies it. The
+// that has one, its workspace (stage 6), unless the operation is anonymous;
+// whichever is empty first denies it. The
 // IP is the one the request-context stage derived across the trusted proxy
 // hops, never a header read here; its bucket key is the IPv4 address, or the /64
 // of an IPv6 one (`rateLimitKeyOf`). An operation that declares `none`, a
@@ -52,6 +53,14 @@ export interface RateLimitState {
  */
 export type TakeEmailLimit = (context: ChainContext, key: string) => Promise<void>;
 
+/**
+ * Takes one token from the per-account limit of the operation's bucket under `accountId`, for an operation that
+ * is anonymous, so the stage takes no account limit for it, and whose handler finds the request signed in
+ * (accepting an invitation with the token alone). Throws `429 rate_limited` when the limit is empty and `503
+ * unavailable` when the limiter cannot decide.
+ */
+export type TakeAccountLimit = (context: ChainContext, accountId: string) => Promise<void>;
+
 export interface RateLimiting {
   /** Stage 3a: the per-IP take, before authentication. */
   readonly ipStage: RequestStage;
@@ -89,20 +98,37 @@ function headersOf(state: RateLimitState): Record<string, string> {
   return headers;
 }
 
+export interface LimiterFailureOptions {
+  readonly logger: Logger;
+  readonly errors: ErrorReportPort;
+}
+
+/**
+ * Logs a limiter that could not decide, reports it with the request ID and answers `503 unavailable`. A report
+ * that fails is logged and changes nothing about the answer.
+ */
+export function limiterFailure(
+  { logger, errors }: LimiterFailureOptions,
+  context: ChainContext,
+  bucket: string,
+  error: unknown,
+): ProblemError {
+  const requestId = requestIdOf(context);
+  (context.get("logger") ?? logger).error("Rate limiter failed", { ...describeError(error), bucket, requestId });
+  void Promise.resolve()
+    .then(() => errors.capture(error, { requestId }))
+    .catch((reportError: unknown) => {
+      logger.warn("Error report failed", { ...describeError(reportError), requestId });
+    });
+  return new ProblemError("unavailable", FAILED_DETAIL);
+}
+
 export function createRateLimiting({ limiter, registry, logger, errors, recordRejection }: RateLimitingOptions): RateLimiting {
-  const failure = (context: ChainContext, bucket: string, error: unknown): ProblemError => {
-    const requestId = requestIdOf(context);
-    (context.get("logger") ?? logger).error("Rate limiter failed", { ...describeError(error), bucket, requestId });
-    void Promise.resolve()
-      .then(() => errors.capture(error, { requestId }))
-      .catch((reportError: unknown) => {
-        logger.warn("Error report failed", { ...describeError(reportError), requestId });
-      });
-    return new ProblemError("unavailable", FAILED_DETAIL);
-  };
+  const failure = (context: ChainContext, bucket: string, error: unknown): ProblemError => limiterFailure({ logger, errors }, context, bucket, error);
 
   const subjectOf = (context: ChainContext, limit: ScopeLimit): string | undefined => {
-    const principal = context.get("principal");
+    // An anonymous operation is limited per address only, whatever credential a caller sends along.
+    const principal = context.get("route")?.operation.auth === "anonymous" ? undefined : context.get("principal");
     switch (limit.scope) {
       case "ip":
         return rateLimitKeyOf(context.get("clientIp") ?? UNKNOWN_CLIENT);
@@ -200,6 +226,19 @@ export function createRateLimiting({ limiter, registry, logger, errors, recordRe
     }
   };
 
+  // The limit an anonymous operation counts per account, once its handler knows the request is a session's.
+  const takeAccount: TakeAccountLimit = async (context, accountId) => {
+    const limited = limitedOperation(context);
+    const limit = limited?.limits.find((candidate) => candidate.scope === "account");
+    if (limited === undefined || limit === undefined) {
+      throw failure(context, limited?.bucket ?? "none", new Error("the operation's bucket has no account limit"));
+    }
+    const { denied } = await consume(context, limited.bucket, [{ limit, key: accountId }]);
+    if (denied) {
+      throw new ProblemError("rate_limited", DENIED_DETAIL);
+    }
+  };
+
   const ipStage: RequestStage = async (context, next) => {
     const refusal = await take(context, (limit) => limit.scope === "ip");
     return refusal ?? next();
@@ -212,6 +251,7 @@ export function createRateLimiting({ limiter, registry, logger, errors, recordRe
     }
     if (limitedOperation(context) !== undefined) {
       context.set("takeEmailLimit", takeEmail);
+      context.set("takeAccountLimit", takeAccount);
     }
     return next();
   };

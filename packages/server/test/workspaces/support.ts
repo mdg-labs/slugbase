@@ -2,7 +2,7 @@ import { generateApiToken, type MailPort } from "@slugbase/core";
 import { apiTokenRepository, type AuthStore } from "@slugbase/db";
 import type { TestDatabase } from "@slugbase/testing/db";
 import { createAccountOnlyTenantResolver } from "../../src/auth/tenant-resolver.ts";
-import { createServer, type Logger, type Server } from "../../src/create-server.ts";
+import { createServer, type Logger, type Server, type ServerModule } from "../../src/create-server.ts";
 import type { EntitlementCheck } from "../../src/http/authorize.ts";
 import { runMigrations } from "../../src/migrate/index.ts";
 import { seedAccount, seedMembership, seedWorkspace, sessionRows, setActiveWorkspace, storeFor, type SeededAccount } from "../auth/support.ts";
@@ -75,6 +75,8 @@ export interface WorkspaceHarness {
     readonly env?: Record<string, string>;
     /** Records what the server logs; by default a logger nobody reads. */
     readonly logger?: Logger;
+    /** Modules the server composes, such as one that answers the registration policy. */
+    readonly modules?: readonly ServerModule[];
   }): World;
   /** A verified account with a session that re-authenticated just now. */
   person(world: World): Promise<Person>;
@@ -133,7 +135,7 @@ export function workspaceHarness(database: () => TestDatabase): WorkspaceHarness
       const server = createServer({
         config,
         adapters: { ...adapters(config), ...(options.mail === undefined ? {} : { mail: options.mail }), tenantResolver: createAccountOnlyTenantResolver() },
-        modules: [],
+        modules: options.modules ?? [],
         migrations: [],
         logger: options.logger ?? recordingLogger(),
         database: tenantDatabase(database()),

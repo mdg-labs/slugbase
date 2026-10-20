@@ -70,12 +70,24 @@ function UnverifiedBanner({ email }: { email: string }): ReactElement {
   );
 }
 
+export interface LoginFormProps {
+  /** Where to go after signing in: a path of this origin, otherwise home. */
+  next: string | undefined;
+  /** The address the email field starts with. */
+  initialEmail?: string;
+  /**
+   * Called instead of the move to `next` when the sign-in is complete, for a page that carries on where it is. An
+   * account with a second factor still goes to the second step, which returns to `next`.
+   */
+  onSignedIn?: () => void;
+}
+
 /** The sign-in form: email, password and "Remember me". On success it goes to `next` when that is a path of this origin, otherwise home. */
-export function LoginForm({ next }: { next: string | undefined }): ReactElement {
+export function LoginForm({ next, initialEmail = "", onSignedIn }: LoginFormProps): ReactElement {
   const { t } = useTranslation();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -168,6 +180,11 @@ export function LoginForm({ next }: { next: string | undefined }): ReactElement 
     // What the previous visitor of this browser left in the cache is not for the next one.
     queryClient.clear();
     // A password is right but the account has a second factor: the session is only half signed in until the code is given.
+    if (!secondFactor && onSignedIn !== undefined) {
+      setSubmitting(false);
+      onSignedIn();
+      return;
+    }
     router.history.replace(secondFactor ? mfaPath(next) : safeNextPath(next));
   }
 

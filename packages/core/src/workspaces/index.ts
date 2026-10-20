@@ -82,3 +82,34 @@ export type {
   InvitationStore,
   NewInvitation,
 } from "./invitations.ts";
+export { acceptInvitation, inspectInvitation } from "./invitation-acceptance.ts";
+export type {
+  InvitationAcceptAsk,
+  InvitationAcceptDependencies,
+  InvitationAcceptOutcome,
+  InvitationAcceptResult,
+  InvitationAcceptStore,
+  InvitationInspectOutcome,
+  InvitationInspectStore,
+  InvitationPreview,
+} from "./invitation-acceptance.ts";
+export { acceptInvitationWithAccount } from "./invitation-signup.ts";
+export type {
+  InvitationSignupAsk,
+  InvitationSignupDependencies,
+  InvitationSignupEvent,
+  InvitationSignupRecords,
+  InvitationSignupResult,
+  InvitationSignupSession,
+  InvitationSignupStore,
+  NewAccountAcceptance,
+} from "./invitation-signup.ts";
+export { acceptInvitationWithIdentity } from "./invitation-identity.ts";
+export type {
+  IdentityAcceptance,
+  InvitationIdentityAsk,
+  InvitationIdentityDependencies,
+  InvitationIdentityRecords,
+  InvitationIdentityResult,
+  InvitationIdentityStore,
+} from "./invitation-identity.ts";

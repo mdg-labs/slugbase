@@ -10,6 +10,7 @@ import { createPasswordVerifier, hashPassword, verifyHash } from "./auth/passwor
 import { DEFAULT_REGISTRATION, registrationSettings } from "./auth/registration-settings.ts";
 import { ensureSetupToken } from "./auth/setup-token.ts";
 import { createMembershipTenantResolver, defersToMembershipResolver } from "./auth/tenant-resolver.ts";
+import { createTokenRedeemLimit } from "./auth/token-redeem-limit.ts";
 import { createRateLimitRegistry, type ServerConfig, type WorkerConfig } from "./config/index.ts";
 import type { Authenticator } from "./http/authenticate.ts";
 import type { EntitlementCheck } from "./http/authorize.ts";
@@ -479,6 +480,7 @@ export function createServer(options: CreateServerOptions): Server {
     apiConfigRoute({ config, store: authStore, buildInfo, adapters, registration, logger }),
     openApiRoute({ enabled: config.API_DOCS_ENABLED, document: options.openApiDocument }),
   ];
+  const metrics = createMetrics();
   // One verifier serves sign-in, re-authentication and the second factor's password check, so its dummy hash is made once.
   const passwords = createPasswordVerifier();
   // Password sign-in is part of the server, not a module: the session cookie is the one browser credential (doc 04 section 4.1).
@@ -493,6 +495,15 @@ export function createServer(options: CreateServerOptions): Server {
     secretBox: adapters.secretBox,
     identity: adapters.identity,
     oidcProviders: config.OIDC_PROVIDERS,
+    takeRedeemLimit: createTokenRedeemLimit({
+      limiter: adapters.rateLimit,
+      registry: createRateLimitRegistry(config),
+      logger,
+      errors: adapters.errors,
+      recordRejection: (bucket) => {
+        metrics.recordRateLimitRejection(bucket);
+      },
+    }),
     now: options.now ?? Date.now,
   });
   builtInRoutes.push(...(auth.routes ?? []));
@@ -505,7 +516,6 @@ export function createServer(options: CreateServerOptions): Server {
   // Requests no operation matches: the paths served as files rather than as operations.
   const docs: readonly Unrouted[] = config.API_DOCS_ENABLED ? [apiDocs()] : [];
 
-  const metrics = createMetrics();
   const database = options.database ?? createDatabase({ url: config.DATABASE_URL, poolSize: DEFAULT_SERVER_POOL_SIZE });
   if (options.database === undefined) {
     metrics.setPoolSize(DEFAULT_SERVER_POOL_SIZE);
@@ -527,7 +537,18 @@ export function createServer(options: CreateServerOptions): Server {
   // So are the members of the active workspace: listed with the co-member projection of their accounts, and their roles changed under the last-owner rule the database enforces.
   builtInRoutes.push(...memberRoutes({ cursorSecret: config.SESSION_SECRET, cookie: sessionCookieSpec(config.APP_ORIGIN) }));
   // So are the invitations of the active workspace: an admin invites an address, and the invitation's email is queued with it when the composition can send mail; the pending ones are listed, resent, linked and revoked.
-  builtInRoutes.push(...invitationRoutes({ mail: adapters.mail, cursorSecret: config.SESSION_SECRET, appOrigin: config.APP_ORIGIN, store: authStore }));
+  builtInRoutes.push(
+    ...invitationRoutes({
+      mail: adapters.mail,
+      cursorSecret: config.SESSION_SECRET,
+      appOrigin: config.APP_ORIGIN,
+      store: authStore,
+      withTenant: context.withTenant,
+      cookie: sessionCookieSpec(config.APP_ORIGIN),
+      passwordPolicy,
+      hashPassword,
+    }),
+  );
   // So are the account's personal API tokens: created, listed and revoked in an account-level transaction on the account's own rows.
   builtInRoutes.push(...apiTokenRoutes({ withTenant: context.withTenant, cursorSecret: config.SESSION_SECRET }));
   // So are the identities linked to the account: listed in an account-level transaction, unlinked by a system operation that checks the account keeps another way to sign in.

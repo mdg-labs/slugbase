@@ -9,7 +9,12 @@ import type { AuditRecord } from '@slugbase/core';
 import type { CredentialTokenPurpose } from '@slugbase/core';
 import { InferInsertModel } from 'drizzle-orm';
 import { InferSelectModel } from 'drizzle-orm';
+import type { InvitationAcceptResult } from '@slugbase/core';
+import type { InvitationIdentityResult } from '@slugbase/core';
+import type { InvitationInspectStore } from '@slugbase/core';
 import type { InvitationManagementStore } from '@slugbase/core';
+import type { InvitationSignupResult } from '@slugbase/core';
+import type { InvitationSignupSession } from '@slugbase/core';
 import type { InvitationStore } from '@slugbase/core';
 import type { MemberRoleStore } from '@slugbase/core';
 import type { PgColumn } from 'drizzle-orm/pg-core';
@@ -200,7 +205,7 @@ export interface AuditEventRepository {
 export function auditEventRepository(tx: TenantTx): AuditEventRepository;
 
 // @public (undocumented)
-export interface AuthStore extends SetupStore, MfaStore, OidcStore, RegistrationStore, EmailVerificationStore, PasswordResetStore, EmailChangeStore {
+export interface AuthStore extends SetupStore, MfaStore, OidcStore, RegistrationStore, EmailVerificationStore, PasswordResetStore, EmailChangeStore, InvitationInspectStore, InvitationAccountStore, InvitationIdentityStore {
     changePassword(change: PasswordChange): Promise<boolean>;
     close(): Promise<void>;
     createSession(session: NewSession): Promise<boolean>;
@@ -503,6 +508,41 @@ export type InsertValues<T extends WorkspaceTable> = Omit<InferInsertModel<T>, "
 };
 
 // @public
+export interface InvitationAcceptanceRepository {
+    accept(tokenHash: Buffer, seatLimit: number | null): Promise<InvitationAcceptResult>;
+    enqueue(jobs: readonly QueuedJob[]): Promise<void>;
+}
+
+// @public (undocumented)
+export function invitationAcceptanceRepository(tx: TenantTx): InvitationAcceptanceRepository;
+
+// @public (undocumented)
+export interface InvitationAccountStore {
+    acceptInvitationWithNewAccount(acceptance: NewInvitationAccount): Promise<InvitationSignupResult>;
+}
+
+// @public
+export interface InvitationAccountWrites {
+    // (undocumented)
+    readonly audit: readonly AuditRecord[];
+    // (undocumented)
+    readonly jobs: readonly QueuedJob[];
+}
+
+// @public (undocumented)
+export interface InvitationIdentityStore {
+    acceptInvitationWithIdentity(acceptance: NewInvitationIdentity): Promise<InvitationIdentityResult>;
+}
+
+// @public
+export interface InvitationIdentityWrites {
+    // (undocumented)
+    readonly audit: readonly AuditRecord[];
+    // (undocumented)
+    readonly jobs: readonly QueuedJob[];
+}
+
+// @public
 export interface InvitationMailContext {
     // (undocumented)
     readonly email: string;
@@ -724,12 +764,59 @@ export interface NewEmailChangeToken {
     readonly ttlSeconds: number;
 }
 
+// @public (undocumented)
+export interface NewInvitationAccount {
+    readonly accountId: string;
+    // (undocumented)
+    readonly displayName: string;
+    // (undocumented)
+    readonly locale: string;
+    readonly onAccepted: (accepted: {
+        readonly workspaceId: string;
+        readonly role: WorkspaceRole;
+    }) => InvitationAccountWrites;
+    readonly passwordHash: string;
+    readonly seatLimit: number | null;
+    // (undocumented)
+    readonly session: InvitationSignupSession;
+    // (undocumented)
+    readonly tokenHash: Buffer;
+}
+
+// @public (undocumented)
+export interface NewInvitationIdentity {
+    readonly accountId: string;
+    // (undocumented)
+    readonly displayName: string;
+    readonly email: string;
+    readonly identityId: string;
+    // (undocumented)
+    readonly locale: string;
+    // (undocumented)
+    readonly mayCreate: boolean;
+    readonly onAccepted: (accepted: {
+        readonly workspaceId: string;
+        readonly role: WorkspaceRole;
+        readonly accountId: string;
+        readonly displayName: string;
+        readonly created: boolean;
+    }) => InvitationIdentityWrites;
+    readonly provider: string;
+    readonly seatLimit: number | null;
+    // (undocumented)
+    readonly session: InvitationSignupSession;
+    readonly subject: string;
+    // (undocumented)
+    readonly tokenHash: Buffer;
+}
+
 // @public
 export interface NewOidcLoginState {
     // (undocumented)
     readonly codeVerifier: SealedVerifier;
     // (undocumented)
-    readonly intent: "login" | "link" | "reauth";
+    readonly intent: "login" | "link" | "reauth" | "invite";
+    readonly invitationTokenHash?: Buffer;
     readonly linkAccountId: string | null;
     // (undocumented)
     readonly nonce: string;
@@ -792,6 +879,7 @@ export interface OidcLoginState {
     readonly codeVerifier: SealedVerifier;
     // (undocumented)
     readonly intent: "login" | "link" | "reauth" | "invite";
+    readonly invitationTokenHash: Buffer | null;
     // (undocumented)
     readonly linkAccountId: string | null;
     // (undocumented)
