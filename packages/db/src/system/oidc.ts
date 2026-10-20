@@ -24,13 +24,15 @@ export interface NewOidcLoginState {
   readonly stateHash: Buffer;
   /** The slug of the provider. */
   readonly provider: string;
-  readonly intent: "login" | "link" | "reauth";
+  readonly intent: "login" | "link" | "reauth" | "invite";
   readonly nonce: string;
   readonly codeVerifier: SealedVerifier;
   /** A same-origin relative path. */
   readonly returnTo: string;
-  /** The signed-in account of the `link` and `reauth` intents; null for `login`. */
+  /** The signed-in account of the `link` and `reauth` intents; null otherwise. */
   readonly linkAccountId: string | null;
+  /** SHA-256 of the token of the invitation the `invite` intent accepts, never the token; absent for every other intent. */
+  readonly invitationTokenHash?: Buffer;
 }
 
 /** The record of a handshake that is ending. */
@@ -40,6 +42,8 @@ export interface OidcLoginState {
   readonly codeVerifier: SealedVerifier;
   readonly returnTo: string;
   readonly linkAccountId: string | null;
+  /** SHA-256 of the token of the invitation the `invite` intent accepts; null for every other intent. */
+  readonly invitationTokenHash: Buffer | null;
 }
 
 /** A sign-in with an identity. */
@@ -175,6 +179,7 @@ interface LoginStateRow {
   code_verifier_key_id: string;
   return_to: string;
   link_account_id: string | null;
+  invitation_token_hash: Buffer | null;
 }
 
 interface SignedInRow {
@@ -311,6 +316,9 @@ export function bindOidcStore(client: postgres.Sql): OidcStore {
   return {
     async createOidcLoginState(state) {
       assertHash(state.stateHash, STATE_HASH_BYTES, "stateHash");
+      if (state.invitationTokenHash !== undefined) {
+        assertHash(state.invitationTokenHash, TOKEN_HASH_BYTES, "invitationTokenHash");
+      }
       await client`
         SELECT sys_oidc_state_create(
           ${state.stateHash}::bytea,
@@ -320,23 +328,24 @@ export function bindOidcStore(client: postgres.Sql): OidcStore {
           ${Buffer.from(state.codeVerifier.ciphertext)}::bytea,
           ${state.codeVerifier.keyId}::text,
           ${state.returnTo}::text,
-          ${state.linkAccountId}::uuid)`;
+          ${state.linkAccountId}::uuid,
+          ${state.invitationTokenHash ?? null}::bytea)`;
     },
 
     async consumeOidcLoginState(stateHash, provider) {
       assertHash(stateHash, STATE_HASH_BYTES, "stateHash");
       const rows = await client<LoginStateRow[]>`
-        SELECT intent, nonce, code_verifier, code_verifier_key_id, return_to, link_account_id
-        FROM sys_oidc_state_consume(${stateHash}::bytea, ${provider}::text)`;
+        SELECT intent, nonce, code_verifier, code_verifier_key_id, return_to, link_account_id, invitation_token_hash
+        FROM sys_oidc_state_take(${stateHash}::bytea, ${provider}::text)`;
       if (rows.length > 1) {
-        throw new Error("sys_oidc_state_consume returned more than one state");
+        throw new Error("sys_oidc_state_take returned more than one state");
       }
       const row = rows[0];
       if (row === undefined) {
         return undefined;
       }
       if (!isIntent(row.intent)) {
-        throw new Error("sys_oidc_state_consume returned an intent outside login, link, reauth and invite");
+        throw new Error("sys_oidc_state_take returned an intent outside login, link, reauth and invite");
       }
       return {
         intent: row.intent,
@@ -344,6 +353,7 @@ export function bindOidcStore(client: postgres.Sql): OidcStore {
         codeVerifier: { ciphertext: new Uint8Array(row.code_verifier), keyId: row.code_verifier_key_id },
         returnTo: row.return_to,
         linkAccountId: row.link_account_id,
+        invitationTokenHash: row.invitation_token_hash,
       };
     },
 

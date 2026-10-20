@@ -365,6 +365,13 @@
       "when": 1792462530756,
       "tag": "20261020021530_add_invitation_dead_token_unlocked",
       "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1792465100107,
+      "tag": "20261020025820_add_invitation_identity",
+      "breakpoints": true
     }
   ]
 }

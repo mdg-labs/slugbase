@@ -1942,7 +1942,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The handshake is over and the browser is sent on to the returnTo of the start, a path of this application. For the login intent, when the identity is linked to an account that can sign in, a new full session cookie is set; so it is for an identity nobody linked when the provider asserted its address as verified and either an enabled account that has verified that address gets the identity linked, or the provider allows accounts to be created, the address passes its allowed domains and the registration policy accepts it, and an account is created and the identity linked to it. For the link intent the identity is added to the account that started the handshake, which must be the account of the browser's current session, and no session changes. For the reauth intent the browser's current session, which must be a session of the account that started the handshake and of an account the provider's identity is linked to, counts as re-authenticated from now. For every other outcome (a missing, reused, expired or foreign state, a refusal by the provider, a token that fails validation, an identity nobody linked whose address the provider did not assert as verified or that neither links nor creates an account, an address held by an unverified account, a disabled account, a registration the policy refuses, a link or reauth in a browser whose session is not the one that started it, a link whose session has not re-authenticated within the last ten minutes at the callback, an identity already linked to another account) nothing is changed and the browser goes to /login?error=oidc_failed, one answer that does not say which. The pre-auth cookie is cleared either way */
+            /** @description The handshake is over and the browser is sent on to the returnTo of the start, a path of this application. For the login intent, when the identity is linked to an account that can sign in, a new full session cookie is set; so it is for an identity nobody linked when the provider asserted its address as verified and either an enabled account that has verified that address gets the identity linked, or the provider allows accounts to be created, the address passes its allowed domains and the registration policy accepts it, and an account is created and the identity linked to it. For the invite intent, when the provider asserts the invited address, and no other, as verified, the identity is linked to the account it belongs to or to the enabled account that holds the invited address verified, or an account is created for the invited address (whatever the provider's auto-create setting says, because the invitation authorises it, and when the registration policy accepts it), the account becomes a member of the invitation's workspace with exactly the invited role, the invitation is accepted, and a new full session cookie is set that acts in that workspace. For the link intent the identity is added to the account that started the handshake, which must be the account of the browser's current session, and no session changes. For the reauth intent the browser's current session, which must be a session of the account that started the handshake and of an account the provider's identity is linked to, counts as re-authenticated from now. For every other outcome (a missing, reused, expired or foreign state, a refusal by the provider, a token that fails validation, an identity nobody linked whose address the provider did not assert as verified or that neither links nor creates an account, an invite intent whose provider address is not the invited one or is not verified or whose invitation is no longer pending, an address held by an unverified account, a disabled account, a registration the policy refuses, a link or reauth in a browser whose session is not the one that started it, a link whose session has not re-authenticated within the last ten minutes at the callback, an identity already linked to another account) nothing is changed and the browser goes to /login?error=oidc_failed, one answer that does not say which. The pre-auth cookie is cleared either way */
             302: {
                 headers: {
                     /** @description A path of this application: the returnTo of the start, or /login?error=oidc_failed */
@@ -1997,7 +1997,8 @@ export interface operations {
         parameters: {
             query?: {
                 returnTo?: string;
-                intent?: "login" | "link" | "reauth";
+                intent?: "login" | "link" | "reauth" | "invite";
+                invitation?: string;
             };
             header?: never;
             path: {
@@ -2007,7 +2008,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The browser is sent to the provider with a PKCE challenge (S256), a state and a nonce, and receives the pre-auth cookie; for the reauth intent the provider is asked to ask for the credentials again. When the provider is unknown or unavailable, or the link or reauth intent comes without a complete session, from another site or without a Sec-Fetch-Site header, the browser is sent to /login?error=oidc_failed instead, the same answer a failed callback gives */
+            /** @description The browser is sent to the provider with a PKCE challenge (S256), a state and a nonce, and receives the pre-auth cookie; for the reauth intent the provider is asked to ask for the credentials again. When the provider is unknown or unavailable, the link or reauth intent comes without a complete session, from another site or without a Sec-Fetch-Site header, or the invite intent carries a text that is not an invitation token, the browser is sent to /login?error=oidc_failed instead, the same answer a failed callback gives */
             302: {
                 headers: {
                     /** @description Where the browser goes next: the provider's authorization endpoint, or /login?error=oidc_failed when the handshake cannot start */
@@ -2045,7 +2046,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Too many sign-in attempts from this address; Retry-After says when to try again */
+            /** @description Too many sign-in attempts from this address, or, for the invite intent, too many redemptions of invitation tokens from this address or by this account; Retry-After says when to try again */
             429: {
                 headers: {
                     /** @description Whole seconds to wait before the request can succeed */

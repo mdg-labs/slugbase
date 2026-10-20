@@ -74,6 +74,7 @@ export type {
 export type { CompleteSetup, SetupOutcome, SetupStore } from "./system/setup.ts";
 export type { NewRegistration, RegistrationStore } from "./system/registration.ts";
 export type { InvitationAccountStore, InvitationAccountWrites, NewInvitationAccount } from "./system/invitation-account.ts";
+export type { InvitationIdentityStore, InvitationIdentityWrites, NewInvitationIdentity } from "./system/invitation-identity.ts";
 export type { AddressJobs } from "./system/address-jobs.ts";
 export type { EmailVerification, EmailVerificationStore, VerificationResend, VerifiedEmail } from "./system/email-verification.ts";
 export type { EmailChangeRequest, EmailChangeStore } from "./system/email-change.ts";

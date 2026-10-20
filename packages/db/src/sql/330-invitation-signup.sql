@@ -9,7 +9,8 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- caller names, verified because the token that arrived in the mailbox proves it; adds it to the workspace with exactly
 -- the invited role; marks the invitation accepted; and signs the account in with a full session whose active workspace
 -- is that one: all in the calling transaction, so a failure at any step leaves nothing. It makes no personal
--- workspace. The password arrives hashed. The outcome is one of: 'accepted'; 'gone' for an unknown, used, revoked,
+-- workspace. The password arrives hashed, or NULL for an account that signs in through a provider
+-- (sys_invitation_accept_with_identity). The outcome is one of: 'accepted'; 'gone' for an unknown, used, revoked,
 -- replaced or expired token or a workspace being deleted, which a caller does not tell apart; 'seat_limit_reached'
 -- (seat_limit is the seats the workspace may hold, NULL meaning unlimited); 'email_taken' when an account holds the
 -- address or the address is reserved by an unused "this wasn't me" token (sys_create_account decides). The checks run
@@ -51,13 +52,13 @@ DECLARE
 BEGIN
   IF NOT coalesce(
     p_token_hash IS NOT NULL AND octet_length(p_token_hash) = 32
-    AND p_account_id IS NOT NULL AND p_display_name IS NOT NULL AND p_password_hash IS NOT NULL AND p_locale IS NOT NULL
+    AND p_account_id IS NOT NULL AND p_display_name IS NOT NULL AND p_locale IS NOT NULL
     AND p_session_id IS NOT NULL AND octet_length(p_session_token_hash) = 32
     AND (p_replaced_token_hash IS NULL OR octet_length(p_replaced_token_hash) = 32)
     AND (p_seat_limit IS NULL OR p_seat_limit >= 0),
     false
   ) THEN
-    RAISE EXCEPTION 'sys_invitation_accept_new_account needs a 32-byte token hash, the account and its session, a password hash and a seat limit that is not negative'
+    RAISE EXCEPTION 'sys_invitation_accept_new_account needs a 32-byte token hash, the account and its session and a seat limit that is not negative'
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
   IF public.app_account_id() IS NOT NULL THEN

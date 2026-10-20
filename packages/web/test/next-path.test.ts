@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { safeNextPath } from "../src/auth/next-path.ts";
-import { currentReturnTo, oidcStartPath } from "../src/auth/oidc.ts";
+import { currentReturnTo, oidcInvitationStartPath, oidcStartPath } from "../src/auth/oidc.ts";
 
 describe("safeNextPath", () => {
   it.each([
@@ -32,6 +32,24 @@ describe("safeNextPath", () => {
 
   it.each([undefined, null, 42, true, ["/a"], { path: "/a" }])("ignores %j, which is not a string", (value) => {
     expect(safeNextPath(value)).toBe("/");
+  });
+});
+
+describe("oidcInvitationStartPath", () => {
+  it("carries the token in the invitation parameter, encoded, with the invite intent and no page to come back to", () => {
+    const path = oidcInvitationStartPath("acme-sso", "abc_DEF-123");
+    expect(path).toBe("/api/v1/auth/oidc/acme-sso/start?intent=invite&invitation=abc_DEF-123");
+    const url = new URL(path, "http://x.invalid");
+    expect(url.searchParams.get("returnTo")).toBeNull();
+    expect(url.searchParams.get("invitation")).toBe("abc_DEF-123");
+  });
+
+  it("encodes a provider slug and a token that are not plain text, so they cannot add a parameter", () => {
+    const path = oidcInvitationStartPath("a/b", "x&intent=login");
+    const url = new URL(path, "http://x.invalid");
+    expect(url.pathname).toBe("/api/v1/auth/oidc/a%2Fb/start");
+    expect(url.searchParams.getAll("intent")).toEqual(["invite"]);
+    expect(url.searchParams.get("invitation")).toBe("x&intent=login");
   });
 });
 

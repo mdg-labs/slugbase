@@ -420,22 +420,44 @@ describe("an invitation for an address without an account", () => {
     expect(screen.getByLabelText<HTMLInputElement>("Email").value).toBe(INVITEE);
   });
 
-  it("lists the configured providers under the form; they start an ordinary sign-in that does not carry the token", async () => {
+  it("lists the configured providers under the form; they start the handshake of the invitation, which carries the token in its own parameter and no page to come back to", async () => {
     stubServer({ accountExists: false, providers: [{ slug: "acme", name: "Acme SSO" }] });
     await openInvite();
 
     await screen.findByRole("button", { name: "Create account and join" });
     expect(screen.getByText("or")).toBeTruthy();
+    expect(screen.getByText(`Use an account at a provider that has confirmed ${INVITEE}.`)).toBeTruthy();
     await press("Continue with Acme SSO");
 
-    expect(navigateTo).toHaveBeenCalledExactlyOnceWith("/api/v1/auth/oidc/acme/start?returnTo=%2F");
+    expect(navigateTo).toHaveBeenCalledExactlyOnceWith(`/api/v1/auth/oidc/acme/start?intent=invite&invitation=${TOKEN}`);
   });
 
-  it("shows no provider buttons for an account that exists", async () => {
-    stubServer({ accountExists: true, providers: [{ slug: "acme", name: "Acme SSO" }] });
+  it("lists them for an address that has an account too, under the sign-in form", async () => {
+    stubServer({ accountExists: true, providers: [{ slug: "acme", name: "Acme SSO" }, { slug: "other-idp", name: "Other IdP" }] });
     await openInvite();
 
     await screen.findByLabelText("Email");
+    expect(screen.getByText("or")).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /^Continue with/ }).map((button) => button.textContent)).toEqual(["Continue with Acme SSO", "Continue with Other IdP"]);
+    await press("Continue with Other IdP");
+
+    expect(navigateTo).toHaveBeenCalledExactlyOnceWith(`/api/v1/auth/oidc/other-idp/start?intent=invite&invitation=${TOKEN}`);
+  });
+
+  it("shows no provider buttons and no separator where no provider is configured", async () => {
+    stubServer({ accountExists: false, providers: [] });
+    await openInvite();
+
+    await screen.findByRole("button", { name: "Create account and join" });
+    expect(screen.queryByRole("button", { name: /^Continue with/ })).toBeNull();
+    expect(screen.queryByText("or")).toBeNull();
+  });
+
+  it("shows no provider buttons to a signed-in account, which joins with one button or is told to sign out", async () => {
+    stubServer({ viewer: "invitee", providers: [{ slug: "acme", name: "Acme SSO" }] });
+    await openInvite();
+
+    await screen.findByRole("button", { name: `Join ${WORKSPACE}` });
     expect(screen.queryByRole("button", { name: /^Continue with/ })).toBeNull();
   });
 
@@ -610,7 +632,19 @@ describe("the token", () => {
     }
   });
 
-  it("is not sent anywhere when a provider is chosen or the visitor signs out", async () => {
+  it("is sent to the start of a handshake and to no request of the page when a provider is chosen", async () => {
+    const server = stubServer({ accountExists: false, providers: [{ slug: "acme", name: "Acme SSO" }] });
+    await openInvite();
+    await screen.findByRole("button", { name: "Create account and join" });
+
+    await press("Continue with Acme SSO");
+
+    expect(navigateTo).toHaveBeenCalledExactlyOnceWith(`/api/v1/auth/oidc/acme/start?intent=invite&invitation=${TOKEN}`);
+    const carrying = server.calls.filter((call) => `${call.url}${call.body}${call.headers}`.includes(TOKEN));
+    expect(carrying.map((call) => call.path)).toEqual([INSPECT_PATH]);
+  });
+
+  it("is not sent anywhere when the visitor signs out", async () => {
     const server = stubServer({ viewer: "other" });
     await openInvite();
     await screen.findByText("This invitation is for another address");

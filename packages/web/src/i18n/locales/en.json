@@ -1305,6 +1305,9 @@
       "description": "You are signed in as {current}, and the invitation is for {invited}. Sign out to continue with the invited address.",
       "action": "Sign out and continue"
     },
+    "provider": {
+      "description": "Use an account at a provider that has confirmed {email}."
+    },
     "signIn": {
       "description": "{email} already has an account. Sign in to join."
     },

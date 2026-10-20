@@ -1305,6 +1305,9 @@
       "description": "Du bist als {current} angemeldet, die Einladung gilt für {invited}. Melde dich ab, um mit der eingeladenen Adresse fortzufahren.",
       "action": "Abmelden und fortfahren"
     },
+    "provider": {
+      "description": "Nutze ein Konto bei einem Anbieter, der {email} bestätigt hat."
+    },
     "signIn": {
       "description": "Für {email} gibt es schon ein Konto. Melde dich an, um beizutreten."
     },

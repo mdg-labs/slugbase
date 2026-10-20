@@ -104,3 +104,12 @@ export type {
   InvitationSignupStore,
   NewAccountAcceptance,
 } from "./invitation-signup.ts";
+export { acceptInvitationWithIdentity } from "./invitation-identity.ts";
+export type {
+  IdentityAcceptance,
+  InvitationIdentityAsk,
+  InvitationIdentityDependencies,
+  InvitationIdentityRecords,
+  InvitationIdentityResult,
+  InvitationIdentityStore,
+} from "./invitation-identity.ts";

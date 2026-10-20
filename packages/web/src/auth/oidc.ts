@@ -39,6 +39,17 @@ export function oidcStartPath(provider: string, intent: OidcIntent, returnTo: st
   return `/api/v1/auth/oidc/${encodeURIComponent(provider)}/start?${query.toString()}`;
 }
 
+/**
+ * The address that starts a handshake which accepts an invitation (doc 04 section 4.5). The token travels in the
+ * `invitation` parameter and nowhere else: not in a `returnTo`, which the server does not read for this intent, and not
+ * in the page's address once the browser has left it, since the invitation page sends no referrer. The handshake ends
+ * on Home, where the workspace joined is the active one.
+ */
+export function oidcInvitationStartPath(provider: string, token: string): string {
+  const query = new URLSearchParams({ intent: "invite", invitation: token });
+  return `/api/v1/auth/oidc/${encodeURIComponent(provider)}/start?${query.toString()}`;
+}
+
 /** The page the member is on, as a path to come back to after a handshake. A failure notice of an earlier handshake is not carried along. */
 export function currentReturnTo(): string {
   const { pathname, search, hash } = globalThis.location;

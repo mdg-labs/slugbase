@@ -22,7 +22,7 @@ import { InvitationSignUpForm, type SignUpSettled } from "../auth/invitation-sig
 import { LoginForm } from "../auth/login-form.tsx";
 import { mfaPath } from "../auth/mfa.ts";
 import { HOME_PATH } from "../auth/next-path.ts";
-import { LOGIN_INTENT, oidcProvidersOf } from "../auth/oidc.ts";
+import { oidcProvidersOf, type OidcProvider } from "../auth/oidc.ts";
 import { useNoReferrer } from "../auth/no-referrer.ts";
 import { ProviderButtons } from "../auth/provider-buttons.tsx";
 import { useSignOut } from "../auth/sign-out.ts";
@@ -98,6 +98,26 @@ function Summary({ preview }: { preview: InvitationPreview }): ReactElement {
         <StatusBadge variant={preview.role === "member" ? "neutral" : "info"}>{roleLabel(preview.role)}</StatusBadge>
       </dd>
     </dl>
+  );
+}
+
+/** The way in through a provider: it has to confirm the invited address, which the invitation page says before the buttons. */
+function ProviderChoice({ providers, email, token }: { providers: readonly OidcProvider[]; email: string; token: string }): ReactElement | null {
+  const { t } = useTranslation();
+  if (providers.length === 0) {
+    return null;
+  }
+  return (
+    <>
+      <div className="flex items-center gap-3 text-muted-foreground text-sm">
+        <Separator className="flex-1" />
+        <span>{t("login.or")}</span>
+        <Separator className="flex-1" />
+      </div>
+      <p className="text-muted-foreground text-sm">{t("invite.provider.description", { email })}</p>
+      {/* The token goes to the start of the handshake in its own parameter and is kept there only as a hash. */}
+      <ProviderButtons invitation={token} label={(name) => t("login.provider", { name })} providers={providers} />
+    </>
   );
 }
 
@@ -367,6 +387,7 @@ export function InvitePage({ token }: { token: string }): ReactElement {
             void readViewer();
           }}
         />
+        <ProviderChoice email={invitation.email} providers={providers} token={token} />
       </div>
     );
   } else {
@@ -380,17 +401,7 @@ export function InvitePage({ token }: { token: string }): ReactElement {
             settleSignUp(outcome, invitation);
           }}
         />
-        {providers.length === 0 ? null : (
-          <>
-            <div className="flex items-center gap-3 text-muted-foreground text-sm">
-              <Separator className="flex-1" />
-              <span>{t("login.or")}</span>
-              <Separator className="flex-1" />
-            </div>
-            {/* A provider sign-in starts the ordinary handshake and returns home: the token is not sent along, and joining with a provider is not wired yet. */}
-            <ProviderButtons intent={LOGIN_INTENT} label={(name) => t("login.provider", { name })} providers={providers} returnTo={HOME_PATH} />
-          </>
-        )}
+        <ProviderChoice email={invitation.email} providers={providers} token={token} />
       </div>
     );
   }

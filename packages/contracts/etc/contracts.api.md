@@ -2204,7 +2204,7 @@ export const MfaEnrollmentSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
-export const OIDC_START_INTENTS: readonly ["login", "link", "reauth"];
+export const OIDC_START_INTENTS: readonly ["login", "link", "reauth", "invite"];
 
 // @public (undocumented)
 export const OidcProviderParamsSchema: z.ZodObject<{
@@ -2218,7 +2218,9 @@ export const OidcStartQuerySchema: z.ZodObject<{
         login: "login";
         link: "link";
         reauth: "reauth";
+        invite: "invite";
     }>>;
+    invitation: z.ZodOptional<z.ZodString>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -5695,7 +5697,8 @@ export interface OperationTypes {
         parameters: {
             query?: {
                 returnTo?: string;
-                intent?: "login" | "link" | "reauth";
+                intent?: "login" | "link" | "reauth" | "invite";
+                invitation?: string;
             };
             header?: never;
             path: {
@@ -8025,7 +8028,9 @@ export const startOidcSignIn: {
                 login: "login";
                 link: "link";
                 reauth: "reauth";
+                invite: "invite";
             }>>;
+            invitation: z.ZodOptional<z.ZodString>;
         }, z.core.$strict>;
     };
     readonly responses: {

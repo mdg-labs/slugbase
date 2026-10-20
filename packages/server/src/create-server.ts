@@ -10,6 +10,7 @@ import { createPasswordVerifier, hashPassword, verifyHash } from "./auth/passwor
 import { DEFAULT_REGISTRATION, registrationSettings } from "./auth/registration-settings.ts";
 import { ensureSetupToken } from "./auth/setup-token.ts";
 import { createMembershipTenantResolver, defersToMembershipResolver } from "./auth/tenant-resolver.ts";
+import { createTokenRedeemLimit } from "./auth/token-redeem-limit.ts";
 import { createRateLimitRegistry, type ServerConfig, type WorkerConfig } from "./config/index.ts";
 import type { Authenticator } from "./http/authenticate.ts";
 import type { EntitlementCheck } from "./http/authorize.ts";
@@ -493,6 +494,7 @@ export function createServer(options: CreateServerOptions): Server {
     secretBox: adapters.secretBox,
     identity: adapters.identity,
     oidcProviders: config.OIDC_PROVIDERS,
+    takeRedeemLimit: createTokenRedeemLimit({ limiter: adapters.rateLimit, registry: createRateLimitRegistry(config), logger }),
     now: options.now ?? Date.now,
   });
   builtInRoutes.push(...(auth.routes ?? []));
