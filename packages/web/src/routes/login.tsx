@@ -9,18 +9,20 @@ import { safeNextPath } from "../auth/next-path.ts";
 import { LOGIN_INTENT, OIDC_FAILED, oidcProvidersOf } from "../auth/oidc.ts";
 import { ProviderButtons } from "../auth/provider-buttons.tsx";
 import { sessionQuery } from "../auth/session.ts";
+import { SignInNotice } from "../auth/sign-in-notice.tsx";
 import { useConfig } from "../config/config-context.tsx";
 import { isSetupRequired } from "../config/setup-state.ts";
 
 function LoginPage(): ReactElement {
   const { t } = useTranslation();
   const config = useConfig();
-  const { product } = config;
+  const name = config.instance?.displayName ?? config.product.name;
   const { next, error } = Route.useSearch();
   const providers = oidcProvidersOf(config);
   return (
-    <AuthPage description={t("login.description", { name: product.name })} productName={product.name} title={t("login.title")}>
+    <AuthPage description={t("login.description", { name })} productName={name} title={t("login.title")}>
       <div className="flex flex-col gap-4">
+        <SignInNotice />
         {error === OIDC_FAILED ? <Banner title={t("login.error.oidcFailed")} variant="error" /> : null}
         <LoginForm next={next} />
         {providers.length === 0 ? null : (

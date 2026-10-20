@@ -19,6 +19,7 @@ import {
   renameWorkspace,
   requestWorkspaceDeletion,
   transferOwnership,
+  workspaceCreationAllowed,
   type AuditActor,
   type MailPort,
   type SessionCookieSpec,
@@ -27,6 +28,7 @@ import {
 import {
   accountProfileRepository,
   auditEventRepository,
+  instanceRepository,
   isLastOwnerViolation,
   memberRepository,
   workspaceRepository,
@@ -113,10 +115,11 @@ const STALE_VERSION = "The workspace has changed since it was read; read it agai
 export interface WorkspaceRoutesOptions {
   readonly withTenant: Database["withTenant"];
   /**
-   * Whether the deployment lets ordinary accounts create workspaces: the default the composition root supplies
-   * (the Community Edition's is off). It is a plain value so that no edition decides it (D4).
+   * Whether the deployment lets ordinary accounts create workspaces until the instance admin sets it: the default the
+   * composition root supplies (the Community Edition's is off). It is a plain value so that no edition decides it (D4).
+   * The stored instance setting overrides it, and is read in the transaction of each request that decides.
    */
-  readonly creationAllowed: boolean;
+  readonly creationDefault: boolean;
   readonly cookie: SessionCookieSpec;
   /** The mail port of the composition; the recipient of an ownership transfer is mailed only when it can send. */
   readonly mail: Pick<MailPort, "available">;
@@ -166,13 +169,14 @@ function workspaceBody(workspace: WorkspaceDetail): z.input<typeof WorkspaceSche
   return { id, name, role, memberCount, createdAt: createdAt.toISOString(), version };
 }
 
-export function workspaceRoutes({ withTenant, creationAllowed, cookie, mail }: WorkspaceRoutesOptions): RouteBinding[] {
+export function workspaceRoutes({ withTenant, creationDefault, cookie, mail }: WorkspaceRoutesOptions): RouteBinding[] {
   return [
     route(listWorkspaces).handle(async (_request, context) => {
       const accountId = accountOf(context);
-      const { workspaces, profile } = await withTenant({ accountId, requestId: requestIdOf(context) }, async (tx) => ({
+      const { workspaces, profile, creationAllowed } = await withTenant({ accountId, requestId: requestIdOf(context) }, async (tx) => ({
         workspaces: await workspaceRepository(tx).list(),
         profile: await accountProfileRepository(tx).profile(),
+        creationAllowed: workspaceCreationAllowed(await instanceRepository(tx).settings(), creationDefault),
       }));
       if (profile === undefined) {
         throw new ProblemError("unauthenticated", UNAUTHENTICATED);
@@ -194,6 +198,7 @@ export function workspaceRoutes({ withTenant, creationAllowed, cookie, mail }: W
         if (profile === undefined) {
           return { kind: "unavailable" } as const;
         }
+        const creationAllowed = workspaceCreationAllowed(await instanceRepository(tx).settings(), creationDefault);
         return createWorkspace(
           { store: storeOf(tx), audit: createAuditWriter({ store: auditEventRepository(tx), newId: uuidv7 }), newId: uuidv7 },
           { accountId, displayName: profile.displayName, emailVerified: profile.emailVerified, creationAllowed, ipPrefix, name: body.name },

@@ -386,6 +386,13 @@
       "when": 1792501923233,
       "tag": "20261020131203_add_instance_admin",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1792508676073,
+      "tag": "20261020150436_add_instance_settings",
+      "breakpoints": true
     }
   ]
 }

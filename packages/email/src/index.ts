@@ -6,6 +6,7 @@ import { NEW_SIGN_IN_TEMPLATE, newSignIn } from "./templates/new-sign-in.ts";
 import { OWNERSHIP_TRANSFERRED_TEMPLATE, ownershipTransferred } from "./templates/ownership-transferred.ts";
 import { PASSWORD_CHANGED_TEMPLATE, passwordChanged } from "./templates/password-changed.ts";
 import { PASSWORD_RESET_TEMPLATE, passwordReset } from "./templates/password-reset.ts";
+import { TEST_MAIL_TEMPLATE, testMail } from "./templates/test-mail.ts";
 import { VERIFY_EMAIL_TEMPLATE, verifyEmail } from "./templates/verify-email.ts";
 import type { MailTemplates } from "./types.ts";
 
@@ -41,5 +42,6 @@ export function createMailTemplates({ appOrigin }: MailTemplateOptions): MailTem
     [EMAIL_CHANGE_NOTICE_TEMPLATE]: emailChangeNotice(options),
     [OWNERSHIP_TRANSFERRED_TEMPLATE]: ownershipTransferred(options),
     [INVITATION_TEMPLATE]: invitation(options),
+    [TEST_MAIL_TEMPLATE]: testMail(options),
   };
 }

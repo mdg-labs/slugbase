@@ -29,6 +29,11 @@ describe("the mail.send job", () => {
     expect(() => mailSendJob.parse({ template: "passwordReset", accountId: ACCOUNT, token: "x".repeat(43) })).toThrow();
   });
 
+  it("queues the test email with the account's identifier only: the address is read when the job runs", () => {
+    expect(queueMailSend(JOB_ID, "testMail", ACCOUNT)).toEqual({ id: JOB_ID, queue: "mail.send", data: { template: "testMail", accountId: ACCOUNT } });
+    expect(() => mailSendJob.parse({ template: "testMail", accountId: ACCOUNT, to: "a@example.test" })).toThrow();
+  });
+
   it("queues the emailChange template with the account's identifier only: the address it concerns is read and the tokens made when the job runs", () => {
     expect(queueMailSend(JOB_ID, "emailChange", ACCOUNT)).toEqual({ id: JOB_ID, queue: "mail.send", data: { template: "emailChange", accountId: ACCOUNT } });
     expect(() => mailSendJob.parse({ template: "emailChange", accountId: ACCOUNT, token: "x".repeat(43) })).toThrow();

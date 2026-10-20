@@ -10,6 +10,7 @@ import { bindOidcStore, type OidcStore } from "./oidc.ts";
 import { bindPasswordResetStore, type PasswordResetStore } from "./password-reset.ts";
 import { enqueueInTransaction, type QueuedJob } from "./queue.ts";
 import { bindRegistrationStore, type RegistrationStore } from "./registration.ts";
+import { bindInstanceSettingsStore, type InstanceSettingsStore } from "./instance-settings.ts";
 import { bindSetupStore, type SetupStore } from "./setup.ts";
 
 // The wrappers of the system operations behind sign-in and the session cookie
@@ -110,7 +111,7 @@ export interface SessionSummary {
   readonly userAgent: string | null;
 }
 
-export interface AuthStore extends SetupStore, MfaStore, OidcStore, RegistrationStore, EmailVerificationStore, PasswordResetStore, EmailChangeStore, InvitationInspectStore, InvitationAccountStore, InvitationIdentityStore {
+export interface AuthStore extends SetupStore, InstanceSettingsStore, MfaStore, OidcStore, RegistrationStore, EmailVerificationStore, PasswordResetStore, EmailChangeStore, InvitationInspectStore, InvitationAccountStore, InvitationIdentityStore {
   /**
    * The address folded the way the database compares emails: two addresses that name one account
    * (`loginLookup` finds the same row) fold to one string, and no two others do. For what counts
@@ -258,6 +259,7 @@ function assertTokenHash(hash: Buffer, name: string): void {
 export function bindAuthStore(client: postgres.Sql): Omit<AuthStore, "close"> {
   return {
     ...bindSetupStore(client),
+    ...bindInstanceSettingsStore(client),
     ...bindMfaStore(client),
     ...bindOidcStore(client),
     ...bindRegistrationStore(client),

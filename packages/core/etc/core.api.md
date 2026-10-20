@@ -1046,7 +1046,24 @@ export const INSTANCE_AUDIT_ACTIONS: {
     readonly "instance.status_viewed": {
         readonly metadata: {};
     };
+    readonly "instance.settings_viewed": {
+        readonly metadata: {};
+    };
+    readonly "instance.settings_changed": {
+        readonly metadata: {
+            readonly settings: "text";
+        };
+    };
+    readonly "instance.test_mail_queued": {
+        readonly metadata: {};
+    };
 };
+
+// @public
+export const INSTANCE_SETTING_NAMES: readonly ["allowWorkspaceCreation", "displayName", "signInNotice"];
+
+// @public
+export const INSTANCE_TEST_MAIL_TEMPLATE = "testMail";
 
 // @public (undocumented)
 export type InstanceAuditAction = keyof typeof INSTANCE_AUDIT_ACTIONS;
@@ -1066,7 +1083,29 @@ export interface InstanceAuditEvent {
     // (undocumented)
     readonly id: string;
     readonly ipPrefix: string | null;
+    readonly metadata: Readonly<Record<string, string>>;
 }
+
+// @public (undocumented)
+export type InstanceSettingName = (typeof INSTANCE_SETTING_NAMES)[number];
+
+// @public
+export interface InstanceSettings {
+    // (undocumented)
+    readonly allowWorkspaceCreation: boolean | null;
+    // (undocumented)
+    readonly displayName: string | null;
+    // (undocumented)
+    readonly signInNotice: string | null;
+}
+
+// @public
+export type InstanceSettingsChange = {
+    readonly [Name in InstanceSettingName]?: InstanceSettings[Name];
+};
+
+// @public
+export function instanceTestMail(recipient: NotificationRecipient): MailMessage;
 
 // @public
 export const INVITATION_ROLES: readonly ["admin", "member"];
@@ -2073,6 +2112,9 @@ export function truncateUserAgent(userAgent: string | null | undefined): string 
 export function unconfigured(): Adapters;
 
 // @public
+export const UNSET_INSTANCE_SETTINGS: InstanceSettings;
+
+// @public
 export const USER_AGENT_MAX_LENGTH = 256;
 
 // @public
@@ -2108,6 +2150,9 @@ export interface WorkspaceChangeAsk {
     // (undocumented)
     readonly workspaceId: string;
 }
+
+// @public
+export function workspaceCreationAllowed(settings: Pick<InstanceSettings, "allowWorkspaceCreation">, compositionDefault: boolean): boolean;
 
 // @public (undocumented)
 export interface WorkspaceCreationAsk extends WorkspaceCreationPolicy {

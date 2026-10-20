@@ -55,6 +55,16 @@ export const ApiConfigSchema = z
       })
       .optional()
       .describe("The sign-in methods beyond the password. This server always sends it"),
+    instance: z
+      .strictObject({
+        displayName: z.string().describe("The instance name the sign-in page shows: the one the instance admin set, else the product's name"),
+        signInNotice: z
+          .string()
+          .nullable()
+          .describe("The plain-text notice the instance admin set for the sign-in page; null while there is none. It is text, never HTML, and the sign-in page renders it as text only"),
+      })
+      .optional()
+      .describe("The instance settings the sign-in page shows. This server always sends it"),
     setupRequired: z
       .boolean()
       .optional()

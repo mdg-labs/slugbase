@@ -11,6 +11,8 @@ import type { EntitlementVersionWriter } from '@slugbase/core';
 import { InferInsertModel } from 'drizzle-orm';
 import { InferSelectModel } from 'drizzle-orm';
 import { InstanceAuditEvent } from '@slugbase/core';
+import { InstanceSettings } from '@slugbase/core';
+import { InstanceSettingsChange } from '@slugbase/core';
 import type { InvitationAcceptResult } from '@slugbase/core';
 import type { InvitationIdentityResult } from '@slugbase/core';
 import type { InvitationInspectStore } from '@slugbase/core';
@@ -207,7 +209,7 @@ export interface AuditEventRepository {
 export function auditEventRepository(tx: TenantTx): AuditEventRepository;
 
 // @public (undocumented)
-export interface AuthStore extends SetupStore, MfaStore, OidcStore, RegistrationStore, EmailVerificationStore, PasswordResetStore, EmailChangeStore, InvitationInspectStore, InvitationAccountStore, InvitationIdentityStore {
+export interface AuthStore extends SetupStore, InstanceSettingsStore, MfaStore, OidcStore, RegistrationStore, EmailVerificationStore, PasswordResetStore, EmailChangeStore, InvitationInspectStore, InvitationAccountStore, InvitationIdentityStore {
     changePassword(change: PasswordChange): Promise<boolean>;
     close(): Promise<void>;
     createSession(session: NewSession): Promise<boolean>;
@@ -538,12 +540,21 @@ export interface InstanceCounts {
 export interface InstanceRepository {
     jobHealth(): Promise<JobHealth>;
     listAudit(limit: number, afterId?: string): Promise<readonly InstanceAuditEvent[]>;
+    recordTestMail(eventId: string, ipPrefix: string | null, job: QueuedJob): Promise<void>;
     secondFactorEnrolled(): Promise<boolean>;
+    settings(): Promise<InstanceSettings>;
     status(eventId: string, ipPrefix: string | null): Promise<InstanceCounts>;
+    updateSettings(change: InstanceSettingsChange, eventId: string, ipPrefix: string | null): Promise<InstanceSettings>;
+    viewSettings(eventId: string, ipPrefix: string | null): Promise<InstanceSettings>;
 }
 
 // @public (undocumented)
 export function instanceRepository(tx: TenantTx): InstanceRepository;
+
+// @public (undocumented)
+export interface InstanceSettingsStore {
+    instanceSettings(): Promise<InstanceSettings>;
+}
 
 // @public
 export interface InvitationAcceptanceRepository {

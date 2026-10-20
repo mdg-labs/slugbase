@@ -188,6 +188,28 @@
             ],
             "type": "object"
           },
+          "instance": {
+            "additionalProperties": false,
+            "description": "The instance settings the sign-in page shows. This server always sends it",
+            "properties": {
+              "displayName": {
+                "description": "The instance name the sign-in page shows: the one the instance admin set, else the product's name",
+                "type": "string"
+              },
+              "signInNotice": {
+                "description": "The plain-text notice the instance admin set for the sign-in page; null while there is none. It is text, never HTML, and the sign-in page renders it as text only",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "displayName",
+              "signInNotice"
+            ],
+            "type": "object"
+          },
           "locales": {
             "description": "Locales the interface is available in",
             "items": {
@@ -958,6 +980,38 @@
         },
         "required": [
           "token"
+        ],
+        "type": "object"
+      },
+      "InstanceSettings": {
+        "additionalProperties": false,
+        "properties": {
+          "allowWorkspaceCreation": {
+            "description": "Whether ordinary accounts may create workspaces; null while the setting is not set, when the default of the deployment applies",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "displayName": {
+            "description": "The instance name the sign-in page shows; null while it is not set",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "signInNotice": {
+            "description": "The plain-text notice the sign-in page shows; null while there is none",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "allowWorkspaceCreation",
+          "displayName",
+          "signInNotice"
         ],
         "type": "object"
       },
@@ -2281,6 +2335,47 @@
               "system"
             ],
             "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "UpdateInstanceSettingsRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "allowWorkspaceCreation": {
+            "description": "true or false overrides the deployment's default, null clears the setting so the default applies again",
+            "type": [
+              "boolean",
+              "null"
+            ]
+          },
+          "displayName": {
+            "anyOf": [
+              {
+                "description": "The instance name the sign-in page shows, 1 to 100 characters; surrounding whitespace is removed and a name that is blank after that is refused",
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The new name, or null to clear it"
+          },
+          "signInNotice": {
+            "anyOf": [
+              {
+                "description": "Plain text shown on the sign-in page, 1 to 500 characters; surrounding whitespace is removed and a notice that is blank after that is refused. It is shown as text, never as HTML",
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The new notice, or null to remove it"
           }
         },
         "type": "object"
@@ -3717,6 +3812,269 @@
         "x-slugbase-auth": "member",
         "x-slugbase-rate": "read",
         "x-slugbase-scope": "read"
+      }
+    },
+    "/api/v1/instance/mail/test": {
+      "post": {
+        "operationId": "sendInstanceTestMail",
+        "responses": {
+          "202": {
+            "description": "A test message to the caller's address is queued for the background worker, and the action is written to the instance audit stream"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden). Nothing is queued"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No mail adapter is configured (mail_unavailable), or the service is temporarily unavailable (unavailable). Nothing is queued"
+          }
+        },
+        "summary": "Send a test email to the caller",
+        "tags": [
+          "instance"
+        ],
+        "x-slugbase-auth": "instanceAdmin",
+        "x-slugbase-rate": "write"
+      }
+    },
+    "/api/v1/instance/settings": {
+      "get": {
+        "operationId": "getInstanceSettings",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstanceSettings"
+                }
+              }
+            },
+            "description": "The settings as stored; a setting that was never set, or was cleared, is null"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The session is not an instance admin's, or the account has no second factor enrolled, or the credential is an API token"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Read the instance settings",
+        "tags": [
+          "instance"
+        ],
+        "x-slugbase-auth": "instanceAdmin",
+        "x-slugbase-rate": "read"
+      },
+      "patch": {
+        "operationId": "updateInstanceSettings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateInstanceSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstanceSettings"
+                }
+              }
+            },
+            "description": "The settings after the change; a setting the request leaves out keeps its value. A stored allowWorkspaceCreation overrides the deployment's default from the next request on, and the change is written to the instance audit stream"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden). Nothing is written"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body did not pass validation: a field the operation does not declare, no setting at all, a name or a notice that is blank, longer than its limit or holds a NUL character, or a value of the wrong type"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Change the instance settings",
+        "tags": [
+          "instance"
+        ],
+        "x-slugbase-auth": "instanceAdmin",
+        "x-slugbase-rate": "write"
       }
     },
     "/api/v1/instance/status": {

@@ -6,7 +6,7 @@ import type { DomainEvent } from "../events/catalog.ts";
 // operation (`sys_create_workspace`, doc 05 section 3.3), which the store behind this port reaches; the
 // service decides who may, what is recorded and what is announced, and never reports a workspace the
 // store did not make. The deployment's answer to "may accounts create workspaces" is a plain value the
-// caller resolves (the composition root's default, later the instance setting): no edition decides it (D4).
+// caller resolves (the stored instance setting, else the composition root's default): no edition decides it (D4).
 
 /** The longest workspace name, in characters (doc 02 section 3.1). */
 export const WORKSPACE_NAME_MAX_LENGTH = 64;

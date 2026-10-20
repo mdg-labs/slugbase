@@ -1,4 +1,12 @@
-import { ACCOUNT_NOTIFICATIONS, CREDENTIAL_TOKEN_TTL_SECONDS, accountNotification, generateCredentialToken, type MailMessage } from "@slugbase/core";
+import {
+  ACCOUNT_NOTIFICATIONS,
+  CREDENTIAL_TOKEN_TTL_SECONDS,
+  INSTANCE_TEST_MAIL_TEMPLATE,
+  accountNotification,
+  generateCredentialToken,
+  instanceTestMail,
+  type MailMessage,
+} from "@slugbase/core";
 import { accountProfileRepository, credentialTokenRepository, emailChangeRepository, memberRepository, workspaceRepository, type QueuedJob } from "@slugbase/db";
 import { z } from "zod";
 import { uuidv7 } from "../../auth/uuidv7.ts";
@@ -41,6 +49,10 @@ import { defineJob } from "../job.ts";
 // departure between the request and the send is what the message shows. It is sent only while the recipient is
 // still an owner of the workspace.
 //
+// The test email of the instance admin (doc 02 section 11.3) is sent to the account that queued it, in its language,
+// and carries nothing but its name. It is sent whatever becomes of the admin's flag between the request and the send:
+// the request that queued it was the check.
+//
 // The "new sign-in" email (doc 02 section 12) carries what it shows, taken when the sign-in happened: the
 // time, the browser family and the coarse network prefix, none of which is a secret. The alert was queued
 // while the account's switch was on, so it is sent whatever becomes of the session or the switch before the
@@ -49,7 +61,7 @@ import { defineJob } from "../job.ts";
 export const MAIL_SEND_JOB = "mail.send";
 
 /** The templates a job can name: the notice of an email change goes out in the job of its confirmation. */
-const MAIL_JOB_TEMPLATES = z.enum(ACCOUNT_NOTIFICATIONS).exclude(["emailChangeNotice"]);
+const MAIL_JOB_TEMPLATES = z.enum([...ACCOUNT_NOTIFICATIONS, INSTANCE_TEST_MAIL_TEMPLATE]).exclude(["emailChangeNotice"]);
 
 export type MailJobTemplate = z.infer<typeof MAIL_JOB_TEMPLATES>;
 
@@ -160,6 +172,9 @@ export const mailSendJob = defineJob({
         });
         const notice = accountNotification("emailChangeNotice", profile, { token: cancel.value });
         return pending === undefined ? [notice] : [notice, accountNotification("emailChange", { ...profile, email: pending }, { token: confirmation.value })];
+      }
+      if (template === INSTANCE_TEST_MAIL_TEMPLATE) {
+        return [instanceTestMail(profile)];
       }
       if (template !== "verifyEmail") {
         return [accountNotification(template, profile)];

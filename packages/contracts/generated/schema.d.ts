@@ -205,6 +205,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/instance/mail/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send a test email to the caller */
+        post: operations["sendInstanceTestMail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instance/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the instance settings */
+        get: operations["getInstanceSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change the instance settings */
+        patch: operations["updateInstanceSettings"];
+        trace?: never;
+    };
     "/api/v1/instance/status": {
         parameters: {
             query?: never;
@@ -941,6 +976,13 @@ export interface components {
                 /** @description Whether a mail port is configured */
                 mail: boolean;
             };
+            /** @description The instance settings the sign-in page shows. This server always sends it */
+            instance?: {
+                /** @description The instance name the sign-in page shows: the one the instance admin set, else the product's name */
+                displayName: string;
+                /** @description The plain-text notice the instance admin set for the sign-in page; null while there is none. It is text, never HTML, and the sign-in page renders it as text only */
+                signInNotice: string | null;
+            };
             /** @description Locales the interface is available in */
             locales: string[];
             /**
@@ -1199,6 +1241,14 @@ export interface components {
         InspectInvitationRequest: {
             /** @description The token of the invitation link, from the path of /invite/<token> */
             token: string;
+        };
+        InstanceSettings: {
+            /** @description Whether ordinary accounts may create workspaces; null while the setting is not set, when the default of the deployment applies */
+            allowWorkspaceCreation: boolean | null;
+            /** @description The instance name the sign-in page shows; null while it is not set */
+            displayName: string | null;
+            /** @description The plain-text notice the sign-in page shows; null while there is none */
+            signInNotice: string | null;
         };
         InstanceStatus: {
             /** @description What the instance holds */
@@ -1684,6 +1734,14 @@ export interface components {
              * @enum {string}
              */
             theme?: "light" | "dark" | "system";
+        };
+        UpdateInstanceSettingsRequest: {
+            /** @description true or false overrides the deployment's default, null clears the setting so the default applies again */
+            allowWorkspaceCreation?: boolean | null;
+            /** @description The new name, or null to clear it */
+            displayName?: string | null;
+            /** @description The new notice, or null to remove it */
+            signInNotice?: string | null;
         };
         UpdateMemberRequest: {
             /**
@@ -2616,6 +2674,218 @@ export interface operations {
                 };
             };
             /** @description The service is temporarily unavailable, or no entitlement source is configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    sendInstanceTestMail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A test message to the caller's address is queued for the background worker, and the action is written to the instance audit stream */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden). Nothing is queued */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description No mail adapter is configured (mail_unavailable), or the service is temporarily unavailable (unavailable). Nothing is queued */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getInstanceSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings as stored; a setting that was never set, or was cleared, is null */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceSettings"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The session is not an instance admin's, or the account has no second factor enrolled, or the credential is an API token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateInstanceSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateInstanceSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description The settings after the change; a setting the request leaves out keeps its value. A stored allowWorkspaceCreation overrides the deployment's default from the next request on, and the change is written to the instance audit stream */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceSettings"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden). Nothing is written */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation: a field the operation does not declare, no setting at all, a name or a notice that is blank, longer than its limit or holds a NUL character, or a value of the wrong type */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
             503: {
                 headers: {
                     [name: string]: unknown;

@@ -176,6 +176,11 @@ export const FIXTURES: ContractFixtures = {
   // The walker that calls it is an instance admin with a second factor on a complete session (the contract test makes it), and the account below the
   // policy is an ordinary one; the instance suite shows that a token, a pending session and an admin without a second factor are refused.
   getInstanceStatus: {},
+  // The settings and the test email of the instance admin name no workspace, account or other identifier either, so the same holds. The walker's
+  // server has no mail adapter, so the valid test-mail request is the declared 503 (mail_unavailable). The settings it writes are the ones it left.
+  getInstanceSettings: {},
+  updateInstanceSettings: { body: { displayName: "Walker" } },
+  sendInstanceTestMail: { status: 503 },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

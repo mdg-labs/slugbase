@@ -141,6 +141,10 @@ export const ApiConfigSchema: z.ZodObject<{
             name: z.ZodString;
         }, z.core.$strict>>;
     }, z.core.$strict>>;
+    instance: z.ZodOptional<z.ZodObject<{
+        displayName: z.ZodString;
+        signInNotice: z.ZodNullable<z.ZodString>;
+    }, z.core.$strict>>;
     setupRequired: z.ZodOptional<z.ZodBoolean>;
     setupTokenRequired: z.ZodOptional<z.ZodBoolean>;
 }, z.core.$strict>;
@@ -405,6 +409,10 @@ export interface ComponentTypes {
                 ai: boolean;
                 mail: boolean;
             };
+            instance?: {
+                displayName: string;
+                signInNotice: string | null;
+            };
             locales: string[];
             origin: string;
             product: {
@@ -529,6 +537,11 @@ export interface ComponentTypes {
         };
         InspectInvitationRequest: {
             token: string;
+        };
+        InstanceSettings: {
+            allowWorkspaceCreation: boolean | null;
+            displayName: string | null;
+            signInNotice: string | null;
         };
         InstanceStatus: {
             counts: {
@@ -758,6 +771,11 @@ export interface ComponentTypes {
             signinAlerts?: boolean;
             singleKeyShortcuts?: boolean;
             theme?: "light" | "dark" | "system";
+        };
+        UpdateInstanceSettingsRequest: {
+            allowWorkspaceCreation?: boolean | null;
+            displayName?: string | null;
+            signInNotice?: string | null;
         };
         UpdateMemberRequest: {
             role: "owner" | "admin" | "member";
@@ -1322,6 +1340,10 @@ export const getApiConfig: {
         name: z.ZodString;
         }, z.core.$strict>>;
         }, z.core.$strict>>;
+        instance: z.ZodOptional<z.ZodObject<{
+        displayName: z.ZodString;
+        signInNotice: z.ZodNullable<z.ZodString>;
+        }, z.core.$strict>>;
         setupRequired: z.ZodOptional<z.ZodBoolean>;
         setupTokenRequired: z.ZodOptional<z.ZodBoolean>;
         }, z.core.$strict>, {
@@ -1386,6 +1408,29 @@ export const getHealth: {
         status: z.ZodLiteral<"ok">;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
         readonly 400: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const getInstanceSettings: {
+    readonly method: "get";
+    readonly path: "/api/v1/instance/settings";
+    readonly operationId: "getInstanceSettings";
+    readonly tag: "instance";
+    readonly summary: "Read the instance settings";
+    readonly auth: "instanceAdmin";
+    readonly rate: "read";
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        allowWorkspaceCreation: z.ZodNullable<z.ZodBoolean>;
+        displayName: z.ZodNullable<z.ZodString>;
+        signInNotice: z.ZodNullable<z.ZodString>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
     };
 };
 
@@ -1753,6 +1798,19 @@ export const inspectInvitation: {
 // @public (undocumented)
 export const InspectInvitationRequestSchema: z.ZodObject<{
     token: z.ZodString;
+}, z.core.$strict>;
+
+// @public
+export const INSTANCE_DISPLAY_NAME_MAX_LENGTH = 100;
+
+// @public
+export const INSTANCE_SIGN_IN_NOTICE_MAX_LENGTH = 500;
+
+// @public (undocumented)
+export const InstanceSettingsSchema: z.ZodObject<{
+    allowWorkspaceCreation: z.ZodNullable<z.ZodBoolean>;
+    displayName: z.ZodNullable<z.ZodString>;
+    signInNotice: z.ZodNullable<z.ZodString>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -3797,6 +3855,67 @@ export interface OperationTypes {
                 };
             };
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    getInstanceSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["InstanceSettings"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5874,6 +5993,65 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    sendInstanceTestMail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     setActiveWorkspace: {
         parameters: {
             query?: never;
@@ -6220,6 +6398,79 @@ export interface OperationTypes {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    updateInstanceSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["UpdateInstanceSettingsRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["InstanceSettings"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6856,6 +7107,40 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/instance/mail/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["sendInstanceTestMail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/instance/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["getInstanceSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: OperationTypes["updateInstanceSettings"];
         trace?: never;
     };
     // (undocumented)
@@ -8263,6 +8548,25 @@ export const RevokeSessionsQuerySchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
+export const sendInstanceTestMail: {
+    readonly method: "post";
+    readonly path: "/api/v1/instance/mail/test";
+    readonly operationId: "sendInstanceTestMail";
+    readonly tag: "instance";
+    readonly summary: "Send a test email to the caller";
+    readonly auth: "instanceAdmin";
+    readonly rate: "write";
+    readonly responses: {
+        readonly 202: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
 export const SessionIdParamsSchema: z.ZodObject<{
     id: z.ZodUUID;
 }, z.core.$strict>;
@@ -8534,6 +8838,44 @@ export const UpdateAccountRequestSchema: z.ZodObject<{
         importDone: z.ZodOptional<z.ZodBoolean>;
         checklistDismissed: z.ZodOptional<z.ZodBoolean>;
     }, z.core.$strict>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const updateInstanceSettings: {
+    readonly method: "patch";
+    readonly path: "/api/v1/instance/settings";
+    readonly operationId: "updateInstanceSettings";
+    readonly tag: "instance";
+    readonly summary: "Change the instance settings";
+    readonly auth: "instanceAdmin";
+    readonly rate: "write";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            allowWorkspaceCreation: z.ZodOptional<z.ZodNullable<z.ZodBoolean>>;
+            displayName: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+            signInNotice: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        allowWorkspaceCreation: z.ZodNullable<z.ZodBoolean>;
+        displayName: z.ZodNullable<z.ZodString>;
+        signInNotice: z.ZodNullable<z.ZodString>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const UpdateInstanceSettingsRequestSchema: z.ZodObject<{
+    allowWorkspaceCreation: z.ZodOptional<z.ZodNullable<z.ZodBoolean>>;
+    displayName: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    signInNotice: z.ZodOptional<z.ZodNullable<z.ZodString>>;
 }, z.core.$strict>;
 
 // @public (undocumented)

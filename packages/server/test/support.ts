@@ -1,4 +1,4 @@
-import { unconfigured, type Adapters, type TenantResolver } from "@slugbase/core";
+import { UNSET_INSTANCE_SETTINGS, unconfigured, type Adapters, type TenantResolver } from "@slugbase/core";
 import type { AuthStore, Database } from "@slugbase/db";
 import { defineOperation, jsonResponse, problemResponse, type OperationDefinition } from "@slugbase/contracts";
 import { z } from "zod";
@@ -67,7 +67,8 @@ export function fakeDatabase(): FakeDatabase {
 
 /**
  * An auth store for a test with no database: every operation but the ones given rejects, and `setupPending`
- * answers false (setup is done), which is all `GET /api/config` asks of it.
+ * answers false (setup is done) and `instanceSettings` answers that no setting was ever saved, which is all
+ * `GET /api/config` asks of it.
  */
 export function fakeAuthStore(overrides: Partial<AuthStore> = {}): AuthStore {
   const unexpected = (name: string) => () => Promise.reject(new Error(`the fake auth store was asked for ${name}`));
@@ -101,6 +102,7 @@ export function fakeAuthStore(overrides: Partial<AuthStore> = {}): AuthStore {
     unlinkIdentity: unexpected("unlinkIdentity"),
     reauthenticateWithIdentity: unexpected("reauthenticateWithIdentity"),
     setupPending: () => Promise.resolve(false),
+    instanceSettings: () => Promise.resolve(UNSET_INSTANCE_SETTINGS),
     setSetupToken: unexpected("setSetupToken"),
     completeSetup: unexpected("completeSetup"),
     registerAccount: unexpected("registerAccount"),

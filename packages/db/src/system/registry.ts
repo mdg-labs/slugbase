@@ -81,4 +81,7 @@ export const systemOperations: readonly string[] = [
   "sys_instance_status",
   "sys_list_instance_audit",
   "sys_setup_audit",
+  "sys_instance_settings",
+  "sys_instance_update_settings",
+  "sys_instance_test_mail",
 ];

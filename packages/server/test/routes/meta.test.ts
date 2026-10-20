@@ -48,9 +48,28 @@ describe("GET /api/config", () => {
       docsBaseUrl: "https://docs.example.org/help",
       features: { mail: false, ai: false },
       signIn: { registration: false, oidc: [] },
+      instance: { displayName: "SlugBase", signInNotice: null },
       setupRequired: false,
       setupTokenRequired: false,
     });
+  });
+
+  it("carries the display name and the sign-in notice the instance admin stored, the notice unchanged as plain text", async () => {
+    const notice = '<img src=x onerror="alert(1)"> Planned maintenance & <b>more</b>';
+    const stored = fakeAuthStore({ instanceSettings: () => Promise.resolve({ allowWorkspaceCreation: true, displayName: "Acme Links", signInNotice: notice }) });
+    const response = await get(start({}, { authStore: stored }), "/api/config");
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { instance: unknown };
+    expect(body.instance).toEqual({ displayName: "Acme Links", signInNotice: notice });
+    expect(response.headers.get("content-type")).toMatch(/^application\/json/);
+    expect(JSON.stringify(body)).not.toContain("allowWorkspaceCreation");
+  });
+
+  it("does not answer when the database cannot say what the instance settings are", async () => {
+    const down = fakeAuthStore({ instanceSettings: () => Promise.reject(new Error("database down")) });
+    const response = await get(start({}, { authStore: down }), "/api/config");
+    expect(response.status).toBe(500);
+    expect(response.headers.get("cache-control")).toBe("no-store");
   });
 
   it("reports setupRequired as the setup status does: pending only while setup is on and the instance has no account", async () => {

@@ -161,7 +161,7 @@ describe("the registration check", () => {
         responses: { 200: jsonResponse("ok", z.strictObject({})), 401: problemResponse("no session") },
       });
     for (const auth of ["anonymous", "partial", "account", "member", "admin", "owner", "machine"] as const) {
-      for (const path of ["/api/v1/instance", "/api/v1/instance/settings"]) {
+      for (const path of ["/api/v1/instance", "/api/v1/instance/probe"]) {
         const operation = under(path, `getInstanceThing${auth}`, auth);
         const error = refusal(() => compose([moduleOf({ operation, ...raw })], documentFor([operation])));
         expect(error.code, `${auth} ${path}`).toBe("missing_policy");
@@ -172,7 +172,7 @@ describe("the registration check", () => {
     // A path that only starts with the same letters is not under it, and the policy the path asks for is accepted.
     const elsewhere = under("/api/v1/instances", "getInstances", "member");
     expect(checkRegistrations([{ operation: elsewhere, ...raw }], documentFor([elsewhere]))).toBeUndefined();
-    const admin = under("/api/v1/instance/settings", "getInstanceSettings", "instanceAdmin");
+    const admin = under("/api/v1/instance/probe", "getInstanceProbe", "instanceAdmin");
     expect(checkRegistrations([{ operation: admin, ...raw }], documentFor([admin]))).toBeUndefined();
   });
 

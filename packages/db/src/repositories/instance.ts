@@ -1,5 +1,6 @@
-import { isInstanceAuditAction, type InstanceAuditEvent } from "@slugbase/core";
+import { INSTANCE_AUDIT_ACTIONS, isInstanceAuditAction, UNSET_INSTANCE_SETTINGS, type InstanceAuditEvent, type InstanceSettings, type InstanceSettingsChange } from "@slugbase/core";
 import { sql } from "drizzle-orm";
+import { enqueueInTenantTransaction, type QueuedJob } from "../system/queue.ts";
 import { tenantHandle, type TenantTx } from "../tenant.ts";
 
 // What the CE instance admin's operations read from the database (doc 04 section 10.10, doc 05 sections 2.9 and
@@ -49,6 +50,33 @@ export interface InstanceRepository {
    * `afterId` is no event of the stream. Works in an account-level transaction.
    */
   listAudit(limit: number, afterId?: string): Promise<readonly InstanceAuditEvent[]>;
+  /**
+   * The instance settings; every one is null while none was ever saved. Reads the table directly and writes no event,
+   * for the workspace routes, which apply a setting on every request. Works in an account-level transaction.
+   */
+  settings(): Promise<InstanceSettings>;
+  /**
+   * The instance settings as the instance admin reads them, and the instance audit event `instance.settings_viewed`
+   * for the account of the transaction, written in the same call under the identifier the caller generated (Q91).
+   * Raises, writing nothing, when the account is not an instance admin with a second factor. Works in an
+   * account-level transaction.
+   */
+  viewSettings(eventId: string, ipPrefix: string | null): Promise<InstanceSettings>;
+  /**
+   * Changes the settings `change` names (`null` clears one, a setting it leaves out keeps its value), and writes the
+   * instance audit event `instance.settings_changed` for the account of the transaction, in the same call, under the
+   * identifier the caller generated (Q91). Answers the settings as they are after the change. Raises, writing nothing,
+   * when the account is not an instance admin with a second factor and when `change` names no setting. Works in an
+   * account-level transaction.
+   */
+  updateSettings(change: InstanceSettingsChange, eventId: string, ipPrefix: string | null): Promise<InstanceSettings>;
+  /**
+   * The instance audit event `instance.test_mail_queued` for the account of the transaction, under the identifier the
+   * caller generated (Q91), and the job that sends the message, queued in the same transaction, so each exists exactly
+   * when the other does. Raises, writing and queuing nothing, when the account is not an instance admin with a second
+   * factor. Works in an account-level transaction.
+   */
+  recordTestMail(eventId: string, ipPrefix: string | null, job: QueuedJob): Promise<void>;
 }
 
 interface EnrolledRow extends Record<string, unknown> {
@@ -78,6 +106,16 @@ interface AuditRow extends Record<string, unknown> {
   ip_prefix: string | null;
 }
 
+interface SettingsRow extends Record<string, unknown> {
+  allow_workspace_creation: boolean | null;
+  display_name: string | null;
+  sign_in_notice: string | null;
+}
+
+function settingsOf(row: SettingsRow): InstanceSettings {
+  return { allowWorkspaceCreation: row.allow_workspace_creation, displayName: row.display_name, signInNotice: row.sign_in_notice };
+}
+
 function count(value: string, what: string): number {
   const parsed = Number(value);
   if (!Number.isSafeInteger(parsed) || parsed < 0) {
@@ -89,7 +127,12 @@ function count(value: string, what: string): number {
 function auditEventOf(row: AuditRow): InstanceAuditEvent {
   // A row outside the catalog or with metadata the catalog does not declare is a schema drift or a forged row; it is not shown.
   const metadata = row.metadata;
-  if (!isInstanceAuditAction(row.action) || typeof metadata !== "object" || metadata === null || Object.keys(metadata).length > 0) {
+  if (!isInstanceAuditAction(row.action) || typeof metadata !== "object" || metadata === null || Array.isArray(metadata)) {
+    throw new Error("the instance audit stream holds an event the catalog does not describe");
+  }
+  const declared = Object.keys(INSTANCE_AUDIT_ACTIONS[row.action].metadata);
+  const entries = Object.entries(metadata);
+  if (entries.length !== declared.length || entries.some(([key, value]) => !declared.includes(key) || typeof value !== "string")) {
     throw new Error("the instance audit stream holds an event the catalog does not describe");
   }
   return {
@@ -100,6 +143,7 @@ function auditEventOf(row: AuditRow): InstanceAuditEvent {
     action: row.action,
     entityType: row.entity_type,
     entityId: row.entity_id,
+    metadata: Object.fromEntries(entries.map(([key, value]) => [key, String(value)])),
     ipPrefix: row.ip_prefix,
   };
 }
@@ -144,6 +188,45 @@ export function instanceRepository(tx: TenantTx): InstanceRepository {
         SELECT id, created_at, actor_account_id, actor_label, action, entity_type, entity_id, metadata, ip_prefix::text AS ip_prefix
         FROM public.sys_list_instance_audit(${limit}::integer, ${afterId ?? null}::uuid)`);
       return rows.map(auditEventOf);
+    },
+
+    async settings() {
+      const rows = await tenantHandle(tx).execute<SettingsRow>(sql`
+        SELECT allow_workspace_creation, display_name, sign_in_notice FROM public.instance_settings WHERE id = 1`);
+      const row = rows[0];
+      return row === undefined ? UNSET_INSTANCE_SETTINGS : settingsOf(row);
+    },
+
+    async viewSettings(eventId, ipPrefix) {
+      const rows = await tenantHandle(tx).execute<SettingsRow>(sql`
+        SELECT allow_workspace_creation, display_name, sign_in_notice
+        FROM public.sys_instance_settings(${eventId}::uuid, ${ipPrefix}::cidr)`);
+      const row = rows[0];
+      if (rows.length !== 1 || row === undefined) {
+        throw new Error("sys_instance_settings did not return exactly one row");
+      }
+      return settingsOf(row);
+    },
+
+    async updateSettings(change, eventId, ipPrefix) {
+      const has = (name: keyof InstanceSettingsChange): boolean => Object.hasOwn(change, name) && change[name] !== undefined;
+      const rows = await tenantHandle(tx).execute<SettingsRow>(sql`
+        SELECT allow_workspace_creation, display_name, sign_in_notice
+        FROM public.sys_instance_update_settings(
+          ${eventId}::uuid, ${ipPrefix}::cidr,
+          ${has("allowWorkspaceCreation")}::boolean, ${change.allowWorkspaceCreation ?? null}::boolean,
+          ${has("displayName")}::boolean, ${change.displayName ?? null}::text,
+          ${has("signInNotice")}::boolean, ${change.signInNotice ?? null}::text)`);
+      const row = rows[0];
+      if (rows.length !== 1 || row === undefined) {
+        throw new Error("sys_instance_update_settings did not return exactly one row");
+      }
+      return settingsOf(row);
+    },
+
+    async recordTestMail(eventId, ipPrefix, job) {
+      await tenantHandle(tx).execute(sql`SELECT public.sys_instance_test_mail(${eventId}::uuid, ${ipPrefix}::cidr)`);
+      await enqueueInTenantTransaction(tx, job);
     },
   };
 }

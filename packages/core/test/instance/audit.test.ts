@@ -3,11 +3,13 @@ import { AUDIT_ACTION_NAMES, INSTANCE_AUDIT_ACTION_NAMES, INSTANCE_AUDIT_ACTIONS
 
 describe("the instance audit catalog", () => {
   it("names the actions of the stream in the dotted style, each with a closed metadata object", () => {
-    expect(INSTANCE_AUDIT_ACTION_NAMES).toEqual(["instance.setup_completed", "instance.status_viewed"]);
+    expect(INSTANCE_AUDIT_ACTION_NAMES).toEqual(["instance.setup_completed", "instance.status_viewed", "instance.settings_viewed", "instance.settings_changed", "instance.test_mail_queued"]);
     for (const name of INSTANCE_AUDIT_ACTION_NAMES) {
       expect(name).toMatch(/^instance\.[a-z_]+$/);
-      expect(INSTANCE_AUDIT_ACTIONS[name].metadata).toEqual({});
     }
+    expect(INSTANCE_AUDIT_ACTIONS["instance.settings_viewed"].metadata).toEqual({});
+    expect(INSTANCE_AUDIT_ACTIONS["instance.settings_changed"].metadata).toEqual({ settings: "text" });
+    expect(INSTANCE_AUDIT_ACTIONS["instance.test_mail_queued"].metadata).toEqual({});
   });
 
   it("shares no action with the workspace catalog, so a workspace event is never read as an instance one", () => {

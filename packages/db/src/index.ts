@@ -76,6 +76,7 @@ export type {
   SignInAlertContext,
 } from "./system/auth.ts";
 export type { CompleteSetup, SetupOutcome, SetupStore } from "./system/setup.ts";
+export type { InstanceSettingsStore } from "./system/instance-settings.ts";
 export type { NewRegistration, RegistrationStore } from "./system/registration.ts";
 export type { InvitationAccountStore, InvitationAccountWrites, NewInvitationAccount } from "./system/invitation-account.ts";
 export type { InvitationIdentityStore, InvitationIdentityWrites, NewInvitationIdentity } from "./system/invitation-identity.ts";
