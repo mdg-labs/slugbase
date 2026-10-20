@@ -39,12 +39,24 @@ CREATE OR REPLACE FUNCTION public.sys_invitation_inspect(p_token_hash bytea)
 -- workspace's row, which every acceptance into the workspace takes, so two acceptances cannot both take the last seat.
 -- When app_account_id() names an account, p_account_id must be that account.
 --
--- Rows are locked parent first and the same way every time: the workspace (FOR UPDATE, the lock the removal of a
--- member and the deletion of the workspace take), the account (FOR SHARE, so a change of its address waits and the
--- address checked is the address the membership is given for), then the invitation. The invitation is found by its
--- token before any lock only to learn the workspace; it is read again under the locks by the token, so a resend or a
--- link that replaced the token in between ends this acceptance, and of two requests for one token the second finds the
--- invitation accepted.
+-- Rows are locked parent first and the same way every time: the workspace (FOR NO KEY UPDATE), the account (FOR SHARE,
+-- so a change of its address waits and the address checked is the address the membership is given for), then the
+-- invitation. The invitation is found by its token before any lock only to learn the workspace; it is read again under
+-- the locks by the token, so a resend or a link that replaced the token in between ends this acceptance, and of two
+-- requests for one token the second finds the invitation accepted.
+--
+-- The workspace lock is FOR NO KEY UPDATE, not FOR UPDATE, because a request that has changed an invitation row (a
+-- revocation, a resend, a link) goes on to write rows that reference the workspace, its audit event first, and the
+-- foreign key of such a row takes FOR KEY SHARE on the workspace row. That lock does not conflict with FOR NO KEY
+-- UPDATE, so the request is never queued behind an acceptance that is itself queued behind the invitation row the
+-- request holds: the request commits, and the acceptance then finds the invitation revoked or its token replaced and
+-- answers 'gone'. The seats stay counted one acceptance at a time, because FOR NO KEY UPDATE conflicts with itself.
+-- It conflicts as well with FOR UPDATE and FOR NO KEY UPDATE, the locks of every other writer that needs the workspace
+-- to stand still: the removal of a member, a role change and an ownership transfer (MemberRoleStore.roles and the
+-- owner-required trigger of workspace_members), the deletion of the workspace (sys_workspace_mark_deleting), the
+-- deletion of an account (sys_account_deletion_scope) and the rename of the workspace. A member is added to an
+-- existing workspace by this function and sys_invitation_accept_new_account only, so no other insert of a member
+-- needs the exclusion that FOR KEY SHARE had against FOR UPDATE.
 CREATE OR REPLACE FUNCTION public.sys_invitation_accept(p_token_hash bytea, p_account_id uuid, p_seat_limit integer)
   RETURNS TABLE (outcome text, accepted_workspace_id uuid, accepted_invitation_id uuid, accepted_role text)
   LANGUAGE plpgsql VOLATILE SECURITY DEFINER
@@ -75,7 +87,7 @@ BEGIN
     RETURN;
   END IF;
 
-  PERFORM 1 FROM public.workspaces w WHERE w.id = v_workspace AND w.deleting_at IS NULL FOR UPDATE;
+  PERFORM 1 FROM public.workspaces w WHERE w.id = v_workspace AND w.deleting_at IS NULL FOR NO KEY UPDATE;
   IF NOT FOUND THEN
     outcome := 'gone';
     RETURN NEXT;

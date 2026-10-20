@@ -15,10 +15,11 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- address or the address is reserved by an unused "this wasn't me" token (sys_create_account decides). The checks run
 -- in that order and a refusal writes nothing, so the invitation stays pending and usable.
 --
--- Rows are locked parent first, as sys_invitation_accept does: the workspace (FOR UPDATE, the lock every acceptance
--- into the workspace takes), then the invitation, found by its token before any lock only to learn the workspace and
--- read again under the locks, so of two requests for one token the second finds the invitation accepted and answers
--- 'gone', and one token creates one account and one membership however many requests carry it. The account insert
+-- Rows are locked parent first, as sys_invitation_accept does: the workspace (FOR NO KEY UPDATE, the lock every
+-- acceptance into the workspace takes, for the reason sys_invitation_accept gives), then the invitation, found by its
+-- token before any lock only to learn the workspace and read again under the locks, so of two requests for one token
+-- the second finds the invitation accepted and answers 'gone', and one token creates one account and one membership
+-- however many requests carry it. The account insert
 -- comes after both locks, so a request that finds the address taken has held the locks only to read. The deletion of an
 -- account (sys_delete_account) takes the same order: it locks the workspaces the account is a member of or created
 -- before the account row, so an insert that waits for a deleted row with the invited address never waits on a
@@ -71,7 +72,7 @@ BEGIN
     RETURN;
   END IF;
 
-  PERFORM 1 FROM public.workspaces w WHERE w.id = v_workspace AND w.deleting_at IS NULL FOR UPDATE;
+  PERFORM 1 FROM public.workspaces w WHERE w.id = v_workspace AND w.deleting_at IS NULL FOR NO KEY UPDATE;
   IF NOT FOUND THEN
     outcome := 'gone';
     RETURN NEXT;

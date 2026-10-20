@@ -351,6 +351,13 @@
       "when": 1792455811852,
       "tag": "20261020002331_add_invitation_signup",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1792459185051,
+      "tag": "20261020011945_add_invitation_acceptance_key_lock",
+      "breakpoints": true
     }
   ]
 }
