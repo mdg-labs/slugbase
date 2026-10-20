@@ -257,6 +257,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/instance/workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List every workspace of the instance */
+        get: operations["listInstanceWorkspaces"];
+        put?: never;
+        /** Create a workspace for an owner account or an owner invitation */
+        post: operations["createInstanceWorkspace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instance/workspaces/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a workspace */
+        delete: operations["deleteInstanceWorkspace"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/invitations": {
         parameters: {
             query?: never;
@@ -1088,6 +1123,20 @@ export interface components {
              */
             workspaceId?: string;
         };
+        CreateInstanceWorkspaceRequest: {
+            /** @description The workspace's name, 1 to 64 characters; surrounding whitespace is removed and a name that is blank after that is refused */
+            name: string;
+            /**
+             * Format: uuid
+             * @description An account that exists and is not disabled, which becomes the workspace's owner. Give this or ownerEmail, and not both
+             */
+            ownerAccountId?: string;
+            /**
+             * Format: email
+             * @description The address of the first owner: the workspace waits for it, with an owner invitation for this address. Give this or ownerAccountId, and not both
+             */
+            ownerEmail?: string;
+        };
         CreateInvitationRequest: {
             /**
              * Format: email
@@ -1242,6 +1291,25 @@ export interface components {
             /** @description The token of the invitation link, from the path of /invite/<token> */
             token: string;
         };
+        InstanceOwnerInvitation: {
+            /** @description The address the invitation is for; only the account that holds it can accept */
+            email: string;
+            /**
+             * Format: date-time
+             * @description When the invitation stops working, RFC 3339 UTC
+             */
+            expiresAt: string;
+            /**
+             * Format: uuid
+             * @description The invitation's identifier
+             */
+            id: string;
+            /**
+             * Format: uri
+             * @description The address the invited owner opens to accept: the application's origin and /invite/ followed by the token. Returned this once and never again
+             */
+            link: string;
+        };
         InstanceSettings: {
             /** @description Whether ordinary accounts may create workspaces; null while the setting is not set, when the default of the deployment applies */
             allowWorkspaceCreation: boolean | null;
@@ -1299,6 +1367,50 @@ export interface components {
             };
             /** @description The version of the running build */
             version: string;
+        };
+        InstanceWorkspace: {
+            /**
+             * Format: date-time
+             * @description When the workspace was created, RFC 3339 UTC
+             */
+            createdAt: string;
+            /**
+             * Format: uuid
+             * @description The workspace's identifier
+             */
+            id: string;
+            /** @description How many members the workspace has; 0 while it waits for its first owner */
+            memberCount: number;
+            /** @description The workspace's name */
+            name: string;
+            /** @description The workspace's owners; empty while it waits for the first owner an invitation will bring */
+            owners: components["schemas"]["InstanceWorkspaceOwner"][];
+        };
+        InstanceWorkspaceCreated: {
+            /**
+             * Format: uuid
+             * @description The new workspace's identifier
+             */
+            id: string;
+            /** @description The workspace's name */
+            name: string;
+            /** @description The owner invitation when ownerEmail was given; null when an account was made the owner */
+            ownerInvitation: components["schemas"]["InstanceOwnerInvitation"] | null;
+        };
+        InstanceWorkspaceList: {
+            /** @description Every workspace that is not being deleted, newest first */
+            items: components["schemas"]["InstanceWorkspace"][];
+        };
+        InstanceWorkspaceOwner: {
+            /**
+             * Format: uuid
+             * @description The owner's account identifier
+             */
+            accountId: string;
+            /** @description The owner's display name */
+            displayName: string;
+            /** @description The owner's email address */
+            email: string;
         };
         Invitation: {
             /**
@@ -2953,6 +3065,238 @@ export interface operations {
                 };
             };
             /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listInstanceWorkspaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every workspace that is not being deleted, with its name, owners, member count and creation time, newest first; never a bookmark or other content, and no member who is not an owner. Reading the list is written to the instance audit stream */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceWorkspaceList"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The session is not an instance admin's, or the account has no second factor enrolled, or the credential is an API token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createInstanceWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateInstanceWorkspaceRequest"];
+            };
+        };
+        responses: {
+            /** @description The workspace is created with the account as its owner, or, for an address, with no member and one pending owner invitation that expires in 7 days; the invitation's link is returned this once and is in no email, log or later response. The admin does not become a member, and the action is written to the instance audit stream */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceWorkspaceCreated"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden). Nothing is written */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation: a field the operation does not declare, a name that is blank or longer than 64 characters, neither or both of ownerAccountId and ownerEmail, or an ownerAccountId that is no account or is disabled (unknown_account). Nothing is written */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteInstanceWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The workspace is marked as being deleted and the request is written to the instance audit stream, in one transaction. From that moment it is gone from its members' workspaces, their sessions act in another workspace or in none, and its API tokens are revoked; the same background job as DELETE /workspace then removes its rows in batches. The deletion cannot be undone */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no workspace with that identifier, or it is already being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description A deployment extension refuses the deletion (billing_active: the workspace owns an active paid subscription, which is cancelled first); nothing is changed and no audit event is written */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable, or a deployment extension that is consulted before the deletion did not answer in time; nothing is changed */
             503: {
                 headers: {
                     [name: string]: unknown;

@@ -14,6 +14,10 @@ export const INSTANCE_AUDIT_ACTIONS = {
   "instance.settings_viewed": { metadata: {} },
   "instance.settings_changed": { metadata: { settings: "text" } },
   "instance.test_mail_queued": { metadata: {} },
+  "instance.workspaces_viewed": { metadata: {} },
+  // `owner` is how the first owner was chosen, `account` or `invitation`, and never who it is.
+  "instance.workspace_created": { metadata: { owner: "text" } },
+  "instance.workspace_deletion_requested": { metadata: {} },
 } as const;
 
 export type InstanceAuditAction = keyof typeof INSTANCE_AUDIT_ACTIONS;

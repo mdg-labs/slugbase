@@ -574,6 +574,9 @@ export function createEntitlementCheck(service: EntitlementService): Entitlement
 export function createEntitlementService(input: EntitlementServiceOptions): EntitlementService;
 
 // @public
+export function createInstanceWorkspace(input: InstanceWorkspaceDependencies, ask: InstanceWorkspaceCreationAsk): Promise<InstanceWorkspaceCreationOutcome>;
+
+// @public
 export function createInvitationLink(input: Omit<InvitationActionDependencies, "newId">, ask: InvitationActionAsk): Promise<InvitationLinkOutcome>;
 
 // @public (undocumented)
@@ -1057,6 +1060,17 @@ export const INSTANCE_AUDIT_ACTIONS: {
     readonly "instance.test_mail_queued": {
         readonly metadata: {};
     };
+    readonly "instance.workspaces_viewed": {
+        readonly metadata: {};
+    };
+    readonly "instance.workspace_created": {
+        readonly metadata: {
+            readonly owner: "text";
+        };
+    };
+    readonly "instance.workspace_deletion_requested": {
+        readonly metadata: {};
+    };
 };
 
 // @public
@@ -1106,6 +1120,129 @@ export type InstanceSettingsChange = {
 
 // @public
 export function instanceTestMail(recipient: NotificationRecipient): MailMessage;
+
+// @public
+export interface InstanceWorkspace {
+    // (undocumented)
+    readonly createdAt: Date;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly memberCount: number;
+    // (undocumented)
+    readonly name: string;
+    readonly owners: readonly InstanceWorkspaceOwner[];
+}
+
+// @public (undocumented)
+export interface InstanceWorkspaceAsk {
+    readonly ipPrefix: string | null;
+}
+
+// @public (undocumented)
+export interface InstanceWorkspaceCreation {
+    readonly events: readonly DomainEvent<"workspace.created">[];
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly owner: InstanceWorkspaceOwnerSeat;
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface InstanceWorkspaceCreationAsk extends InstanceWorkspaceAsk {
+    // (undocumented)
+    readonly name: string;
+    readonly ownerAccountId?: string;
+    // (undocumented)
+    readonly ownerEmail?: string;
+    readonly ttlSeconds?: number;
+}
+
+// @public (undocumented)
+export type InstanceWorkspaceCreationOutcome = {
+    readonly kind: "created";
+    readonly workspaceId: string;
+    readonly invitation?: {
+        readonly id: string;
+        readonly email: string;
+        readonly expiresAt: Date;
+        readonly token: string;
+    };
+} | {
+    readonly kind: "unknown_account";
+};
+
+// @public (undocumented)
+export type InstanceWorkspaceCreationResult =
+/** The workspace exists; `invitationExpiresAt` is the expiry of the owner invitation, null when an account was made the owner. */
+    {
+    readonly kind: "created";
+    readonly invitationExpiresAt: Date | null;
+}
+/** The chosen owner account does not exist or is disabled; nothing was written. */
+| {
+    readonly kind: "unknown_account";
+};
+
+// @public (undocumented)
+export interface InstanceWorkspaceDeletionDependencies<Code extends string> extends InstanceWorkspaceDependencies {
+    readonly guard: (input: {
+        readonly workspaceId: string;
+    }) => Promise<WorkspaceDeletionGuardResult<Code>>;
+}
+
+// @public (undocumented)
+export type InstanceWorkspaceDeletionOutcome<Code extends string> =
+/** The workspace is marked, the job is queued and the request is in the instance audit stream. */
+    {
+    readonly kind: "requested";
+}
+/** The guard refused with `code`; nothing was written. */
+| {
+    readonly kind: "refused";
+    readonly code: Code;
+}
+/** The workspace does not exist or is already being deleted; nothing was written. */
+| {
+    readonly kind: "unavailable";
+};
+
+// @public (undocumented)
+export interface InstanceWorkspaceDependencies {
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: InstanceWorkspaceStore;
+}
+
+// @public
+export interface InstanceWorkspaceOwner {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly displayName: string;
+    // (undocumented)
+    readonly email: string;
+}
+
+// @public
+export type InstanceWorkspaceOwnerSeat = {
+    readonly kind: "account";
+    readonly accountId: string;
+} | {
+    readonly kind: "invitation";
+    readonly invitationId: string;
+    readonly email: string;
+    readonly tokenHash: Buffer;
+    readonly ttlSeconds: number;
+};
+
+// @public
+export interface InstanceWorkspaceStore {
+    createWorkspace(request: InstanceWorkspaceCreation, eventId: string, ipPrefix: string | null): Promise<InstanceWorkspaceCreationResult>;
+    listWorkspaces(eventId: string, ipPrefix: string | null): Promise<readonly InstanceWorkspace[]>;
+    markWorkspaceDeleting(workspaceId: string, eventId: string, ipPrefix: string | null): Promise<boolean>;
+}
 
 // @public
 export const INVITATION_ROLES: readonly ["admin", "member"];
@@ -1560,6 +1697,9 @@ export function isEntitlementKey(key: string): key is EntitlementKey;
 export function isInstanceAuditAction(value: unknown): value is InstanceAuditAction;
 
 // @public
+export function listInstanceWorkspaces(input: InstanceWorkspaceDependencies, ask: InstanceWorkspaceAsk): Promise<readonly InstanceWorkspace[]>;
+
+// @public
 export function listInvitations(input: Pick<InvitationActionDependencies, "store">, ask: {
     readonly afterId: string | null;
     readonly limit: number;
@@ -2000,6 +2140,11 @@ export interface RequestEntitlements {
     forAccount(): Promise<AccountEntitlementSet>;
     forWorkspace(workspaceId: string): Promise<EntitlementSet | undefined>;
 }
+
+// @public
+export function requestInstanceWorkspaceDeletion<Code extends string>(input: InstanceWorkspaceDeletionDependencies<Code>, ask: InstanceWorkspaceAsk & {
+    readonly workspaceId: string;
+}): Promise<InstanceWorkspaceDeletionOutcome<Code>>;
 
 // @public
 export function requestWorkspaceDeletion<Code extends string>(input: WorkspaceDeletionDependencies<Code>, ask: WorkspaceDeletionAsk): Promise<WorkspaceDeletionOutcome<Code>>;

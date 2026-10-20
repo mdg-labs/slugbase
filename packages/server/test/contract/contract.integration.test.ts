@@ -177,6 +177,10 @@ describe("the walker over the committed document", () => {
       if (kind === "process" && policy === "instanceAdmin") {
         // An instance admin with a second factor, and the account just below the policy: an ordinary one.
         cookies.set(operationId, await signIn(`walker-${operationId}@example.test`.toLowerCase(), needsReauth.has(operationId), false, undefined, true, true));
+        if (needsReauth.has(operationId)) {
+          // An instance admin with a second factor that has not re-authenticated: the policy admits it, the re-authentication does not.
+          stale.set(operationId, await signIn(`walker-${operationId}-stale@example.test`.toLowerCase(), false, false, undefined, true, true));
+        }
         below.set(operationId, await signIn(`walker-${operationId}-below@example.test`.toLowerCase(), false));
         continue;
       }
@@ -227,12 +231,12 @@ describe("the walker over the committed document", () => {
     expect(report.failures.filter((failure) => !teamRefusal(failure))).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each anonymous operation and for the sign-in; each of the forty-four operations that need a session
-    // also answers 401 without one, each of the ten that declare re-authentication answers 401 reauth_required without it, and each of
+    // One valid request for each anonymous operation and for the sign-in; each of the forty-seven operations that need a session
+    // also answers 401 without one, each of the eleven that declare re-authentication answers 401 reauth_required without it, and each of
     // the sixteen that need a role in the workspace answers the principal just below it (404 below member, 403 below admin), and each of the eight
     // that name a member, a recipient, a team or an invitation answers for one of workspace B; each of the four that declare an entitlement answers 403 to an account without it;
-    // and each of the three instance operations answers 403 to the ordinary account just below its policy.
-    expect(report.calls).toBe(operations.length + 86);
+    // and each of the six instance operations answers 403 to the ordinary account just below its policy.
+    expect(report.calls).toBe(operations.length + 93);
   }, WALK_TIMEOUT_MS);
 });
 

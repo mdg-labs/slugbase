@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
+import { WorkspaceNameSchema } from "./workspaces.ts";
 
 // The instance tag of doc 04 section 10.10: the operations of the CE instance admin. Every one of them declares
 // the `instanceAdmin` policy, which admits a complete browser session of an account that holds the flag and has a
@@ -182,5 +183,141 @@ export const sendInstanceTestMail = defineOperation({
     ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("No mail adapter is configured (mail_unavailable), or the service is temporarily unavailable (unavailable). Nothing is queued"),
+  },
+});
+
+export const InstanceWorkspaceOwnerSchema = z
+  .strictObject({
+    accountId: z.uuid().describe("The owner's account identifier"),
+    displayName: z.string().describe("The owner's display name"),
+    email: z.string().describe("The owner's email address"),
+  })
+  .meta({ id: "InstanceWorkspaceOwner" });
+
+export const InstanceWorkspaceSchema = z
+  .strictObject({
+    id: z.uuid().describe("The workspace's identifier"),
+    name: z.string().describe("The workspace's name"),
+    owners: z.array(InstanceWorkspaceOwnerSchema).describe("The workspace's owners; empty while it waits for the first owner an invitation will bring"),
+    memberCount: COUNT.describe("How many members the workspace has; 0 while it waits for its first owner"),
+    createdAt: z.iso.datetime().describe("When the workspace was created, RFC 3339 UTC"),
+  })
+  .meta({ id: "InstanceWorkspace" });
+
+export const InstanceWorkspaceListSchema = z
+  .strictObject({
+    items: z.array(InstanceWorkspaceSchema).describe("Every workspace that is not being deleted, newest first"),
+  })
+  .meta({ id: "InstanceWorkspaceList" });
+
+export const CreateInstanceWorkspaceRequestSchema = z
+  .strictObject({
+    name: WorkspaceNameSchema,
+    ownerAccountId: z.uuid().optional().describe("An account that exists and is not disabled, which becomes the workspace's owner. Give this or ownerEmail, and not both"),
+    ownerEmail: z
+      .email()
+      .max(320)
+      .optional()
+      .describe("The address of the first owner: the workspace waits for it, with an owner invitation for this address. Give this or ownerAccountId, and not both"),
+  })
+  .refine((request) => (request.ownerAccountId === undefined) !== (request.ownerEmail === undefined), {
+    message: "name either ownerAccountId or ownerEmail",
+  })
+  .meta({ id: "CreateInstanceWorkspaceRequest" });
+
+export const InstanceOwnerInvitationSchema = z
+  .strictObject({
+    id: z.uuid().describe("The invitation's identifier"),
+    email: z.string().describe("The address the invitation is for; only the account that holds it can accept"),
+    expiresAt: z.iso.datetime().describe("When the invitation stops working, RFC 3339 UTC"),
+    link: z.url().describe("The address the invited owner opens to accept: the application's origin and /invite/ followed by the token. Returned this once and never again"),
+  })
+  .meta({ id: "InstanceOwnerInvitation" });
+
+export const InstanceWorkspaceCreatedSchema = z
+  .strictObject({
+    id: z.uuid().describe("The new workspace's identifier"),
+    name: z.string().describe("The workspace's name"),
+    ownerInvitation: InstanceOwnerInvitationSchema.nullable().describe("The owner invitation when ownerEmail was given; null when an account was made the owner"),
+  })
+  .meta({ id: "InstanceWorkspaceCreated" });
+
+export const InstanceWorkspaceParamsSchema = z.strictObject({
+  id: z.uuid().describe("The identifier of a workspace, as listed"),
+});
+
+export const listInstanceWorkspaces = defineOperation({
+  method: "get",
+  path: "/api/v1/instance/workspaces",
+  operationId: "listInstanceWorkspaces",
+  tag: "instance",
+  summary: "List every workspace of the instance",
+  auth: "instanceAdmin",
+  rate: "read",
+  responses: {
+    200: jsonResponse(
+      "Every workspace that is not being deleted, with its name, owners, member count and creation time, newest first; never a bookmark or other content, and no member who is not an owner. Reading the list is written to the instance audit stream",
+      InstanceWorkspaceListSchema,
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    403: problemResponse("The session is not an instance admin's, or the account has no second factor enrolled, or the credential is an API token"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const createInstanceWorkspace = defineOperation({
+  method: "post",
+  path: "/api/v1/instance/workspaces",
+  operationId: "createInstanceWorkspace",
+  tag: "instance",
+  summary: "Create a workspace for an owner account or an owner invitation",
+  auth: "instanceAdmin",
+  rate: "write",
+  request: { body: CreateInstanceWorkspaceRequestSchema },
+  responses: {
+    201: jsonResponse(
+      "The workspace is created with the account as its owner, or, for an address, with no member and one pending owner invitation that expires in 7 days; the invitation's link is returned this once and is in no email, log or later response. The admin does not become a member, and the action is written to the instance audit stream",
+      InstanceWorkspaceCreatedSchema,
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    403: problemResponse(
+      "The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden). Nothing is written",
+    ),
+    422: problemResponse(
+      "The body did not pass validation: a field the operation does not declare, a name that is blank or longer than 64 characters, neither or both of ownerAccountId and ownerEmail, or an ownerAccountId that is no account or is disabled (unknown_account). Nothing is written",
+    ),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const deleteInstanceWorkspace = defineOperation({
+  method: "delete",
+  path: "/api/v1/instance/workspaces/{id}",
+  operationId: "deleteInstanceWorkspace",
+  tag: "instance",
+  summary: "Delete a workspace",
+  auth: "instanceAdmin",
+  rate: "write",
+  reauth: true,
+  request: { params: InstanceWorkspaceParamsSchema },
+  responses: {
+    202: emptyResponse(
+      "The workspace is marked as being deleted and the request is written to the instance audit stream, in one transaction. From that moment it is gone from its members' workspaces, their sessions act in another workspace or in none, and its API tokens are revoked; the same background job as DELETE /workspace then removes its rows in batches. The deletion cannot be undone",
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"),
+    403: problemResponse(
+      "The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden)",
+    ),
+    404: problemResponse("There is no workspace with that identifier, or it is already being deleted"),
+    409: problemResponse(
+      "A deployment extension refuses the deletion (billing_active: the workspace owns an active paid subscription, which is cancelled first); nothing is changed and no audit event is written",
+    ),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable, or a deployment extension that is consulted before the deletion did not answer in time; nothing is changed"),
   },
 });

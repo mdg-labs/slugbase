@@ -400,6 +400,13 @@
       "when": 1792510825910,
       "tag": "20261020154025_add_instance_admin_comments",
       "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1792513220051,
+      "tag": "20261020162020_add_instance_workspaces",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,15 @@
-import { INSTANCE_AUDIT_ACTIONS, isInstanceAuditAction, UNSET_INSTANCE_SETTINGS, type InstanceAuditEvent, type InstanceSettings, type InstanceSettingsChange } from "@slugbase/core";
+import {
+  INSTANCE_AUDIT_ACTIONS,
+  isInstanceAuditAction,
+  UNSET_INSTANCE_SETTINGS,
+  type InstanceAuditEvent,
+  type InstanceSettings,
+  type InstanceSettingsChange,
+  type InstanceWorkspace,
+  type InstanceWorkspaceCreation,
+  type InstanceWorkspaceCreationResult,
+  type InstanceWorkspaceOwner,
+} from "@slugbase/core";
 import { sql } from "drizzle-orm";
 import { enqueueInTenantTransaction, type QueuedJob } from "../system/queue.ts";
 import { tenantHandle, type TenantTx } from "../tenant.ts";
@@ -77,6 +88,31 @@ export interface InstanceRepository {
    * factor. Works in an account-level transaction.
    */
   recordTestMail(eventId: string, ipPrefix: string | null, job: QueuedJob): Promise<void>;
+  /**
+   * Every workspace that is not being deleted, newest first, with its name, its member count and its owners, and
+   * no content of any workspace, through `sys_instance_list_workspaces`, which also writes the instance audit event
+   * `instance.workspaces_viewed` for the account of the transaction under the identifier the caller generated (Q91).
+   * Raises, writing nothing, when the account is not an instance admin with a second factor. Works in an
+   * account-level transaction.
+   */
+  listWorkspaces(eventId: string, ipPrefix: string | null): Promise<readonly InstanceWorkspace[]>;
+  /**
+   * Creates the workspace and its settings, with the chosen account as owner or with a pending owner invitation
+   * for the chosen address, and writes `instance.workspace_created`, in one call of `sys_instance_create_workspace`;
+   * `jobs` are queued in the same transaction, only when the workspace is created. `unknown_account`, with nothing
+   * written or queued, when the account does not exist or is disabled. Raises, writing nothing, when the account of
+   * the transaction is not an instance admin with a second factor. Works in an account-level transaction.
+   */
+  createWorkspace(request: InstanceWorkspaceCreation, eventId: string, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<InstanceWorkspaceCreationResult>;
+  /**
+   * Marks the workspace as being deleted, with the effects of `WorkspaceRepository.markDeleting` (hidden from every
+   * policy and lookup, its sessions pointed at none, its API tokens revoked), writes
+   * `instance.workspace_deletion_requested` and queues `jobs`, in one transaction, through
+   * `sys_instance_delete_workspace`. False, with nothing written or queued, when the workspace does not exist or is
+   * already being deleted. Raises, writing nothing, when the account of the transaction is not an instance admin
+   * with a second factor. Works in an account-level transaction.
+   */
+  markWorkspaceDeleting(workspaceId: string, eventId: string, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<boolean>;
 }
 
 interface EnrolledRow extends Record<string, unknown> {
@@ -110,6 +146,47 @@ interface SettingsRow extends Record<string, unknown> {
   allow_workspace_creation: boolean | null;
   display_name: string | null;
   sign_in_notice: string | null;
+}
+
+interface WorkspaceRow extends Record<string, unknown> {
+  workspace_id: string;
+  workspace_name: string;
+  workspace_created_at: string;
+  member_count: string;
+  owners: unknown;
+}
+
+interface CreatedWorkspaceRow extends Record<string, unknown> {
+  outcome: string;
+  invitation_expires_at: string | null;
+}
+
+interface DeletedWorkspaceRow extends Record<string, unknown> {
+  marked: boolean;
+}
+
+function ownerOf(value: unknown): InstanceWorkspaceOwner {
+  if (typeof value !== "object" || value === null) {
+    throw new Error("sys_instance_list_workspaces returned an owner that is not an object");
+  }
+  const { accountId, displayName, email } = value as Record<string, unknown>;
+  if (typeof accountId !== "string" || typeof displayName !== "string" || typeof email !== "string") {
+    throw new Error("sys_instance_list_workspaces returned an owner without an account, a name and an address");
+  }
+  return { accountId, displayName, email };
+}
+
+function workspaceOf(row: WorkspaceRow): InstanceWorkspace {
+  if (!Array.isArray(row.owners)) {
+    throw new Error("sys_instance_list_workspaces returned owners that are not a list");
+  }
+  return {
+    id: row.workspace_id,
+    name: row.workspace_name,
+    createdAt: new Date(row.workspace_created_at),
+    memberCount: count(row.member_count, "the member count"),
+    owners: (row.owners as unknown[]).map(ownerOf),
+  };
 }
 
 function settingsOf(row: SettingsRow): InstanceSettings {
@@ -227,6 +304,56 @@ export function instanceRepository(tx: TenantTx): InstanceRepository {
     async recordTestMail(eventId, ipPrefix, job) {
       await tenantHandle(tx).execute(sql`SELECT public.sys_instance_test_mail(${eventId}::uuid, ${ipPrefix}::cidr)`);
       await enqueueInTenantTransaction(tx, job);
+    },
+
+    async listWorkspaces(eventId, ipPrefix) {
+      const rows = await tenantHandle(tx).execute<WorkspaceRow>(sql`
+        SELECT workspace_id, workspace_name, to_char(workspace_created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS workspace_created_at, member_count::text, owners
+        FROM public.sys_instance_list_workspaces(${eventId}::uuid, ${ipPrefix}::cidr)`);
+      return rows.map(workspaceOf);
+    },
+
+    async createWorkspace(request, eventId, ipPrefix, jobs) {
+      const { owner } = request;
+      const rows = await tenantHandle(tx).execute<CreatedWorkspaceRow>(sql`
+        SELECT outcome, to_char(invitation_expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS invitation_expires_at
+        FROM public.sys_instance_create_workspace(
+          ${eventId}::uuid, ${ipPrefix}::cidr, ${request.workspaceId}::uuid, ${request.name}::text,
+          ${owner.kind === "account" ? owner.accountId : null}::uuid,
+          ${owner.kind === "invitation" ? owner.email : null}::citext,
+          ${owner.kind === "invitation" ? owner.invitationId : null}::uuid,
+          ${owner.kind === "invitation" ? owner.tokenHash : null}::bytea,
+          ${owner.kind === "invitation" ? owner.ttlSeconds : null}::integer)`);
+      const row = rows[0];
+      if (rows.length !== 1 || row === undefined) {
+        throw new Error("sys_instance_create_workspace did not return exactly one row");
+      }
+      if (row.outcome === "unknown_account") {
+        return { kind: "unknown_account" };
+      }
+      if (row.outcome !== "created") {
+        throw new Error("sys_instance_create_workspace answered an outcome it does not define");
+      }
+      for (const job of jobs) {
+        await enqueueInTenantTransaction(tx, job);
+      }
+      return { kind: "created", invitationExpiresAt: row.invitation_expires_at === null ? null : new Date(row.invitation_expires_at) };
+    },
+
+    async markWorkspaceDeleting(workspaceId, eventId, ipPrefix, jobs) {
+      const rows = await tenantHandle(tx).execute<DeletedWorkspaceRow>(sql`
+        SELECT public.sys_instance_delete_workspace(${eventId}::uuid, ${ipPrefix}::cidr, ${workspaceId}::uuid) AS marked`);
+      const row = rows[0];
+      if (rows.length !== 1 || row === undefined) {
+        throw new Error("sys_instance_delete_workspace did not return exactly one row");
+      }
+      if (!row.marked) {
+        return false;
+      }
+      for (const job of jobs) {
+        await enqueueInTenantTransaction(tx, job);
+      }
+      return true;
     },
   };
 }

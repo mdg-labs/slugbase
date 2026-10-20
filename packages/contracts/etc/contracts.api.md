@@ -463,6 +463,11 @@ export interface ComponentTypes {
             scope: "read" | "read-write";
             workspaceId?: string;
         };
+        CreateInstanceWorkspaceRequest: {
+            name: string;
+            ownerAccountId?: string;
+            ownerEmail?: string;
+        };
         CreateInvitationRequest: {
             email: string;
             role: "admin" | "member";
@@ -538,6 +543,12 @@ export interface ComponentTypes {
         InspectInvitationRequest: {
             token: string;
         };
+        InstanceOwnerInvitation: {
+            email: string;
+            expiresAt: string;
+            id: string;
+            link: string;
+        };
         InstanceSettings: {
             allowWorkspaceCreation: boolean | null;
             displayName: string | null;
@@ -571,6 +582,26 @@ export interface ComponentTypes {
                 publicRegistration: boolean;
             };
             version: string;
+        };
+        InstanceWorkspace: {
+            createdAt: string;
+            id: string;
+            memberCount: number;
+            name: string;
+            owners: ComponentTypes["schemas"]["InstanceWorkspaceOwner"][];
+        };
+        InstanceWorkspaceCreated: {
+            id: string;
+            name: string;
+            ownerInvitation: ComponentTypes["schemas"]["InstanceOwnerInvitation"] | null;
+        };
+        InstanceWorkspaceList: {
+            items: ComponentTypes["schemas"]["InstanceWorkspace"][];
+        };
+        InstanceWorkspaceOwner: {
+            accountId: string;
+            displayName: string;
+            email: string;
         };
         Invitation: {
             createdAt: string;
@@ -972,6 +1003,49 @@ export const CreatedApiTokenSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
+export const createInstanceWorkspace: {
+    readonly method: "post";
+    readonly path: "/api/v1/instance/workspaces";
+    readonly operationId: "createInstanceWorkspace";
+    readonly tag: "instance";
+    readonly summary: "Create a workspace for an owner account or an owner invitation";
+    readonly auth: "instanceAdmin";
+    readonly rate: "write";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            name: z.ZodString;
+            ownerAccountId: z.ZodOptional<z.ZodUUID>;
+            ownerEmail: z.ZodOptional<z.ZodEmail>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 201: JsonResponse<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        ownerInvitation: z.ZodNullable<z.ZodObject<{
+        id: z.ZodUUID;
+        email: z.ZodString;
+        expiresAt: z.ZodISODateTime;
+        link: z.ZodURL;
+        }, z.core.$strict>>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const CreateInstanceWorkspaceRequestSchema: z.ZodObject<{
+    name: z.ZodString;
+    ownerAccountId: z.ZodOptional<z.ZodUUID>;
+    ownerEmail: z.ZodOptional<z.ZodEmail>;
+}, z.core.$strict>;
+
+// @public (undocumented)
 export const createInvitation: {
     readonly method: "post";
     readonly path: "/api/v1/invitations";
@@ -1125,6 +1199,33 @@ export function defineOperation<const D extends OperationDefinition>(definition:
 export const DeleteAccountRequestSchema: z.ZodObject<{
     email: z.ZodString;
 }, z.core.$strict>;
+
+// @public (undocumented)
+export const deleteInstanceWorkspace: {
+    readonly method: "delete";
+    readonly path: "/api/v1/instance/workspaces/{id}";
+    readonly operationId: "deleteInstanceWorkspace";
+    readonly tag: "instance";
+    readonly summary: "Delete a workspace";
+    readonly auth: "instanceAdmin";
+    readonly rate: "write";
+    readonly reauth: true;
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 202: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 409: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
 
 // @public (undocumented)
 export const deleteMe: {
@@ -1807,6 +1908,14 @@ export const INSTANCE_DISPLAY_NAME_MAX_LENGTH = 100;
 export const INSTANCE_SIGN_IN_NOTICE_MAX_LENGTH = 500;
 
 // @public (undocumented)
+export const InstanceOwnerInvitationSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    email: z.ZodString;
+    expiresAt: z.ZodISODateTime;
+    link: z.ZodURL;
+}, z.core.$strict>;
+
+// @public (undocumented)
 export const InstanceSettingsSchema: z.ZodObject<{
     allowWorkspaceCreation: z.ZodNullable<z.ZodBoolean>;
     displayName: z.ZodNullable<z.ZodString>;
@@ -1842,6 +1951,58 @@ export const InstanceStatusSchema: z.ZodObject<{
         queueDepth: z.ZodInt;
         failed: z.ZodInt;
     }, z.core.$strict>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const InstanceWorkspaceCreatedSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    name: z.ZodString;
+    ownerInvitation: z.ZodNullable<z.ZodObject<{
+        id: z.ZodUUID;
+        email: z.ZodString;
+        expiresAt: z.ZodISODateTime;
+        link: z.ZodURL;
+    }, z.core.$strict>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const InstanceWorkspaceListSchema: z.ZodObject<{
+    items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        owners: z.ZodArray<z.ZodObject<{
+            accountId: z.ZodUUID;
+            displayName: z.ZodString;
+            email: z.ZodString;
+        }, z.core.$strict>>;
+        memberCount: z.ZodInt;
+        createdAt: z.ZodISODateTime;
+    }, z.core.$strict>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const InstanceWorkspaceOwnerSchema: z.ZodObject<{
+    accountId: z.ZodUUID;
+    displayName: z.ZodString;
+    email: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const InstanceWorkspaceParamsSchema: z.ZodObject<{
+    id: z.ZodUUID;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const InstanceWorkspaceSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    name: z.ZodString;
+    owners: z.ZodArray<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        email: z.ZodString;
+    }, z.core.$strict>>;
+    memberCount: z.ZodInt;
+    createdAt: z.ZodISODateTime;
 }, z.core.$strict>;
 
 // @public
@@ -2102,6 +2263,37 @@ export const listIdentities: {
         readonly 401: ProblemResponse;
         readonly 403: ProblemResponse;
         readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const listInstanceWorkspaces: {
+    readonly method: "get";
+    readonly path: "/api/v1/instance/workspaces";
+    readonly operationId: "listInstanceWorkspaces";
+    readonly tag: "instance";
+    readonly summary: "List every workspace of the instance";
+    readonly auth: "instanceAdmin";
+    readonly rate: "read";
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        owners: z.ZodArray<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        email: z.ZodString;
+        }, z.core.$strict>>;
+        memberCount: z.ZodInt;
+        createdAt: z.ZodISODateTime;
+        }, z.core.$strict>>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
         readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
     };
@@ -3216,6 +3408,79 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    createInstanceWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["CreateInstanceWorkspaceRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["InstanceWorkspaceCreated"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     createInvitation: {
         parameters: {
             query?: never;
@@ -3432,6 +3697,83 @@ export interface OperationTypes {
                 };
             };
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    deleteInstanceWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4587,6 +4929,67 @@ export interface OperationTypes {
                 };
             };
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    listInstanceWorkspaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["InstanceWorkspaceList"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7155,6 +7558,40 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/instance/workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["listInstanceWorkspaces"];
+        put?: never;
+        post: OperationTypes["createInstanceWorkspace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/instance/workspaces/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: OperationTypes["deleteInstanceWorkspace"];
         options?: never;
         head?: never;
         patch?: never;

@@ -172,6 +172,9 @@ describe("the shipped chain", () => {
       "sys_instance_settings",
       "sys_instance_update_settings",
       "sys_instance_test_mail",
+      "sys_instance_list_workspaces",
+      "sys_instance_create_workspace",
+      "sys_instance_delete_workspace",
     ]);
     expect(checkRules).toContain(systemOperationsRule);
     const database = await scratch();

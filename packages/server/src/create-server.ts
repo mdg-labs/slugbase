@@ -557,6 +557,7 @@ export function createServer(options: CreateServerOptions): Server {
       buildInfo,
       adapters,
       registration,
+      appOrigin: config.APP_ORIGIN,
     }),
   );
   // The signed-in account is part of the server like its sign-in: it reads the account's own rows and memberships.

@@ -23,6 +23,9 @@ export const UNKNOWN_IDENTITY_ID = "0192f3a0-cccc-7000-8000-000000000003";
 /** A team no workspace holds: teams have no members to join yet, so any team named in an invitation is refused the same way. */
 export const UNKNOWN_TEAM_ID = "0192f3a0-cccc-7000-8000-000000000005";
 
+/** A workspace no instance holds: the walker's request to delete it is the declared 404. */
+export const UNKNOWN_WORKSPACE_ID = "0192f3a0-dddd-7000-8000-000000000008";
+
 /** The pending invitation the matrix seeds in workspace B, which the invitation operations of A name. */
 export const B_INVITATION_ID = "0192f3a0-cccc-7000-8000-000000000007";
 
@@ -181,6 +184,13 @@ export const FIXTURES: ContractFixtures = {
   getInstanceSettings: {},
   updateInstanceSettings: { body: { displayName: "Walker" } },
   sendInstanceTestMail: { status: 503 },
+  // The workspace operations of the instance admin. The list names nothing. The creation names the address of a first owner and no account, so
+  // there is no account of another workspace to put in it: the valid request is the declared 201 and makes a workspace nobody is a member of. The
+  // deletion names a workspace by identifier, which an instance admin may name whoever holds it, and the walker knows none it could delete without
+  // taking the next call's workspace away: its valid request names one that does not exist, the declared 404; the route tests delete workspaces.
+  listInstanceWorkspaces: {},
+  createInstanceWorkspace: { body: { name: "Walker's instance workspace", ownerEmail: "walker-first-owner@example.test" } },
+  deleteInstanceWorkspace: { path: { id: UNKNOWN_WORKSPACE_ID }, status: 404 },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

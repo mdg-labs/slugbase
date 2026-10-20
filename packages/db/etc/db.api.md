@@ -13,6 +13,9 @@ import { InferSelectModel } from 'drizzle-orm';
 import { InstanceAuditEvent } from '@slugbase/core';
 import { InstanceSettings } from '@slugbase/core';
 import { InstanceSettingsChange } from '@slugbase/core';
+import { InstanceWorkspace } from '@slugbase/core';
+import { InstanceWorkspaceCreation } from '@slugbase/core';
+import { InstanceWorkspaceCreationResult } from '@slugbase/core';
 import type { InvitationAcceptResult } from '@slugbase/core';
 import type { InvitationIdentityResult } from '@slugbase/core';
 import type { InvitationInspectStore } from '@slugbase/core';
@@ -538,8 +541,11 @@ export interface InstanceCounts {
 
 // @public (undocumented)
 export interface InstanceRepository {
+    createWorkspace(request: InstanceWorkspaceCreation, eventId: string, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<InstanceWorkspaceCreationResult>;
     jobHealth(): Promise<JobHealth>;
     listAudit(limit: number, afterId?: string): Promise<readonly InstanceAuditEvent[]>;
+    listWorkspaces(eventId: string, ipPrefix: string | null): Promise<readonly InstanceWorkspace[]>;
+    markWorkspaceDeleting(workspaceId: string, eventId: string, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<boolean>;
     recordTestMail(eventId: string, ipPrefix: string | null, job: QueuedJob): Promise<void>;
     secondFactorEnrolled(): Promise<boolean>;
     settings(): Promise<InstanceSettings>;
