@@ -1,4 +1,4 @@
-import { generateApiToken, type MailPort } from "@slugbase/core";
+import { generateApiToken, type EntitlementSource, type MailPort } from "@slugbase/core";
 import { apiTokenRepository, type AuthStore } from "@slugbase/db";
 import type { TestDatabase } from "@slugbase/testing/db";
 import { createAccountOnlyTenantResolver } from "../../src/auth/tenant-resolver.ts";
@@ -70,6 +70,8 @@ export interface WorkspaceHarness {
   serve(options?: {
     readonly allowWorkspaceCreation?: boolean;
     readonly entitlements?: EntitlementCheck;
+    /** The entitlement source of the composition, which the server's engine reads when `entitlements` does not replace the check. */
+    readonly entitlementSource?: EntitlementSource;
     readonly mail?: MailPort;
     /** Configuration keys that replace the suite's defaults. */
     readonly env?: Record<string, string>;
@@ -134,7 +136,12 @@ export function workspaceHarness(database: () => TestDatabase): WorkspaceHarness
       });
       const server = createServer({
         config,
-        adapters: { ...adapters(config), ...(options.mail === undefined ? {} : { mail: options.mail }), tenantResolver: createAccountOnlyTenantResolver() },
+        adapters: {
+          ...adapters(config),
+          ...(options.mail === undefined ? {} : { mail: options.mail }),
+          ...(options.entitlementSource === undefined ? {} : { entitlements: options.entitlementSource }),
+          tenantResolver: createAccountOnlyTenantResolver(),
+        },
         modules: options.modules ?? [],
         migrations: [],
         logger: options.logger ?? recordingLogger(),

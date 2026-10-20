@@ -8,7 +8,7 @@ import { expect, test } from "../support/test.ts";
 // language of the browser. Every text is read from the catalogs of packages/web; the
 // product name is the one the server reports in /api/config.
 //
-// As a member, from the session the global setup signed in (e2e/global-setup.ts): the
+// As a member, from the session the setup project signed in (e2e/tests/first-run.setup.ts): the
 // home heading, the 404 page inside the shell for a path that no page owns, and the
 // theme toggle of the top bar from the keyboard.
 //

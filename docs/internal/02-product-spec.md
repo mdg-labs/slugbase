@@ -488,7 +488,7 @@ Token buckets through `RateLimitPort` (doc 01 §8.2); each operation names its b
 | `mfa` | MFA code, TOTP re-authentication, MFA enrolment confirmation, backup-code regeneration and disabling MFA | 10 / min | 5 failures per pending session (then it ends); 30 / hour per account |
 | `register` | Registration | 5 / hour | — |
 | `reset` | Password-reset request, verification resend, email-change request, invitation resend | 5 / hour | 3 / hour per target email |
-| `token_redeem` | Redeeming an emailed or invitation token (verify email, reset password, confirm or cancel an email change, inspect and accept an invitation) | 10 / hour | 10 / hour per account, taken for a signed-in caller (accepting an invitation) |
+| `token_redeem` | Redeeming an emailed or invitation token (verify email, reset password, confirm or cancel an email change, inspect and accept an invitation, start a provider sign-in for an invitation) | 10 / hour | 10 / hour per account, taken for a signed-in caller (accepting an invitation) and for a caller with a complete session (starting a provider sign-in for an invitation) |
 | `token_create` | API token creation | 20 / hour | 20 / hour per account |
 | `setup` | First-run setup | 10 / hour | — |
 | `go` | `/go` resolution, choosing a candidate, slug suggestions and recording an open | 600 / min | 300 / min per account |

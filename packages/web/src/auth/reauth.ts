@@ -105,7 +105,9 @@ export function reauthMiddleware(reauth: Reauth): Middleware {
       if (!(await reauth.request())) {
         throw new ReauthCancelled();
       }
-      return options.fetch(again);
+      // Called bare, not as `options.fetch(...)`: the browser's native `fetch` throws "Illegal invocation" with any other receiver.
+      const { fetch: send } = options;
+      return send(again);
     },
   };
 }

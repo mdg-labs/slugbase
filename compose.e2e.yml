@@ -1,0 +1,37 @@
+# Adds a Mailpit that catches every mail the stack sends, for the e2e journeys
+# (doc 08 section 5.1): the server and the worker send through it, and the
+# journeys read the mail back through its HTTP API. It is an override file;
+# compose.yml alone, which is what an operator runs, has no mail relay.
+#
+#   docker compose -f compose.yml -f compose.e2e.yml up -d
+#
+# e2e/with-stack.sh merges it over compose.yml (scripts/smoke-image.sh takes it
+# from SMOKE_EXTRA_COMPOSE_FILES) and finds the address of the API through
+# `docker compose port`. The API is published on the loopback address with a
+# port that Docker picks, so two stacks on one machine never collide. The SMTP
+# port is reachable from the other services of the project only.
+services:
+  mailpit:
+    # The tag that ci.yml pins for the integration tests of the mail adapter.
+    image: axllent/mailpit:v1.31.5
+    ports:
+      - "127.0.0.1::8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+
+  slugbase:
+    depends_on:
+      mailpit:
+        condition: service_healthy
+    environment: &mail-relay
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_SECURITY: none
+      SMTP_FROM: SlugBase <slugbase@example.test>
+
+  slugbase-worker:
+    environment: *mail-relay

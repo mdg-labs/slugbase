@@ -3,6 +3,7 @@ export type { AiSuggestPort, AiSuggestRequest, AiSuggestion } from "./ai-suggest
 export type { AnalyticsEvent, AnalyticsPort } from "./analytics.ts";
 export type { ChallengePort, ChallengeVerdict } from "./challenge.ts";
 export type { ClientErrorReportPort, ClientErrorReportRequest } from "./client-error-report.ts";
+export type { EntitlementSource, WorkspaceEntitlementGrant } from "./entitlements.ts";
 export {
   EGRESS_MAX_REQUEST_BODY_BYTES,
   EgressBlocked,

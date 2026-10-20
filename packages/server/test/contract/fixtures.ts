@@ -118,6 +118,9 @@ export const FIXTURES: ContractFixtures = {
   getWorkspace: {},
   renameWorkspace: { body: { name: "Walker's renamed workspace" } },
   getWorkspaceSettings: {},
+  // The entitlements of the workspace of the request: it acts in the walker's own workspace and names no identifier of any workspace, so
+  // there is none of workspace B to put in it. The walker's server composes a source that limits nothing, so the valid request is the declared 200.
+  getEntitlements: {},
   updateWorkspaceSettings: { body: { aiEnabled: false } },
   // Tenant-scoped operations of the workspace of the request. The list names no identifier. The role change names a member by account
   // identifier, and the walker cannot know the identifier of a member of the workspace it owns, so its valid request names an account that is no

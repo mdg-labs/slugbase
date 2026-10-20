@@ -52,6 +52,7 @@
     "20261020002331_add_invitation_signup": "f3ca1a44591892911e9715710ee05b031b902c7459bcd4f26f3b3d63935fcf11",
     "20261020011945_add_invitation_acceptance_key_lock": "c0b137bb5af9324835ae262c4728f98d3834258cf98df1f265e8e622e06b1c1c",
     "20261020021530_add_invitation_dead_token_unlocked": "ee4eea34b33518facfd1dd4b9556cc4671ab55feb727f0c0297c3a03bca7937c",
-    "20261020025820_add_invitation_identity": "eedd64adef5751048ee9a115624ae2ae23301bfd25eb632f388d012c296d62cf"
+    "20261020025820_add_invitation_identity": "eedd64adef5751048ee9a115624ae2ae23301bfd25eb632f388d012c296d62cf",
+    "20261020084850_add_entitlement_version_bump": "4e4ab9a0d894730976d0d6b892aa00327643e6e5fa78f80e9279c2837104eb8a"
   }
 }

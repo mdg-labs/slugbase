@@ -4,6 +4,37 @@
 
 ```ts
 
+import { AccountEntitlementValues } from '@slugbase/core';
+import { EntitlementKey } from '@slugbase/core';
+import { EntitlementLimit } from '@slugbase/core';
+import { EntitlementSource } from '@slugbase/core';
+import { EntitlementVersions } from '@slugbase/core';
+import { WorkspaceEntitlementGrant } from '@slugbase/core';
+
+// @public
+export type GrantedValue = boolean | EntitlementLimit;
+
+// @public
+export class LimitedEntitlementSource implements EntitlementSource, EntitlementVersions {
+    // (undocumented)
+    readonly available = true;
+    bump(): this;
+    deny(key: EntitlementKey): this;
+    // (undocumented)
+    forAccount(accountId: string): Promise<AccountEntitlementValues>;
+    // (undocumented)
+    forWorkspace(workspaceId: string): Promise<WorkspaceEntitlementGrant>;
+    grant(key: EntitlementKey, value: GrantedValue): this;
+    offerUpgrade(available: boolean): this;
+    // (undocumented)
+    read(): Promise<number>;
+    get reads(): {
+        readonly workspaces: readonly string[];
+        readonly accounts: readonly string[];
+    };
+    get version(): number;
+}
+
 
 export * from "@slugbase/testing-ports";
 

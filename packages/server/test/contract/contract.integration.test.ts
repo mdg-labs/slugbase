@@ -1,3 +1,4 @@
+import { LimitedEntitlementSource } from "@slugbase/testing";
 import { classifyOperations, createProbe, loadOpenApiDocument, runApiMatrix, runTokenMatrix, type MatrixFailure, type Probe } from "@slugbase/testing/tenancy";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -49,8 +50,11 @@ function serve(modules: readonly ServerModule[], document?: TestDocument, option
   return createServer({
     config,
     // The stub resolver knows the workspaces of the fixture and no session of a real sign-in; the walk of the committed document resolves each
-    // walker's workspace from its memberships, as the server does.
-    adapters: options.memberships === true ? { ...world.adapters(config), tenantResolver: createAccountOnlyTenantResolver() } : world.adapters(config),
+    // walker's workspace from its memberships, as the server does, and reads the entitlements of its workspace from a source that limits nothing.
+    adapters:
+      options.memberships === true
+        ? { ...world.adapters(config), tenantResolver: createAccountOnlyTenantResolver(), entitlements: new LimitedEntitlementSource() }
+        : world.adapters(config),
     modules,
     migrations: [],
     logger: recordingLogger(),
@@ -207,11 +211,11 @@ describe("the walker over the committed document", () => {
     expect(report.failures.filter((failure) => !teamRefusal(failure))).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each anonymous operation and for the sign-in; each of the thirty-nine operations that need a session
+    // One valid request for each anonymous operation and for the sign-in; each of the forty operations that need a session
     // also answers 401 without one, each of the ten that declare re-authentication answers 401 reauth_required without it, and each of
-    // the fifteen that need a role in the workspace answers the principal just below it (404 below member, 403 below admin), and each of the eight
+    // the sixteen that need a role in the workspace answers the principal just below it (404 below member, 403 below admin), and each of the eight
     // that name a member, a recipient, a team or an invitation answers for one of workspace B; each of the four that declare an entitlement answers 403 to an account without it.
-    expect(report.calls).toBe(operations.length + 76);
+    expect(report.calls).toBe(operations.length + 78);
   }, WALK_TIMEOUT_MS);
 });
 
@@ -409,13 +413,13 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     const report = { ...matrix, failures: matrix.failures.filter((failure) => !teamRefusal(failure)) };
     expect(matrix.failures.filter(teamRefusal).map((failure) => failure.detail.slice(0, "as owner of A".length))).toEqual(["as owner of A", "as admin of A"]);
     expect(report.failures).toEqual([]);
-    expect(report.classified.byKind["tenant-scoped"]).toBe(15);
-    // the three sessions and the six tokens (a read and a read-write one of each role) of A, once on each of the seven operations that name no member
-    // (the invitation list among them) and on the invitation, which names the one team of B,
+    expect(report.classified.byKind["tenant-scoped"]).toBe(16);
+    // the three sessions and the six tokens (a read and a read-write one of each role) of A, once on each of the eight operations that name no member
+    // (the entitlements and the invitation list among them) and on the invitation, which names the one team of B,
     // and on the operations that name members of B once for each of them: the role change, and the leaving, which names a recipient, once for each
     // of the three, and the ownership transfer, which names the member who becomes an owner, once for each of the three; the removal names both
     // a member and a recipient, once for each pair; the resend, the link and the revocation of an invitation name the one invitation of B once each
-    expect(report.attempts).toBe(9 * 8 + 9 * (3 + 3 + 3 + 3 * 3 + 3));
+    expect(report.attempts).toBe(9 * 9 + 9 * (3 + 3 + 3 + 3 * 3 + 3));
     expect(await contentOfB()).toBe(before);
     // Every invitation the matrix tried to make was refused before anything was written, in A as in B, and the one invitation of B is still its own,
     // pending, with the token hash the seed gave it.

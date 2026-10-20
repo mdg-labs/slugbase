@@ -165,6 +165,7 @@ describe("the shipped chain", () => {
       "sys_invitation_accept_new_account",
       "sys_oidc_state_take",
       "sys_invitation_accept_with_identity",
+      "sys_workspace_bump_entitlement_version",
     ]);
     expect(checkRules).toContain(systemOperationsRule);
     const database = await scratch();

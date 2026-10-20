@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 
-/** Where the global setup writes the session every journey starts from, and where the configuration reads it. */
+/** Where the setup project (tests/first-run.setup.ts) writes the session every journey starts from, and where the configuration reads it. */
 export const STORAGE_STATE = fileURLToPath(new URL("../.auth/state.json", import.meta.url));
 
 /**

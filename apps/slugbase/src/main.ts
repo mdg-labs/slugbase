@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   HttpEgress,
+  createFullEntitlementSource,
   createLogOnlyMail,
   createOidcIdentity,
   createRateLimiter,
@@ -204,7 +205,9 @@ function composeIdentity(config: ServerConfig | WorkerConfig, egress: EgressPort
 // The rate limiter keeps its tokens in Postgres through the system operation of
 // `@slugbase/db`, on a small pool of its own as the role of `DATABASE_URL`; the
 // pool connects on the first limited request, not at start-up. Its limits are the
-// bucket registry of the server package, with the `RATE_LIMIT_*` keys applied.
+// bucket registry of the server package, with the `RATE_LIMIT_*` keys applied. The entitlement source is the
+// full one: every flag is granted and every limit is unlimited (doc 01 section 7.5); the server's engine
+// reads it, and no edition flag decides anything (D4).
 export function composeAdapters(config: ServerConfig | WorkerConfig, logger: Logger): Adapters {
   const secretBox = createSecretBox({
     current: { keyId: config.ENCRYPTION_KEY_ID, key: Buffer.from(config.ENCRYPTION_KEY, "base64") },
@@ -237,6 +240,7 @@ export function composeAdapters(config: ServerConfig | WorkerConfig, logger: Log
     egress,
     identity: composeIdentity(config, egress, logger),
     rateLimit,
+    entitlements: createFullEntitlementSource(),
     tenantResolver: createAccountOnlyTenantResolver(),
   };
 }

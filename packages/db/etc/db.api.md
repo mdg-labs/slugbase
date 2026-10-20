@@ -7,6 +7,7 @@
 import type { AccountDeletionScope } from '@slugbase/core';
 import type { AuditRecord } from '@slugbase/core';
 import type { CredentialTokenPurpose } from '@slugbase/core';
+import type { EntitlementVersionWriter } from '@slugbase/core';
 import { InferInsertModel } from 'drizzle-orm';
 import { InferSelectModel } from 'drizzle-orm';
 import type { InvitationAcceptResult } from '@slugbase/core';
@@ -402,6 +403,23 @@ export interface EmailVerificationStore {
     emailVerified(accountId: string): Promise<boolean>;
     resendVerification(resend: VerificationResend): Promise<void>;
     verifyEmail(verification: EmailVerification): Promise<VerifiedEmail | undefined>;
+}
+
+// @public (undocumented)
+export interface EntitlementRepository extends EntitlementVersionWriter {
+    bump(): Promise<number | undefined>;
+    ownedWorkspaces(): Promise<number>;
+    usage(): Promise<EntitlementUsage | undefined>;
+    version(): Promise<number | undefined>;
+}
+
+// @public (undocumented)
+export function entitlementRepository(tx: TenantTx): EntitlementRepository;
+
+// @public
+export interface EntitlementUsage {
+    readonly bookmarksUsed: number;
+    readonly seatsUsed: number;
 }
 
 // @public

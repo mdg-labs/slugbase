@@ -12,9 +12,19 @@ const CI = process.env.CI !== undefined && process.env.CI !== "";
 
 // The journeys run against the built image (doc 08 section 5.1), in the three
 // engines the smoke journey covers. Traces, videos and screenshots of a failed test
-// are kept in test-results/, which the workflow uploads. Every journey starts from
-// the session that the global setup signed in; a journey of a visitor without one
+// are kept in test-results/, which the workflow uploads. The first journey to run is
+// the first-run setup (tests/first-run.setup.ts, the `setup` project): it claims the
+// instance, signs the owner in and keeps the session as the state every other journey
+// starts from, so the engines wait for it. A journey of a visitor without a session
 // starts from an empty state of its own (`test.use({ storageState })`).
+//
+// The accounts journey (tests/accounts.spec.ts) invites, accepts and signs in with a
+// second factor, one sign-in after the other, against the limits of sign-in attempts
+// per client address that the stack keeps (10 a minute, doc 04 section 7). Three engines
+// at once would share them, so it runs in Chromium alone, the engine of the long tail.
+const SETUP = /.*\.setup\.ts/;
+const ACCOUNTS = /accounts\.spec\.ts/;
+
 export default defineConfig({
   testDir: "./tests",
   globalSetup: "./global-setup.ts",
@@ -37,8 +47,9 @@ export default defineConfig({
     screenshot: "only-on-failure",
   },
   projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
-    { name: "firefox", use: { ...devices["Desktop Firefox"] } },
-    { name: "webkit", use: { ...devices["Desktop Safari"] } },
+    { name: "setup", testMatch: SETUP, use: { ...devices["Desktop Chrome"], storageState: { cookies: [], origins: [] } } },
+    { name: "chromium", testIgnore: SETUP, dependencies: ["setup"], use: { ...devices["Desktop Chrome"] } },
+    { name: "firefox", testIgnore: [SETUP, ACCOUNTS], dependencies: ["setup"], use: { ...devices["Desktop Firefox"] } },
+    { name: "webkit", testIgnore: [SETUP, ACCOUNTS], dependencies: ["setup"], use: { ...devices["Desktop Safari"] } },
   ],
 });

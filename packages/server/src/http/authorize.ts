@@ -1,5 +1,5 @@
 import type { AuthPolicy, OperationDefinition } from "@slugbase/contracts";
-import { reauthenticatedRecently, type WorkspaceRole } from "@slugbase/core";
+import { reauthenticatedRecently, type EntitlementCheck, type WorkspaceRole } from "@slugbase/core";
 import type { Principal } from "./authenticate.ts";
 import type { RequestStage } from "./chain.ts";
 import { ProblemError } from "./problem.ts";
@@ -17,14 +17,7 @@ const ROLE_REQUIRED: Readonly<Partial<Record<AuthPolicy, WorkspaceRole>>> = {
   owner: "owner",
 };
 
-/** Who an entitlement is evaluated for. */
-export interface EntitlementSubject {
-  readonly accountId: string;
-  readonly workspaceId?: string;
-}
-
-/** Whether the subject holds an entitlement of the catalog (doc 01 section 7.5). */
-export type EntitlementCheck = (entitlement: string, subject: EntitlementSubject) => boolean | Promise<boolean>;
+export type { EntitlementCheck, EntitlementSubject } from "@slugbase/core";
 
 /** No entitlement source is configured: an operation that declares one is refused. */
 export const denyEntitlements: EntitlementCheck = () => false;
@@ -134,10 +127,14 @@ export function createAuthorization({ entitlements = denyEntitlements, now = Dat
     }
 
     if (entitlement !== undefined) {
-      const held = await entitlements(entitlement, {
-        accountId: principal.accountId,
-        ...(tenant === undefined ? {} : { workspaceId: tenant.workspaceId }),
-      });
+      const held = await entitlements(
+        entitlement,
+        {
+          accountId: principal.accountId,
+          ...(tenant === undefined ? {} : { workspaceId: tenant.workspaceId }),
+        },
+        context.req.raw,
+      );
       if (!held) {
         throw new ProblemError("entitlement_required", DETAILS.entitlement_required);
       }

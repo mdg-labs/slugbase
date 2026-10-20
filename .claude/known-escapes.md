@@ -75,6 +75,7 @@ existing line by adding its PR number.
 - **URL by prefix** — a check that a URL points at an expected host tests a string prefix (`startsWith(issuer)`) instead of the parsed origin, so a look-alike host (`https://idp.example.test.evil/`) passes — PR 484
 - **race window at the wrong point** — a concurrency test widens the race with a pause before the read it needs to overlap rather than between that read and the commit, so the overlap lasts only as long as one commit and the test flakes on a slow runner — PR 506
 - **lookup of a fresh key** — a negative assertion ("nothing resolves any more") looks up a freshly generated key (a new token hash) that was never stored, instead of the keys the fixture seeded, so it passes whatever the code under test does — PR 510
+- **wait on a promise that may never settle** — a test helper awaits a completion promise of every object of a kind (an animation's `finished`) without filtering out the states in which it never settles on its own (paused, idle), so one such object blocks the helper until the test times out — PR 524
 
 ## Web UI
 

@@ -14,6 +14,16 @@ function apiWith(reauth: ReturnType<typeof createReauth>, transport: Transport) 
   return api;
 }
 
+/** A transport that refuses a receiver the way the browser's native `fetch` does. */
+function receiverCheckedTransport(answers: (request: Request) => Response): Transport {
+  return function (this: unknown, request: Request): Promise<Response> {
+    if (this !== undefined && this !== globalThis) {
+      return Promise.reject(new TypeError("Illegal invocation"));
+    }
+    return Promise.resolve(answers(request));
+  };
+}
+
 const BODY = { currentPassword: "old", newPassword: "new" };
 
 describe("reauthMiddleware", () => {
@@ -36,6 +46,27 @@ describe("reauthMiddleware", () => {
     expect((await result).response.status).toBe(204);
     expect(seen).toEqual([`POST /api/v1/me/password ${JSON.stringify(BODY)}`, `POST /api/v1/me/password ${JSON.stringify(BODY)}`]);
     expect(reauth.isOpen()).toBe(false);
+  });
+
+  it("sends the request again through a fetch that must not be called as a method of the options", async () => {
+    const reauth = createReauth();
+    let calls = 0;
+    const api = apiWith(
+      reauth,
+      receiverCheckedTransport(() => {
+        calls += 1;
+        return calls === 1 ? problem(401, "reauth_required", "req-1") : new Response(null, { status: 204 });
+      }),
+    );
+
+    const result = api.POST("/api/v1/me/password", { body: BODY });
+    await vi.waitFor(() => {
+      expect(reauth.isOpen()).toBe(true);
+    });
+    reauth.settle(true);
+
+    expect((await result).response.status).toBe(204);
+    expect(calls).toBe(2);
   });
 
   it("sends a request without a body again with the type it was first sent with", async () => {

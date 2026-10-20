@@ -55,10 +55,26 @@ function selectorOf(target: readonly unknown[]): string {
 }
 
 /**
+ * Waits until every running animation of the page that ends has ended. A dialog that is still fading and
+ * growing in has the contrast and the size of a frame on the way, not of the page the visitor gets; an
+ * animation that never ends (a spinner) is left alone, and so is one that is paused or idle, whose finished
+ * promise settles only once something plays it again.
+ */
+export async function settleAnimations(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    const finite = document
+      .getAnimations()
+      .filter((animation) => animation.playState === "running" && animation.effect?.getComputedTiming().iterations !== Infinity);
+    await Promise.all(finite.map((animation) => animation.finished.catch(() => undefined)));
+  });
+}
+
+/**
  * Runs axe with the WCAG 2.2 AA rules on the page as it is now and returns one
  * line per violating element that the allowlist does not name.
  */
 export async function findViolations(page: Page, allowlist: readonly AllowlistEntry[]): Promise<string[]> {
+  await settleAnimations(page);
   const results = await new AxeBuilder({ page }).withTags([...WCAG_22_AA_TAGS]).analyze();
   return results.violations.flatMap((violation) =>
     violation.nodes

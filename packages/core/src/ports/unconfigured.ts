@@ -8,8 +8,9 @@ function unavailable(port: keyof Adapters, code: PortUnavailableCode = "unavaila
 /**
  * The adapters of an instance with nothing configured (D22): every port reports
  * `available: false`. Mail, AI, identity, egress, the secret box, the rate
- * limiter and the tenant resolver reject with `PortUnavailable` when used, so a
- * missing adapter never reads as success. Analytics and error reporting record
+ * limiter, the tenant resolver and the entitlement source reject with
+ * `PortUnavailable` when used, so a missing adapter never reads as success (an
+ * instance with no source holds no entitlement). Analytics and error reporting record
  * nothing, the client error-report source answers no DSN, and the challenge is
  * disabled: it requires no solution and passes every one.
  */
@@ -37,5 +38,6 @@ export function unconfigured(): Adapters {
       reseal: unavailable("secretBox"),
     },
     tenantResolver: { available: false, resolve: unavailable("tenantResolver") },
+    entitlements: { available: false, forWorkspace: unavailable("entitlements"), forAccount: unavailable("entitlements") },
   };
 }

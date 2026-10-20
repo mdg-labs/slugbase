@@ -489,6 +489,27 @@ export interface ComponentTypes {
             content: "transfer" | "delete";
             transferTo?: string;
         };
+        EntitlementSet: {
+            "ai.suggestions": boolean;
+            "audit.log": boolean;
+            "bookmarks.max": number | "unlimited";
+            "members.invite": boolean;
+            "seats.max": number | "unlimited";
+            "sharing.members": boolean;
+            "sharing.teams": boolean;
+            "teams.manage": boolean;
+            "workspaces.ownMax": number | "unlimited";
+        };
+        EntitlementUsage: {
+            "bookmarks.used": number;
+            "seats.used": number;
+            "workspaces.owned": number;
+        };
+        Entitlements: {
+            entitlements: ComponentTypes["schemas"]["EntitlementSet"];
+            upgradeAvailable: boolean;
+            usage: ComponentTypes["schemas"]["EntitlementUsage"];
+        };
         ForgotPasswordRequest: {
             email: string;
         };
@@ -1172,6 +1193,47 @@ export const EndMembershipRequestSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
+export const EntitlementSetSchema: z.ZodObject<{
+    "bookmarks.max": z.ZodUnion<readonly [z.ZodInt, z.ZodLiteral<"unlimited">]>;
+    "seats.max": z.ZodUnion<readonly [z.ZodInt, z.ZodLiteral<"unlimited">]>;
+    "workspaces.ownMax": z.ZodUnion<readonly [z.ZodInt, z.ZodLiteral<"unlimited">]>;
+    "ai.suggestions": z.ZodBoolean;
+    "sharing.members": z.ZodBoolean;
+    "sharing.teams": z.ZodBoolean;
+    "members.invite": z.ZodBoolean;
+    "teams.manage": z.ZodBoolean;
+    "audit.log": z.ZodBoolean;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const EntitlementsSchema: z.ZodObject<{
+    entitlements: z.ZodObject<{
+        "bookmarks.max": z.ZodUnion<readonly [z.ZodInt, z.ZodLiteral<"unlimited">]>;
+        "seats.max": z.ZodUnion<readonly [z.ZodInt, z.ZodLiteral<"unlimited">]>;
+        "workspaces.ownMax": z.ZodUnion<readonly [z.ZodInt, z.ZodLiteral<"unlimited">]>;
+        "ai.suggestions": z.ZodBoolean;
+        "sharing.members": z.ZodBoolean;
+        "sharing.teams": z.ZodBoolean;
+        "members.invite": z.ZodBoolean;
+        "teams.manage": z.ZodBoolean;
+        "audit.log": z.ZodBoolean;
+    }, z.core.$strict>;
+    usage: z.ZodObject<{
+        "bookmarks.used": z.ZodInt;
+        "seats.used": z.ZodInt;
+        "workspaces.owned": z.ZodInt;
+    }, z.core.$strict>;
+    upgradeAvailable: z.ZodBoolean;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const EntitlementUsageSchema: z.ZodObject<{
+    "bookmarks.used": z.ZodInt;
+    "seats.used": z.ZodInt;
+    "workspaces.owned": z.ZodInt;
+}, z.core.$strict>;
+
+// @public (undocumented)
 export const forgotPassword: {
     readonly method: "post";
     readonly path: "/api/v1/auth/password/forgot";
@@ -1240,6 +1302,44 @@ export const getApiConfig: {
         };
         }>;
         readonly 400: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const getEntitlements: {
+    readonly method: "get";
+    readonly path: "/api/v1/entitlements";
+    readonly operationId: "getEntitlements";
+    readonly tag: "entitlements";
+    readonly summary: "Read the active workspace's entitlements and usage";
+    readonly auth: "member";
+    readonly rate: "read";
+    readonly scope: "read";
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        entitlements: z.ZodObject<{
+        "bookmarks.max": z.ZodUnion<readonly [z.ZodInt, z.ZodLiteral<"unlimited">]>;
+        "seats.max": z.ZodUnion<readonly [z.ZodInt, z.ZodLiteral<"unlimited">]>;
+        "workspaces.ownMax": z.ZodUnion<readonly [z.ZodInt, z.ZodLiteral<"unlimited">]>;
+        "ai.suggestions": z.ZodBoolean;
+        "sharing.members": z.ZodBoolean;
+        "sharing.teams": z.ZodBoolean;
+        "members.invite": z.ZodBoolean;
+        "teams.manage": z.ZodBoolean;
+        "audit.log": z.ZodBoolean;
+        }, z.core.$strict>;
+        usage: z.ZodObject<{
+        "bookmarks.used": z.ZodInt;
+        "seats.used": z.ZodInt;
+        "workspaces.owned": z.ZodInt;
+        }, z.core.$strict>;
+        upgradeAvailable: z.ZodBoolean;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
     };
 };
 
@@ -3501,6 +3601,67 @@ export interface OperationTypes {
                 };
             };
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    getEntitlements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["Entitlements"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6506,6 +6667,23 @@ export interface paths {
         get?: never;
         put?: never;
         post: OperationTypes["resendVerifyEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/entitlements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["getEntitlements"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;

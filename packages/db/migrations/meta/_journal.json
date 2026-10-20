@@ -372,6 +372,13 @@
       "when": 1792465100107,
       "tag": "20261020025820_add_invitation_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1792486130208,
+      "tag": "20261020084850_add_entitlement_version_bump",
+      "breakpoints": true
     }
   ]
 }
