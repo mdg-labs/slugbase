@@ -136,11 +136,15 @@ test.describe("accounts journey: invite, accept and sign in with a second factor
 
       await app.visit("/settings/account/security", page.getByRole("heading", { level: 1, name: message("en", "settings.security.title") }));
       // Starting an enrolment needs a recent confirmation of the password (doc 04 section 4.4), which the
-      // session of a new account lacks. The journey confirms it through the API, with the browser's session,
-      // so that the prompt is not part of it.
-      const confirmed = await page.request.post("/api/v1/me/reauth", { headers: { origin: appOrigin() }, data: { password: invitee.password } });
-      expect(confirmed.status(), "POST /api/v1/me/reauth").toBe(204);
+      // session of a new account lacks: the request answers 401 reauth_required, the prompt opens, and the
+      // request is sent again once the password is accepted.
       await page.getByRole("button", { name: message("en", "settings.security.mfa.enrol.open"), exact: true }).click();
+      const prompt = page.getByRole("dialog", { name: message("en", "reauth.title") });
+      await expect(prompt).toBeVisible();
+      await prompt.getByLabel(message("en", "reauth.password.label"), { exact: true }).fill(invitee.password);
+      await app.scan();
+      await prompt.getByRole("button", { name: message("en", "reauth.submit"), exact: true }).click();
+      await expect(prompt).toHaveCount(0);
 
       const wizard = page.getByRole("heading", { name: message("en", "settings.security.mfa.enrol.scan.title") });
       await expect(wizard).toBeVisible();

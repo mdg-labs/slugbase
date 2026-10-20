@@ -1,2 +1,2 @@
-# The signed-in session that global-setup.ts writes.
+# The signed-in session that the setup project (tests/first-run.setup.ts) writes.
 .auth/

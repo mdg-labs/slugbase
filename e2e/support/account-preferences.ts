@@ -5,7 +5,7 @@ import { appOrigin, STORAGE_STATE } from "./environment.ts";
 
 // The theme and the language of the signed-in journeys are the account's: once the app has the account
 // it applies the account's saved theme and locale, whatever the browser remembers. Every signed-in
-// journey runs as the one account the global setup signed in, and the engines run in parallel, so a
+// journey runs as the one account the setup project (tests/first-run.setup.ts) signed in, and the engines run in parallel, so a
 // journey that depends on a theme or a locale sets it through `PATCH /api/v1/me` and holds the lock of
 // the account's preferences until the previous ones are back. A signed-in journey that reads either
 // takes the lock as well, so that it never runs while another journey holds a different value.
