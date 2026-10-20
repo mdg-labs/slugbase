@@ -1,6 +1,7 @@
 import {
   addInstanceAdminMembership as addInstanceAdminMembershipOperation,
   createInstanceWorkspace as createInstanceWorkspaceOperation,
+  deleteInstanceAccount as deleteInstanceAccountOperation,
   deleteInstanceWorkspace as deleteInstanceWorkspaceOperation,
   getInstanceSettings,
   getInstanceStatus,
@@ -16,6 +17,7 @@ import {
 import {
   addInstanceAdminMembership,
   createInstanceWorkspace,
+  deleteInstanceAccount,
   invitationLink,
   issueInstanceResetLink,
   listInstanceAccounts,
@@ -26,6 +28,7 @@ import {
   updateInstanceAccount,
   type Adapters,
   type InstanceAccount,
+  type InstanceAccountDeletionStore,
   type InstanceAccountStore,
   type InstanceRecoveryStore,
   type InstanceWorkspaceStore,
@@ -106,6 +109,18 @@ import { route } from "../register.ts";
 // with a field code on `id` (`account_disabled`, `self`, `email_unverified`, `no_password`, `already_verified`), and 404 is an account that
 // does not exist; a reset of an account without a confirmed second factor changes nothing and answers 204 all the same.
 //
+// DELETE /api/v1/instance/accounts/{id} (doc 02 sections 2.10 and 11.2, doc 04 section 10.10, doc 05 sections 3.3 and 7.1, doc 01 section
+// 13.2, doc 10 T1 and T18) deletes another account with the rules of `DELETE /me`, ownership resolved first. It needs a session that
+// re-authenticated within ten minutes. One transaction reads the account's scope under the locks of `sys_instance_account_deletion_scope`
+// (the account's workspaces, its backup codes, the rows of the admin and of the account and, for an admin, the advisory key of the set of
+// admins), refuses with 409 `last_owner` while the account is the only owner of a workspace that has other members, naming each such
+// workspace, and with 422 `validation_failed` and the field code `last_instance_admin` (on `id`) when it is the only enabled instance
+// admin, asks the deletion guard with `requestedBy: instanceAdmin` for the account and for every workspace that goes with it (a refusal is
+// its code, 409 `billing_active`; a guard that throws or times out is 503 from the dispatcher), and then deletes the account, marks the
+// workspaces where it was the only member, writes `instance.account_deleted` and queues the `workspace.delete` jobs and `account.deleted`,
+// all in that transaction (`sys_instance_delete_account`). The admin's own account is refused with the field code `self`: `DELETE /me`
+// asks for the typed address and ends the session, and this route does neither. 404 is an account that does not exist.
+//
 // POST /api/v1/instance/mail/test queues a test message to the calling admin's address, as the `mail.send` job reads
 // the address when it runs, and writes `instance.test_mail_queued` in the transaction that queues it. A deployment
 // without a mail adapter answers `503 mail_unavailable` before anything is written.
@@ -146,6 +161,10 @@ const NO_SUCH_ACCOUNT = "There is no account that can own the workspace.";
 const NO_SUCH_WORKSPACE = "There is no such workspace.";
 const ALREADY_MEMBER = "You are a member of this workspace already.";
 const DELETION_REFUSED = "The workspace cannot be deleted while its subscription is active; cancel the subscription first.";
+const ACCOUNT_DELETION_REFUSED = "The account cannot be deleted while a subscription is active; cancel the subscription first.";
+const OWN_ACCOUNT = "Your own account is deleted in your account settings.";
+const LAST_OWNER = "The account is the only owner of workspaces that have other members; transfer their ownership or delete them first.";
+const ACCOUNT_DELETION_UNAVAILABLE = "The account could not be deleted; try again.";
 
 function accountBody({ id, displayName, email, emailVerified, mfaEnabled, isInstanceAdmin, disabled, lastSignInAt, workspaceCount }: InstanceAccount) {
   return { id, displayName, email, emailVerified, mfaEnabled, isInstanceAdmin, disabled, lastSignInAt: lastSignInAt === null ? null : lastSignInAt.toISOString(), workspaceCount };
@@ -189,6 +208,19 @@ function accountStoreOf(tx: TenantTx): InstanceAccountStore {
     listAccounts: (eventId, ipPrefix) => repository.listAccounts(eventId, ipPrefix),
     updateAccount: (accountId, change, notify, eventIds, ipPrefix) =>
       repository.updateAccount(accountId, change, eventIds, ipPrefix, change.disabled === true && notify ? [queueMailSend(uuidv7(), "accountDisabled", accountId)] : []),
+  };
+}
+
+/** The account deletion of the instance admin, bound to the account-level transaction of the request; the deletion queues its jobs and events in that transaction. */
+function accountDeletionStoreOf(tx: TenantTx): InstanceAccountDeletionStore {
+  const repository = instanceRepository(tx);
+  return {
+    scope: (accountId) => repository.accountDeletionScope(accountId),
+    delete: ({ accountId, soleWorkspaceIds, eventId, ipPrefix, events }) =>
+      repository.deleteAccount({ accountId, soleWorkspaceIds, eventId, ipPrefix }, [
+        ...soleWorkspaceIds.map((workspaceId) => ({ id: uuidv7(), queue: WORKSPACE_DELETE_JOB, data: { workspaceId } })),
+        ...events.map((event) => queueDomainEvent(event.eventId, event.name, event.payload)),
+      ]),
   };
 }
 
@@ -403,6 +435,45 @@ export function instanceRoutes({
         }
       });
       return { status: 200, body: accountBody(account) };
+    }),
+
+    route(deleteInstanceAccountOperation).handle(async ({ params }, context) => {
+      const { accountId } = sessionOf(context);
+      const hooks = context.get("hooks");
+      if (hooks === undefined) {
+        throw new Error("the instance account deletion route was reached without the hook dispatcher");
+      }
+      const outcome = await withTenant({ accountId, requestId: requestIdOf(context) }, (tx) =>
+        deleteInstanceAccount(
+          {
+            store: accountDeletionStoreOf(tx),
+            guard: (input) =>
+              hooks.deletionGuard(
+                input.kind === "account"
+                  ? { kind: "account", accountId: input.accountId, requestedBy: "instanceAdmin" }
+                  : { kind: "workspace", workspaceId: input.workspaceId, accountId: input.accountId, requestedBy: "instanceAdmin" },
+              ),
+            newId: uuidv7,
+          },
+          { accountId: params.id.toLowerCase(), ipPrefix: networkPrefixOf(context.get("clientIp")) ?? null },
+        ),
+      );
+      switch (outcome.kind) {
+        case "deleted":
+          return { status: 204 };
+        case "unknown_account":
+          throw new ProblemError("not_found", NO_SUCH_ACCOUNT_TO_CHANGE);
+        case "last_instance_admin":
+          throw refusal(LAST_INSTANCE_ADMIN, "last_instance_admin");
+        case "self":
+          throw refusal(OWN_ACCOUNT, "self");
+        case "last_owner":
+          throw new ProblemError("last_owner", LAST_OWNER, { members: { workspaces: outcome.workspaces.map(({ id, name }) => ({ id, name })) } });
+        case "refused":
+          throw new ProblemError(outcome.code, ACCOUNT_DELETION_REFUSED);
+        case "unavailable":
+          throw new ProblemError("unavailable", ACCOUNT_DELETION_UNAVAILABLE);
+      }
     }),
 
     route(resetInstanceAccountMfaOperation).handle(async ({ params }, context) => {

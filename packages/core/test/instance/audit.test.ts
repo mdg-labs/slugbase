@@ -3,7 +3,7 @@ import { AUDIT_ACTION_NAMES, INSTANCE_AUDIT_ACTION_NAMES, INSTANCE_AUDIT_ACTIONS
 
 describe("the instance audit catalog", () => {
   it("names the actions of the stream in the dotted style, each with a closed metadata object", () => {
-    expect(INSTANCE_AUDIT_ACTION_NAMES).toEqual(["instance.setup_completed", "instance.status_viewed", "instance.settings_viewed", "instance.settings_changed", "instance.test_mail_queued", "instance.workspaces_viewed", "instance.workspace_created", "instance.workspace_deletion_requested", "instance.workspace_joined", "instance.accounts_viewed", "instance.account_admin_granted", "instance.account_admin_revoked", "instance.account_disabled", "instance.account_enabled", "instance.account_mfa_reset", "instance.account_reset_link_issued", "instance.account_verification_resent", "instance.account_email_verified"]);
+    expect(INSTANCE_AUDIT_ACTION_NAMES).toEqual(["instance.setup_completed", "instance.status_viewed", "instance.settings_viewed", "instance.settings_changed", "instance.test_mail_queued", "instance.workspaces_viewed", "instance.workspace_created", "instance.workspace_deletion_requested", "instance.workspace_joined", "instance.accounts_viewed", "instance.account_admin_granted", "instance.account_admin_revoked", "instance.account_disabled", "instance.account_enabled", "instance.account_mfa_reset", "instance.account_reset_link_issued", "instance.account_verification_resent", "instance.account_email_verified", "instance.account_deleted"]);
     for (const name of INSTANCE_AUDIT_ACTION_NAMES) {
       expect(name).toMatch(/^instance\.[a-z_]+$/);
     }
@@ -23,6 +23,7 @@ describe("the instance audit catalog", () => {
       "instance.account_mfa_reset",
       "instance.account_verification_resent",
       "instance.account_email_verified",
+      "instance.account_deleted",
     ] as const) {
       expect(INSTANCE_AUDIT_ACTIONS[name].metadata, name).toEqual({});
     }

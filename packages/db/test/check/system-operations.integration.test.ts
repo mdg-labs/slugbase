@@ -181,6 +181,8 @@ describe("the shipped chain", () => {
       "sys_instance_reset_mfa",
       "sys_instance_issue_reset_link",
       "sys_instance_resend_verification",
+      "sys_instance_account_deletion_scope",
+      "sys_instance_delete_account",
     ]);
     expect(checkRules).toContain(systemOperationsRule);
     const database = await scratch();

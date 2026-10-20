@@ -12,6 +12,9 @@ import { InferInsertModel } from 'drizzle-orm';
 import { InferSelectModel } from 'drizzle-orm';
 import { InstanceAccount } from '@slugbase/core';
 import { InstanceAccountChange } from '@slugbase/core';
+import { InstanceAccountDeletionRequest } from '@slugbase/core';
+import { InstanceAccountDeletionScope } from '@slugbase/core';
+import { InstanceAccountDeletionStoreOutcome } from '@slugbase/core';
 import { InstanceAccountUpdateOutcome } from '@slugbase/core';
 import { InstanceAuditEvent } from '@slugbase/core';
 import { InstanceMembershipRequest } from '@slugbase/core';
@@ -549,8 +552,10 @@ export interface InstanceCounts {
 
 // @public (undocumented)
 export interface InstanceRepository {
+    accountDeletionScope(accountId: string): Promise<InstanceAccountDeletionScope>;
     addMembership(request: Pick<InstanceMembershipRequest, "workspaceId" | "eventIds">, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<InstanceMembershipResult>;
     createWorkspace(request: InstanceWorkspaceCreation, eventId: string, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<InstanceWorkspaceCreationResult>;
+    deleteAccount(request: Pick<InstanceAccountDeletionRequest, "accountId" | "soleWorkspaceIds" | "eventId" | "ipPrefix">, jobs: readonly QueuedJob[]): Promise<InstanceAccountDeletionStoreOutcome>;
     issueResetLink(accountId: string, eventId: string, token: {
         readonly id: string;
         readonly hash: Buffer;

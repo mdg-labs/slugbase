@@ -33,6 +33,8 @@ export const INSTANCE_AUDIT_ACTIONS = {
   "instance.account_reset_link_issued": { metadata: { delivery: "text" } },
   "instance.account_verification_resent": { metadata: {} },
   "instance.account_email_verified": { metadata: {} },
+  // The account the event names as entity was deleted in the same call; its identifier is the one place the deleted account's id stays (doc 05 section 7.1).
+  "instance.account_deleted": { metadata: {} },
 } as const;
 
 export type InstanceAuditAction = keyof typeof INSTANCE_AUDIT_ACTIONS;

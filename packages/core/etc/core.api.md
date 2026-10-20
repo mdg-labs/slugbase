@@ -627,6 +627,9 @@ export type CredentialTokenPurpose = (typeof CREDENTIAL_TOKEN_PURPOSES)[number];
 // @public
 export function deleteAccount<Code extends string>(input: AccountDeletionDependencies<Code>, ask: AccountDeletionAsk): Promise<AccountDeletionOutcome<Code>>;
 
+// @public
+export function deleteInstanceAccount<Code extends string>(input: InstanceAccountDeletionDependencies<Code>, ask: InstanceAccountDeletionAsk): Promise<InstanceAccountDeletionOutcome<Code>>;
+
 // @public (undocumented)
 export const DOMAIN_EVENT_NAMES: readonly DomainEventName[];
 
@@ -1119,6 +1122,9 @@ export const INSTANCE_AUDIT_ACTIONS: {
     readonly "instance.account_email_verified": {
         readonly metadata: {};
     };
+    readonly "instance.account_deleted": {
+        readonly metadata: {};
+    };
 };
 
 // @public
@@ -1160,6 +1166,82 @@ export interface InstanceAccountChange {
     // (undocumented)
     readonly isInstanceAdmin?: boolean;
 }
+
+// @public (undocumented)
+export interface InstanceAccountDeletionAsk {
+    readonly accountId: string;
+    readonly ipPrefix: string | null;
+}
+
+// @public (undocumented)
+export interface InstanceAccountDeletionDependencies<Code extends string> {
+    readonly guard: (input: AccountDeletionGuardInput) => Promise<WorkspaceDeletionGuardResult<Code>>;
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: InstanceAccountDeletionStore;
+}
+
+// @public (undocumented)
+export type InstanceAccountDeletionOutcome<Code extends string> =
+/** The account is deleted and the request is in the instance audit stream; `workspaces` were deleted with it. */
+    {
+    readonly kind: "deleted";
+    readonly workspaces: readonly AccountDeletionWorkspace[];
+} | {
+    readonly kind: InstanceAccountDeletionRefusal;
+}
+/** The account is the only owner of these workspaces, which have other members; nothing was written. */
+| {
+    readonly kind: "last_owner";
+    readonly workspaces: readonly AccountDeletionWorkspace[];
+}
+/** The guard refused with `code`, for the account or for one of the workspaces; nothing was written. */
+| {
+    readonly kind: "refused";
+    readonly code: Code;
+}
+/** The workspaces changed under the request; nothing was written. */
+| {
+    readonly kind: "unavailable";
+};
+
+// @public
+export type InstanceAccountDeletionRefusal =
+/** There is no such account. */
+"unknown_account"
+/** The account is an instance admin and no other enabled account is one. */
+| "last_instance_admin"
+/** The account is the calling admin's own; `DELETE /me` deletes it. */
+| "self";
+
+// @public (undocumented)
+export interface InstanceAccountDeletionRequest {
+    // (undocumented)
+    readonly accountId: string;
+    readonly eventId: string;
+    readonly events: readonly DomainEvent<"account.deleted">[];
+    // (undocumented)
+    readonly ipPrefix: string | null;
+    readonly soleWorkspaceIds: readonly string[];
+}
+
+// @public
+export type InstanceAccountDeletionScope = {
+    readonly kind: "ok";
+    readonly blocking: readonly AccountDeletionWorkspace[];
+    readonly soleMember: readonly AccountDeletionWorkspace[];
+} | {
+    readonly kind: InstanceAccountDeletionRefusal;
+};
+
+// @public
+export interface InstanceAccountDeletionStore {
+    delete(request: InstanceAccountDeletionRequest): Promise<InstanceAccountDeletionStoreOutcome>;
+    scope(accountId: string): Promise<InstanceAccountDeletionScope>;
+}
+
+// @public
+export type InstanceAccountDeletionStoreOutcome = "deleted" | "unavailable" | InstanceAccountDeletionRefusal;
 
 // @public (undocumented)
 export interface InstanceAccountDependencies {

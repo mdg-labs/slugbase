@@ -210,6 +210,8 @@ export const FIXTURES: ContractFixtures = {
   resetInstanceAccountMfa: { path: { id: UNKNOWN_ACCOUNT_ID }, status: 404 },
   issueInstanceAccountResetLink: { path: { id: UNKNOWN_ACCOUNT_ID }, status: 404 },
   resendInstanceAccountVerification: { path: { id: UNKNOWN_ACCOUNT_ID }, status: 503 },
+  // The deletion names the account that does not exist too, the declared 404: the walker's own accounts are the callers of the calls that follow.
+  deleteInstanceAccount: { path: { id: UNKNOWN_ACCOUNT_ID }, status: 404 },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

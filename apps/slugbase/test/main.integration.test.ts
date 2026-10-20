@@ -572,13 +572,13 @@ describe("apps/slugbase main server and the instance admin account operations", 
       };
       const change = { disabled: true };
       const recovery = ["mfa-reset", "password-reset-link", "verification-email"].map((action) => `${ACCOUNTS}/${unknown}/${action}`);
-      const anonymous = [await as("", "GET", ACCOUNTS), await as("", "PATCH", `${ACCOUNTS}/${unknown}`, change)];
+      const anonymous = [await as("", "GET", ACCOUNTS), await as("", "PATCH", `${ACCOUNTS}/${unknown}`, change), await as("", "DELETE", `${ACCOUNTS}/${unknown}`)];
       for (const path of recovery) {
         anonymous.push(await as("", "POST", path));
       }
       const created = await post(port, "/api/v1/setup", first);
       const cookie = /set-cookie: (__Host-slugbase_session=[A-Za-z0-9_-]+)/i.exec(created)?.[1] ?? "";
-      const signedIn = [await as(cookie, "GET", ACCOUNTS), await as(cookie, "PATCH", `${ACCOUNTS}/${unknown}`, change)];
+      const signedIn = [await as(cookie, "GET", ACCOUNTS), await as(cookie, "PATCH", `${ACCOUNTS}/${unknown}`, change), await as(cookie, "DELETE", `${ACCOUNTS}/${unknown}`)];
       for (const path of recovery) {
         signedIn.push(await as(cookie, "POST", path));
       }
@@ -586,8 +586,8 @@ describe("apps/slugbase main server and the instance admin account operations", 
     });
     expect(status, output).toBe(0);
     expect((observed ?? "").split("\n=====\n")).toEqual([
-      ...Array<string>(5).fill("HTTP/1.1 401 Unauthorized unauthenticated"),
-      ...Array<string>(5).fill("HTTP/1.1 403 Forbidden forbidden"),
+      ...Array<string>(6).fill("HTTP/1.1 401 Unauthorized unauthenticated"),
+      ...Array<string>(6).fill("HTTP/1.1 403 Forbidden forbidden"),
     ]);
   }, 60_000);
 });

@@ -15,6 +15,7 @@ import {
   UpdateInstanceSettingsRequestSchema,
   addInstanceAdminMembership,
   createInstanceWorkspace,
+  deleteInstanceAccount,
   deleteInstanceWorkspace,
   getInstanceSettings,
   getInstanceStatus,
@@ -378,5 +379,30 @@ describe("the instance account recovery operations", () => {
     expect(InstanceAccountResetLinkSchema.safeParse({ delivery: "link", link: "https://links.example.com/reset-password#token=abc" }).success).toBe(true);
     expect(InstanceAccountResetLinkSchema.safeParse({ delivery: "sms", link: null }).success).toBe(false);
     expect(InstanceAccountResetLinkSchema.safeParse({ delivery: "mail", link: null, token: "abc" }).success).toBe(false);
+  });
+});
+
+describe("the instance account deletion operation", () => {
+  const remove = paths["/api/v1/instance/accounts/{id}"]?.["delete"];
+  const responses = remove?.["responses"] as Record<string, Obj>;
+
+  it("is a DELETE of the instance admin in the write bucket, with re-authentication and no token scope", () => {
+    expect(deleteInstanceAccount.operationId).toBe("deleteInstanceAccount");
+    expect(remove?.["x-slugbase-auth"]).toBe("instanceAdmin");
+    expect(remove?.["x-slugbase-rate"]).toBe("write");
+    expect(remove?.["x-slugbase-reauth"]).toBe(true);
+    expect(remove?.["x-slugbase-scope"]).toBeUndefined();
+  });
+
+  it("answers 204 without a body and every refusal with problem+json", () => {
+    expect(Object.keys(responses["204"] ?? {})).not.toContain("content");
+    for (const status of ["400", "401", "403", "404", "409", "422", "429", "503"]) {
+      expect(Object.keys(responses[status]?.["content"] as Obj), status).toEqual(["application/problem+json"]);
+    }
+  });
+
+  it("names the account by the path and takes no body", () => {
+    expect(remove?.["requestBody"]).toBeUndefined();
+    expect((remove?.["parameters"] as Obj[]).map((parameter) => [parameter["name"], parameter["in"]])).toEqual([["id", "path"]]);
   });
 });

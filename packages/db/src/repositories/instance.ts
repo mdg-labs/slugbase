@@ -2,8 +2,12 @@ import {
   INSTANCE_AUDIT_ACTIONS,
   isInstanceAuditAction,
   UNSET_INSTANCE_SETTINGS,
+  type AccountDeletionWorkspace,
   type InstanceAccount,
   type InstanceAccountChange,
+  type InstanceAccountDeletionRequest,
+  type InstanceAccountDeletionScope,
+  type InstanceAccountDeletionStoreOutcome,
   type InstanceAccountUpdateOutcome,
   type InstanceAuditEvent,
   type InstanceMfaResetOutcome,
@@ -194,6 +198,27 @@ export interface InstanceRepository {
    * with a second factor. Works in an account-level transaction.
    */
   requestVerification(accountId: string, eventId: string, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<InstanceVerificationOutcome>;
+  /**
+   * What deleting the account would do, through `sys_instance_account_deletion_scope`, and the locks that keep it true for
+   * the rest of the transaction: the account's workspaces that are not being deleted, its backup-code rows, the rows of the
+   * calling admin and of the account, and, for an instance admin, the advisory key of the set of admins (doc 05 section
+   * 7.1). The admin is checked again under them. `unknown_account`, `last_instance_admin` (no other enabled admin) and
+   * `self` (the calling admin's own account, which `DELETE /me` deletes) say the account is not to be deleted. Raises,
+   * writing nothing, when the account of the transaction is not an instance admin with a second factor. Works in an
+   * account-level transaction.
+   */
+  accountDeletionScope(accountId: string): Promise<InstanceAccountDeletionScope>;
+  /**
+   * Deletes the account through `sys_instance_delete_account`, which runs the deletion of `DELETE /me` (puts
+   * `request.soleWorkspaceIds` through the request half of the workspace deletion, clears the network prefix and the target
+   * identifier of the events that name the account, and deletes the account row and what cascades from it) and writes
+   * `instance.account_deleted` with the account as entity under the identifier the caller generated (Q91), all in one call;
+   * `jobs` are queued in the same transaction, only when the answer is `deleted`. The scope is computed again under the locks,
+   * so `unavailable` (the account is the only owner of a workspace with other members, or the sole workspaces are not
+   * `request.soleWorkspaceIds`) and the refusals of `accountDeletionScope` write and queue nothing. Raises, writing nothing,
+   * when the account of the transaction is not an instance admin with a second factor. Works in an account-level transaction.
+   */
+  deleteAccount(request: Pick<InstanceAccountDeletionRequest, "accountId" | "soleWorkspaceIds" | "eventId" | "ipPrefix">, jobs: readonly QueuedJob[]): Promise<InstanceAccountDeletionStoreOutcome>;
 }
 
 interface EnrolledRow extends Record<string, unknown> {
@@ -272,6 +297,13 @@ interface RecoveryRow extends Record<string, unknown> {
 
 interface DeletedWorkspaceRow extends Record<string, unknown> {
   marked: boolean;
+}
+
+interface DeletionScopeRow extends Record<string, unknown> {
+  outcome: string;
+  workspace_id: string | null;
+  workspace_name: string | null;
+  kind: string | null;
 }
 
 function ownerOf(value: unknown): InstanceWorkspaceOwner {
@@ -625,6 +657,69 @@ export function instanceRepository(tx: TenantTx): InstanceRepository {
           return outcome;
         default:
           throw new Error("sys_instance_resend_verification answered an outcome it does not define");
+      }
+    },
+
+    async accountDeletionScope(accountId) {
+      const rows = await tenantHandle(tx).execute<DeletionScopeRow>(sql`
+        SELECT outcome, workspace_id, workspace_name, kind FROM public.sys_instance_account_deletion_scope(${accountId}::uuid)`);
+      const first = rows[0];
+      if (first === undefined) {
+        throw new Error("sys_instance_account_deletion_scope returned no row");
+      }
+      switch (first.outcome) {
+        case "unknown_account":
+        case "last_instance_admin":
+        case "self":
+          return { kind: first.outcome };
+        case "ok":
+          break;
+        default:
+          throw new Error("sys_instance_account_deletion_scope answered an outcome it does not define");
+      }
+      const blocking: AccountDeletionWorkspace[] = [];
+      const soleMember: AccountDeletionWorkspace[] = [];
+      for (const row of rows) {
+        if (row.outcome !== "ok") {
+          throw new Error("sys_instance_account_deletion_scope mixed outcomes in one answer");
+        }
+        if (row.kind === null) {
+          continue;
+        }
+        if (row.workspace_id === null || row.workspace_name === null) {
+          throw new Error("sys_instance_account_deletion_scope returned a workspace row without a workspace");
+        }
+        const workspace = { id: row.workspace_id, name: row.workspace_name };
+        if (row.kind === "blocking") {
+          blocking.push(workspace);
+        } else if (row.kind === "sole") {
+          soleMember.push(workspace);
+        } else {
+          throw new Error("sys_instance_account_deletion_scope returned a kind other than blocking and sole");
+        }
+      }
+      return { kind: "ok", blocking, soleMember };
+    },
+
+    async deleteAccount(request, jobs) {
+      const ids = `{${request.soleWorkspaceIds.join(",")}}`;
+      const outcome = await recoveryOutcome(
+        tx,
+        "sys_instance_delete_account",
+        sql`SELECT public.sys_instance_delete_account(
+          ${request.eventId}::uuid, ${request.ipPrefix}::cidr, ${request.accountId}::uuid, ${ids}::uuid[]) AS outcome`,
+      );
+      switch (outcome) {
+        case "deleted":
+          await enqueueAll(tx, jobs);
+          return outcome;
+        case "unavailable":
+        case "unknown_account":
+        case "last_instance_admin":
+        case "self":
+          return outcome;
+        default:
+          throw new Error("sys_instance_delete_account answered an outcome it does not define");
       }
     },
   };

@@ -7,6 +7,17 @@ export {
 } from "./settings.ts";
 export type { InstanceSettingName, InstanceSettings, InstanceSettingsChange } from "./settings.ts";
 export { INSTANCE_TEST_MAIL_TEMPLATE, instanceTestMail } from "./test-mail.ts";
+export { deleteInstanceAccount } from "./account-deletion.ts";
+export type {
+  InstanceAccountDeletionAsk,
+  InstanceAccountDeletionDependencies,
+  InstanceAccountDeletionOutcome,
+  InstanceAccountDeletionRefusal,
+  InstanceAccountDeletionRequest,
+  InstanceAccountDeletionScope,
+  InstanceAccountDeletionStore,
+  InstanceAccountDeletionStoreOutcome,
+} from "./account-deletion.ts";
 export { listInstanceAccounts, updateInstanceAccount } from "./accounts.ts";
 export type {
   InstanceAccount,
