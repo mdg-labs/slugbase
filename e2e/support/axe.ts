@@ -55,13 +55,16 @@ function selectorOf(target: readonly unknown[]): string {
 }
 
 /**
- * Waits until every animation of the page that ends has ended. A dialog that is still fading and growing in
- * has the contrast and the size of a frame on the way, not of the page the visitor gets; an animation that
- * never ends (a spinner) is left alone.
+ * Waits until every running animation of the page that ends has ended. A dialog that is still fading and
+ * growing in has the contrast and the size of a frame on the way, not of the page the visitor gets; an
+ * animation that never ends (a spinner) is left alone, and so is one that is paused or idle, whose finished
+ * promise settles only once something plays it again.
  */
 export async function settleAnimations(page: Page): Promise<void> {
   await page.evaluate(async () => {
-    const finite = document.getAnimations().filter((animation) => animation.effect?.getComputedTiming().iterations !== Infinity);
+    const finite = document
+      .getAnimations()
+      .filter((animation) => animation.playState === "running" && animation.effect?.getComputedTiming().iterations !== Infinity);
     await Promise.all(finite.map((animation) => animation.finished.catch(() => undefined)));
   });
 }
