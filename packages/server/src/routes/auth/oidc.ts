@@ -175,12 +175,13 @@ function signedInSession(
 }
 
 // A browser says where a navigation came from (Sec-Fetch-Site). Only the application's own page (`same-origin`)
-// and the address bar or a bookmark (`none`) may start a link or a re-authentication. A page of another site, a
-// sibling subdomain included, may not, and neither may a request that carries no such header: a browser that
-// does not send it cannot show the request came from the application, so it fails closed there. Such a browser
-// cannot link or re-authenticate through a provider; a sign-in through a provider (`login`) is not affected. An
-// account with a password re-authenticates with it, one with a second factor and no password uses a code, and one
-// with neither cannot re-authenticate on that browser.
+// and the address bar or a bookmark (`none`) may start a link, a re-authentication or the acceptance of an
+// invitation. A page of another site, a sibling subdomain included, may not, and neither may a request that
+// carries no such header: a browser that does not send it cannot show the request came from the application, so it
+// fails closed there. Such a browser cannot link, re-authenticate or accept an invitation through a provider (it
+// accepts by signing in or registering on the invitation page); a sign-in through a provider (`login`) is not
+// affected. An account with a password re-authenticates with it, one with a second factor and no password uses a
+// code, and one with neither cannot re-authenticate on that browser.
 function fromTheApplication(context: ChainContext): boolean {
   const site = context.req.raw.headers.get("sec-fetch-site");
   return site === "same-origin" || site === "none";
@@ -324,6 +325,10 @@ export function oidcRoutes({
     let linkAccountId: string | null = null;
     let invitationTokenHash: Buffer | undefined;
     if (intent === "invite") {
+      if (!fromTheApplication(context)) {
+        refused(context, params.provider, "cross_site_start");
+        return failure;
+      }
       // The redemption is counted whether or not the text is a token, like every other redemption.
       await takeRedeemLimit(context, signedInSession(context)?.accountId);
       invitationTokenHash = query.invitation === undefined ? undefined : hashCredentialToken(query.invitation);

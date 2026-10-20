@@ -31,6 +31,8 @@ const ISSUER = "https://idp.example.test";
 const START = "/api/v1/auth/oidc/idp/start";
 const FAILED = "/login?error=oidc_failed";
 const HOOK_TIMEOUT_MS = 120_000;
+// What the browser sends for the provider button on the invitation page, a navigation of the application's own page.
+const FROM_THE_APPLICATION = { "sec-fetch-site": "same-origin" };
 
 const database = useTestDatabase();
 let store: AuthStore;
@@ -140,7 +142,7 @@ function startUrl(token: string, extra = ""): string {
 
 /** Starts the handshake and plays the person approving it. */
 async function approved(world: World, query: string, grant: FakeIdentityGrant, headers: Record<string, string> = {}) {
-  const started = await world.server.fetch(new Request(new URL(query, world.origin), { headers }));
+  const started = await world.server.fetch(new Request(new URL(query, world.origin), { headers: { ...FROM_THE_APPLICATION, ...headers } }));
   const authorizationUrl = started.headers.get("location") ?? "";
   const preAuth = cookieValue(started, PREAUTH_COOKIE);
   if (started.status !== 302 || preAuth === undefined) {
@@ -505,7 +507,7 @@ describe("accepting an invitation through a provider", () => {
       const world = serve();
       const target = await invitation("kept@example.test");
 
-      const started = await world.server.fetch(new Request(new URL(startUrl(target.token), world.origin)));
+      const started = await world.server.fetch(new Request(new URL(startUrl(target.token), world.origin), { headers: FROM_THE_APPLICATION }));
 
       expect(started.status).toBe(302);
       const location = started.headers.get("location") ?? "";
@@ -539,11 +541,45 @@ describe("accepting an invitation through a provider", () => {
       expect(response.headers.get("location")).toBe("/");
     });
 
+    it("does not start from a page of another site, a sibling subdomain or a browser that says nothing about where the navigation came from", async () => {
+      const world = serve(provider({ RATE_LIMIT_TOKEN_REDEEM_IP: "1/hour" }));
+      const target = await invitation("cross-site@example.test");
+
+      for (const headers of [{ "sec-fetch-site": "cross-site" }, { "sec-fetch-site": "same-site" }, {}]) {
+        const response = await world.server.fetch(new Request(new URL(startUrl(target.token), world.origin), { headers }));
+
+        expect(response.status, JSON.stringify(headers)).toBe(302);
+        expect(response.headers.get("location"), JSON.stringify(headers)).toBe(FAILED);
+        expect(cookieValue(response, PREAUTH_COOKIE), JSON.stringify(headers)).toBe("");
+        expect(cookieValue(response, SESSION_COOKIE), JSON.stringify(headers)).toBeUndefined();
+        expect(world.logs.entries.at(-1), JSON.stringify(headers)).toMatchObject({ fields: { reason: "cross_site_start" } });
+      }
+
+      expect(await stateRecords()).toEqual([]);
+      // The refused starts took nothing from the one redemption the address may make in the hour.
+      expect((await world.server.fetch(new Request(new URL(startUrl(target.token), world.origin), { headers: FROM_THE_APPLICATION }))).status).toBe(302);
+    });
+
+    it("starts from the application's own page and from the address bar", async () => {
+      const world = serve();
+      const target = await invitation("same-origin@example.test");
+
+      for (const site of ["same-origin", "none"]) {
+        const response = await world.server.fetch(new Request(new URL(startUrl(target.token), world.origin), { headers: { "sec-fetch-site": site } }));
+
+        expect(response.status, site).toBe(302);
+        expect(new URL(response.headers.get("location") ?? "").origin, site).toBe(new URL(ISSUER).origin);
+        expect(cookieValue(response, PREAUTH_COOKIE), site).not.toBe("");
+        expect(cookieValue(response, PREAUTH_COOKIE), site).toBeDefined();
+      }
+      expect(await stateRecords()).toHaveLength(2);
+    });
+
     it("does not start for a text that is not an invitation token, and stores nothing", async () => {
       const world = serve();
 
       for (const text of ["short", "x".repeat(43), "a".repeat(42), "%2e".repeat(20)]) {
-        const response = await world.server.fetch(new Request(new URL(`${START}?intent=invite&invitation=${text}`, world.origin)));
+        const response = await world.server.fetch(new Request(new URL(`${START}?intent=invite&invitation=${text}`, world.origin), { headers: FROM_THE_APPLICATION }));
         expect(response.status, text).toBe(302);
         expect(response.headers.get("location"), text).toBe(FAILED);
       }
@@ -578,9 +614,9 @@ describe("accepting an invitation through a provider", () => {
       const world = serve(provider({ RATE_LIMIT_TOKEN_REDEEM_IP: "2/hour" }));
       const target = await invitation("limited@example.test");
 
-      expect((await world.server.fetch(new Request(new URL(startUrl(target.token), world.origin)))).status).toBe(302);
-      expect((await world.server.fetch(new Request(new URL(startUrl("not-a-token"), world.origin)))).status).toBe(302);
-      const limited = await world.server.fetch(new Request(new URL(startUrl(target.token), world.origin)));
+      expect((await world.server.fetch(new Request(new URL(startUrl(target.token), world.origin), { headers: FROM_THE_APPLICATION }))).status).toBe(302);
+      expect((await world.server.fetch(new Request(new URL(startUrl("not-a-token"), world.origin), { headers: FROM_THE_APPLICATION }))).status).toBe(302);
+      const limited = await world.server.fetch(new Request(new URL(startUrl(target.token), world.origin), { headers: FROM_THE_APPLICATION }));
 
       expect(limited.status).toBe(429);
       expect(limited.headers.get("retry-after")).not.toBeNull();
@@ -603,9 +639,9 @@ describe("accepting an invitation through a provider", () => {
       const cookie = `${SESSION_COOKIE}=${issuedToken(login) ?? ""}`;
       const target = await invitation("account-limited@example.test");
 
-      expect((await world.server.fetch(new Request(new URL(startUrl(target.token), world.origin), { headers: { cookie } }))).status).toBe(302);
-      expect((await world.server.fetch(new Request(new URL(startUrl(target.token), world.origin), { headers: { cookie } }))).status).toBe(429);
-      expect((await world.server.fetch(new Request(new URL(startUrl(target.token), world.origin)))).status).toBe(302);
+      expect((await world.server.fetch(new Request(new URL(startUrl(target.token), world.origin), { headers: { cookie, ...FROM_THE_APPLICATION } }))).status).toBe(302);
+      expect((await world.server.fetch(new Request(new URL(startUrl(target.token), world.origin), { headers: { cookie, ...FROM_THE_APPLICATION } }))).status).toBe(429);
+      expect((await world.server.fetch(new Request(new URL(startUrl(target.token), world.origin), { headers: FROM_THE_APPLICATION }))).status).toBe(302);
     });
 
     it("answers 503 and stores nothing when the limiter cannot decide", async () => {
@@ -628,7 +664,7 @@ describe("accepting an invitation through a provider", () => {
       });
       const target = await invitation("down@example.test");
 
-      const response = await broken.fetch(new Request(new URL(startUrl(target.token), config.APP_ORIGIN)));
+      const response = await broken.fetch(new Request(new URL(startUrl(target.token), config.APP_ORIGIN), { headers: FROM_THE_APPLICATION }));
 
       expect(response.status).toBe(503);
       expect(await stateRecords()).toEqual([]);
