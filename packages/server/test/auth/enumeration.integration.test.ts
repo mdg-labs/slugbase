@@ -8,6 +8,8 @@ import { HEAVY_TEST_TIMEOUT_MS } from "../../../../vitest.shared.ts";
 import { uuidv7 } from "../../src/auth/uuidv7.ts";
 import { runMigrations } from "../../src/migrate/index.ts";
 import { urlOf } from "../migrate/support.ts";
+import { GRANTED, acceptAs, freshAddress, inspect, invite, linkOf, markDeleting, randomToken, revoke, setExpiry, signup, workspaceWithAdmin } from "../invitations/support.ts";
+import { HOOK_TIMEOUT_MS, workspaceHarness } from "../workspaces/support.ts";
 import { CREDENTIAL_ENV, requestFlows, type RequestFlow } from "./credential-flows.ts";
 import {
   attemptLogin,
@@ -27,8 +29,9 @@ import {
 // that tells an account that exists from one that does not, or an account that
 // is disabled or has no password from a live one, and the four requests that ask
 // for an emailed link (register, resend, forgot, change email) give none that tells
-// an address with an account, verified or not, from one without. Later epics add
-// the endpoints they own (invitation) to this file.
+// an address with an account, verified or not, from one without. The two requests that redeem an
+// invitation token (inspect, and accept in both its forms) give none that tells a token nobody
+// issued from one that expired, was revoked, was replaced by a newer link or was used.
 //
 // Already asserted in login.integration ("one answer for every way to fail"),
 // and not repeated here: the same 401 unauthenticated, body shape, header names
@@ -299,4 +302,136 @@ describe("the requests for an emailed link (T8)", () => {
       },
     );
   });
+});
+
+// The invitation tokens (doc 04 section 10.5, doc 02 section 3.4, doc 10 T8): the token is the only credential of
+// the inspection and the acceptance, so the answer to a token that no longer works must not say why it does not.
+// Already asserted in routes/invitation-acceptance.integration ("answers one identical 410 token_expired"): the
+// status, code, title, detail and type of the unknown, malformed, expired, revoked, replaced and used token to the
+// inspection and to the signed-in acceptance. What this adds: the headers and the body text as well, for the
+// acceptance that creates the account too, and the latency class of each kind of dead token against an unknown one.
+describe("the requests that redeem an invitation token (T8)", () => {
+  const harness = workspaceHarness(database);
+  const REDEEM_ENV = { RATE_LIMIT_TOKEN_REDEEM_IP: "100000/hour", RATE_LIMIT_TOKEN_REDEEM_ACCOUNT: "100000/hour" };
+
+  beforeAll(() => harness.start(), HOOK_TIMEOUT_MS);
+
+  afterAll(() => harness.stop());
+
+  interface DeadToken {
+    readonly name: string;
+    readonly token: string;
+  }
+
+  /** A token of every kind that no longer redeems, and an unknown one. */
+  async function deadTokens(): Promise<readonly DeadToken[]> {
+    const setup = serveAuth(database(), store, { entitlements: GRANTED });
+    const { admin } = await workspaceWithAdmin(harness, setup);
+    const expired = await invite(setup, admin, freshAddress());
+    await setExpiry(database(), expired.id, -1);
+    const revoked = await invite(setup, admin, freshAddress());
+    expect((await revoke(setup, admin, revoked.id)).status).toBe(204);
+    const replaced = await invite(setup, admin, freshAddress());
+    await linkOf(setup, admin, replaced.id);
+    const invitee = await harness.person(setup);
+    const used = await invite(setup, admin, invitee.account.email);
+    expect((await acceptAs(setup, invitee, used.token)).status).toBe(200);
+    const other = await workspaceWithAdmin(harness, setup);
+    const deleting = await invite(setup, other.admin, freshAddress());
+    await markDeleting(database(), other.workspaceId);
+    return [
+      { name: "a token nobody issued", token: randomToken() },
+      { name: "an expired token", token: expired.token },
+      { name: "a revoked token", token: revoked.token },
+      { name: "a token a newer link replaced", token: replaced.token },
+      { name: "a used token", token: used.token },
+      { name: "a token of a workspace being deleted", token: deleting.token },
+    ];
+  }
+
+  interface Form {
+    readonly name: string;
+    /** Redeems `token` from the client address `from`. */
+    readonly call: (world: AuthWorld, token: string, from: string) => Promise<Response>;
+  }
+
+  /** The three requests, each one from the address it names; the signed-in acceptance is made by an account of its own so that its per-account count reads the same. */
+  async function forms(): Promise<readonly Form[]> {
+    const setup = serveAuth(database(), store);
+    const people = await Promise.all(Array.from({ length: 24 }, () => harness.person(setup)));
+    let next = 0;
+    return [
+      { name: "the inspection", call: (world, token, from) => inspect(world, token, { "x-forwarded-for": from }) },
+      {
+        name: "the acceptance as the signed-in account",
+        call: (world, token, from) => {
+          const person = people[next % people.length];
+          next += 1;
+          if (person === undefined) {
+            throw new Error("no signed-in account");
+          }
+          return acceptAs(world, person, token, { "x-forwarded-for": from });
+        },
+      },
+      { name: "the acceptance that creates the account", call: (world, token, from) => signup(world, token, undefined, { "x-forwarded-for": from }) },
+    ];
+  }
+
+  it("answers every kind of dead token with the same status, header names and values and body text, to the inspection and to both forms of the acceptance", async () => {
+    const world = serveAuth(database(), store, { env: { ...REDEEM_ENV, TRUSTED_PROXY_HOPS: "1" } });
+    const byForm: { form: string; answers: { name: string; answer: Awaited<ReturnType<typeof answerOf>> }[] }[] = [];
+    let hop = 0;
+    for (const form of await forms()) {
+      const answers: { name: string; answer: Awaited<ReturnType<typeof answerOf>> }[] = [];
+      for (const { name, token } of await deadTokens()) {
+        hop += 1;
+        // Each request comes from its own address, so the rate-limit headers, which count per address, read the same too.
+        const response = await form.call(world, token, `198.51.100.${String(hop)}`);
+        expect(response.headers.get("set-cookie"), `${form.name}, ${name}`).toBeNull();
+        answers.push({ name: `${form.name}, ${name}`, answer: await answerOf(response) });
+      }
+      expect(answers).toHaveLength(6);
+      byForm.push({ form: form.name, answers });
+    }
+    // Within one request, every kind of dead token is answered alike down to the limit headers.
+    for (const { answers } of byForm) {
+      const [first, ...rest] = answers;
+      expect(first?.answer.status).toBe(410);
+      expect(JSON.parse(first?.answer.body ?? "{}")).toMatchObject({ code: "token_expired", status: 410 });
+      expect(first?.answer.headers.map(([name]) => name)).toContain("ratelimit");
+      for (const { name, answer } of rest) {
+        expect(answer, name).toEqual(first?.answer);
+      }
+    }
+    // Across the requests everything but the limit headers agrees: the acceptance of the signed-in account is also counted per account.
+    const unlimited = (answer: Awaited<ReturnType<typeof answerOf>>) => ({ ...answer, headers: answer.headers.filter(([name]) => !name.startsWith("ratelimit")) });
+    const [reference, ...others] = byForm.map(({ answers }) => unlimited(answers[0]?.answer ?? { status: 0, headers: [], body: "" }));
+    for (const answer of others) {
+      expect(answer).toEqual(reference);
+    }
+  });
+
+  it(
+    "falls in one latency class for an expired, a revoked and a used token as for a token nobody issued, to the inspection and to both forms of the acceptance",
+    { timeout: 4 * HEAVY_TEST_TIMEOUT_MS },
+    async () => {
+      const world = serveAuth(database(), store, { env: REDEEM_ENV });
+      const dead = await deadTokens();
+      const probes = ["an expired token", "a revoked token", "a used token"].map((name) => dead.find((candidate) => candidate.name === name));
+      for (const form of await forms()) {
+        const reference = () => form.call(world, randomToken(), "198.51.100.1");
+        // A path that answered before it looked the token up, or after more work than the other, would fall outside the
+        // bounds, which are far wider than the noise of a loaded runner: the ratio is a median over many back-to-back pairs.
+        for (const probe of probes) {
+          if (probe === undefined) {
+            throw new Error("a kind of dead token is missing");
+          }
+          const { name, token } = probe;
+          const ratio = await medianLatencyRatio(reference, () => form.call(world, token, "198.51.100.1"));
+          expect(ratio, `${form.name}, ${name}`).toBeGreaterThan(0.5);
+          expect(ratio, `${form.name}, ${name}`).toBeLessThan(2);
+        }
+      }
+    },
+  );
 });
