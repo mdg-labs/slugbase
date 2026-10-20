@@ -114,7 +114,8 @@ compose() {
 }
 
 # Sets postgres_major and compose_files from SMOKE_POSTGRES_MAJOR: compose.yml alone
-# runs PostgreSQL 18, and compose.pg17.yml is merged over it for 17.
+# runs PostgreSQL 18, and compose.pg17.yml is merged over it for 17. The files of
+# SMOKE_EXTRA_COMPOSE_FILES come last.
 select_postgres() {
   postgres_major="${SMOKE_POSTGRES_MAJOR:-18}"
   compose_files=(-f "$root/compose.yml")
@@ -123,6 +124,13 @@ select_postgres() {
     17) compose_files+=(-f "$root/compose.pg17.yml") ;;
     *) fail "SMOKE_POSTGRES_MAJOR is '$postgres_major', expected 17 or 18" ;;
   esac
+  local extra
+  # Word splitting is the point: the paths are separated by spaces.
+  # shellcheck disable=SC2086
+  for extra in ${SMOKE_EXTRA_COMPOSE_FILES:-}; do
+    [[ -f "$extra" ]] || fail "SMOKE_EXTRA_COMPOSE_FILES names '$extra', which is not a file"
+    compose_files+=(-f "$extra")
+  done
 }
 
 # HTTP: sets status, and leaves the headers and the body of the answer in $work.

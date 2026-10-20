@@ -1,7 +1,8 @@
 name: E2E
 
 # The browser journeys of doc 08 section 5.1 against the image built from this
-# commit, started through compose.yml, once on PostgreSQL 17 and once on 18 (doc 08
+# commit, started through compose.yml with the Mailpit of compose.e2e.yml that
+# catches the mail of the stack, once on PostgreSQL 17 and once on 18 (doc 08
 # section 6.2, Q3). Docker runs on the runner itself, as in the
 # `build` job of ci.yml, and Playwright installs its browsers there. No job
 # references a secret, the workflow never runs on pull_request_target, and the
