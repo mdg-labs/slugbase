@@ -121,5 +121,13 @@
     "body": "Eine Administration dieser {appName}-Instanz hat dein Konto deaktiviert. Du kannst dich nicht mehr anmelden, und deine Geräte und API-Tokens funktionieren nicht mehr.",
     "help": "Wenn du glaubst, dass das ein Irrtum ist, wende dich an die Administration dieser {appName}-Instanz.",
     "footer": "Du erhältst diese E-Mail, weil eine Administration dieser {appName}-Instanz dein Konto deaktiviert hat."
+  },
+  "mfaReset": {
+    "subject": "Die Zwei-Faktor-Authentifizierung für dein {appName}-Konto wurde zurückgesetzt",
+    "greeting": "Hallo {name},",
+    "greetingAnonymous": "Hallo,",
+    "body": "Eine Administratorin oder ein Administrator dieser {appName}-Instanz hat die Zwei-Faktor-Authentifizierung für dein Konto zurückgesetzt. Deine Authenticator-App und deine Backup-Codes funktionieren nicht mehr, deine Geräte wurden abgemeldet, und die Anmeldung fragt jetzt nur noch nach deinem Passwort.",
+    "notYou": "Falls du die Administration nicht darum gebeten hast, wende dich sofort an die Administration dieser {appName}-Instanz. Schalte die Zwei-Faktor-Authentifizierung nach der Anmeldung wieder ein.",
+    "action": "Zwei-Faktor-Authentifizierung einrichten"
   }
 }

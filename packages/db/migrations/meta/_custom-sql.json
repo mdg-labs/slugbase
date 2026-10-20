@@ -1,4 +1,4 @@
 {
-  "sha256": "230335496fde2125ebdc420c57fe747ccf6d7d36613e03e765044bde5efdf235",
-  "migration": "20261020193346_add_instance_membership"
+  "sha256": "882f45bed2e5bb79676374baac0dcb5ae9048b384d81f5d33bd214701cff2c87",
+  "migration": "20261020213737_add_instance_recovery"
 }

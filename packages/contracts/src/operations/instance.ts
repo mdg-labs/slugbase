@@ -384,8 +384,16 @@ export const UpdateInstanceAccountRequestSchema = z
   .strictObject({
     isInstanceAdmin: z.boolean().optional().describe("true grants the instance-admin flag, false clears it; the target's sessions are deleted when the flag changes"),
     disabled: z.boolean().optional().describe("true disables the account, false enables it again; disabling deletes the target's sessions and refuses its API tokens"),
+    emailVerified: z
+      .literal(true)
+      .optional()
+      .describe(
+        "true marks the account's address verified; for an address nobody had verified it takes away what the registrant set up, as redeeming the verification link does: the password, sessions, second factor, API tokens and linked identities of the account go, and the owner gets in through a password-reset link or a provider; nothing marks an address unverified, so false is refused",
+      ),
   })
-  .refine((request) => request.isInstanceAdmin !== undefined || request.disabled !== undefined, { message: "name at least one of isInstanceAdmin and disabled" })
+  .refine((request) => request.isInstanceAdmin !== undefined || request.disabled !== undefined || request.emailVerified !== undefined, {
+    message: "name at least one of isInstanceAdmin, disabled and emailVerified",
+  })
   .meta({ id: "UpdateInstanceAccountRequest" });
 
 export const listInstanceAccounts = defineOperation({
@@ -414,14 +422,14 @@ export const updateInstanceAccount = defineOperation({
   path: "/api/v1/instance/accounts/{id}",
   operationId: "updateInstanceAccount",
   tag: "instance",
-  summary: "Grant or clear the instance-admin flag of an account, or disable or enable it",
+  summary: "Grant or clear the instance-admin flag of an account, disable or enable it, or mark its address verified",
   auth: "instanceAdmin",
   rate: "write",
   reauth: true,
   request: { params: InstanceAccountParamsSchema, body: UpdateInstanceAccountRequestSchema },
   responses: {
     200: jsonResponse(
-      "The account after the change; a field the request leaves out, or sets to the value the account already has, changes nothing. Granting or clearing the flag deletes every session of the account. Disabling it deletes every session, refuses its API tokens from the next request on and, where a mail adapter is configured, queues the email that tells it so; enabling it clears the state. Each change is written to the instance audit stream",
+      "The account after the change; a field the request leaves out, or sets to the value the account already has, changes nothing. Granting or clearing the flag deletes every session of the account. Disabling it deletes every session, refuses its API tokens from the next request on and, where a mail adapter is configured, queues the email that tells it so; enabling it clears the state. Marking an address verified that was not (also for a disabled account) runs the clean-up redeeming the verification link runs, in the same transaction: the account's password is removed, its sessions, second factor and backup codes, API tokens, linked identities, and its unused password-reset, email-change and verification tokens are deleted, because whoever registered the address is not necessarily its owner; the owner then gets in through a password-reset link (issueInstanceAccountResetLink) or a provider. The calling admin's own account keeps its second factor and sessions. An address that was verified already is left as it is. Each change is written to the instance audit stream",
       InstanceAccountSchema,
     ),
     400: problemResponse("The request was malformed"),
@@ -431,9 +439,105 @@ export const updateInstanceAccount = defineOperation({
     ),
     404: problemResponse("There is no account with that identifier"),
     422: problemResponse(
-      "The body did not pass validation: a field the operation does not declare, neither field, or a value of the wrong type; or the change would leave the instance without an enabled instance admin: clearing the flag of, or disabling, the last one is refused as validation_failed with the field code last_instance_admin on isInstanceAdmin or disabled. Nothing is written",
+      "The body did not pass validation: a field the operation does not declare, none of the three fields, a value of the wrong type or emailVerified set to anything but true; or the change would leave the instance without an enabled instance admin: clearing the flag of, or disabling, the last one is refused as validation_failed with the field code last_instance_admin on isInstanceAdmin or disabled. Nothing is written",
     ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const InstanceAccountResetLinkSchema = z
+  .strictObject({
+    delivery: z
+      .enum(["mail", "link"])
+      .describe("`mail`: the reset email is queued for the account's address and no link is returned. `link`: no mail adapter is configured and the link is returned here"),
+    link: z
+      .string()
+      .nullable()
+      .describe("The reset link, valid for one hour and for one use, returned only when delivery is `link` and nowhere again; null when it was mailed"),
+  })
+  .meta({ id: "InstanceAccountResetLink" });
+
+export const resetInstanceAccountMfa = defineOperation({
+  method: "post",
+  path: "/api/v1/instance/accounts/{id}/mfa-reset",
+  operationId: "resetInstanceAccountMfa",
+  tag: "instance",
+  summary: "Reset the second factor of an account that lost it",
+  auth: "instanceAdmin",
+  rate: "write",
+  reauth: true,
+  request: { params: InstanceAccountParamsSchema },
+  responses: {
+    204: emptyResponse(
+      "The account's second factor is off: its secret, activation and backup codes are cleared and never returned, every session of the account is deleted, the instance audit stream records instance.account_mfa_reset and, where a mail adapter is configured, the account is emailed that an administrator reset it, all in one transaction. The account then signs in with its password alone. An account with no confirmed second factor is left as it is: nothing is written, deleted or sent",
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"),
+    403: problemResponse(
+      "The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden)",
+    ),
+    404: problemResponse("There is no account with that identifier"),
+    422: problemResponse(
+      "The account is disabled (validation_failed with the field code account_disabled on id), or it is the calling admin's own, whose second factor is turned off with the second factor that disabling it asks for (validation_failed with the field code self on id). Nothing is written",
+    ),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const issueInstanceAccountResetLink = defineOperation({
+  method: "post",
+  path: "/api/v1/instance/accounts/{id}/password-reset-link",
+  operationId: "issueInstanceAccountResetLink",
+  tag: "instance",
+  summary: "Issue a one-hour password-reset link for an account",
+  auth: "instanceAdmin",
+  rate: "write",
+  reauth: true,
+  request: { params: InstanceAccountParamsSchema },
+  responses: {
+    200: jsonResponse(
+      "A password-reset token that works once for one hour, replacing the account's earlier unused one, is issued and written to the instance audit stream as instance.account_reset_link_issued (naming the delivery, never the token). Where a mail adapter is configured the link is emailed to the account and none is returned (delivery mail, link null); otherwise, and for an account with no password and no linked provider identity, which the reset email is not sent to, it is returned here, once, as delivery link. Redeeming it is the ordinary password reset: every session of the account is deleted and, for an account with a second factor, the new session is partial until the code is given",
+      InstanceAccountResetLinkSchema,
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"),
+    403: problemResponse(
+      "The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden)",
+    ),
+    404: problemResponse("There is no account with that identifier"),
+    422: problemResponse(
+      "The account cannot use a reset link: it is disabled (account_disabled), its address was never verified (email_unverified: mark it verified or resend the verification email first) or it signs in through a provider only, with no password and a linked identity (no_password), each as validation_failed with that field code on id. Nothing is written or issued",
+    ),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const resendInstanceAccountVerification = defineOperation({
+  method: "post",
+  path: "/api/v1/instance/accounts/{id}/verification-email",
+  operationId: "resendInstanceAccountVerification",
+  tag: "instance",
+  summary: "Resend the verification email of an account",
+  auth: "instanceAdmin",
+  rate: "write",
+  request: { params: InstanceAccountParamsSchema },
+  responses: {
+    202: emptyResponse(
+      "The verification email is queued for the account's address, with a new link that replaces its earlier unused one, and the request is written to the instance audit stream as instance.account_verification_resent, in one transaction",
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    403: problemResponse(
+      "The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden)",
+    ),
+    404: problemResponse("There is no account with that identifier"),
+    422: problemResponse(
+      "The account's address is verified already (already_verified) or the account is disabled (account_disabled), each as validation_failed with that field code on id. Nothing is written or queued",
+    ),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("No mail adapter is configured (mail_unavailable), or the service is temporarily unavailable (unavailable). Nothing is queued"),
   },
 });

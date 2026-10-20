@@ -923,7 +923,7 @@ describe("sys_instance_add_membership", () => {
     const demoted = gate();
 
     const demoting = withTenant(demoter, async (tx) => {
-      const outcome = await instanceRepository(tx).updateAccount(caller, { isInstanceAdmin: false }, { admin: freshId(), disabled: freshId() }, null, []);
+      const outcome = await instanceRepository(tx).updateAccount(caller, { isInstanceAdmin: false }, { admin: freshId(), disabled: freshId(), verified: freshId() }, null, []);
       demoted.open();
       await held.opened;
       return outcome;

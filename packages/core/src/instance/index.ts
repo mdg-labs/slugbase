@@ -17,6 +17,20 @@ export type {
   InstanceAccountUpdateAsk,
   InstanceAccountUpdateOutcome,
 } from "./accounts.ts";
+export { issueInstanceResetLink, passwordResetLink, requestInstanceAccountVerification, resetInstanceAccountMfa } from "./recovery.ts";
+export type {
+  InstanceMfaResetAsk,
+  InstanceMfaResetOutcome,
+  InstanceRecoveryAsk,
+  InstanceRecoveryDependencies,
+  InstanceRecoveryStore,
+  InstanceResetLinkAsk,
+  InstanceResetLinkOutcome,
+  InstanceResetLinkRefusal,
+  InstanceResetLinkStoreOutcome,
+  InstanceVerificationOutcome,
+  InstanceVerificationRefusal,
+} from "./recovery.ts";
 export { addInstanceAdminMembership, createInstanceWorkspace, listInstanceWorkspaces, requestInstanceWorkspaceDeletion } from "./workspaces.ts";
 export type {
   InstanceMembershipOutcome,

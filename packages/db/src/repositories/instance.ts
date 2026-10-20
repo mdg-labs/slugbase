@@ -6,6 +6,9 @@ import {
   type InstanceAccountChange,
   type InstanceAccountUpdateOutcome,
   type InstanceAuditEvent,
+  type InstanceMfaResetOutcome,
+  type InstanceResetLinkStoreOutcome,
+  type InstanceVerificationOutcome,
   type InstanceSettings,
   type InstanceSettingsChange,
   type InstanceMembershipRequest,
@@ -15,7 +18,7 @@ import {
   type InstanceWorkspaceCreationResult,
   type InstanceWorkspaceOwner,
 } from "@slugbase/core";
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import { enqueueInTenantTransaction, type QueuedJob } from "../system/queue.ts";
 import { tenantHandle, type TenantTx } from "../tenant.ts";
 
@@ -139,10 +142,13 @@ export interface InstanceRepository {
   listAccounts(eventId: string, ipPrefix: string | null): Promise<readonly InstanceAccount[]>;
   /**
    * Applies the change to the account in one call of `sys_instance_update_account`, which checks the calling admin once
-   * for both fields: grants or clears the instance-admin flag (`instance.account_admin_granted` or
-   * `instance.account_admin_revoked`, under `eventIds.admin`) and disables or enables the account
-   * (`instance.account_disabled` or `instance.account_enabled`, under `eventIds.disabled`). A change of the flag, and
-   * disabling, delete every session of the account. A change that takes the only enabled admin away is
+   * for every field: grants or clears the instance-admin flag (`instance.account_admin_granted` or
+   * `instance.account_admin_revoked`, under `eventIds.admin`), disables or enables the account
+   * (`instance.account_disabled` or `instance.account_enabled`, under `eventIds.disabled`) and marks its address
+   * verified (`instance.account_email_verified`, under `eventIds.verified`). An address that was not verified loses what its
+   * registrant set up, as redeeming the verification link does (`account_mark_verified`): the password, sessions, second
+   * factor, API tokens, linked identities and the unused tokens of the account; the calling admin's own account is only
+   * marked. A change of the flag, and disabling, delete every session of the account. A change that takes the only enabled admin away is
    * `last_instance_admin`, decided under the advisory lock of the set of admins (doc 05 section 7.1), with nothing
    * written or queued; the field says which of the two it refused. A field that already has the value writes nothing.
    * `jobs` are queued in the same transaction, only when this call disabled the account. Raises, writing nothing, when
@@ -152,10 +158,42 @@ export interface InstanceRepository {
   updateAccount(
     accountId: string,
     change: InstanceAccountChange,
-    eventIds: { readonly admin: string; readonly disabled: string },
+    eventIds: { readonly admin: string; readonly disabled: string; readonly verified: string },
     ipPrefix: string | null,
     jobs: readonly QueuedJob[],
   ): Promise<InstanceAccountUpdateOutcome>;
+  /**
+   * Turns the account's second factor off through `sys_instance_reset_mfa`: clears the secret, its key id, the
+   * activation time and the accepted step, deletes the backup codes and every session of the account, and writes
+   * `instance.account_mfa_reset`, in one call; the secret is never read. `jobs` are queued in the same transaction, only
+   * when the answer is `reset`. Every other answer writes, deletes and queues nothing. Raises, writing nothing, when the
+   * account of the transaction is not an instance admin with a second factor. Works in an account-level transaction.
+   */
+  resetMfa(accountId: string, eventId: string, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<InstanceMfaResetOutcome>;
+  /**
+   * Vouches through `sys_instance_issue_reset_link` that the account may be sent a password-reset token and writes
+   * `instance.account_reset_link_issued`. With `token` (the identifier and the SHA-256 of a token the caller generated)
+   * the one-hour token is stored in the same call, replacing the account's earlier unused one, and the event names the
+   * delivery `link`; without it nothing is stored and the delivery is `mail`. An account with no password and no linked
+   * provider identity cannot be mailed (the mail job sends the reset email only to an account with a password), so
+   * without a token the answer is `link_required`, and nothing is written. `jobs` are queued in the same transaction,
+   * only when the answer is `issued`. Every refusal writes, issues and queues nothing. Raises, writing nothing, when the
+   * account of the transaction is not an instance admin with a second factor. Works in an account-level transaction.
+   */
+  issueResetLink(
+    accountId: string,
+    eventId: string,
+    token: { readonly id: string; readonly hash: Buffer } | undefined,
+    ipPrefix: string | null,
+    jobs: readonly QueuedJob[],
+  ): Promise<InstanceResetLinkStoreOutcome>;
+  /**
+   * Writes `instance.account_verification_resent` through `sys_instance_resend_verification` for an enabled account whose
+   * address is not verified; `jobs` are queued in the same transaction, only when the answer is `requested`. Every refusal
+   * writes and queues nothing. Raises, writing nothing, when the account of the transaction is not an instance admin
+   * with a second factor. Works in an account-level transaction.
+   */
+  requestVerification(accountId: string, eventId: string, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<InstanceVerificationOutcome>;
 }
 
 interface EnrolledRow extends Record<string, unknown> {
@@ -225,6 +263,11 @@ interface AccountChangeRow extends AccountColumns {
   refused_field: string | null;
   admin_changed: boolean | null;
   disabled_changed: boolean | null;
+  verified_changed: boolean | null;
+}
+
+interface RecoveryRow extends Record<string, unknown> {
+  outcome: string;
 }
 
 interface DeletedWorkspaceRow extends Record<string, unknown> {
@@ -295,16 +338,22 @@ function accountChangeOf(rows: readonly AccountChangeRow[]): InstanceAccountUpda
       }
       return { kind: "last_instance_admin", field: row.refused_field };
     case "updated":
-      if (row.admin_changed === null || row.disabled_changed === null) {
+      if (row.admin_changed === null || row.disabled_changed === null || row.verified_changed === null) {
         throw new Error("sys_instance_update_account did not say which fields changed");
       }
-      return { kind: "updated", account: accountOf(row), adminChanged: row.admin_changed, disabledChanged: row.disabled_changed };
+      return {
+        kind: "updated",
+        account: accountOf(row),
+        adminChanged: row.admin_changed,
+        disabledChanged: row.disabled_changed,
+        verifiedChanged: row.verified_changed,
+      };
     default:
       throw new Error("sys_instance_update_account answered an outcome it does not define");
   }
 }
 
-const ACCOUNT_COLUMNS = sql`outcome, refused_field, admin_changed, disabled_changed, acct_id, acct_name, acct_email, acct_verified, acct_mfa_on, acct_admin, acct_disabled,
+const ACCOUNT_COLUMNS = sql`outcome, refused_field, admin_changed, disabled_changed, verified_changed, acct_id, acct_name, acct_email, acct_verified, acct_mfa_on, acct_admin, acct_disabled,
           to_char(acct_last_sign_in AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS acct_last_sign_in, acct_workspaces::text AS acct_workspaces`;
 
 function settingsOf(row: SettingsRow): InstanceSettings {
@@ -507,8 +556,8 @@ export function instanceRepository(tx: TenantTx): InstanceRepository {
       const rows = await tenantHandle(tx).execute<AccountChangeRow>(sql`
         SELECT ${ACCOUNT_COLUMNS}
         FROM public.sys_instance_update_account(
-          ${eventIds.admin}::uuid, ${eventIds.disabled}::uuid, ${ipPrefix}::cidr, ${accountId}::uuid,
-          ${change.isInstanceAdmin ?? null}::boolean, ${change.disabled ?? null}::boolean)`);
+          ${eventIds.admin}::uuid, ${eventIds.disabled}::uuid, ${eventIds.verified}::uuid, ${ipPrefix}::cidr, ${accountId}::uuid,
+          ${change.isInstanceAdmin ?? null}::boolean, ${change.disabled ?? null}::boolean, ${change.emailVerified ?? null}::boolean)`);
       const result = accountChangeOf(rows);
       if (result.kind === "updated" && result.disabledChanged) {
         for (const job of jobs) {
@@ -517,5 +566,81 @@ export function instanceRepository(tx: TenantTx): InstanceRepository {
       }
       return result;
     },
+
+    async resetMfa(accountId, eventId, ipPrefix, jobs) {
+      const outcome = await recoveryOutcome(
+        tx,
+        "sys_instance_reset_mfa",
+        sql`SELECT public.sys_instance_reset_mfa(${eventId}::uuid, ${ipPrefix}::cidr, ${accountId}::uuid) AS outcome`,
+      );
+      switch (outcome) {
+        case "reset":
+          await enqueueAll(tx, jobs);
+          return outcome;
+        case "mfa_not_enabled":
+        case "account_disabled":
+        case "self":
+        case "unknown_account":
+          return outcome;
+        default:
+          throw new Error("sys_instance_reset_mfa answered an outcome it does not define");
+      }
+    },
+
+    async issueResetLink(accountId, eventId, token, ipPrefix, jobs) {
+      const outcome = await recoveryOutcome(
+        tx,
+        "sys_instance_issue_reset_link",
+        sql`SELECT public.sys_instance_issue_reset_link(
+          ${eventId}::uuid, ${ipPrefix}::cidr, ${accountId}::uuid, ${token?.id ?? null}::uuid, ${token?.hash ?? null}::bytea) AS outcome`,
+      );
+      switch (outcome) {
+        case "issued":
+          await enqueueAll(tx, jobs);
+          return outcome;
+        case "link_required":
+        case "account_disabled":
+        case "email_unverified":
+        case "no_password":
+        case "unknown_account":
+          return outcome;
+        default:
+          throw new Error("sys_instance_issue_reset_link answered an outcome it does not define");
+      }
+    },
+
+    async requestVerification(accountId, eventId, ipPrefix, jobs) {
+      const outcome = await recoveryOutcome(
+        tx,
+        "sys_instance_resend_verification",
+        sql`SELECT public.sys_instance_resend_verification(${eventId}::uuid, ${ipPrefix}::cidr, ${accountId}::uuid) AS outcome`,
+      );
+      switch (outcome) {
+        case "requested":
+          await enqueueAll(tx, jobs);
+          return outcome;
+        case "already_verified":
+        case "account_disabled":
+        case "unknown_account":
+          return outcome;
+        default:
+          throw new Error("sys_instance_resend_verification answered an outcome it does not define");
+      }
+    },
   };
+}
+
+async function recoveryOutcome(tx: TenantTx, operation: string, statement: SQL): Promise<string> {
+  const rows = await tenantHandle(tx).execute<RecoveryRow>(statement);
+  const row = rows[0];
+  if (rows.length !== 1 || row === undefined) {
+    throw new Error(`${operation} did not return exactly one row`);
+  }
+  return row.outcome;
+}
+
+async function enqueueAll(tx: TenantTx, jobs: readonly QueuedJob[]): Promise<void> {
+  for (const job of jobs) {
+    await enqueueInTenantTransaction(tx, job);
+  }
 }

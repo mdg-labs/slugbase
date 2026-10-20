@@ -46,7 +46,7 @@ beforeAll(async () => {
 function serve(modules: readonly ServerModule[], document?: TestDocument, options: { readonly memberships?: boolean; readonly entitlements?: EntitlementCheck } = {}): Server {
   // The walker signs in once for each operation that needs a session, and calls each of the mfa and reset buckets' operations several times,
   // more often than the default limits of one address allow.
-  const config = serverConfig({ NODE_ENV: "test", DATABASE_URL: appUrl(database()), RATE_LIMIT_LOGIN_IP: "100/min", RATE_LIMIT_MFA_IP: "100/min", RATE_LIMIT_MFA_ACCOUNT: "1000/hour", RATE_LIMIT_RESET_IP: "1000/hour" });
+  const config = serverConfig({ NODE_ENV: "test", DATABASE_URL: appUrl(database()), RATE_LIMIT_LOGIN_IP: "200/min", RATE_LIMIT_MFA_IP: "100/min", RATE_LIMIT_MFA_ACCOUNT: "1000/hour", RATE_LIMIT_RESET_IP: "1000/hour" });
   return createServer({
     config,
     // The stub resolver knows the workspaces of the fixture and no session of a real sign-in; the walk of the committed document resolves each
@@ -231,12 +231,12 @@ describe("the walker over the committed document", () => {
     expect(report.failures.filter((failure) => !teamRefusal(failure))).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each anonymous operation and for the sign-in; each of the fifty operations that need a session
-    // also answers 401 without one, each of the thirteen that declare re-authentication answers 401 reauth_required without it, and each of
+    // One valid request for each anonymous operation and for the sign-in; each of the fifty-three operations that need a session
+    // also answers 401 without one, each of the fifteen that declare re-authentication answers 401 reauth_required without it, and each of
     // the sixteen that need a role in the workspace answers the principal just below it (404 below member, 403 below admin), and each of the eight
     // that name a member, a recipient, a team or an invitation answers for one of workspace B; each of the four that declare an entitlement answers 403 to an account without it;
-    // and each of the nine instance operations answers 403 to the ordinary account just below its policy.
-    expect(report.calls).toBe(operations.length + 101);
+    // and each of the twelve instance operations answers 403 to the ordinary account just below its policy.
+    expect(report.calls).toBe(operations.length + 109);
   }, WALK_TIMEOUT_MS);
 });
 

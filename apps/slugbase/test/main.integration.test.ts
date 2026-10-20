@@ -558,7 +558,7 @@ describe("apps/slugbase main server and the instance admin account operations", 
   });
   const first = { displayName: "Ada", email: "ada@example.test", password: "a long enough password for ada", workspaceName: "Home" };
 
-  it("composes GET /api/v1/instance/accounts and PATCH /api/v1/instance/accounts/{id}: each asks for a credential, and each refuses the first admin, whom setup signs in without a second factor", async () => {
+  it("composes the instance account operations: each asks for a credential, and each refuses the first admin, whom setup signs in without a second factor", async () => {
     const ACCOUNTS = "/api/v1/instance/accounts";
     const unknown = "0192f3a0-aaaa-7000-8000-00000000dead";
     const { status, output, observed } = await runServer(env(), async (port) => {
@@ -571,18 +571,23 @@ describe("apps/slugbase main server and the instance admin account operations", 
         );
       };
       const change = { disabled: true };
+      const recovery = ["mfa-reset", "password-reset-link", "verification-email"].map((action) => `${ACCOUNTS}/${unknown}/${action}`);
       const anonymous = [await as("", "GET", ACCOUNTS), await as("", "PATCH", `${ACCOUNTS}/${unknown}`, change)];
+      for (const path of recovery) {
+        anonymous.push(await as("", "POST", path));
+      }
       const created = await post(port, "/api/v1/setup", first);
       const cookie = /set-cookie: (__Host-slugbase_session=[A-Za-z0-9_-]+)/i.exec(created)?.[1] ?? "";
       const signedIn = [await as(cookie, "GET", ACCOUNTS), await as(cookie, "PATCH", `${ACCOUNTS}/${unknown}`, change)];
+      for (const path of recovery) {
+        signedIn.push(await as(cookie, "POST", path));
+      }
       return [...anonymous, ...signedIn].map((answer) => `${answer.split("\r\n")[0] ?? ""} ${/"code":"([a-z_]+)"/.exec(answer)?.[1] ?? ""}`).join("\n=====\n");
     });
     expect(status, output).toBe(0);
     expect((observed ?? "").split("\n=====\n")).toEqual([
-      "HTTP/1.1 401 Unauthorized unauthenticated",
-      "HTTP/1.1 401 Unauthorized unauthenticated",
-      "HTTP/1.1 403 Forbidden forbidden",
-      "HTTP/1.1 403 Forbidden forbidden",
+      ...Array<string>(5).fill("HTTP/1.1 401 Unauthorized unauthenticated"),
+      ...Array<string>(5).fill("HTTP/1.1 403 Forbidden forbidden"),
     ]);
   }, 60_000);
 });

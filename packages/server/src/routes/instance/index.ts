@@ -4,8 +4,11 @@ import {
   deleteInstanceWorkspace as deleteInstanceWorkspaceOperation,
   getInstanceSettings,
   getInstanceStatus,
+  issueInstanceAccountResetLink as issueInstanceAccountResetLinkOperation,
   listInstanceAccounts as listInstanceAccountsOperation,
   listInstanceWorkspaces as listInstanceWorkspacesOperation,
+  resendInstanceAccountVerification as resendInstanceAccountVerificationOperation,
+  resetInstanceAccountMfa as resetInstanceAccountMfaOperation,
   sendInstanceTestMail,
   updateInstanceAccount as updateInstanceAccountOperation,
   updateInstanceSettings,
@@ -14,13 +17,17 @@ import {
   addInstanceAdminMembership,
   createInstanceWorkspace,
   invitationLink,
+  issueInstanceResetLink,
   listInstanceAccounts,
   listInstanceWorkspaces,
+  requestInstanceAccountVerification,
   requestInstanceWorkspaceDeletion,
+  resetInstanceAccountMfa,
   updateInstanceAccount,
   type Adapters,
   type InstanceAccount,
   type InstanceAccountStore,
+  type InstanceRecoveryStore,
   type InstanceWorkspaceStore,
   type RegistrationSettings,
 } from "@slugbase/core";
@@ -87,6 +94,18 @@ import { route } from "../register.ts";
 // target's sessions, so the next request of each answers 401; a disabled account's API tokens are refused by their lookup. When the
 // account is disabled and mail is configured the email that tells it so is queued in the same transaction.
 //
+// POST /api/v1/instance/accounts/{id}/mfa-reset, /password-reset-link and /verification-email (doc 02 sections 2.7 and 11.2, doc 04 section
+// 10.10, doc 10 T7 and T17) recover an account, and PATCH /api/v1/instance/accounts/{id} marks its address verified with `emailVerified: true`.
+// Each goes through a `sys_instance_*` function that repeats the admin check in the database and writes its instance audit event in the same
+// call. The reset of the second factor and the reset link need a session that re-authenticated within ten minutes. The reset clears the factor
+// and deletes the target's sessions in the database and never reads the secret; the email that tells the account is queued in the same
+// transaction where mail is configured. The reset link is a one-hour password-reset token: where mail is configured it is mailed (the mail job
+// makes the token, as for a member's own request) and the response carries none, and where it is not the application makes it, the database
+// stores its hash and the response returns the link once. The verification email is queued in the transaction that audits it and needs mail
+// (503 `mail_unavailable` before anything is written otherwise). A disabled account is refused by all three, a refusal is 422 `validation_failed`
+// with a field code on `id` (`account_disabled`, `self`, `email_unverified`, `no_password`, `already_verified`), and 404 is an account that
+// does not exist; a reset of an account without a confirmed second factor changes nothing and answers 204 all the same.
+//
 // POST /api/v1/instance/mail/test queues a test message to the calling admin's address, as the `mail.send` job reads
 // the address when it runs, and writes `instance.test_mail_queued` in the transaction that queues it. A deployment
 // without a mail adapter answers `503 mail_unavailable` before anything is written.
@@ -118,6 +137,11 @@ const ADMIN_GRANT_REFUSED = "This deployment does not grant the instance-admin f
 const NO_SUCH_ACCOUNT_TO_CHANGE = "There is no such account.";
 const LAST_INSTANCE_ADMIN = "The instance must keep an enabled instance admin.";
 const MAIL_UNAVAILABLE = "Email delivery is not available on this instance.";
+const ACCOUNT_DISABLED = "The account is disabled; enable it first.";
+const OWN_MFA = "Your own two-factor authentication is turned off in your account settings, with your second factor.";
+const EMAIL_UNVERIFIED = "The account's address is not verified; mark it verified or resend the verification email first.";
+const NO_PASSWORD = "The account has no password to reset; it signs in through a provider.";
+const ALREADY_VERIFIED = "The account's address is verified already.";
 const NO_SUCH_ACCOUNT = "There is no account that can own the workspace.";
 const NO_SUCH_WORKSPACE = "There is no such workspace.";
 const ALREADY_MEMBER = "You are a member of this workspace already.";
@@ -166,6 +190,24 @@ function accountStoreOf(tx: TenantTx): InstanceAccountStore {
     updateAccount: (accountId, change, notify, eventIds, ipPrefix) =>
       repository.updateAccount(accountId, change, eventIds, ipPrefix, change.disabled === true && notify ? [queueMailSend(uuidv7(), "accountDisabled", accountId)] : []),
   };
+}
+
+/** The recovery operations of the instance admin, bound to the account-level transaction of the request; each queues its email in that transaction. */
+function recoveryStoreOf(tx: TenantTx): InstanceRecoveryStore {
+  const repository = instanceRepository(tx);
+  return {
+    resetMfa: (accountId, eventId, notify, ipPrefix) =>
+      repository.resetMfa(accountId, eventId, ipPrefix, notify ? [queueMailSend(uuidv7(), "mfaReset", accountId)] : []),
+    // Without a token the link travels by mail, which the mail job makes when it runs.
+    issueResetLink: (accountId, eventId, token, ipPrefix) =>
+      repository.issueResetLink(accountId, eventId, token, ipPrefix, token === undefined ? [queueMailSend(uuidv7(), "passwordReset", accountId)] : []),
+    requestVerification: (accountId, eventId, ipPrefix) => repository.requestVerification(accountId, eventId, ipPrefix, [queueMailSend(uuidv7(), "verifyEmail", accountId)]),
+  };
+}
+
+/** A refusal of a recovery operation that names the account: the field is the `id` of the path. */
+function refusal(message: string, code: string): ProblemError {
+  return new ProblemError("validation_failed", message, { errors: [{ path: "id", code }] });
 }
 
 export function instanceRoutes({
@@ -345,6 +387,7 @@ export function instanceRoutes({
             accountId: targetAccountId,
             ...(body.isInstanceAdmin === undefined ? {} : { isInstanceAdmin: body.isInstanceAdmin }),
             ...(body.disabled === undefined ? {} : { disabled: body.disabled }),
+            ...(body.emailVerified === undefined ? {} : { emailVerified: body.emailVerified }),
             notify: adapters.mail.available,
             ipPrefix: networkPrefixOf(context.get("clientIp")) ?? null,
           },
@@ -360,6 +403,76 @@ export function instanceRoutes({
         }
       });
       return { status: 200, body: accountBody(account) };
+    }),
+
+    route(resetInstanceAccountMfaOperation).handle(async ({ params }, context) => {
+      const { accountId } = sessionOf(context);
+      await withTenant({ accountId, requestId: requestIdOf(context) }, async (tx) => {
+        const outcome = await resetInstanceAccountMfa(
+          { store: recoveryStoreOf(tx), newId: uuidv7 },
+          { accountId: params.id.toLowerCase(), notify: adapters.mail.available, ipPrefix: networkPrefixOf(context.get("clientIp")) ?? null },
+        );
+        switch (outcome) {
+          case "reset":
+          case "mfa_not_enabled":
+            return;
+          case "unknown_account":
+            throw new ProblemError("not_found", NO_SUCH_ACCOUNT_TO_CHANGE);
+          case "account_disabled":
+            throw refusal(ACCOUNT_DISABLED, "account_disabled");
+          case "self":
+            throw refusal(OWN_MFA, "self");
+        }
+      });
+      return { status: 204 };
+    }),
+
+    route(issueInstanceAccountResetLinkOperation).handle(async ({ params }, context) => {
+      const { accountId } = sessionOf(context);
+      const outcome = await withTenant({ accountId, requestId: requestIdOf(context) }, async (tx) => {
+        const result = await issueInstanceResetLink(
+          { store: recoveryStoreOf(tx), newId: uuidv7 },
+          { accountId: params.id.toLowerCase(), mailAvailable: adapters.mail.available, origin: appOrigin, ipPrefix: networkPrefixOf(context.get("clientIp")) ?? null },
+        );
+        switch (result.kind) {
+          case "mailed":
+          case "link":
+            return result;
+          case "unknown_account":
+            throw new ProblemError("not_found", NO_SUCH_ACCOUNT_TO_CHANGE);
+          case "account_disabled":
+            throw refusal(ACCOUNT_DISABLED, "account_disabled");
+          case "email_unverified":
+            throw refusal(EMAIL_UNVERIFIED, "email_unverified");
+          case "no_password":
+            throw refusal(NO_PASSWORD, "no_password");
+        }
+      });
+      return { status: 200, body: outcome.kind === "link" ? { delivery: "link", link: outcome.link } : { delivery: "mail", link: null } };
+    }),
+
+    route(resendInstanceAccountVerificationOperation).handle(async ({ params }, context) => {
+      const { accountId } = sessionOf(context);
+      if (!adapters.mail.available) {
+        throw new ProblemError("mail_unavailable", MAIL_UNAVAILABLE);
+      }
+      await withTenant({ accountId, requestId: requestIdOf(context) }, async (tx) => {
+        const outcome = await requestInstanceAccountVerification(
+          { store: recoveryStoreOf(tx), newId: uuidv7 },
+          { accountId: params.id.toLowerCase(), ipPrefix: networkPrefixOf(context.get("clientIp")) ?? null },
+        );
+        switch (outcome) {
+          case "requested":
+            return;
+          case "unknown_account":
+            throw new ProblemError("not_found", NO_SUCH_ACCOUNT_TO_CHANGE);
+          case "account_disabled":
+            throw refusal(ACCOUNT_DISABLED, "account_disabled");
+          case "already_verified":
+            throw refusal(ALREADY_VERIFIED, "already_verified");
+        }
+      });
+      return { status: 202 };
     }),
   ];
 }

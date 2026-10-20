@@ -178,6 +178,9 @@ describe("the shipped chain", () => {
       "sys_instance_list_accounts",
       "sys_instance_update_account",
       "sys_instance_add_membership",
+      "sys_instance_reset_mfa",
+      "sys_instance_issue_reset_link",
+      "sys_instance_resend_verification",
     ]);
     expect(checkRules).toContain(systemOperationsRule);
     const database = await scratch();

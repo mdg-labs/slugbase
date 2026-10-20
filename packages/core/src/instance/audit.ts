@@ -26,6 +26,13 @@ export const INSTANCE_AUDIT_ACTIONS = {
   "instance.account_admin_revoked": { metadata: {} },
   "instance.account_disabled": { metadata: {} },
   "instance.account_enabled": { metadata: {} },
+  // The recovery actions (doc 02 section 11.2). A reset of the second factor, a resent verification email and an address marked
+  // verified carry no metadata. A password-reset link names how it reached the account, `mail` or `link` (returned once to the
+  // admin), and never the token.
+  "instance.account_mfa_reset": { metadata: {} },
+  "instance.account_reset_link_issued": { metadata: { delivery: "text" } },
+  "instance.account_verification_resent": { metadata: {} },
+  "instance.account_email_verified": { metadata: {} },
 } as const;
 
 export type InstanceAuditAction = keyof typeof INSTANCE_AUDIT_ACTIONS;

@@ -22,7 +22,7 @@ export const ACCOUNT_CREATION_PATHS: readonly ["self-registration", "invitation"
 export const ACCOUNT_LIMIT_ENTITLEMENTS: readonly AccountLimitEntitlement[];
 
 // @public
-export const ACCOUNT_NOTIFICATIONS: readonly ["passwordChanged", "mfaEnabled", "mfaDisabled", "verifyEmail", "newSignIn", "passwordReset", "emailChange", "emailChangeNotice", "ownershipTransferred", "accountDisabled"];
+export const ACCOUNT_NOTIFICATIONS: readonly ["passwordChanged", "mfaEnabled", "mfaDisabled", "verifyEmail", "newSignIn", "passwordReset", "emailChange", "emailChangeNotice", "ownershipTransferred", "accountDisabled", "mfaReset"];
 
 // @public (undocumented)
 export type AccountCreationPath = (typeof ACCOUNT_CREATION_PATHS)[number];
@@ -1105,6 +1105,20 @@ export const INSTANCE_AUDIT_ACTIONS: {
     readonly "instance.account_enabled": {
         readonly metadata: {};
     };
+    readonly "instance.account_mfa_reset": {
+        readonly metadata: {};
+    };
+    readonly "instance.account_reset_link_issued": {
+        readonly metadata: {
+            readonly delivery: "text";
+        };
+    };
+    readonly "instance.account_verification_resent": {
+        readonly metadata: {};
+    };
+    readonly "instance.account_email_verified": {
+        readonly metadata: {};
+    };
 };
 
 // @public
@@ -1142,6 +1156,7 @@ export interface InstanceAccountAsk {
 export interface InstanceAccountChange {
     // (undocumented)
     readonly disabled?: boolean;
+    readonly emailVerified?: true;
     // (undocumented)
     readonly isInstanceAdmin?: boolean;
 }
@@ -1159,6 +1174,7 @@ export interface InstanceAccountStore {
     updateAccount(accountId: string, change: InstanceAccountChange, notify: boolean, eventIds: {
         readonly admin: string;
         readonly disabled: string;
+        readonly verified: string;
     }, ipPrefix: string | null): Promise<InstanceAccountUpdateOutcome>;
 }
 
@@ -1167,18 +1183,20 @@ export interface InstanceAccountUpdateAsk extends InstanceAccountAsk {
     // (undocumented)
     readonly accountId: string;
     readonly disabled?: boolean;
+    readonly emailVerified?: true;
     readonly isInstanceAdmin?: boolean;
     readonly notify: boolean;
 }
 
 // @public
 export type InstanceAccountUpdateOutcome =
-/** Every field the ask named is in the state it names; `adminChanged` and `disabledChanged` say which of them moved. */
+/** Every field the ask named is in the state it names; `adminChanged`, `disabledChanged` and `verifiedChanged` say which of them moved. */
     {
     readonly kind: "updated";
     readonly account: InstanceAccount;
     readonly adminChanged: boolean;
     readonly disabledChanged: boolean;
+    readonly verifiedChanged: boolean;
 }
 /** The account does not exist; nothing was written. */
 | {
@@ -1239,6 +1257,70 @@ export type InstanceMembershipResult = {
 };
 
 // @public (undocumented)
+export interface InstanceMfaResetAsk extends InstanceRecoveryAsk {
+    readonly notify: boolean;
+}
+
+// @public
+export type InstanceMfaResetOutcome =
+/** The second factor was on and is off; every session of the account is gone and the audit event is written. */
+"reset"
+/** The account has no confirmed second factor; nothing was written, deleted or queued. */
+| "mfa_not_enabled" | "account_disabled"
+/** The target is the calling admin, who turns their own second factor off with the second factor that asks for. */
+| "self" | "unknown_account";
+
+// @public (undocumented)
+export interface InstanceRecoveryAsk {
+    // (undocumented)
+    readonly accountId: string;
+    readonly ipPrefix: string | null;
+}
+
+// @public (undocumented)
+export interface InstanceRecoveryDependencies {
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: InstanceRecoveryStore;
+}
+
+// @public
+export interface InstanceRecoveryStore {
+    issueResetLink(accountId: string, eventId: string, token: {
+        readonly id: string;
+        readonly hash: Buffer;
+    } | undefined, ipPrefix: string | null): Promise<InstanceResetLinkStoreOutcome>;
+    requestVerification(accountId: string, eventId: string, ipPrefix: string | null): Promise<InstanceVerificationOutcome>;
+    resetMfa(accountId: string, eventId: string, notify: boolean, ipPrefix: string | null): Promise<InstanceMfaResetOutcome>;
+}
+
+// @public (undocumented)
+export interface InstanceResetLinkAsk extends InstanceRecoveryAsk {
+    readonly mailAvailable: boolean;
+    readonly origin: string;
+}
+
+// @public
+export type InstanceResetLinkOutcome =
+/** The password-reset email is queued; no link is returned, since the email carries it. */
+    {
+    readonly kind: "mailed";
+}
+/** No mail can carry it: the link, valid for one hour, is returned here and nowhere else. */
+| {
+    readonly kind: "link";
+    readonly link: string;
+} | {
+    readonly kind: InstanceResetLinkRefusal;
+};
+
+// @public
+export type InstanceResetLinkRefusal = "account_disabled" | "email_unverified" | "no_password" | "unknown_account";
+
+// @public
+export type InstanceResetLinkStoreOutcome = "issued" | "link_required" | InstanceResetLinkRefusal;
+
+// @public (undocumented)
 export type InstanceSettingName = (typeof INSTANCE_SETTING_NAMES)[number];
 
 // @public
@@ -1258,6 +1340,12 @@ export type InstanceSettingsChange = {
 
 // @public
 export function instanceTestMail(recipient: NotificationRecipient): MailMessage;
+
+// @public (undocumented)
+export type InstanceVerificationOutcome = "requested" | InstanceVerificationRefusal;
+
+// @public
+export type InstanceVerificationRefusal = "already_verified" | "account_disabled" | "unknown_account";
 
 // @public
 export interface InstanceWorkspace {
@@ -1836,6 +1924,9 @@ export function isEntitlementKey(key: string): key is EntitlementKey;
 export function isInstanceAuditAction(value: unknown): value is InstanceAuditAction;
 
 // @public
+export function issueInstanceResetLink(input: InstanceRecoveryDependencies, ask: InstanceResetLinkAsk): Promise<InstanceResetLinkOutcome>;
+
+// @public
 export function listInstanceAccounts(input: InstanceAccountDependencies, ask: InstanceAccountAsk): Promise<readonly InstanceAccount[]>;
 
 // @public
@@ -2165,6 +2256,9 @@ export interface PasswordPolicyOptions {
 export type PasswordProblem = "too_short" | "too_long" | "breached";
 
 // @public
+export function passwordResetLink(origin: string, token: string): string;
+
+// @public
 export const PERSONAL_WORKSPACE_NAME_SUFFIX = "'s workspace";
 
 // @public (undocumented)
@@ -2284,6 +2378,9 @@ export interface RequestEntitlements {
 }
 
 // @public
+export function requestInstanceAccountVerification(input: InstanceRecoveryDependencies, ask: InstanceRecoveryAsk): Promise<InstanceVerificationOutcome>;
+
+// @public
 export function requestInstanceWorkspaceDeletion<Code extends string>(input: InstanceWorkspaceDeletionDependencies<Code>, ask: InstanceWorkspaceAsk & {
     readonly workspaceId: string;
 }): Promise<InstanceWorkspaceDeletionOutcome<Code>>;
@@ -2293,6 +2390,9 @@ export function requestWorkspaceDeletion<Code extends string>(input: WorkspaceDe
 
 // @public
 export function resendInvitation(input: InvitationActionDependencies, ask: InvitationActionAsk): Promise<InvitationResendOutcome>;
+
+// @public
+export function resetInstanceAccountMfa(input: InstanceRecoveryDependencies, ask: InstanceMfaResetAsk): Promise<InstanceMfaResetOutcome>;
 
 // @public
 export function revokeInvitation(input: Pick<InvitationActionDependencies, "store" | "audit">, ask: InvitationActionAsk): Promise<InvitationRevokeOutcome>;

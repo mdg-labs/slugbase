@@ -587,6 +587,10 @@ export interface ComponentTypes {
         InstanceAccountList: {
             items: ComponentTypes["schemas"]["InstanceAccount"][];
         };
+        InstanceAccountResetLink: {
+            delivery: "mail" | "link";
+            link: string | null;
+        };
         InstanceOwnerInvitation: {
             email: string;
             expiresAt: string;
@@ -853,6 +857,7 @@ export interface ComponentTypes {
         };
         UpdateInstanceAccountRequest: {
             disabled?: boolean;
+            emailVerified?: true;
             isInstanceAdmin?: boolean;
         };
         UpdateInstanceSettingsRequest: {
@@ -1980,6 +1985,15 @@ export const InstanceAccountParamsSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
+export const InstanceAccountResetLinkSchema: z.ZodObject<{
+    delivery: z.ZodEnum<{
+        link: "link";
+        mail: "mail";
+    }>;
+    link: z.ZodNullable<z.ZodString>;
+}, z.core.$strict>;
+
+// @public (undocumented)
 export const InstanceAccountSchema: z.ZodObject<{
     id: z.ZodUUID;
     displayName: z.ZodString;
@@ -2223,6 +2237,39 @@ export const InvitationSchema: z.ZodObject<{
     expiresAt: z.ZodISODateTime;
     createdAt: z.ZodISODateTime;
 }, z.core.$strict>;
+
+// @public (undocumented)
+export const issueInstanceAccountResetLink: {
+    readonly method: "post";
+    readonly path: "/api/v1/instance/accounts/{id}/password-reset-link";
+    readonly operationId: "issueInstanceAccountResetLink";
+    readonly tag: "instance";
+    readonly summary: "Issue a one-hour password-reset link for an account";
+    readonly auth: "instanceAdmin";
+    readonly rate: "write";
+    readonly reauth: true;
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        delivery: z.ZodEnum<{
+        link: "link";
+        mail: "mail";
+        }>;
+        link: z.ZodNullable<z.ZodString>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
 
 // @public
 export interface JsonResponse<S extends z.ZodType = z.ZodType, H extends ResponseHeaders = ResponseHeaders> {
@@ -4924,6 +4971,85 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    issueInstanceAccountResetLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["InstanceAccountResetLink"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     leaveWorkspace: {
         parameters: {
             query?: never;
@@ -6142,6 +6268,83 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    resendInstanceAccountVerification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     resendInvitation: {
         parameters: {
             query?: never;
@@ -6249,6 +6452,83 @@ export interface OperationTypes {
                 };
             };
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    resetInstanceAccountMfa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7892,6 +8172,57 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/instance/accounts/{id}/mfa-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["resetInstanceAccountMfa"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/instance/accounts/{id}/password-reset-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["issueInstanceAccountResetLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/instance/accounts/{id}/verification-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["resendInstanceAccountVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/api/v1/instance/mail/test": {
         parameters: {
             query?: never;
@@ -9127,6 +9458,32 @@ export const RequestEmailChangeRequestSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
+export const resendInstanceAccountVerification: {
+    readonly method: "post";
+    readonly path: "/api/v1/instance/accounts/{id}/verification-email";
+    readonly operationId: "resendInstanceAccountVerification";
+    readonly tag: "instance";
+    readonly summary: "Resend the verification email of an account";
+    readonly auth: "instanceAdmin";
+    readonly rate: "write";
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 202: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
 export const resendInvitation: {
     readonly method: "post";
     readonly path: "/api/v1/invitations/{id}/resend";
@@ -9198,6 +9555,33 @@ export const resendVerifyEmail: {
 export const ResendVerifyEmailRequestSchema: z.ZodObject<{
     email: z.ZodEmail;
 }, z.core.$strict>;
+
+// @public (undocumented)
+export const resetInstanceAccountMfa: {
+    readonly method: "post";
+    readonly path: "/api/v1/instance/accounts/{id}/mfa-reset";
+    readonly operationId: "resetInstanceAccountMfa";
+    readonly tag: "instance";
+    readonly summary: "Reset the second factor of an account that lost it";
+    readonly auth: "instanceAdmin";
+    readonly rate: "write";
+    readonly reauth: true;
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 204: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
 
 // @public (undocumented)
 export const resetPassword: {
@@ -9679,7 +10063,7 @@ export const updateInstanceAccount: {
     readonly path: "/api/v1/instance/accounts/{id}";
     readonly operationId: "updateInstanceAccount";
     readonly tag: "instance";
-    readonly summary: "Grant or clear the instance-admin flag of an account, or disable or enable it";
+    readonly summary: "Grant or clear the instance-admin flag of an account, disable or enable it, or mark its address verified";
     readonly auth: "instanceAdmin";
     readonly rate: "write";
     readonly reauth: true;
@@ -9690,6 +10074,7 @@ export const updateInstanceAccount: {
         readonly body: z.ZodObject<{
             isInstanceAdmin: z.ZodOptional<z.ZodBoolean>;
             disabled: z.ZodOptional<z.ZodBoolean>;
+            emailVerified: z.ZodOptional<z.ZodLiteral<true>>;
         }, z.core.$strict>;
     };
     readonly responses: {
@@ -9718,6 +10103,7 @@ export const updateInstanceAccount: {
 export const UpdateInstanceAccountRequestSchema: z.ZodObject<{
     isInstanceAdmin: z.ZodOptional<z.ZodBoolean>;
     disabled: z.ZodOptional<z.ZodBoolean>;
+    emailVerified: z.ZodOptional<z.ZodLiteral<true>>;
 }, z.core.$strict>;
 
 // @public (undocumented)

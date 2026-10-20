@@ -121,5 +121,13 @@
     "body": "An administrator of this {appName} instance disabled your account. You can no longer sign in, and your devices and API tokens have stopped working.",
     "help": "If you think this is a mistake, contact the administrator of this {appName} instance.",
     "footer": "You are receiving this email because an administrator of this {appName} instance disabled your account."
+  },
+  "mfaReset": {
+    "subject": "Two-factor authentication was reset for your {appName} account",
+    "greeting": "Hi {name},",
+    "greetingAnonymous": "Hi,",
+    "body": "An administrator of this {appName} instance reset two-factor authentication on your account. Your authenticator app and backup codes no longer work, your devices were signed out, and signing in now asks only for your password.",
+    "notYou": "If you did not ask an administrator for this, contact the administrator of this {appName} instance right away. Once you are signed in, turn two-factor authentication back on.",
+    "action": "Set up two-factor authentication"
   }
 }

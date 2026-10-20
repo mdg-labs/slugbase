@@ -53,6 +53,10 @@ import { defineJob } from "../job.ts";
 // and carries nothing but its name. It is sent whatever becomes of the admin's flag between the request and the send:
 // the request that queued it was the check.
 //
+// The "second factor reset" email tells an account that an instance administrator turned its second factor off (doc 02
+// section 2.7). It carries the account's identifier and nothing else, no secret or code, and is queued in the transaction
+// of the reset, so it is sent whatever becomes of the account before the worker runs.
+//
 // The "new sign-in" email (doc 02 section 12) carries what it shows, taken when the sign-in happened: the
 // time, the browser family and the coarse network prefix, none of which is a secret. The alert was queued
 // while the account's switch was on, so it is sent whatever becomes of the session or the switch before the

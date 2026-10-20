@@ -439,7 +439,9 @@ describe("PATCH /instance/accounts/{id} refusals", () => {
 
   it.each([
     ["no field", {}],
-    ["an unknown field", { disabled: true, emailVerified: true }],
+    ["an unknown field", { disabled: true, passwordHash: "x" }],
+    ["a verified address set to false", { emailVerified: false }],
+    ["a verified address set to a string", { emailVerified: "true" }],
     ["a value of the wrong type", { isInstanceAdmin: "yes" }],
   ])("answers 422 for %s, changing nothing", async (_what, body) => {
     const world = harness.serve();

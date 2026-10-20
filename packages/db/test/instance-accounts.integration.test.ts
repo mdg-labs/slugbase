@@ -198,10 +198,10 @@ function fieldResult(outcome: InstanceAccountUpdateOutcome, field: "adminChanged
 }
 
 const setAdminIn = async (tx: TenantTx, target: string, value: boolean, eventId = freshId(), ipPrefix: string | null = null): Promise<FieldResult> =>
-  fieldResult(await instanceRepository(tx).updateAccount(target, { isInstanceAdmin: value }, { admin: eventId, disabled: freshId() }, ipPrefix, []), "adminChanged");
+  fieldResult(await instanceRepository(tx).updateAccount(target, { isInstanceAdmin: value }, { admin: eventId, disabled: freshId(), verified: freshId() }, ipPrefix, []), "adminChanged");
 
 const setDisabledIn = async (tx: TenantTx, target: string, value: boolean, jobs: readonly QueuedJob[] = [], eventId = freshId(), ipPrefix: string | null = null): Promise<FieldResult> =>
-  fieldResult(await instanceRepository(tx).updateAccount(target, { disabled: value }, { admin: freshId(), disabled: eventId }, ipPrefix, jobs), "disabledChanged");
+  fieldResult(await instanceRepository(tx).updateAccount(target, { disabled: value }, { admin: freshId(), disabled: eventId, verified: freshId() }, ipPrefix, jobs), "disabledChanged");
 
 const setAdmin = (actor: string, target: string, value: boolean, eventId = freshId(), ipPrefix: string | null = null) =>
   withTenant(actor, (tx) => setAdminIn(tx, target, value, eventId, ipPrefix));
@@ -532,7 +532,7 @@ describe("sys_instance_update_account, the disabled state", () => {
 
 describe("sys_instance_update_account, both fields in one call", () => {
   const both = (actor: string, target: string, change: { isInstanceAdmin?: boolean; disabled?: boolean }, jobs: readonly QueuedJob[] = []) =>
-    withTenant(actor, (tx) => instanceRepository(tx).updateAccount(target, change, { admin: freshId(), disabled: freshId() }, null, jobs));
+    withTenant(actor, (tx) => instanceRepository(tx).updateAccount(target, change, { admin: freshId(), disabled: freshId(), verified: freshId() }, null, jobs));
 
   it("changes the flag and the disabled state of another account, with one event each, one deletion of its sessions and the mail queued once", async () => {
     const caller = await admin();

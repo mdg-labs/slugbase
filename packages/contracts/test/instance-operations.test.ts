@@ -4,6 +4,7 @@ import {
   CreateInstanceWorkspaceRequestSchema,
   INSTANCE_DISPLAY_NAME_MAX_LENGTH,
   INSTANCE_SIGN_IN_NOTICE_MAX_LENGTH,
+  InstanceAccountResetLinkSchema,
   InstanceAccountSchema,
   InstanceSettingsSchema,
   InstanceStatusSchema,
@@ -17,8 +18,11 @@ import {
   deleteInstanceWorkspace,
   getInstanceSettings,
   getInstanceStatus,
+  issueInstanceAccountResetLink,
   listInstanceAccounts,
   listInstanceWorkspaces,
+  resendInstanceAccountVerification,
+  resetInstanceAccountMfa,
   sendInstanceTestMail,
   updateInstanceAccount,
   updateInstanceSettings,
@@ -271,14 +275,17 @@ describe("the instance account operations", () => {
     problemOnly(change, ["400", "401", "403", "404", "422", "429", "503"]);
   });
 
-  it("takes the flag, the disabled state or both, and nothing else", () => {
+  it("takes the flag, the disabled state, a verified address or any of them together, and nothing else", () => {
     const parse = (body: unknown) => UpdateInstanceAccountRequestSchema.safeParse(body);
     expect(parse({ isInstanceAdmin: true }).success).toBe(true);
     expect(parse({ disabled: false }).success).toBe(true);
     expect(parse({ isInstanceAdmin: false, disabled: true }).success).toBe(true);
     expect(parse({}).success).toBe(false);
     expect(parse({ isInstanceAdmin: "yes" }).success).toBe(false);
-    expect(parse({ disabled: true, emailVerified: true }).success).toBe(false);
+    expect(parse({ emailVerified: true }).success).toBe(true);
+    expect(parse({ disabled: false, emailVerified: true }).success).toBe(true);
+    expect(parse({ emailVerified: false }).success).toBe(false);
+    expect(parse({ emailVerified: "true" }).success).toBe(false);
     expect(parse({ disabled: true, passwordHash: "x" }).success).toBe(false);
   });
 
@@ -330,5 +337,46 @@ describe("the instance membership operation", () => {
     expect(InstanceWorkspaceMembershipSchema.safeParse(answer).success).toBe(true);
     expect(InstanceWorkspaceMembershipSchema.safeParse({ ...answer, role: "owner" }).success).toBe(false);
     expect(InstanceWorkspaceMembershipSchema.safeParse({ ...answer, accountId: "0192f3a0-bbbb-7000-8000-0000000000aa" }).success).toBe(false);
+  });
+});
+
+describe("the instance account recovery operations", () => {
+  const reset = paths["/api/v1/instance/accounts/{id}/mfa-reset"]?.["post"];
+  const link = paths["/api/v1/instance/accounts/{id}/password-reset-link"]?.["post"];
+  const verification = paths["/api/v1/instance/accounts/{id}/verification-email"]?.["post"];
+  const problemOnly = (operation: Obj | undefined, statuses: readonly string[]): void => {
+    const responses = operation?.["responses"] as Record<string, Obj>;
+    for (const status of statuses) {
+      expect(Object.keys(responses[status]?.["content"] as Obj), status).toEqual(["application/problem+json"]);
+    }
+  };
+
+  it("are POSTs of the instance admin in the write bucket, the reset and the link with re-authentication and the resend without", () => {
+    expect([resetInstanceAccountMfa.operationId, issueInstanceAccountResetLink.operationId, resendInstanceAccountVerification.operationId]).toEqual([
+      "resetInstanceAccountMfa",
+      "issueInstanceAccountResetLink",
+      "resendInstanceAccountVerification",
+    ]);
+    for (const operation of [reset, link, verification]) {
+      expect(operation?.["x-slugbase-auth"]).toBe("instanceAdmin");
+      expect(operation?.["x-slugbase-rate"]).toBe("write");
+      expect(operation?.["x-slugbase-scope"]).toBeUndefined();
+    }
+    expect([reset?.["x-slugbase-reauth"], link?.["x-slugbase-reauth"], verification?.["x-slugbase-reauth"]]).toEqual([true, true, undefined]);
+  });
+
+  it("answer with problem+json refusals, and the reset and the resend carry no body", () => {
+    problemOnly(reset, ["400", "401", "403", "404", "422", "429", "503"]);
+    problemOnly(link, ["400", "401", "403", "404", "422", "429", "503"]);
+    problemOnly(verification, ["400", "401", "403", "404", "422", "429", "503"]);
+    expect(Object.keys((reset?.["responses"] as Record<string, Obj>)["204"] ?? {})).not.toContain("content");
+    expect(Object.keys((verification?.["responses"] as Record<string, Obj>)["202"] ?? {})).not.toContain("content");
+  });
+
+  it("describe a reset link that is a link only where it was not mailed, and nothing else", () => {
+    expect(InstanceAccountResetLinkSchema.safeParse({ delivery: "mail", link: null }).success).toBe(true);
+    expect(InstanceAccountResetLinkSchema.safeParse({ delivery: "link", link: "https://links.example.com/reset-password#token=abc" }).success).toBe(true);
+    expect(InstanceAccountResetLinkSchema.safeParse({ delivery: "sms", link: null }).success).toBe(false);
+    expect(InstanceAccountResetLinkSchema.safeParse({ delivery: "mail", link: null, token: "abc" }).success).toBe(false);
   });
 });

@@ -16,8 +16,11 @@ import { InstanceAccountUpdateOutcome } from '@slugbase/core';
 import { InstanceAuditEvent } from '@slugbase/core';
 import { InstanceMembershipRequest } from '@slugbase/core';
 import { InstanceMembershipResult } from '@slugbase/core';
+import { InstanceMfaResetOutcome } from '@slugbase/core';
+import { InstanceResetLinkStoreOutcome } from '@slugbase/core';
 import { InstanceSettings } from '@slugbase/core';
 import { InstanceSettingsChange } from '@slugbase/core';
+import { InstanceVerificationOutcome } from '@slugbase/core';
 import { InstanceWorkspace } from '@slugbase/core';
 import { InstanceWorkspaceCreation } from '@slugbase/core';
 import { InstanceWorkspaceCreationResult } from '@slugbase/core';
@@ -548,18 +551,25 @@ export interface InstanceCounts {
 export interface InstanceRepository {
     addMembership(request: Pick<InstanceMembershipRequest, "workspaceId" | "eventIds">, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<InstanceMembershipResult>;
     createWorkspace(request: InstanceWorkspaceCreation, eventId: string, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<InstanceWorkspaceCreationResult>;
+    issueResetLink(accountId: string, eventId: string, token: {
+        readonly id: string;
+        readonly hash: Buffer;
+    } | undefined, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<InstanceResetLinkStoreOutcome>;
     jobHealth(): Promise<JobHealth>;
     listAccounts(eventId: string, ipPrefix: string | null): Promise<readonly InstanceAccount[]>;
     listAudit(limit: number, afterId?: string): Promise<readonly InstanceAuditEvent[]>;
     listWorkspaces(eventId: string, ipPrefix: string | null): Promise<readonly InstanceWorkspace[]>;
     markWorkspaceDeleting(workspaceId: string, eventId: string, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<boolean>;
     recordTestMail(eventId: string, ipPrefix: string | null, job: QueuedJob): Promise<void>;
+    requestVerification(accountId: string, eventId: string, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<InstanceVerificationOutcome>;
+    resetMfa(accountId: string, eventId: string, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<InstanceMfaResetOutcome>;
     secondFactorEnrolled(): Promise<boolean>;
     settings(): Promise<InstanceSettings>;
     status(eventId: string, ipPrefix: string | null): Promise<InstanceCounts>;
     updateAccount(accountId: string, change: InstanceAccountChange, eventIds: {
         readonly admin: string;
         readonly disabled: string;
+        readonly verified: string;
     }, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<InstanceAccountUpdateOutcome>;
     updateSettings(change: InstanceSettingsChange, eventId: string, ipPrefix: string | null): Promise<InstanceSettings>;
     viewSettings(eventId: string, ipPrefix: string | null): Promise<InstanceSettings>;
