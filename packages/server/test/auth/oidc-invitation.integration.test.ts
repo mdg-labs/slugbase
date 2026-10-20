@@ -511,7 +511,7 @@ describe("accepting an invitation through a provider", () => {
 
       expect(started.status).toBe(302);
       const location = started.headers.get("location") ?? "";
-      expect(location.startsWith(ISSUER)).toBe(true);
+      expect(new URL(location).origin).toBe(new URL(ISSUER).origin);
       expect(location).not.toContain(target.token);
       expect(started.headers.getSetCookie().join("\n")).not.toContain(target.token);
       const [record, ...rest] = await stateRecords();
