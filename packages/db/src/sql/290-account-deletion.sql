@@ -18,7 +18,11 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- or one where the account is not an owner, is neither: the membership just ends. The rows of the workspaces and
 -- then the account are locked first, in that order and the workspaces in identifier order, the order the member and
 -- invitation paths take them in, so the answer stays true for the rest of the transaction: no member joins, leaves
--- or changes role in these workspaces and the account gains no membership until it commits. The account of the
+-- or changes role in these workspaces and the account gains no membership until it commits. The workspaces locked
+-- are those the account is a member of and those it created (created_by), members or not: deleting the account sets
+-- created_by of the latter to NULL, which writes their rows, and a path that took the account first and those rows
+-- after would deadlock with an invitation accepted into one of them, which takes the workspace and then the account.
+-- A workspace already being deleted is locked in neither case. The account of the
 -- transaction (app_account_id(), which must be the argument) is the only account that can ask; for any other
 -- argument, and when no tenant account is set, nothing comes back and nothing is locked.
 CREATE OR REPLACE FUNCTION public.sys_account_deletion_scope(p_account_id uuid)
@@ -36,7 +40,8 @@ BEGIN
   END IF;
   PERFORM 1 FROM public.workspaces w
   WHERE w.deleting_at IS NULL
-    AND w.id IN (SELECT m.workspace_id FROM public.workspace_members m WHERE m.account_id = p_account_id)
+    AND (w.created_by = p_account_id
+         OR w.id IN (SELECT m.workspace_id FROM public.workspace_members m WHERE m.account_id = p_account_id))
   ORDER BY w.id
   FOR UPDATE OF w;
   PERFORM 1 FROM public.accounts a WHERE a.id = p_account_id FOR UPDATE;
