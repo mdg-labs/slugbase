@@ -17,9 +17,10 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 --
 -- Rows are locked parent first, as sys_invitation_accept does: the workspace (FOR NO KEY UPDATE, the lock every
 -- acceptance into the workspace takes, for the reason sys_invitation_accept gives), then the invitation, found by its
--- token before any lock only to learn the workspace and read again under the locks, so of two requests for one token
--- the second finds the invitation accepted and answers 'gone', and one token creates one account and one membership
--- however many requests carry it. The account insert
+-- token before any lock, pending and unexpired, only to learn the workspace (any other token ends there with 'gone',
+-- as an unknown one does) and read again under the locks, so of two requests for one token the second finds the
+-- invitation accepted and answers 'gone', and one token creates one account and one membership however many requests
+-- carry it. The account insert
 -- comes after both locks, so a request that finds the address taken has held the locks only to read. The deletion of an
 -- account (sys_delete_account) takes the same order: it locks the workspaces the account is a member of or created
 -- before the account row, so an insert that waits for a deleted row with the invited address never waits on a
@@ -65,7 +66,9 @@ BEGIN
     RETURN;
   END IF;
 
-  SELECT i.workspace_id INTO v_workspace FROM public.workspace_invitations i WHERE i.token_hash = p_token_hash;
+  SELECT i.workspace_id INTO v_workspace
+  FROM public.workspace_invitations i
+  WHERE i.token_hash = p_token_hash AND i.status = 'pending' AND i.expires_at > clock_timestamp();
   IF v_workspace IS NULL THEN
     outcome := 'gone';
     RETURN NEXT;

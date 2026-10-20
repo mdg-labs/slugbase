@@ -41,9 +41,11 @@ CREATE OR REPLACE FUNCTION public.sys_invitation_inspect(p_token_hash bytea)
 --
 -- Rows are locked parent first and the same way every time: the workspace (FOR NO KEY UPDATE), the account (FOR SHARE,
 -- so a change of its address waits and the address checked is the address the membership is given for), then the
--- invitation. The invitation is found by its token before any lock only to learn the workspace; it is read again under
--- the locks by the token, so a resend or a link that replaced the token in between ends this acceptance, and of two
--- requests for one token the second finds the invitation accepted.
+-- invitation. The invitation is found by its token before any lock, pending and unexpired, only to learn the workspace:
+-- an unknown, used, revoked, replaced or expired token ends there with 'gone', after the one lookup an unknown token
+-- takes, so no token that was once issued waits for a lock an unknown one does not. It is read again under the locks by
+-- the token, so a revocation, a resend, a link that replaced the token or the passing of its expiry in between ends
+-- this acceptance, and of two requests for one token the second finds the invitation accepted.
 --
 -- The workspace lock is FOR NO KEY UPDATE, not FOR UPDATE, because a request that has changed an invitation row (a
 -- revocation, a resend, a link) goes on to write rows that reference the workspace, its audit event first, and the
@@ -80,7 +82,9 @@ BEGIN
     RETURN;
   END IF;
 
-  SELECT i.workspace_id INTO v_workspace FROM public.workspace_invitations i WHERE i.token_hash = p_token_hash;
+  SELECT i.workspace_id INTO v_workspace
+  FROM public.workspace_invitations i
+  WHERE i.token_hash = p_token_hash AND i.status = 'pending' AND i.expires_at > clock_timestamp();
   IF v_workspace IS NULL THEN
     outcome := 'gone';
     RETURN NEXT;

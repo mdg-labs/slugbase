@@ -1,4 +1,4 @@
 {
-  "sha256": "f7a32c0a84542e1c9c6cbce24ec9e8e7b80d57da3861890c134a7eb939033f73",
-  "migration": "20261020011945_add_invitation_acceptance_key_lock"
+  "sha256": "abb6fb80ba4871e1eda0363b246370b1f0065ed07eeb726b709cb5c84f95502a",
+  "migration": "20261020021530_add_invitation_dead_token_unlocked"
 }

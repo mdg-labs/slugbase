@@ -358,6 +358,13 @@
       "when": 1792459185051,
       "tag": "20261020011945_add_invitation_acceptance_key_lock",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1792462530756,
+      "tag": "20261020021530_add_invitation_dead_token_unlocked",
+      "breakpoints": true
     }
   ]
 }
