@@ -480,6 +480,7 @@ export function createServer(options: CreateServerOptions): Server {
     apiConfigRoute({ config, store: authStore, buildInfo, adapters, registration, logger }),
     openApiRoute({ enabled: config.API_DOCS_ENABLED, document: options.openApiDocument }),
   ];
+  const metrics = createMetrics();
   // One verifier serves sign-in, re-authentication and the second factor's password check, so its dummy hash is made once.
   const passwords = createPasswordVerifier();
   // Password sign-in is part of the server, not a module: the session cookie is the one browser credential (doc 04 section 4.1).
@@ -494,7 +495,15 @@ export function createServer(options: CreateServerOptions): Server {
     secretBox: adapters.secretBox,
     identity: adapters.identity,
     oidcProviders: config.OIDC_PROVIDERS,
-    takeRedeemLimit: createTokenRedeemLimit({ limiter: adapters.rateLimit, registry: createRateLimitRegistry(config), logger }),
+    takeRedeemLimit: createTokenRedeemLimit({
+      limiter: adapters.rateLimit,
+      registry: createRateLimitRegistry(config),
+      logger,
+      errors: adapters.errors,
+      recordRejection: (bucket) => {
+        metrics.recordRateLimitRejection(bucket);
+      },
+    }),
     now: options.now ?? Date.now,
   });
   builtInRoutes.push(...(auth.routes ?? []));
@@ -507,7 +516,6 @@ export function createServer(options: CreateServerOptions): Server {
   // Requests no operation matches: the paths served as files rather than as operations.
   const docs: readonly Unrouted[] = config.API_DOCS_ENABLED ? [apiDocs()] : [];
 
-  const metrics = createMetrics();
   const database = options.database ?? createDatabase({ url: config.DATABASE_URL, poolSize: DEFAULT_SERVER_POOL_SIZE });
   if (options.database === undefined) {
     metrics.setPoolSize(DEFAULT_SERVER_POOL_SIZE);

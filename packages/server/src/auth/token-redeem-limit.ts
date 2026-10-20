@@ -1,9 +1,9 @@
-import type { RateLimitPort } from "@slugbase/core";
+import type { ErrorReportPort, RateLimitPort } from "@slugbase/core";
 import type { RateLimitRegistry } from "../config/index.ts";
 import type { Logger } from "../create-server.ts";
 import type { ChainContext } from "../http/chain.ts";
-import { ProblemError, describeError } from "../http/problem.ts";
-import type { TakenLimit } from "../http/rate-limit.ts";
+import { ProblemError } from "../http/problem.ts";
+import { limiterFailure, type TakenLimit } from "../http/rate-limit.ts";
 import { rateLimitKeyOf } from "../http/trusted-proxy.ts";
 
 // The `token_redeem` limits (doc 04 section 7, doc 10 T9) for an operation that does not declare that bucket: the
@@ -14,7 +14,6 @@ import { rateLimitKeyOf } from "../http/trusted-proxy.ts";
 
 const BUCKET = "token_redeem";
 const DENIED_DETAIL = "Too many requests. Try again later.";
-const FAILED_DETAIL = "The service is temporarily unavailable.";
 const UNKNOWN_CLIENT = "unknown";
 
 /** Takes one redemption from the limits of the client address and, with `accountId`, of that account. Throws `429 rate_limited` or `503 unavailable`. */
@@ -24,14 +23,14 @@ export interface TokenRedeemLimitOptions {
   readonly limiter: Pick<RateLimitPort, "consume">;
   readonly registry: RateLimitRegistry;
   readonly logger: Logger;
+  readonly errors: ErrorReportPort;
+  /** Counts a refusal under its bucket. */
+  readonly recordRejection?: (bucket: string) => void;
 }
 
-export function createTokenRedeemLimit({ limiter, registry, logger }: TokenRedeemLimitOptions): TakeTokenRedeemLimit {
+export function createTokenRedeemLimit({ limiter, registry, logger, errors, recordRejection }: TokenRedeemLimitOptions): TakeTokenRedeemLimit {
   return async (context, accountId) => {
-    const unavailable = (error: unknown): ProblemError => {
-      (context.get("logger") ?? logger).error("Rate limiter failed", { ...describeError(error), bucket: BUCKET });
-      return new ProblemError("unavailable", FAILED_DETAIL);
-    };
+    const unavailable = (error: unknown): ProblemError => limiterFailure({ logger, errors }, context, BUCKET, error);
     const limits = registry.scopesOf(BUCKET);
     if (limits === undefined) {
       throw unavailable(new Error("the bucket is not in the registry"));
@@ -59,6 +58,7 @@ export function createTokenRedeemLimit({ limiter, registry, logger }: TokenRedee
       taken.push({ name: limit.name, window, limit: decision.limit, remaining: decision.remaining });
       if (!decision.allowed) {
         context.set("rateLimit", { taken, retryAfterSeconds: decision.retryAfterSeconds });
+        recordRejection?.(BUCKET);
         throw new ProblemError("rate_limited", DENIED_DETAIL);
       }
     }

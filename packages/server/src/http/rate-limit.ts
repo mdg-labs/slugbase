@@ -98,17 +98,33 @@ function headersOf(state: RateLimitState): Record<string, string> {
   return headers;
 }
 
+export interface LimiterFailureOptions {
+  readonly logger: Logger;
+  readonly errors: ErrorReportPort;
+}
+
+/**
+ * Logs a limiter that could not decide, reports it with the request ID and answers `503 unavailable`. A report
+ * that fails is logged and changes nothing about the answer.
+ */
+export function limiterFailure(
+  { logger, errors }: LimiterFailureOptions,
+  context: ChainContext,
+  bucket: string,
+  error: unknown,
+): ProblemError {
+  const requestId = requestIdOf(context);
+  (context.get("logger") ?? logger).error("Rate limiter failed", { ...describeError(error), bucket, requestId });
+  void Promise.resolve()
+    .then(() => errors.capture(error, { requestId }))
+    .catch((reportError: unknown) => {
+      logger.warn("Error report failed", { ...describeError(reportError), requestId });
+    });
+  return new ProblemError("unavailable", FAILED_DETAIL);
+}
+
 export function createRateLimiting({ limiter, registry, logger, errors, recordRejection }: RateLimitingOptions): RateLimiting {
-  const failure = (context: ChainContext, bucket: string, error: unknown): ProblemError => {
-    const requestId = requestIdOf(context);
-    (context.get("logger") ?? logger).error("Rate limiter failed", { ...describeError(error), bucket, requestId });
-    void Promise.resolve()
-      .then(() => errors.capture(error, { requestId }))
-      .catch((reportError: unknown) => {
-        logger.warn("Error report failed", { ...describeError(reportError), requestId });
-      });
-    return new ProblemError("unavailable", FAILED_DETAIL);
-  };
+  const failure = (context: ChainContext, bucket: string, error: unknown): ProblemError => limiterFailure({ logger, errors }, context, bucket, error);
 
   const subjectOf = (context: ChainContext, limit: ScopeLimit): string | undefined => {
     // An anonymous operation is limited per address only, whatever credential a caller sends along.
