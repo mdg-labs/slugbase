@@ -74,8 +74,10 @@ describe("issueInstanceResetLink", () => {
     if (outcome.kind !== "link") {
       throw new Error(`expected a link, got ${outcome.kind}`);
     }
-    expect(outcome.link).toMatch(new RegExp(`^${ORIGIN}/reset-password#token=[A-Za-z0-9_-]{43}$`));
-    const value = outcome.link.slice(outcome.link.indexOf("#token=") + "#token=".length);
+    const prefix = `${ORIGIN}/reset-password#token=`;
+    expect(outcome.link.startsWith(prefix)).toBe(true);
+    const value = outcome.link.slice(prefix.length);
+    expect(value).toMatch(/^[A-Za-z0-9_-]{43}$/);
     const stored = calls.links[0]?.token;
     expect(stored?.hash.equals(hashCredentialToken(value) ?? Buffer.alloc(0))).toBe(true);
     expect(stored?.id).toEqual(expect.any(String));
