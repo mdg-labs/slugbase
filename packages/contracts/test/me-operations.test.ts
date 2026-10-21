@@ -122,7 +122,7 @@ describe("the account operation", () => {
     const account = schemas["Account"] as { additionalProperties: unknown; properties: Obj; required: string[] };
     expect(account.additionalProperties).toBe(false);
     expect(Object.keys(account.properties).sort()).toEqual([
-      "accent", "aiOptOut", "analyticsConsent", "defaultView", "displayName", "email", "emailVerified", "hasPassword", "id", "locale", "mfaEnabled", "onboarding", "pendingEmail", "signinAlerts", "singleKeyShortcuts", "theme",
+      "accent", "aiOptOut", "analyticsConsent", "defaultView", "displayName", "email", "emailVerified", "hasPassword", "id", "isInstanceAdmin", "locale", "mfaEnabled", "onboarding", "pendingEmail", "signinAlerts", "singleKeyShortcuts", "theme",
     ]);
     expect([...account.required].sort()).toEqual(Object.keys(account.properties).sort());
     const membership = schemas["Membership"] as { additionalProperties: unknown; properties: Obj; required: string[] };
@@ -147,12 +147,16 @@ describe("the account operation", () => {
       emailVerified: true,
       hasPassword: false,
       mfaEnabled: false,
+      isInstanceAdmin: false,
       pendingEmail: null,
     };
     const membership = { workspaceId: "0192f3a0-0000-7000-8000-0000000000b1", name: "Notes", role: "admin" };
     expect(MeSchema.safeParse({ account, memberships: [membership], activeWorkspaceId: null }).success).toBe(true);
     expect(MeSchema.safeParse({ account, memberships: [], activeWorkspaceId: membership.workspaceId, clientErrorReportDsn: "https://k@e.example/1" }).success).toBe(true);
     expect(MeSchema.safeParse({ account, memberships: [] }).success).toBe(false);
+    expect(AccountSchema.safeParse({ ...account, isInstanceAdmin: true }).success).toBe(true);
+    expect(AccountSchema.safeParse({ ...account, isInstanceAdmin: "yes" }).success).toBe(false);
+    expect(AccountSchema.safeParse({ ...account, isInstanceAdmin: undefined }).success).toBe(false);
     expect(AccountSchema.safeParse({ ...account, passwordHash: "x" }).success).toBe(false);
     expect(AccountSchema.safeParse({ ...account, locale: "fr" }).success).toBe(false);
     expect(AccountSchema.safeParse({ ...account, accent: "#ff0000" }).success).toBe(false);

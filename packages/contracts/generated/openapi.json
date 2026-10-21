@@ -92,6 +92,10 @@
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
             "type": "string"
           },
+          "isInstanceAdmin": {
+            "description": "Whether the account holds the instance-admin flag, as of this request; always false for an API token, which the instance operations refuse",
+            "type": "boolean"
+          },
           "locale": {
             "description": "The language of the account's emails and of the app unless the browser overrides it",
             "enum": [
@@ -149,6 +153,7 @@
           "emailVerified",
           "hasPassword",
           "mfaEnabled",
+          "isInstanceAdmin",
           "pendingEmail"
         ],
         "type": "object"

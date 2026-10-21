@@ -1091,6 +1091,8 @@ export interface components {
              * @description The account's identifier
              */
             id: string;
+            /** @description Whether the account holds the instance-admin flag, as of this request; always false for an API token, which the instance operations refuse */
+            isInstanceAdmin: boolean;
             /**
              * @description The language of the account's emails and of the app unless the browser overrides it
              * @enum {string}

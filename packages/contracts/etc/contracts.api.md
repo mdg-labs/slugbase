@@ -107,6 +107,7 @@ export const AccountSchema: z.ZodObject<{
     emailVerified: z.ZodBoolean;
     hasPassword: z.ZodBoolean;
     mfaEnabled: z.ZodBoolean;
+    isInstanceAdmin: z.ZodBoolean;
     pendingEmail: z.ZodNullable<z.ZodString>;
 }, z.core.$strict>;
 
@@ -423,6 +424,7 @@ export interface ComponentTypes {
             emailVerified: boolean;
             hasPassword: boolean;
             id: string;
+            isInstanceAdmin: boolean;
             locale: "en" | "de";
             mfaEnabled: boolean;
             onboarding: ComponentTypes["schemas"]["Onboarding"];
@@ -1723,6 +1725,7 @@ export const getMe: {
         emailVerified: z.ZodBoolean;
         hasPassword: z.ZodBoolean;
         mfaEnabled: z.ZodBoolean;
+        isInstanceAdmin: z.ZodBoolean;
         pendingEmail: z.ZodNullable<z.ZodString>;
         }, z.core.$strict>;
         memberships: z.ZodArray<z.ZodObject<{
@@ -2874,6 +2877,7 @@ export const MeSchema: z.ZodObject<{
         emailVerified: z.ZodBoolean;
         hasPassword: z.ZodBoolean;
         mfaEnabled: z.ZodBoolean;
+        isInstanceAdmin: z.ZodBoolean;
         pendingEmail: z.ZodNullable<z.ZodString>;
     }, z.core.$strict>;
     memberships: z.ZodArray<z.ZodObject<{
@@ -10504,6 +10508,7 @@ export const updateMe: {
         emailVerified: z.ZodBoolean;
         hasPassword: z.ZodBoolean;
         mfaEnabled: z.ZodBoolean;
+        isInstanceAdmin: z.ZodBoolean;
         pendingEmail: z.ZodNullable<z.ZodString>;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
         readonly 400: ProblemResponse;

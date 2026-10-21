@@ -1,5 +1,6 @@
 import { getMe, updateMe } from "@slugbase/contracts";
 import { accountProfileRepository, membershipRepository, type AccountProfile, type Database } from "@slugbase/db";
+import type { Principal } from "../../http/authenticate.ts";
 import type { RouteBinding } from "../../http/chain.ts";
 import { ProblemError, requestIdOf } from "../../http/problem.ts";
 import { route } from "../register.ts";
@@ -8,7 +9,8 @@ import { route } from "../register.ts";
 // memberships and the workspace the request acts in. It reads the account's own
 // row and memberships in an account-level transaction, on row-level security,
 // and selects no hash and no secret. A browser error reporter's DSN is the
-// session's alone: it is not asked for on behalf of an API token.
+// session's alone: it is not asked for on behalf of an API token. `isInstanceAdmin` is the
+// flag the session's principal carries, so it is never read from the row for an API token.
 //
 // PATCH /api/v1/me changes the profile (display name, language) and the
 // preferences (theme, accent, default view, single-key shortcuts, sign-in alerts, AI opt-out,
@@ -21,7 +23,12 @@ export interface ProfileRoutesOptions {
   readonly withTenant: Database["withTenant"];
 }
 
-function accountBody(profile: AccountProfile) {
+/** The flag the session carried into this request; an API token has none, whatever its account holds. */
+function isInstanceAdminOf(principal: Principal): boolean {
+  return principal.kind === "session" && principal.instanceAdmin;
+}
+
+function accountBody(profile: AccountProfile, isInstanceAdmin: boolean) {
   return {
     id: profile.id,
     email: profile.email,
@@ -38,6 +45,7 @@ function accountBody(profile: AccountProfile) {
     emailVerified: profile.emailVerified,
     hasPassword: profile.hasPassword,
     mfaEnabled: profile.mfaEnabled,
+    isInstanceAdmin,
     pendingEmail: profile.pendingEmail,
   };
 }
@@ -62,7 +70,7 @@ export function profileRoutes({ withTenant }: ProfileRoutesOptions): RouteBindin
       return {
         status: 200,
         body: {
-          account: accountBody(profile),
+          account: accountBody(profile, isInstanceAdminOf(principal)),
           memberships: memberships.map(({ workspaceId: id, name, role }) => ({ workspaceId: id, name, role })),
           activeWorkspaceId: workspaceId ?? null,
           ...(dsn === null || dsn === undefined ? {} : { clientErrorReportDsn: dsn }),
@@ -91,7 +99,7 @@ export function profileRoutes({ withTenant }: ProfileRoutesOptions): RouteBindin
       if (profile === undefined) {
         throw new ProblemError("unauthenticated", "Authentication is required.");
       }
-      return { status: 200, body: accountBody(profile) };
+      return { status: 200, body: accountBody(profile, isInstanceAdminOf(principal)) };
     }),
   ];
 }
