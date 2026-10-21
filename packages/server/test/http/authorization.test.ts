@@ -116,6 +116,8 @@ interface Seen {
 
 interface SetupOptions {
   readonly authenticators?: boolean;
+  /** Replaces the second-factor check; by default only the instance admin of the fixture has a second factor. */
+  readonly secondFactor?: (subject: { readonly accountId: string; readonly requestId: string }) => Promise<boolean>;
   readonly resolver?: TenantResolver;
   readonly now?: () => number;
   readonly extraRoutes?: (handler: (id: string) => RouteBinding["handler"]) => readonly RouteBinding[];
@@ -184,14 +186,14 @@ function setup(options: SetupOptions = {}) {
     admin: operationOf("/api/v1/admin-check", "adminCheck", "admin", { scope: "read" }),
     owner: operationOf("/api/v1/owner-check", "checkOwner", "owner", { scope: "read" }),
     unscoped: operationOf("/api/v1/tokens", "listTokens", "account"),
-    instance: operationOf("/api/v1/instance/accounts", "listAccounts", "instanceAdmin"),
+    instance: operationOf("/api/v1/instance/probe", "listAccounts", "instanceAdmin"),
     gated: operationOf("/api/v1/teams", "listTeams", "member", { scope: "read", entitlement: "teams.manage" }),
     machine: operationOf("/api/v1/events", "receiveEvent", "machine", { method: "post", audience: "machine" }),
     form: operationOf("/api/v1/contact", "sendContact", "anonymous", { method: "post", audience: "marketing-form" }),
     partial: operationOf("/api/v1/test/partial", "checkPartial", "partial", { method: "post" }),
     changeTestPassword: operationOf("/api/v1/test/password", "changeTestPassword", "account", { method: "post", reauth: true }),
     deleteTestWorkspace: operationOf("/api/v1/workspace/delete", "deleteTestWorkspace", "owner", { method: "post", reauth: true }),
-    instanceReauth: operationOf("/api/v1/instance/accounts/delete", "deleteAccountAsAdmin", "instanceAdmin", { method: "post", reauth: true }),
+    instanceReauth: operationOf("/api/v1/instance/probe/delete", "deleteAccountAsAdmin", "instanceAdmin", { method: "post", reauth: true }),
   };
   const routes: RouteBinding[] = [
     ...Object.values(operations).map((operation): RouteBinding => ({
@@ -220,6 +222,7 @@ function setup(options: SetupOptions = {}) {
         return database.withTenant(context, fn);
       },
     },
+    secondFactor: options.secondFactor ?? (({ accountId }) => Promise.resolve(accountId === ACCOUNTS.instanceAdmin)),
     ...(options.now === undefined ? {} : { now: options.now }),
   });
   return { server, seen, cookieCalls, bearerCalls, resolved, transactions, operations };
@@ -256,7 +259,7 @@ describe("the failure scenario (T3): an anonymous caller of an operation that re
     ["/api/v1/admin-check"],
     ["/api/v1/owner-check"],
     ["/api/v1/account-check"],
-    ["/api/v1/instance/accounts"],
+    ["/api/v1/instance/probe"],
   ])("answers 401 on %s too", async (path) => {
     const { server, seen } = setup();
     expect((await server.fetch(get(path))).status).toBe(401);
@@ -510,11 +513,49 @@ describe("stage 9: authorization", () => {
 
   it("admits an instance admin session only to an instanceAdmin operation", async () => {
     const { server, seen } = setup();
-    expect((await server.fetch(get("/api/v1/instance/accounts", cookieOf("instanceAdmin")))).status).toBe(200);
-    const refused = await server.fetch(get("/api/v1/instance/accounts", cookieOf("owner")));
+    expect((await server.fetch(get("/api/v1/instance/probe", cookieOf("instanceAdmin")))).status).toBe(200);
+    const refused = await server.fetch(get("/api/v1/instance/probe", cookieOf("owner")));
     expect(refused.status).toBe(403);
     expect(await codeOf(refused)).toBe("forbidden");
     expect(seen).toHaveLength(1);
+  });
+
+  describe("the instanceAdmin policy and the second factor (Q45)", () => {
+    it("refuses an admin whose account has no second factor with 403 forbidden, and asks the check once, for that account", async () => {
+      const asked: { accountId: string; requestId: string }[] = [];
+      const { server, seen } = setup({
+        secondFactor: (subject) => {
+          asked.push(subject);
+          return Promise.resolve(false);
+        },
+      });
+      const response = await server.fetch(get("/api/v1/instance/probe", cookieOf("instanceAdmin")));
+      expect(response.status).toBe(403);
+      expect(await codeOf(response)).toBe("forbidden");
+      expect(seen).toEqual([]);
+      expect(asked).toEqual([{ accountId: ACCOUNTS.instanceAdmin, requestId: expect.any(String) as string }]);
+    });
+
+    it("refuses when the check cannot answer, rather than admitting the admin", async () => {
+      const { server, seen } = setup({ secondFactor: () => Promise.reject(new Error("database down")) });
+      const response = await server.fetch(get("/api/v1/instance/probe", cookieOf("instanceAdmin")));
+      expect(response.status).toBe(500);
+      expect(seen).toEqual([]);
+    });
+
+    it("does not ask the check for a session without the flag, a token or a pending session, which are refused before it", async () => {
+      const asked: string[] = [];
+      const { server } = setup({
+        secondFactor: ({ accountId }) => {
+          asked.push(accountId);
+          return Promise.resolve(true);
+        },
+      });
+      expect((await server.fetch(get("/api/v1/instance/probe", cookieOf("owner")))).status).toBe(403);
+      expect((await server.fetch(get("/api/v1/instance/probe", { authorization: "Bearer slb_owner_write" }))).status).toBe(403);
+      expect((await server.fetch(get("/api/v1/instance/probe", { cookie: "sid=instanceAdmin; state=partial" }))).status).toBe(401);
+      expect(asked).toEqual([]);
+    });
   });
 
   describe("API tokens", () => {
@@ -536,7 +577,7 @@ describe("stage 9: authorization", () => {
 
     it("refuses a token on an operation that declares no scope with 403 forbidden", async () => {
       const { server, seen } = setup();
-      for (const path of ["/api/v1/tokens", "/api/v1/instance/accounts"]) {
+      for (const path of ["/api/v1/tokens", "/api/v1/instance/probe"]) {
         const response = await server.fetch(get(path, { authorization: "Bearer slb_owner_write" }));
         expect(response.status, path).toBe(403);
         expect(await codeOf(response)).toBe("forbidden");
@@ -610,12 +651,12 @@ describe("stage 9: declared re-authentication and completed second factor (T18)"
 
   it("asks an instance admin to re-authenticate on an instanceAdmin operation that declares it, and refuses a stale non-admin as forbidden", async () => {
     const { server, seen } = setup();
-    const stale = await server.fetch(post("/api/v1/instance/accounts/delete", { ...BROWSER_MUTATION, ...withState("instanceAdmin", "stale") }));
+    const stale = await server.fetch(post("/api/v1/instance/probe/delete", { ...BROWSER_MUTATION, ...withState("instanceAdmin", "stale") }));
     expect(stale.status).toBe(401);
     expect(await codeOf(stale)).toBe("reauth_required");
-    const outsider = await server.fetch(post("/api/v1/instance/accounts/delete", { ...BROWSER_MUTATION, ...withState("owner", "stale") }));
+    const outsider = await server.fetch(post("/api/v1/instance/probe/delete", { ...BROWSER_MUTATION, ...withState("owner", "stale") }));
     expect(outsider.status).toBe(403);
-    const fresh = await server.fetch(post("/api/v1/instance/accounts/delete", { ...BROWSER_MUTATION, ...withState("instanceAdmin", "fresh") }));
+    const fresh = await server.fetch(post("/api/v1/instance/probe/delete", { ...BROWSER_MUTATION, ...withState("instanceAdmin", "fresh") }));
     expect(fresh.status).toBe(200);
     expect(seen.map((entry) => entry.operationId)).toEqual(["deleteAccountAsAdmin"]);
   });
@@ -674,7 +715,7 @@ describe("stage 9: declared re-authentication and completed second factor (T18)"
       ["/api/v1/bookmarks", "member"],
       ["/api/v1/admin-check", "admin"],
       ["/api/v1/owner-check", "owner"],
-      ["/api/v1/instance/accounts", "instanceAdmin"],
+      ["/api/v1/instance/probe", "instanceAdmin"],
       ["/api/v1/tokens", "member"],
     ] as const)("answers 401 mfa_required on %s, before the handler", async (path, who) => {
       const { server, seen } = setup();
@@ -737,6 +778,14 @@ describe("stage 9: declared re-authentication and completed second factor (T18)"
       );
       return { app, handled };
     }
+
+    it("refuses an instance admin session when the chain is given no second-factor check, rather than admitting it", async () => {
+      const { app, handled } = chainWith(session("instanceAdmin"), operationOf("/api/v1/instance/probe", "listAccounts", "instanceAdmin"));
+      const response = await app.request("http://localhost/api/v1/instance/probe");
+      expect(response.status).toBe(403);
+      expect(await codeOf(response)).toBe("forbidden");
+      expect(handled).toEqual([]);
+    });
 
     it("refuses an API token on an operation that declares reauth even when the operation also declares a scope", async () => {
       const { app, handled } = chainWith(token("owner", "read-write"), operationOf("/api/v1/tokens/new", "createToken", "account", { scope: "write", reauth: true }));

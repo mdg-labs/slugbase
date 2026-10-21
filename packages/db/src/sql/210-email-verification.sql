@@ -6,13 +6,59 @@
 -- needs CREATE on the schema for the length of those statements.
 GRANT CREATE ON SCHEMA public TO slugbase_system;
 
+-- account_mark_verified(account_id, password_hash): what marking an address verified does to the account of
+-- an address nobody had verified, the one place the rule is written. Whoever registers an address is not necessarily its
+-- owner, so verifying takes away what the registrant set up (doc 02 section 2.6): the stored password is replaced by the
+-- hash given, or removed when none is, and password_changed_at moves with it; every session of the account is deleted;
+-- the second factor (a pending enrolment included) and its backup codes, the API tokens, the linked identities and the
+-- pending handshakes that would link one are removed; every unused password-reset token, since a reset requested before
+-- the owner verified is not the owner's, and the pending change of email with its unused confirmation and cancel tokens
+-- are removed; then the address is marked verified. The caller holds the account's backup-code rows and then the row of
+-- the account locked, the order sys_mfa_lock documents, and has checked that the account is not disabled. Raises for an
+-- account that does not exist or whose address is verified already, which a caller must keep from reaching it. It is called by sys_email_verify (the owner's own password) and by
+-- sys_instance_update_account (no password: the owner gets in through a password-reset token or a provider). It is not a
+-- system operation: it is SECURITY INVOKER, owned by slugbase_system and executable by it alone, so it runs only inside
+-- those two functions and slugbase_app cannot call it.
+CREATE OR REPLACE FUNCTION public.account_mark_verified(p_account_id uuid, p_password_hash text) RETURNS void
+  LANGUAGE plpgsql VOLATILE SECURITY INVOKER
+  SET search_path = pg_catalog, public, pg_temp
+  AS $$
+BEGIN
+  PERFORM 1 FROM public.accounts a WHERE a.id = p_account_id AND a.email_verified_at IS NULL;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'account_mark_verified needs an account whose address is not verified' USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  IF p_password_hash IS NULL THEN
+    UPDATE public.accounts SET password_hash = NULL, password_changed_at = clock_timestamp() WHERE id = p_account_id;
+  ELSIF NOT public.sys_password_set(p_account_id, p_password_hash) THEN
+    RAISE EXCEPTION 'the password of the account being verified could not be set';
+  END IF;
+  PERFORM public.sys_session_revoke_all(p_account_id, NULL);
+  UPDATE public.accounts
+  SET mfa_secret = NULL, mfa_secret_key_id = NULL, mfa_enabled_at = NULL, mfa_last_step = NULL, pending_email = NULL
+  WHERE id = p_account_id;
+  DELETE FROM public.mfa_backup_codes WHERE account_id = p_account_id;
+  DELETE FROM public.api_tokens WHERE account_id = p_account_id;
+  DELETE FROM public.account_identities WHERE account_id = p_account_id;
+  DELETE FROM public.oidc_login_states WHERE link_account_id = p_account_id;
+  DELETE FROM public.credential_tokens
+  WHERE account_id = p_account_id AND purpose IN ('password_reset', 'email_change', 'email_change_cancel') AND used_at IS NULL;
+  UPDATE public.accounts SET email_verified_at = clock_timestamp() WHERE id = p_account_id;
+END
+$$;
+
 -- sys_email_verify(token_hash, password_hash, session_id, session_token_hash,
 -- ip_prefix, user_agent, replaced_token_hash): redeems a signup verification
--- token and signs the account in, all in this one call. The row of the account
--- the token belongs to is locked first, found by a read that locks nothing, and
--- the token is consumed after that (sys_credential_token_consume: once, before
--- its expiry, purpose email_verify), the order in which
--- sys_credential_token_issue takes the same two rows, so a redemption and an
+-- token and signs the account in, all in this one call. The account the token
+-- belongs to is found by a read that locks nothing. Its backup-code rows are locked
+-- first (in id order), the order sys_mfa_lock gives every writer of them, so a
+-- redemption queues behind a sign-in with a backup code, a rewrite of the codes and
+-- the instance admin's reset of the second factor or mark of the address instead of
+-- deadlocking with them; then its account row; and the token is consumed after that
+-- (sys_credential_token_consume: once, before its expiry, purpose email_verify), the
+-- account row before the token row being the order in which
+-- sys_credential_token_issue takes those two, so a redemption and an
 -- issue for one account queue and do not wait on each other. No row comes back
 -- for an unknown, used, expired or foreign token, and none for an account that
 -- is disabled, which a caller does not tell apart. An account whose address was
@@ -26,7 +72,8 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- every unused password-reset token, since a reset requested before the
 -- owner verified is not the owner's, and the pending change of email with its
 -- unused confirmation and cancel tokens, since a change started before the owner
--- verified is not the owner's either. Only then is the address marked verified.
+-- verified is not the owner's either. Only then is the address marked verified. All of that is
+-- account_mark_verified above, which the instance admin's marking of an address verified runs too.
 -- An account that is already verified keeps all of it. The
 -- session is partial for an account whose second factor is on and full
 -- otherwise, and replaces the session of the token the request carried. The
@@ -46,6 +93,7 @@ CREATE OR REPLACE FUNCTION public.sys_email_verify(
   AS $$
 DECLARE
   v_account uuid;
+  v_token_account uuid;
   v_verified_at timestamptz;
   v_mfa boolean;
   v_level text;
@@ -60,9 +108,10 @@ BEGIN
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
 
-  PERFORM 1 FROM public.accounts a
-  WHERE a.id = (SELECT t.account_id FROM public.credential_tokens t WHERE t.purpose = 'email_verify' AND t.token_hash = p_token_hash)
-  FOR UPDATE;
+  SELECT t.account_id INTO v_token_account
+  FROM public.credential_tokens t WHERE t.purpose = 'email_verify' AND t.token_hash = p_token_hash;
+  PERFORM 1 FROM public.mfa_backup_codes c WHERE c.account_id = v_token_account ORDER BY c.id FOR UPDATE;
+  PERFORM 1 FROM public.accounts a WHERE a.id = v_token_account FOR UPDATE;
 
   SELECT t.account_id INTO v_account FROM public.sys_credential_token_consume('email_verify', p_token_hash) t;
   IF v_account IS NULL THEN
@@ -78,21 +127,8 @@ BEGIN
   END IF;
 
   IF v_verified_at IS NULL THEN
-    IF NOT public.sys_password_set(v_account, p_password_hash) THEN
-      RAISE EXCEPTION 'the password of the account being verified could not be set';
-    END IF;
-    PERFORM public.sys_session_revoke_all(v_account, NULL);
-    UPDATE public.accounts
-    SET mfa_secret = NULL, mfa_secret_key_id = NULL, mfa_enabled_at = NULL, mfa_last_step = NULL, pending_email = NULL
-    WHERE id = v_account;
+    PERFORM public.account_mark_verified(v_account, p_password_hash);
     v_mfa := false;
-    DELETE FROM public.mfa_backup_codes WHERE account_id = v_account;
-    DELETE FROM public.api_tokens WHERE account_id = v_account;
-    DELETE FROM public.account_identities WHERE account_id = v_account;
-    DELETE FROM public.oidc_login_states WHERE link_account_id = v_account;
-    DELETE FROM public.credential_tokens
-    WHERE account_id = v_account AND purpose IN ('password_reset', 'email_change', 'email_change_cancel') AND used_at IS NULL;
-    UPDATE public.accounts SET email_verified_at = clock_timestamp() WHERE id = v_account;
   END IF;
 
   v_level := CASE WHEN v_mfa THEN 'partial' ELSE 'full' END;
@@ -168,11 +204,13 @@ CREATE OR REPLACE FUNCTION public.sys_account_email_verified(p_account_id uuid) 
       false)
   $$;
 
+ALTER FUNCTION public.account_mark_verified(uuid, text) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_email_verify(bytea, text, uuid, bytea, cidr, text, bytea) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_create_personal_workspace(uuid, uuid, text) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_account_email_verified(uuid) OWNER TO slugbase_system;
 REVOKE CREATE ON SCHEMA public FROM slugbase_system;
 
+REVOKE ALL ON FUNCTION public.account_mark_verified(uuid, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sys_email_verify(bytea, text, uuid, bytea, cidr, text, bytea) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sys_create_personal_workspace(uuid, uuid, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sys_account_email_verified(uuid) FROM PUBLIC;

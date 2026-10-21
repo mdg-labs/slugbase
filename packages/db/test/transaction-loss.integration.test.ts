@@ -128,6 +128,7 @@ function setupRequest(): CompleteSetup {
     sessionTokenHash: freshToken().hash,
     ipPrefix: "203.0.0.0/16",
     userAgent: "Vitest",
+    instanceEventId: freshId(),
   };
 }
 

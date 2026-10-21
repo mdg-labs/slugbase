@@ -465,6 +465,24 @@ describe("deleting an instance admin", () => {
     expect(await instanceAdmins()).toEqual([second.id]);
   });
 
+  it("counts only enabled admins as another: an enabled admin with only a disabled admin beside it is the last one, in the scope and in the function", async () => {
+    const enabled = await person(true);
+    const disabled = await person(true);
+    await asSystem(db, (tx) => tx`UPDATE accounts SET disabled_at = now() WHERE id = ${disabled.id}`);
+    await workspaceOf("Enabled's own", [enabled, "owner"]);
+    const before = await snapshot();
+
+    expect(await inTenant({ accountId: enabled.id }, (tx) => accountDeletionRepository(tx).scope())).toMatchObject({ lastInstanceAdmin: true });
+    expect(await deleteAccount(enabled)).toMatchObject({ deleted: false });
+    expect(await inTenant({ accountId: enabled.id }, (tx) => accountDeletionRepository(tx).delete([], []))).toBe(false);
+    expect(await snapshot()).toEqual(before);
+    expect(await instanceAdmins()).toEqual([enabled.id, disabled.id].sort());
+    // an enabled admin beside it makes it deletable again
+    await asSystem(db, (tx) => tx`UPDATE accounts SET disabled_at = NULL WHERE id = ${disabled.id}`);
+    expect((await deleteAccount(enabled)).deleted).toBe(true);
+    expect(await instanceAdmins()).toEqual([disabled.id]);
+  });
+
   it("lets a non-admin go when the instance has no admin at all", async () => {
     const plain = await person();
     expect(await instanceAdmins()).toEqual([]);

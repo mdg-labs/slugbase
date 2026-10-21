@@ -50,10 +50,10 @@ describe("getApiConfig", () => {
     expect(api.properties["features"]?.["additionalProperties"]).toBe(false);
   });
 
-  it("carries exactly the fields a server without accounts can answer, and the setup answers besides", () => {
+  it("carries exactly the fields a server without accounts can answer, and the instance and setup answers besides", () => {
     const api = schemas["ApiConfig"] as { properties: Obj; required: string[] };
     const names = ["apiVersion", "defaultLocale", "docsBaseUrl", "features", "locales", "origin", "product"];
-    expect(Object.keys(api.properties).sort()).toEqual([...names, "setupRequired", "setupTokenRequired", "signIn"].sort());
+    expect(Object.keys(api.properties).sort()).toEqual([...names, "instance", "setupRequired", "setupTokenRequired", "signIn"].sort());
     expect([...api.required].sort()).toEqual(names);
     expect(api.properties["setupRequired"]).toMatchObject({ type: "boolean" });
     expect(api.properties["setupTokenRequired"]).toMatchObject({ type: "boolean" });
@@ -67,6 +67,11 @@ describe("getApiConfig", () => {
     expect(provider.items.additionalProperties).toBe(false);
     expect(Object.keys(provider.items.properties).sort()).toEqual(["name", "slug"]);
     expect([...provider.items.required].sort()).toEqual(["name", "slug"]);
+    const instance = api.properties["instance"] as { additionalProperties: unknown; properties: Obj; required: string[] };
+    expect(instance.additionalProperties).toBe(false);
+    expect(Object.keys(instance.properties).sort()).toEqual(["displayName", "signInNotice"]);
+    expect([...instance.required].sort()).toEqual(["displayName", "signInNotice"]);
+    expect(instance.properties["displayName"]).toMatchObject({ type: "string" });
     const features = api.properties["features"] as { properties: Obj; required: string[] };
     expect(Object.keys(features.properties).sort()).toEqual(["ai", "mail"]);
     expect([...features.required].sort()).toEqual(["ai", "mail"]);

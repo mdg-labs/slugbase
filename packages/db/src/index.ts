@@ -40,6 +40,8 @@ export { accountDeletionRepository } from "./repositories/account-deletion.ts";
 export type { AccountDeletionRepository } from "./repositories/account-deletion.ts";
 export { entitlementRepository } from "./repositories/entitlements.ts";
 export type { EntitlementRepository, EntitlementUsage } from "./repositories/entitlements.ts";
+export { instanceRepository } from "./repositories/instance.ts";
+export type { InstanceCounts, InstanceRepository, JobHealth } from "./repositories/instance.ts";
 export { workspaceRepository } from "./repositories/workspaces.ts";
 export type { NewWorkspace, WorkspaceDetail, WorkspaceRepository, WorkspaceSummary } from "./repositories/workspaces.ts";
 export { isLastOwnerViolation, memberRepository, OWNER_REQUIRED_CONSTRAINT } from "./repositories/members.ts";
@@ -74,6 +76,7 @@ export type {
   SignInAlertContext,
 } from "./system/auth.ts";
 export type { CompleteSetup, SetupOutcome, SetupStore } from "./system/setup.ts";
+export type { InstanceSettingsStore } from "./system/instance-settings.ts";
 export type { NewRegistration, RegistrationStore } from "./system/registration.ts";
 export type { InvitationAccountStore, InvitationAccountWrites, NewInvitationAccount } from "./system/invitation-account.ts";
 export type { InvitationIdentityStore, InvitationIdentityWrites, NewInvitationIdentity } from "./system/invitation-identity.ts";

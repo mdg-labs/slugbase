@@ -430,6 +430,22 @@ describe("DELETE /api/v1/me by an instance admin", () => {
     expect((await send(world, "GET", ME, { cookie: ada.cookie })).status).toBe(200);
   });
 
+  it("answers 422 last_instance_admin for the only enabled admin while a disabled admin remains, and changes nothing", async () => {
+    const world = serve();
+    const ada = await person(world, true);
+    await seedAccount(database(), { emailVerified: true, instanceAdmin: true, disabled: true });
+    await workspaceOf("Ada's own", [ada, "owner"]);
+    const before = await state();
+
+    const response = await send(world, "DELETE", ME, { cookie: ada.cookie }, { email: ada.account.email });
+
+    expect(response.status).toBe(422);
+    expect(await problem(response)).toMatchObject({ code: "validation_failed", errors: [{ path: "email", code: "last_instance_admin" }] });
+    expect(await state()).toBe(before);
+    expect(await instanceAdmins()).toHaveLength(2);
+    expect(await accountExists(ada.account.id)).toBe(true);
+  });
+
   it("deletes an instance admin while another one remains, and a non-admin is unaffected", async () => {
     const world = serve();
     const ada = await person(world, true);

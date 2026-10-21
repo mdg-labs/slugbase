@@ -2,7 +2,7 @@ import type { AuthPolicy, OperationDefinition } from "@slugbase/contracts";
 import { reauthenticatedRecently, type EntitlementCheck, type WorkspaceRole } from "@slugbase/core";
 import type { Principal } from "./authenticate.ts";
 import type { RequestStage } from "./chain.ts";
-import { ProblemError } from "./problem.ts";
+import { ProblemError, requestIdOf } from "./problem.ts";
 
 // Stage 9 of the chain (doc 01 section 4, doc 10 T3): the policy the operation
 // declares in its contract is checked before the handler runs. Every refusal
@@ -22,9 +22,20 @@ export type { EntitlementCheck, EntitlementSubject } from "@slugbase/core";
 /** No entitlement source is configured: an operation that declares one is refused. */
 export const denyEntitlements: EntitlementCheck = () => false;
 
+/**
+ * Whether the account has a second factor enrolled, which the `instanceAdmin` policy needs besides the flag (doc 04
+ * section 10.10, Q45). It is asked on the request's own transaction and only for an operation of that policy.
+ */
+export type SecondFactorCheck = (subject: { readonly accountId: string; readonly requestId: string }) => Promise<boolean>;
+
+/** No second-factor source is configured: an account is read as having none, so the `instanceAdmin` policy refuses everyone. */
+export const denySecondFactor: SecondFactorCheck = () => Promise.resolve(false);
+
 export interface AuthorizationOptions {
   /** Defaults to refusing every entitlement. */
   readonly entitlements?: EntitlementCheck;
+  /** Defaults to reading every account as having no second factor. */
+  readonly secondFactor?: SecondFactorCheck;
   /** The instant, in milliseconds, a session's `reauth_at` is compared with; defaults to the system clock. */
   readonly now?: () => number;
 }
@@ -70,12 +81,13 @@ export function refuseUncallableToken(principal: Principal | undefined, operatio
  * these checks; `member`, `admin` and
  * `owner` need the role of the resolved workspace or a higher one (`403
  * forbidden`), and a principal with no workspace is answered `404 not_found`
- * by all three; `instanceAdmin` needs an instance-admin session (`403
- * forbidden`); an operation that declares `reauth` needs a session
+ * by all three; `instanceAdmin` needs a complete session of an account that holds the instance-admin flag and has a
+ * second factor enrolled (`403 forbidden` for a token, another account and an admin without one; a session still
+ * waiting for its second factor has been answered `401 mfa_required` before); an operation that declares `reauth` needs a session
  * re-authenticated within the window of `reauthenticatedRecently` (`401 reauth_required`); a declared
  * entitlement must be held (`403 entitlement_required`).
  */
-export function createAuthorization({ entitlements = denyEntitlements, now = Date.now }: AuthorizationOptions = {}): RequestStage {
+export function createAuthorization({ entitlements = denyEntitlements, secondFactor = denySecondFactor, now = Date.now }: AuthorizationOptions = {}): RequestStage {
   return async (context, next) => {
     const operation = context.get("route")?.operation;
     if (operation === undefined) {
@@ -118,8 +130,11 @@ export function createAuthorization({ entitlements = denyEntitlements, now = Dat
         throw new ProblemError("forbidden", DETAILS.forbidden);
       }
     }
-    if (auth === "instanceAdmin" && !(principal.kind === "session" && principal.instanceAdmin)) {
-      throw new ProblemError("forbidden", DETAILS.forbidden);
+    if (auth === "instanceAdmin") {
+      // The flag comes from this request's session lookup; the second factor is asked of the database last, only for an admin, and a failure to answer is a refusal.
+      if (!(principal.kind === "session" && principal.instanceAdmin && (await secondFactor({ accountId: principal.accountId, requestId: requestIdOf(context) })))) {
+        throw new ProblemError("forbidden", DETAILS.forbidden);
+      }
     }
 
     if (reauth === true && !(principal.kind === "session" && reauthenticatedRecently(principal.reauthAt, now()))) {

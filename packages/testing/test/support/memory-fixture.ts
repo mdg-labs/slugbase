@@ -39,7 +39,7 @@ export interface MemoryFixture extends TenantFixture {
   touchB(): void;
 }
 
-export function memoryFixture({ withTokens = false }: { withTokens?: boolean } = {}): MemoryFixture {
+export function memoryFixture({ withTokens = false, withInstanceAdmin = false }: { withTokens?: boolean; withInstanceAdmin?: boolean } = {}): MemoryFixture {
   let version = 0;
   return {
     a: { ...workspace("a", A_ID, [{ kind: "workspace", id: A_ID }], ["marker-of-a"]), ...(withTokens ? { tokens: tokens("a") } : {}) },
@@ -55,6 +55,9 @@ export function memoryFixture({ withTokens = false }: { withTokens?: boolean } =
       ],
       [B_MARKER],
     ),
+    ...(withInstanceAdmin
+      ? { instanceAdmin: { instanceAdmin: true as const, accountId: "0192f3a0-0000-7000-8000-0000000000d2", credentials: "session:instance-admin" } }
+      : {}),
     checksum: (workspaceId) => Promise.resolve(`${workspaceId}:${String(version)}`),
     touchB() {
       version += 1;

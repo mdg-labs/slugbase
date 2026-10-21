@@ -2,7 +2,7 @@ import { InMemoryMail } from "@slugbase/testing";
 import { describe, expect, it } from "vitest";
 import { createMailTemplates } from "../src/index.ts";
 
-// The "MFA enabled" and "MFA disabled" emails (doc 02 section 12): rendered in the
+// The "MFA enabled", "MFA disabled" and "MFA reset by an administrator" emails (doc 02 section 12): rendered in the
 // recipient's language with a plain-text part, no tracking element, a link only to
 // the deployment's origin, and nothing of the second factor itself. The message
 // reaches a mail port as the worker hands it over; the template renders it as the
@@ -15,8 +15,9 @@ const templates = createMailTemplates({ appOrigin: ORIGIN });
 const SUBJECTS = {
   mfaEnabled: { en: "Two-factor authentication was turned on for your SlugBase account", de: "Die Zwei-Faktor-Authentifizierung wurde für dein SlugBase-Konto eingeschaltet" },
   mfaDisabled: { en: "Two-factor authentication was turned off for your SlugBase account", de: "Die Zwei-Faktor-Authentifizierung wurde für dein SlugBase-Konto ausgeschaltet" },
+  mfaReset: { en: "Two-factor authentication was reset for your SlugBase account", de: "Die Zwei-Faktor-Authentifizierung für dein SlugBase-Konto wurde zurückgesetzt" },
 } as const;
-const NAMES = ["mfaEnabled", "mfaDisabled"] as const;
+const NAMES = ["mfaEnabled", "mfaDisabled", "mfaReset"] as const;
 
 async function render(template: (typeof NAMES)[number], locale: string, data: Record<string, string> = { displayName: "Ada Lovelace" }) {
   const mail = new InMemoryMail();
@@ -97,5 +98,16 @@ describe("the two messages", () => {
     expect(enabled).not.toContain("turned off");
     expect(disabled).toContain("turned off");
     expect(disabled).not.toContain("turned on");
+  });
+});
+
+describe("the reset message", () => {
+  it("says an administrator did it and that signing in now asks only for the password, in both languages", async () => {
+    const english = (await render("mfaReset", "en")).rendered.text;
+    expect(english).toContain("An administrator of this SlugBase instance reset two-factor authentication");
+    expect(english).toContain("asks only for your password");
+    const german = (await render("mfaReset", "de")).rendered.text;
+    expect(german).toContain("hat die Zwei-Faktor-Authentifizierung für dein Konto zurückgesetzt");
+    expect(german).toContain("nur noch nach deinem Passwort");
   });
 });

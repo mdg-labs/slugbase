@@ -379,6 +379,69 @@
       "when": 1792486130208,
       "tag": "20261020084850_add_entitlement_version_bump",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1792501923233,
+      "tag": "20261020131203_add_instance_admin",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1792508676073,
+      "tag": "20261020150436_add_instance_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1792510825910,
+      "tag": "20261020154025_add_instance_admin_comments",
+      "breakpoints": true
+    },
+    {
+      "idx": 57,
+      "version": "7",
+      "when": 1792513220051,
+      "tag": "20261020162020_add_instance_workspaces",
+      "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1792520088428,
+      "tag": "20261020181448_add_instance_accounts",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1792524826715,
+      "tag": "20261020193346_add_instance_membership",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1792532257459,
+      "tag": "20261020213737_add_instance_recovery",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1792535421466,
+      "tag": "20261020223021_add_instance_account_deletion",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1792539347252,
+      "tag": "20261020233547_add_instance_audit_retention",
+      "breakpoints": true
     }
   ]
 }

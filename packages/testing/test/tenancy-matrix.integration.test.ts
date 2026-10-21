@@ -6,6 +6,7 @@ import {
   classifyOperations,
   createProbe,
   loadOpenApiDocument,
+  PROBE_INSTANCE_ADMIN,
   PROBE_WORKSPACE_A,
   PROBE_WORKSPACE_B,
   runApiMatrix,
@@ -102,8 +103,10 @@ describe("the matrix over the committed contract and the repository registry", (
 
   it("RLS-only mode passes over the scoped-repository registry as it stands", async () => {
     const methods = listRepositoryMethods();
-    const report = await runRlsOnlyMatrix({ tenant: database().tenant, fixture: scoped.fixture, methods });
+    const report = await runRlsOnlyMatrix({ tenant: database().tenant, fixture: { ...scoped.fixture, instanceAdmin: PROBE_INSTANCE_ADMIN }, methods });
     expect(report.methods).toBe(methods.length);
+    // every method ran once more as the instance admin of the fixture, which belongs to neither workspace
+    expect(report.instanceAdminAttempts).toBeGreaterThanOrEqual(methods.length);
     assertMatrixPassed(report);
   });
 });
@@ -494,5 +497,68 @@ describe("API mode over the probe table", () => {
     // the first attempt against each of the two rows removes it
     expect(report.failures.map((failure) => failure.kind)).toEqual(["workspace_changed", "workspace_changed"]);
     expect(report.failures[0]?.subject).toContain("deleteBookmark");
+  });
+});
+
+describe("RLS-only mode as an instance admin outside both workspaces", () => {
+  const withAdmin = (fixture: TenantFixture): TenantFixture => ({ ...fixture, instanceAdmin: PROBE_INSTANCE_ADMIN });
+
+  // The flag opens nothing in a tenant table: a transaction of the admin's account with no workspace set reads no row of A or of B and writes none.
+  it("passes for a table with a workspace policy: nothing is read, and every write naming A or B is refused or touches no row", async () => {
+    const report = await runRlsOnlyMatrix({
+      tenant: database().tenant,
+      fixture: withAdmin(scoped.fixture),
+      methods: scoped.methods,
+      samples: { [scoped.repository]: scoped.sample },
+    });
+    expect(report.failures).toEqual([]);
+    // select and delete without a predicate, and the insert and the update each naming A and naming B
+    expect(report.instanceAdminAttempts).toBe(6);
+    // the two inserts: row-level security refuses a row of any workspace when none is set; the two updates find no row to touch
+    expect(report.instanceAdminRefusals).toBe(2);
+    expect(report.attempts).toBe(6);
+  });
+
+  it("runs only when the fixture holds an instance admin", async () => {
+    const report = await runRlsOnlyMatrix({
+      tenant: database().tenant,
+      fixture: scoped.fixture,
+      methods: scoped.methods,
+      samples: { [scoped.repository]: scoped.sample },
+    });
+    expect(report.failures).toEqual([]);
+    expect(report.instanceAdminAttempts).toBe(0);
+    expect(report.instanceAdminRefusals).toBe(0);
+  });
+
+  it("fails for a table whose policy is USING (true): the account with no workspace reads and writes the rows of A and B", async () => {
+    const report = await runRlsOnlyMatrix({
+      tenant: database().tenant,
+      fixture: withAdmin(permissive.fixture),
+      methods: permissive.methods,
+      samples: { [permissive.repository]: permissive.sample },
+    });
+    const asInstanceAdmin = report.failures.filter((failure) => failure.kind.startsWith("instance_admin_"));
+    expect(new Set(asInstanceAdmin.map((failure) => [failure.subject.split(" ")[0], failure.kind].join(" ")))).toEqual(
+      new Set([
+        "matrix_probe_open.select instance_admin_read_row",
+        "matrix_probe_open.insert instance_admin_wrote_row",
+        "matrix_probe_open.update instance_admin_wrote_row",
+        "matrix_probe_open.delete instance_admin_wrote_row",
+      ]),
+    );
+    expect(asInstanceAdmin.every((failure) => /as the instance admin/.test(failure.detail) && /to an account with no workspace/.test(failure.detail))).toBe(true);
+    expect(report.instanceAdminRefusals).toBe(0);
+  });
+
+  it("leaves the rows of A and B as it found them", async () => {
+    const before = await Promise.all([victim.fixture.checksum(PROBE_WORKSPACE_A), victim.fixture.checksum(PROBE_WORKSPACE_B)]);
+    await runRlsOnlyMatrix({
+      tenant: database().tenant,
+      fixture: withAdmin(victim.fixture),
+      methods: victim.methods,
+      samples: { [victim.repository]: victim.sample },
+    });
+    expect(await Promise.all([victim.fixture.checksum(PROBE_WORKSPACE_A), victim.fixture.checksum(PROBE_WORKSPACE_B)])).toEqual(before);
   });
 });

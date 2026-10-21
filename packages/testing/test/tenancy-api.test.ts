@@ -31,7 +31,7 @@ const RANK: Readonly<Record<string, number>> = { member: 1, admin: 2, owner: 3 }
 
 /** What the chain answers: 403 to a principal below the policy of the operation, 404 to the others. */
 const answerByPolicy = (call: ApiCall): ApiResponse =>
-  (RANK[call.principal.role] ?? 0) < (RANK[call.operation.policy] ?? 0) ? refused(call) : notFound(call);
+  (RANK[call.principal.role ?? ""] ?? 0) < (RANK[call.operation.policy] ?? 0) ? refused(call) : notFound(call);
 
 describe("classifyOperations", () => {
   it("places each policy in one of the four kinds and counts them", () => {
@@ -89,6 +89,75 @@ describe("classifyOperations", () => {
   });
 });
 
+describe("API mode as an instance admin outside both workspaces", () => {
+  // The flag is no membership: whatever the policy and whatever the call names, the chain has no workspace for the principal and answers 404.
+  const WORKSPACE_DOCUMENT = documentOf([
+    { operationId: "getBookmark", path: "/api/v1/bookmarks/{bookmarkId}", auth: "member" },
+    { operationId: "deleteWidget", method: "delete", path: "/api/v1/widgets/{widgetId}", auth: "owner" },
+    { operationId: "getWorkspace", path: "/api/v1/workspace", auth: "admin" },
+  ]);
+  const MAPPINGS = { bookmarkId: "bookmark", widgetId: "bookmark" } as const;
+  const run = (request: (call: ApiCall) => Promise<ApiResponse>) =>
+    runApiMatrix({ document: WORKSPACE_DOCUMENT, fixture: memoryFixture({ withInstanceAdmin: true }), mapping: MAPPINGS, request });
+  const asInstanceAdmin = (call: ApiCall): boolean => "instanceAdmin" in call.principal;
+
+  it("sends it every call, those naming B once for each identifier and those naming nothing once, and passes on 404", async () => {
+    const seen: string[] = [];
+    const report = await run((call) => {
+      if (asInstanceAdmin(call)) {
+        seen.push(`${call.operation.operationId} ${call.url}`);
+        return Promise.resolve(notFound(call));
+      }
+      return Promise.resolve(answerByPolicy(call));
+    });
+    expect(report.failures).toEqual([]);
+    expect(seen.sort()).toEqual(
+      [
+        ...[B_BOOKMARK_SHARED, B_BOOKMARK_UNSHARED].map((id) => `getBookmark /api/v1/bookmarks/${id}`),
+        ...[B_BOOKMARK_SHARED, B_BOOKMARK_UNSHARED].map((id) => `deleteWidget /api/v1/widgets/${id}`),
+        "getWorkspace /api/v1/workspace",
+      ].sort(),
+    );
+    // the three principals of A and the instance admin, against the two bookmarks of B on two operations and once on the one naming nothing
+    expect(report.attempts).toBe(4 * (2 + 2 + 1));
+  });
+
+  it("expects 404 and no other answer from it, also on an owner policy where a member of A is told 403", async () => {
+    const report = await run((call) =>
+      Promise.resolve(asInstanceAdmin(call) ? refused(call) : (RANK[call.principal.role ?? ""] ?? 0) < (RANK[call.operation.policy] ?? 0) ? refused(call) : notFound(call)),
+    );
+    expect(report.failures.length).toBeGreaterThan(0);
+    expect(report.failures.every((failure) => failure.kind === "unexpected_status" && failure.detail.startsWith("as instance admin outside A and B"))).toBe(true);
+    expect(report.failures[0]?.detail).toContain("expected 404");
+  });
+
+  it("fails a handler that is reached: a 200 to the instance admin on a call that names B, and on one that names nothing", async () => {
+    const report = await run((call) => Promise.resolve(asInstanceAdmin(call) ? { status: 200, body: { ok: true } } : answerByPolicy(call)));
+    const subjects = new Set(report.failures.map((failure) => failure.subject.split(" ")[0]));
+    expect(subjects).toEqual(new Set(["getBookmark", "deleteWidget", "getWorkspace"]));
+    expect(report.failures.every((failure) => failure.kind === "unexpected_status" && failure.detail.startsWith("as instance admin outside A and B"))).toBe(true);
+  });
+
+  it("fails an instance admin answer that quotes B, whatever its status", async () => {
+    const report = await run((call) => Promise.resolve(asInstanceAdmin(call) ? { status: 404, body: { detail: B_MARKER } } : answerByPolicy(call)));
+    expect(new Set(report.failures.map((failure) => failure.kind))).toEqual(new Set(["leaked_name"]));
+  });
+
+  it("makes no call as an instance admin when the fixture holds none", async () => {
+    let calls = 0;
+    await runApiMatrix({
+      document: WORKSPACE_DOCUMENT,
+      fixture: memoryFixture(),
+      mapping: MAPPINGS,
+      request: (call) => {
+        calls += asInstanceAdmin(call) ? 1 : 0;
+        return Promise.resolve(answerByPolicy(call));
+      },
+    });
+    expect(calls).toBe(0);
+  });
+});
+
 describe("API mode", () => {
   it("passes when every attempt answers 404 and B is unchanged, and counts the attempts", async () => {
     const report = await runApiMatrix({
@@ -110,7 +179,7 @@ describe("API mode", () => {
       fixture: memoryFixture(),
       mapping: MAPPING,
       request: (call) => {
-        seen.push(`${call.principal.role} ${call.url}`);
+        seen.push(`${call.principal.role ?? "instance admin"} ${call.url}`);
         return Promise.resolve(notFound(call));
       },
     });
@@ -159,14 +228,14 @@ describe("API mode", () => {
     const documentOfPolicy = (auth: string): unknown =>
       documentOf([{ operationId: "getWidget", path: "/api/v1/widgets/{widgetId}", auth }]);
     const answerByRole = (below: readonly string[]) => (call: ApiCall) =>
-      Promise.resolve(below.includes(call.principal.role) ? refused(call) : notFound(call));
+      Promise.resolve(below.includes(call.principal.role ?? "") ? refused(call) : notFound(call));
     const run = (auth: string, request: (call: ApiCall) => Promise<ApiResponse>) =>
       runApiMatrix({ document: documentOfPolicy(auth), fixture: memoryFixture(), mapping: { widgetId: "bookmark" }, request });
 
     it("expects 403 below an admin policy and 404 at or above it, and still calls every principal", async () => {
       const seen: string[] = [];
       const report = await run("admin", (call) => {
-        seen.push(call.principal.role);
+        seen.push(call.principal.role ?? "instance admin");
         return answerByRole(["member"])(call);
       });
       expect(report.failures).toEqual([]);

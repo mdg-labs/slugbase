@@ -7,7 +7,7 @@ import type { Logger } from "../create-server.ts";
 import type { HookDispatcher } from "../hooks/index.ts";
 import type { Metrics } from "../metrics/index.ts";
 import { createAuthentication, type Authenticator, type Principal } from "./authenticate.ts";
-import { createAuthorization, type EntitlementCheck } from "./authorize.ts";
+import { createAuthorization, type EntitlementCheck, type SecondFactorCheck } from "./authorize.ts";
 import { bodyLimits } from "./body-limits.ts";
 import { createCrossSiteProtection } from "./cross-site.ts";
 import { createSecurityHeaders } from "./headers.ts";
@@ -165,6 +165,8 @@ export interface ChainDependencies {
   readonly withTenant: Database["withTenant"];
   /** Decides the entitlement an operation declares (stage 9); by default every entitlement is refused. */
   readonly entitlements?: EntitlementCheck;
+  /** Whether an account has a second factor enrolled, which an `instanceAdmin` operation needs (stage 9); by default no account has. */
+  readonly secondFactor?: SecondFactorCheck;
   /** The instant, in milliseconds, stage 9 compares a session's re-authentication with; defaults to the system clock. */
   readonly now?: () => number;
   /** The hooks modules registered, consulted by the handlers of the core flows. */
@@ -286,6 +288,7 @@ export function installChain(
     tenantResolver,
     withTenant,
     entitlements,
+    secondFactor,
     now,
   } = dependencies;
   const requestContext = createRequestContext({ logger, trustedProxyHops, ...(metrics === undefined ? {} : { metrics }) });
@@ -308,7 +311,11 @@ export function installChain(
     "rate-limiting": rateLimiting.stage,
     "tenant-resolution": createTenantResolution({ resolver: tenantResolver, withTenant }),
     validation,
-    authorization: createAuthorization({ ...(entitlements === undefined ? {} : { entitlements }), ...(now === undefined ? {} : { now }) }),
+    authorization: createAuthorization({
+      ...(entitlements === undefined ? {} : { entitlements }),
+      ...(secondFactor === undefined ? {} : { secondFactor }),
+      ...(now === undefined ? {} : { now }),
+    }),
     idempotency: createIdempotency({ withTenant }),
   };
   const requestStages = REQUEST_STAGES.map((name) => ({

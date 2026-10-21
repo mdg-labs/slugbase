@@ -1,11 +1,12 @@
 import {
   identifiersOf,
+  isFixtureInstanceAdmin,
   isFixtureToken,
   namesOf,
   principalsOf,
   tokensOf,
   type FixtureIdentifier,
-  type FixturePrincipal,
+  type MatrixPrincipal,
   type PrincipalRole,
   type TenantFixture,
 } from "./fixture.js";
@@ -38,11 +39,18 @@ import { isTokenCallable } from "./token-mode.js";
 // 403 where the operation is not token-callable (it declares no scope, or
 // re-authentication), and 403 where it declares the write scope and the token
 // is read-only. A token that gets past both is answered by role like a session.
+//
+// When the fixture holds an instance admin that belongs to neither workspace, it is sent every call as well, and
+// every one of them, naming an identifier of B or none, must be answered 404: the flag is no role in a workspace,
+// so the chain has no workspace to act in and discloses nothing, whatever the policy of the operation.
 
 const ROLE_RANK: Readonly<Record<PrincipalRole, number>> = { member: 1, admin: 2, owner: 3 };
 
 /** The status the chain answers a principal of workspace A for a row of workspace B, by the policy of the operation. */
-function expectedStatus(operation: ClassifiedOperation, principal: FixturePrincipal): number {
+function expectedStatus(operation: ClassifiedOperation, principal: MatrixPrincipal): number {
+  if (isFixtureInstanceAdmin(principal)) {
+    return 404;
+  }
   if (isFixtureToken(principal) && (!isTokenCallable(operation) || (operation.scope === "write" && principal.scope !== "read-write"))) {
     return 403;
   }
@@ -52,12 +60,18 @@ function expectedStatus(operation: ClassifiedOperation, principal: FixturePrinci
 }
 
 /** How a failure names the principal: `admin of A`, or `admin of A by a read-write token`. */
-function describePrincipal(principal: FixturePrincipal): string {
+function describePrincipal(principal: MatrixPrincipal): string {
+  if (isFixtureInstanceAdmin(principal)) {
+    return "instance admin outside A and B";
+  }
   return isFixtureToken(principal) ? `${principal.role} of A by a ${principal.scope} token` : `${principal.role} of A`;
 }
 
 /** Why the status is the expected one, for the failure that says it was not. */
-function reasonFor(operation: ClassifiedOperation, principal: FixturePrincipal, expected: number): string {
+function reasonFor(operation: ClassifiedOperation, principal: MatrixPrincipal, expected: number): string {
+  if (isFixtureInstanceAdmin(principal)) {
+    return "the instance-admin flag is no membership: the principal has no workspace to act in, and an answer other than 404 discloses what a workspace holds";
+  }
   if (expected === 404) {
     return "a 403 discloses that the row exists";
   }
@@ -73,7 +87,7 @@ function reasonFor(operation: ClassifiedOperation, principal: FixturePrincipal, 
 /** One request the matrix makes. */
 export interface ApiCall {
   readonly operation: ClassifiedOperation;
-  readonly principal: FixturePrincipal;
+  readonly principal: MatrixPrincipal;
   /** The path with the parameters substituted. */
   readonly url: string;
   /** Path parameter to the workspace B identifier substituted for it. */
@@ -263,7 +277,12 @@ export async function runApiMatrix(options: ApiMatrixOptions): Promise<ApiMatrix
     }
 
     const combinations = product(targets);
-    for (const principal of [...principalsOf(fixture.a), ...tokensOf(fixture.a)]) {
+    const principals: readonly MatrixPrincipal[] = [
+      ...principalsOf(fixture.a),
+      ...tokensOf(fixture.a),
+      ...(fixture.instanceAdmin === undefined ? [] : [fixture.instanceAdmin]),
+    ];
+    for (const principal of principals) {
       for (const combination of combinations) {
         const pathTargets: Record<string, string> = {};
         for (const [target, id] of combination) {
@@ -292,7 +311,8 @@ export async function runApiMatrix(options: ApiMatrixOptions): Promise<ApiMatrix
 
         if (response !== undefined) {
           const expected = expectedStatus(operation, principal);
-          if (targets.length > 0 && response.status !== expected) {
+          // An instance admin has no workspace, so it is answered 404 by an operation that names nothing as well.
+          if ((targets.length > 0 || isFixtureInstanceAdmin(principal)) && response.status !== expected) {
             failures.push(
               failure(
                 subject,

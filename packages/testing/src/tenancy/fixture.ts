@@ -39,6 +39,28 @@ export function isFixtureToken(principal: FixturePrincipal): principal is Fixtur
   return "scope" in principal;
 }
 
+/**
+ * An instance admin who belongs to neither workspace: a full session of an account that holds the instance-admin flag and a
+ * second factor, and no membership anywhere. The flag is a capability over the instance and not a role in a workspace
+ * (doc 02 section 11, Q44), so against every tenant-scoped operation it must be answered as an account with no workspace
+ * is: 404, whatever the operation's policy says and whatever it names.
+ */
+export interface FixtureInstanceAdmin {
+  readonly instanceAdmin: true;
+  readonly accountId: string;
+  /** What the request function turns into a session for this principal; opaque to the matrix. */
+  readonly credentials: string;
+  /** An instance admin holds no role in a workspace; the property exists so that code reading the role of a principal compiles over both. */
+  readonly role?: undefined;
+}
+
+/** Whoever the API mode of the matrix sends a request as. */
+export type MatrixPrincipal = FixturePrincipal | FixtureInstanceAdmin;
+
+export function isFixtureInstanceAdmin(principal: MatrixPrincipal): principal is FixtureInstanceAdmin {
+  return "instanceAdmin" in principal;
+}
+
 export interface FixtureIdentifier {
   readonly kind: IdentifierKind;
   /** The value a path parameter takes: an id, or a slug for the `slug` kind. */
@@ -73,6 +95,12 @@ export interface TenantFixture {
    * change to B is seen whatever the request path did.
    */
   checksum(workspaceId: string): Promise<string>;
+  /**
+   * An instance admin who is a member of neither workspace. When the fixture holds one, both modes of the matrix also run as it:
+   * the API mode expects 404 from every tenant-scoped operation, and the RLS-only mode expects it to read and write no row of
+   * either workspace in a transaction with no workspace set.
+   */
+  readonly instanceAdmin?: FixtureInstanceAdmin;
 }
 
 export function principalsOf(workspace: WorkspaceFixture): readonly FixturePrincipal[] {

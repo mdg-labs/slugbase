@@ -166,6 +166,23 @@ describe("the shipped chain", () => {
       "sys_oidc_state_take",
       "sys_invitation_accept_with_identity",
       "sys_workspace_bump_entitlement_version",
+      "sys_instance_status",
+      "sys_list_instance_audit",
+      "sys_setup_audit",
+      "sys_instance_settings",
+      "sys_instance_update_settings",
+      "sys_instance_test_mail",
+      "sys_instance_list_workspaces",
+      "sys_instance_create_workspace",
+      "sys_instance_delete_workspace",
+      "sys_instance_list_accounts",
+      "sys_instance_update_account",
+      "sys_instance_add_membership",
+      "sys_instance_reset_mfa",
+      "sys_instance_issue_reset_link",
+      "sys_instance_resend_verification",
+      "sys_instance_account_deletion_scope",
+      "sys_instance_delete_account",
     ]);
     expect(checkRules).toContain(systemOperationsRule);
     const database = await scratch();

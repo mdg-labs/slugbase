@@ -14,7 +14,7 @@ export interface ApiCall {
     // (undocumented)
     readonly operation: ClassifiedOperation;
     // (undocumented)
-    readonly principal: FixturePrincipal;
+    readonly principal: MatrixPrincipal;
     readonly query: Readonly<Record<string, string | readonly string[]>>;
     readonly targets: Readonly<Record<string, string>>;
     readonly url: string;
@@ -107,6 +107,16 @@ export interface FixtureIdentifier {
     readonly visibility?: "shared" | "unshared";
 }
 
+// @public
+export interface FixtureInstanceAdmin {
+    // (undocumented)
+    readonly accountId: string;
+    readonly credentials: string;
+    // (undocumented)
+    readonly instanceAdmin: true;
+    readonly role?: undefined;
+}
+
 // @public (undocumented)
 export interface FixturePrincipal {
     // (undocumented)
@@ -146,6 +156,9 @@ export function identifiersOf(workspace: WorkspaceFixture, kind: IdentifierKind)
 export type InputLocation = "query" | "body";
 
 // @public (undocumented)
+export function isFixtureInstanceAdmin(principal: MatrixPrincipal): principal is FixtureInstanceAdmin;
+
+// @public (undocumented)
 export function isFixtureToken(principal: FixturePrincipal): principal is FixtureToken;
 
 // @public
@@ -179,6 +192,9 @@ export class MatrixFailureError extends Error {
 export type MatrixMode = "api" | "rls-only" | "token";
 
 // @public
+export type MatrixPrincipal = FixturePrincipal | FixtureInstanceAdmin;
+
+// @public
 export function namesOf(workspace: WorkspaceFixture): readonly string[];
 
 // @public (undocumented)
@@ -210,6 +226,9 @@ export interface Probe {
     // (undocumented)
     readonly table: string;
 }
+
+// @public
+export const PROBE_INSTANCE_ADMIN: FixtureInstanceAdmin;
 
 // @public (undocumented)
 export const PROBE_SAMPLE: RepositorySample;
@@ -262,6 +281,8 @@ export interface RlsOnlyReport {
     readonly attempts: number;
     // (undocumented)
     readonly failures: readonly MatrixFailure[];
+    readonly instanceAdminAttempts: number;
+    readonly instanceAdminRefusals: number;
     readonly methods: number;
     readonly rlsRefusals: number;
 }
@@ -282,6 +303,7 @@ export interface TenantFixture {
     // (undocumented)
     readonly b: WorkspaceFixture;
     checksum(workspaceId: string): Promise<string>;
+    readonly instanceAdmin?: FixtureInstanceAdmin;
 }
 
 // @public

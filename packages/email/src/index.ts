@@ -1,11 +1,13 @@
+import { ACCOUNT_DISABLED_TEMPLATE, accountDisabled } from "./templates/account-disabled.ts";
 import { EMAIL_CHANGE_NOTICE_TEMPLATE, emailChangeNotice } from "./templates/email-change-notice.ts";
 import { EMAIL_CHANGE_TEMPLATE, emailChange } from "./templates/email-change.ts";
 import { INVITATION_TEMPLATE, invitation } from "./templates/invitation.ts";
-import { MFA_DISABLED_TEMPLATE, MFA_ENABLED_TEMPLATE, mfaDisabled, mfaEnabled } from "./templates/mfa.ts";
+import { MFA_DISABLED_TEMPLATE, MFA_ENABLED_TEMPLATE, MFA_RESET_TEMPLATE, mfaDisabled, mfaEnabled, mfaReset } from "./templates/mfa.ts";
 import { NEW_SIGN_IN_TEMPLATE, newSignIn } from "./templates/new-sign-in.ts";
 import { OWNERSHIP_TRANSFERRED_TEMPLATE, ownershipTransferred } from "./templates/ownership-transferred.ts";
 import { PASSWORD_CHANGED_TEMPLATE, passwordChanged } from "./templates/password-changed.ts";
 import { PASSWORD_RESET_TEMPLATE, passwordReset } from "./templates/password-reset.ts";
+import { TEST_MAIL_TEMPLATE, testMail } from "./templates/test-mail.ts";
 import { VERIFY_EMAIL_TEMPLATE, verifyEmail } from "./templates/verify-email.ts";
 import type { MailTemplates } from "./types.ts";
 
@@ -41,5 +43,8 @@ export function createMailTemplates({ appOrigin }: MailTemplateOptions): MailTem
     [EMAIL_CHANGE_NOTICE_TEMPLATE]: emailChangeNotice(options),
     [OWNERSHIP_TRANSFERRED_TEMPLATE]: ownershipTransferred(options),
     [INVITATION_TEMPLATE]: invitation(options),
+    [TEST_MAIL_TEMPLATE]: testMail(options),
+    [ACCOUNT_DISABLED_TEMPLATE]: accountDisabled(options),
+    [MFA_RESET_TEMPLATE]: mfaReset(options),
   };
 }

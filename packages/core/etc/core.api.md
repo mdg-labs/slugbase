@@ -22,7 +22,7 @@ export const ACCOUNT_CREATION_PATHS: readonly ["self-registration", "invitation"
 export const ACCOUNT_LIMIT_ENTITLEMENTS: readonly AccountLimitEntitlement[];
 
 // @public
-export const ACCOUNT_NOTIFICATIONS: readonly ["passwordChanged", "mfaEnabled", "mfaDisabled", "verifyEmail", "newSignIn", "passwordReset", "emailChange", "emailChangeNotice", "ownershipTransferred"];
+export const ACCOUNT_NOTIFICATIONS: readonly ["passwordChanged", "mfaEnabled", "mfaDisabled", "verifyEmail", "newSignIn", "passwordReset", "emailChange", "emailChangeNotice", "ownershipTransferred", "accountDisabled", "mfaReset"];
 
 // @public (undocumented)
 export type AccountCreationPath = (typeof ACCOUNT_CREATION_PATHS)[number];
@@ -158,6 +158,12 @@ export interface Adapters {
     // (undocumented)
     readonly tenantResolver: TenantResolver;
 }
+
+// @public
+export function addInstanceAdminMembership(input: InstanceWorkspaceDependencies, ask: InstanceWorkspaceAsk & {
+    readonly workspaceId: string;
+    readonly accountId: string;
+}): Promise<InstanceMembershipOutcome>;
 
 // @public (undocumented)
 export interface AiSuggestion {
@@ -335,6 +341,16 @@ export const AUDIT_ACTIONS: {
         };
     };
     readonly "member.joined": {
+        readonly category: "member";
+        readonly metadata: {
+            readonly role: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
+    };
+    readonly "member.instance_admin_joined": {
         readonly category: "member";
         readonly metadata: {
             readonly role: {
@@ -574,6 +590,9 @@ export function createEntitlementCheck(service: EntitlementService): Entitlement
 export function createEntitlementService(input: EntitlementServiceOptions): EntitlementService;
 
 // @public
+export function createInstanceWorkspace(input: InstanceWorkspaceDependencies, ask: InstanceWorkspaceCreationAsk): Promise<InstanceWorkspaceCreationOutcome>;
+
+// @public
 export function createInvitationLink(input: Omit<InvitationActionDependencies, "newId">, ask: InvitationActionAsk): Promise<InvitationLinkOutcome>;
 
 // @public (undocumented)
@@ -607,6 +626,9 @@ export type CredentialTokenPurpose = (typeof CREDENTIAL_TOKEN_PURPOSES)[number];
 
 // @public
 export function deleteAccount<Code extends string>(input: AccountDeletionDependencies<Code>, ask: AccountDeletionAsk): Promise<AccountDeletionOutcome<Code>>;
+
+// @public
+export function deleteInstanceAccount<Code extends string>(input: InstanceAccountDeletionDependencies<Code>, ask: InstanceAccountDeletionAsk): Promise<InstanceAccountDeletionOutcome<Code>>;
 
 // @public (undocumented)
 export const DOMAIN_EVENT_NAMES: readonly DomainEventName[];
@@ -1034,6 +1056,509 @@ export function inspectInvitation(input: {
 }, ask: {
     readonly token: string;
 }): Promise<InvitationInspectOutcome>;
+
+// @public (undocumented)
+export const INSTANCE_AUDIT_ACTION_NAMES: readonly InstanceAuditAction[];
+
+// @public (undocumented)
+export const INSTANCE_AUDIT_ACTIONS: {
+    readonly "instance.setup_completed": {
+        readonly metadata: {};
+    };
+    readonly "instance.status_viewed": {
+        readonly metadata: {};
+    };
+    readonly "instance.settings_viewed": {
+        readonly metadata: {};
+    };
+    readonly "instance.settings_changed": {
+        readonly metadata: {
+            readonly settings: "text";
+        };
+    };
+    readonly "instance.test_mail_queued": {
+        readonly metadata: {};
+    };
+    readonly "instance.workspaces_viewed": {
+        readonly metadata: {};
+    };
+    readonly "instance.workspace_created": {
+        readonly metadata: {
+            readonly owner: "text";
+        };
+    };
+    readonly "instance.workspace_deletion_requested": {
+        readonly metadata: {};
+    };
+    readonly "instance.workspace_joined": {
+        readonly metadata: {};
+    };
+    readonly "instance.accounts_viewed": {
+        readonly metadata: {};
+    };
+    readonly "instance.account_admin_granted": {
+        readonly metadata: {};
+    };
+    readonly "instance.account_admin_revoked": {
+        readonly metadata: {};
+    };
+    readonly "instance.account_disabled": {
+        readonly metadata: {};
+    };
+    readonly "instance.account_enabled": {
+        readonly metadata: {};
+    };
+    readonly "instance.account_mfa_reset": {
+        readonly metadata: {};
+    };
+    readonly "instance.account_reset_link_issued": {
+        readonly metadata: {
+            readonly delivery: "text";
+        };
+    };
+    readonly "instance.account_verification_resent": {
+        readonly metadata: {};
+    };
+    readonly "instance.account_email_verified": {
+        readonly metadata: {};
+    };
+    readonly "instance.account_deleted": {
+        readonly metadata: {};
+    };
+};
+
+// @public
+export const INSTANCE_SETTING_NAMES: readonly ["allowWorkspaceCreation", "displayName", "signInNotice"];
+
+// @public
+export const INSTANCE_TEST_MAIL_TEMPLATE = "testMail";
+
+// @public
+export interface InstanceAccount {
+    // (undocumented)
+    readonly disabled: boolean;
+    // (undocumented)
+    readonly displayName: string;
+    // (undocumented)
+    readonly email: string;
+    // (undocumented)
+    readonly emailVerified: boolean;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly isInstanceAdmin: boolean;
+    readonly lastSignInAt: Date | null;
+    // (undocumented)
+    readonly mfaEnabled: boolean;
+    readonly workspaceCount: number;
+}
+
+// @public (undocumented)
+export interface InstanceAccountAsk {
+    readonly ipPrefix: string | null;
+}
+
+// @public
+export interface InstanceAccountChange {
+    // (undocumented)
+    readonly disabled?: boolean;
+    readonly emailVerified?: true;
+    // (undocumented)
+    readonly isInstanceAdmin?: boolean;
+}
+
+// @public (undocumented)
+export interface InstanceAccountDeletionAsk {
+    readonly accountId: string;
+    readonly ipPrefix: string | null;
+}
+
+// @public (undocumented)
+export interface InstanceAccountDeletionDependencies<Code extends string> {
+    readonly guard: (input: AccountDeletionGuardInput) => Promise<WorkspaceDeletionGuardResult<Code>>;
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: InstanceAccountDeletionStore;
+}
+
+// @public (undocumented)
+export type InstanceAccountDeletionOutcome<Code extends string> =
+/** The account is deleted and the request is in the instance audit stream; `workspaces` were deleted with it. */
+    {
+    readonly kind: "deleted";
+    readonly workspaces: readonly AccountDeletionWorkspace[];
+} | {
+    readonly kind: InstanceAccountDeletionRefusal;
+}
+/** The account is the only owner of these workspaces, which have other members; nothing was written. */
+| {
+    readonly kind: "last_owner";
+    readonly workspaces: readonly AccountDeletionWorkspace[];
+}
+/** The guard refused with `code`, for the account or for one of the workspaces; nothing was written. */
+| {
+    readonly kind: "refused";
+    readonly code: Code;
+}
+/** The workspaces changed under the request; nothing was written. */
+| {
+    readonly kind: "unavailable";
+};
+
+// @public
+export type InstanceAccountDeletionRefusal =
+/** There is no such account. */
+"unknown_account"
+/** The account is an instance admin and no other enabled account is one. */
+| "last_instance_admin"
+/** The account is the calling admin's own; `DELETE /me` deletes it. */
+| "self";
+
+// @public (undocumented)
+export interface InstanceAccountDeletionRequest {
+    // (undocumented)
+    readonly accountId: string;
+    readonly eventId: string;
+    readonly events: readonly DomainEvent<"account.deleted">[];
+    // (undocumented)
+    readonly ipPrefix: string | null;
+    readonly soleWorkspaceIds: readonly string[];
+}
+
+// @public
+export type InstanceAccountDeletionScope = {
+    readonly kind: "ok";
+    readonly blocking: readonly AccountDeletionWorkspace[];
+    readonly soleMember: readonly AccountDeletionWorkspace[];
+} | {
+    readonly kind: InstanceAccountDeletionRefusal;
+};
+
+// @public
+export interface InstanceAccountDeletionStore {
+    delete(request: InstanceAccountDeletionRequest): Promise<InstanceAccountDeletionStoreOutcome>;
+    scope(accountId: string): Promise<InstanceAccountDeletionScope>;
+}
+
+// @public
+export type InstanceAccountDeletionStoreOutcome = "deleted" | "unavailable" | InstanceAccountDeletionRefusal;
+
+// @public (undocumented)
+export interface InstanceAccountDependencies {
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: InstanceAccountStore;
+}
+
+// @public
+export interface InstanceAccountStore {
+    listAccounts(eventId: string, ipPrefix: string | null): Promise<readonly InstanceAccount[]>;
+    updateAccount(accountId: string, change: InstanceAccountChange, notify: boolean, eventIds: {
+        readonly admin: string;
+        readonly disabled: string;
+        readonly verified: string;
+    }, ipPrefix: string | null): Promise<InstanceAccountUpdateOutcome>;
+}
+
+// @public (undocumented)
+export interface InstanceAccountUpdateAsk extends InstanceAccountAsk {
+    // (undocumented)
+    readonly accountId: string;
+    readonly disabled?: boolean;
+    readonly emailVerified?: true;
+    readonly isInstanceAdmin?: boolean;
+    readonly notify: boolean;
+}
+
+// @public
+export type InstanceAccountUpdateOutcome =
+/** Every field the ask named is in the state it names; `adminChanged`, `disabledChanged` and `verifiedChanged` say which of them moved. */
+    {
+    readonly kind: "updated";
+    readonly account: InstanceAccount;
+    readonly adminChanged: boolean;
+    readonly disabledChanged: boolean;
+    readonly verifiedChanged: boolean;
+}
+/** The account does not exist; nothing was written. */
+| {
+    readonly kind: "unknown_account";
+}
+/** The change would leave the instance without an enabled instance admin; `field` is the one of the ask it refused. */
+| {
+    readonly kind: "last_instance_admin";
+    readonly field: "isInstanceAdmin" | "disabled";
+};
+
+// @public
+export class InstanceAdminRequiredError extends Error {
+    constructor(options: {
+        readonly cause: unknown;
+    });
+}
+
+// @public (undocumented)
+export type InstanceAuditAction = keyof typeof INSTANCE_AUDIT_ACTIONS;
+
+// @public
+export interface InstanceAuditEvent {
+    // (undocumented)
+    readonly action: InstanceAuditAction;
+    readonly actorAccountId: string | null;
+    readonly actorLabel: string;
+    // (undocumented)
+    readonly createdAt: Date;
+    // (undocumented)
+    readonly entityId: string | null;
+    // (undocumented)
+    readonly entityType: string | null;
+    // (undocumented)
+    readonly id: string;
+    readonly ipPrefix: string | null;
+    readonly metadata: Readonly<Record<string, string>>;
+}
+
+// @public (undocumented)
+export type InstanceMembershipOutcome = InstanceMembershipResult;
+
+// @public (undocumented)
+export interface InstanceMembershipRequest {
+    readonly eventIds: {
+        readonly workspace: string;
+        readonly instance: string;
+    };
+    readonly events: readonly DomainEvent<"member.joined">[];
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public
+export type InstanceMembershipResult = {
+    readonly kind: "added";
+}
+/** The workspace does not exist or is being deleted; nothing was written. */
+| {
+    readonly kind: "unknown_workspace";
+}
+/** The account holds a role in the workspace already; nothing was written. */
+| {
+    readonly kind: "already_member";
+};
+
+// @public (undocumented)
+export interface InstanceMfaResetAsk extends InstanceRecoveryAsk {
+    readonly notify: boolean;
+}
+
+// @public
+export type InstanceMfaResetOutcome =
+/** The second factor was on and is off; every session of the account is gone and the audit event is written. */
+"reset"
+/** The account has no confirmed second factor; nothing was written, deleted or queued. */
+| "mfa_not_enabled" | "account_disabled"
+/** The target is the calling admin, who turns their own second factor off with the second factor that asks for. */
+| "self" | "unknown_account";
+
+// @public (undocumented)
+export interface InstanceRecoveryAsk {
+    // (undocumented)
+    readonly accountId: string;
+    readonly ipPrefix: string | null;
+}
+
+// @public (undocumented)
+export interface InstanceRecoveryDependencies {
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: InstanceRecoveryStore;
+}
+
+// @public
+export interface InstanceRecoveryStore {
+    issueResetLink(accountId: string, eventId: string, token: {
+        readonly id: string;
+        readonly hash: Buffer;
+    } | undefined, ipPrefix: string | null): Promise<InstanceResetLinkStoreOutcome>;
+    requestVerification(accountId: string, eventId: string, ipPrefix: string | null): Promise<InstanceVerificationOutcome>;
+    resetMfa(accountId: string, eventId: string, notify: boolean, ipPrefix: string | null): Promise<InstanceMfaResetOutcome>;
+}
+
+// @public (undocumented)
+export interface InstanceResetLinkAsk extends InstanceRecoveryAsk {
+    readonly mailAvailable: boolean;
+    readonly origin: string;
+}
+
+// @public
+export type InstanceResetLinkOutcome =
+/** The password-reset email is queued; no link is returned, since the email carries it. */
+    {
+    readonly kind: "mailed";
+}
+/** No mail can carry it: the link, valid for one hour, is returned here and nowhere else. */
+| {
+    readonly kind: "link";
+    readonly link: string;
+} | {
+    readonly kind: InstanceResetLinkRefusal;
+};
+
+// @public
+export type InstanceResetLinkRefusal = "account_disabled" | "email_unverified" | "no_password" | "unknown_account";
+
+// @public
+export type InstanceResetLinkStoreOutcome = "issued" | "link_required" | InstanceResetLinkRefusal;
+
+// @public (undocumented)
+export type InstanceSettingName = (typeof INSTANCE_SETTING_NAMES)[number];
+
+// @public
+export interface InstanceSettings {
+    // (undocumented)
+    readonly allowWorkspaceCreation: boolean | null;
+    // (undocumented)
+    readonly displayName: string | null;
+    // (undocumented)
+    readonly signInNotice: string | null;
+}
+
+// @public
+export type InstanceSettingsChange = {
+    readonly [Name in InstanceSettingName]?: InstanceSettings[Name];
+};
+
+// @public
+export function instanceTestMail(recipient: NotificationRecipient): MailMessage;
+
+// @public (undocumented)
+export type InstanceVerificationOutcome = "requested" | InstanceVerificationRefusal;
+
+// @public
+export type InstanceVerificationRefusal = "already_verified" | "account_disabled" | "unknown_account";
+
+// @public
+export interface InstanceWorkspace {
+    // (undocumented)
+    readonly createdAt: Date;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly memberCount: number;
+    // (undocumented)
+    readonly name: string;
+    readonly owners: readonly InstanceWorkspaceOwner[];
+}
+
+// @public (undocumented)
+export interface InstanceWorkspaceAsk {
+    readonly ipPrefix: string | null;
+}
+
+// @public (undocumented)
+export interface InstanceWorkspaceCreation {
+    readonly events: readonly DomainEvent<"workspace.created">[];
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly owner: InstanceWorkspaceOwnerSeat;
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface InstanceWorkspaceCreationAsk extends InstanceWorkspaceAsk {
+    // (undocumented)
+    readonly name: string;
+    readonly ownerAccountId?: string;
+    // (undocumented)
+    readonly ownerEmail?: string;
+    readonly ttlSeconds?: number;
+}
+
+// @public (undocumented)
+export type InstanceWorkspaceCreationOutcome = {
+    readonly kind: "created";
+    readonly workspaceId: string;
+    readonly invitation?: {
+        readonly id: string;
+        readonly email: string;
+        readonly expiresAt: Date;
+        readonly token: string;
+    };
+} | {
+    readonly kind: "unknown_account";
+};
+
+// @public (undocumented)
+export type InstanceWorkspaceCreationResult =
+/** The workspace exists; `invitationExpiresAt` is the expiry of the owner invitation, null when an account was made the owner. */
+    {
+    readonly kind: "created";
+    readonly invitationExpiresAt: Date | null;
+}
+/** The chosen owner account does not exist or is disabled; nothing was written. */
+| {
+    readonly kind: "unknown_account";
+};
+
+// @public (undocumented)
+export interface InstanceWorkspaceDeletionDependencies<Code extends string> extends InstanceWorkspaceDependencies {
+    readonly guard: (input: {
+        readonly workspaceId: string;
+    }) => Promise<WorkspaceDeletionGuardResult<Code>>;
+}
+
+// @public (undocumented)
+export type InstanceWorkspaceDeletionOutcome<Code extends string> =
+/** The workspace is marked, the job is queued and the request is in the instance audit stream. */
+    {
+    readonly kind: "requested";
+}
+/** The guard refused with `code`; nothing was written. */
+| {
+    readonly kind: "refused";
+    readonly code: Code;
+}
+/** The workspace does not exist or is already being deleted; nothing was written. */
+| {
+    readonly kind: "unavailable";
+};
+
+// @public (undocumented)
+export interface InstanceWorkspaceDependencies {
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: InstanceWorkspaceStore;
+}
+
+// @public
+export interface InstanceWorkspaceOwner {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly displayName: string;
+    // (undocumented)
+    readonly email: string;
+}
+
+// @public
+export type InstanceWorkspaceOwnerSeat = {
+    readonly kind: "account";
+    readonly accountId: string;
+} | {
+    readonly kind: "invitation";
+    readonly invitationId: string;
+    readonly email: string;
+    readonly tokenHash: Buffer;
+    readonly ttlSeconds: number;
+};
+
+// @public
+export interface InstanceWorkspaceStore {
+    addMembership(request: InstanceMembershipRequest, ipPrefix: string | null): Promise<InstanceMembershipResult>;
+    createWorkspace(request: InstanceWorkspaceCreation, eventId: string, ipPrefix: string | null): Promise<InstanceWorkspaceCreationResult>;
+    listWorkspaces(eventId: string, ipPrefix: string | null): Promise<readonly InstanceWorkspace[]>;
+    markWorkspaceDeleting(workspaceId: string, eventId: string, ipPrefix: string | null): Promise<boolean>;
+}
 
 // @public
 export const INVITATION_ROLES: readonly ["admin", "member"];
@@ -1484,6 +2009,18 @@ export function isDomainEventName(value: unknown): value is DomainEventName;
 // @public
 export function isEntitlementKey(key: string): key is EntitlementKey;
 
+// @public (undocumented)
+export function isInstanceAuditAction(value: unknown): value is InstanceAuditAction;
+
+// @public
+export function issueInstanceResetLink(input: InstanceRecoveryDependencies, ask: InstanceResetLinkAsk): Promise<InstanceResetLinkOutcome>;
+
+// @public
+export function listInstanceAccounts(input: InstanceAccountDependencies, ask: InstanceAccountAsk): Promise<readonly InstanceAccount[]>;
+
+// @public
+export function listInstanceWorkspaces(input: InstanceWorkspaceDependencies, ask: InstanceWorkspaceAsk): Promise<readonly InstanceWorkspace[]>;
+
 // @public
 export function listInvitations(input: Pick<InvitationActionDependencies, "store">, ask: {
     readonly afterId: string | null;
@@ -1808,6 +2345,9 @@ export interface PasswordPolicyOptions {
 export type PasswordProblem = "too_short" | "too_long" | "breached";
 
 // @public
+export function passwordResetLink(origin: string, token: string): string;
+
+// @public
 export const PERSONAL_WORKSPACE_NAME_SUFFIX = "'s workspace";
 
 // @public (undocumented)
@@ -1927,10 +2467,21 @@ export interface RequestEntitlements {
 }
 
 // @public
+export function requestInstanceAccountVerification(input: InstanceRecoveryDependencies, ask: InstanceRecoveryAsk): Promise<InstanceVerificationOutcome>;
+
+// @public
+export function requestInstanceWorkspaceDeletion<Code extends string>(input: InstanceWorkspaceDeletionDependencies<Code>, ask: InstanceWorkspaceAsk & {
+    readonly workspaceId: string;
+}): Promise<InstanceWorkspaceDeletionOutcome<Code>>;
+
+// @public
 export function requestWorkspaceDeletion<Code extends string>(input: WorkspaceDeletionDependencies<Code>, ask: WorkspaceDeletionAsk): Promise<WorkspaceDeletionOutcome<Code>>;
 
 // @public
 export function resendInvitation(input: InvitationActionDependencies, ask: InvitationActionAsk): Promise<InvitationResendOutcome>;
+
+// @public
+export function resetInstanceAccountMfa(input: InstanceRecoveryDependencies, ask: InstanceMfaResetAsk): Promise<InstanceMfaResetOutcome>;
 
 // @public
 export function revokeInvitation(input: Pick<InvitationActionDependencies, "store" | "audit">, ask: InvitationActionAsk): Promise<InvitationRevokeOutcome>;
@@ -2037,6 +2588,12 @@ export function truncateUserAgent(userAgent: string | null | undefined): string 
 export function unconfigured(): Adapters;
 
 // @public
+export const UNSET_INSTANCE_SETTINGS: InstanceSettings;
+
+// @public
+export function updateInstanceAccount(input: InstanceAccountDependencies, ask: InstanceAccountUpdateAsk): Promise<InstanceAccountUpdateOutcome>;
+
+// @public
 export const USER_AGENT_MAX_LENGTH = 256;
 
 // @public
@@ -2072,6 +2629,9 @@ export interface WorkspaceChangeAsk {
     // (undocumented)
     readonly workspaceId: string;
 }
+
+// @public
+export function workspaceCreationAllowed(settings: Pick<InstanceSettings, "allowWorkspaceCreation">, compositionDefault: boolean): boolean;
 
 // @public (undocumented)
 export interface WorkspaceCreationAsk extends WorkspaceCreationPolicy {

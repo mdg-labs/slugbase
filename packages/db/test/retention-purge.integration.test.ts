@@ -11,7 +11,7 @@ import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 // it deleted per table. The rules so far: expired sessions, API tokens that
 // were revoked or expired more than 30 days ago, OIDC login states past their expiry, credential
 // tokens that were used or expired more than 7 days ago, invitations that stopped being pending more than 30 days ago,
-// idempotency keys past their 24 hours, and workspace audit events older than the
+// idempotency keys past their 24 hours, and audit events older than the
 // retention the operator chose (365 days unless told otherwise, 0 keeps them forever).
 
 const HOOK_TIMEOUT_MS = 300_000;
@@ -631,14 +631,17 @@ describe("purging audit events", () => {
     readonly ageDays: number;
     /** Left null for a deployment-level event, which has no workspace. */
     readonly workspace?: string | null;
+    /** The action name; `workspace.created` unless told otherwise. */
+    readonly action?: string;
   }
 
   async function seedAuditEvent(event: SeedAuditEvent): Promise<string> {
     const id = freshId();
     const target = event.workspace === undefined ? workspaceId : event.workspace;
+    const action = event.action ?? "workspace.created";
     await asSystem(db, (tx) => tx`
       INSERT INTO audit_events (id, workspace_id, actor_type, actor_label, action, metadata, created_at)
-      VALUES (${id}, ${target}, 'system', 'SlugBase', 'workspace.created', '{}'::jsonb, now() - ${event.ageDays} * interval '1 day')`);
+      VALUES (${id}, ${target}, 'system', 'SlugBase', ${action}, '{}'::jsonb, now() - ${event.ageDays} * interval '1 day')`);
     return id;
   }
 
@@ -679,12 +682,70 @@ describe("purging audit events", () => {
     expect(await remainingAuditEvents()).toEqual([]);
   });
 
-  it("keeps an event with no workspace, which is a deployment-level one", async () => {
+  it("deletes an instance event older than the retention, keeps a newer one, and counts it with the workspace events", async () => {
+    await clearAuditEvents();
+    await seedAuditEvent({ ageDays: AUDIT_RETENTION_DAYS + 1, workspace: null });
+    await seedAuditEvent({ ageDays: AUDIT_RETENTION_DAYS + 1 });
+    const recent = await seedAuditEvent({ ageDays: AUDIT_RETENTION_DAYS - 1, workspace: null });
+    const fresh = await seedAuditEvent({ ageDays: 0, workspace: null });
+
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 2));
+
+    expect(await remainingAuditEvents()).toEqual([recent, fresh].sort());
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 0));
+  });
+
+  it("keeps an instance event whatever its age with a retention of 0", async () => {
     await clearAuditEvents();
     const deployment = await seedAuditEvent({ ageDays: 1000, workspace: null });
 
-    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 0));
+    const forever = createRetentionStore({ url: appUrl(db), poolSize: 1, auditRetentionDays: 0 });
+    try {
+      expect(await forever.purge()).toEqual(counts(0, 0, 0, 0, 0));
+    } finally {
+      await forever.close();
+    }
     expect(await remainingAuditEvents()).toEqual([deployment]);
+  });
+
+  it("keeps instance.setup_completed whatever its age, so sys_setup_audit still writes nothing, and deletes an equally old other instance event", async () => {
+    await clearAuditEvents();
+    const admin = await account();
+    await db.owner`INSERT INTO instance_state (id, setup_completed_at, setup_by) VALUES (1, now() - interval '2000 days', ${admin})`;
+    try {
+      const setup = await seedAuditEvent({ ageDays: AUDIT_RETENTION_DAYS * 3, workspace: null, action: "instance.setup_completed" });
+      await seedAuditEvent({ ageDays: AUDIT_RETENTION_DAYS * 3, workspace: null, action: "instance.status_viewed" });
+
+      expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 1));
+      expect(await remainingAuditEvents()).toEqual([setup]);
+
+      const shorter = createRetentionStore({ url: appUrl(db), poolSize: 1, auditRetentionDays: 1 });
+      try {
+        expect(await shorter.purge()).toEqual(counts(0, 0, 0, 0, 0));
+      } finally {
+        await shorter.close();
+      }
+      expect(await remainingAuditEvents()).toEqual([setup]);
+
+      const again = await db.app<{ recorded: boolean }[]>`SELECT sys_setup_audit(${freshId()}::uuid, NULL::cidr) AS recorded`;
+      expect(again).toEqual([{ recorded: false }]);
+      expect(await remainingAuditEvents()).toEqual([setup]);
+    } finally {
+      await db.owner`DELETE FROM instance_state`;
+    }
+  });
+
+  it("deletes the instance events in the same batch of 5 000 as the workspace ones", async () => {
+    await clearAuditEvents();
+    const extra = 7;
+    await asSystem(db, (tx) => tx`
+      INSERT INTO audit_events (id, workspace_id, actor_type, actor_label, action, metadata, created_at)
+      SELECT gen_random_uuid(), NULL, 'system', 'SlugBase', 'instance.status_viewed', '{}'::jsonb, now() - interval '400 days'
+      FROM generate_series(1, ${BATCH + extra})`);
+
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, BATCH));
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, extra));
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 0));
   });
 
   it("uses the retention the store was opened with: a shorter one deletes more, 0 deletes none", async () => {
@@ -740,11 +801,12 @@ describe("purging audit events", () => {
   it("is left alone by the overload of the previous release, which keeps the audit log whatever its age", async () => {
     await clearAuditEvents();
     const old = await seedAuditEvent({ ageDays: 4000 });
+    const oldInstance = await seedAuditEvent({ ageDays: 4000, workspace: null });
 
     const rows = await db.app<{ table_name: string; deleted: string }[]>`SELECT table_name, deleted::text AS deleted FROM sys_retention_purge()`;
 
     expect(rows.map((row) => ({ table: row.table_name, deleted: Number(row.deleted) }))).toEqual(counts(0));
-    expect(await remainingAuditEvents()).toEqual([old]);
+    expect(await remainingAuditEvents()).toEqual([old, oldInstance].sort());
   });
 });
 

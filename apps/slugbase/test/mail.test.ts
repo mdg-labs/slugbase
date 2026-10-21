@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { PortUnavailable, type RateLimitPort } from "@slugbase/core";
+import { PortUnavailable, UNSET_INSTANCE_SETTINGS, type RateLimitPort } from "@slugbase/core";
 import type { AuthStore, Database } from "@slugbase/db";
 import { createServer, createWorker, loadConfig, type Logger, type ServerModule } from "@slugbase/server";
 import { describe, expect, it } from "vitest";
@@ -52,6 +52,7 @@ const authStore: AuthStore = {
   unlinkIdentity: unexpected,
   reauthenticateWithIdentity: unexpected,
   setupPending: () => Promise.resolve(false),
+  instanceSettings: () => Promise.resolve(UNSET_INSTANCE_SETTINGS),
   setSetupToken: unexpected,
   completeSetup: unexpected,
   registerAccount: unexpected,

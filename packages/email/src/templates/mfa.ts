@@ -5,6 +5,7 @@ import type { MailTemplate } from "../types.ts";
 
 export const MFA_ENABLED_TEMPLATE = "mfaEnabled";
 export const MFA_DISABLED_TEMPLATE = "mfaDisabled";
+export const MFA_RESET_TEMPLATE = "mfaReset";
 
 /** Where the messages lead: the security settings of the account, on the deployment's own origin. */
 const SECURITY_PATH = "/settings/account/security";
@@ -42,6 +43,14 @@ const DISABLED_COPY: MfaCopy = (t, displayName, appName) => ({
   action: t("mfaDisabled.action"),
 });
 
+const RESET_COPY: MfaCopy = (t, displayName, appName) => ({
+  subject: t("mfaReset.subject", { appName }),
+  greeting: displayName === "" ? t("mfaReset.greetingAnonymous") : t("mfaReset.greeting", { name: displayName }),
+  body: t("mfaReset.body", { appName }),
+  notYou: t("mfaReset.notYou", { appName }),
+  action: t("mfaReset.action"),
+});
+
 /**
  * The account's display name greets the reader, the message says what changed about the second factor
  * and links to the security settings. A name that is missing or empty gives a greeting without one. The
@@ -75,4 +84,9 @@ export function mfaEnabled(options: MfaNotificationOptions): MailTemplate {
 /** "Two-factor authentication was turned off" (doc 02 section 12). */
 export function mfaDisabled(options: MfaNotificationOptions): MailTemplate {
   return mfaNotification(DISABLED_COPY, options);
+}
+
+/** "Two-factor authentication was reset by an administrator" (doc 02 sections 2.7 and 12). */
+export function mfaReset(options: MfaNotificationOptions): MailTemplate {
+  return mfaNotification(RESET_COPY, options);
 }

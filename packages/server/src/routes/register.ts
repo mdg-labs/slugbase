@@ -176,6 +176,9 @@ function missingPolicy(operation: OperationDefinition): string | undefined {
   return undefined;
 }
 
+/** The operations of the CE instance admin (doc 04 section 10.10) live under this path, and every one of them declares the `instanceAdmin` policy. */
+const INSTANCE_PATH = "/api/v1/instance";
+
 /**
  * Why an operation's declared re-authentication contradicts the rest of its policy, or
  * `undefined`. Re-authentication is a property of a fully authenticated session (doc 04
@@ -183,6 +186,9 @@ function missingPolicy(operation: OperationDefinition): string | undefined {
  * anonymous caller, a machine, a session whose second factor is pending or an API token.
  */
 function inconsistency(operation: OperationDefinition): string | undefined {
+  if ((operation.path === INSTANCE_PATH || operation.path.startsWith(`${INSTANCE_PATH}/`)) && operation.auth !== "instanceAdmin") {
+    return `an operation under ${INSTANCE_PATH} is the instance admin's and declares the instanceAdmin policy, not ${operation.auth}`;
+  }
   if (operation.idempotency === true && (operation.auth === "anonymous" || operation.auth === "machine")) {
     return `idempotency cannot be declared on a ${operation.auth} operation, which has no account to keep a key for`;
   }

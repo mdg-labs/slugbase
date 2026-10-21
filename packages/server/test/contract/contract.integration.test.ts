@@ -1,5 +1,5 @@
 import { LimitedEntitlementSource } from "@slugbase/testing";
-import { classifyOperations, createProbe, loadOpenApiDocument, runApiMatrix, runTokenMatrix, type MatrixFailure, type Probe } from "@slugbase/testing/tenancy";
+import { classifyOperations, createProbe, loadOpenApiDocument, PROBE_INSTANCE_ADMIN, runApiMatrix, runTokenMatrix, type MatrixFailure, type Probe } from "@slugbase/testing/tenancy";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createAccountOnlyTenantResolver } from "../../src/auth/tenant-resolver.ts";
@@ -46,7 +46,7 @@ beforeAll(async () => {
 function serve(modules: readonly ServerModule[], document?: TestDocument, options: { readonly memberships?: boolean; readonly entitlements?: EntitlementCheck } = {}): Server {
   // The walker signs in once for each operation that needs a session, and calls each of the mfa and reset buckets' operations several times,
   // more often than the default limits of one address allow.
-  const config = serverConfig({ NODE_ENV: "test", DATABASE_URL: appUrl(database()), RATE_LIMIT_LOGIN_IP: "100/min", RATE_LIMIT_MFA_IP: "100/min", RATE_LIMIT_MFA_ACCOUNT: "1000/hour", RATE_LIMIT_RESET_IP: "1000/hour" });
+  const config = serverConfig({ NODE_ENV: "test", DATABASE_URL: appUrl(database()), RATE_LIMIT_LOGIN_IP: "200/min", RATE_LIMIT_MFA_IP: "100/min", RATE_LIMIT_MFA_ACCOUNT: "1000/hour", RATE_LIMIT_RESET_IP: "1000/hour" });
   return createServer({
     config,
     // The stub resolver knows the workspaces of the fixture and no session of a real sign-in; the walk of the committed document resolves each
@@ -61,6 +61,9 @@ function serve(modules: readonly ServerModule[], document?: TestDocument, option
     database: tenantDatabase(database()),
     ...(document === undefined ? {} : { openApiDocument: document }),
     ...(options.entitlements === undefined ? {} : { entitlements: options.entitlements }),
+    // The stub world names its own instance admin, which the database knows nothing of; the walk of the committed document signs real accounts in and
+    // leaves the check to the database.
+    ...(options.memberships === true ? {} : { secondFactor: world.secondFactor }),
   });
 }
 
@@ -95,8 +98,8 @@ describe("the walker over the committed document", () => {
   async function sessionHooks(server: Server, unentitled: Set<string>): Promise<PolicyHooks> {
     await seedAccount(database(), WALKER_ACCOUNT);
     const needsReauth = new Set(readOperations(committed).operations.filter((operation) => operation.reauth === true).map((operation) => operation.operationId));
-    const signIn = async (email: string, reauthenticate: boolean, member = false, role?: "owner" | "member", entitled = true): Promise<string> => {
-      const account = await seedAccount(database(), { email, password: WALKER_ACCOUNT.password });
+    const signIn = async (email: string, reauthenticate: boolean, member = false, role?: "owner" | "member", entitled = true, instanceAdmin = false): Promise<string> => {
+      const account = await seedAccount(database(), { email, password: WALKER_ACCOUNT.password, instanceAdmin });
       if (!entitled) {
         unentitled.add(account.id);
       }
@@ -128,6 +131,13 @@ describe("the walker over the committed document", () => {
       const cookie = /^(__Host-slugbase_session=[A-Za-z0-9_-]{43});/.exec(response.headers.get("set-cookie") ?? "")?.[1];
       if (response.status !== 200 || cookie === undefined) {
         throw new Error(`the walker could not sign in: ${String(response.status)}`);
+      }
+      if (instanceAdmin) {
+        // An instance admin needs a second factor besides the flag. The sign-in above came first, so the session is a complete one, as it is after the code is accepted.
+        await database().owner.begin(async (tx) => {
+          await tx`SELECT set_config('app.account_id', ${account.id}, true)`;
+          await tx`UPDATE accounts SET mfa_enabled_at = now(), mfa_secret = ${Buffer.from("sealed")}, mfa_secret_key_id = 'key-1' WHERE id = ${account.id}`;
+        });
       }
       if (reauthenticate) {
         const reauth = await server.fetch(
@@ -162,6 +172,16 @@ describe("the walker over the committed document", () => {
           // An owner of a workspace of its own whose account the entitlement source does not hold the entitlement for: the policy admits it, the entitlement does not.
           without.set(operationId, await signIn(`walker-${operationId}-unentitled@example.test`.toLowerCase(), false, false, "owner", false));
         }
+        continue;
+      }
+      if (kind === "process" && policy === "instanceAdmin") {
+        // An instance admin with a second factor, and the account just below the policy: an ordinary one.
+        cookies.set(operationId, await signIn(`walker-${operationId}@example.test`.toLowerCase(), needsReauth.has(operationId), false, undefined, true, true));
+        if (needsReauth.has(operationId)) {
+          // An instance admin with a second factor that has not re-authenticated: the policy admits it, the re-authentication does not.
+          stale.set(operationId, await signIn(`walker-${operationId}-stale@example.test`.toLowerCase(), false, false, undefined, true, true));
+        }
+        below.set(operationId, await signIn(`walker-${operationId}-below@example.test`.toLowerCase(), false));
         continue;
       }
       if (kind !== "account-level") {
@@ -211,11 +231,12 @@ describe("the walker over the committed document", () => {
     expect(report.failures.filter((failure) => !teamRefusal(failure))).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each anonymous operation and for the sign-in; each of the forty operations that need a session
-    // also answers 401 without one, each of the ten that declare re-authentication answers 401 reauth_required without it, and each of
+    // One valid request for each anonymous operation and for the sign-in; each of the fifty-four operations that need a session
+    // also answers 401 without one, each of the sixteen that declare re-authentication answers 401 reauth_required without it, and each of
     // the sixteen that need a role in the workspace answers the principal just below it (404 below member, 403 below admin), and each of the eight
-    // that name a member, a recipient, a team or an invitation answers for one of workspace B; each of the four that declare an entitlement answers 403 to an account without it.
-    expect(report.calls).toBe(operations.length + 78);
+    // that name a member, a recipient, a team or an invitation answers for one of workspace B; each of the four that declare an entitlement answers 403 to an account without it;
+    // and each of the thirteen instance operations answers 403 to the ordinary account just below its policy.
+    expect(report.calls).toBe(operations.length + 112);
   }, WALK_TIMEOUT_MS);
 });
 
@@ -394,16 +415,26 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     ], undefined, { entitlements: entitlementsExcept(new Set()) });
     // The fixture of the probe holds no team, so workspace B is given one: the matrix puts it in the invitation's `teamIds`. It holds no invitation
     // either, and is given the one the seed wrote.
+    // The instance admin of the stub world belongs to neither workspace; the matrix sends it every call as well.
     const fixture = {
       ...probe.fixture,
       b: { ...probe.fixture.b, identifiers: [...probe.fixture.b.identifiers, { kind: "team" as const, id: UNKNOWN_TEAM_ID }, { kind: "invitation" as const, id: B_INVITATION_ID }] },
+      instanceAdmin: PROBE_INSTANCE_ADMIN,
     };
 
+    const send = matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: FIXTURES, credentialsOf: (principal) => world.credentialsOf(principal) });
+    const instanceAdminStatuses: number[] = [];
     const matrix = await runApiMatrix({
       document: committed,
       fixture,
       mapping: { rowId: "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation" },
-      request: matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: FIXTURES, credentialsOf: (principal) => world.credentialsOf(principal) }),
+      request: async (call) => {
+        const response = await send(call);
+        if ("instanceAdmin" in call.principal) {
+          instanceAdminStatuses.push(response.status);
+        }
+        return response;
+      },
     });
 
     // A team is refused with 422 whichever workspace holds it, because no team can be invited into yet and none can be told from another, which
@@ -419,7 +450,11 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // and on the operations that name members of B once for each of them: the role change, and the leaving, which names a recipient, once for each
     // of the three, and the ownership transfer, which names the member who becomes an owner, once for each of the three; the removal names both
     // a member and a recipient, once for each pair; the resend, the link and the revocation of an invitation name the one invitation of B once each
-    expect(report.attempts).toBe(9 * 9 + 9 * (3 + 3 + 3 + 3 * 3 + 3));
+    // The instance admin is a tenth principal making the same thirty calls, and each of them is answered 404 whatever the policy of the operation:
+    // it holds no membership, so there is no workspace for a handler to act in or a role to be refused for.
+    const calls = 9 + (3 + 3 + 3 + 3 * 3 + 3);
+    expect(report.attempts).toBe(10 * calls);
+    expect(instanceAdminStatuses).toEqual(Array<number>(calls).fill(404));
     expect(await contentOfB()).toBe(before);
     // Every invitation the matrix tried to make was refused before anything was written, in A as in B, and the one invitation of B is still its own,
     // pending, with the token hash the seed gave it.

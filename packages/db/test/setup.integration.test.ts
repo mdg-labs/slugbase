@@ -76,6 +76,7 @@ function request(overrides: Partial<CompleteSetup> = {}): CompleteSetup {
     sessionTokenHash: freshToken().hash,
     ipPrefix: "203.0.0.0/16",
     userAgent: "Vitest",
+    instanceEventId: freshId(),
     ...overrides,
   };
 }
@@ -564,7 +565,11 @@ describe("the audit events of a setup", () => {
   }
 
   async function auditRows(): Promise<{ id: string; workspace_id: string; actor_account_id: string | null; action: string; metadata: unknown }[]> {
-    return asSystem(db, (tx) => tx`SELECT id, workspace_id, actor_account_id, action, metadata FROM audit_events ORDER BY id`);
+    return asSystem(db, (tx) => tx`SELECT id, workspace_id, actor_account_id, action, metadata FROM audit_events WHERE workspace_id IS NOT NULL ORDER BY id`);
+  }
+
+  async function instanceRows(): Promise<{ id: string; actor_account_id: string | null; action: string }[]> {
+    return asSystem(db, (tx) => tx`SELECT id, actor_account_id, action FROM audit_events WHERE workspace_id IS NULL ORDER BY id`);
   }
 
   it("writes the events it carries in the transaction that creates the workspace", async () => {
@@ -576,6 +581,7 @@ describe("the audit events of a setup", () => {
     expect(await auditRows()).toEqual([
       { id: event.id, workspace_id: setup.workspaceId, actor_account_id: setup.accountId, action: "workspace.created", metadata: { name: "First workspace" } },
     ]);
+    expect(await instanceRows()).toEqual([{ id: setup.instanceEventId, actor_account_id: setup.accountId, action: "instance.setup_completed" }]);
   });
 
   it("writes none when setup is already completed, and none when the token is wrong", async () => {
@@ -583,11 +589,13 @@ describe("the audit events of a setup", () => {
     const second = request();
     expect(await store.completeSetup({ ...second, audit: [eventFor(second)] })).toBe("setup_completed");
     expect(await auditRows()).toEqual([]);
+    expect(await instanceRows()).toHaveLength(1);
 
     await db.owner`TRUNCATE accounts, workspaces, instance_state CASCADE`;
     const guarded = request({ tokenRequired: true, tokenHash: freshToken().hash });
     expect(await store.completeSetup({ ...guarded, audit: [eventFor(guarded)] })).toBe("forbidden");
     expect(await auditRows()).toEqual([]);
+    expect(await instanceRows()).toEqual([]);
   });
 
   it("leaves no account when an event names another workspace than the one the setup creates", async () => {

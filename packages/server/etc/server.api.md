@@ -172,6 +172,7 @@ export interface CreateServerOptions {
     readonly database?: Database;
     readonly entitlements?: EntitlementCheck;
     readonly hookTimeoutMs?: number;
+    readonly instanceAdminGrant?: InstanceAdminGrantCheck;
     // (undocumented)
     readonly logger: Logger;
     readonly migrations: readonly MigrationChain[];
@@ -180,6 +181,7 @@ export interface CreateServerOptions {
     readonly now?: () => number;
     readonly openApiDocument?: ContractDocument;
     readonly registrationDefaults?: RegistrationSettings;
+    readonly secondFactor?: SecondFactorCheck;
     readonly shutdownTimeoutMs?: number;
     readonly webRoot?: string;
 }
@@ -505,6 +507,12 @@ export interface IdempotencyCheck<Payload extends JobPayload> {
     readonly payload: Payload;
     readonly state: () => Promise<unknown>;
 }
+
+// @public
+export type InstanceAdminGrantCheck = (subject: {
+    readonly accountId: string;
+    readonly targetAccountId: string;
+}) => boolean | Promise<boolean>;
 
 // @public (undocumented)
 export type IntersectUnion<Union> = (Union extends unknown ? (value: Union) => void : never) extends (value: infer Both) => void ? Both : never;
@@ -1086,6 +1094,12 @@ export interface SeatCheckInput {
     // (undocumented)
     readonly workspaceId: string;
 }
+
+// @public
+export type SecondFactorCheck = (subject: {
+    readonly accountId: string;
+    readonly requestId: string;
+}) => Promise<boolean>;
 
 // @public
 export const secretsFragment: EnvFragment<    {

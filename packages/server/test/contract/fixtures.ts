@@ -23,6 +23,12 @@ export const UNKNOWN_IDENTITY_ID = "0192f3a0-cccc-7000-8000-000000000003";
 /** A team no workspace holds: teams have no members to join yet, so any team named in an invitation is refused the same way. */
 export const UNKNOWN_TEAM_ID = "0192f3a0-cccc-7000-8000-000000000005";
 
+/** A workspace no instance holds: the walker's request to delete it is the declared 404. */
+export const UNKNOWN_WORKSPACE_ID = "0192f3a0-dddd-7000-8000-000000000008";
+
+/** An account no instance holds: the walker's request to change it is the declared 404. */
+export const UNKNOWN_ACCOUNT_ID = "0192f3a0-dddd-7000-8000-000000000009";
+
 /** The pending invitation the matrix seeds in workspace B, which the invitation operations of A name. */
 export const B_INVITATION_ID = "0192f3a0-cccc-7000-8000-000000000007";
 
@@ -172,6 +178,40 @@ export const FIXTURES: ContractFixtures = {
   // acceptance without a credential, which is the registration form. The redemptions themselves are walked by the invitation acceptance tests.
   inspectInvitation: { body: { token: "A".repeat(43) }, status: 410 },
   acceptInvitation: { body: { token: "A".repeat(43), displayName: "Walker", password: "a password for the walker" }, status: 410 },
+  // An instance admin's operation: it names no workspace, account or other identifier, so there is none of workspace B or of another account to put in it.
+  // The walker that calls it is an instance admin with a second factor on a complete session (the contract test makes it), and the account below the
+  // policy is an ordinary one; the instance suite shows that a token, a pending session and an admin without a second factor are refused.
+  getInstanceStatus: {},
+  // The settings and the test email of the instance admin name no workspace, account or other identifier either, so the same holds. The walker's
+  // server has no mail adapter, so the valid test-mail request is the declared 503 (mail_unavailable). The settings it writes are the ones it left.
+  getInstanceSettings: {},
+  updateInstanceSettings: { body: { displayName: "Walker" } },
+  sendInstanceTestMail: { status: 503 },
+  // The workspace operations of the instance admin. The list names nothing. The creation names the address of a first owner and no account, so
+  // there is no account of another workspace to put in it: the valid request is the declared 201 and makes a workspace nobody is a member of. The
+  // deletion names a workspace by identifier, which an instance admin may name whoever holds it, and the walker knows none it could delete without
+  // taking the next call's workspace away: its valid request names one that does not exist, the declared 404; the route tests delete workspaces.
+  listInstanceWorkspaces: {},
+  createInstanceWorkspace: { body: { name: "Walker's instance workspace", ownerEmail: "walker-first-owner@example.test" } },
+  deleteInstanceWorkspace: { path: { id: UNKNOWN_WORKSPACE_ID }, status: 404 },
+  // The membership names a workspace by identifier, which an instance admin may name whoever holds it, and the walker knows none it could join
+  // without giving its account a membership the next call would not expect: its valid request names one that does not exist, the declared 404;
+  // the route tests add the admin to workspaces.
+  addInstanceAdminMembership: { path: { id: UNKNOWN_WORKSPACE_ID }, status: 404 },
+  // The account operations of the instance admin. The list names nothing. The change names an account by identifier, which an instance admin may
+  // name whoever it is, and the walker knows none it could disable or demote without taking the next call's caller away: its valid request names one
+  // that does not exist, the declared 404; the route tests change accounts.
+  listInstanceAccounts: {},
+  updateInstanceAccount: { path: { id: UNKNOWN_ACCOUNT_ID }, body: { disabled: true }, status: 404 },
+  // The recovery operations name an account by identifier too, and the walker knows none whose second factor it could reset or whose reset link it
+  // could issue without taking the next call's caller away: the reset and the link name the one that does not exist, the declared 404. The walked
+  // server has no mail adapter, which the resend of a verification email asks about first, so its valid request is the declared 503
+  // (mail_unavailable). The route tests recover accounts.
+  resetInstanceAccountMfa: { path: { id: UNKNOWN_ACCOUNT_ID }, status: 404 },
+  issueInstanceAccountResetLink: { path: { id: UNKNOWN_ACCOUNT_ID }, status: 404 },
+  resendInstanceAccountVerification: { path: { id: UNKNOWN_ACCOUNT_ID }, status: 503 },
+  // The deletion names the account that does not exist too, the declared 404: the walker's own accounts are the callers of the calls that follow.
+  deleteInstanceAccount: { path: { id: UNKNOWN_ACCOUNT_ID }, status: 404 },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

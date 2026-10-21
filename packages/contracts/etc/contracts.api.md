@@ -111,6 +111,36 @@ export const AccountSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
+export const addInstanceAdminMembership: {
+    readonly method: "post";
+    readonly path: "/api/v1/instance/workspaces/{id}/membership";
+    readonly operationId: "addInstanceAdminMembership";
+    readonly tag: "instance";
+    readonly summary: "Add the calling instance admin to a workspace as a member";
+    readonly auth: "instanceAdmin";
+    readonly rate: "write";
+    readonly reauth: true;
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 201: JsonResponse<z.ZodObject<{
+        workspaceId: z.ZodUUID;
+        role: z.ZodLiteral<"member">;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 409: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
 export const ANALYTICS_CONSENTS: readonly ["unset", "granted", "denied"];
 
 // @public
@@ -140,6 +170,10 @@ export const ApiConfigSchema: z.ZodObject<{
             slug: z.ZodString;
             name: z.ZodString;
         }, z.core.$strict>>;
+    }, z.core.$strict>>;
+    instance: z.ZodOptional<z.ZodObject<{
+        displayName: z.ZodString;
+        signInNotice: z.ZodNullable<z.ZodString>;
     }, z.core.$strict>>;
     setupRequired: z.ZodOptional<z.ZodBoolean>;
     setupTokenRequired: z.ZodOptional<z.ZodBoolean>;
@@ -405,6 +439,10 @@ export interface ComponentTypes {
                 ai: boolean;
                 mail: boolean;
             };
+            instance?: {
+                displayName: string;
+                signInNotice: string | null;
+            };
             locales: string[];
             origin: string;
             product: {
@@ -454,6 +492,11 @@ export interface ComponentTypes {
             name: string;
             scope: "read" | "read-write";
             workspaceId?: string;
+        };
+        CreateInstanceWorkspaceRequest: {
+            name: string;
+            ownerAccountId?: string;
+            ownerEmail?: string;
         };
         CreateInvitationRequest: {
             email: string;
@@ -529,6 +572,88 @@ export interface ComponentTypes {
         };
         InspectInvitationRequest: {
             token: string;
+        };
+        InstanceAccount: {
+            disabled: boolean;
+            displayName: string;
+            email: string;
+            emailVerified: boolean;
+            id: string;
+            isInstanceAdmin: boolean;
+            lastSignInAt: string | null;
+            mfaEnabled: boolean;
+            workspaceCount: number;
+        };
+        InstanceAccountList: {
+            items: ComponentTypes["schemas"]["InstanceAccount"][];
+        };
+        InstanceAccountResetLink: {
+            delivery: "mail" | "link";
+            link: string | null;
+        };
+        InstanceOwnerInvitation: {
+            email: string;
+            expiresAt: string;
+            id: string;
+            link: string;
+        };
+        InstanceSettings: {
+            allowWorkspaceCreation: boolean | null;
+            displayName: string | null;
+            signInNotice: string | null;
+        };
+        InstanceStatus: {
+            counts: {
+                accounts: number;
+                activeSessions: number;
+                workspaces: number;
+            };
+            jobs: {
+                failed: number;
+                queueDepth: number;
+            };
+            migrations: {
+                applied: number;
+                expected: number;
+            };
+            oidcProviders: {
+                name: string;
+                slug: string;
+            }[];
+            ports: {
+                ai: boolean;
+                errorReporting: boolean;
+                mail: boolean;
+            };
+            signIn: {
+                emailVerificationRequired: boolean;
+                publicRegistration: boolean;
+            };
+            version: string;
+        };
+        InstanceWorkspace: {
+            createdAt: string;
+            id: string;
+            memberCount: number;
+            name: string;
+            owners: ComponentTypes["schemas"]["InstanceWorkspaceOwner"][];
+        };
+        InstanceWorkspaceCreated: {
+            id: string;
+            name: string;
+            ownerInvitation: ComponentTypes["schemas"]["InstanceOwnerInvitation"] | null;
+        };
+        InstanceWorkspaceList: {
+            items: ComponentTypes["schemas"]["InstanceWorkspace"][];
+        };
+        InstanceWorkspaceMembership: {
+            role: "member";
+            workspaceId: string;
+        };
+        InstanceWorkspaceOwner: {
+            accountId: string;
+            displayName: string;
+            email: string;
         };
         Invitation: {
             createdAt: string;
@@ -730,6 +855,16 @@ export interface ComponentTypes {
             singleKeyShortcuts?: boolean;
             theme?: "light" | "dark" | "system";
         };
+        UpdateInstanceAccountRequest: {
+            disabled?: boolean;
+            emailVerified?: true;
+            isInstanceAdmin?: boolean;
+        };
+        UpdateInstanceSettingsRequest: {
+            allowWorkspaceCreation?: boolean | null;
+            displayName?: string | null;
+            signInNotice?: string | null;
+        };
         UpdateMemberRequest: {
             role: "owner" | "admin" | "member";
         };
@@ -925,6 +1060,49 @@ export const CreatedApiTokenSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
+export const createInstanceWorkspace: {
+    readonly method: "post";
+    readonly path: "/api/v1/instance/workspaces";
+    readonly operationId: "createInstanceWorkspace";
+    readonly tag: "instance";
+    readonly summary: "Create a workspace for an owner account or an owner invitation";
+    readonly auth: "instanceAdmin";
+    readonly rate: "write";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            name: z.ZodString;
+            ownerAccountId: z.ZodOptional<z.ZodUUID>;
+            ownerEmail: z.ZodOptional<z.ZodEmail>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 201: JsonResponse<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        ownerInvitation: z.ZodNullable<z.ZodObject<{
+        id: z.ZodUUID;
+        email: z.ZodString;
+        expiresAt: z.ZodISODateTime;
+        link: z.ZodURL;
+        }, z.core.$strict>>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const CreateInstanceWorkspaceRequestSchema: z.ZodObject<{
+    name: z.ZodString;
+    ownerAccountId: z.ZodOptional<z.ZodUUID>;
+    ownerEmail: z.ZodOptional<z.ZodEmail>;
+}, z.core.$strict>;
+
+// @public (undocumented)
 export const createInvitation: {
     readonly method: "post";
     readonly path: "/api/v1/invitations";
@@ -1078,6 +1256,61 @@ export function defineOperation<const D extends OperationDefinition>(definition:
 export const DeleteAccountRequestSchema: z.ZodObject<{
     email: z.ZodString;
 }, z.core.$strict>;
+
+// @public (undocumented)
+export const deleteInstanceAccount: {
+    readonly method: "delete";
+    readonly path: "/api/v1/instance/accounts/{id}";
+    readonly operationId: "deleteInstanceAccount";
+    readonly tag: "instance";
+    readonly summary: "Delete an account";
+    readonly auth: "instanceAdmin";
+    readonly rate: "write";
+    readonly reauth: true;
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 204: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 409: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const deleteInstanceWorkspace: {
+    readonly method: "delete";
+    readonly path: "/api/v1/instance/workspaces/{id}";
+    readonly operationId: "deleteInstanceWorkspace";
+    readonly tag: "instance";
+    readonly summary: "Delete a workspace";
+    readonly auth: "instanceAdmin";
+    readonly rate: "write";
+    readonly reauth: true;
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 202: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 409: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
 
 // @public (undocumented)
 export const deleteMe: {
@@ -1293,6 +1526,10 @@ export const getApiConfig: {
         name: z.ZodString;
         }, z.core.$strict>>;
         }, z.core.$strict>>;
+        instance: z.ZodOptional<z.ZodObject<{
+        displayName: z.ZodString;
+        signInNotice: z.ZodNullable<z.ZodString>;
+        }, z.core.$strict>>;
         setupRequired: z.ZodOptional<z.ZodBoolean>;
         setupTokenRequired: z.ZodOptional<z.ZodBoolean>;
         }, z.core.$strict>, {
@@ -1357,6 +1594,76 @@ export const getHealth: {
         status: z.ZodLiteral<"ok">;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
         readonly 400: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const getInstanceSettings: {
+    readonly method: "get";
+    readonly path: "/api/v1/instance/settings";
+    readonly operationId: "getInstanceSettings";
+    readonly tag: "instance";
+    readonly summary: "Read the instance settings";
+    readonly auth: "instanceAdmin";
+    readonly rate: "read";
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        allowWorkspaceCreation: z.ZodNullable<z.ZodBoolean>;
+        displayName: z.ZodNullable<z.ZodString>;
+        signInNotice: z.ZodNullable<z.ZodString>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const getInstanceStatus: {
+    readonly method: "get";
+    readonly path: "/api/v1/instance/status";
+    readonly operationId: "getInstanceStatus";
+    readonly tag: "instance";
+    readonly summary: "Read the status of the instance";
+    readonly auth: "instanceAdmin";
+    readonly rate: "read";
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        version: z.ZodString;
+        migrations: z.ZodObject<{
+        expected: z.ZodInt;
+        applied: z.ZodInt;
+        }, z.core.$strict>;
+        ports: z.ZodObject<{
+        mail: z.ZodBoolean;
+        ai: z.ZodBoolean;
+        errorReporting: z.ZodBoolean;
+        }, z.core.$strict>;
+        oidcProviders: z.ZodArray<z.ZodObject<{
+        slug: z.ZodString;
+        name: z.ZodString;
+        }, z.core.$strict>>;
+        signIn: z.ZodObject<{
+        publicRegistration: z.ZodBoolean;
+        emailVerificationRequired: z.ZodBoolean;
+        }, z.core.$strict>;
+        counts: z.ZodObject<{
+        accounts: z.ZodInt;
+        workspaces: z.ZodInt;
+        activeSessions: z.ZodInt;
+        }, z.core.$strict>;
+        jobs: z.ZodObject<{
+        queueDepth: z.ZodInt;
+        failed: z.ZodInt;
+        }, z.core.$strict>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
     };
 };
 
@@ -1680,6 +1987,158 @@ export const InspectInvitationRequestSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public
+export const INSTANCE_DISPLAY_NAME_MAX_LENGTH = 100;
+
+// @public
+export const INSTANCE_SIGN_IN_NOTICE_MAX_LENGTH = 500;
+
+// @public (undocumented)
+export const InstanceAccountListSchema: z.ZodObject<{
+    items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        displayName: z.ZodString;
+        email: z.ZodString;
+        emailVerified: z.ZodBoolean;
+        mfaEnabled: z.ZodBoolean;
+        isInstanceAdmin: z.ZodBoolean;
+        disabled: z.ZodBoolean;
+        lastSignInAt: z.ZodNullable<z.ZodISODateTime>;
+        workspaceCount: z.ZodInt;
+    }, z.core.$strict>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const InstanceAccountParamsSchema: z.ZodObject<{
+    id: z.ZodUUID;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const InstanceAccountResetLinkSchema: z.ZodObject<{
+    delivery: z.ZodEnum<{
+        link: "link";
+        mail: "mail";
+    }>;
+    link: z.ZodNullable<z.ZodString>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const InstanceAccountSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    displayName: z.ZodString;
+    email: z.ZodString;
+    emailVerified: z.ZodBoolean;
+    mfaEnabled: z.ZodBoolean;
+    isInstanceAdmin: z.ZodBoolean;
+    disabled: z.ZodBoolean;
+    lastSignInAt: z.ZodNullable<z.ZodISODateTime>;
+    workspaceCount: z.ZodInt;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const InstanceOwnerInvitationSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    email: z.ZodString;
+    expiresAt: z.ZodISODateTime;
+    link: z.ZodURL;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const InstanceSettingsSchema: z.ZodObject<{
+    allowWorkspaceCreation: z.ZodNullable<z.ZodBoolean>;
+    displayName: z.ZodNullable<z.ZodString>;
+    signInNotice: z.ZodNullable<z.ZodString>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const InstanceStatusSchema: z.ZodObject<{
+    version: z.ZodString;
+    migrations: z.ZodObject<{
+        expected: z.ZodInt;
+        applied: z.ZodInt;
+    }, z.core.$strict>;
+    ports: z.ZodObject<{
+        mail: z.ZodBoolean;
+        ai: z.ZodBoolean;
+        errorReporting: z.ZodBoolean;
+    }, z.core.$strict>;
+    oidcProviders: z.ZodArray<z.ZodObject<{
+        slug: z.ZodString;
+        name: z.ZodString;
+    }, z.core.$strict>>;
+    signIn: z.ZodObject<{
+        publicRegistration: z.ZodBoolean;
+        emailVerificationRequired: z.ZodBoolean;
+    }, z.core.$strict>;
+    counts: z.ZodObject<{
+        accounts: z.ZodInt;
+        workspaces: z.ZodInt;
+        activeSessions: z.ZodInt;
+    }, z.core.$strict>;
+    jobs: z.ZodObject<{
+        queueDepth: z.ZodInt;
+        failed: z.ZodInt;
+    }, z.core.$strict>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const InstanceWorkspaceCreatedSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    name: z.ZodString;
+    ownerInvitation: z.ZodNullable<z.ZodObject<{
+        id: z.ZodUUID;
+        email: z.ZodString;
+        expiresAt: z.ZodISODateTime;
+        link: z.ZodURL;
+    }, z.core.$strict>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const InstanceWorkspaceListSchema: z.ZodObject<{
+    items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        owners: z.ZodArray<z.ZodObject<{
+            accountId: z.ZodUUID;
+            displayName: z.ZodString;
+            email: z.ZodString;
+        }, z.core.$strict>>;
+        memberCount: z.ZodInt;
+        createdAt: z.ZodISODateTime;
+    }, z.core.$strict>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const InstanceWorkspaceMembershipSchema: z.ZodObject<{
+    workspaceId: z.ZodUUID;
+    role: z.ZodLiteral<"member">;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const InstanceWorkspaceOwnerSchema: z.ZodObject<{
+    accountId: z.ZodUUID;
+    displayName: z.ZodString;
+    email: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const InstanceWorkspaceParamsSchema: z.ZodObject<{
+    id: z.ZodUUID;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const InstanceWorkspaceSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    name: z.ZodString;
+    owners: z.ZodArray<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        email: z.ZodString;
+    }, z.core.$strict>>;
+    memberCount: z.ZodInt;
+    createdAt: z.ZodISODateTime;
+}, z.core.$strict>;
+
+// @public
 export const INVITATION_ROLES: readonly ["admin", "member"];
 
 // @public (undocumented)
@@ -1806,6 +2265,39 @@ export const InvitationSchema: z.ZodObject<{
     expiresAt: z.ZodISODateTime;
     createdAt: z.ZodISODateTime;
 }, z.core.$strict>;
+
+// @public (undocumented)
+export const issueInstanceAccountResetLink: {
+    readonly method: "post";
+    readonly path: "/api/v1/instance/accounts/{id}/password-reset-link";
+    readonly operationId: "issueInstanceAccountResetLink";
+    readonly tag: "instance";
+    readonly summary: "Issue a one-hour password-reset link for an account";
+    readonly auth: "instanceAdmin";
+    readonly rate: "write";
+    readonly reauth: true;
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        delivery: z.ZodEnum<{
+        link: "link";
+        mail: "mail";
+        }>;
+        link: z.ZodNullable<z.ZodString>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
 
 // @public
 export interface JsonResponse<S extends z.ZodType = z.ZodType, H extends ResponseHeaders = ResponseHeaders> {
@@ -1937,6 +2429,68 @@ export const listIdentities: {
         readonly 401: ProblemResponse;
         readonly 403: ProblemResponse;
         readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const listInstanceAccounts: {
+    readonly method: "get";
+    readonly path: "/api/v1/instance/accounts";
+    readonly operationId: "listInstanceAccounts";
+    readonly tag: "instance";
+    readonly summary: "List every account of the instance";
+    readonly auth: "instanceAdmin";
+    readonly rate: "read";
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        displayName: z.ZodString;
+        email: z.ZodString;
+        emailVerified: z.ZodBoolean;
+        mfaEnabled: z.ZodBoolean;
+        isInstanceAdmin: z.ZodBoolean;
+        disabled: z.ZodBoolean;
+        lastSignInAt: z.ZodNullable<z.ZodISODateTime>;
+        workspaceCount: z.ZodInt;
+        }, z.core.$strict>>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const listInstanceWorkspaces: {
+    readonly method: "get";
+    readonly path: "/api/v1/instance/workspaces";
+    readonly operationId: "listInstanceWorkspaces";
+    readonly tag: "instance";
+    readonly summary: "List every workspace of the instance";
+    readonly auth: "instanceAdmin";
+    readonly rate: "read";
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        owners: z.ZodArray<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        email: z.ZodString;
+        }, z.core.$strict>>;
+        memberCount: z.ZodInt;
+        createdAt: z.ZodISODateTime;
+        }, z.core.$strict>>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
         readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
     };
@@ -2468,6 +3022,85 @@ export interface OperationTypes {
                 };
             };
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    addInstanceAdminMembership: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["InstanceWorkspaceMembership"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3051,6 +3684,79 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    createInstanceWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["CreateInstanceWorkspaceRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["InstanceWorkspaceCreated"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     createInvitation: {
         parameters: {
             query?: never;
@@ -3267,6 +3973,168 @@ export interface OperationTypes {
                 };
             };
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    deleteInstanceAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    deleteInstanceWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3700,6 +4568,128 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    getInstanceSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["InstanceSettings"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    getInstanceStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["InstanceStatus"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     getMe: {
         parameters: {
             query?: never;
@@ -4094,6 +5084,85 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    issueInstanceAccountResetLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["InstanceAccountResetLink"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     leaveWorkspace: {
         parameters: {
             query?: never;
@@ -4300,6 +5369,128 @@ export interface OperationTypes {
                 };
             };
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    listInstanceAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["InstanceAccountList"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    listInstanceWorkspaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["InstanceWorkspaceList"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5190,6 +6381,83 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    resendInstanceAccountVerification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     resendInvitation: {
         parameters: {
             query?: never;
@@ -5297,6 +6565,83 @@ export interface OperationTypes {
                 };
             };
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    resetInstanceAccountMfa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5706,6 +7051,65 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    sendInstanceTestMail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     setActiveWorkspace: {
         parameters: {
             query?: never;
@@ -6052,6 +7456,162 @@ export interface OperationTypes {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    updateInstanceAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["UpdateInstanceAccountRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["InstanceAccount"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    updateInstanceSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["UpdateInstanceSettingsRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["InstanceSettings"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6684,6 +8244,193 @@ export interface paths {
         get: OperationTypes["getEntitlements"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/instance/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["listInstanceAccounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/instance/accounts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: OperationTypes["deleteInstanceAccount"];
+        options?: never;
+        head?: never;
+        patch: OperationTypes["updateInstanceAccount"];
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/instance/accounts/{id}/mfa-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["resetInstanceAccountMfa"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/instance/accounts/{id}/password-reset-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["issueInstanceAccountResetLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/instance/accounts/{id}/verification-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["resendInstanceAccountVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/instance/mail/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["sendInstanceTestMail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/instance/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["getInstanceSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: OperationTypes["updateInstanceSettings"];
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/instance/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["getInstanceStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/instance/workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["listInstanceWorkspaces"];
+        put?: never;
+        post: OperationTypes["createInstanceWorkspace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/instance/workspaces/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: OperationTypes["deleteInstanceWorkspace"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/instance/workspaces/{id}/membership": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["addInstanceAdminMembership"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7824,6 +9571,32 @@ export const RequestEmailChangeRequestSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
+export const resendInstanceAccountVerification: {
+    readonly method: "post";
+    readonly path: "/api/v1/instance/accounts/{id}/verification-email";
+    readonly operationId: "resendInstanceAccountVerification";
+    readonly tag: "instance";
+    readonly summary: "Resend the verification email of an account";
+    readonly auth: "instanceAdmin";
+    readonly rate: "write";
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 202: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
 export const resendInvitation: {
     readonly method: "post";
     readonly path: "/api/v1/invitations/{id}/resend";
@@ -7895,6 +9668,33 @@ export const resendVerifyEmail: {
 export const ResendVerifyEmailRequestSchema: z.ZodObject<{
     email: z.ZodEmail;
 }, z.core.$strict>;
+
+// @public (undocumented)
+export const resetInstanceAccountMfa: {
+    readonly method: "post";
+    readonly path: "/api/v1/instance/accounts/{id}/mfa-reset";
+    readonly operationId: "resetInstanceAccountMfa";
+    readonly tag: "instance";
+    readonly summary: "Reset the second factor of an account that lost it";
+    readonly auth: "instanceAdmin";
+    readonly rate: "write";
+    readonly reauth: true;
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 204: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
 
 // @public (undocumented)
 export const resetPassword: {
@@ -8076,6 +9876,25 @@ export const RevokeSessionsQuerySchema: z.ZodObject<{
         false: "false";
     }>>;
 }, z.core.$strict>;
+
+// @public (undocumented)
+export const sendInstanceTestMail: {
+    readonly method: "post";
+    readonly path: "/api/v1/instance/mail/test";
+    readonly operationId: "sendInstanceTestMail";
+    readonly tag: "instance";
+    readonly summary: "Send a test email to the caller";
+    readonly auth: "instanceAdmin";
+    readonly rate: "write";
+    readonly responses: {
+        readonly 202: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
 
 // @public (undocumented)
 export const SessionIdParamsSchema: z.ZodObject<{
@@ -8349,6 +10168,93 @@ export const UpdateAccountRequestSchema: z.ZodObject<{
         importDone: z.ZodOptional<z.ZodBoolean>;
         checklistDismissed: z.ZodOptional<z.ZodBoolean>;
     }, z.core.$strict>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const updateInstanceAccount: {
+    readonly method: "patch";
+    readonly path: "/api/v1/instance/accounts/{id}";
+    readonly operationId: "updateInstanceAccount";
+    readonly tag: "instance";
+    readonly summary: "Grant or clear the instance-admin flag of an account, disable or enable it, or mark its address verified";
+    readonly auth: "instanceAdmin";
+    readonly rate: "write";
+    readonly reauth: true;
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+        readonly body: z.ZodObject<{
+            isInstanceAdmin: z.ZodOptional<z.ZodBoolean>;
+            disabled: z.ZodOptional<z.ZodBoolean>;
+            emailVerified: z.ZodOptional<z.ZodLiteral<true>>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        id: z.ZodUUID;
+        displayName: z.ZodString;
+        email: z.ZodString;
+        emailVerified: z.ZodBoolean;
+        mfaEnabled: z.ZodBoolean;
+        isInstanceAdmin: z.ZodBoolean;
+        disabled: z.ZodBoolean;
+        lastSignInAt: z.ZodNullable<z.ZodISODateTime>;
+        workspaceCount: z.ZodInt;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const UpdateInstanceAccountRequestSchema: z.ZodObject<{
+    isInstanceAdmin: z.ZodOptional<z.ZodBoolean>;
+    disabled: z.ZodOptional<z.ZodBoolean>;
+    emailVerified: z.ZodOptional<z.ZodLiteral<true>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const updateInstanceSettings: {
+    readonly method: "patch";
+    readonly path: "/api/v1/instance/settings";
+    readonly operationId: "updateInstanceSettings";
+    readonly tag: "instance";
+    readonly summary: "Change the instance settings";
+    readonly auth: "instanceAdmin";
+    readonly rate: "write";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            allowWorkspaceCreation: z.ZodOptional<z.ZodNullable<z.ZodBoolean>>;
+            displayName: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+            signInNotice: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        allowWorkspaceCreation: z.ZodNullable<z.ZodBoolean>;
+        displayName: z.ZodNullable<z.ZodString>;
+        signInNotice: z.ZodNullable<z.ZodString>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const UpdateInstanceSettingsRequestSchema: z.ZodObject<{
+    allowWorkspaceCreation: z.ZodOptional<z.ZodNullable<z.ZodBoolean>>;
+    displayName: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    signInNotice: z.ZodOptional<z.ZodNullable<z.ZodString>>;
 }, z.core.$strict>;
 
 // @public (undocumented)

@@ -149,6 +149,33 @@ describe("the registration check", () => {
     }
   });
 
+  it("refuses an operation under /api/v1/instance that does not declare the instanceAdmin policy, naming it, even when the document says the same", () => {
+    const under = (path: string, operationId: string, auth: OperationDefinition["auth"]): OperationDefinition =>
+      defineOperation({
+        method: "get",
+        path,
+        operationId,
+        tag: "instance",
+        auth,
+        rate: "read",
+        responses: { 200: jsonResponse("ok", z.strictObject({})), 401: problemResponse("no session") },
+      });
+    for (const auth of ["anonymous", "partial", "account", "member", "admin", "owner", "machine"] as const) {
+      for (const path of ["/api/v1/instance", "/api/v1/instance/probe"]) {
+        const operation = under(path, `getInstanceThing${auth}`, auth);
+        const error = refusal(() => compose([moduleOf({ operation, ...raw })], documentFor([operation])));
+        expect(error.code, `${auth} ${path}`).toBe("missing_policy");
+        expect(error.message).toContain(`getInstanceThing${auth}`);
+        expect(error.message).toContain("instanceAdmin");
+      }
+    }
+    // A path that only starts with the same letters is not under it, and the policy the path asks for is accepted.
+    const elsewhere = under("/api/v1/instances", "getInstances", "member");
+    expect(checkRegistrations([{ operation: elsewhere, ...raw }], documentFor([elsewhere]))).toBeUndefined();
+    const admin = under("/api/v1/instance/probe", "getInstanceProbe", "instanceAdmin");
+    expect(checkRegistrations([{ operation: admin, ...raw }], documentFor([admin]))).toBeUndefined();
+  });
+
   it("refuses an operation that is not in the committed document, naming it", () => {
     const stray = defineOperation({
       method: "get",

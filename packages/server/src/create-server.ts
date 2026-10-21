@@ -2,7 +2,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { createAdaptorServer, type ServerType } from "@hono/node-server";
 import { getHealth, getReady, getVersion } from "@slugbase/contracts";
 import { createEntitlementCheck, createEntitlementService, createPasswordPolicy, loadBreachedPasswords, sessionCookieSpec, type Adapters, type RegistrationSettings } from "@slugbase/core";
-import { createAuthStore, createDatabase, entitlementRepository, type AuthStore, type Database, type MigrationChain } from "@slugbase/db";
+import { createAuthStore, createDatabase, entitlementRepository, instanceRepository, type AuthStore, type Database, type MigrationChain } from "@slugbase/db";
 import { Hono } from "hono";
 import { DEVELOPMENT_BUILD_INFO, type BuildInfo } from "./build-info.ts";
 import { renderQrSvg } from "./auth/qr.ts";
@@ -13,7 +13,7 @@ import { createMembershipTenantResolver, defersToMembershipResolver } from "./au
 import { createTokenRedeemLimit } from "./auth/token-redeem-limit.ts";
 import { createRateLimitRegistry, type ServerConfig, type WorkerConfig } from "./config/index.ts";
 import type { Authenticator } from "./http/authenticate.ts";
-import { denyEntitlements, type EntitlementCheck } from "./http/authorize.ts";
+import { denyEntitlements, type EntitlementCheck, type SecondFactorCheck } from "./http/authorize.ts";
 import { bodyLimits } from "./http/body-limits.ts";
 import {
   RouteTable,
@@ -45,6 +45,7 @@ import { isOpenApiDocument, openApiRoute } from "./routes/meta/openapi.ts";
 import { setupRoutes } from "./routes/setup/index.ts";
 import { invitationRoutes } from "./routes/invitations/index.ts";
 import { entitlementRoutes } from "./routes/entitlements.ts";
+import { instanceRoutes, type InstanceAdminGrantCheck } from "./routes/instance/index.ts";
 import { memberRoutes } from "./routes/members/index.ts";
 import { workspaceRoutes } from "./routes/workspaces/index.ts";
 import { checkRegistrations, type ContractDocument } from "./routes/register.ts";
@@ -161,7 +162,8 @@ export interface CreateServerOptions {
   /**
    * Whether ordinary accounts may create workspaces on this deployment: the composition root's choice, never an
    * edition flag (D4, doc 02 section 3.2). By default they may not, the Community Edition's; the managed
-   * composition passes `true`. The instance setting that overrides it follows.
+   * composition passes `true`. The instance setting `allow_workspace_creation` overrides it from the very next request
+   * once an instance admin stores a value (doc 02 section 3.2).
    */
   readonly allowWorkspaceCreation?: boolean;
   /**
@@ -175,6 +177,18 @@ export interface CreateServerOptions {
    * declared entitlement is refused (`403 entitlement_required`). A test passes a check of its own.
    */
   readonly entitlements?: EntitlementCheck;
+  /**
+   * Replaces the second-factor check of stage 9 (doc 04 section 10.10, Q45), which by default reads whether the
+   * account has a second factor enrolled from the database. A test passes a check of its own.
+   */
+  readonly secondFactor?: SecondFactorCheck;
+  /**
+   * Whether an instance admin may grant the instance-admin flag to an account (doc 04 section 10.10, Q44): the
+   * composition's choice, never an edition flag (D4). By default it may, the Community Edition's; a composition
+   * that must never have an admin passes a check that refuses, and `PATCH /instance/accounts/{id}` answers 403
+   * `forbidden` to a request that grants the flag, writing nothing.
+   */
+  readonly instanceAdminGrant?: InstanceAdminGrantCheck;
   /** How long a shutdown lets in-flight requests finish before cutting them (doc 01 section 3 rule 2). */
   readonly shutdownTimeoutMs?: number;
 }
@@ -540,14 +554,28 @@ export function createServer(options: CreateServerOptions): Server {
     },
   });
   builtInRoutes.push(...entitlementRoutes({ withTenant: context.withTenant, service: entitlementService }));
+  // The CE instance admin's operations are part of the server and mounted in every composition: the policy admits no one on a deployment
+  // where no account holds the flag (Q44), so a composition needs no switch of its own.
+  builtInRoutes.push(
+    ...instanceRoutes({
+      withTenant: context.withTenant,
+      databaseUrl: config.DATABASE_URL,
+      chains: () => migrationSets,
+      buildInfo,
+      adapters,
+      registration,
+      appOrigin: config.APP_ORIGIN,
+      ...(options.instanceAdminGrant === undefined ? {} : { instanceAdminGrant: options.instanceAdminGrant }),
+    }),
+  );
   // The signed-in account is part of the server like its sign-in: it reads the account's own rows and memberships.
   builtInRoutes.push(...profileRoutes({ withTenant: context.withTenant }));
   // So is the change of the account's email address: the request records the address and queues its two mails, and the two links redeem anonymously.
   builtInRoutes.push(...emailChangeRoutes({ store: authStore, mail: adapters.mail }));
   // So is the deletion of the account: it deletes the account of the session and the workspaces where it is the only member, after the deletion guard of the composition allows it.
   builtInRoutes.push(...accountDeletionRoutes({ withTenant: context.withTenant, cookie: sessionCookieSpec(config.APP_ORIGIN) }));
-  // So are the account's workspaces: listed, with the creation policy the composition root supplied, created and switched to in an account-level transaction; the ownership transfer rotates the caller's session token and mails the new owner.
-  builtInRoutes.push(...workspaceRoutes({ withTenant: context.withTenant, creationAllowed: options.allowWorkspaceCreation ?? false, cookie: sessionCookieSpec(config.APP_ORIGIN), mail: adapters.mail }));
+  // So are the account's workspaces: listed, with the creation policy (the stored instance setting, else the composition root's default), created and switched to in an account-level transaction; the ownership transfer rotates the caller's session token and mails the new owner.
+  builtInRoutes.push(...workspaceRoutes({ withTenant: context.withTenant, creationDefault: options.allowWorkspaceCreation ?? false, cookie: sessionCookieSpec(config.APP_ORIGIN), mail: adapters.mail }));
   // So are the members of the active workspace: listed with the co-member projection of their accounts, and their roles changed under the last-owner rule the database enforces.
   builtInRoutes.push(...memberRoutes({ cursorSecret: config.SESSION_SECRET, cookie: sessionCookieSpec(config.APP_ORIGIN) }));
   // So are the invitations of the active workspace: an admin invites an address, and the invitation's email is queued with it when the composition can send mail; the pending ones are listed, resent, linked and revoked.
@@ -671,6 +699,10 @@ export function createServer(options: CreateServerOptions): Server {
     withTenant: context.withTenant,
     ...(options.now === undefined ? {} : { now: options.now }),
     entitlements: options.entitlements ?? (adapters.entitlements.available ? createEntitlementCheck(entitlementService) : denyEntitlements),
+    // Stage 9 asks the database whether the admin's account has a second factor; the default check reads it in an account-level transaction of its own, not on the request's.
+    secondFactor:
+      options.secondFactor ??
+      (({ accountId, requestId }) => context.withTenant({ accountId, requestId }, (tx) => instanceRepository(tx).secondFactorEnrolled())),
     responseValidation,
     metrics,
   }, chainStages);

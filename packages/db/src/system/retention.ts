@@ -30,7 +30,8 @@ export interface RetentionStoreOptions {
   /** Maximum number of connections in the pool. */
   poolSize?: number;
   /**
-   * How many days a workspace's audit events are kept (`AUDIT_RETENTION_DAYS`, Q53); 0 keeps them forever.
+   * How many days audit events are kept, those of a workspace and the instance events alike, except the one
+   * `instance.setup_completed` event, which is kept (`AUDIT_RETENTION_DAYS`, Q53); 0 keeps them all forever.
    * An integer from 0 to 36 500; the default is 365.
    */
   auditRetentionDays?: number;
@@ -41,7 +42,7 @@ interface PurgeRow {
   deleted: string;
 }
 
-/** The days a workspace's audit events are kept unless the operator says otherwise (Q53). */
+/** The days audit events are kept, workspace and instance events alike (bar `instance.setup_completed`), unless the operator says otherwise (Q53). */
 const DEFAULT_AUDIT_RETENTION_DAYS = 365;
 
 const MAX_AUDIT_RETENTION_DAYS = 36_500;

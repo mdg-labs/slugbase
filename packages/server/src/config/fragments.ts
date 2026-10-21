@@ -196,8 +196,9 @@ export const mfaFragment = envFragment({
 });
 
 /**
- * How long a workspace's audit events are kept (doc 05 section 6, Q53), for the server and the worker; the
- * worker runs the retention purge. `0` keeps them forever; the day count is capped at 100 years.
+ * How long audit events are kept, workspace and instance events alike except the one `instance.setup_completed`
+ * event, which is kept (doc 05 section 6, Q53), for the server and the worker; the worker runs the retention
+ * purge. `0` keeps them all forever; the day count is capped at 100 years.
  */
 export const retentionFragment = envFragment({
   shape: {

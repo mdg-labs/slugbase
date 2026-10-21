@@ -1,6 +1,6 @@
 import type { RepositoryMethodEntry } from "@slugbase/db";
 import { testRepositoryMethods, type TestDatabase } from "@slugbase/db/testing";
-import type { FixtureIdentifier, FixturePrincipal, FixtureToken, PrincipalRole, TenantFixture, TokenScope, WorkspaceFixture } from "./fixture.js";
+import type { FixtureIdentifier, FixtureInstanceAdmin, FixturePrincipal, FixtureToken, PrincipalRole, TenantFixture, TokenScope, WorkspaceFixture } from "./fixture.js";
 import type { RepositorySample } from "./mapping.js";
 
 // The probe implementation of the fixture over one test-only table, created by
@@ -51,6 +51,16 @@ const ACCOUNTS: Record<"a" | "b", Record<PrincipalRole, string>> = {
     admin: "0192f3a0-0000-7000-8000-00000000b012",
     member: "0192f3a0-0000-7000-8000-00000000b013",
   },
+};
+
+/**
+ * An instance admin that belongs to neither workspace, for a test to add to the fixture (`{ ...probe.fixture, instanceAdmin: PROBE_INSTANCE_ADMIN }`):
+ * the probe fixture holds none, so that a suite not about the instance admin is run as it always was.
+ */
+export const PROBE_INSTANCE_ADMIN: FixtureInstanceAdmin = {
+  instanceAdmin: true,
+  accountId: "0192f3a0-0000-7000-8000-00000000d002",
+  credentials: "session:0192f3a0-0000-7000-8000-00000000d002",
 };
 
 const ROWS: Record<"a" | "b", { shared: string; unshared: string }> = {

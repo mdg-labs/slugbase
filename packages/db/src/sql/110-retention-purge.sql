@@ -45,18 +45,21 @@
 -- later changes no answer. Rows another statement holds are skipped and found by the next call. The
 -- grants it needs are in 310-idempotency-keys.sql.
 --
--- audit_events: workspace events (those with a workspace) created more than
--- p_audit_retention_days days ago, which is the operator's AUDIT_RETENTION_DAYS (Q53). 0 keeps
--- them forever and deletes none; a negative number or NULL is refused. Events of a deployment
--- with no workspace are not deleted. Nothing locks an audit row (the application role cannot
--- update one), so the batch is selected without a row lock, which slugbase_system holds no
--- UPDATE privilege for. The grants it needs are in 250-audit-events.sql.
+-- audit_events: events created more than p_audit_retention_days days ago, which is the
+-- operator's AUDIT_RETENTION_DAYS (Q53), those of a workspace and the instance events (no
+-- workspace) alike, in one batch and counted in one row, except the one instance event
+-- 'instance.setup_completed': there is one per deployment, and its existence is what makes
+-- sys_setup_audit (360-instance-admin.sql, which slugbase_app may call) write it at most once.
+-- 0 keeps every event forever and deletes none; a negative number or NULL is refused. Nothing
+-- locks an audit row (the application role cannot update one), so the batch is selected without
+-- a row lock, which slugbase_system holds no UPDATE privilege for. The grants it needs are in
+-- 250-audit-events.sql.
 --
 -- Every other rule is fixed in the function, and its one argument only chooses how
 -- long audit events stay, so a caller cannot widen what the other tables lose; it
 -- uses no dynamic SQL. The overload without an argument keeps working for a replica
--- of the previous release during a rolling deploy and deletes no audit event (it
--- passes 0). Both are entered in src/system/registry.ts. slugbase_system, the
+-- of the previous release during a rolling deploy and deletes no audit event, instance
+-- events included (it passes 0). Both are entered in src/system/registry.ts. slugbase_system, the
 -- owner, already holds DELETE on sessions (060-accounts-sessions.sql) and holds
 -- DELETE on api_tokens (150-api-tokens.sql); slugbase_app reaches neither table
 -- for a delete except through this function.
@@ -145,7 +148,8 @@ BEGIN
     DELETE FROM public.audit_events
     WHERE id IN (
       SELECT e.id FROM public.audit_events e
-      WHERE e.workspace_id IS NOT NULL AND e.created_at <= v_now - p_audit_retention_days * interval '1 day'
+      WHERE e.created_at <= v_now - p_audit_retention_days * interval '1 day'
+        AND NOT (e.workspace_id IS NULL AND e.action = 'instance.setup_completed')
       LIMIT c_batch
     );
     GET DIAGNOSTICS v_deleted = ROW_COUNT;

@@ -1,7 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createWebApp } from "../src/index.ts";
-import { PRODUCT_NAME, SESSION_PATH, json, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
+import { CONFIG_BODY, PRODUCT_NAME, SESSION_PATH, json, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
 type Transport = (request: Request) => Promise<Response>;
 
@@ -378,5 +378,50 @@ describe("the password toggle", () => {
     expect(screen.getByLabelText<HTMLInputElement>("Password").value).toBe("correct horse");
     fireEvent.click(screen.getByRole("button", { name: "Hide password" }));
     expect(screen.getByLabelText<HTMLInputElement>("Password").type).toBe("password");
+  });
+});
+
+describe("the sign-in page with instance settings", () => {
+  function serveConfig(instance: unknown): void {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn<Transport>((request) => {
+        const { pathname } = new URL(request.url);
+        if (pathname === "/api/config") {
+          return Promise.resolve(json({ ...CONFIG_BODY, instance }));
+        }
+        return pathname === SESSION_PATH ? Promise.resolve(problem(401, "unauthenticated", "req-session")) : signedIn(request);
+      }),
+    );
+  }
+
+  it("shows the instance name the admin set beside the mark and in the description", async () => {
+    serveConfig({ displayName: "Acme Links", signInNotice: null });
+    await openLogin();
+
+    const main = screen.getByRole("main");
+    expect(within(main).getByText("Acme Links")).toBeTruthy();
+    expect(within(main).getByText("Sign in to Acme Links.")).toBeTruthy();
+    expect(within(main).queryByText(PRODUCT_NAME)).toBeNull();
+    expect(screen.queryByRole("note")).toBeNull();
+  });
+
+  it("shows the notice as text only: markup in it is not rendered, and its line breaks stay", async () => {
+    const notice = 'Planned maintenance <b>Friday</b>\n<img src=x onerror="alert(1)"><script>alert(2)</script>';
+    serveConfig({ displayName: PRODUCT_NAME, signInNotice: notice });
+    await openLogin();
+
+    const note = screen.getByRole("note");
+    expect(note.textContent).toBe(notice);
+    expect(note.querySelector("b, img, script")).toBeNull();
+    expect(document.querySelector("main img, main script")).toBeNull();
+    expect(within(screen.getByRole("main")).getByText(PRODUCT_NAME)).toBeTruthy();
+  });
+
+  it("shows no notice for a blank one", async () => {
+    serveConfig({ displayName: PRODUCT_NAME, signInNotice: "  \n " });
+    await openLogin();
+
+    expect(screen.queryByRole("note")).toBeNull();
   });
 });

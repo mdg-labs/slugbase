@@ -20,7 +20,8 @@ import { setupRequired } from "./status.ts";
 // (`sys_complete_setup` takes an advisory lock and re-checks under it); the
 // check here only spares a closed instance the cost of hashing a password. The
 // `account.created` and `workspace.created` events are queued, and the workspace's
-// `workspace.created` audit event is written, in the setup's own transaction (doc 01
+// `workspace.created` audit event and the instance audit event `instance.setup_completed`
+// are written, in the setup's own transaction (doc 01
 // section 7.1 and 8.1, doc 05 section 2.9), so they exist exactly when the account and
 // the workspace do; setup skips the registration policy (doc 01 section 13.5) but
 // announces its account and workspace like any other.
@@ -92,6 +93,7 @@ export function completeSetupRoute({ config, store, hashPassword, cookie, passwo
       sessionTokenHash: token.hash,
       ipPrefix,
       userAgent: truncateUserAgent(context.req.raw.headers.get("user-agent")),
+      instanceEventId: uuidv7(),
       jobs: [
         queueDomainEvent(uuidv7(), "account.created", { accountId, path: "setup" }),
         queueDomainEvent(uuidv7(), "workspace.created", { workspaceId, accountId }),

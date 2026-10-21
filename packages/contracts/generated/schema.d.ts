@@ -205,6 +205,196 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/instance/accounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List every account of the instance */
+        get: operations["listInstanceAccounts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instance/accounts/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete an account */
+        delete: operations["deleteInstanceAccount"];
+        options?: never;
+        head?: never;
+        /** Grant or clear the instance-admin flag of an account, disable or enable it, or mark its address verified */
+        patch: operations["updateInstanceAccount"];
+        trace?: never;
+    };
+    "/api/v1/instance/accounts/{id}/mfa-reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reset the second factor of an account that lost it */
+        post: operations["resetInstanceAccountMfa"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instance/accounts/{id}/password-reset-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue a one-hour password-reset link for an account */
+        post: operations["issueInstanceAccountResetLink"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instance/accounts/{id}/verification-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resend the verification email of an account */
+        post: operations["resendInstanceAccountVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instance/mail/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send a test email to the caller */
+        post: operations["sendInstanceTestMail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instance/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the instance settings */
+        get: operations["getInstanceSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change the instance settings */
+        patch: operations["updateInstanceSettings"];
+        trace?: never;
+    };
+    "/api/v1/instance/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the status of the instance */
+        get: operations["getInstanceStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instance/workspaces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List every workspace of the instance */
+        get: operations["listInstanceWorkspaces"];
+        put?: never;
+        /** Create a workspace for an owner account or an owner invitation */
+        post: operations["createInstanceWorkspace"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instance/workspaces/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a workspace */
+        delete: operations["deleteInstanceWorkspace"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/instance/workspaces/{id}/membership": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add the calling instance admin to a workspace as a member */
+        post: operations["addInstanceAdminMembership"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/invitations": {
         parameters: {
             query?: never;
@@ -924,6 +1114,13 @@ export interface components {
                 /** @description Whether a mail port is configured */
                 mail: boolean;
             };
+            /** @description The instance settings the sign-in page shows. This server always sends it */
+            instance?: {
+                /** @description The instance name the sign-in page shows: the one the instance admin set, else the product's name */
+                displayName: string;
+                /** @description The plain-text notice the instance admin set for the sign-in page; null while there is none. It is text, never HTML, and the sign-in page renders it as text only */
+                signInNotice: string | null;
+            };
             /** @description Locales the interface is available in */
             locales: string[];
             /**
@@ -1028,6 +1225,20 @@ export interface components {
              * @description The workspace to bind the token to, one the account is a member of; the workspace the request acts in when left out
              */
             workspaceId?: string;
+        };
+        CreateInstanceWorkspaceRequest: {
+            /** @description The workspace's name, 1 to 64 characters; surrounding whitespace is removed and a name that is blank after that is refused */
+            name: string;
+            /**
+             * Format: uuid
+             * @description An account that exists and is not disabled, which becomes the workspace's owner. Give this or ownerEmail, and not both
+             */
+            ownerAccountId?: string;
+            /**
+             * Format: email
+             * @description The address of the first owner: the workspace waits for it, with an owner invitation for this address. Give this or ownerAccountId, and not both
+             */
+            ownerEmail?: string;
         };
         CreateInvitationRequest: {
             /**
@@ -1182,6 +1393,175 @@ export interface components {
         InspectInvitationRequest: {
             /** @description The token of the invitation link, from the path of /invite/<token> */
             token: string;
+        };
+        InstanceAccount: {
+            /** @description Whether the account is disabled: it cannot sign in, it has no session and its API tokens are refused */
+            disabled: boolean;
+            /** @description The account's display name */
+            displayName: string;
+            /** @description The account's address */
+            email: string;
+            /** @description Whether the address was confirmed */
+            emailVerified: boolean;
+            /**
+             * Format: uuid
+             * @description The account's identifier
+             */
+            id: string;
+            /** @description Whether the account holds the instance-admin flag */
+            isInstanceAdmin: boolean;
+            /** @description When a complete sign-in last happened, RFC 3339 UTC; null while the account never signed in */
+            lastSignInAt: string | null;
+            /** @description Whether a second factor is enrolled and confirmed */
+            mfaEnabled: boolean;
+            /** @description How many workspaces, not being deleted, the account is a member of */
+            workspaceCount: number;
+        };
+        InstanceAccountList: {
+            /** @description Every account, oldest first */
+            items: components["schemas"]["InstanceAccount"][];
+        };
+        InstanceAccountResetLink: {
+            /**
+             * @description `mail`: the reset email is queued for the account's address and no link is returned. `link`: no mail adapter is configured and the link is returned here
+             * @enum {string}
+             */
+            delivery: "mail" | "link";
+            /** @description The reset link, valid for one hour and for one use, returned only when delivery is `link` and nowhere again; null when it was mailed */
+            link: string | null;
+        };
+        InstanceOwnerInvitation: {
+            /** @description The address the invitation is for; only the account that holds it can accept */
+            email: string;
+            /**
+             * Format: date-time
+             * @description When the invitation stops working, RFC 3339 UTC
+             */
+            expiresAt: string;
+            /**
+             * Format: uuid
+             * @description The invitation's identifier
+             */
+            id: string;
+            /**
+             * Format: uri
+             * @description The address the invited owner opens to accept: the application's origin and /invite/ followed by the token. Returned this once and never again
+             */
+            link: string;
+        };
+        InstanceSettings: {
+            /** @description Whether ordinary accounts may create workspaces; null while the setting is not set, when the default of the deployment applies */
+            allowWorkspaceCreation: boolean | null;
+            /** @description The instance name the sign-in page shows; null while it is not set */
+            displayName: string | null;
+            /** @description The plain-text notice the sign-in page shows; null while there is none */
+            signInNotice: string | null;
+        };
+        InstanceStatus: {
+            /** @description What the instance holds */
+            counts: {
+                /** @description Every account, disabled ones included */
+                accounts: number;
+                /** @description The complete sessions that have not expired */
+                activeSessions: number;
+                /** @description The workspaces that are not being deleted */
+                workspaces: number;
+            };
+            /** @description The health of the background jobs */
+            jobs: {
+                /** @description Background jobs that failed and are still on record */
+                failed: number;
+                /** @description Background jobs that are due and waiting for a worker */
+                queueDepth: number;
+            };
+            /** @description The migration level of the database */
+            migrations: {
+                /** @description The migrations of those that the database has recorded */
+                applied: number;
+                /** @description The migrations this build ships, across every chain it composes */
+                expected: number;
+            };
+            /** @description The OIDC providers that are enabled and answered discovery, by slug and name only */
+            oidcProviders: {
+                /** @description The name the sign-in page shows */
+                name: string;
+                /** @description The provider's slug */
+                slug: string;
+            }[];
+            /** @description Which optional ports the deployment configures; never the configuration itself */
+            ports: {
+                /** @description Whether an AI adapter is configured */
+                ai: boolean;
+                /** @description Whether server error reporting is configured */
+                errorReporting: boolean;
+                /** @description Whether a mail adapter is configured */
+                mail: boolean;
+            };
+            /** @description The registration settings in force */
+            signIn: {
+                /** @description The value of EMAIL_VERIFICATION_REQUIRED in force, the composition's default when the operator left it unset */
+                emailVerificationRequired: boolean;
+                /** @description The value of PUBLIC_REGISTRATION in force, the composition's default when the operator left it unset */
+                publicRegistration: boolean;
+            };
+            /** @description The version of the running build */
+            version: string;
+        };
+        InstanceWorkspace: {
+            /**
+             * Format: date-time
+             * @description When the workspace was created, RFC 3339 UTC
+             */
+            createdAt: string;
+            /**
+             * Format: uuid
+             * @description The workspace's identifier
+             */
+            id: string;
+            /** @description How many members the workspace has; 0 while it waits for its first owner */
+            memberCount: number;
+            /** @description The workspace's name */
+            name: string;
+            /** @description The workspace's owners; empty while it waits for the first owner an invitation will bring */
+            owners: components["schemas"]["InstanceWorkspaceOwner"][];
+        };
+        InstanceWorkspaceCreated: {
+            /**
+             * Format: uuid
+             * @description The new workspace's identifier
+             */
+            id: string;
+            /** @description The workspace's name */
+            name: string;
+            /** @description The owner invitation when ownerEmail was given; null when an account was made the owner */
+            ownerInvitation: components["schemas"]["InstanceOwnerInvitation"] | null;
+        };
+        InstanceWorkspaceList: {
+            /** @description Every workspace that is not being deleted, newest first */
+            items: components["schemas"]["InstanceWorkspace"][];
+        };
+        InstanceWorkspaceMembership: {
+            /**
+             * @description The role the membership has: always member, whatever the admin may be elsewhere
+             * @constant
+             */
+            role: "member";
+            /**
+             * Format: uuid
+             * @description The workspace the calling admin is now a member of
+             */
+            workspaceId: string;
+        };
+        InstanceWorkspaceOwner: {
+            /**
+             * Format: uuid
+             * @description The owner's account identifier
+             */
+            accountId: string;
+            /** @description The owner's display name */
+            displayName: string;
+            /** @description The owner's email address */
+            email: string;
         };
         Invitation: {
             /**
@@ -1617,6 +1997,25 @@ export interface components {
              * @enum {string}
              */
             theme?: "light" | "dark" | "system";
+        };
+        UpdateInstanceAccountRequest: {
+            /** @description true disables the account, false enables it again; disabling deletes the target's sessions and refuses its API tokens */
+            disabled?: boolean;
+            /**
+             * @description true marks the account's address verified; for an address nobody had verified it takes away what the registrant set up, as redeeming the verification link does: the password, sessions, second factor, API tokens and linked identities of the account go, and the owner gets in through a password-reset link or a provider; nothing marks an address unverified, so false is refused
+             * @constant
+             */
+            emailVerified?: true;
+            /** @description true grants the instance-admin flag, false clears it; the target's sessions are deleted when the flag changes */
+            isInstanceAdmin?: boolean;
+        };
+        UpdateInstanceSettingsRequest: {
+            /** @description true or false overrides the deployment's default, null clears the setting so the default applies again */
+            allowWorkspaceCreation?: boolean | null;
+            /** @description The new name, or null to clear it */
+            displayName?: string | null;
+            /** @description The new notice, or null to remove it */
+            signInNotice?: string | null;
         };
         UpdateMemberRequest: {
             /**
@@ -2549,6 +2948,1113 @@ export interface operations {
                 };
             };
             /** @description The service is temporarily unavailable, or no entitlement source is configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listInstanceAccounts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every account, oldest first, with its name, address, whether the address was confirmed and a second factor is on, the instance-admin flag, whether it is disabled, its last sign-in and its workspace count; never a hash, a secret or the content of a workspace. Reading the list is written to the instance audit stream */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceAccountList"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The session is not an instance admin's, or the account has no second factor enrolled, or the credential is an API token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteInstanceAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account is deleted the way DELETE /me deletes the calling account, with its sessions, API tokens, identities, emailed tokens and backup codes, and the request is written to the instance audit stream (instance.account_deleted, naming the account's identifier and no address), in one transaction. Every workspace where it was the only member is deleted with it, the way a deleted workspace is: it is hidden at once and a background job removes its rows. In every other workspace its membership ends and the bookmarks and folders it created stay with the workspace without an owner. The audit events it caused keep the name they carry and lose the reference to the account and the network they were made from. `account.deleted` is announced to the modules that own content. The deletion cannot be undone */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no account with that identifier */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The account is the only owner of a workspace that has other members (last_owner), and the problem document names each such workspace in its `workspaces` member as `{ id, name }`, so its ownership is transferred or the workspace deleted first; or a deployment extension refuses the deletion (billing_active), for the account or for a workspace that would be deleted with it. Nothing is changed in either case */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The identifier did not pass validation; the account is the only enabled instance admin, which would leave the instance without one (validation_failed with the field code last_instance_admin on id); or it is the calling admin's own account, which is deleted with DELETE /me (validation_failed with the field code self on id). Nothing is changed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable, or a deployment extension that is consulted before the deletion did not answer in time; nothing is changed */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateInstanceAccount: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateInstanceAccountRequest"];
+            };
+        };
+        responses: {
+            /** @description The account after the change; a field the request leaves out, or sets to the value the account already has, changes nothing. Granting or clearing the flag deletes every session of the account. Disabling it deletes every session, refuses its API tokens from the next request on and, where a mail adapter is configured, queues the email that tells it so; enabling it clears the state. Marking an address verified that was not (also for a disabled account) runs the clean-up redeeming the verification link runs, in the same transaction: the account's password is removed, its sessions, second factor and backup codes, API tokens, linked identities, and its unused password-reset, email-change and verification tokens are deleted, because whoever registered the address is not necessarily its owner; the owner then gets in through a password-reset link (issueInstanceAccountResetLink) or a provider. The calling admin's own account keeps its second factor and sessions. An address that was verified already is left as it is. Each change is written to the instance audit stream */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceAccount"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, the credential is an API token, or this deployment does not grant the instance-admin flag (forbidden). Nothing is written */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no account with that identifier */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation: a field the operation does not declare, none of the three fields, a value of the wrong type or emailVerified set to anything but true; or the change would leave the instance without an enabled instance admin: clearing the flag of, or disabling, the last one is refused as validation_failed with the field code last_instance_admin on isInstanceAdmin or disabled. Nothing is written */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    resetInstanceAccountMfa: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The account's second factor is off: its secret, activation and backup codes are cleared and never returned, every session of the account is deleted, the instance audit stream records instance.account_mfa_reset and, where a mail adapter is configured, the account is emailed that an administrator reset it, all in one transaction. The account then signs in with its password alone. An account with no confirmed second factor is left as it is: nothing is written, deleted or sent */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no account with that identifier */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The account is disabled (validation_failed with the field code account_disabled on id), or it is the calling admin's own, whose second factor is turned off with the second factor that disabling it asks for (validation_failed with the field code self on id). Nothing is written */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    issueInstanceAccountResetLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A password-reset token that works once for one hour, replacing the account's earlier unused one, is issued and written to the instance audit stream as instance.account_reset_link_issued (naming the delivery, never the token). Where a mail adapter is configured the link is emailed to the account and none is returned (delivery mail, link null); otherwise, and for an account with no password and no linked provider identity, which the reset email is not sent to, it is returned here, once, as delivery link. Redeeming it is the ordinary password reset: every session of the account is deleted and, for an account with a second factor, the new session is partial until the code is given */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceAccountResetLink"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no account with that identifier */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The account cannot use a reset link: it is disabled (account_disabled), its address was never verified (email_unverified: mark it verified or resend the verification email first) or it signs in through a provider only, with no password and a linked identity (no_password), each as validation_failed with that field code on id. Nothing is written or issued */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    resendInstanceAccountVerification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The verification email is queued for the account's address, with a new link that replaces its earlier unused one, and the request is written to the instance audit stream as instance.account_verification_resent, in one transaction */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no account with that identifier */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The account's address is verified already (already_verified) or the account is disabled (account_disabled), each as validation_failed with that field code on id. Nothing is written or queued */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description No mail adapter is configured (mail_unavailable), or the service is temporarily unavailable (unavailable). Nothing is queued */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    sendInstanceTestMail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A test message to the caller's address is queued for the background worker, and the action is written to the instance audit stream */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden). Nothing is queued */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description No mail adapter is configured (mail_unavailable), or the service is temporarily unavailable (unavailable). Nothing is queued */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getInstanceSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The settings as stored; a setting that was never set, or was cleared, is null */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceSettings"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The session is not an instance admin's, or the account has no second factor enrolled, or the credential is an API token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateInstanceSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateInstanceSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description The settings after the change; a setting the request leaves out keeps its value. A stored allowWorkspaceCreation overrides the deployment's default from the next request on, and the change is written to the instance audit stream */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceSettings"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden). Nothing is written */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation: a field the operation does not declare, no setting at all, a name or a notice that is blank, longer than its limit or holds a NUL character, or a value of the wrong type */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getInstanceStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The version and migration level, the configured ports, the detected OIDC providers, the registration settings, the counts and the health of the background jobs; never a credential, a URL with credentials or a secret */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceStatus"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The session is not an instance admin's, or the account has no second factor enrolled, or the credential is an API token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listInstanceWorkspaces: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every workspace that is not being deleted, with its name, owners, member count and creation time, newest first; never a bookmark or other content, and no member who is not an owner. Reading the list is written to the instance audit stream */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceWorkspaceList"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The session is not an instance admin's, or the account has no second factor enrolled, or the credential is an API token */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createInstanceWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateInstanceWorkspaceRequest"];
+            };
+        };
+        responses: {
+            /** @description The workspace is created with the account as its owner, or, for an address, with no member and one pending owner invitation that expires in 7 days; the invitation's link is returned this once and is in no email, log or later response. The admin does not become a member, and the action is written to the instance audit stream */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceWorkspaceCreated"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden). Nothing is written */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation: a field the operation does not declare, a name that is blank or longer than 64 characters, neither or both of ownerAccountId and ownerEmail, or an ownerAccountId that is no account or is disabled (unknown_account). Nothing is written */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteInstanceWorkspace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The workspace is marked as being deleted and the request is written to the instance audit stream, in one transaction. From that moment it is gone from its members' workspaces, their sessions act in another workspace or in none, and its API tokens are revoked; the same background job as DELETE /workspace then removes its rows in batches. The deletion cannot be undone */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no workspace with that identifier, or it is already being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description A deployment extension refuses the deletion (billing_active: the workspace owns an active paid subscription, which is cancelled first); nothing is changed and no audit event is written */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable, or a deployment extension that is consulted before the deletion did not answer in time; nothing is changed */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    addInstanceAdminMembership: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The calling admin is a member of the workspace with the member role, and nothing more: the membership gives what any member has. It is written to the workspace's own audit log as member.instance_admin_joined, where its owners read it as distinct from an accepted invitation, and to the instance audit stream as instance.workspace_joined, and member.joined is announced, all in one transaction. The admin's session is not moved to the workspace */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceWorkspaceMembership"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no workspace with that identifier, or it is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The calling account is a member of the workspace already, with any role (already_member); nothing is written */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
             503: {
                 headers: {
                     [name: string]: unknown;
