@@ -1279,6 +1279,7 @@
     "retry": "Try again",
     "signedInAs": "Signed in as {email}",
     "open": "Open {name}",
+    "admin": "Open the admin area",
     "loadFailed": {
       "title": "Your account could not be loaded",
       "description": "Try again. If this continues, tell your administrator."

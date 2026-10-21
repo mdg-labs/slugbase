@@ -3,7 +3,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
 import { createWebApp } from "../src/index.ts";
-import { ACCOUNT_BODY, ME_PATH, json, meOf, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
+import { ACCOUNT_BODY, ME_PATH, WORKSPACES_PATH, json, meOf, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
 // /admin (doc 03 section 12): the sidebar item and the pages are for an instance admin only, an admin without a second
 // factor gets the banner and no request for the status, and the overview shows the status the server answers. The failure
@@ -32,11 +32,15 @@ interface ServerOptions {
   status?: readonly (() => Response)[];
   /** The answer to `GET /me`, in place of the account. */
   me?: () => Response;
+  /** The account is a member of no workspace and acts in none. */
+  noWorkspace?: boolean;
 }
 
-function stubServer({ isInstanceAdmin = true, mfaEnabled = true, status = [() => json(STATUS)], me }: ServerOptions = {}): { statusCalls: () => number } {
+function stubServer({ isInstanceAdmin = true, mfaEnabled = true, status = [() => json(STATUS)], me, noWorkspace = false }: ServerOptions = {}): { statusCalls: () => number } {
   let statusCalls = 0;
-  const account = { ...ACCOUNT_BODY, isInstanceAdmin, mfaEnabled };
+  // The account chose the language of the browser, so a test that opens the app in German sees German.
+  const locale = globalThis.navigator.languages.some((language) => language.toLowerCase().startsWith("de")) ? "de" : "en";
+  const account = { ...ACCOUNT_BODY, locale, isInstanceAdmin, mfaEnabled };
   vi.stubGlobal(
     "fetch",
     vi.fn<Transport>((request) => {
@@ -45,7 +49,10 @@ function stubServer({ isInstanceAdmin = true, mfaEnabled = true, status = [() =>
         return Promise.resolve(me());
       }
       if (pathname === ME_PATH && request.method === "GET") {
-        return Promise.resolve(json(meOf(account)));
+        return Promise.resolve(json(noWorkspace ? { account, memberships: [], activeWorkspaceId: null } : meOf(account)));
+      }
+      if (pathname === WORKSPACES_PATH && request.method === "GET" && noWorkspace) {
+        return Promise.resolve(json({ items: [], canCreate: true }));
       }
       return signedIn(request, () => {
         if (pathname === STATUS_PATH) {
@@ -132,6 +139,97 @@ describe("the admin area for an account that is not an instance admin", () => {
     expect(screen.queryByRole("heading", { name: "Overview" })).toBeNull();
     expect(screen.queryByText("You don't have access")).toBeNull();
     expect(server.statusCalls()).toBe(0);
+  });
+});
+
+describe("the admin area for an account that acts in no workspace", () => {
+  it.each(["/admin", "/admin/workspaces"])("shows an instance admin %s, not /no-workspace, and the shell works without a workspace", async (path) => {
+    const server = stubServer({ noWorkspace: true });
+    await open(path);
+
+    expect(await screen.findByRole("navigation", { name: "Administration" })).toBeTruthy();
+    expect(window.location.pathname).toBe(path);
+    expect(screen.queryByText("You are not in a workspace yet")).toBeNull();
+    expect(screen.queryByText("You don't have access")).toBeNull();
+    if (path === "/admin") {
+      expect(await screen.findByText("1,204")).toBeTruthy();
+      expect(server.statusCalls()).toBe(1);
+    }
+    expect(within(sidebar()).getByRole("link", { name: "Admin" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Workspace: No workspace" })).toBeTruthy();
+  });
+
+  it("shows an instance admin without a second factor the banner, not /no-workspace", async () => {
+    const server = stubServer({ noWorkspace: true, mfaEnabled: false });
+    await open("/admin");
+
+    expect(await screen.findByText("Two-factor authentication required")).toBeTruthy();
+    expect(window.location.pathname).toBe("/admin");
+    expect(server.statusCalls()).toBe(0);
+  });
+
+  it.each(["/admin", "/admin/accounts"])("shows an account that is not an instance admin the 403 page on %s", async (path) => {
+    const server = stubServer({ noWorkspace: true, isInstanceAdmin: false });
+    await open(path);
+
+    const main = await screen.findByRole("main");
+    expect(await within(main).findByRole("heading", { level: 1, name: "You don't have access" })).toBeTruthy();
+    expect(window.location.pathname).toBe(path);
+    expect(screen.queryByRole("navigation", { name: "Administration" })).toBeNull();
+    expect(server.statusCalls()).toBe(0);
+  });
+
+  it("does not show the area while the account cannot be loaded", async () => {
+    stubServer({ noWorkspace: true, me: () => problem(403, "forbidden", "req-me") });
+    await open("/admin");
+
+    expect(await screen.findByText("Your account could not be loaded")).toBeTruthy();
+    expect(screen.queryByRole("navigation", { name: "Administration" })).toBeNull();
+  });
+
+  it.each([true, false])("still sends the pages of a workspace to /no-workspace (instance admin: %s)", async (isInstanceAdmin) => {
+    stubServer({ noWorkspace: true, isInstanceAdmin });
+    await open("/");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "You are not in a workspace yet" })).toBeTruthy();
+    expect(window.location.pathname).toBe("/no-workspace");
+    expect(screen.queryByRole("navigation", { name: "Administration" })).toBeNull();
+  });
+
+  it("sends a path that only starts like /admin to /no-workspace", async () => {
+    stubServer({ noWorkspace: true });
+    await open("/administrators");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "You are not in a workspace yet" })).toBeTruthy();
+    expect(window.location.pathname).toBe("/no-workspace");
+  });
+
+  it("is reached from the link on /no-workspace, which only an instance admin sees", async () => {
+    stubServer({ noWorkspace: true });
+    await open("/no-workspace");
+
+    const link = await screen.findByRole("link", { name: "Open the admin area" });
+    expect(link.getAttribute("href")).toBe("/admin");
+    fireEvent.click(link);
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Overview" })).toBeTruthy();
+    expect(window.location.pathname).toBe("/admin");
+  });
+
+  it("offers a non-admin no link to the admin area on /no-workspace", async () => {
+    stubServer({ noWorkspace: true, isInstanceAdmin: false });
+    await open("/no-workspace");
+
+    await screen.findByRole("heading", { level: 1, name: "You are not in a workspace yet" });
+    expect(screen.queryByRole("link", { name: "Open the admin area" })).toBeNull();
+  });
+
+  it("writes the link in German", async () => {
+    vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["de-AT"]);
+    stubServer({ noWorkspace: true });
+    await open("/no-workspace");
+
+    expect(await screen.findByRole("link", { name: "Admin-Bereich öffnen" })).toBeTruthy();
   });
 });
 

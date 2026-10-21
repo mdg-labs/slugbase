@@ -232,7 +232,7 @@ Shows workspace name, inviter, role. Branches per doc 02 §3.4: signed in as the
 
 ### 1.6 `/no-workspace`
 
-For accounts with no membership: create a workspace (where allowed) or "Waiting for an invitation" with the account email shown and a sign-out link.
+For accounts with no membership: create a workspace (where allowed) or "Waiting for an invitation" with the account email shown and a sign-out link. An instance admin also gets a link to `/admin`. An account that acts in no workspace can open only the account pages (`/settings/account/*`) and the admin area (`/admin/*`, still 403 for anyone who is not an instance admin); every other page sends it here.
 
 **Components:** `empty-state`; `form-overlay` for create.
 

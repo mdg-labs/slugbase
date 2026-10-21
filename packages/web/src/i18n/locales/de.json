@@ -1279,6 +1279,7 @@
     "retry": "Erneut versuchen",
     "signedInAs": "Angemeldet als {email}",
     "open": "{name} öffnen",
+    "admin": "Admin-Bereich öffnen",
     "loadFailed": {
       "title": "Dein Konto konnte nicht geladen werden",
       "description": "Versuche es erneut. Wenn das so bleibt, sag deiner Administration Bescheid."
