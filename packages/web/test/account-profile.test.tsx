@@ -30,6 +30,7 @@ const ACCOUNT: Account = {
   emailVerified: true,
   hasPassword: true,
   mfaEnabled: false,
+  isInstanceAdmin: false,
   pendingEmail: null,
 };
 

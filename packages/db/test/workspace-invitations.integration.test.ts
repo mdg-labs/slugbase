@@ -676,7 +676,7 @@ describe("invitationRepository.issueToken", () => {
 
     const context = await inTenant({ accountId: who(a, 0), workspaceId: a.workspaceId }, (tx) => invitationRepository(tx).issueToken(written.invitation.id, invitation.mailTicket, issued));
 
-    expect(context).toEqual({ email: "send@example.test", role: "admin", expiresAt: written.invitation.expiresAt, workspaceName: "Invitations test" });
+    expect(context).toEqual({ email: "send@example.test", role: "admin", instanceIssued: false, expiresAt: written.invitation.expiresAt, workspaceName: "Invitations test" });
     const [after] = await rowsOf(a.workspaceId);
     expect(after?.token_hash.equals(issued)).toBe(true);
     expect(after?.token_hash.equals(before?.token_hash ?? Buffer.alloc(0))).toBe(false);

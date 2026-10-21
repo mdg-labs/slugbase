@@ -227,7 +227,8 @@ export interface InvitationMessageContent {
   readonly workspaceName: string;
   /** The display name of the account that invited; empty when it is no longer known. */
   readonly inviterName: string;
-  readonly role: InvitationRole;
+  /** `owner` only for the invitation an instance admin issued (doc 02 section 11.1). */
+  readonly role: WorkspaceRole;
   /** The text the link carries, from `generateCredentialToken`. */
   readonly token: string;
   readonly expiresAt: Date;

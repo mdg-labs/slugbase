@@ -45,6 +45,7 @@ const PROBLEM_TITLES: Record<ProblemCode, string> = {
   email_taken: "Email address already in use",
   already_member: "Already a member",
   last_owner: "Last owner",
+  workspace_has_owner: "Workspace has an owner",
   idempotency_conflict: "Idempotency key conflict",
   billing_active: "Billing is active",
   token_expired: "Token unknown or expired",

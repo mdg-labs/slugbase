@@ -199,6 +199,7 @@ describe("GET /api/v1/me", () => {
         emailVerified: true,
         hasPassword: true,
         mfaEnabled: false,
+        isInstanceAdmin: false,
         pendingEmail: null,
       },
       memberships: [],
@@ -363,6 +364,18 @@ describe("GET /api/v1/me", () => {
     expect(Object.keys(body)).not.toContain("clientErrorReportDsn");
     const probe = await call(server, "/api/v1/workspace-probe", `Bearer token:${ada.id}:${bound}`);
     expect(await probe.json()).toEqual({ workspaceId: bound, memberId: ada.id, role: "admin" });
+  });
+
+  it("tells an instance admin's session it is one, and a non-admin's session and an instance admin's API token it is not", async () => {
+    const server = serve();
+    const admin = await seedAccount(database(), { instanceAdmin: true });
+    const member = await seedAccount(database());
+    const workspace = await seedWorkspace(database(), { name: "Shared" });
+    await seedMembership(database(), { workspaceId: workspace, accountId: admin.id, role: "owner" });
+
+    expect((await me(server, await signIn(admin))).account["isInstanceAdmin"]).toBe(true);
+    expect((await me(server, await signIn(member))).account["isInstanceAdmin"]).toBe(false);
+    expect((await me(server, `Bearer token:${admin.id}:${workspace}`)).account["isInstanceAdmin"]).toBe(false);
   });
 
   it("refuses a token bound to a workspace its account is not a member of", async () => {

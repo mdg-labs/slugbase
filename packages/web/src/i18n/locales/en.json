@@ -24,12 +24,439 @@
     "emailUnverified": {
       "title": "Your email address is not verified",
       "description": "We sent a link to {email}. Open it to verify the address, or ask for a new one."
+    },
+    "admin": "Admin",
+    "mailNotConfigured": {
+      "title": "Email is not set up",
+      "description": "This server sends no email, so invitation emails, address verification and password-reset emails are not delivered. Invitation and reset links are shown to you instead, to pass on by hand.",
+      "action": "Open settings & status"
     }
   },
   "home": {
     "empty": {
       "title": "Welcome to {name}",
       "description": "Bookmarks with short, private slugs."
+    }
+  },
+  "admin": {
+    "navigation": "Administration",
+    "nav": {
+      "instance": "Instance",
+      "overview": "Overview",
+      "workspaces": "Workspaces",
+      "accounts": "Accounts",
+      "settings": "Settings & status"
+    },
+    "loadFailed": {
+      "title": "Your account could not be loaded",
+      "description": "The administration needs to know who you are. Try again.",
+      "retry": "Try again"
+    },
+    "mfaRequired": {
+      "title": "Two-factor authentication required",
+      "description": "Instance administration is off until you turn on two-factor authentication for your account.",
+      "action": "Set up two-factor authentication"
+    },
+    "overview": {
+      "title": "Overview",
+      "mfaRequired": {
+        "title": "The overview is not available yet",
+        "description": "Turn on two-factor authentication to see the status of this instance."
+      },
+      "loadFailed": {
+        "title": "The status of the instance could not be loaded",
+        "description": "Try again. If this continues, check the server's logs.",
+        "retry": "Try again"
+      },
+      "counts": {
+        "label": "Counts",
+        "accounts": "Accounts",
+        "workspaces": "Workspaces",
+        "activeSessions": "Active sessions"
+      },
+      "build": {
+        "title": "Version and database",
+        "version": "Version",
+        "migrations": "Migrations",
+        "applied": "{applied} of {expected} applied",
+        "upToDate": "Up to date",
+        "outOfDate": "Out of date"
+      },
+      "jobs": {
+        "title": "Background jobs",
+        "failed": "Failed jobs",
+        "none": "None",
+        "some": "{count} failed",
+        "queue": "Waiting for a worker",
+        "waiting": "{count, plural, one {# job} other {# jobs}}"
+      },
+      "configuration": {
+        "title": "Configuration",
+        "description": "What the operator has set up for this instance.",
+        "registration": "Public registration",
+        "verification": "Email verification required",
+        "mail": "Mail",
+        "ai": "AI suggestions",
+        "errorReporting": "Error reporting",
+        "oidc": "Sign-in providers",
+        "on": "On",
+        "off": "Off",
+        "configured": "Configured",
+        "notConfigured": "Not configured",
+        "noProviders": "None"
+      }
+    },
+    "workspaces": {
+      "title": "Workspaces",
+      "mfaRequired": {
+        "title": "Workspaces are not available yet",
+        "description": "Turn on two-factor authentication to manage the workspaces of this instance."
+      },
+      "loadFailed": {
+        "title": "The workspaces could not be loaded",
+        "description": "Try again. If this continues, check the server's logs.",
+        "retry": "Try again"
+      },
+      "empty": {
+        "title": "There are no workspaces yet",
+        "description": "Create a workspace for an owner, or invite someone to be its first owner."
+      },
+      "table": {
+        "label": "Workspaces"
+      },
+      "column": {
+        "name": "Name",
+        "owners": "Owners",
+        "members": "Members",
+        "created": "Created",
+        "actions": "Actions"
+      },
+      "pendingOwner": "Waiting for its first owner",
+      "actionsFor": "Actions for {name}",
+      "action": {
+        "addMe": "Add me as member",
+        "invite": "Re-issue owner invitation",
+        "delete": "Delete workspace"
+      },
+      "create": {
+        "open": "Create workspace",
+        "title": "Create a workspace",
+        "description": "You create the workspace for its owner. You do not become a member.",
+        "close": "Close",
+        "cancel": "Cancel",
+        "submit": "Create workspace",
+        "done": "“{name}” was created.",
+        "doneMailed": "“{name}” was created. The owner invitation was mailed to {email}.",
+        "name": {
+          "label": "Name",
+          "required": "Enter a name."
+        },
+        "owner": {
+          "label": "Owner",
+          "account": {
+            "option": "Existing account",
+            "label": "Account",
+            "placeholder": "Search by name or email",
+            "empty": "No account matches.",
+            "required": "Choose an account.",
+            "retry": "Try again",
+            "loadFailed": {
+              "title": "The accounts could not be loaded",
+              "description": "Try again, or invite the owner by email instead."
+            }
+          },
+          "email": {
+            "option": "Invite by email",
+            "label": "Email address",
+            "description": "The workspace waits for this address to accept the invitation and become its first owner.",
+            "required": "Enter an email address."
+          }
+        },
+        "error": {
+          "invalidName": "Use a name of 1 to 64 characters.",
+          "invalidEmail": "Enter a valid email address.",
+          "unknownAccount": "This account no longer exists or is disabled. Choose another one.",
+          "invalid": "Check the name and the owner, then try again.",
+          "forbidden": "You can no longer manage this instance. The page has been reloaded.",
+          "unavailable": "The workspace could not be created. Try again in a moment."
+        }
+      },
+      "addMe": {
+        "title": "Add yourself to {name}?",
+        "description": "You join {name} as a member. Its owners will see in the workspace's activity that an instance admin joined.",
+        "cancel": "Cancel",
+        "action": "Add me as member",
+        "done": "You are now a member of {name}.",
+        "error": {
+          "title": "You were not added to {name}",
+          "reauthCancelled": "Confirm it is you to join the workspace. Nothing was changed.",
+          "forbidden": "You can no longer manage this instance. The page has been reloaded.",
+          "gone": "This workspace no longer exists or is being deleted.",
+          "alreadyMember": "You are already a member of this workspace."
+        }
+      },
+      "delete": {
+        "title": "Delete {name}?",
+        "description": "This is irreversible. Deleting {name} removes every row of the workspace, including its bookmarks, folders and tags, and every member loses access right away.",
+        "confirmLabel": "Type {name} to confirm",
+        "cancel": "Cancel",
+        "action": "Delete workspace",
+        "done": "{name} is being deleted",
+        "error": {
+          "title": "The workspace was not deleted",
+          "reauthCancelled": "Confirm it is you to delete the workspace.",
+          "forbidden": "You can no longer manage this instance. The page has been reloaded.",
+          "gone": "This workspace no longer exists or is already being deleted."
+        },
+        "blocked": {
+          "title": "{name} cannot be deleted yet",
+          "close": "Close",
+          "billingActive": "This workspace has an active paid subscription. It has to be cancelled before the workspace can be deleted.",
+          "other": "This server does not allow the workspace to be deleted right now. Nothing was changed."
+        }
+      },
+      "invitation": {
+        "title": "Re-issue the owner invitation for {name}",
+        "description": "The new invitation replaces the earlier ones: their links stop working right away.",
+        "close": "Close",
+        "cancel": "Cancel",
+        "submit": "Re-issue invitation",
+        "mailed": "The owner invitation was mailed to {email}.",
+        "email": {
+          "label": "Email address",
+          "description": "Leave it empty to use the address of the previous invitation."
+        },
+        "error": {
+          "unavailable": "The invitation could not be issued. Try again in a moment.",
+          "reauthCancelled": "Confirm it is you to issue the invitation. Nothing was sent.",
+          "forbidden": "You can no longer manage this instance. The page has been reloaded.",
+          "gone": "This workspace no longer exists or is being deleted.",
+          "hasOwner": "This workspace has an owner by now, so it needs no invitation.",
+          "emailRequired": "This workspace has no earlier invitation to take the address from. Enter the address to invite.",
+          "invalidEmail": "Enter a valid email address."
+        },
+        "link": {
+          "description": "This server cannot send email, so the invitation for {name} has no message to carry it. Send this link to {email} yourself; only the account with that address can accept it.",
+          "label": "Owner invitation link",
+          "copy": "Copy the invitation link",
+          "copied": "Link copied",
+          "note": "The link is shown only now. It stops working on {date}, or when you issue a new invitation.",
+          "acknowledge": "I have sent or saved this link",
+          "done": "Done"
+        }
+      }
+    },
+    "accounts": {
+      "title": "Accounts",
+      "mfaRequired": {
+        "title": "Accounts are not available yet",
+        "description": "Turn on two-factor authentication to manage the accounts of this instance."
+      },
+      "loadFailed": {
+        "title": "The accounts could not be loaded",
+        "description": "Try again. If this continues, check the server's logs.",
+        "retry": "Try again"
+      },
+      "empty": {
+        "title": "There are no accounts",
+        "description": "Accounts appear here once people sign up."
+      },
+      "search": {
+        "label": "Search accounts",
+        "placeholder": "Search by name or email",
+        "clear": "Clear search",
+        "none": {
+          "title": "No account matches",
+          "description": "No account has a name or email containing “{query}”."
+        }
+      },
+      "table": {
+        "label": "Accounts"
+      },
+      "column": {
+        "name": "Name",
+        "email": "Email",
+        "verified": "Verified",
+        "mfa": "Two-factor",
+        "admin": "Instance admin",
+        "lastSignIn": "Last sign-in",
+        "workspaces": "Workspaces",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "you": "You",
+      "verified": "Verified",
+      "notVerified": "Not verified",
+      "on": "On",
+      "off": "Off",
+      "yes": "Yes",
+      "no": "No",
+      "never": "Never",
+      "disabled": "Disabled",
+      "active": "Active",
+      "actionsFor": "Actions for {name}",
+      "cancel": "Cancel",
+      "error": {
+        "title": "Nothing was changed",
+        "reauthCancelled": "Confirm it is you to do this. Nothing was changed.",
+        "forbidden": "You can no longer do this: your account may not manage the instance any more, or this deployment does not allow it. The page has been reloaded.",
+        "gone": "This account no longer exists.",
+        "lastInstanceAdmin": "This is the only enabled instance admin. Make another account an instance admin first.",
+        "accountDisabled": "This account is disabled. Enable it first.",
+        "emailUnverified": "The address of this account is not verified. Mark it as verified or resend the verification email first.",
+        "noPassword": "This account signs in through a provider only, so it has no password to reset.",
+        "alreadyVerified": "The address of this account is verified already.",
+        "mailUnavailable": "This server has no mail configured, so no email can be sent.",
+        "self": "This is your own account. Use your account settings for it.",
+        "invalid": "The change was refused. Reload the page and try again.",
+        "lastOwner": "This account is the only owner of workspaces that have other members.",
+        "billingActive": "This account has an active paid subscription. It has to be cancelled first.",
+        "guard": "This server does not allow this right now. Nothing was changed."
+      },
+      "action": {
+        "resend": {
+          "label": "Resend verification email",
+          "done": "A new verification email was queued for {email}.",
+          "failed": "No verification email was sent to {email}"
+        },
+        "markVerified": {
+          "label": "Mark as verified",
+          "title": "Mark {email} as verified?",
+          "description": "Whoever registered this address may not own it, so marking it verified removes the account's password, sessions, two-factor authentication, API tokens and linked sign-ins. The owner then gets in through a password-reset link or a sign-in provider.",
+          "descriptionOwn": "This is your own account. Its address is marked as verified; your password, sessions and two-factor authentication stay as they are.",
+          "done": "{email} is marked as verified."
+        },
+        "resetLink": {
+          "label": "Send reset link",
+          "mailed": "A password-reset link was mailed to {email}.",
+          "failed": "No reset link was issued for {name}"
+        },
+        "resetMfa": {
+          "label": "Reset two-factor authentication",
+          "title": "Reset the two-factor authentication of {name}?",
+          "description": "Two-factor authentication is turned off for {name}, who is signed out everywhere and signs in with the password alone. They are emailed about it where mail is configured.",
+          "done": "Two-factor authentication was reset for {name}."
+        },
+        "disable": {
+          "label": "Disable account",
+          "title": "Disable {name}?",
+          "description": "{name} is signed out everywhere and cannot sign in. Their API tokens stop working.",
+          "descriptionOwn": "This is your own account. You are signed out right away and cannot sign in until another admin enables it again.",
+          "done": "{name} is disabled."
+        },
+        "enable": {
+          "label": "Enable account",
+          "title": "Enable {name}?",
+          "description": "{name} can sign in again.",
+          "done": "{name} is enabled."
+        },
+        "promote": {
+          "label": "Make instance admin",
+          "title": "Make {name} an instance admin?",
+          "description": "{name} can manage every workspace and account of this instance, once two-factor authentication is on. They are signed out and sign in again.",
+          "done": "{name} is now an instance admin."
+        },
+        "demote": {
+          "label": "Remove instance admin",
+          "title": "Remove {name} as instance admin?",
+          "description": "{name} loses access to the administration and is signed out everywhere.",
+          "descriptionOwn": "This is your own account. You lose access to the administration and are signed out right away.",
+          "done": "{name} is no longer an instance admin."
+        },
+        "delete": {
+          "label": "Delete account"
+        }
+      },
+      "resetLink": {
+        "title": "Reset link for {name}",
+        "description": "No email was sent for this link, so it is shown here instead.",
+        "close": "Close",
+        "label": "Password-reset link",
+        "copy": "Copy the reset link",
+        "copied": "Link copied",
+        "note": "The link is shown only now. It works once and for one hour. Opening it signs {name} out everywhere once a new password is set.",
+        "acknowledge": "I have sent or saved this link",
+        "done": "Done"
+      },
+      "delete": {
+        "title": "Delete {name}?",
+        "description": "This is irreversible. Deleting {name} removes the account with its sessions and API tokens. Workspaces it is the only member of are deleted with it; in every other workspace its membership ends and what it created stays.",
+        "confirmLabel": "Type {email} to confirm",
+        "done": "{name} is deleted.",
+        "blocked": {
+          "title": "{name} cannot be deleted yet",
+          "description": "This account is the only owner of workspaces that have other members. Transfer the ownership of each, or delete the workspace, first.",
+          "workspaces": "Workspaces without another owner",
+          "close": "Close",
+          "open": "Open workspaces"
+        }
+      }
+    },
+    "settings": {
+      "title": "Settings & status",
+      "saved": "Saved.",
+      "mfaRequired": {
+        "title": "The settings are not available yet",
+        "description": "Turn on two-factor authentication to change the settings of this instance."
+      },
+      "loadFailed": {
+        "title": "The settings could not be loaded",
+        "description": "Try again. If this continues, check the server's logs.",
+        "retry": "Try again"
+      },
+      "error": {
+        "forbidden": "You can no longer manage this instance. The page has been reloaded.",
+        "invalid": "The settings were refused. Check the values and try again."
+      },
+      "creation": {
+        "title": "Workspaces",
+        "description": "Who may create workspaces on this instance.",
+        "switch": {
+          "label": "Allow members to create workspaces",
+          "description": "When this is off, only an instance admin creates workspaces.",
+          "notSet": "Not set yet, so the default of this deployment applies, shown here. Changing it overrides that default."
+        },
+        "error": {
+          "saveFailed": "The setting could not be saved."
+        }
+      },
+      "signIn": {
+        "title": "Sign-in page",
+        "description": "What people see before they sign in.",
+        "save": "Save",
+        "displayName": {
+          "label": "Instance name",
+          "description": "Shown on the sign-in page in place of the product name. Leave it empty to show the product name.",
+          "invalid": "Use a name of 1 to 100 characters."
+        },
+        "notice": {
+          "label": "Sign-in notice",
+          "description": "Plain text shown on the sign-in page, up to 500 characters. Leave it empty for no notice.",
+          "invalid": "Use a notice of 1 to 500 characters."
+        }
+      },
+      "test": {
+        "title": "Test email",
+        "description": "Check that this server can send email to {email}.",
+        "note": "The message is queued for the background worker, so it can arrive a moment after this says it was queued.",
+        "send": "Send test email",
+        "done": "A test email to {email} was queued.",
+        "error": {
+          "title": "No test email was queued",
+          "mailUnavailable": "This server has no mail configured. Set up the mail connection in the server's environment, restart it, and try again."
+        }
+      },
+      "configuration": {
+        "title": "Configuration",
+        "description": "What the operator has set up for this instance.",
+        "label": "Operator configuration",
+        "column": {
+          "setting": "Setting",
+          "value": "Value"
+        },
+        "envOnly": "This is read-only. Credentials and connections are set through environment variables on the server only, never in this app.",
+        "loadFailed": "The configuration could not be loaded"
+      }
     }
   },
   "settings": {
@@ -1209,6 +1636,7 @@
     "retry": "Try again",
     "signedInAs": "Signed in as {email}",
     "open": "Open {name}",
+    "admin": "Open the admin area",
     "loadFailed": {
       "title": "Your account could not be loaded",
       "description": "Try again. If this continues, tell your administrator."

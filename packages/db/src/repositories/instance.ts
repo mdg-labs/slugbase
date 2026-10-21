@@ -18,6 +18,8 @@ import {
   type InstanceSettingsChange,
   type InstanceMembershipRequest,
   type InstanceMembershipResult,
+  type InstanceOwnerInvitationReissue,
+  type InstanceOwnerInvitationReissueResult,
   type InstanceWorkspace,
   type InstanceWorkspaceCreation,
   type InstanceWorkspaceCreationResult,
@@ -119,6 +121,15 @@ export interface InstanceRepository {
    * the transaction is not an instance admin with a second factor. Works in an account-level transaction.
    */
   createWorkspace(request: InstanceWorkspaceCreation, eventId: string, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<InstanceWorkspaceCreationResult>;
+  /**
+   * Gives a workspace that has no owner a new owner invitation through `sys_instance_reissue_owner_invitation`, which
+   * revokes the pending owner invitations of the workspace and writes `instance.workspace_owner_invited`, all in one call;
+   * `jobs` are queued in the same transaction, only when the invitation is written. `unknown_workspace` for a workspace
+   * that does not exist or is being deleted, `has_owner` for one with an owner and `email_required` when no address was
+   * given and the workspace never had an owner invitation, with nothing written or queued. Raises, writing nothing, when
+   * the account of the transaction is not an instance admin with a second factor. Works in an account-level transaction.
+   */
+  reissueOwnerInvitation(request: InstanceOwnerInvitationReissue, eventId: string, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<InstanceOwnerInvitationReissueResult>;
   /**
    * Marks the workspace as being deleted, with the effects of `WorkspaceRepository.markDeleting` (hidden from every
    * policy and lookup, its sessions pointed at none, its API tokens revoked), writes
@@ -267,6 +278,12 @@ interface WorkspaceRow extends Record<string, unknown> {
 
 interface CreatedWorkspaceRow extends Record<string, unknown> {
   outcome: string;
+  invitation_expires_at: string | null;
+}
+
+interface ReissuedInvitationRow extends Record<string, unknown> {
+  outcome: string;
+  invitation_email: string | null;
   invitation_expires_at: string | null;
 }
 
@@ -540,6 +557,34 @@ export function instanceRepository(tx: TenantTx): InstanceRepository {
         await enqueueInTenantTransaction(tx, job);
       }
       return { kind: "created", invitationExpiresAt: row.invitation_expires_at === null ? null : new Date(row.invitation_expires_at) };
+    },
+
+    async reissueOwnerInvitation(request, eventId, ipPrefix, jobs) {
+      const rows = await executeAsAdmin<ReissuedInvitationRow>(tx, sql`
+        SELECT outcome, invitation_email, to_char(invitation_expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS invitation_expires_at
+        FROM public.sys_instance_reissue_owner_invitation(
+          ${eventId}::uuid, ${ipPrefix}::cidr, ${request.workspaceId}::uuid, ${request.email ?? null}::citext,
+          ${request.invitationId}::uuid, ${request.tokenHash}::bytea, ${request.ttlSeconds}::integer)`);
+      const row = rows[0];
+      if (rows.length !== 1 || row === undefined) {
+        throw new Error("sys_instance_reissue_owner_invitation did not return exactly one row");
+      }
+      switch (row.outcome) {
+        case "unknown_workspace":
+        case "has_owner":
+        case "email_required":
+          return { kind: row.outcome };
+        case "issued":
+          if (row.invitation_email === null || row.invitation_expires_at === null) {
+            throw new Error("sys_instance_reissue_owner_invitation issued an invitation without its address and expiry");
+          }
+          for (const job of jobs) {
+            await enqueueInTenantTransaction(tx, job);
+          }
+          return { kind: "issued", email: row.invitation_email, expiresAt: new Date(row.invitation_expires_at) };
+        default:
+          throw new Error("sys_instance_reissue_owner_invitation answered an outcome it does not define");
+      }
     },
 
     async markWorkspaceDeleting(workspaceId, eventId, ipPrefix, jobs) {

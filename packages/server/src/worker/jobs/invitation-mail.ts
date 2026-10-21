@@ -14,7 +14,10 @@ import { defineJob } from "../job.ts";
 // expired, nor for one that holds another ticket than the job's: a link issued, or a resend made, after the job
 // was queued has renewed the invitation, and the job must not end that link, nor for one whose workspace is
 // being deleted, which the transaction cannot see. A retry after an attempt that failed
-// finds its ticket still on the invitation and makes a new token, which replaces the earlier one.
+// finds its ticket still on the invitation and makes a new token, which replaces the earlier one. The owner role is
+// mailed only for the invitation an instance admin issued (`instance_issued`, doc 02 section 11.1), which is the
+// first owner of a workspace and is sent as the admin acting in a workspace they are no member of; any other owner
+// invitation is refused.
 
 export const INVITATION_SEND_JOB = "invitation.send";
 
@@ -46,7 +49,7 @@ export const invitationSendJob = defineJob({
       return;
     }
     const { issued, inviterName } = prepared;
-    if (issued.role === "owner") {
+    if (issued.role === "owner" && !issued.instanceIssued) {
       context.logger.warn("Mail not sent; the invitation grants a role this email does not carry");
       return;
     }

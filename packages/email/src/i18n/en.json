@@ -100,7 +100,8 @@
     "bodyBy": "{inviter} invited you to join the workspace {workspace} on {appName} as {role}.",
     "role": {
       "admin": "an admin",
-      "member": "a member"
+      "member": "a member",
+      "owner": "an owner"
     },
     "action": "Accept the invitation",
     "expiry": "The link works once and until {date}.",

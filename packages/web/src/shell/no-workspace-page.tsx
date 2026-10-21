@@ -1,7 +1,7 @@
 import { Button } from "@slugbase/ui";
 import { EmptyState, feedbackToast, InboxIcon, Loading, TriangleAlertIcon } from "@slugbase/ui/patterns";
 import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "@tanstack/react-router";
+import { Link, useRouter } from "@tanstack/react-router";
 import { useState, type ReactElement, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { AccountPreferences } from "../account/account-preferences.tsx";
@@ -82,6 +82,13 @@ export function NoWorkspacePage(): ReactElement {
     </Button>
   );
 
+  // The admin area works without a workspace, and is where an instance admin creates the first one.
+  const adminLink = me.data.account.isInstanceAdmin ? (
+    <Button render={<Link to="/admin" />} variant="outline">
+      {t("noWorkspace.admin")}
+    </Button>
+  ) : null;
+
   let content: ReactElement;
   if (memberships.length > 0) {
     content = (
@@ -106,6 +113,7 @@ export function NoWorkspacePage(): ReactElement {
                 {t("noWorkspace.open", { name })}
               </Button>
             ))}
+            {adminLink}
             {signedInAs}
             {signOutLink}
           </>
@@ -128,6 +136,7 @@ export function NoWorkspacePage(): ReactElement {
             >
               {t("noWorkspace.create.action")}
             </Button>
+            {adminLink}
             {signedInAs}
             {signOutLink}
           </>
@@ -143,6 +152,7 @@ export function NoWorkspacePage(): ReactElement {
       <EmptyState
         actions={
           <>
+            {adminLink}
             {signedInAs}
             {signOutLink}
           </>

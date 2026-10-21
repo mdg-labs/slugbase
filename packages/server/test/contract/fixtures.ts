@@ -198,6 +198,9 @@ export const FIXTURES: ContractFixtures = {
   // without giving its account a membership the next call would not expect: its valid request names one that does not exist, the declared 404;
   // the route tests add the admin to workspaces.
   addInstanceAdminMembership: { path: { id: UNKNOWN_WORKSPACE_ID }, status: 404 },
+  // The owner invitation names a workspace by identifier too, which an instance admin may name whoever holds it, and the walker knows none that waits
+  // for its first owner and is not another call's: its valid request names one that does not exist, the declared 404; the route tests issue the invitations.
+  issueInstanceWorkspaceOwnerInvitation: { path: { id: UNKNOWN_WORKSPACE_ID }, body: { ownerEmail: "walker-next-owner@example.test" }, status: 404 },
   // The account operations of the instance admin. The list names nothing. The change names an account by identifier, which an instance admin may
   // name whoever it is, and the walker knows none it could disable or demote without taking the next call's caller away: its valid request names one
   // that does not exist, the declared 404; the route tests change accounts.

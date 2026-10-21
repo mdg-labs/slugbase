@@ -1087,6 +1087,9 @@ export const INSTANCE_AUDIT_ACTIONS: {
             readonly owner: "text";
         };
     };
+    readonly "instance.workspace_owner_invited": {
+        readonly metadata: {};
+    };
     readonly "instance.workspace_deletion_requested": {
         readonly metadata: {};
     };
@@ -1359,6 +1362,72 @@ export type InstanceMfaResetOutcome =
 /** The target is the calling admin, who turns their own second factor off with the second factor that asks for. */
 | "self" | "unknown_account";
 
+// @public
+export type InstanceOwnerInvitation = {
+    readonly id: string;
+    readonly email: string;
+    readonly expiresAt: Date;
+} & ({
+    readonly delivery: "mail";
+} | {
+    readonly delivery: "link";
+    readonly token: string;
+});
+
+// @public (undocumented)
+export interface InstanceOwnerInvitationAsk extends InstanceWorkspaceAsk {
+    readonly mailLocale?: string;
+    readonly ownerEmail?: string;
+    readonly ttlSeconds?: number;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export type InstanceOwnerInvitationOutcome = {
+    readonly kind: "issued";
+    readonly invitation: InstanceOwnerInvitation;
+} | {
+    readonly kind: "unknown_workspace";
+} | {
+    readonly kind: "has_owner";
+} | {
+    readonly kind: "email_required";
+};
+
+// @public
+export interface InstanceOwnerInvitationReissue {
+    readonly email?: string;
+    readonly invitationId: string;
+    readonly mailLocale?: string;
+    readonly tokenHash: Buffer;
+    // (undocumented)
+    readonly ttlSeconds: number;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export type InstanceOwnerInvitationReissueResult =
+/** The pending owner invitations of the workspace are revoked and the new one is written. */
+    {
+    readonly kind: "issued";
+    readonly email: string;
+    readonly expiresAt: Date;
+}
+/** The workspace does not exist or is being deleted; nothing was written. */
+| {
+    readonly kind: "unknown_workspace";
+}
+/** The workspace has an owner; nothing was written. */
+| {
+    readonly kind: "has_owner";
+}
+/** No address was given and the workspace has no owner invitation to take it from; nothing was written. */
+| {
+    readonly kind: "email_required";
+};
+
 // @public (undocumented)
 export interface InstanceRecoveryAsk {
     // (undocumented)
@@ -1466,6 +1535,7 @@ export interface InstanceWorkspaceCreation {
 
 // @public (undocumented)
 export interface InstanceWorkspaceCreationAsk extends InstanceWorkspaceAsk {
+    readonly mailLocale?: string;
     // (undocumented)
     readonly name: string;
     readonly ownerAccountId?: string;
@@ -1478,12 +1548,7 @@ export interface InstanceWorkspaceCreationAsk extends InstanceWorkspaceAsk {
 export type InstanceWorkspaceCreationOutcome = {
     readonly kind: "created";
     readonly workspaceId: string;
-    readonly invitation?: {
-        readonly id: string;
-        readonly email: string;
-        readonly expiresAt: Date;
-        readonly token: string;
-    };
+    readonly invitation?: InstanceOwnerInvitation;
 } | {
     readonly kind: "unknown_account";
 };
@@ -1550,6 +1615,7 @@ export type InstanceWorkspaceOwnerSeat = {
     readonly email: string;
     readonly tokenHash: Buffer;
     readonly ttlSeconds: number;
+    readonly mailLocale?: string;
 };
 
 // @public
@@ -1558,6 +1624,7 @@ export interface InstanceWorkspaceStore {
     createWorkspace(request: InstanceWorkspaceCreation, eventId: string, ipPrefix: string | null): Promise<InstanceWorkspaceCreationResult>;
     listWorkspaces(eventId: string, ipPrefix: string | null): Promise<readonly InstanceWorkspace[]>;
     markWorkspaceDeleting(workspaceId: string, eventId: string, ipPrefix: string | null): Promise<boolean>;
+    reissueOwnerInvitation(request: InstanceOwnerInvitationReissue, eventId: string, ipPrefix: string | null): Promise<InstanceOwnerInvitationReissueResult>;
 }
 
 // @public
@@ -1803,8 +1870,7 @@ export interface InvitationMessageContent {
     readonly expiresAt: Date;
     readonly inviterName: string;
     readonly locale: string;
-    // (undocumented)
-    readonly role: InvitationRole;
+    readonly role: WorkspaceRole;
     readonly to: string;
     readonly token: string;
     // (undocumented)
@@ -2456,6 +2522,9 @@ export type RegistrationUnavailable = "registration_closed" | "mail_unavailable"
 
 // @public
 export function registrationUnavailable(settings: RegistrationSettings, mailAvailable: boolean): RegistrationUnavailable | undefined;
+
+// @public
+export function reissueInstanceWorkspaceOwnerInvitation(input: InstanceWorkspaceDependencies, ask: InstanceOwnerInvitationAsk): Promise<InstanceOwnerInvitationOutcome>;
 
 // @public
 export function renameWorkspace(input: WorkspaceAdministrationDependencies, ask: WorkspaceRenameAsk): Promise<WorkspaceRenameOutcome>;

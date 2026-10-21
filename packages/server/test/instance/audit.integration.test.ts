@@ -66,6 +66,7 @@ describe("the instance audit stream", () => {
       { operationId: "sendInstanceTestMail", method: "POST", path: () => "/api/v1/instance/mail/test", status: 202, actions: ["instance.test_mail_queued"] },
       { operationId: "listInstanceWorkspaces", method: "GET", path: () => "/api/v1/instance/workspaces", status: 200, actions: ["instance.workspaces_viewed"] },
       { operationId: "createInstanceWorkspace", method: "POST", path: () => "/api/v1/instance/workspaces", body: { name: "Audit suite workspace", ownerEmail: "audit-first-owner@example.test" }, status: 201, actions: ["instance.workspace_created"] },
+      { operationId: "issueInstanceWorkspaceOwnerInvitation", method: "POST", path: () => `/api/v1/instance/workspaces/${workspaceId}/owner-invitation`, body: {}, status: 201, actions: ["instance.workspace_owner_invited"], entity: () => workspaceId },
       { operationId: "addInstanceAdminMembership", method: "POST", path: () => `/api/v1/instance/workspaces/${workspaceId}/membership`, status: 201, actions: ["instance.workspace_joined"], entity: () => workspaceId },
       { operationId: "deleteInstanceWorkspace", method: "DELETE", path: () => `/api/v1/instance/workspaces/${workspaceId}`, status: 202, actions: ["instance.workspace_deletion_requested"], entity: () => workspaceId },
       { operationId: "listInstanceAccounts", method: "GET", path: () => ACCOUNT, status: 200, actions: ["instance.accounts_viewed"] },

@@ -395,6 +395,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/instance/workspaces/{id}/owner-invitation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Issue a new owner invitation for a workspace that has no owner */
+        post: operations["issueInstanceWorkspaceOwnerInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/invitations": {
         parameters: {
             query?: never;
@@ -1074,6 +1091,8 @@ export interface components {
              * @description The account's identifier
              */
             id: string;
+            /** @description Whether the account holds the instance-admin flag, as of this request; always false for an API token, which the instance operations refuse */
+            isInstanceAdmin: boolean;
             /**
              * @description The language of the account's emails and of the app unless the browser overrides it
              * @enum {string}
@@ -1443,11 +1462,8 @@ export interface components {
              * @description The invitation's identifier
              */
             id: string;
-            /**
-             * Format: uri
-             * @description The address the invited owner opens to accept: the application's origin and /invite/ followed by the token. Returned this once and never again
-             */
-            link: string;
+            /** @description The address the invited owner opens to accept: the application's origin and /invite/ followed by the token. Returned this once and never again, and only where no email can be sent; null when the invitation was mailed to its address */
+            link: string | null;
         };
         InstanceSettings: {
             /** @description Whether ordinary accounts may create workspaces; null while the setting is not set, when the default of the deployment applies */
@@ -1673,6 +1689,13 @@ export interface components {
             /** @description The name of the workspace the invitation is into */
             workspaceName: string;
         };
+        IssueInstanceOwnerInvitationRequest: {
+            /**
+             * Format: email
+             * @description The address to invite as the workspace's first owner. Left out, the address of the workspace's latest owner invitation is used
+             */
+            ownerEmail?: string;
+        };
         LoginRequest: {
             /** @description The account's email address; case does not matter */
             email: string;
@@ -1801,7 +1824,7 @@ export interface components {
              * @description Stable machine identifier
              * @enum {string}
              */
-            code: "bad_request" | "unauthenticated" | "mfa_required" | "reauth_required" | "forbidden" | "registration_refused" | "cross_site_request" | "token_scope" | "entitlement_required" | "email_unverified" | "registration_closed" | "setup_completed" | "not_found" | "slug_not_found" | "slug_taken" | "name_taken" | "email_taken" | "already_member" | "last_owner" | "idempotency_conflict" | "billing_active" | "token_expired" | "precondition_failed" | "payload_too_large" | "unsupported_media_type" | "validation_failed" | "bookmark_limit_reached" | "seat_limit_reached" | "workspace_limit_reached" | "weak_password" | "invalid_code" | "url_not_allowed" | "rate_limited" | "internal" | "upstream_failed" | "unavailable" | "mail_unavailable" | "ai_unavailable" | "billing_unavailable";
+            code: "bad_request" | "unauthenticated" | "mfa_required" | "reauth_required" | "forbidden" | "registration_refused" | "cross_site_request" | "token_scope" | "entitlement_required" | "email_unverified" | "registration_closed" | "setup_completed" | "not_found" | "slug_not_found" | "slug_taken" | "name_taken" | "email_taken" | "already_member" | "last_owner" | "workspace_has_owner" | "idempotency_conflict" | "billing_active" | "token_expired" | "precondition_failed" | "payload_too_large" | "unsupported_media_type" | "validation_failed" | "bookmark_limit_reached" | "seat_limit_reached" | "workspace_limit_reached" | "weak_password" | "invalid_code" | "url_not_allowed" | "rate_limited" | "internal" | "upstream_failed" | "unavailable" | "mail_unavailable" | "ai_unavailable" | "billing_unavailable";
             /** @description English explanation; may contain user-supplied values */
             detail: string;
             /** @description Per-field errors */
@@ -3826,7 +3849,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The workspace is created with the account as its owner, or, for an address, with no member and one pending owner invitation that expires in 7 days; the invitation's link is returned this once and is in no email, log or later response. The admin does not become a member, and the action is written to the instance audit stream */
+            /** @description The workspace is created with the account as its owner, or, for an address, with no member and one pending owner invitation that expires in 7 days. Where email can be sent the invitation is mailed to the address in the language of the calling admin and the response carries no link (link is null); otherwise the invitation's link is returned this once and is in no email, log or later response. The admin does not become a member, and the action is written to the instance audit stream */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -4036,6 +4059,106 @@ export interface operations {
             };
             /** @description The calling account is a member of the workspace already, with any role (already_member); nothing is written */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    issueInstanceWorkspaceOwnerInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssueInstanceOwnerInvitationRequest"];
+            };
+        };
+        responses: {
+            /** @description The workspace's pending owner invitations are revoked, so their links stop working at once, and a new one for the address is written; it expires in 7 days. Where email can be sent the invitation is mailed to the address in the language of the calling admin and the response carries no link (link is null); otherwise the link is returned this once and is in no email, log or later response. The admin does not become a member, and the action is written to the instance audit stream, naming no address, in one transaction with the invitation */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceOwnerInvitation"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden). Nothing is written */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no workspace with that identifier, or it is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The workspace has an owner already (workspace_has_owner); nothing is written */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation: a field the operation does not declare, an ownerEmail that is not an address, or no ownerEmail for a workspace that has no owner invitation to take the address from (owner_email_required on ownerEmail). Nothing is written */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

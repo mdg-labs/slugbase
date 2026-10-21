@@ -7,17 +7,18 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@slugbase/ui";
-import { AccountMenu, AppShell, HomeIcon, LifeBuoyIcon, LockIcon, LogOutIcon, SettingsIcon, ThemeToggle } from "@slugbase/ui/patterns";
+import { AccountMenu, AppShell, HomeIcon, LifeBuoyIcon, LockIcon, LogOutIcon, SettingsIcon, ShieldCheckIcon, ThemeToggle } from "@slugbase/ui/patterns";
 import { Link, Outlet, useRouter, useRouterState } from "@tanstack/react-router";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { AccountPreferences } from "../account/account-preferences.tsx";
+import { useCachedAccount } from "../account/use-cached-account.ts";
 import { useUpdatePreferences } from "../account/use-update-preferences.ts";
 import { useSignOut } from "../auth/sign-out.ts";
 import { useConfig } from "../config/config-context.tsx";
 import { Slot, useExtensions } from "../extensions/index.ts";
 import { docsUrl } from "./docs-url.ts";
-import { EmailUnverifiedBanner } from "./banners.tsx";
+import { EmailUnverifiedBanner, MailNotConfiguredBanner } from "./banners.tsx";
 import { OfflineBanner } from "./offline-banner.tsx";
 import { useWorkspaceSwitcher } from "./workspace-switcher.tsx";
 
@@ -30,7 +31,9 @@ function AppLayoutShell(): ReactElement {
   const router = useRouter();
   const updatePreferences = useUpdatePreferences();
   const { switcher, dialog } = useWorkspaceSwitcher();
+  const account = useCachedAccount();
   const inSettings = pathname === "/settings" || pathname.startsWith("/settings/");
+  const inAdmin = pathname === "/admin" || pathname.startsWith("/admin/");
   const accountItems = [
     {
       id: "settings",
@@ -72,7 +75,7 @@ function AppLayoutShell(): ReactElement {
         <Breadcrumb aria-label={t("shell.breadcrumb")}>
           <BreadcrumbList>
             <BreadcrumbItem>
-              <BreadcrumbPage>{inSettings ? t("shell.settings") : t("shell.home")}</BreadcrumbPage>
+              <BreadcrumbPage>{inAdmin ? t("shell.admin") : inSettings ? t("shell.settings") : t("shell.home")}</BreadcrumbPage>
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
@@ -109,6 +112,14 @@ function AppLayoutShell(): ReactElement {
               <span>{t("shell.home")}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
+          {account?.isInstanceAdmin === true ? (
+            <SidebarMenuItem>
+              <SidebarMenuButton isActive={inAdmin} render={<Link to="/admin" />} tooltip={t("shell.admin")}>
+                <ShieldCheckIcon aria-hidden="true" />
+                <span>{t("shell.admin")}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          ) : null}
           {extensions.flatMap(({ id, navigation = [] }) =>
             navigation.map(({ to, label, icon }) => (
               <SidebarMenuItem key={`${id}:${to}`}>
@@ -127,6 +138,7 @@ function AppLayoutShell(): ReactElement {
       {dialog}
       <OfflineBanner />
       <EmailUnverifiedBanner />
+      <MailNotConfiguredBanner />
       <Slot name="banner.entitlement" />
       <Outlet />
     </AppShell>

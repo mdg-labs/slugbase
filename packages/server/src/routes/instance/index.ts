@@ -6,6 +6,7 @@ import {
   getInstanceSettings,
   getInstanceStatus,
   issueInstanceAccountResetLink as issueInstanceAccountResetLinkOperation,
+  issueInstanceWorkspaceOwnerInvitation as issueInstanceWorkspaceOwnerInvitationOperation,
   listInstanceAccounts as listInstanceAccountsOperation,
   listInstanceWorkspaces as listInstanceWorkspacesOperation,
   resendInstanceAccountVerification as resendInstanceAccountVerificationOperation,
@@ -23,6 +24,7 @@ import {
   issueInstanceResetLink,
   listInstanceAccounts,
   listInstanceWorkspaces,
+  reissueInstanceWorkspaceOwnerInvitation,
   requestInstanceAccountVerification,
   requestInstanceWorkspaceDeletion,
   resetInstanceAccountMfa,
@@ -32,16 +34,18 @@ import {
   type InstanceAccountDeletionStore,
   type InstanceAccountStore,
   type InstanceRecoveryStore,
+  type InstanceOwnerInvitation,
   type InstanceWorkspaceStore,
   type RegistrationSettings,
 } from "@slugbase/core";
-import { instanceRepository, migrationLevel, type Database, type MigrationChain, type TenantTx } from "@slugbase/db";
+import { accountProfileRepository, instanceRepository, migrationLevel, type Database, type MigrationChain, type QueuedJob, type TenantTx } from "@slugbase/db";
 import { uuidv7 } from "../../auth/uuidv7.ts";
 import { queueDomainEvent } from "../../events/publish.ts";
 import type { BuildInfo } from "../../build-info.ts";
 import type { ChainContext, RouteBinding } from "../../http/chain.ts";
 import { ProblemError, requestIdOf } from "../../http/problem.ts";
 import { networkPrefixOf } from "../../http/trusted-proxy.ts";
+import { queueInvitationMail } from "../../worker/jobs/invitation-mail.ts";
 import { queueMailSend } from "../../worker/jobs/mail-send.ts";
 import { WORKSPACE_DELETE_JOB } from "../../worker/jobs/workspace-delete.ts";
 import { route } from "../register.ts";
@@ -70,9 +74,10 @@ import { route } from "../register.ts";
 // its instance audit event in the same call. The list is the workspace's name, owners, member count and creation time and nothing
 // the workspace holds; the admin acts in no workspace they are not a member of, and the list gives no way into one. A creation
 // names an owner account, which becomes the owner, or an owner address: the workspace then has no member and one pending owner
-// invitation (the only owner invitation there is; the public invitation operation still refuses `owner`), and the link of that
-// invitation is returned once, in the response, since no workspace admin exists yet to hand it out and the invitation mail job
-// carries no owner role. `workspace.created` is announced for an account that becomes the owner. A deletion needs a session that
+// invitation (the only owner invitation there is; the public invitation operation still refuses `owner`). Where mail is configured the
+// `invitation.send` job, queued in the transaction that writes the invitation, mails the link to the address in the calling admin's
+// language and the response carries none; otherwise the link is returned once, in the response, since no workspace admin exists yet to
+// hand it out. `workspace.created` is announced for an account that becomes the owner. A deletion needs a session that
 // re-authenticated within ten minutes (the authorization stage judges it before the handler runs); the deletion guard of the
 // composition is asked first, with `requestedBy: instanceAdmin`, and a refusal is its code (409 billing_active) with nothing
 // written, a guard that throws or times out is 503 from the dispatcher. The mark, the revocation of the workspace's tokens, the
@@ -85,6 +90,15 @@ import { route } from "../register.ts";
 // queued in the same transaction, so each exists exactly when the others do. The admin is added and nobody else, whichever admin
 // asks: the account is the one of the session. 409 `already_member` for an account that holds any role in the workspace, and 404
 // for a workspace that does not exist or is being deleted, with nothing written in either case. The session is not moved to the workspace.
+//
+// POST /api/v1/instance/workspaces/{id}/owner-invitation (doc 02 section 11.1, doc 04 section 10.10, doc 05 section 3.3) gives a
+// workspace that has no owner a new owner invitation, for the address in the body or, without one, for the address of its latest owner
+// invitation. It needs a session that re-authenticated within ten minutes. One `sys_instance_reissue_owner_invitation` call revokes the
+// workspace's pending owner invitations, so their links stop working at once, writes the new one and `instance.workspace_owner_invited`;
+// the mail job is queued in the same transaction where mail is configured and the response then carries no link, as for a creation.
+// 409 `workspace_has_owner` for a workspace with an owner, 404 for one that does not exist or is being deleted, and 422
+// `validation_failed` with the field code `owner_email_required` on `ownerEmail` when no address was given and none can be taken from the
+// workspace, with nothing written in any of the three cases.
 //
 // GET /api/v1/instance/accounts and PATCH /api/v1/instance/accounts/{id} (doc 02 section 11.2, doc 04 section 10.10, doc 05
 // sections 3.3 and 7.1) list the accounts and change the instance-admin flag and the disabled state of one. Each goes through a
@@ -162,7 +176,10 @@ const EMAIL_UNVERIFIED = "The account's address is not verified; mark it verifie
 const NO_PASSWORD = "The account has no password to reset; it signs in through a provider.";
 const ALREADY_VERIFIED = "The account's address is verified already.";
 const NO_SUCH_ACCOUNT = "There is no account that can own the workspace.";
+const DEFAULT_MAIL_LOCALE = "en";
 const NO_SUCH_WORKSPACE = "There is no such workspace.";
+const WORKSPACE_HAS_OWNER = "The workspace has an owner already; an owner invitation is for a workspace that waits for its first owner.";
+const OWNER_EMAIL_REQUIRED = "The workspace has no owner invitation to take the address from; give the address of the first owner.";
 const ALREADY_MEMBER = "You are a member of this workspace already.";
 const DELETION_REFUSED = "The workspace cannot be deleted while its subscription is active; cancel the subscription first.";
 const ACCOUNT_DELETION_REFUSED = "The account cannot be deleted while a subscription is active; cancel the subscription first.";
@@ -187,15 +204,18 @@ function sessionOf(context: ChainContext): { readonly accountId: string } {
 /** The workspace operations of the instance admin, bound to the account-level transaction of the request. */
 function workspaceStoreOf(tx: TenantTx): InstanceWorkspaceStore {
   const repository = instanceRepository(tx);
+  /** The job that mails an owner invitation, which acts in its workspace as the admin that issued it; its mail ticket is the invitation's identifier. */
+  const invitationMail = (invitationId: string, workspaceId: string, locale: string | undefined): QueuedJob[] =>
+    locale === undefined ? [] : [queueInvitationMail(uuidv7(), { invitationId, workspaceId, accountId: tx.accountId, locale, mailTicket: invitationId })];
   return {
     listWorkspaces: (eventId, ipPrefix) => repository.listWorkspaces(eventId, ipPrefix),
     createWorkspace: (request, eventId, ipPrefix) =>
-      repository.createWorkspace(
-        request,
-        eventId,
-        ipPrefix,
-        request.events.map((event) => queueDomainEvent(event.eventId, event.name, event.payload)),
-      ),
+      repository.createWorkspace(request, eventId, ipPrefix, [
+        ...request.events.map((event) => queueDomainEvent(event.eventId, event.name, event.payload)),
+        ...(request.owner.kind === "invitation" ? invitationMail(request.owner.invitationId, request.workspaceId, request.owner.mailLocale) : []),
+      ]),
+    reissueOwnerInvitation: (request, eventId, ipPrefix) =>
+      repository.reissueOwnerInvitation(request, eventId, ipPrefix, invitationMail(request.invitationId, request.workspaceId, request.mailLocale)),
     markWorkspaceDeleting: (workspaceId, eventId, ipPrefix) =>
       repository.markWorkspaceDeleting(workspaceId, eventId, ipPrefix, [{ id: uuidv7(), queue: WORKSPACE_DELETE_JOB, data: { workspaceId } }]),
     addMembership: (request, ipPrefix) =>
@@ -264,6 +284,23 @@ export function instanceRoutes({
     tenantTransaction(context, fn).catch((error: unknown) => {
       throw error instanceof InstanceAdminRequiredError ? new ProblemError("forbidden", FORBIDDEN) : error;
     });
+  /**
+   * The language an owner invitation is mailed in: the calling admin's, when mail is configured; undefined, which keeps the
+   * link in the response, where it is not.
+   */
+  const mailLocaleOf = async (tx: TenantTx): Promise<string | undefined> => {
+    if (!adapters.mail.available) {
+      return undefined;
+    }
+    return (await accountProfileRepository(tx).profile())?.locale ?? DEFAULT_MAIL_LOCALE;
+  };
+  /** An owner invitation as the response carries it: the link only where the invitation was not mailed. */
+  const ownerInvitationBody = (invitation: InstanceOwnerInvitation) => ({
+    id: invitation.id,
+    email: invitation.email,
+    expiresAt: invitation.expiresAt.toISOString(),
+    link: invitation.delivery === "link" ? invitationLink(appOrigin, invitation.token) : null,
+  });
   return [
     route(getInstanceStatus).handle(async (_request, context) => {
       const principal = sessionOf(context);
@@ -339,17 +376,19 @@ export function instanceRoutes({
     route(createInstanceWorkspaceOperation).handle(async ({ body }, context) => {
       const { accountId } = sessionOf(context);
       const ipPrefix = networkPrefixOf(context.get("clientIp")) ?? null;
-      const outcome = await withTenant({ accountId, requestId: requestIdOf(context) }, (tx) =>
-        createInstanceWorkspace(
+      const outcome = await withTenant({ accountId, requestId: requestIdOf(context) }, async (tx) => {
+        const mailLocale = await mailLocaleOf(tx);
+        return createInstanceWorkspace(
           { store: workspaceStoreOf(tx), newId: uuidv7 },
           {
             name: body.name,
             ...(body.ownerAccountId === undefined ? {} : { ownerAccountId: body.ownerAccountId.toLowerCase() }),
             ...(body.ownerEmail === undefined ? {} : { ownerEmail: body.ownerEmail }),
+            ...(mailLocale === undefined ? {} : { mailLocale }),
             ipPrefix,
           },
-        ),
-      );
+        );
+      });
       if (outcome.kind === "unknown_account") {
         throw new ProblemError("validation_failed", NO_SUCH_ACCOUNT, { errors: [{ path: "ownerAccountId", code: "unknown_account" }] });
       }
@@ -359,12 +398,35 @@ export function instanceRoutes({
         body: {
           id: outcome.workspaceId,
           name: body.name,
-          ownerInvitation:
-            invitation === undefined
-              ? null
-              : { id: invitation.id, email: invitation.email, expiresAt: invitation.expiresAt.toISOString(), link: invitationLink(appOrigin, invitation.token) },
+          ownerInvitation: invitation === undefined ? null : ownerInvitationBody(invitation),
         },
       };
+    }),
+
+    route(issueInstanceWorkspaceOwnerInvitationOperation).handle(async ({ params, body }, context) => {
+      const { accountId } = sessionOf(context);
+      const outcome = await withTenant({ accountId, requestId: requestIdOf(context) }, async (tx) => {
+        const mailLocale = await mailLocaleOf(tx);
+        return reissueInstanceWorkspaceOwnerInvitation(
+          { store: workspaceStoreOf(tx), newId: uuidv7 },
+          {
+            workspaceId: params.id.toLowerCase(),
+            ...(body.ownerEmail === undefined ? {} : { ownerEmail: body.ownerEmail }),
+            ...(mailLocale === undefined ? {} : { mailLocale }),
+            ipPrefix: networkPrefixOf(context.get("clientIp")) ?? null,
+          },
+        );
+      });
+      switch (outcome.kind) {
+        case "issued":
+          return { status: 201, body: ownerInvitationBody(outcome.invitation) };
+        case "unknown_workspace":
+          throw new ProblemError("not_found", NO_SUCH_WORKSPACE);
+        case "has_owner":
+          throw new ProblemError("workspace_has_owner", WORKSPACE_HAS_OWNER);
+        case "email_required":
+          throw new ProblemError("validation_failed", OWNER_EMAIL_REQUIRED, { errors: [{ path: "ownerEmail", code: "owner_email_required" }] });
+      }
     }),
 
     route(addInstanceAdminMembershipOperation).handle(async ({ params }, context) => {

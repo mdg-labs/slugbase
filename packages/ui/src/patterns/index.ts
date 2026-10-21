@@ -16,6 +16,7 @@ export { FormField, type FormFieldProps } from "./form-field.tsx";
 export { FormOverlay, type FormOverlayProps } from "./form-overlay.tsx";
 export { InlineNote, type InlineNoteProps } from "./inline-note.tsx";
 export { Loading, type LoadingProps } from "./loading.tsx";
+export { MetricTile, type MetricTileProps } from "./metric-tile.tsx";
 export { PasswordStrength, type PasswordScore, type PasswordStrengthProps } from "./password-strength.tsx";
 export { Picker, type PickerOption, type PickerProps } from "./picker.tsx";
 export { RowActions, type RowAction, type RowActionsProps } from "./row-actions.tsx";
@@ -34,4 +35,4 @@ export type { WorkspaceSwitcherAction, WorkspaceSwitcherItem, WorkspaceSwitcherP
 export type { Accent, ResolvedTheme } from "../theme/theme-provider.tsx";
 export { ThemeToggle, type ThemeToggleProps } from "./theme-toggle.tsx";
 // The icons the shell and the empty states of the app place; the app takes them from here so the icon library has one home.
-export { CompassIcon, HomeIcon, InboxIcon, LifeBuoyIcon, LockIcon, LogOutIcon, SettingsIcon, TriangleAlertIcon } from "lucide-react";
+export { CompassIcon, HomeIcon, InboxIcon, LifeBuoyIcon, LockIcon, LogOutIcon, SettingsIcon, ShieldCheckIcon, TriangleAlertIcon } from "lucide-react";

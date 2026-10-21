@@ -155,10 +155,24 @@ describe("PATCH /api/v1/me", () => {
       emailVerified: true,
       hasPassword: true,
       mfaEnabled: false,
+      isInstanceAdmin: false,
       pendingEmail: null,
     });
     expect(text).not.toMatch(/argon2|password_hash|passwordHash|token_hash/i);
     expect((await me(world, browser)).account).toMatchObject({ displayName: "Ada Lovelace", locale: "de" });
+  });
+
+  it("answers whether the session's account is an instance admin, as GET /me does", async () => {
+    const world = serve();
+    const admin = await seedAccount(database(), { instanceAdmin: true });
+    const member = await seedAccount(database());
+
+    const asAdmin = await signIn(world, admin);
+    expect(await (await patch(world, { as: asAdmin, body: { locale: "de" } })).json()).toMatchObject({ isInstanceAdmin: true });
+    expect((await me(world, asAdmin)).account["isInstanceAdmin"]).toBe(true);
+
+    const asMember = await signIn(world, member);
+    expect(await (await patch(world, { as: asMember, body: { locale: "de" } })).json()).toMatchObject({ isInstanceAdmin: false });
   });
 
   it("keeps a field the body leaves out, and an empty body changes nothing", async () => {

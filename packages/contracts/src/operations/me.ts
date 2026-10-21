@@ -74,6 +74,9 @@ export const AccountSchema = z
     emailVerified: z.boolean().describe("Whether the email address was verified"),
     hasPassword: z.boolean().describe("Whether the account can sign in with a password; false for an account that signs in through an identity provider only"),
     mfaEnabled: z.boolean().describe("Whether a second factor is on; false when it is off or an enrolment is only pending"),
+    isInstanceAdmin: z
+      .boolean()
+      .describe("Whether the account holds the instance-admin flag, as of this request; always false for an API token, which the instance operations refuse"),
     pendingEmail: z.string().nullable().describe("The address an email change was requested for and not yet confirmed, as stored; null when no change is pending"),
   })
   .meta({ id: "Account" });

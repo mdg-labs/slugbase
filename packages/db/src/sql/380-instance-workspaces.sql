@@ -1,10 +1,11 @@
 -- The workspace operations of the CE instance admin (doc 05 sections 2.2, 2.9 and 3.3, doc 02 section 11.1, doc 10
 -- T1 and T18): list every workspace without any content, create one for a chosen account or for the first owner an
--- invitation will bring, and delete one. All three are entered in src/system/registry.ts. slugbase_owner creates each
+-- invitation will bring, issue that invitation again while the workspace is still without an owner, and delete one.
+-- All four are entered in src/system/registry.ts. slugbase_owner creates each
 -- function and hands it to slugbase_system, which needs CREATE on the schema for the length of those statements.
 -- The tables are unchanged: workspace_invitations already allows the owner role for a row with instance_issued, which
--- slugbase_app cannot insert (300-workspace-invitations.sql), so sys_instance_create_workspace is the only writer of
--- an owner invitation.
+-- slugbase_app cannot insert (300-workspace-invitations.sql), so sys_instance_create_workspace and
+-- sys_instance_reissue_owner_invitation are the only writers of an owner invitation.
 --
 -- Like every sys_instance_* function each repeats the check of the instanceAdmin policy inside its own body: the
 -- account of the transaction (app_account_id(), never an argument) must hold the instance-admin flag, have a second
@@ -65,7 +66,8 @@ $$;
 --   * p_owner_email names the address of the first owner: the workspace has no member and one pending owner
 --     invitation (instance_issued, role owner) that holds the SHA-256 of the token the caller keeps, and that expires
 --     p_ttl_seconds from now by the database's clock. The accept operations give the owner role to exactly that
---     invitation.
+--     invitation. Its mail ticket is its own identifier, which is the ticket of the invitation.send job the caller
+--     queues in the same transaction when the link is mailed.
 -- Answers 'created', with the invitation's expiry on the second path, or 'unknown_account' when the account does not
 -- exist or is disabled, writing nothing. A call that names both ways or neither, or an invitation without its
 -- identifier, hash and lifetime, raises invalid_parameter_value. Writes 'instance.workspace_created' for the
@@ -119,8 +121,8 @@ BEGIN
   IF p_owner_account_id IS NOT NULL THEN
     INSERT INTO public.workspace_members (workspace_id, account_id, role) VALUES (p_workspace_id, p_owner_account_id, 'owner');
   ELSE
-    INSERT INTO public.workspace_invitations (id, workspace_id, email, role, instance_issued, token_hash, invited_by, expires_at)
-    VALUES (p_invitation_id, p_workspace_id, p_owner_email, 'owner', true, p_token_hash, public.app_account_id(), clock_timestamp() + p_ttl_seconds * interval '1 second')
+    INSERT INTO public.workspace_invitations (id, workspace_id, email, role, instance_issued, token_hash, mail_ticket, invited_by, expires_at)
+    VALUES (p_invitation_id, p_workspace_id, p_owner_email, 'owner', true, p_token_hash, p_invitation_id, public.app_account_id(), clock_timestamp() + p_ttl_seconds * interval '1 second')
     RETURNING expires_at INTO v_expires;
   END IF;
 
@@ -131,6 +133,88 @@ BEGIN
   );
 
   RETURN QUERY SELECT 'created'::text, v_expires;
+END
+$$;
+
+-- sys_instance_reissue_owner_invitation(...): a new owner invitation for a workspace that has no owner yet, which ends
+-- every pending owner invitation of it, in one call, so a workspace waits on exactly one link. The workspace row is
+-- locked first, FOR NO KEY UPDATE like an acceptance, so an owner invitation that is being accepted completes before
+-- this decides (and the workspace then has its owner) or finds its invitation revoked and answers 'gone'; the pending
+-- owner invitations are then revoked and the new one inserted (instance_issued, role owner, holding the SHA-256 of the
+-- token the caller keeps, expiring p_ttl_seconds from now by the database's clock). The address is p_owner_email, or,
+-- when that is NULL, the one the latest owner invitation of the workspace was for, whatever became of it. Its mail
+-- ticket is its own identifier, the ticket of the invitation.send job the caller queues in the same transaction when
+-- the link is mailed.
+-- Answers 'issued' with the address and the expiry; 'unknown_workspace' for a workspace that does not exist or is being
+-- deleted; 'has_owner' for a workspace with an owner; 'email_required' when no address was given and the workspace
+-- never had an owner invitation (or it was purged). A refusal writes and revokes nothing. A call without an event id,
+-- workspace, invitation id, a 32-byte token hash or a lifetime of at least a second raises invalid_parameter_value.
+-- Writes 'instance.workspace_owner_invited' for the workspace, naming no address.
+CREATE OR REPLACE FUNCTION public.sys_instance_reissue_owner_invitation(
+  p_event_id uuid,
+  p_ip_prefix cidr,
+  p_workspace_id uuid,
+  p_owner_email citext,
+  p_invitation_id uuid,
+  p_token_hash bytea,
+  p_ttl_seconds integer
+) RETURNS TABLE (outcome text, invitation_email text, invitation_expires_at timestamptz)
+  LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+  SET search_path = pg_catalog, public, pg_temp
+  AS $$
+DECLARE
+  v_label text;
+  v_email citext;
+  v_expires timestamptz;
+BEGIN
+  IF p_event_id IS NULL OR p_workspace_id IS NULL OR p_invitation_id IS NULL OR p_token_hash IS NULL
+     OR octet_length(p_token_hash) <> 32 OR p_ttl_seconds IS NULL OR p_ttl_seconds < 1 THEN
+    RAISE EXCEPTION 'sys_instance_reissue_owner_invitation needs an event id, a workspace, an invitation id, a 32-byte token hash and a lifetime' USING ERRCODE = 'invalid_parameter_value';
+  END IF;
+
+  SELECT a.display_name INTO v_label
+  FROM public.accounts a
+  WHERE a.id = public.app_account_id() AND a.is_instance_admin AND a.mfa_enabled_at IS NOT NULL AND a.disabled_at IS NULL;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'the instance operations are for instance admins with a second factor' USING ERRCODE = 'insufficient_privilege';
+  END IF;
+
+  PERFORM 1 FROM public.workspaces w WHERE w.id = p_workspace_id AND w.deleting_at IS NULL FOR NO KEY UPDATE;
+  IF NOT FOUND THEN
+    RETURN QUERY SELECT 'unknown_workspace'::text, NULL::text, NULL::timestamptz;
+    RETURN;
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM public.workspace_members m WHERE m.workspace_id = p_workspace_id AND m.role = 'owner') THEN
+    RETURN QUERY SELECT 'has_owner'::text, NULL::text, NULL::timestamptz;
+    RETURN;
+  END IF;
+
+  v_email := p_owner_email;
+  IF v_email IS NULL THEN
+    SELECT i.email INTO v_email
+    FROM public.workspace_invitations i
+    WHERE i.workspace_id = p_workspace_id AND i.role = 'owner' AND i.instance_issued
+    ORDER BY i.created_at DESC, i.id DESC
+    LIMIT 1;
+    IF v_email IS NULL THEN
+      RETURN QUERY SELECT 'email_required'::text, NULL::text, NULL::timestamptz;
+      RETURN;
+    END IF;
+  END IF;
+
+  UPDATE public.workspace_invitations
+  SET status = 'revoked', closed_at = clock_timestamp()
+  WHERE workspace_id = p_workspace_id AND role = 'owner' AND status = 'pending';
+
+  INSERT INTO public.workspace_invitations (id, workspace_id, email, role, instance_issued, token_hash, mail_ticket, invited_by, expires_at)
+  VALUES (p_invitation_id, p_workspace_id, v_email, 'owner', true, p_token_hash, p_invitation_id, public.app_account_id(), clock_timestamp() + p_ttl_seconds * interval '1 second')
+  RETURNING expires_at INTO v_expires;
+
+  INSERT INTO public.audit_events (id, workspace_id, actor_type, actor_account_id, actor_label, action, entity_type, entity_id, metadata, ip_prefix)
+  VALUES (p_event_id, NULL, 'account', public.app_account_id(), v_label, 'instance.workspace_owner_invited', 'workspace', p_workspace_id, '{}'::jsonb, p_ip_prefix);
+
+  RETURN QUERY SELECT 'issued'::text, v_email::text, v_expires;
 END
 $$;
 
@@ -181,12 +265,15 @@ $$;
 
 ALTER FUNCTION public.sys_instance_list_workspaces(uuid, cidr) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_instance_create_workspace(uuid, cidr, uuid, text, uuid, citext, uuid, bytea, integer) OWNER TO slugbase_system;
+ALTER FUNCTION public.sys_instance_reissue_owner_invitation(uuid, cidr, uuid, citext, uuid, bytea, integer) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_instance_delete_workspace(uuid, cidr, uuid) OWNER TO slugbase_system;
 REVOKE CREATE ON SCHEMA public FROM slugbase_system;
 
 REVOKE ALL ON FUNCTION public.sys_instance_list_workspaces(uuid, cidr) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sys_instance_create_workspace(uuid, cidr, uuid, text, uuid, citext, uuid, bytea, integer) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.sys_instance_reissue_owner_invitation(uuid, cidr, uuid, citext, uuid, bytea, integer) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sys_instance_delete_workspace(uuid, cidr, uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.sys_instance_list_workspaces(uuid, cidr) TO slugbase_app;
 GRANT EXECUTE ON FUNCTION public.sys_instance_create_workspace(uuid, cidr, uuid, text, uuid, citext, uuid, bytea, integer) TO slugbase_app;
+GRANT EXECUTE ON FUNCTION public.sys_instance_reissue_owner_invitation(uuid, cidr, uuid, citext, uuid, bytea, integer) TO slugbase_app;
 GRANT EXECUTE ON FUNCTION public.sys_instance_delete_workspace(uuid, cidr, uuid) TO slugbase_app;

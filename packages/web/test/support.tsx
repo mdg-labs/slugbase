@@ -65,6 +65,7 @@ export const ACCOUNT_BODY = {
   emailVerified: true,
   hasPassword: true,
   mfaEnabled: false,
+  isInstanceAdmin: false,
   pendingEmail: null,
 } as const;
 

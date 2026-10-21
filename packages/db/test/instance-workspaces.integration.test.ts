@@ -6,6 +6,7 @@ import {
   createAuthStore,
   instanceRepository,
   invitationAcceptanceRepository,
+  invitationRepository as invitationRepositoryOf,
   workspaceRepository,
   type AuthStore,
   type QueuedJob,
@@ -34,6 +35,7 @@ const UNIQUE_VIOLATION = "23505";
 const DELETE_QUEUE = "workspace.delete";
 const EVENT_QUEUE = "event.workspace.created";
 const JOINED_QUEUE = "event.member.joined";
+const MAIL_QUEUE = "invitation.send";
 
 let db: TestDatabase;
 let store: AuthStore;
@@ -65,7 +67,8 @@ beforeAll(async () => {
     INSERT INTO pgboss.queue VALUES
       ('${DELETE_QUEUE}', 3600, 900, 3600, 3, 5, true, NULL, 'standard', NULL, NULL),
       ('${EVENT_QUEUE}', 3600, 900, 3600, 3, 5, true, NULL, 'standard', NULL, NULL),
-      ('${JOINED_QUEUE}', 3600, 900, 3600, 3, 5, true, NULL, 'standard', NULL, NULL);`);
+      ('${JOINED_QUEUE}', 3600, 900, 3600, 3, 5, true, NULL, 'standard', NULL, NULL),
+      ('${MAIL_QUEUE}', 3600, 900, 3600, 3, 5, true, NULL, 'standard', NULL, NULL);`);
 }, HOOK_TIMEOUT_MS);
 
 beforeEach(async () => {
@@ -210,7 +213,13 @@ async function workspaceOf(owner: string, ...others: readonly [string, Role][]):
 describe("the system operations are entered in the registry", () => {
   it("lists the functions of the workspace operations", () => {
     expect(systemOperations).toEqual(
-      expect.arrayContaining(["sys_instance_list_workspaces", "sys_instance_create_workspace", "sys_instance_delete_workspace", "sys_instance_add_membership"]),
+      expect.arrayContaining([
+        "sys_instance_list_workspaces",
+        "sys_instance_create_workspace",
+        "sys_instance_reissue_owner_invitation",
+        "sys_instance_delete_workspace",
+        "sys_instance_add_membership",
+      ]),
     );
   });
 });
@@ -427,7 +436,16 @@ describe("sys_instance_create_workspace for an owner invitation", () => {
         FROM workspace_invitations i WHERE i.workspace_id = ${request.workspaceId}`,
     );
     expect(invitations).toHaveLength(1);
-    expect(invitations[0]).toMatchObject({ email: "First.Owner@Example.test", role: "owner", instance_issued: true, status: "pending", invited_by: caller, mail_ticket: null, members: 0, settings: 1 });
+    expect(invitations[0]).toMatchObject({
+      email: "First.Owner@Example.test",
+      role: "owner",
+      instance_issued: true,
+      status: "pending",
+      invited_by: caller,
+      mail_ticket: request.owner.kind === "invitation" ? request.owner.invitationId : null,
+      members: 0,
+      settings: 1,
+    });
     expect(invitations[0]?.token_hash.equals(request.hash)).toBe(true);
     expect((await instanceEvents()).at(-1)).toMatchObject({ id: eventId, action: "instance.workspace_created", entity_id: request.workspaceId, metadata: { owner: "invitation" } });
     expect(JSON.stringify(await instanceEvents())).not.toContain("First.Owner");
@@ -478,6 +496,293 @@ describe("sys_instance_create_workspace for an owner invitation", () => {
 
     expect(await workspaceCount()).toBe(workspaces);
     expect(await instanceEvents()).toEqual(events);
+  });
+});
+
+describe("sys_instance_reissue_owner_invitation", () => {
+  interface InvitationRow {
+    id: string;
+    email: string;
+    role: string;
+    instance_issued: boolean;
+    status: string;
+    invited_by: string | null;
+    mail_ticket: string | null;
+    closed: boolean;
+    expired: boolean;
+    token_hash: Buffer;
+  }
+
+  const invitationsOf = async (workspaceId: string): Promise<InvitationRow[]> => [
+    ...(await asSystem(
+      db,
+      (tx) => tx<InvitationRow[]>`
+        SELECT id, email::text AS email, role::text AS role, instance_issued, status, invited_by::text AS invited_by, mail_ticket::text AS mail_ticket,
+          closed_at IS NOT NULL AS closed, expires_at <= now() AS expired, token_hash
+        FROM workspace_invitations WHERE workspace_id = ${workspaceId} ORDER BY created_at, id`,
+    )),
+  ];
+
+  /** A workspace that waits for the owner of the address, created the way the instance admin creates one. */
+  async function waiting(caller: string, email: string) {
+    const request = invited(email);
+    await create(caller, request);
+    return { workspaceId: request.workspaceId, first: request };
+  }
+
+  const reissue = (
+    caller: string,
+    workspaceId: string,
+    options: { email?: string; hash?: Buffer; invitationId?: string; eventId?: string; ipPrefix?: string | null; jobs?: readonly QueuedJob[] } = {},
+  ) => {
+    const { hash } = freshToken();
+    const invitationId = options.invitationId ?? freshId();
+    return withTenant(caller, (tx) =>
+      instanceRepository(tx).reissueOwnerInvitation(
+        {
+          workspaceId,
+          ...(options.email === undefined ? {} : { email: options.email }),
+          invitationId,
+          tokenHash: options.hash ?? hash,
+          ttlSeconds: 7 * 24 * 60 * 60,
+        },
+        options.eventId ?? freshId(),
+        options.ipPrefix ?? null,
+        options.jobs ?? [],
+      ),
+    ).then((result) => ({ result, invitationId, hash: options.hash ?? hash }));
+  };
+
+  const mailJob = (invitationId: string, workspaceId: string, accountId: string): QueuedJob => ({
+    id: freshId(),
+    queue: MAIL_QUEUE,
+    data: { invitationId, workspaceId, accountId, locale: "en", mailTicket: invitationId },
+  });
+
+  it("replaces an expired owner invitation: the new link makes the invitee the owner and the old link no longer works", async () => {
+    const caller = await admin();
+    const invitee = await account();
+    const { workspaceId, first } = await waiting(caller, invitee.email);
+    await asSystem(db, (tx) => tx`UPDATE workspace_invitations SET expires_at = now() - interval '1 hour' WHERE workspace_id = ${workspaceId}`);
+    // The expired link is already refused; it stays refused after the replacement, which is the part the scenario is about.
+    expect((await withTenant(invitee.id, (tx) => invitationAcceptanceRepository(tx).accept(first.hash, null))).kind).toBe("gone");
+
+    const { result, hash } = await reissue(caller, workspaceId);
+
+    expect(result).toMatchObject({ kind: "issued", email: invitee.email });
+    expect(await ownersOf(workspaceId)).toEqual([]);
+    expect((await withTenant(invitee.id, (tx) => invitationAcceptanceRepository(tx).accept(first.hash, null))).kind).toBe("gone");
+    expect(await ownersOf(workspaceId)).toEqual([]);
+    expect(await withTenant(invitee.id, (tx) => invitationAcceptanceRepository(tx).accept(hash, null))).toMatchObject({ kind: "accepted", workspaceId, role: "owner" });
+    expect(await ownersOf(workspaceId)).toEqual([invitee.id]);
+  });
+
+  it("ends the link of a pending owner invitation at once, revoking it, and leaves exactly one pending owner invitation", async () => {
+    const caller = await admin();
+    const invitee = await account();
+    const { workspaceId, first } = await waiting(caller, invitee.email);
+    const { invitationId, hash } = await reissue(caller, workspaceId);
+
+    expect((await withTenant(invitee.id, (tx) => invitationAcceptanceRepository(tx).accept(first.hash, null))).kind).toBe("gone");
+
+    const rows = await invitationsOf(workspaceId);
+    expect(rows.map((row) => [row.status, row.closed])).toEqual([
+      ["revoked", true],
+      ["pending", false],
+    ]);
+    expect(rows[1]).toMatchObject({ id: invitationId, email: invitee.email, role: "owner", instance_issued: true, invited_by: caller, mail_ticket: invitationId, expired: false });
+    expect(rows[1]?.token_hash.equals(hash)).toBe(true);
+    expect(rows[0]?.token_hash.equals(first.hash)).toBe(true);
+  });
+
+  it("invites the given address instead of the previous one, in the case it was written, and the previous invitee's link ends", async () => {
+    const caller = await admin();
+    const previous = await account();
+    const next = await account();
+    const { workspaceId, first } = await waiting(caller, previous.email);
+
+    const { result, hash } = await reissue(caller, workspaceId, { email: "New.Owner@Example.test" });
+
+    expect(result).toMatchObject({ kind: "issued", email: "New.Owner@Example.test" });
+    expect((await withTenant(previous.id, (tx) => invitationAcceptanceRepository(tx).accept(first.hash, null))).kind).toBe("gone");
+    expect((await withTenant(next.id, (tx) => invitationAcceptanceRepository(tx).accept(hash, null))).kind).toBe("email_mismatch");
+    expect(await ownersOf(workspaceId)).toEqual([]);
+  });
+
+  it("takes the previous address from the latest owner invitation whatever became of it, including a revoked one, and after two reissues", async () => {
+    const caller = await admin();
+    const { workspaceId } = await waiting(caller, "Kept.Address@Example.test");
+    await asSystem(db, (tx) => tx`UPDATE workspace_invitations SET status = 'revoked', closed_at = now() WHERE workspace_id = ${workspaceId}`);
+
+    expect(await reissue(caller, workspaceId).then(({ result }) => result)).toMatchObject({ kind: "issued", email: "Kept.Address@Example.test" });
+    expect(await reissue(caller, workspaceId, { email: "second@example.test" }).then(({ result }) => result)).toMatchObject({ kind: "issued", email: "second@example.test" });
+    expect(await reissue(caller, workspaceId).then(({ result }) => result)).toMatchObject({ kind: "issued", email: "second@example.test" });
+
+    expect((await invitationsOf(workspaceId)).filter((row) => row.status === "pending")).toHaveLength(1);
+  });
+
+  it("writes one instance audit event for the workspace in the same call, naming no address, and queues the mail job with it", async () => {
+    const caller = await admin();
+    const { workspaceId } = await waiting(caller, "mailed-owner@example.test");
+    const eventId = freshId();
+    const invitationId = freshId();
+    const before = (await instanceEvents()).length;
+
+    await reissue(caller, workspaceId, { invitationId, eventId, ipPrefix: "203.0.0.0/16", jobs: [mailJob(invitationId, workspaceId, caller)] });
+
+    const events = (await instanceEvents()).slice(before);
+    expect(events).toEqual([
+      { id: eventId, actor_account_id: caller, action: "instance.workspace_owner_invited", entity_type: "workspace", entity_id: workspaceId, metadata: {}, ip_prefix: "203.0.0.0/16" },
+    ]);
+    expect(JSON.stringify(events)).not.toContain("mailed-owner");
+    expect((await jobsOf(MAIL_QUEUE)).map((job) => job.data)).toEqual([{ invitationId, workspaceId, accountId: caller, locale: "en", mailTicket: invitationId }]);
+  });
+
+  it("lets the mail job issue a token for the invitation as the admin acting in a workspace they are no member of, and for no other invitation of it", async () => {
+    const caller = await admin();
+    const invitee = await account();
+    const { workspaceId } = await waiting(caller, invitee.email);
+    const { invitationId } = await reissue(caller, workspaceId);
+    const { hash } = freshToken();
+
+    const issued = await withTenant(caller, (tx) => invitationRepositoryOf(tx).issueToken(invitationId, invitationId, hash), workspaceId);
+
+    expect(issued).toMatchObject({ email: invitee.email, role: "owner", instanceIssued: true, workspaceName: "Waiting for an owner" });
+    expect((await withTenant(invitee.id, (tx) => invitationAcceptanceRepository(tx).accept(hash, null))).kind).toBe("accepted");
+    // An invitation that a later reissue revoked is not the job's any more.
+    const { workspaceId: other } = await waiting(caller, invitee.email);
+    const first = await reissue(caller, other);
+    await reissue(caller, other);
+    expect(await withTenant(caller, (tx) => invitationRepositoryOf(tx).issueToken(first.invitationId, first.invitationId, freshToken().hash), other)).toBeUndefined();
+  });
+
+  it("answers has_owner for a workspace that has an owner, and revokes, writes and queues nothing", async () => {
+    const caller = await admin();
+    const owner = await account();
+    const workspaceId = await workspaceOf(owner.id);
+    await asSystem(
+      db,
+      (tx) => tx`
+        INSERT INTO workspace_invitations (id, workspace_id, email, role, instance_issued, token_hash, expires_at)
+        VALUES (${freshId()}, ${workspaceId}, 'leftover@example.test', 'owner', true, ${freshToken().hash}, now() + interval '1 day')`,
+    );
+    const events = await instanceEvents();
+    const rows = await invitationsOf(workspaceId);
+    const invitationId = freshId();
+
+    const { result } = await reissue(caller, workspaceId, { email: "other@example.test", invitationId, jobs: [mailJob(invitationId, workspaceId, caller)] });
+
+    expect(result).toEqual({ kind: "has_owner" });
+    expect(await invitationsOf(workspaceId)).toEqual(rows);
+    expect(await instanceEvents()).toEqual(events);
+    expect(await jobsOf(MAIL_QUEUE)).toEqual([]);
+  });
+
+  it("answers has_owner once the first invitation was accepted", async () => {
+    const caller = await admin();
+    const invitee = await account();
+    const { workspaceId, first } = await waiting(caller, invitee.email);
+    await withTenant(invitee.id, (tx) => invitationAcceptanceRepository(tx).accept(first.hash, null));
+
+    expect((await reissue(caller, workspaceId)).result).toEqual({ kind: "has_owner" });
+
+    expect(await ownersOf(workspaceId)).toEqual([invitee.id]);
+  });
+
+  it("answers unknown_workspace for a workspace that does not exist or is being deleted, writing nothing", async () => {
+    const caller = await admin();
+    const { workspaceId } = await waiting(caller, "going@example.test");
+    await withTenant(caller, (tx) => instanceRepository(tx).markWorkspaceDeleting(workspaceId, freshId(), null, []));
+    const events = await instanceEvents();
+    const rows = await invitationsOf(workspaceId);
+
+    expect((await reissue(caller, workspaceId, { email: "x@example.test" })).result).toEqual({ kind: "unknown_workspace" });
+    expect((await reissue(caller, freshId(), { email: "x@example.test" })).result).toEqual({ kind: "unknown_workspace" });
+
+    expect(await invitationsOf(workspaceId)).toEqual(rows);
+    expect(await instanceEvents()).toEqual(events);
+  });
+
+  it("answers email_required for a workspace with no owner invitation and no address given, and revokes and writes nothing", async () => {
+    const caller = await admin();
+    const workspaceId = await seedWorkspace(db, { name: "Never invited" });
+    const events = await instanceEvents();
+
+    expect((await reissue(caller, workspaceId)).result).toEqual({ kind: "email_required" });
+    expect(await instanceEvents()).toEqual(events);
+    expect((await reissue(caller, workspaceId, { email: "first@example.test" })).result).toMatchObject({ kind: "issued", email: "first@example.test" });
+  });
+
+  it("is atomic: a job that cannot be queued keeps the pending invitation, writes no new one and no audit event", async () => {
+    const caller = await admin();
+    const invitee = await account();
+    const { workspaceId, first } = await waiting(caller, invitee.email);
+    const events = await instanceEvents();
+    const rows = await invitationsOf(workspaceId);
+
+    await expect(reissue(caller, workspaceId, { jobs: [{ id: freshId(), queue: "no.such.queue", data: {} }] })).rejects.toThrow(/does not exist/);
+
+    expect(await invitationsOf(workspaceId)).toEqual(rows);
+    expect(await instanceEvents()).toEqual(events);
+    expect(await withTenant(invitee.id, (tx) => invitationAcceptanceRepository(tx).accept(first.hash, null))).toMatchObject({ kind: "accepted" });
+  });
+
+  it("is atomic: a token hash that is taken rolls back the revocation and the audit event", async () => {
+    const caller = await admin();
+    const { workspaceId, first } = await waiting(caller, "taken-hash@example.test");
+    const events = await instanceEvents();
+    const rows = await invitationsOf(workspaceId);
+
+    expect(await refusedWith(reissue(caller, workspaceId, { hash: first.hash }))).toBe(UNIQUE_VIOLATION);
+
+    expect(await invitationsOf(workspaceId)).toEqual(rows);
+    expect(await instanceEvents()).toEqual(events);
+  });
+
+  it.each([
+    ["a member who holds no flag", { mfa: true }],
+    ["an admin who has no second factor enrolled", { admin: true }],
+    ["a disabled admin", { admin: true, mfa: true, disabled: true }],
+    ["an account with neither", {}],
+  ] satisfies [string, Options][])("is refused to %s, which revokes, writes and queues nothing", async (_name, options) => {
+    const adminId = await admin();
+    const caller = await account(options);
+    const { workspaceId } = await waiting(adminId, "refused@example.test");
+    const events = await instanceEvents();
+    const rows = await invitationsOf(workspaceId);
+    const invitationId = freshId();
+
+    expect(await refusedWith(reissue(caller.id, workspaceId, { invitationId, jobs: [mailJob(invitationId, workspaceId, caller.id)] }))).toBe(INSUFFICIENT_PRIVILEGE);
+
+    expect(await invitationsOf(workspaceId)).toEqual(rows);
+    expect(await instanceEvents()).toEqual(events);
+    expect(await jobsOf(MAIL_QUEUE)).toEqual([]);
+  });
+
+  it("is not reachable by the owner of another workspace, or by a direct call without an account, and refuses a call without its identifiers", async () => {
+    const caller = await admin();
+    const owner = await account();
+    const ownWorkspace = await workspaceOf(owner.id);
+    const { workspaceId } = await waiting(caller, "target@example.test");
+    const rows = await invitationsOf(workspaceId);
+    const call = (accountId: string | undefined, workspace: string | null, invitation: string | null, hash: Buffer | null, ttl: number | null) =>
+      appAs(
+        accountId ?? "",
+        undefined,
+        (tx) => tx`SELECT * FROM sys_instance_reissue_owner_invitation(${freshId()}::uuid, NULL::cidr, ${workspace}::uuid, NULL::citext, ${invitation}::uuid, ${hash}::bytea, ${ttl}::integer)`,
+      );
+
+    expect(await refusedWith(reissue(owner.id, workspaceId))).toBe(INSUFFICIENT_PRIVILEGE);
+    expect(await refusedWith(db.app`SELECT * FROM sys_instance_reissue_owner_invitation(${freshId()}::uuid, NULL::cidr, ${workspaceId}::uuid, NULL::citext, ${freshId()}::uuid, ${freshToken().hash}::bytea, 3600)`)).toBe(
+      INSUFFICIENT_PRIVILEGE,
+    );
+    expect(await refusedWith(call(caller, null, freshId(), freshToken().hash, 3600))).toBe(INVALID_PARAMETER);
+    expect(await refusedWith(call(caller, workspaceId, null, freshToken().hash, 3600))).toBe(INVALID_PARAMETER);
+    expect(await refusedWith(call(caller, workspaceId, freshId(), null, 3600))).toBe(INVALID_PARAMETER);
+    expect(await refusedWith(call(caller, workspaceId, freshId(), Buffer.alloc(8), 3600))).toBe(INVALID_PARAMETER);
+    expect(await refusedWith(call(caller, workspaceId, freshId(), freshToken().hash, 0))).toBe(INVALID_PARAMETER);
+    expect(ownWorkspace).not.toBe(workspaceId);
+    expect(await invitationsOf(workspaceId)).toEqual(rows);
   });
 });
 
