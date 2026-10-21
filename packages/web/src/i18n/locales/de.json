@@ -25,7 +25,12 @@
       "title": "Deine E-Mail-Adresse ist nicht bestätigt",
       "description": "Wir haben einen Link an {email} geschickt. Öffne ihn, um die Adresse zu bestätigen, oder fordere einen neuen an."
     },
-    "admin": "Admin"
+    "admin": "Admin",
+    "mailNotConfigured": {
+      "title": "E-Mail ist nicht eingerichtet",
+      "description": "Dieser Server sendet keine E-Mails, deshalb werden Einladungen, die Bestätigung von Adressen und E-Mails zum Zurücksetzen des Passworts nicht zugestellt. Einladungs- und Zurücksetzen-Links werden dir stattdessen angezeigt, damit du sie selbst weitergibst.",
+      "action": "Einstellungen & Status öffnen"
+    }
   },
   "home": {
     "empty": {
@@ -385,6 +390,72 @@
           "close": "Schließen",
           "open": "Workspaces öffnen"
         }
+      }
+    },
+    "settings": {
+      "title": "Einstellungen & Status",
+      "saved": "Gespeichert.",
+      "mfaRequired": {
+        "title": "Die Einstellungen sind noch nicht verfügbar",
+        "description": "Aktiviere die Zwei-Faktor-Authentifizierung, um die Einstellungen dieser Instanz zu ändern."
+      },
+      "loadFailed": {
+        "title": "Die Einstellungen konnten nicht geladen werden",
+        "description": "Versuche es noch einmal. Besteht das Problem weiter, prüfe die Logs des Servers.",
+        "retry": "Erneut versuchen"
+      },
+      "error": {
+        "forbidden": "Du kannst diese Instanz nicht mehr verwalten. Die Seite wurde neu geladen.",
+        "invalid": "Die Einstellungen wurden abgelehnt. Prüfe die Werte und versuche es noch einmal."
+      },
+      "creation": {
+        "title": "Workspaces",
+        "description": "Wer auf dieser Instanz Workspaces erstellen darf.",
+        "switch": {
+          "label": "Mitgliedern erlauben, Workspaces zu erstellen",
+          "description": "Ist das ausgeschaltet, erstellen nur Instanzadministratoren Workspaces.",
+          "notSet": "Noch nicht festgelegt, deshalb gilt der Standard dieser Installation, der hier angezeigt wird. Eine Änderung überschreibt diesen Standard."
+        },
+        "error": {
+          "saveFailed": "Die Einstellung konnte nicht gespeichert werden."
+        }
+      },
+      "signIn": {
+        "title": "Anmeldeseite",
+        "description": "Was Leute sehen, bevor sie sich anmelden.",
+        "save": "Speichern",
+        "displayName": {
+          "label": "Name der Instanz",
+          "description": "Wird auf der Anmeldeseite anstelle des Produktnamens angezeigt. Lass das Feld leer, um den Produktnamen zu zeigen.",
+          "invalid": "Verwende einen Namen mit 1 bis 100 Zeichen."
+        },
+        "notice": {
+          "label": "Hinweis auf der Anmeldeseite",
+          "description": "Reiner Text auf der Anmeldeseite, bis zu 500 Zeichen. Lass das Feld leer, wenn es keinen Hinweis geben soll.",
+          "invalid": "Verwende einen Hinweis mit 1 bis 500 Zeichen."
+        }
+      },
+      "test": {
+        "title": "Test-E-Mail",
+        "description": "Prüfe, ob dieser Server E-Mails an {email} senden kann.",
+        "note": "Die Nachricht wird für den Hintergrundprozess vorgemerkt und kann daher einen Moment nach dieser Meldung ankommen.",
+        "send": "Test-E-Mail senden",
+        "done": "Eine Test-E-Mail an {email} wurde vorgemerkt.",
+        "error": {
+          "title": "Es wurde keine Test-E-Mail vorgemerkt",
+          "mailUnavailable": "Auf diesem Server ist kein E-Mail-Versand eingerichtet. Richte die Mail-Verbindung in der Umgebung des Servers ein, starte ihn neu und versuche es noch einmal."
+        }
+      },
+      "configuration": {
+        "title": "Konfiguration",
+        "description": "Was der Betreiber für diese Instanz eingerichtet hat.",
+        "label": "Konfiguration des Betreibers",
+        "column": {
+          "setting": "Einstellung",
+          "value": "Wert"
+        },
+        "envOnly": "Das ist nur lesbar. Zugangsdaten und Verbindungen werden ausschließlich über Umgebungsvariablen auf dem Server gesetzt, nie in dieser App.",
+        "loadFailed": "Die Konfiguration konnte nicht geladen werden"
       }
     }
   },

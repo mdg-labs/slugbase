@@ -14,7 +14,7 @@ export type AdminAnswer = (call: number) => Response | Promise<Response>;
 export interface AdminServerOptions {
   isInstanceAdmin?: boolean;
   mfaEnabled?: boolean;
-  /** The answers by `"METHOD /path"`; a route without one answers 404. */
+  /** The answers by `"METHOD /path"`; a route without one answers 404, unless the shared session answers it. */
   routes?: Readonly<Record<string, AdminAnswer | readonly AdminAnswer[]>>;
   /** The answer to `GET /me`, in place of the account, by call. */
   me?: AdminAnswer;
@@ -50,7 +50,7 @@ export function stubAdminServer({ isInstanceAdmin = true, mfaEnabled = true, mai
         meCalls += 1;
         return Promise.resolve(me === undefined ? json(meOf(account)) : me(meCalls));
       }
-      return signedIn(request, async () => {
+      const answer = async (): Promise<Response> => {
         const text = await request.clone().text();
         calls.push({ method: request.method, path: pathname, body: text === "" ? undefined : (JSON.parse(text) as unknown) });
         const key = `${request.method} ${pathname}`;
@@ -61,9 +61,11 @@ export function stubAdminServer({ isInstanceAdmin = true, mfaEnabled = true, mai
           return problem(404, "not_found", "req-404");
         }
         const answers = Array.isArray(route) ? (route as readonly AdminAnswer[]) : [route as AdminAnswer];
-        const answer = answers[Math.min(count, answers.length) - 1];
-        return answer === undefined ? problem(500, "internal", "req-500") : answer(count);
-      });
+        const next = answers[Math.min(count, answers.length) - 1];
+        return next === undefined ? problem(500, "internal", "req-500") : next(count);
+      };
+      // A route a test sets answers before the shared session does, so it can replace one of the shared answers.
+      return routes[`${request.method} ${pathname}`] === undefined ? signedIn(request, answer) : answer();
     }),
   );
   return {

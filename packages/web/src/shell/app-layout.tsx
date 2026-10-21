@@ -18,7 +18,7 @@ import { useSignOut } from "../auth/sign-out.ts";
 import { useConfig } from "../config/config-context.tsx";
 import { Slot, useExtensions } from "../extensions/index.ts";
 import { docsUrl } from "./docs-url.ts";
-import { EmailUnverifiedBanner } from "./banners.tsx";
+import { EmailUnverifiedBanner, MailNotConfiguredBanner } from "./banners.tsx";
 import { OfflineBanner } from "./offline-banner.tsx";
 import { useWorkspaceSwitcher } from "./workspace-switcher.tsx";
 
@@ -138,6 +138,7 @@ function AppLayoutShell(): ReactElement {
       {dialog}
       <OfflineBanner />
       <EmailUnverifiedBanner />
+      <MailNotConfiguredBanner />
       <Slot name="banner.entitlement" />
       <Outlet />
     </AppShell>

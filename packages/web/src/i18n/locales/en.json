@@ -25,7 +25,12 @@
       "title": "Your email address is not verified",
       "description": "We sent a link to {email}. Open it to verify the address, or ask for a new one."
     },
-    "admin": "Admin"
+    "admin": "Admin",
+    "mailNotConfigured": {
+      "title": "Email is not set up",
+      "description": "This server sends no email, so invitation emails, address verification and password-reset emails are not delivered. Invitation and reset links are shown to you instead, to pass on by hand.",
+      "action": "Open settings & status"
+    }
   },
   "home": {
     "empty": {
@@ -385,6 +390,72 @@
           "close": "Close",
           "open": "Open workspaces"
         }
+      }
+    },
+    "settings": {
+      "title": "Settings & status",
+      "saved": "Saved.",
+      "mfaRequired": {
+        "title": "The settings are not available yet",
+        "description": "Turn on two-factor authentication to change the settings of this instance."
+      },
+      "loadFailed": {
+        "title": "The settings could not be loaded",
+        "description": "Try again. If this continues, check the server's logs.",
+        "retry": "Try again"
+      },
+      "error": {
+        "forbidden": "You can no longer manage this instance. The page has been reloaded.",
+        "invalid": "The settings were refused. Check the values and try again."
+      },
+      "creation": {
+        "title": "Workspaces",
+        "description": "Who may create workspaces on this instance.",
+        "switch": {
+          "label": "Allow members to create workspaces",
+          "description": "When this is off, only an instance admin creates workspaces.",
+          "notSet": "Not set yet, so the default of this deployment applies, shown here. Changing it overrides that default."
+        },
+        "error": {
+          "saveFailed": "The setting could not be saved."
+        }
+      },
+      "signIn": {
+        "title": "Sign-in page",
+        "description": "What people see before they sign in.",
+        "save": "Save",
+        "displayName": {
+          "label": "Instance name",
+          "description": "Shown on the sign-in page in place of the product name. Leave it empty to show the product name.",
+          "invalid": "Use a name of 1 to 100 characters."
+        },
+        "notice": {
+          "label": "Sign-in notice",
+          "description": "Plain text shown on the sign-in page, up to 500 characters. Leave it empty for no notice.",
+          "invalid": "Use a notice of 1 to 500 characters."
+        }
+      },
+      "test": {
+        "title": "Test email",
+        "description": "Check that this server can send email to {email}.",
+        "note": "The message is queued for the background worker, so it can arrive a moment after this says it was queued.",
+        "send": "Send test email",
+        "done": "A test email to {email} was queued.",
+        "error": {
+          "title": "No test email was queued",
+          "mailUnavailable": "This server has no mail configured. Set up the mail connection in the server's environment, restart it, and try again."
+        }
+      },
+      "configuration": {
+        "title": "Configuration",
+        "description": "What the operator has set up for this instance.",
+        "label": "Operator configuration",
+        "column": {
+          "setting": "Setting",
+          "value": "Value"
+        },
+        "envOnly": "This is read-only. Credentials and connections are set through environment variables on the server only, never in this app.",
+        "loadFailed": "The configuration could not be loaded"
       }
     }
   },

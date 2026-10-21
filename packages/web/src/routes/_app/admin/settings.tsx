@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { AdminSettingsPage } from "../../../shell/admin-settings-page.tsx";
 
-// The page arrives with its own item; until then the route holds the navigation entry inside the admin layout.
 export const Route = createFileRoute("/_app/admin/settings")({
-  component: () => null,
+  component: AdminSettingsPage,
 });
