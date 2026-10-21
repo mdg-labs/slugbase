@@ -61,6 +61,7 @@
     "20261020181448_add_instance_accounts": "19a333566b2d3a929e637855bf5766b375ccc0f424cee85858925e8c730428d0",
     "20261020193346_add_instance_membership": "594c5970e9f5c4e8bbce710f059297fe6bbcdde67d2bfcca05be01c466569b90",
     "20261020213737_add_instance_recovery": "2248acbc6eb69fd7e2ffaa8baeb3f12e1391f8e937eb5dcb6dd28befc89969b7",
-    "20261020223021_add_instance_account_deletion": "de9fef4e24f5c1f42028d5c4355182bd0f6e665c14dac37d5f077ef107cea254"
+    "20261020223021_add_instance_account_deletion": "de9fef4e24f5c1f42028d5c4355182bd0f6e665c14dac37d5f077ef107cea254",
+    "20261020233547_add_instance_audit_retention": "466021eb3ae23423c01dbaabf3187cf4fe55b5705c7deba47c88641a975e1ca9"
   }
 }

@@ -435,6 +435,13 @@
       "when": 1792535421466,
       "tag": "20261020223021_add_instance_account_deletion",
       "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1792539347252,
+      "tag": "20261020233547_add_instance_audit_retention",
+      "breakpoints": true
     }
   ]
 }
