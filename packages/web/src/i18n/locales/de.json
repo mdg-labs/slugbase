@@ -240,6 +240,152 @@
           "done": "Fertig"
         }
       }
+    },
+    "accounts": {
+      "title": "Konten",
+      "mfaRequired": {
+        "title": "Die Konten sind noch nicht verfügbar",
+        "description": "Aktiviere die Zwei-Faktor-Authentifizierung, um die Konten dieser Instanz zu verwalten."
+      },
+      "loadFailed": {
+        "title": "Die Konten konnten nicht geladen werden",
+        "description": "Versuche es noch einmal. Besteht das Problem weiter, prüfe die Logs des Servers.",
+        "retry": "Erneut versuchen"
+      },
+      "empty": {
+        "title": "Es gibt keine Konten",
+        "description": "Konten erscheinen hier, sobald sich Leute registrieren."
+      },
+      "search": {
+        "label": "Konten durchsuchen",
+        "placeholder": "Nach Name oder E-Mail suchen",
+        "clear": "Suche zurücksetzen",
+        "none": {
+          "title": "Kein Konto passt",
+          "description": "Kein Konto hat einen Namen oder eine E-Mail-Adresse mit „{query}“."
+        }
+      },
+      "table": {
+        "label": "Konten"
+      },
+      "column": {
+        "name": "Name",
+        "email": "E-Mail",
+        "verified": "Bestätigt",
+        "mfa": "Zwei-Faktor",
+        "admin": "Instanzadministrator",
+        "lastSignIn": "Letzte Anmeldung",
+        "workspaces": "Workspaces",
+        "status": "Status",
+        "actions": "Aktionen"
+      },
+      "you": "Du",
+      "verified": "Bestätigt",
+      "notVerified": "Nicht bestätigt",
+      "on": "An",
+      "off": "Aus",
+      "yes": "Ja",
+      "no": "Nein",
+      "never": "Nie",
+      "disabled": "Deaktiviert",
+      "active": "Aktiv",
+      "actionsFor": "Aktionen für {name}",
+      "cancel": "Abbrechen",
+      "error": {
+        "title": "Es wurde nichts geändert",
+        "reauthCancelled": "Bestätige, dass du es bist, um das zu tun. Es wurde nichts geändert.",
+        "forbidden": "Das kannst du nicht mehr tun: Dein Konto darf die Instanz womöglich nicht mehr verwalten, oder diese Installation erlaubt es nicht. Die Seite wurde neu geladen.",
+        "gone": "Dieses Konto existiert nicht mehr.",
+        "lastInstanceAdmin": "Das ist der einzige aktive Instanzadministrator. Mache zuerst ein anderes Konto zum Instanzadministrator.",
+        "accountDisabled": "Dieses Konto ist deaktiviert. Aktiviere es zuerst.",
+        "emailUnverified": "Die Adresse dieses Kontos ist nicht bestätigt. Markiere sie zuerst als bestätigt oder sende die Bestätigungs-E-Mail erneut.",
+        "noPassword": "Dieses Konto meldet sich nur über einen Anbieter an und hat kein Passwort, das sich zurücksetzen ließe.",
+        "alreadyVerified": "Die Adresse dieses Kontos ist bereits bestätigt.",
+        "mailUnavailable": "Auf diesem Server ist kein E-Mail-Versand eingerichtet, deshalb kann keine E-Mail gesendet werden.",
+        "self": "Das ist dein eigenes Konto. Nutze dafür deine Kontoeinstellungen.",
+        "invalid": "Die Änderung wurde abgelehnt. Lade die Seite neu und versuche es noch einmal.",
+        "lastOwner": "Dieses Konto ist der einzige Eigentümer von Workspaces, die weitere Mitglieder haben.",
+        "billingActive": "Dieses Konto hat ein aktives kostenpflichtiges Abonnement. Es muss zuerst gekündigt werden.",
+        "guard": "Dieser Server erlaubt das gerade nicht. Es wurde nichts geändert."
+      },
+      "action": {
+        "resend": {
+          "label": "Bestätigungs-E-Mail erneut senden",
+          "done": "Eine neue Bestätigungs-E-Mail für {email} wurde vorgemerkt.",
+          "failed": "Es wurde keine Bestätigungs-E-Mail an {email} gesendet"
+        },
+        "markVerified": {
+          "label": "Als bestätigt markieren",
+          "title": "{email} als bestätigt markieren?",
+          "description": "Wer diese Adresse registriert hat, besitzt sie womöglich nicht. Wird sie als bestätigt markiert, werden Passwort, Sitzungen, Zwei-Faktor-Authentifizierung, API-Tokens und verknüpfte Anmeldungen des Kontos entfernt. Der Besitzer kommt dann über einen Link zum Zurücksetzen des Passworts oder über einen Anmeldeanbieter hinein.",
+          "descriptionOwn": "Das ist dein eigenes Konto. Seine Adresse wird als bestätigt markiert; dein Passwort, deine Sitzungen und deine Zwei-Faktor-Authentifizierung bleiben unverändert.",
+          "done": "{email} ist als bestätigt markiert."
+        },
+        "resetLink": {
+          "label": "Link zum Zurücksetzen senden",
+          "mailed": "Ein Link zum Zurücksetzen des Passworts wurde an {email} gesendet.",
+          "failed": "Für {name} wurde kein Link zum Zurücksetzen ausgestellt"
+        },
+        "resetMfa": {
+          "label": "Zwei-Faktor-Authentifizierung zurücksetzen",
+          "title": "Die Zwei-Faktor-Authentifizierung von {name} zurücksetzen?",
+          "description": "Die Zwei-Faktor-Authentifizierung wird für {name} ausgeschaltet. {name} wird überall abgemeldet und meldet sich nur noch mit dem Passwort an. Wo der E-Mail-Versand eingerichtet ist, wird {name} per E-Mail informiert.",
+          "done": "Die Zwei-Faktor-Authentifizierung von {name} wurde zurückgesetzt."
+        },
+        "disable": {
+          "label": "Konto deaktivieren",
+          "title": "{name} deaktivieren?",
+          "description": "{name} wird überall abgemeldet und kann sich nicht mehr anmelden. Die API-Tokens funktionieren nicht mehr.",
+          "descriptionOwn": "Das ist dein eigenes Konto. Du wirst sofort abgemeldet und kannst dich erst wieder anmelden, wenn ein anderer Administrator es aktiviert.",
+          "done": "{name} ist deaktiviert."
+        },
+        "enable": {
+          "label": "Konto aktivieren",
+          "title": "{name} aktivieren?",
+          "description": "{name} kann sich wieder anmelden.",
+          "done": "{name} ist aktiviert."
+        },
+        "promote": {
+          "label": "Zum Instanzadministrator machen",
+          "title": "{name} zum Instanzadministrator machen?",
+          "description": "{name} kann alle Workspaces und Konten dieser Instanz verwalten, sobald die Zwei-Faktor-Authentifizierung eingeschaltet ist. {name} wird abgemeldet und meldet sich neu an.",
+          "done": "{name} ist jetzt Instanzadministrator."
+        },
+        "demote": {
+          "label": "Als Instanzadministrator entfernen",
+          "title": "{name} als Instanzadministrator entfernen?",
+          "description": "{name} verliert den Zugriff auf die Administration und wird überall abgemeldet.",
+          "descriptionOwn": "Das ist dein eigenes Konto. Du verlierst den Zugriff auf die Administration und wirst sofort abgemeldet.",
+          "done": "{name} ist kein Instanzadministrator mehr."
+        },
+        "delete": {
+          "label": "Konto löschen"
+        }
+      },
+      "resetLink": {
+        "title": "Link zum Zurücksetzen für {name}",
+        "description": "Für diesen Link wurde keine E-Mail gesendet, deshalb wird er hier angezeigt.",
+        "close": "Schließen",
+        "label": "Link zum Zurücksetzen des Passworts",
+        "copy": "Den Link zum Zurücksetzen kopieren",
+        "copied": "Link kopiert",
+        "note": "Der Link wird nur jetzt angezeigt. Er funktioniert einmal und eine Stunde lang. Sobald ein neues Passwort gesetzt ist, wird {name} überall abgemeldet.",
+        "acknowledge": "Ich habe diesen Link gesendet oder gespeichert",
+        "done": "Fertig"
+      },
+      "delete": {
+        "title": "{name} löschen?",
+        "description": "Das lässt sich nicht rückgängig machen. Beim Löschen von {name} werden das Konto mit seinen Sitzungen und API-Tokens entfernt. Workspaces, in denen es das einzige Mitglied ist, werden mitgelöscht; in allen anderen endet seine Mitgliedschaft und was es erstellt hat, bleibt.",
+        "confirmLabel": "Tippe {email} zur Bestätigung",
+        "done": "{name} ist gelöscht.",
+        "blocked": {
+          "title": "{name} kann noch nicht gelöscht werden",
+          "description": "Dieses Konto ist der einzige Eigentümer von Workspaces, die weitere Mitglieder haben. Übertrage zuerst die Eigentümerschaft jedes Workspace oder lösche den Workspace.",
+          "workspaces": "Workspaces ohne weiteren Eigentümer",
+          "close": "Schließen",
+          "open": "Workspaces öffnen"
+        }
+      }
     }
   },
   "settings": {

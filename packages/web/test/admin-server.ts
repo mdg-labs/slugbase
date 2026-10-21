@@ -1,5 +1,5 @@
 import { vi } from "vitest";
-import { ACCOUNT_BODY, ME_PATH, json, meOf, problem, signedIn } from "./support.tsx";
+import { ACCOUNT_BODY, CONFIG_BODY, ME_PATH, json, meOf, problem, signedIn } from "./support.tsx";
 
 /** A request an admin test server received. */
 export interface AdminCall {
@@ -18,6 +18,8 @@ export interface AdminServerOptions {
   routes?: Readonly<Record<string, AdminAnswer | readonly AdminAnswer[]>>;
   /** The answer to `GET /me`, in place of the account, by call. */
   me?: AdminAnswer;
+  /** Whether `/api/config` reports that the server can send mail; by default it cannot. */
+  mail?: boolean;
 }
 
 export interface AdminServer {
@@ -31,7 +33,7 @@ export interface AdminServer {
  * A signed-in instance admin's server: the shared session answers, the account with the admin flag and second factor
  * as chosen, and the routes of a test. It records the requests so a test can tell what was sent.
  */
-export function stubAdminServer({ isInstanceAdmin = true, mfaEnabled = true, routes = {}, me }: AdminServerOptions = {}): AdminServer {
+export function stubAdminServer({ isInstanceAdmin = true, mfaEnabled = true, mail = false, routes = {}, me }: AdminServerOptions = {}): AdminServer {
   const calls: AdminCall[] = [];
   const counts = new Map<string, number>();
   const locale = globalThis.navigator.languages.some((language) => language.toLowerCase().startsWith("de")) ? "de" : "en";
@@ -41,6 +43,9 @@ export function stubAdminServer({ isInstanceAdmin = true, mfaEnabled = true, rou
     "fetch",
     vi.fn((request: Request): Promise<Response> => {
       const { pathname } = new URL(request.url);
+      if (pathname === "/api/config") {
+        return Promise.resolve(json({ ...CONFIG_BODY, features: { ...CONFIG_BODY.features, mail } }));
+      }
       if (pathname === ME_PATH && request.method === "GET") {
         meCalls += 1;
         return Promise.resolve(me === undefined ? json(meOf(account)) : me(meCalls));
