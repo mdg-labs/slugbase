@@ -45,6 +45,12 @@ export interface EntitlementSet {
   readonly upgradeAvailable: boolean;
 }
 
+/** The immutable entitlements of a workspace read for an account that is not a member of it yet. */
+export interface JoiningEntitlements {
+  readonly values: WorkspaceEntitlementValues;
+  readonly upgradeAvailable: boolean;
+}
+
 /** The immutable account-scoped entitlements of one account. */
 export interface AccountEntitlementSet {
   readonly accountId: string;
@@ -54,6 +60,12 @@ export interface AccountEntitlementSet {
 export interface RequestEntitlements {
   /** The set of a workspace; undefined when the workspace cannot be seen. Asked twice in one request, it is read once. */
   forWorkspace(workspaceId: string): Promise<EntitlementSet | undefined>;
+  /**
+   * The values of a workspace the acting account is about to join through an invitation. The version row is readable
+   * to members only, so this answer is neither keyed by the version nor kept in the process cache: the source is asked
+   * once per request, and what it answers is checked against the catalog like any other.
+   */
+  forJoiningWorkspace(workspaceId: string): Promise<JoiningEntitlements>;
   /** The account-scoped values of the acting account, read from the source on every request that needs them. */
   forAccount(): Promise<AccountEntitlementSet>;
 }
@@ -129,6 +141,14 @@ export function createEntitlementService({ source, versions, cacheSize = DEFAULT
   const cache = new Map<string, CacheEntry>();
   const requests = new WeakMap<object, RequestEntitlements>();
 
+  async function readSource(workspaceId: string): Promise<JoiningEntitlements> {
+    const grant = await source.forWorkspace(workspaceId);
+    if (typeof grant.upgradeAvailable !== "boolean") {
+      throw new EntitlementSourceError("the entitlement source did not say whether an upgrade path exists");
+    }
+    return Object.freeze({ values: parseWorkspaceEntitlements(grant.values), upgradeAvailable: grant.upgradeAvailable });
+  }
+
   async function load(accountId: string, workspaceId: string): Promise<EntitlementSet | undefined> {
     const version = await versions.read({ accountId, workspaceId });
     if (version === undefined) {
@@ -139,16 +159,8 @@ export function createEntitlementService({ source, versions, cacheSize = DEFAULT
     if (cached?.version === version) {
       return cached.set;
     }
-    const grant = await source.forWorkspace(workspaceId);
-    if (typeof grant.upgradeAvailable !== "boolean") {
-      throw new EntitlementSourceError("the entitlement source did not say whether an upgrade path exists");
-    }
-    const set: EntitlementSet = Object.freeze({
-      workspaceId,
-      version,
-      values: parseWorkspaceEntitlements(grant.values),
-      upgradeAvailable: grant.upgradeAvailable,
-    });
+    const { values, upgradeAvailable } = await readSource(workspaceId);
+    const set: EntitlementSet = Object.freeze({ workspaceId, version, values, upgradeAvailable });
     // A slower request that read an older version must not replace the entry of a newer one.
     if ((cache.get(workspaceId)?.version ?? version) <= version) {
       cache.delete(workspaceId);
@@ -170,6 +182,7 @@ export function createEntitlementService({ source, versions, cacheSize = DEFAULT
         return known;
       }
       const sets = new Map<string, Promise<EntitlementSet | undefined>>();
+      const joining = new Map<string, Promise<JoiningEntitlements>>();
       let account: Promise<AccountEntitlementSet> | undefined;
       const scope: RequestEntitlements = {
         forWorkspace(workspaceId) {
@@ -179,6 +192,16 @@ export function createEntitlementService({ source, versions, cacheSize = DEFAULT
             // A failed read is not memoised: the next ask in the request reads again.
             if (sets.get(workspaceId) === memo) {
               sets.delete(workspaceId);
+            }
+          });
+          return memo;
+        },
+        forJoiningWorkspace(workspaceId) {
+          const memo = joining.get(workspaceId) ?? readSource(workspaceId);
+          joining.set(workspaceId, memo);
+          memo.catch(() => {
+            if (joining.get(workspaceId) === memo) {
+              joining.delete(workspaceId);
             }
           });
           return memo;
@@ -198,6 +221,11 @@ export function createEntitlementService({ source, versions, cacheSize = DEFAULT
 export interface EntitlementSubject {
   readonly accountId: string;
   readonly workspaceId?: string;
+  /**
+   * The account is not a member of `workspaceId` yet and is joining it through an invitation, so the workspace is
+   * read from the source as it is now rather than through the version the row shows to members.
+   */
+  readonly joining?: boolean;
 }
 
 /**
@@ -224,8 +252,29 @@ export function createEntitlementCheck(service: EntitlementService): Entitlement
     if (subject.workspaceId === undefined) {
       return false;
     }
-    const set = await entitlements.forWorkspace(subject.workspaceId);
+    const set = await workspaceSet(entitlements, subject.workspaceId, subject.joining === true);
     return set !== undefined && isHeld(Reflect.get(set.values, entitlement));
+  };
+}
+
+function workspaceSet(entitlements: RequestEntitlements, workspaceId: string, joining: boolean): Promise<JoiningEntitlements | undefined> {
+  return joining ? entitlements.forJoiningWorkspace(workspaceId) : entitlements.forWorkspace(workspaceId);
+}
+
+/**
+ * Whether the plan behind the subject's workspace has a better one to offer: what an `entitlement_required` answer
+ * reports beside the entitlement. A key outside the catalog, an account-scoped key, a workspace key asked without
+ * a workspace and a workspace that cannot be seen have none. A failing source rejects.
+ */
+export type EntitlementUpgradeCheck = (entitlement: string, subject: EntitlementSubject, request: object) => boolean | Promise<boolean>;
+
+export function createEntitlementUpgradeCheck(service: EntitlementService): EntitlementUpgradeCheck {
+  return async (entitlement, subject, request) => {
+    if (!isEntitlementKey(entitlement) || ENTITLEMENT_CATALOG[entitlement].scope === "account" || subject.workspaceId === undefined) {
+      return false;
+    }
+    const set = await workspaceSet(service.forRequest(request, subject.accountId), subject.workspaceId, subject.joining === true);
+    return set?.upgradeAvailable ?? false;
   };
 }
 

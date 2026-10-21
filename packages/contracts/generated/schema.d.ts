@@ -4428,7 +4428,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the account's verified email address is not the invited one, an unverified address included (forbidden, field code invitation_email_mismatch), or the deployment's registration policy refused the invited address for the account to create (registration_refused, one answer for every reason). Nothing is written and the invitation stays pending */
+            /** @description The request did not come from the application itself (cross_site_request), or the account's verified email address is not the invited one, an unverified address included (forbidden, field code invitation_email_mismatch), or the deployment's registration policy refused the invited address for the account to create (registration_refused, one answer for every reason), or the workspace of the invitation does not hold the members.invite entitlement (entitlement_required, in either form; the problem carries entitlement and upgradeAvailable). Nothing is written and the invitation stays pending */
             403: {
                 headers: {
                     [name: string]: unknown;

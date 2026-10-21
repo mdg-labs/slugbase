@@ -589,6 +589,9 @@ export function createEntitlementCheck(service: EntitlementService): Entitlement
 // @public (undocumented)
 export function createEntitlementService(input: EntitlementServiceOptions): EntitlementService;
 
+// @public (undocumented)
+export function createEntitlementUpgradeCheck(service: EntitlementService): EntitlementUpgradeCheck;
+
 // @public
 export function createInstanceWorkspace(input: InstanceWorkspaceDependencies, ask: InstanceWorkspaceCreationAsk): Promise<InstanceWorkspaceCreationOutcome>;
 
@@ -866,12 +869,16 @@ export class EntitlementSourceError extends Error {
 export interface EntitlementSubject {
     // (undocumented)
     readonly accountId: string;
+    readonly joining?: boolean;
     // (undocumented)
     readonly workspaceId?: string;
 }
 
 // @public (undocumented)
 export type EntitlementType = "flag" | "limit";
+
+// @public
+export type EntitlementUpgradeCheck = (entitlement: string, subject: EntitlementSubject, request: object) => boolean | Promise<boolean>;
 
 // @public
 export class EntitlementVersionError extends Error {
@@ -2082,6 +2089,14 @@ export function isInstanceAuditAction(value: unknown): value is InstanceAuditAct
 export function issueInstanceResetLink(input: InstanceRecoveryDependencies, ask: InstanceResetLinkAsk): Promise<InstanceResetLinkOutcome>;
 
 // @public
+export interface JoiningEntitlements {
+    // (undocumented)
+    readonly upgradeAvailable: boolean;
+    // (undocumented)
+    readonly values: WorkspaceEntitlementValues;
+}
+
+// @public
 export function listInstanceAccounts(input: InstanceAccountDependencies, ask: InstanceAccountAsk): Promise<readonly InstanceAccount[]>;
 
 // @public
@@ -2532,6 +2547,7 @@ export function renameWorkspace(input: WorkspaceAdministrationDependencies, ask:
 // @public (undocumented)
 export interface RequestEntitlements {
     forAccount(): Promise<AccountEntitlementSet>;
+    forJoiningWorkspace(workspaceId: string): Promise<JoiningEntitlements>;
     forWorkspace(workspaceId: string): Promise<EntitlementSet | undefined>;
 }
 

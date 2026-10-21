@@ -22,6 +22,7 @@ export {
   EntitlementSourceError,
   EntitlementVersionError,
   createEntitlementCheck,
+  createEntitlementUpgradeCheck,
   createEntitlementService,
   parseAccountEntitlements,
   parseWorkspaceEntitlements,
@@ -34,7 +35,9 @@ export type {
   EntitlementServiceOptions,
   EntitlementSet,
   EntitlementSubject,
+  EntitlementUpgradeCheck,
   EntitlementVersions,
   EntitlementVersionWriter,
+  JoiningEntitlements,
   RequestEntitlements,
 } from "./engine.ts";

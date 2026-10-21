@@ -15,6 +15,7 @@ import { DomainEventPayload } from '@slugbase/core';
 import { EmptyResponse } from '@slugbase/contracts';
 import { EntitlementCheck } from '@slugbase/core';
 import { EntitlementSubject } from '@slugbase/core';
+import { EntitlementUpgradeCheck } from '@slugbase/core';
 import { IdentityProviderConfig } from '@slugbase/core';
 import { JsonResponse } from '@slugbase/contracts';
 import { MigrateResult } from '@slugbase/db';
@@ -268,6 +269,8 @@ export const DEVELOPMENT_BUILD_INFO: BuildInfo;
 export { EntitlementCheck }
 
 export { EntitlementSubject }
+
+export { EntitlementUpgradeCheck }
 
 // @public
 export function envBoolean(): z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>;
