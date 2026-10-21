@@ -4,12 +4,14 @@ export { runRlsOnlyMatrix } from "./rls-mode.js";
 export type { RlsOnlyOptions, RlsOnlyReport } from "./rls-mode.js";
 export { isTokenCallable, runTokenMatrix } from "./token-mode.js";
 export type { TokenCall, TokenMatrixOptions, TokenMatrixReport, TokenRequestFunction } from "./token-mode.js";
-export { IDENTIFIER_KINDS, identifiersOf, isFixtureToken, namesOf, principalsOf, tokensOf } from "./fixture.js";
+export { IDENTIFIER_KINDS, identifiersOf, isFixtureInstanceAdmin, isFixtureToken, namesOf, principalsOf, tokensOf } from "./fixture.js";
 export type {
   FixtureIdentifier,
+  FixtureInstanceAdmin,
   FixturePrincipal,
   FixtureToken,
   IdentifierKind,
+  MatrixPrincipal,
   PrincipalRole,
   TenantFixture,
   TokenScope,
@@ -28,5 +30,5 @@ export type {
 } from "./openapi.js";
 export { MatrixFailureError, assertMatrixPassed, formatFailures } from "./report.js";
 export type { MatrixFailure, MatrixMode } from "./report.js";
-export { PROBE_SAMPLE, PROBE_WORKSPACE_A, PROBE_WORKSPACE_B, createProbe } from "./probe.js";
+export { PROBE_INSTANCE_ADMIN, PROBE_SAMPLE, PROBE_WORKSPACE_A, PROBE_WORKSPACE_B, createProbe } from "./probe.js";
 export type { Probe, ProbeOptions, ProbePolicy } from "./probe.js";

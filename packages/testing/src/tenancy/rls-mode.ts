@@ -29,6 +29,12 @@ import type { MatrixFailure } from "./report.js";
 // layer, and the registry's own `foreign_workspace` code is a refusal by the
 // application layer, which is reported apart and is not evidence for RLS. Any
 // other error is a failure: an error is never taken for a pass.
+//
+// When the fixture holds an instance admin that belongs to neither workspace, every method also runs as it: in a
+// transaction of its account with no workspace set, which is all the database knows of a principal that has no
+// workspace to act in. Nothing may come back from a read or a write, and a write that names A or B must be refused by
+// row-level security or touch no row. That is the RLS-only form of the 404 the API mode expects of it: the flag
+// opens nothing in a tenant table, only the system operations of the instance do.
 
 export interface RlsOnlyOptions {
   /** The tenant database the methods run on, as the application role. */
@@ -52,6 +58,10 @@ export interface RlsOnlyReport {
    * refusal, so an entry here means a method that kept an application guard.
    */
   readonly applicationRefusals: readonly string[];
+  /** Runs of a method as the instance admin of the fixture; zero when the fixture holds none. */
+  readonly instanceAdminAttempts: number;
+  /** Attempts as the instance admin that named a workspace and that row-level security refused (SQLSTATE 42501). */
+  readonly instanceAdminRefusals: number;
   readonly failures: readonly MatrixFailure[];
 }
 
@@ -134,6 +144,8 @@ export async function runRlsOnlyMatrix(options: RlsOnlyOptions): Promise<RlsOnly
   const failures: MatrixFailure[] = [];
   let attempts = 0;
   let rlsRefusals = 0;
+  let instanceAdminAttempts = 0;
+  let instanceAdminRefusals = 0;
   const applicationRefusals: string[] = [];
   let baseline = await fixture.checksum(fixture.b.id);
 
@@ -201,6 +213,51 @@ export async function runRlsOnlyMatrix(options: RlsOnlyOptions): Promise<RlsOnly
       }
     }
 
+    if (fixture.instanceAdmin !== undefined) {
+      const outsideContext: TenantContext = { accountId: fixture.instanceAdmin.accountId, requestId: "matrix-rls-only-instance-admin" };
+      const outside: { label: string; input: RepositoryInput; mayBeRefused: boolean }[] = [];
+      if (entry.method === "select" || entry.method === "delete") {
+        outside.push({ label: "as the instance admin, without a predicate", input: {}, mayBeRefused: false });
+      } else {
+        const sample = samples[entry.repository];
+        if (sample !== undefined) {
+          const columns = entry.method === "insert" ? sample.values : sample.set;
+          const key = entry.method === "insert" ? "values" : "set";
+          for (const [side, workspaceId] of [["A", fixture.a.id], ["B", fixture.b.id]] as const) {
+            outside.push({ label: `as the instance admin, naming workspace ${side}`, input: { [key]: { ...columns, workspaceId } }, mayBeRefused: true });
+          }
+        }
+      }
+      for (const { label, input, mayBeRefused } of outside) {
+        instanceAdminAttempts += 1;
+        let outcome: Outcome;
+        try {
+          outcome = await attempt(tenant, outsideContext, (tx) => entry.invokeRlsOnly(tx, input), mayBeRefused);
+        } catch (error) {
+          failures.push(failure(subject, "unexpected_error", `${label}: ${messageOf(error)}`));
+          continue;
+        }
+        if ("refusal" in outcome) {
+          if (outcome.refusal === "rls") {
+            instanceAdminRefusals += 1;
+          } else {
+            applicationRefusals.push(subject);
+          }
+          continue;
+        }
+        // A principal with no workspace has no row of either workspace to read and none to write: any row that comes back is one it should not see.
+        for (const row of outcome.rows) {
+          failures.push(
+            failure(
+              subject,
+              entry.access === "read" ? "instance_admin_read_row" : "instance_admin_wrote_row",
+              `${label}: ${entry.access === "read" ? "returned" : "wrote"} a row of workspace ${workspaceOf(row) ?? "unknown"} to an account with no workspace`,
+            ),
+          );
+        }
+      }
+    }
+
     const after = await fixture.checksum(fixture.b.id);
     if (after !== baseline) {
       failures.push(failure(subject, "workspace_changed", "the row-level checksum of workspace B changed"));
@@ -208,5 +265,5 @@ export async function runRlsOnlyMatrix(options: RlsOnlyOptions): Promise<RlsOnly
     }
   }
 
-  return { methods: methods.length, attempts, rlsRefusals, applicationRefusals, failures };
+  return { methods: methods.length, attempts, rlsRefusals, applicationRefusals, instanceAdminAttempts, instanceAdminRefusals, failures };
 }

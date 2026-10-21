@@ -1,5 +1,5 @@
 import { LimitedEntitlementSource } from "@slugbase/testing";
-import { classifyOperations, createProbe, loadOpenApiDocument, runApiMatrix, runTokenMatrix, type MatrixFailure, type Probe } from "@slugbase/testing/tenancy";
+import { classifyOperations, createProbe, loadOpenApiDocument, PROBE_INSTANCE_ADMIN, runApiMatrix, runTokenMatrix, type MatrixFailure, type Probe } from "@slugbase/testing/tenancy";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createAccountOnlyTenantResolver } from "../../src/auth/tenant-resolver.ts";
@@ -415,16 +415,26 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     ], undefined, { entitlements: entitlementsExcept(new Set()) });
     // The fixture of the probe holds no team, so workspace B is given one: the matrix puts it in the invitation's `teamIds`. It holds no invitation
     // either, and is given the one the seed wrote.
+    // The instance admin of the stub world belongs to neither workspace; the matrix sends it every call as well.
     const fixture = {
       ...probe.fixture,
       b: { ...probe.fixture.b, identifiers: [...probe.fixture.b.identifiers, { kind: "team" as const, id: UNKNOWN_TEAM_ID }, { kind: "invitation" as const, id: B_INVITATION_ID }] },
+      instanceAdmin: PROBE_INSTANCE_ADMIN,
     };
 
+    const send = matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: FIXTURES, credentialsOf: (principal) => world.credentialsOf(principal) });
+    const instanceAdminStatuses: number[] = [];
     const matrix = await runApiMatrix({
       document: committed,
       fixture,
       mapping: { rowId: "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation" },
-      request: matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: FIXTURES, credentialsOf: (principal) => world.credentialsOf(principal) }),
+      request: async (call) => {
+        const response = await send(call);
+        if ("instanceAdmin" in call.principal) {
+          instanceAdminStatuses.push(response.status);
+        }
+        return response;
+      },
     });
 
     // A team is refused with 422 whichever workspace holds it, because no team can be invited into yet and none can be told from another, which
@@ -440,7 +450,11 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // and on the operations that name members of B once for each of them: the role change, and the leaving, which names a recipient, once for each
     // of the three, and the ownership transfer, which names the member who becomes an owner, once for each of the three; the removal names both
     // a member and a recipient, once for each pair; the resend, the link and the revocation of an invitation name the one invitation of B once each
-    expect(report.attempts).toBe(9 * 9 + 9 * (3 + 3 + 3 + 3 * 3 + 3));
+    // The instance admin is a tenth principal making the same thirty calls, and each of them is answered 404 whatever the policy of the operation:
+    // it holds no membership, so there is no workspace for a handler to act in or a role to be refused for.
+    const calls = 9 + (3 + 3 + 3 + 3 * 3 + 3);
+    expect(report.attempts).toBe(10 * calls);
+    expect(instanceAdminStatuses).toEqual(Array<number>(calls).fill(404));
     expect(await contentOfB()).toBe(before);
     // Every invitation the matrix tried to make was refused before anything was written, in A as in B, and the one invitation of B is still its own,
     // pending, with the token hash the seed gave it.

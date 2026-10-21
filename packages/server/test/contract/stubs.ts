@@ -1,5 +1,5 @@
 import type { Adapters, TenantResolution, TenantResolver } from "@slugbase/core";
-import { isFixtureToken, type FixturePrincipal, type TenantFixture, type TokenScope } from "@slugbase/testing/tenancy";
+import { isFixtureInstanceAdmin, isFixtureToken, PROBE_INSTANCE_ADMIN, type MatrixPrincipal, type TenantFixture, type TokenScope } from "@slugbase/testing/tenancy";
 import type { ApiTokenPrincipal, Authenticator, ModuleContext, SessionPrincipal } from "../../src/create-server.ts";
 import { testKey, testSecretBox } from "../secret-box.ts";
 import { adapters } from "../support.ts";
@@ -20,7 +20,7 @@ const BEARER_TOKEN = /^Bearer stub-token\.(read|read-write)\.(\S+)$/;
 /** An account no workspace has a member of. */
 export const OUTSIDER_ACCOUNT = "0192f3a0-0000-7000-8000-00000000d001";
 /** An account that administers the instance and belongs to no workspace. */
-export const INSTANCE_ADMIN_ACCOUNT = "0192f3a0-0000-7000-8000-00000000d002";
+export const INSTANCE_ADMIN_ACCOUNT = PROBE_INSTANCE_ADMIN.accountId;
 
 export interface StubWorld {
   /** The authenticators a test module registers (`ModuleContribution.authenticators`). */
@@ -31,7 +31,7 @@ export interface StubWorld {
   /** The second-factor check of the server under test: only the instance admin of the stub world has a second factor enrolled. */
   readonly secondFactor: (subject: { readonly accountId: string }) => Promise<boolean>;
   /** What a fixture principal sends: its session cookie, or for a token its bearer header. */
-  credentialsOf(principal: FixturePrincipal): Credentials;
+  credentialsOf(principal: MatrixPrincipal): Credentials;
   /** A bearer token of the given scope, of the owner of workspace A. */
   tokenOf(scope: TokenScope): Credentials;
 }
@@ -113,7 +113,8 @@ export function createStubWorld(fixture: TenantFixture): StubWorld {
     authenticators: [cookie, bearer],
     secondFactor: ({ accountId }) => Promise.resolve(accountId === INSTANCE_ADMIN_ACCOUNT),
     adapters: (config) => ({ ...adapters(config), tenantResolver: resolver, secretBox: testSecretBox(testKey("walker-1")) }),
-    credentialsOf: (principal) => (isFixtureToken(principal) ? tokenCredentials(principal.scope, principal.accountId) : freshSessionCredentials(principal.accountId)),
+    credentialsOf: (principal) =>
+      !isFixtureInstanceAdmin(principal) && isFixtureToken(principal) ? tokenCredentials(principal.scope, principal.accountId) : freshSessionCredentials(principal.accountId),
     tokenOf: (scope) => tokenCredentials(scope, fixture.a.owner.accountId),
     hooks: {
       authorized: (operation) => authorized(operation.auth),

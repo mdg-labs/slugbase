@@ -1,4 +1,4 @@
-import type { ApiCall, ApiResponse, FixturePrincipal, RequestFunction, TokenRequestFunction, TokenScope } from "@slugbase/testing/tenancy";
+import type { ApiCall, ApiResponse, MatrixPrincipal, RequestFunction, TokenRequestFunction, TokenScope } from "@slugbase/testing/tenancy";
 import { buildRequest, type ContractFixtures, type Credentials, type RequestParts } from "./walker.ts";
 
 // The request function of the cross-tenant matrix in API mode (doc 08 section
@@ -12,7 +12,7 @@ export interface MatrixRequestOptions {
   readonly origin: string;
   readonly fixtures: ContractFixtures;
   /** What a principal of the fixture sends. */
-  readonly credentialsOf: (principal: FixturePrincipal) => Credentials;
+  readonly credentialsOf: (principal: MatrixPrincipal) => Credentials;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
