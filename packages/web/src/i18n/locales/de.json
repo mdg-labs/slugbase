@@ -100,6 +100,146 @@
         "notConfigured": "Nicht eingerichtet",
         "noProviders": "Keine"
       }
+    },
+    "workspaces": {
+      "title": "Workspaces",
+      "mfaRequired": {
+        "title": "Die Workspaces sind noch nicht verfügbar",
+        "description": "Aktiviere die Zwei-Faktor-Authentifizierung, um die Workspaces dieser Instanz zu verwalten."
+      },
+      "loadFailed": {
+        "title": "Die Workspaces konnten nicht geladen werden",
+        "description": "Versuche es noch einmal. Besteht das Problem weiter, prüfe die Logs des Servers.",
+        "retry": "Erneut versuchen"
+      },
+      "empty": {
+        "title": "Es gibt noch keine Workspaces",
+        "description": "Erstelle einen Workspace für einen Eigentümer oder lade jemanden als ersten Eigentümer ein."
+      },
+      "table": {
+        "label": "Workspaces"
+      },
+      "column": {
+        "name": "Name",
+        "owners": "Eigentümer",
+        "members": "Mitglieder",
+        "created": "Erstellt",
+        "actions": "Aktionen"
+      },
+      "pendingOwner": "Wartet auf den ersten Eigentümer",
+      "actionsFor": "Aktionen für {name}",
+      "action": {
+        "addMe": "Mich als Mitglied hinzufügen",
+        "invite": "Einladung für Eigentümer erneut ausstellen",
+        "delete": "Workspace löschen"
+      },
+      "create": {
+        "open": "Workspace erstellen",
+        "title": "Workspace erstellen",
+        "description": "Du erstellst den Workspace für seinen Eigentümer. Du wirst kein Mitglied.",
+        "close": "Schließen",
+        "cancel": "Abbrechen",
+        "submit": "Workspace erstellen",
+        "done": "„{name}“ wurde erstellt.",
+        "doneMailed": "„{name}“ wurde erstellt. Die Einladung für den Eigentümer wurde an {email} gesendet.",
+        "name": {
+          "label": "Name",
+          "required": "Gib einen Namen ein."
+        },
+        "owner": {
+          "label": "Eigentümer",
+          "account": {
+            "option": "Vorhandenes Konto",
+            "label": "Konto",
+            "placeholder": "Nach Name oder E-Mail suchen",
+            "empty": "Kein Konto passt.",
+            "required": "Wähle ein Konto aus.",
+            "retry": "Erneut versuchen",
+            "loadFailed": {
+              "title": "Die Konten konnten nicht geladen werden",
+              "description": "Versuche es noch einmal oder lade den Eigentümer stattdessen per E-Mail ein."
+            }
+          },
+          "email": {
+            "option": "Per E-Mail einladen",
+            "label": "E-Mail-Adresse",
+            "description": "Der Workspace wartet darauf, dass diese Adresse die Einladung annimmt und erster Eigentümer wird.",
+            "required": "Gib eine E-Mail-Adresse ein."
+          }
+        },
+        "error": {
+          "invalidName": "Verwende einen Namen mit 1 bis 64 Zeichen.",
+          "invalidEmail": "Gib eine gültige E-Mail-Adresse ein.",
+          "unknownAccount": "Dieses Konto existiert nicht mehr oder ist deaktiviert. Wähle ein anderes.",
+          "invalid": "Prüfe den Namen und den Eigentümer und versuche es noch einmal.",
+          "forbidden": "Du kannst diese Instanz nicht mehr verwalten. Die Seite wurde neu geladen.",
+          "unavailable": "Der Workspace konnte nicht erstellt werden. Versuche es gleich noch einmal."
+        }
+      },
+      "addMe": {
+        "title": "Dich zu {name} hinzufügen?",
+        "description": "Du trittst {name} als Mitglied bei. Die Eigentümer sehen in der Aktivität des Workspace, dass ein Instanzadministrator beigetreten ist.",
+        "cancel": "Abbrechen",
+        "action": "Mich als Mitglied hinzufügen",
+        "done": "Du bist jetzt Mitglied von {name}.",
+        "error": {
+          "title": "Du wurdest nicht zu {name} hinzugefügt",
+          "reauthCancelled": "Bestätige, dass du es bist, um dem Workspace beizutreten. Es wurde nichts geändert.",
+          "forbidden": "Du kannst diese Instanz nicht mehr verwalten. Die Seite wurde neu geladen.",
+          "gone": "Dieser Workspace existiert nicht mehr oder wird gelöscht.",
+          "alreadyMember": "Du bist bereits Mitglied dieses Workspace."
+        }
+      },
+      "delete": {
+        "title": "{name} löschen?",
+        "description": "Das lässt sich nicht rückgängig machen. Beim Löschen von {name} wird jede Zeile des Workspace entfernt, darunter Lesezeichen, Ordner und Tags, und alle Mitglieder verlieren sofort den Zugriff.",
+        "confirmLabel": "Tippe {name} zur Bestätigung",
+        "cancel": "Abbrechen",
+        "action": "Workspace löschen",
+        "done": "{name} wird gelöscht",
+        "error": {
+          "title": "Der Workspace wurde nicht gelöscht",
+          "reauthCancelled": "Bestätige, dass du es bist, um den Workspace zu löschen.",
+          "forbidden": "Du kannst diese Instanz nicht mehr verwalten. Die Seite wurde neu geladen.",
+          "gone": "Dieser Workspace existiert nicht mehr oder wird bereits gelöscht."
+        },
+        "blocked": {
+          "title": "{name} kann noch nicht gelöscht werden",
+          "close": "Schließen",
+          "billingActive": "Dieser Workspace hat ein aktives kostenpflichtiges Abonnement. Es muss gekündigt werden, bevor der Workspace gelöscht werden kann.",
+          "other": "Dieser Server erlaubt das Löschen des Workspace gerade nicht. Es wurde nichts geändert."
+        }
+      },
+      "invitation": {
+        "title": "Einladung für den Eigentümer von {name} erneut ausstellen",
+        "description": "Die neue Einladung ersetzt die früheren: Deren Links funktionieren sofort nicht mehr.",
+        "close": "Schließen",
+        "cancel": "Abbrechen",
+        "submit": "Einladung erneut ausstellen",
+        "mailed": "Die Einladung für den Eigentümer wurde an {email} gesendet.",
+        "email": {
+          "label": "E-Mail-Adresse",
+          "description": "Lass das Feld leer, um die Adresse der vorherigen Einladung zu verwenden."
+        },
+        "error": {
+          "unavailable": "Die Einladung konnte nicht ausgestellt werden. Versuche es gleich noch einmal.",
+          "reauthCancelled": "Bestätige, dass du es bist, um die Einladung auszustellen. Es wurde nichts gesendet.",
+          "forbidden": "Du kannst diese Instanz nicht mehr verwalten. Die Seite wurde neu geladen.",
+          "gone": "Dieser Workspace existiert nicht mehr oder wird gelöscht.",
+          "hasOwner": "Dieser Workspace hat inzwischen einen Eigentümer und braucht keine Einladung.",
+          "emailRequired": "Dieser Workspace hat keine frühere Einladung, aus der sich die Adresse übernehmen ließe. Gib die einzuladende Adresse ein.",
+          "invalidEmail": "Gib eine gültige E-Mail-Adresse ein."
+        },
+        "link": {
+          "description": "Dieser Server kann keine E-Mails senden, deshalb gibt es für die Einladung zu {name} keine Nachricht. Schicke diesen Link selbst an {email}; nur das Konto mit dieser Adresse kann ihn annehmen.",
+          "label": "Einladungslink für den Eigentümer",
+          "copy": "Den Einladungslink kopieren",
+          "copied": "Link kopiert",
+          "note": "Der Link wird nur jetzt angezeigt. Er funktioniert bis {date} oder bis du eine neue Einladung ausstellst.",
+          "acknowledge": "Ich habe diesen Link gesendet oder gespeichert",
+          "done": "Fertig"
+        }
+      }
     }
   },
   "settings": {

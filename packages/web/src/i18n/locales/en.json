@@ -100,6 +100,146 @@
         "notConfigured": "Not configured",
         "noProviders": "None"
       }
+    },
+    "workspaces": {
+      "title": "Workspaces",
+      "mfaRequired": {
+        "title": "Workspaces are not available yet",
+        "description": "Turn on two-factor authentication to manage the workspaces of this instance."
+      },
+      "loadFailed": {
+        "title": "The workspaces could not be loaded",
+        "description": "Try again. If this continues, check the server's logs.",
+        "retry": "Try again"
+      },
+      "empty": {
+        "title": "There are no workspaces yet",
+        "description": "Create a workspace for an owner, or invite someone to be its first owner."
+      },
+      "table": {
+        "label": "Workspaces"
+      },
+      "column": {
+        "name": "Name",
+        "owners": "Owners",
+        "members": "Members",
+        "created": "Created",
+        "actions": "Actions"
+      },
+      "pendingOwner": "Waiting for its first owner",
+      "actionsFor": "Actions for {name}",
+      "action": {
+        "addMe": "Add me as member",
+        "invite": "Re-issue owner invitation",
+        "delete": "Delete workspace"
+      },
+      "create": {
+        "open": "Create workspace",
+        "title": "Create a workspace",
+        "description": "You create the workspace for its owner. You do not become a member.",
+        "close": "Close",
+        "cancel": "Cancel",
+        "submit": "Create workspace",
+        "done": "“{name}” was created.",
+        "doneMailed": "“{name}” was created. The owner invitation was mailed to {email}.",
+        "name": {
+          "label": "Name",
+          "required": "Enter a name."
+        },
+        "owner": {
+          "label": "Owner",
+          "account": {
+            "option": "Existing account",
+            "label": "Account",
+            "placeholder": "Search by name or email",
+            "empty": "No account matches.",
+            "required": "Choose an account.",
+            "retry": "Try again",
+            "loadFailed": {
+              "title": "The accounts could not be loaded",
+              "description": "Try again, or invite the owner by email instead."
+            }
+          },
+          "email": {
+            "option": "Invite by email",
+            "label": "Email address",
+            "description": "The workspace waits for this address to accept the invitation and become its first owner.",
+            "required": "Enter an email address."
+          }
+        },
+        "error": {
+          "invalidName": "Use a name of 1 to 64 characters.",
+          "invalidEmail": "Enter a valid email address.",
+          "unknownAccount": "This account no longer exists or is disabled. Choose another one.",
+          "invalid": "Check the name and the owner, then try again.",
+          "forbidden": "You can no longer manage this instance. The page has been reloaded.",
+          "unavailable": "The workspace could not be created. Try again in a moment."
+        }
+      },
+      "addMe": {
+        "title": "Add yourself to {name}?",
+        "description": "You join {name} as a member. Its owners will see in the workspace's activity that an instance admin joined.",
+        "cancel": "Cancel",
+        "action": "Add me as member",
+        "done": "You are now a member of {name}.",
+        "error": {
+          "title": "You were not added to {name}",
+          "reauthCancelled": "Confirm it is you to join the workspace. Nothing was changed.",
+          "forbidden": "You can no longer manage this instance. The page has been reloaded.",
+          "gone": "This workspace no longer exists or is being deleted.",
+          "alreadyMember": "You are already a member of this workspace."
+        }
+      },
+      "delete": {
+        "title": "Delete {name}?",
+        "description": "This is irreversible. Deleting {name} removes every row of the workspace, including its bookmarks, folders and tags, and every member loses access right away.",
+        "confirmLabel": "Type {name} to confirm",
+        "cancel": "Cancel",
+        "action": "Delete workspace",
+        "done": "{name} is being deleted",
+        "error": {
+          "title": "The workspace was not deleted",
+          "reauthCancelled": "Confirm it is you to delete the workspace.",
+          "forbidden": "You can no longer manage this instance. The page has been reloaded.",
+          "gone": "This workspace no longer exists or is already being deleted."
+        },
+        "blocked": {
+          "title": "{name} cannot be deleted yet",
+          "close": "Close",
+          "billingActive": "This workspace has an active paid subscription. It has to be cancelled before the workspace can be deleted.",
+          "other": "This server does not allow the workspace to be deleted right now. Nothing was changed."
+        }
+      },
+      "invitation": {
+        "title": "Re-issue the owner invitation for {name}",
+        "description": "The new invitation replaces the earlier ones: their links stop working right away.",
+        "close": "Close",
+        "cancel": "Cancel",
+        "submit": "Re-issue invitation",
+        "mailed": "The owner invitation was mailed to {email}.",
+        "email": {
+          "label": "Email address",
+          "description": "Leave it empty to use the address of the previous invitation."
+        },
+        "error": {
+          "unavailable": "The invitation could not be issued. Try again in a moment.",
+          "reauthCancelled": "Confirm it is you to issue the invitation. Nothing was sent.",
+          "forbidden": "You can no longer manage this instance. The page has been reloaded.",
+          "gone": "This workspace no longer exists or is being deleted.",
+          "hasOwner": "This workspace has an owner by now, so it needs no invitation.",
+          "emailRequired": "This workspace has no earlier invitation to take the address from. Enter the address to invite.",
+          "invalidEmail": "Enter a valid email address."
+        },
+        "link": {
+          "description": "This server cannot send email, so the invitation for {name} has no message to carry it. Send this link to {email} yourself; only the account with that address can accept it.",
+          "label": "Owner invitation link",
+          "copy": "Copy the invitation link",
+          "copied": "Link copied",
+          "note": "The link is shown only now. It stops working on {date}, or when you issue a new invitation.",
+          "acknowledge": "I have sent or saved this link",
+          "done": "Done"
+        }
+      }
     }
   },
   "settings": {
