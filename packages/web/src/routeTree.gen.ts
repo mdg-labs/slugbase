@@ -20,11 +20,16 @@ import { Route as VerifyEmailRouteImport } from "./routes/verify-email.tsx";
 import { Route as AppIndexRouteImport } from "./routes/_app/index.tsx";
 import { Route as AppSplatRouteImport } from "./routes/_app/$.tsx";
 import { Route as App403RouteImport } from "./routes/_app/403.tsx";
+import { Route as AppAdminRouteImport } from "./routes/_app/admin.tsx";
 import { Route as AppSettingsRouteImport } from "./routes/_app/settings.tsx";
 import { Route as EmailChangeCancelRouteImport } from "./routes/email-change.cancel.tsx";
 import { Route as EmailChangeConfirmRouteImport } from "./routes/email-change.confirm.tsx";
 import { Route as InviteTokenRouteImport } from "./routes/invite.$token.tsx";
 import { Route as LoginMfaRouteImport } from "./routes/login_.mfa.tsx";
+import { Route as AppAdminIndexRouteImport } from "./routes/_app/admin/index.tsx";
+import { Route as AppAdminAccountsRouteImport } from "./routes/_app/admin/accounts.tsx";
+import { Route as AppAdminSettingsRouteImport } from "./routes/_app/admin/settings.tsx";
+import { Route as AppAdminWorkspacesRouteImport } from "./routes/_app/admin/workspaces.tsx";
 import { Route as AppSettingsIndexRouteImport } from "./routes/_app/settings/index.tsx";
 import { Route as AppSettingsAccountIndexRouteImport } from "./routes/_app/settings/account/index.tsx";
 import { Route as AppSettingsAccountPreferencesRouteImport } from "./routes/_app/settings/account/preferences.tsx";
@@ -87,6 +92,11 @@ const App403Route = App403RouteImport.update({
   path: "/403",
   getParentRoute: () => AppRoute,
 } as any);
+const AppAdminRoute = AppAdminRouteImport.update({
+  id: "/admin",
+  path: "/admin",
+  getParentRoute: () => AppRoute,
+} as any);
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: "/settings",
   path: "/settings",
@@ -111,6 +121,26 @@ const LoginMfaRoute = LoginMfaRouteImport.update({
   id: "/login_/mfa",
   path: "/login/mfa",
   getParentRoute: () => rootRouteImport,
+} as any);
+const AppAdminIndexRoute = AppAdminIndexRouteImport.update({
+  id: "/",
+  path: "/",
+  getParentRoute: () => AppAdminRoute,
+} as any);
+const AppAdminAccountsRoute = AppAdminAccountsRouteImport.update({
+  id: "/accounts",
+  path: "/accounts",
+  getParentRoute: () => AppAdminRoute,
+} as any);
+const AppAdminSettingsRoute = AppAdminSettingsRouteImport.update({
+  id: "/settings",
+  path: "/settings",
+  getParentRoute: () => AppAdminRoute,
+} as any);
+const AppAdminWorkspacesRoute = AppAdminWorkspacesRouteImport.update({
+  id: "/workspaces",
+  path: "/workspaces",
+  getParentRoute: () => AppAdminRoute,
 } as any);
 const AppSettingsIndexRoute = AppSettingsIndexRouteImport.update({
   id: "/",
@@ -164,11 +194,16 @@ export interface FileRoutesByFullPath {
   "/verify-email": typeof VerifyEmailRoute;
   "/$": typeof AppSplatRoute;
   "/403": typeof App403Route;
+  "/admin": typeof AppAdminRouteWithChildren;
   "/settings": typeof AppSettingsRouteWithChildren;
   "/email-change/cancel": typeof EmailChangeCancelRoute;
   "/email-change/confirm": typeof EmailChangeConfirmRoute;
   "/invite/$token": typeof InviteTokenRoute;
   "/login/mfa": typeof LoginMfaRoute;
+  "/admin/accounts": typeof AppAdminAccountsRoute;
+  "/admin/settings": typeof AppAdminSettingsRoute;
+  "/admin/workspaces": typeof AppAdminWorkspacesRoute;
+  "/admin/": typeof AppAdminIndexRoute;
   "/settings/": typeof AppSettingsIndexRoute;
   "/settings/account/preferences": typeof AppSettingsAccountPreferencesRoute;
   "/settings/account/security": typeof AppSettingsAccountSecurityRoute;
@@ -192,6 +227,10 @@ export interface FileRoutesByTo {
   "/invite/$token": typeof InviteTokenRoute;
   "/login/mfa": typeof LoginMfaRoute;
   "/": typeof AppIndexRoute;
+  "/admin/accounts": typeof AppAdminAccountsRoute;
+  "/admin/settings": typeof AppAdminSettingsRoute;
+  "/admin/workspaces": typeof AppAdminWorkspacesRoute;
+  "/admin": typeof AppAdminIndexRoute;
   "/settings": typeof AppSettingsIndexRoute;
   "/settings/account/preferences": typeof AppSettingsAccountPreferencesRoute;
   "/settings/account/security": typeof AppSettingsAccountSecurityRoute;
@@ -212,12 +251,17 @@ export interface FileRoutesById {
   "/verify-email": typeof VerifyEmailRoute;
   "/_app/$": typeof AppSplatRoute;
   "/_app/403": typeof App403Route;
+  "/_app/admin": typeof AppAdminRouteWithChildren;
   "/_app/settings": typeof AppSettingsRouteWithChildren;
   "/email-change/cancel": typeof EmailChangeCancelRoute;
   "/email-change/confirm": typeof EmailChangeConfirmRoute;
   "/invite/$token": typeof InviteTokenRoute;
   "/login_/mfa": typeof LoginMfaRoute;
   "/_app/": typeof AppIndexRoute;
+  "/_app/admin/accounts": typeof AppAdminAccountsRoute;
+  "/_app/admin/settings": typeof AppAdminSettingsRoute;
+  "/_app/admin/workspaces": typeof AppAdminWorkspacesRoute;
+  "/_app/admin/": typeof AppAdminIndexRoute;
   "/_app/settings/": typeof AppSettingsIndexRoute;
   "/_app/settings/account/preferences": typeof AppSettingsAccountPreferencesRoute;
   "/_app/settings/account/security": typeof AppSettingsAccountSecurityRoute;
@@ -239,11 +283,16 @@ export interface FileRouteTypes {
     | "/verify-email"
     | "/$"
     | "/403"
+    | "/admin"
     | "/settings"
     | "/email-change/cancel"
     | "/email-change/confirm"
     | "/invite/$token"
     | "/login/mfa"
+    | "/admin/accounts"
+    | "/admin/settings"
+    | "/admin/workspaces"
+    | "/admin/"
     | "/settings/"
     | "/settings/account/preferences"
     | "/settings/account/security"
@@ -267,6 +316,10 @@ export interface FileRouteTypes {
     | "/invite/$token"
     | "/login/mfa"
     | "/"
+    | "/admin/accounts"
+    | "/admin/settings"
+    | "/admin/workspaces"
+    | "/admin"
     | "/settings"
     | "/settings/account/preferences"
     | "/settings/account/security"
@@ -286,12 +339,17 @@ export interface FileRouteTypes {
     | "/verify-email"
     | "/_app/$"
     | "/_app/403"
+    | "/_app/admin"
     | "/_app/settings"
     | "/email-change/cancel"
     | "/email-change/confirm"
     | "/invite/$token"
     | "/login_/mfa"
     | "/_app/"
+    | "/_app/admin/accounts"
+    | "/_app/admin/settings"
+    | "/_app/admin/workspaces"
+    | "/_app/admin/"
     | "/_app/settings/"
     | "/_app/settings/account/preferences"
     | "/_app/settings/account/security"
@@ -395,6 +453,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof App403RouteImport;
       parentRoute: typeof AppRoute;
     };
+    "/_app/admin": {
+      id: "/_app/admin";
+      path: "/admin";
+      fullPath: "/admin";
+      preLoaderRoute: typeof AppAdminRouteImport;
+      parentRoute: typeof AppRoute;
+    };
     "/_app/settings": {
       id: "/_app/settings";
       path: "/settings";
@@ -429,6 +494,34 @@ declare module "@tanstack/react-router" {
       fullPath: "/login/mfa";
       preLoaderRoute: typeof LoginMfaRouteImport;
       parentRoute: typeof rootRouteImport;
+    };
+    "/_app/admin/": {
+      id: "/_app/admin/";
+      path: "/";
+      fullPath: "/admin/";
+      preLoaderRoute: typeof AppAdminIndexRouteImport;
+      parentRoute: typeof AppAdminRoute;
+    };
+    "/_app/admin/accounts": {
+      id: "/_app/admin/accounts";
+      path: "/accounts";
+      fullPath: "/admin/accounts";
+      preLoaderRoute: typeof AppAdminAccountsRouteImport;
+      parentRoute: typeof AppAdminRoute;
+    };
+    "/_app/admin/settings": {
+      id: "/_app/admin/settings";
+      path: "/settings";
+      fullPath: "/admin/settings";
+      preLoaderRoute: typeof AppAdminSettingsRouteImport;
+      parentRoute: typeof AppAdminRoute;
+    };
+    "/_app/admin/workspaces": {
+      id: "/_app/admin/workspaces";
+      path: "/workspaces";
+      fullPath: "/admin/workspaces";
+      preLoaderRoute: typeof AppAdminWorkspacesRouteImport;
+      parentRoute: typeof AppAdminRoute;
     };
     "/_app/settings/": {
       id: "/_app/settings/";
@@ -482,6 +575,24 @@ declare module "@tanstack/react-router" {
   }
 }
 
+interface AppAdminRouteChildren {
+  AppAdminAccountsRoute: typeof AppAdminAccountsRoute;
+  AppAdminSettingsRoute: typeof AppAdminSettingsRoute;
+  AppAdminWorkspacesRoute: typeof AppAdminWorkspacesRoute;
+  AppAdminIndexRoute: typeof AppAdminIndexRoute;
+}
+
+const AppAdminRouteChildren: AppAdminRouteChildren = {
+  AppAdminAccountsRoute: AppAdminAccountsRoute,
+  AppAdminSettingsRoute: AppAdminSettingsRoute,
+  AppAdminWorkspacesRoute: AppAdminWorkspacesRoute,
+  AppAdminIndexRoute: AppAdminIndexRoute,
+};
+
+const AppAdminRouteWithChildren = AppAdminRoute._addFileChildren(
+  AppAdminRouteChildren,
+);
+
 interface AppSettingsRouteChildren {
   AppSettingsIndexRoute: typeof AppSettingsIndexRoute;
   AppSettingsAccountPreferencesRoute: typeof AppSettingsAccountPreferencesRoute;
@@ -509,6 +620,7 @@ const AppSettingsRouteWithChildren = AppSettingsRoute._addFileChildren(
 interface AppRouteChildren {
   AppSplatRoute: typeof AppSplatRoute;
   App403Route: typeof App403Route;
+  AppAdminRoute: typeof AppAdminRouteWithChildren;
   AppSettingsRoute: typeof AppSettingsRouteWithChildren;
   AppIndexRoute: typeof AppIndexRoute;
 }
@@ -516,6 +628,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppSplatRoute: AppSplatRoute,
   App403Route: App403Route,
+  AppAdminRoute: AppAdminRouteWithChildren,
   AppSettingsRoute: AppSettingsRouteWithChildren,
   AppIndexRoute: AppIndexRoute,
 };

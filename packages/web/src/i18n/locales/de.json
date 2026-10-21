@@ -24,12 +24,82 @@
     "emailUnverified": {
       "title": "Deine E-Mail-Adresse ist nicht bestätigt",
       "description": "Wir haben einen Link an {email} geschickt. Öffne ihn, um die Adresse zu bestätigen, oder fordere einen neuen an."
-    }
+    },
+    "admin": "Admin"
   },
   "home": {
     "empty": {
       "title": "Willkommen bei {name}",
       "description": "Lesezeichen mit kurzen, privaten Slugs."
+    }
+  },
+  "admin": {
+    "navigation": "Administration",
+    "nav": {
+      "instance": "Instanz",
+      "overview": "Übersicht",
+      "workspaces": "Workspaces",
+      "accounts": "Konten",
+      "settings": "Einstellungen & Status"
+    },
+    "loadFailed": {
+      "title": "Dein Konto konnte nicht geladen werden",
+      "description": "Die Administration muss wissen, wer du bist. Versuche es erneut.",
+      "retry": "Erneut versuchen"
+    },
+    "mfaRequired": {
+      "title": "Zwei-Faktor-Authentifizierung erforderlich",
+      "description": "Die Administration der Instanz bleibt ausgeschaltet, bis du die Zwei-Faktor-Authentifizierung für dein Konto einschaltest.",
+      "action": "Zwei-Faktor-Authentifizierung einrichten"
+    },
+    "overview": {
+      "title": "Übersicht",
+      "mfaRequired": {
+        "title": "Die Übersicht ist noch nicht verfügbar",
+        "description": "Schalte die Zwei-Faktor-Authentifizierung ein, um den Status dieser Instanz zu sehen."
+      },
+      "loadFailed": {
+        "title": "Der Status der Instanz konnte nicht geladen werden",
+        "description": "Versuche es erneut. Wenn das so bleibt, prüfe die Logs des Servers.",
+        "retry": "Erneut versuchen"
+      },
+      "counts": {
+        "label": "Anzahlen",
+        "accounts": "Konten",
+        "workspaces": "Workspaces",
+        "activeSessions": "Aktive Sitzungen"
+      },
+      "build": {
+        "title": "Version und Datenbank",
+        "version": "Version",
+        "migrations": "Migrationen",
+        "applied": "{applied} von {expected} angewendet",
+        "upToDate": "Aktuell",
+        "outOfDate": "Nicht aktuell"
+      },
+      "jobs": {
+        "title": "Hintergrundjobs",
+        "failed": "Fehlgeschlagene Jobs",
+        "none": "Keine",
+        "some": "{count} fehlgeschlagen",
+        "queue": "Warten auf einen Worker",
+        "waiting": "{count, plural, one {# Job} other {# Jobs}}"
+      },
+      "configuration": {
+        "title": "Konfiguration",
+        "description": "Was der Betreiber für diese Instanz eingerichtet hat.",
+        "registration": "Öffentliche Registrierung",
+        "verification": "E-Mail-Bestätigung erforderlich",
+        "mail": "E-Mail-Versand",
+        "ai": "KI-Vorschläge",
+        "errorReporting": "Fehlerberichte",
+        "oidc": "Anmeldeanbieter",
+        "on": "An",
+        "off": "Aus",
+        "configured": "Eingerichtet",
+        "notConfigured": "Nicht eingerichtet",
+        "noProviders": "Keine"
+      }
     }
   },
   "settings": {

@@ -15,6 +15,7 @@ import { ReactElement } from 'react';
 import { ReactNode } from 'react';
 import { Ref } from 'react';
 import { SettingsIcon } from 'lucide-react';
+import { ShieldCheckIcon } from 'lucide-react';
 import { TriangleAlertIcon } from 'lucide-react';
 
 // @public
@@ -387,6 +388,17 @@ export const MAIN_CONTENT_ID = "main-content";
 export function matchesExpected(typed: string, expected: string): boolean;
 
 // @public
+export function MetricTile(input: MetricTileProps): ReactElement;
+
+// @public (undocumented)
+export interface MetricTileProps {
+    // (undocumented)
+    className?: string;
+    label: ReactNode;
+    value: ReactNode;
+}
+
+// @public
 export type PasswordScore = 0 | 1 | 2 | 3 | 4;
 
 // @public
@@ -617,6 +629,8 @@ export interface SettingSwitchProps {
     // (undocumented)
     onCheckedChange: (checked: boolean) => void;
 }
+
+export { ShieldCheckIcon }
 
 // @public
 export function ShownOnce(input: ShownOnceProps): ReactElement;

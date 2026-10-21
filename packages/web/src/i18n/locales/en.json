@@ -24,12 +24,82 @@
     "emailUnverified": {
       "title": "Your email address is not verified",
       "description": "We sent a link to {email}. Open it to verify the address, or ask for a new one."
-    }
+    },
+    "admin": "Admin"
   },
   "home": {
     "empty": {
       "title": "Welcome to {name}",
       "description": "Bookmarks with short, private slugs."
+    }
+  },
+  "admin": {
+    "navigation": "Administration",
+    "nav": {
+      "instance": "Instance",
+      "overview": "Overview",
+      "workspaces": "Workspaces",
+      "accounts": "Accounts",
+      "settings": "Settings & status"
+    },
+    "loadFailed": {
+      "title": "Your account could not be loaded",
+      "description": "The administration needs to know who you are. Try again.",
+      "retry": "Try again"
+    },
+    "mfaRequired": {
+      "title": "Two-factor authentication required",
+      "description": "Instance administration is off until you turn on two-factor authentication for your account.",
+      "action": "Set up two-factor authentication"
+    },
+    "overview": {
+      "title": "Overview",
+      "mfaRequired": {
+        "title": "The overview is not available yet",
+        "description": "Turn on two-factor authentication to see the status of this instance."
+      },
+      "loadFailed": {
+        "title": "The status of the instance could not be loaded",
+        "description": "Try again. If this continues, check the server's logs.",
+        "retry": "Try again"
+      },
+      "counts": {
+        "label": "Counts",
+        "accounts": "Accounts",
+        "workspaces": "Workspaces",
+        "activeSessions": "Active sessions"
+      },
+      "build": {
+        "title": "Version and database",
+        "version": "Version",
+        "migrations": "Migrations",
+        "applied": "{applied} of {expected} applied",
+        "upToDate": "Up to date",
+        "outOfDate": "Out of date"
+      },
+      "jobs": {
+        "title": "Background jobs",
+        "failed": "Failed jobs",
+        "none": "None",
+        "some": "{count} failed",
+        "queue": "Waiting for a worker",
+        "waiting": "{count, plural, one {# job} other {# jobs}}"
+      },
+      "configuration": {
+        "title": "Configuration",
+        "description": "What the operator has set up for this instance.",
+        "registration": "Public registration",
+        "verification": "Email verification required",
+        "mail": "Mail",
+        "ai": "AI suggestions",
+        "errorReporting": "Error reporting",
+        "oidc": "Sign-in providers",
+        "on": "On",
+        "off": "Off",
+        "configured": "Configured",
+        "notConfigured": "Not configured",
+        "noProviders": "None"
+      }
     }
   },
   "settings": {
