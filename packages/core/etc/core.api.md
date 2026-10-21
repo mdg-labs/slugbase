@@ -1290,6 +1290,13 @@ export type InstanceAccountUpdateOutcome =
     readonly field: "isInstanceAdmin" | "disabled";
 };
 
+// @public
+export class InstanceAdminRequiredError extends Error {
+    constructor(options: {
+        readonly cause: unknown;
+    });
+}
+
 // @public (undocumented)
 export type InstanceAuditAction = keyof typeof INSTANCE_AUDIT_ACTIONS;
 

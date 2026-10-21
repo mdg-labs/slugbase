@@ -12,7 +12,7 @@ import { signInAdmin, type Principal } from "./support.ts";
 // packages/db/test/instance-account-deletion.integration.test.ts ("the last instance admin": a deletion against a
 // demotion, a self-deletion, and the lock the deletions take). The suite here relies on them for the exact
 // interleavings and adds what only the whole stack can show: two admins whose requests arrive together through the chain
-// can never both succeed in removing each other, or themselves.
+// can never both succeed in removing each other, or themselves, and the one that loses is refused with the status its loss gives.
 
 const ACCOUNTS = "/api/v1/instance/accounts";
 
@@ -105,6 +105,12 @@ describe("the only enabled instance admin", () => {
 });
 
 describe("two admins whose requests arrive together", () => {
+  // What the request that lost answers. Each admin aimed at the other: the winner's commit took the loser's caller out of the
+  // enabled admins, so the database refuses the loser's call (403 forbidden); 401 is the same loss seen one stage earlier, when the winner's
+  // commit had already ended the loser's session before the chain read it. Each admin aimed at itself: both callers are still
+  // enabled admins, so the loser reaches the last-admin rule (422 validation_failed).
+  const LOSER = { "the other": [401, 403], itself: [422] } as const;
+
   // Every pair of the requests that remove an admin from the enabled ones, aimed so that together they would remove both: each removes the
   // other, or each removes itself. The two admins are interchangeable, so a pair of kinds is run once. Both requests start in one tick, so
   // which of them reaches the database first is for the database to decide; the exact interleavings are the ones the repository suites drive.
@@ -116,9 +122,9 @@ describe("two admins whose requests arrive together", () => {
 
     const statuses = [fromX.status, fromY.status];
     const succeeded = statuses.filter((status) => status >= 200 && status < 300);
+    const lost = statuses.filter((status) => status < 200 || status >= 300);
     expect(succeeded, `answers: ${statuses.join(", ")}`).toHaveLength(1);
-    // The request that lost changed nothing: it was refused, by the last-admin rule (422) or because the winner had already taken its caller's standing away.
-    expect(statuses.filter((status) => status < 200 || status >= 300).every((status) => status >= 400)).toBe(true);
+    expect(LOSER[aim], `answers: ${statuses.join(", ")}`).toContain(lost[0]);
     expect(await enabledAdmins()).toBe(1);
   }
 

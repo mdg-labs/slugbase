@@ -2,6 +2,7 @@ import { InMemoryMail } from "@slugbase/testing";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { seedAccount } from "../auth/support.ts";
+import { recordingLogger } from "../support.ts";
 import { HOOK_TIMEOUT_MS, SESSION_COOKIE, bearer, send, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
 
 // GET /instance/accounts and PATCH /instance/accounts/{id} through the whole chain over the migrated database (doc 04
@@ -34,6 +35,14 @@ beforeEach(async () => {
 });
 
 const codeOf = async (response: Response): Promise<string> => ((await response.json()) as { code: string }).code;
+
+/** What another admin's demotion of the caller does, committed while the caller's request is in flight. */
+async function loseFlag(accountId: string): Promise<void> {
+  await database().owner.begin(async (tx) => {
+    await tx`SELECT set_config('app.account_id', ${accountId}, true)`;
+    await tx`UPDATE accounts SET is_instance_admin = false WHERE id = ${accountId}`;
+  });
+}
 
 async function enrolSecondFactor(accountId: string): Promise<void> {
   await database().owner.begin(async (tx) => {
@@ -315,6 +324,31 @@ describe("PATCH /instance/accounts/{id} the instance-admin flag", () => {
     expect(await instanceEvents()).toEqual(events);
     expect((await patch(world, root, target.account.id, { isInstanceAdmin: false, disabled: true })).status).toBe(200);
     expect(asked).toHaveLength(1);
+  });
+
+  it("answers 403 forbidden and changes nothing, without logging an error, when the caller loses the flag after the policy admitted the request", async () => {
+    const logger = recordingLogger();
+    const asking: { accountId: string } = { accountId: "" };
+    const world = harness.serve({
+      logger,
+      instanceAdminGrant: async () => {
+        await loseFlag(asking.accountId);
+        return true;
+      },
+    });
+    const root = await admin(world);
+    asking.accountId = root.accountId;
+    const target = await harness.person(world);
+    const events = await instanceEvents();
+
+    const response = await patch(world, root, target.account.id, { isInstanceAdmin: true });
+
+    expect(response.status).toBe(403);
+    expect(await codeOf(response)).toBe("forbidden");
+    expect(await statusOf(world, target.cookie)).toBe(200);
+    expect(await instanceEvents()).toEqual(events);
+    expect(await mailJobs()).toEqual([]);
+    expect([...logger.entries, ...logger.requests].filter((entry) => entry.level === "error")).toEqual([]);
   });
 
   it("answers 500, not a grant, when the composition's check throws", async () => {

@@ -18,6 +18,7 @@ import {
   addInstanceAdminMembership,
   createInstanceWorkspace,
   deleteInstanceAccount,
+  InstanceAdminRequiredError,
   invitationLink,
   issueInstanceResetLink,
   listInstanceAccounts,
@@ -109,6 +110,9 @@ import { route } from "../register.ts";
 // with a field code on `id` (`account_disabled`, `self`, `email_unverified`, `no_password`, `already_verified`), and 404 is an account that
 // does not exist; a reset of an account without a confirmed second factor changes nothing and answers 204 all the same.
 //
+// Every route here answers 403 `forbidden`, with nothing written, when the database's own admin check refuses a caller whom the policy admitted: another
+// admin demoted, disabled or deleted the account in between (doc 05 section 7.1).
+//
 // DELETE /api/v1/instance/accounts/{id} (doc 02 sections 2.10 and 11.2, doc 04 section 10.10, doc 05 sections 3.3 and 7.1, doc 01 section
 // 13.2, doc 10 T1 and T18) deletes another account with the rules of `DELETE /me`, ownership resolved first. It needs a session that
 // re-authenticated within ten minutes. One transaction reads the account's scope under the locks of `sys_instance_account_deletion_scope`
@@ -170,10 +174,12 @@ function accountBody({ id, displayName, email, emailVerified, mfaEnabled, isInst
   return { id, displayName, email, emailVerified, mfaEnabled, isInstanceAdmin, disabled, lastSignInAt: lastSignInAt === null ? null : lastSignInAt.toISOString(), workspaceCount };
 }
 
+const FORBIDDEN = "You do not have access to this resource.";
+
 function sessionOf(context: ChainContext): { readonly accountId: string } {
   const principal = context.get("principal");
   if (principal?.kind !== "session") {
-    throw new ProblemError("forbidden", "You do not have access to this resource.");
+    throw new ProblemError("forbidden", FORBIDDEN);
   }
   return principal;
 }
@@ -243,7 +249,7 @@ function refusal(message: string, code: string): ProblemError {
 }
 
 export function instanceRoutes({
-  withTenant,
+  withTenant: tenantTransaction,
   databaseUrl,
   chains,
   buildInfo,
@@ -252,6 +258,12 @@ export function instanceRoutes({
   appOrigin,
   instanceAdminGrant = allowInstanceAdminGrant,
 }: InstanceRoutesOptions): RouteBinding[] {
+  // The policy admitted the caller before the handler ran; an admin whose standing another admin's commit took away in between is
+  // refused by the database's own check, and answers like a caller the policy excludes.
+  const withTenant: Database["withTenant"] = (context, fn) =>
+    tenantTransaction(context, fn).catch((error: unknown) => {
+      throw error instanceof InstanceAdminRequiredError ? new ProblemError("forbidden", FORBIDDEN) : error;
+    });
   return [
     route(getInstanceStatus).handle(async (_request, context) => {
       const principal = sessionOf(context);

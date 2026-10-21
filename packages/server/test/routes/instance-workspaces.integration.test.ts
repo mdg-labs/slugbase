@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { HookResult, type DeletionGuardInput, type ServerHooks } from "../../src/hooks/index.ts";
 import type { ServerModule } from "../../src/create-server.ts";
 import { seedAccount } from "../auth/support.ts";
+import { recordingLogger } from "../support.ts";
 import { HOOK_TIMEOUT_MS, SESSION_COOKIE, bearer, send, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
 
 // GET, POST and DELETE /instance/workspaces through the whole chain over the migrated database (doc 04 section
@@ -37,6 +38,14 @@ beforeEach(async () => {
 });
 
 const codeOf = async (response: Response): Promise<string> => ((await response.json()) as { code: string }).code;
+
+/** What another admin's demotion of the caller does, committed while the caller's request is in flight. */
+async function loseFlag(accountId: string): Promise<void> {
+  await database().owner.begin(async (tx) => {
+    await tx`SELECT set_config('app.account_id', ${accountId}, true)`;
+    await tx`UPDATE accounts SET is_instance_admin = false WHERE id = ${accountId}`;
+  });
+}
 
 async function enrolSecondFactor(accountId: string): Promise<void> {
   await database().owner.begin(async (tx) => {
@@ -414,6 +423,32 @@ describe("DELETE /instance/workspaces/{id}", () => {
     expect((await send(world, "GET", "/api/v1/workspace", bearer(token))).status).toBe(200);
     expect(await jobs(DELETE_JOB)).toEqual([]);
     expect(await instanceEvents()).toEqual(events);
+  });
+
+  it("answers 403 forbidden, with nothing marked, queued or written and no error logged, when the caller loses the flag after the policy admitted the request", async () => {
+    const logger = recordingLogger();
+    const asking: { accountId: string } = { accountId: "" };
+    const world = harness.serve({
+      logger,
+      modules: [
+        guardModule(async () => {
+          await loseFlag(asking.accountId);
+          return HookResult.allow();
+        }),
+      ],
+    });
+    const root = await admin(world);
+    asking.accountId = root.accountId;
+    const { workspaceId } = await victim(world);
+    const events = await instanceEvents();
+
+    const response = await remove(world, root, workspaceId);
+
+    expect(response.status).toBe(403);
+    expect(await codeOf(response)).toBe("forbidden");
+    expect(await jobs(DELETE_JOB)).toEqual([]);
+    expect(await instanceEvents()).toEqual(events);
+    expect([...logger.entries, ...logger.requests].filter((entry) => entry.level === "error")).toEqual([]);
   });
 
   it("answers 401 reauth_required to a session that has not re-authenticated within ten minutes, and marks nothing", async () => {

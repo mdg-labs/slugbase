@@ -1,5 +1,6 @@
 import {
   INSTANCE_AUDIT_ACTIONS,
+  InstanceAdminRequiredError,
   isInstanceAuditAction,
   UNSET_INSTANCE_SETTINGS,
   type AccountDeletionWorkspace,
@@ -30,7 +31,9 @@ import { tenantHandle, type TenantTx } from "../tenant.ts";
 // 3.3, doc 02 section 11, doc 10 T3 and T15). The counts and the stream of instance audit events are reached only
 // through the `sys_instance_*` and `sys_list_instance_audit` system operations, each of which checks inside its own
 // body that the account of the transaction is an instance admin with a second factor and raises otherwise; this
-// repository adds nothing to that check and bypasses none of it. The background-job health is read from the
+// repository adds nothing to that check and bypasses none of it. When that check refuses an account that another admin's
+// committed change has just demoted, disabled or deleted, the call throws `InstanceAdminRequiredError` and the transaction
+// rolls back (doc 05 section 7.1). The background-job health is read from the
 // pg-boss tables, which the application role may read and which hold no tenant data.
 
 /** What the instance holds. */
@@ -432,7 +435,7 @@ export function instanceRepository(tx: TenantTx): InstanceRepository {
     },
 
     async status(eventId, ipPrefix) {
-      const rows = await tenantHandle(tx).execute<CountsRow>(sql`
+      const rows = await executeAsAdmin<CountsRow>(tx, sql`
         SELECT account_count::text, workspace_count::text, active_session_count::text
         FROM public.sys_instance_status(${eventId}::uuid, ${ipPrefix}::cidr)`);
       const row = rows[0];
@@ -460,7 +463,7 @@ export function instanceRepository(tx: TenantTx): InstanceRepository {
     },
 
     async listAudit(limit, afterId) {
-      const rows = await tenantHandle(tx).execute<AuditRow>(sql`
+      const rows = await executeAsAdmin<AuditRow>(tx, sql`
         SELECT id, created_at, actor_account_id, actor_label, action, entity_type, entity_id, metadata, ip_prefix::text AS ip_prefix
         FROM public.sys_list_instance_audit(${limit}::integer, ${afterId ?? null}::uuid)`);
       return rows.map(auditEventOf);
@@ -474,7 +477,7 @@ export function instanceRepository(tx: TenantTx): InstanceRepository {
     },
 
     async viewSettings(eventId, ipPrefix) {
-      const rows = await tenantHandle(tx).execute<SettingsRow>(sql`
+      const rows = await executeAsAdmin<SettingsRow>(tx, sql`
         SELECT allow_workspace_creation, display_name, sign_in_notice
         FROM public.sys_instance_settings(${eventId}::uuid, ${ipPrefix}::cidr)`);
       const row = rows[0];
@@ -486,7 +489,7 @@ export function instanceRepository(tx: TenantTx): InstanceRepository {
 
     async updateSettings(change, eventId, ipPrefix) {
       const has = (name: keyof InstanceSettingsChange): boolean => Object.hasOwn(change, name) && change[name] !== undefined;
-      const rows = await tenantHandle(tx).execute<SettingsRow>(sql`
+      const rows = await executeAsAdmin<SettingsRow>(tx, sql`
         SELECT allow_workspace_creation, display_name, sign_in_notice
         FROM public.sys_instance_update_settings(
           ${eventId}::uuid, ${ipPrefix}::cidr,
@@ -501,12 +504,12 @@ export function instanceRepository(tx: TenantTx): InstanceRepository {
     },
 
     async recordTestMail(eventId, ipPrefix, job) {
-      await tenantHandle(tx).execute(sql`SELECT public.sys_instance_test_mail(${eventId}::uuid, ${ipPrefix}::cidr)`);
+      await executeAsAdmin(tx, sql`SELECT public.sys_instance_test_mail(${eventId}::uuid, ${ipPrefix}::cidr)`);
       await enqueueInTenantTransaction(tx, job);
     },
 
     async listWorkspaces(eventId, ipPrefix) {
-      const rows = await tenantHandle(tx).execute<WorkspaceRow>(sql`
+      const rows = await executeAsAdmin<WorkspaceRow>(tx, sql`
         SELECT workspace_id, workspace_name, to_char(workspace_created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS workspace_created_at, member_count::text, owners
         FROM public.sys_instance_list_workspaces(${eventId}::uuid, ${ipPrefix}::cidr)`);
       return rows.map(workspaceOf);
@@ -514,7 +517,7 @@ export function instanceRepository(tx: TenantTx): InstanceRepository {
 
     async createWorkspace(request, eventId, ipPrefix, jobs) {
       const { owner } = request;
-      const rows = await tenantHandle(tx).execute<CreatedWorkspaceRow>(sql`
+      const rows = await executeAsAdmin<CreatedWorkspaceRow>(tx, sql`
         SELECT outcome, to_char(invitation_expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS invitation_expires_at
         FROM public.sys_instance_create_workspace(
           ${eventId}::uuid, ${ipPrefix}::cidr, ${request.workspaceId}::uuid, ${request.name}::text,
@@ -540,7 +543,7 @@ export function instanceRepository(tx: TenantTx): InstanceRepository {
     },
 
     async markWorkspaceDeleting(workspaceId, eventId, ipPrefix, jobs) {
-      const rows = await tenantHandle(tx).execute<DeletedWorkspaceRow>(sql`
+      const rows = await executeAsAdmin<DeletedWorkspaceRow>(tx, sql`
         SELECT public.sys_instance_delete_workspace(${eventId}::uuid, ${ipPrefix}::cidr, ${workspaceId}::uuid) AS marked`);
       const row = rows[0];
       if (rows.length !== 1 || row === undefined) {
@@ -556,7 +559,7 @@ export function instanceRepository(tx: TenantTx): InstanceRepository {
     },
 
     async addMembership(request, ipPrefix, jobs) {
-      const rows = await tenantHandle(tx).execute<MembershipRow>(sql`
+      const rows = await executeAsAdmin<MembershipRow>(tx, sql`
         SELECT public.sys_instance_add_membership(${request.eventIds.workspace}::uuid, ${request.eventIds.instance}::uuid, ${ipPrefix}::cidr, ${request.workspaceId}::uuid) AS outcome`);
       const row = rows[0];
       if (rows.length !== 1 || row === undefined) {
@@ -577,7 +580,7 @@ export function instanceRepository(tx: TenantTx): InstanceRepository {
     },
 
     async listAccounts(eventId, ipPrefix) {
-      const rows = await tenantHandle(tx).execute<AccountColumns>(sql`
+      const rows = await executeAsAdmin<AccountColumns>(tx, sql`
         SELECT acct_id, acct_name, acct_email, acct_verified, acct_mfa_on, acct_admin, acct_disabled,
           to_char(acct_last_sign_in AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS acct_last_sign_in, acct_workspaces::text AS acct_workspaces
         FROM public.sys_instance_list_accounts(${eventId}::uuid, ${ipPrefix}::cidr)`);
@@ -585,7 +588,7 @@ export function instanceRepository(tx: TenantTx): InstanceRepository {
     },
 
     async updateAccount(accountId, change, eventIds, ipPrefix, jobs) {
-      const rows = await tenantHandle(tx).execute<AccountChangeRow>(sql`
+      const rows = await executeAsAdmin<AccountChangeRow>(tx, sql`
         SELECT ${ACCOUNT_COLUMNS}
         FROM public.sys_instance_update_account(
           ${eventIds.admin}::uuid, ${eventIds.disabled}::uuid, ${eventIds.verified}::uuid, ${ipPrefix}::cidr, ${accountId}::uuid,
@@ -661,7 +664,7 @@ export function instanceRepository(tx: TenantTx): InstanceRepository {
     },
 
     async accountDeletionScope(accountId) {
-      const rows = await tenantHandle(tx).execute<DeletionScopeRow>(sql`
+      const rows = await executeAsAdmin<DeletionScopeRow>(tx, sql`
         SELECT outcome, workspace_id, workspace_name, kind FROM public.sys_instance_account_deletion_scope(${accountId}::uuid)`);
       const first = rows[0];
       if (first === undefined) {
@@ -725,8 +728,34 @@ export function instanceRepository(tx: TenantTx): InstanceRepository {
   };
 }
 
+// The message of the refusal the `sys_instance_*` functions raise with `insufficient_privilege` when the account of the
+// transaction fails their own admin check. A `42501` is also what a missing grant or a row-level security violation
+// raises, and those must stay defects, so a refusal is recognised by its code and this message together.
+const ADMIN_REQUIRED_MESSAGE = "the instance operations are for instance admins with a second factor";
+
+function isAdminRequiredRefusal(error: unknown): boolean {
+  // Drizzle wraps the driver's error, which holds the SQLSTATE and the message the function raised.
+  let current: unknown = error;
+  for (let depth = 0; depth < 4 && typeof current === "object" && current !== null; depth += 1) {
+    const { code, message, cause } = current as { code?: unknown; message?: unknown; cause?: unknown };
+    if (typeof code === "string") {
+      return code === "42501" && message === ADMIN_REQUIRED_MESSAGE;
+    }
+    current = cause;
+  }
+  return false;
+}
+
+async function executeAsAdmin<T extends Record<string, unknown> = Record<string, unknown>>(tx: TenantTx, statement: SQL): Promise<T[]> {
+  try {
+    return (await tenantHandle(tx).execute<T>(statement)) as T[];
+  } catch (error) {
+    throw isAdminRequiredRefusal(error) ? new InstanceAdminRequiredError({ cause: error }) : error;
+  }
+}
+
 async function recoveryOutcome(tx: TenantTx, operation: string, statement: SQL): Promise<string> {
-  const rows = await tenantHandle(tx).execute<RecoveryRow>(statement);
+  const rows = await executeAsAdmin<RecoveryRow>(tx, statement);
   const row = rows[0];
   if (rows.length !== 1 || row === undefined) {
     throw new Error(`${operation} did not return exactly one row`);
