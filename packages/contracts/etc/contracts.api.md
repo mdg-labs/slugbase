@@ -595,7 +595,7 @@ export interface ComponentTypes {
             email: string;
             expiresAt: string;
             id: string;
-            link: string;
+            link: string | null;
         };
         InstanceSettings: {
             allowWorkspaceCreation: boolean | null;
@@ -695,6 +695,9 @@ export interface ComponentTypes {
             role: "owner" | "admin" | "member";
             workspaceName: string;
         };
+        IssueInstanceOwnerInvitationRequest: {
+            ownerEmail?: string;
+        };
         LoginRequest: {
             email: string;
             password: string;
@@ -760,7 +763,7 @@ export interface ComponentTypes {
             [key: string]: unknown;
         };
         Problem: {
-            code: "bad_request" | "unauthenticated" | "mfa_required" | "reauth_required" | "forbidden" | "registration_refused" | "cross_site_request" | "token_scope" | "entitlement_required" | "email_unverified" | "registration_closed" | "setup_completed" | "not_found" | "slug_not_found" | "slug_taken" | "name_taken" | "email_taken" | "already_member" | "last_owner" | "idempotency_conflict" | "billing_active" | "token_expired" | "precondition_failed" | "payload_too_large" | "unsupported_media_type" | "validation_failed" | "bookmark_limit_reached" | "seat_limit_reached" | "workspace_limit_reached" | "weak_password" | "invalid_code" | "url_not_allowed" | "rate_limited" | "internal" | "upstream_failed" | "unavailable" | "mail_unavailable" | "ai_unavailable" | "billing_unavailable";
+            code: "bad_request" | "unauthenticated" | "mfa_required" | "reauth_required" | "forbidden" | "registration_refused" | "cross_site_request" | "token_scope" | "entitlement_required" | "email_unverified" | "registration_closed" | "setup_completed" | "not_found" | "slug_not_found" | "slug_taken" | "name_taken" | "email_taken" | "already_member" | "last_owner" | "workspace_has_owner" | "idempotency_conflict" | "billing_active" | "token_expired" | "precondition_failed" | "payload_too_large" | "unsupported_media_type" | "validation_failed" | "bookmark_limit_reached" | "seat_limit_reached" | "workspace_limit_reached" | "weak_password" | "invalid_code" | "url_not_allowed" | "rate_limited" | "internal" | "upstream_failed" | "unavailable" | "mail_unavailable" | "ai_unavailable" | "billing_unavailable";
             detail: string;
             errors?: ComponentTypes["schemas"]["ProblemFieldError"][];
             requestId: string;
@@ -1083,7 +1086,7 @@ export const createInstanceWorkspace: {
         id: z.ZodUUID;
         email: z.ZodString;
         expiresAt: z.ZodISODateTime;
-        link: z.ZodURL;
+        link: z.ZodNullable<z.ZodURL>;
         }, z.core.$strict>>;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
         readonly 400: ProblemResponse;
@@ -2039,7 +2042,7 @@ export const InstanceOwnerInvitationSchema: z.ZodObject<{
     id: z.ZodUUID;
     email: z.ZodString;
     expiresAt: z.ZodISODateTime;
-    link: z.ZodURL;
+    link: z.ZodNullable<z.ZodURL>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -2088,7 +2091,7 @@ export const InstanceWorkspaceCreatedSchema: z.ZodObject<{
         id: z.ZodUUID;
         email: z.ZodString;
         expiresAt: z.ZodISODateTime;
-        link: z.ZodURL;
+        link: z.ZodNullable<z.ZodURL>;
     }, z.core.$strict>>;
 }, z.core.$strict>;
 
@@ -2293,6 +2296,47 @@ export const issueInstanceAccountResetLink: {
         readonly 401: ProblemResponse;
         readonly 403: ProblemResponse;
         readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const IssueInstanceOwnerInvitationRequestSchema: z.ZodObject<{
+    ownerEmail: z.ZodOptional<z.ZodEmail>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const issueInstanceWorkspaceOwnerInvitation: {
+    readonly method: "post";
+    readonly path: "/api/v1/instance/workspaces/{id}/owner-invitation";
+    readonly operationId: "issueInstanceWorkspaceOwnerInvitation";
+    readonly tag: "instance";
+    readonly summary: "Issue a new owner invitation for a workspace that has no owner";
+    readonly auth: "instanceAdmin";
+    readonly rate: "write";
+    readonly reauth: true;
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+        readonly body: z.ZodObject<{
+            ownerEmail: z.ZodOptional<z.ZodEmail>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 201: JsonResponse<z.ZodObject<{
+        id: z.ZodUUID;
+        email: z.ZodString;
+        expiresAt: z.ZodISODateTime;
+        link: z.ZodNullable<z.ZodURL>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 409: ProblemResponse;
         readonly 422: ProblemResponse;
         readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
@@ -5128,6 +5172,97 @@ export interface OperationTypes {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    issueInstanceWorkspaceOwnerInvitation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["IssueInstanceOwnerInvitationRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["InstanceOwnerInvitation"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8438,6 +8573,23 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/instance/workspaces/{id}/owner-invitation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["issueInstanceWorkspaceOwnerInvitation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/api/v1/invitations": {
         parameters: {
             query?: never;
@@ -9131,6 +9283,9 @@ export const PROBLEM_CATALOG: readonly [{
     readonly code: "last_owner";
 }, {
     readonly status: 409;
+    readonly code: "workspace_has_owner";
+}, {
+    readonly status: 409;
     readonly code: "idempotency_conflict";
 }, {
     readonly status: 409;
@@ -9215,6 +9370,7 @@ export const ProblemCodeSchema: z.ZodEnum<{
     email_taken: "email_taken";
     already_member: "already_member";
     last_owner: "last_owner";
+    workspace_has_owner: "workspace_has_owner";
     idempotency_conflict: "idempotency_conflict";
     billing_active: "billing_active";
     token_expired: "token_expired";
@@ -9284,6 +9440,7 @@ export const ProblemSchema: z.ZodObject<{
         email_taken: "email_taken";
         already_member: "already_member";
         last_owner: "last_owner";
+        workspace_has_owner: "workspace_has_owner";
         idempotency_conflict: "idempotency_conflict";
         billing_active: "billing_active";
         token_expired: "token_expired";

@@ -15,7 +15,8 @@ export type InvitationStatus = "pending" | "accepted" | "revoked";
  * An invitation of an email address into a workspace with a role (doc 02 section 3.4). The token is found by
  * its SHA-256 and never stored; a resend replaces the hash, which ends the earlier link. Expiry is evaluated at
  * read time. The public operations never write an owner invitation: `instance_issued` is true only for the
- * one a system operation writes for a workspace created without an owner account.
+ * ones the system operations of the instance admin write, for a workspace created without an owner account and for
+ * a workspace that still has no owner.
  */
 export const workspaceInvitations = pgTable(
   "workspace_invitations",

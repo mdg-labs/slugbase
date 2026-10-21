@@ -24,6 +24,7 @@ export const PROBLEM_CATALOG = [
   { status: 409, code: "email_taken" },
   { status: 409, code: "already_member" },
   { status: 409, code: "last_owner" },
+  { status: 409, code: "workspace_has_owner" },
   { status: 409, code: "idempotency_conflict" },
   { status: 409, code: "billing_active" },
   { status: 410, code: "token_expired" },

@@ -1138,9 +1138,16 @@
             "type": "string"
           },
           "link": {
-            "description": "The address the invited owner opens to accept: the application's origin and /invite/ followed by the token. Returned this once and never again",
-            "format": "uri",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uri",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The address the invited owner opens to accept: the application's origin and /invite/ followed by the token. Returned this once and never again, and only where no email can be sent; null when the invitation was mailed to its address"
           }
         },
         "required": [
@@ -1749,6 +1756,19 @@
         ],
         "type": "object"
       },
+      "IssueInstanceOwnerInvitationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "ownerEmail": {
+            "description": "The address to invite as the workspace's first owner. Left out, the address of the workspace's latest owner invitation is used",
+            "format": "email",
+            "maxLength": 320,
+            "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$",
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
       "LoginRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2098,6 +2118,7 @@
               "email_taken",
               "already_member",
               "last_owner",
+              "workspace_has_owner",
               "idempotency_conflict",
               "billing_active",
               "token_expired",
@@ -5258,7 +5279,7 @@
                 }
               }
             },
-            "description": "The workspace is created with the account as its owner, or, for an address, with no member and one pending owner invitation that expires in 7 days; the invitation's link is returned this once and is in no email, log or later response. The admin does not become a member, and the action is written to the instance audit stream"
+            "description": "The workspace is created with the account as its owner, or, for an address, with no member and one pending owner invitation that expires in 7 days. Where email can be sent the invitation is mailed to the address in the language of the calling admin and the response carries no link (link is null); otherwise the invitation's link is returned this once and is in no email, log or later response. The admin does not become a member, and the action is written to the instance audit stream"
           },
           "400": {
             "content": {
@@ -5561,6 +5582,144 @@
           }
         },
         "summary": "Add the calling instance admin to a workspace as a member",
+        "tags": [
+          "instance"
+        ],
+        "x-slugbase-auth": "instanceAdmin",
+        "x-slugbase-rate": "write",
+        "x-slugbase-reauth": true
+      }
+    },
+    "/api/v1/instance/workspaces/{id}/owner-invitation": {
+      "post": {
+        "operationId": "issueInstanceWorkspaceOwnerInvitation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The identifier of a workspace, as listed",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IssueInstanceOwnerInvitationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstanceOwnerInvitation"
+                }
+              }
+            },
+            "description": "The workspace's pending owner invitations are revoked, so their links stop working at once, and a new one for the address is written; it expires in 7 days. Where email can be sent the invitation is mailed to the address in the language of the calling admin and the response carries no link (link is null); otherwise the link is returned this once and is in no email, log or later response. The admin does not become a member, and the action is written to the instance audit stream, naming no address, in one transaction with the invitation"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden). Nothing is written"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no workspace with that identifier, or it is being deleted"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The workspace has an owner already (workspace_has_owner); nothing is written"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body did not pass validation: a field the operation does not declare, an ownerEmail that is not an address, or no ownerEmail for a workspace that has no owner invitation to take the address from (owner_email_required on ownerEmail). Nothing is written"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Issue a new owner invitation for a workspace that has no owner",
         "tags": [
           "instance"
         ],

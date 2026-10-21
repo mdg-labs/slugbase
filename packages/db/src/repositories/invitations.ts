@@ -69,6 +69,7 @@ interface AcceptedRow extends Record<string, unknown> {
 interface IssuedRow extends Record<string, unknown> {
   email: string;
   role: string;
+  instance_issued: boolean;
   expires_at: string;
   workspace_name: string;
 }
@@ -77,6 +78,8 @@ interface IssuedRow extends Record<string, unknown> {
 export interface InvitationMailContext {
   readonly email: string;
   readonly role: WorkspaceRole;
+  /** Whether an instance admin issued the invitation, the only way an invitation carries the owner role. */
+  readonly instanceIssued: boolean;
   readonly expiresAt: Date;
   readonly workspaceName: string;
 }
@@ -214,11 +217,11 @@ export function invitationRepository(tx: TenantTx): InvitationRepository {
         WHERE i.id = ${invitationId}::uuid AND i.workspace_id = ${workspaceId}::uuid AND i.status = 'pending' AND i.expires_at > now()
           AND i.mail_ticket = ${mailTicket}::uuid
           AND EXISTS (SELECT 1 FROM public.workspaces w WHERE w.id = i.workspace_id)
-        RETURNING i.email::text AS email, i.role::text AS role,
+        RETURNING i.email::text AS email, i.role::text AS role, i.instance_issued,
                   to_char(i.expires_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS expires_at,
                   (SELECT w.name FROM public.workspaces w WHERE w.id = i.workspace_id) AS workspace_name`);
       const row = rows[0];
-      return row === undefined ? undefined : { email: row.email, role: roleOf(row.role), expiresAt: new Date(row.expires_at), workspaceName: row.workspace_name };
+      return row === undefined ? undefined : { email: row.email, role: roleOf(row.role), instanceIssued: row.instance_issued, expiresAt: new Date(row.expires_at), workspaceName: row.workspace_name };
     },
 
     async pending(invitationId) {

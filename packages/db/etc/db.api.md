@@ -20,6 +20,8 @@ import { InstanceAuditEvent } from '@slugbase/core';
 import { InstanceMembershipRequest } from '@slugbase/core';
 import { InstanceMembershipResult } from '@slugbase/core';
 import { InstanceMfaResetOutcome } from '@slugbase/core';
+import { InstanceOwnerInvitationReissue } from '@slugbase/core';
+import { InstanceOwnerInvitationReissueResult } from '@slugbase/core';
 import { InstanceResetLinkStoreOutcome } from '@slugbase/core';
 import { InstanceSettings } from '@slugbase/core';
 import { InstanceSettingsChange } from '@slugbase/core';
@@ -566,6 +568,7 @@ export interface InstanceRepository {
     listWorkspaces(eventId: string, ipPrefix: string | null): Promise<readonly InstanceWorkspace[]>;
     markWorkspaceDeleting(workspaceId: string, eventId: string, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<boolean>;
     recordTestMail(eventId: string, ipPrefix: string | null, job: QueuedJob): Promise<void>;
+    reissueOwnerInvitation(request: InstanceOwnerInvitationReissue, eventId: string, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<InstanceOwnerInvitationReissueResult>;
     requestVerification(accountId: string, eventId: string, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<InstanceVerificationOutcome>;
     resetMfa(accountId: string, eventId: string, ipPrefix: string | null, jobs: readonly QueuedJob[]): Promise<InstanceMfaResetOutcome>;
     secondFactorEnrolled(): Promise<boolean>;
@@ -629,6 +632,7 @@ export interface InvitationMailContext {
     readonly email: string;
     // (undocumented)
     readonly expiresAt: Date;
+    readonly instanceIssued: boolean;
     // (undocumented)
     readonly role: WorkspaceRole;
     // (undocumented)

@@ -10,7 +10,9 @@ import {
   InstanceStatusSchema,
   UpdateInstanceAccountRequestSchema,
   InstanceWorkspaceCreatedSchema,
+  InstanceOwnerInvitationSchema,
   InstanceWorkspaceMembershipSchema,
+  IssueInstanceOwnerInvitationRequestSchema,
   InstanceWorkspaceSchema,
   UpdateInstanceSettingsRequestSchema,
   addInstanceAdminMembership,
@@ -20,6 +22,7 @@ import {
   getInstanceSettings,
   getInstanceStatus,
   issueInstanceAccountResetLink,
+  issueInstanceWorkspaceOwnerInvitation,
   listInstanceAccounts,
   listInstanceWorkspaces,
   resendInstanceAccountVerification,
@@ -338,6 +341,40 @@ describe("the instance membership operation", () => {
     expect(InstanceWorkspaceMembershipSchema.safeParse(answer).success).toBe(true);
     expect(InstanceWorkspaceMembershipSchema.safeParse({ ...answer, role: "owner" }).success).toBe(false);
     expect(InstanceWorkspaceMembershipSchema.safeParse({ ...answer, accountId: "0192f3a0-bbbb-7000-8000-0000000000aa" }).success).toBe(false);
+  });
+});
+
+describe("the owner invitation operation of the instance admin", () => {
+  const operation = paths["/api/v1/instance/workspaces/{id}/owner-invitation"]?.["post"];
+  const responses = (operation?.["responses"] ?? {}) as Record<string, Obj>;
+
+  it("is POST /instance/workspaces/{id}/owner-invitation for the instance admin, with the write bucket and re-authentication", () => {
+    expect(issueInstanceWorkspaceOwnerInvitation.operationId).toBe("issueInstanceWorkspaceOwnerInvitation");
+    expect(operation?.["x-slugbase-auth"]).toBe("instanceAdmin");
+    expect(operation?.["x-slugbase-rate"]).toBe("write");
+    expect(operation?.["x-slugbase-reauth"]).toBe(true);
+  });
+
+  it("answers 201 with a body and every refusal as a problem document", () => {
+    expect(Object.keys(responses["201"]?.["content"] as Obj)).toEqual(["application/json"]);
+    for (const status of ["400", "401", "403", "404", "409", "422", "429", "503"]) {
+      expect(Object.keys(responses[status]?.["content"] as Obj), status).toEqual(["application/problem+json"]);
+    }
+  });
+
+  it("takes a closed body whose only field is an optional address", () => {
+    const parse = (body: unknown) => IssueInstanceOwnerInvitationRequestSchema.safeParse(body);
+    expect(parse({}).success).toBe(true);
+    expect(parse({ ownerEmail: "owner@example.test" }).success).toBe(true);
+    expect(parse({ ownerEmail: "not an address" }).success).toBe(false);
+    expect(parse({ ownerEmail: "owner@example.test", role: "admin" }).success).toBe(false);
+  });
+
+  it("describes an invitation whose link is null when it was mailed", () => {
+    const invitation = { id: "0192f3a0-bbbb-7000-8000-0000000000bb", email: "owner@example.test", expiresAt: "2026-10-28T10:00:00.000Z", link: null };
+    expect(InstanceOwnerInvitationSchema.safeParse(invitation).success).toBe(true);
+    expect(InstanceOwnerInvitationSchema.safeParse({ ...invitation, link: "https://slugbase.example.test/invite/x" }).success).toBe(true);
+    expect(InstanceOwnerInvitationSchema.safeParse({ ...invitation, link: undefined }).success).toBe(false);
   });
 });
 

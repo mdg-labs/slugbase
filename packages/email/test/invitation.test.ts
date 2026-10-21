@@ -49,6 +49,11 @@ describe("the invitation template", () => {
     expect((await render("de", { ...DATA, role: "member" })).text).toContain("als Mitglied beizutreten.");
   });
 
+  it("names the owner role of the first-owner invitation an instance admin issues", async () => {
+    expect((await render("en", { ...DATA, role: "owner" })).text).toContain("as an owner.");
+    expect((await render("de", { ...DATA, role: "owner" })).text).toContain("als Eigentümer beizutreten.");
+  });
+
   it("falls back to English for a language it has no catalog for", async () => {
     expect((await render("fr")).subject).toBe("Ada Lovelace invited you to Compilers on SlugBase");
   });
@@ -97,7 +102,7 @@ describe("the invitation template", () => {
     ["a missing token", { ...DATA, token: "" }],
     ["a token of the wrong length", { ...DATA, token: "short" }],
     ["a token with a character a link cannot carry", { ...DATA, token: `${TOKEN.slice(0, 42)}/` }],
-    ["the owner role, which no invitation grants", { ...DATA, role: "owner" }],
+    ["a role the catalogs do not name", { ...DATA, role: "superuser" }],
     ["no role", { ...DATA, role: "" }],
     ["no workspace name", { ...DATA, workspaceName: "  " }],
     ["a date that is not a date", { ...DATA, expiresOn: "next week" }],

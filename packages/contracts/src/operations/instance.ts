@@ -230,9 +230,24 @@ export const InstanceOwnerInvitationSchema = z
     id: z.uuid().describe("The invitation's identifier"),
     email: z.string().describe("The address the invitation is for; only the account that holds it can accept"),
     expiresAt: z.iso.datetime().describe("When the invitation stops working, RFC 3339 UTC"),
-    link: z.url().describe("The address the invited owner opens to accept: the application's origin and /invite/ followed by the token. Returned this once and never again"),
+    link: z
+      .url()
+      .nullable()
+      .describe(
+        "The address the invited owner opens to accept: the application's origin and /invite/ followed by the token. Returned this once and never again, and only where no email can be sent; null when the invitation was mailed to its address",
+      ),
   })
   .meta({ id: "InstanceOwnerInvitation" });
+
+export const IssueInstanceOwnerInvitationRequestSchema = z
+  .strictObject({
+    ownerEmail: z
+      .email()
+      .max(320)
+      .optional()
+      .describe("The address to invite as the workspace's first owner. Left out, the address of the workspace's latest owner invitation is used"),
+  })
+  .meta({ id: "IssueInstanceOwnerInvitationRequest" });
 
 export const InstanceWorkspaceCreatedSchema = z
   .strictObject({
@@ -285,7 +300,7 @@ export const createInstanceWorkspace = defineOperation({
   request: { body: CreateInstanceWorkspaceRequestSchema },
   responses: {
     201: jsonResponse(
-      "The workspace is created with the account as its owner, or, for an address, with no member and one pending owner invitation that expires in 7 days; the invitation's link is returned this once and is in no email, log or later response. The admin does not become a member, and the action is written to the instance audit stream",
+      "The workspace is created with the account as its owner, or, for an address, with no member and one pending owner invitation that expires in 7 days. Where email can be sent the invitation is mailed to the address in the language of the calling admin and the response carries no link (link is null); otherwise the invitation's link is returned this once and is in no email, log or later response. The admin does not become a member, and the action is written to the instance audit stream",
       InstanceWorkspaceCreatedSchema,
     ),
     400: problemResponse("The request was malformed"),
@@ -323,6 +338,36 @@ export const addInstanceAdminMembership = defineOperation({
     ),
     404: problemResponse("There is no workspace with that identifier, or it is being deleted"),
     409: problemResponse("The calling account is a member of the workspace already, with any role (already_member); nothing is written"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const issueInstanceWorkspaceOwnerInvitation = defineOperation({
+  method: "post",
+  path: "/api/v1/instance/workspaces/{id}/owner-invitation",
+  operationId: "issueInstanceWorkspaceOwnerInvitation",
+  tag: "instance",
+  summary: "Issue a new owner invitation for a workspace that has no owner",
+  auth: "instanceAdmin",
+  rate: "write",
+  reauth: true,
+  request: { params: InstanceWorkspaceParamsSchema, body: IssueInstanceOwnerInvitationRequestSchema },
+  responses: {
+    201: jsonResponse(
+      "The workspace's pending owner invitations are revoked, so their links stop working at once, and a new one for the address is written; it expires in 7 days. Where email can be sent the invitation is mailed to the address in the language of the calling admin and the response carries no link (link is null); otherwise the link is returned this once and is in no email, log or later response. The admin does not become a member, and the action is written to the instance audit stream, naming no address, in one transaction with the invitation",
+      InstanceOwnerInvitationSchema,
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, its second factor is not complete, or it has not re-authenticated within the last ten minutes (reauth_required)"),
+    403: problemResponse(
+      "The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden). Nothing is written",
+    ),
+    404: problemResponse("There is no workspace with that identifier, or it is being deleted"),
+    409: problemResponse("The workspace has an owner already (workspace_has_owner); nothing is written"),
+    422: problemResponse(
+      "The body did not pass validation: a field the operation does not declare, an ownerEmail that is not an address, or no ownerEmail for a workspace that has no owner invitation to take the address from (owner_email_required on ownerEmail). Nothing is written",
+    ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },

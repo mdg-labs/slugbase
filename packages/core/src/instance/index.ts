@@ -43,7 +43,13 @@ export type {
   InstanceVerificationOutcome,
   InstanceVerificationRefusal,
 } from "./recovery.ts";
-export { addInstanceAdminMembership, createInstanceWorkspace, listInstanceWorkspaces, requestInstanceWorkspaceDeletion } from "./workspaces.ts";
+export {
+  addInstanceAdminMembership,
+  createInstanceWorkspace,
+  listInstanceWorkspaces,
+  reissueInstanceWorkspaceOwnerInvitation,
+  requestInstanceWorkspaceDeletion,
+} from "./workspaces.ts";
 export type {
   InstanceMembershipOutcome,
   InstanceMembershipRequest,
@@ -57,6 +63,11 @@ export type {
   InstanceWorkspaceDeletionDependencies,
   InstanceWorkspaceDeletionOutcome,
   InstanceWorkspaceDependencies,
+  InstanceOwnerInvitation,
+  InstanceOwnerInvitationAsk,
+  InstanceOwnerInvitationOutcome,
+  InstanceOwnerInvitationReissue,
+  InstanceOwnerInvitationReissueResult,
   InstanceWorkspaceOwner,
   InstanceWorkspaceOwnerSeat,
   InstanceWorkspaceStore,

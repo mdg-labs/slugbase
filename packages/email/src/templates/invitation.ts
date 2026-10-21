@@ -12,7 +12,7 @@ const INVITE_PATH = "/invite/";
 const TOKEN_SHAPE = /^[A-Za-z0-9_-]{43}$/;
 
 /** The roles an invitation grants, which the catalogs name. */
-const ROLES = ["admin", "member"] as const;
+const ROLES = ["admin", "member", "owner"] as const;
 
 /** The day the link stops working, as the date the core hands over. */
 const DATE_SHAPE = /^\d{4}-\d{2}-\d{2}$/;
@@ -33,7 +33,7 @@ function oneLine(value: unknown): string {
  * invitation grants, and links to `/invite/<token>` on the deployment's origin. The message goes to an address
  * that may have no account, so it greets nobody by name. The workspace and the inviter are other people's data,
  * so they are escaped and kept on one line; an inviter who is no longer known is left out of the message. A
- * token that is not the shape the core makes, a role an invitation cannot grant, a workspace without a name or
+ * token that is not the shape the core makes, a role the catalogs do not name, a workspace without a name or
  * a date that is not a date is refused, so no message goes out that names nothing or links to nothing that works.
  */
 export function invitation({ appName, origin }: InvitationOptions): MailTemplate {
@@ -44,7 +44,7 @@ export function invitation({ appName, origin }: InvitationOptions): MailTemplate
     }
     const role = ROLES.find((candidate) => candidate === data["role"]);
     if (role === undefined) {
-      throw new RangeError("the invitation email needs the role the invitation grants: admin or member");
+      throw new RangeError("the invitation email needs the role the invitation grants: admin, member or owner");
     }
     const workspace = oneLine(data["workspaceName"]);
     if (workspace === "") {
@@ -58,7 +58,7 @@ export function invitation({ appName, origin }: InvitationOptions): MailTemplate
     const link = `${origin}${INVITE_PATH}${token}`;
     const language = resolveLocale(locale);
     const t = translator(language);
-    const roleName = role === "admin" ? t("invitation.role.admin") : t("invitation.role.member");
+    const roleName = role === "owner" ? t("invitation.role.owner") : role === "admin" ? t("invitation.role.admin") : t("invitation.role.member");
     const subject =
       inviter === "" ? t("invitation.subject", { appName, workspace }) : t("invitation.subjectBy", { appName, workspace, inviter });
     const greeting = t("invitation.greeting");
