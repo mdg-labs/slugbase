@@ -378,6 +378,25 @@ describe("the overview", () => {
     expect(server.statusCalls()).toBe(2);
   });
 
+  it("shows the 403 page when the status is refused because the account is no longer an admin", async () => {
+    // The account loses the flag when the status is refused, so only a fresh read of it after the refusal shows the 403 page.
+    let demoted = false;
+    const server = stubServer({
+      me: () => json(meOf({ ...ACCOUNT_BODY, isInstanceAdmin: !demoted, mfaEnabled: true })),
+      status: [
+        () => {
+          demoted = true;
+          return problem(403, "forbidden", "req-403");
+        },
+      ],
+    });
+    await open("/admin");
+
+    expect(await screen.findByRole("heading", { level: 1, name: "You don't have access" })).toBeTruthy();
+    expect(screen.queryByText("The status of the instance could not be loaded")).toBeNull();
+    expect(server.statusCalls()).toBe(1);
+  });
+
   it.each(["light", "dark"] as const)("has no axe violations at tablet width in the %s theme", async (theme) => {
     stubServer();
     await open("/admin");

@@ -5,7 +5,7 @@ import { useRouter } from "@tanstack/react-router";
 import type { ReactElement, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useFormat } from "../i18n/use-format.ts";
-import { useAdminActionsEnabled } from "./admin-access.ts";
+import { useAdminActionsEnabled, useRefreshStandingOnForbidden } from "./admin-access.ts";
 import { instanceStatusQuery, type InstanceStatus } from "./instance-status.ts";
 
 function Row({ label, children }: { label: string; children: ReactNode }): ReactElement {
@@ -112,6 +112,7 @@ export function AdminOverviewPage(): ReactElement {
   const router = useRouter();
   const enabled = useAdminActionsEnabled();
   const status = useQuery({ ...instanceStatusQuery(router.options.context.api), enabled });
+  useRefreshStandingOnForbidden(status.error);
 
   let body: ReactElement;
   if (!enabled) {
