@@ -1,6 +1,6 @@
 import { analyseSql, identifierForm, mentionOfAny, setsSessionTimeout, SYSTEM_ROLE, TENANT_FUNCTIONS, type AnalysedStatement, type ColumnType, type FunctionIdentity, type Operation, type TableName, type TriggerForm } from "./migration-statements.ts";
 import { readJournal, readMigration } from "./migration-files.ts";
-import { readReleaseState, releaseTags, type ReleaseState } from "./release-history.ts";
+import { customStep, privilegeStatements, readReleasedPrivileges, readReleaseState, releaseTags, sameTablePrivileges, type PrivilegeStatement, type ReleaseState } from "./release-history.ts";
 import type { CheckRule, ContractMarker, Finding } from "./types.ts";
 
 // Doc 05 section 5.2 and Q52: several replicas run during a rolling deploy, so a
@@ -54,9 +54,10 @@ import type { CheckRule, ContractMarker, Finding } from "./types.ts";
 //   - revoking privileges (REVOKE ... FROM) on a table that exists at that tag,
 //     or on an object that is not a named table (a schema, a sequence, a
 //     database, ALL TABLES IN SCHEMA ...): a running replica may lose the access
-//     it uses. Only a REVOKE on tables the release does not hold passes. The
-//     release state holds tables only, so a view or sequence of the release
-//     named as a bare table, or an object only custom SQL creates, is not seen,
+//     it uses. A REVOKE on tables the release does not hold passes, and so does
+//     a re-emitted one (below). The release state holds tables only, so a view
+//     or sequence of the release named as a bare table, or an object only custom
+//     SQL creates, is not seen,
 //   - replacing a function the chain declares (CREATE OR REPLACE FUNCTION) with a
 //     different return type, or where an earlier statement this check could not
 //     read may have created it, so that it cannot show the signature and return
@@ -138,8 +139,28 @@ import type { CheckRule, ContractMarker, Finding } from "./types.ts";
 // spelled differently in two statements is not recognised as one function and
 // the later statement is rejected rather than guessed at.
 //
-// Those are accepted only in the contract half of an expand/contract pair, and
-// only with both of:
+// A re-emitted REVOKE is the one exception to the REVOKE rule above. Every migration that
+// changes src/sql/ carries all of it again as a custom step (doc 05 section 5.1), so the
+// REVOKE ... ON TABLE statements of the release come back in each later step. What a REVOKE
+// does depends on the GRANTs on the same table around it, so a REVOKE on named tables is
+// accepted only when it stands in the migration's own custom step (the statements from the
+// `-- slugbase:custom-sql` marker to the end of the file) and, for each table it names, the
+// GRANT and REVOKE statements on that table in that step (with those on a wider object: a
+// schema, ALL TABLES IN SCHEMA) are the same, in the same order, as in the latest custom step
+// of the release, read from git at the tag as release-history.ts reads the journal. The
+// statements are compared as the reader gives them, comments removed and runs of whitespace
+// collapsed to one space; letter case, privileges, roles, the order of tables and the quoting
+// of names stay as written. A REVOKE that stands outside the custom step, or on a table whose
+// GRANTs or REVOKEs differ from the release's (a GRANT dropped, moved before the REVOKE or
+// added), leaves the table other privileges than the release did and is judged as above. A
+// REVOKE on a schema, a sequence, a database or ALL TABLES IN SCHEMA is never accepted this
+// way, nor is any other statement a re-emit repeats (a DROP FUNCTION, say, which this check
+// does not read at all): they are judged as above. Where the release has no custom step, or
+// either step holds a GRANT or REVOKE the reader does not place, no statement counts as
+// already applied.
+//
+// Everything else the rules above reject is accepted only in the contract half of an
+// expand/contract pair, and only with both of:
 //
 //   - a header in the leading comment block of the file,
 //       -- slugbase:contract expand=<migration tag> release=<version>
@@ -423,12 +444,12 @@ class Released {
     return mention === undefined ? [] : [`mentions ${mention}, a function the migration chain declares: a call of it, written in any form, would run its body in the migration (D25: migrations stay schema-only), and this check does not tell a call from another use of the name`];
   }
 
-  apply(operation: Operation): string[] {
+  apply(operation: Operation, alreadyApplied = false): string[] {
     const open = [...this.creatable];
     const before = operation.kind === "declares-function" ? this.functions.get(functionKey(operation.fn)) : undefined;
     const trigger = operation.kind === "creates-trigger" || operation.kind === "drops-trigger" ? this.triggers.get(triggerKey(operation.table, operation.name)) : undefined;
     this.track(operation);
-    const problems = this.place(operation, before, trigger);
+    const problems = this.place(operation, before, trigger, alreadyApplied);
     return open.length > 0 && !FUNCTION_STATEMENTS.has(operation.kind)
       ? [`runs a statement between GRANT CREATE ON SCHEMA ${open.join(", ")} and its REVOKE that is not a CREATE FUNCTION or an ALTER FUNCTION ... OWNER TO ${SYSTEM_ROLE}: while ${SYSTEM_ROLE} holds CREATE on the schema, a migration runs function statements only`, ...problems]
       : problems;
@@ -437,9 +458,11 @@ class Released {
   /**
    * The problems of one operation; `before` is the return type the chain declared for the function it declares,
    * and `trigger` the function and form the chain had a trigger of the same table and name before the trigger
-   * it creates.
+   * it creates. `alreadyApplied` is true only for a REVOKE on named tables inside the file's custom step, when that
+   * step's GRANT and REVOKE statements on each of those tables, in order, equal those of the release's latest custom
+   * step (`sameTablePrivileges`).
    */
-  private place(operation: Operation, before: string | undefined, trigger: TriggerDefinition | undefined): string[] {
+  private place(operation: Operation, before: string | undefined, trigger: TriggerDefinition | undefined, alreadyApplied: boolean): string[] {
     const at = this.tag ?? "the latest release";
     switch (operation.kind) {
       case "drop-table": {
@@ -595,6 +618,9 @@ class Released {
         if (operation.tables === undefined) {
           return [`revokes privileges on a schema, sequence, database or every object of a kind, which this check cannot show the release at ${at} does not use: a running replica may lose access to it`];
         }
+        if (alreadyApplied) {
+          return [];
+        }
         return operation.tables
           .filter((table) => this.hasTable(table))
           .map((table) => `revokes privileges on table ${describe(table)}, which exists at ${at}: the previous release may still rely on that access during a rolling deploy`);
@@ -693,6 +719,16 @@ export const expandContractRule: CheckRule = {
     const release = latest === undefined ? undefined : readReleaseState(packageDir, latest);
     const released = new Released(latest, release);
     const shipped = new Set(release?.migrations);
+    // The table privileges the release's custom SQL left, read once and only when a migration after it needs them.
+    let releasedPrivileges: PrivilegeStatement[] | undefined;
+    let releasedRead = false;
+    const releasedFor = (): PrivilegeStatement[] | undefined => {
+      if (release !== undefined && !releasedRead) {
+        releasedPrivileges = readReleasedPrivileges(packageDir, release);
+        releasedRead = true;
+      }
+      return releasedPrivileges;
+    };
     const findings: Finding[] = [];
 
     for (const { tag } of journal) {
@@ -723,13 +759,25 @@ export const expandContractRule: CheckRule = {
             message: `sets ${timeout}: \`migrate\` sets lock_timeout and statement_timeout for its session (doc 05 section 5.2), a migration file does not`,
           });
         }
-        for (const statement of analyseSql(content)) {
+        const statements = analyseSql(content);
+        // A table REVOKE is already applied only inside the file's custom step, and only when the step leaves the
+        // table the privileges the release's custom step left it (all its GRANTs and REVOKEs on it, in order).
+        const step = customStep(content);
+        const tail = step === undefined ? [] : statements.slice(Math.max(0, statements.length - step.length));
+        const stepIsTail = step !== undefined && tail.length === step.length && step.every((statement, index) => statement.text === tail[index]?.text);
+        const inStep = new Set(stepIsTail ? tail : []);
+        const stepPrivileges = stepIsTail ? privilegeStatements(step) : undefined;
+        for (const statement of statements) {
           problems.push(...released.callProblem(statement));
+          const [operation, ...rest] = statement.operations;
+          const revoked = inStep.has(statement) && operation?.kind === "revoke" && rest.length === 0 ? operation.tables : undefined;
+          const before = revoked === undefined || stepPrivileges === undefined ? undefined : releasedFor();
+          const alreadyApplied = revoked !== undefined && before !== undefined && stepPrivileges !== undefined && revoked.every((table) => sameTablePrivileges(before, stepPrivileges, table));
           for (const operation of statement.operations) {
             if (operation.kind === "data-change") {
               findings.push({ rule: ID, object, message: dataChangeMessage(operation.statement, statement.text) });
             }
-            problems.push(...released.apply(operation));
+            problems.push(...released.apply(operation, alreadyApplied));
           }
         }
         problems.push(...released.endFile());

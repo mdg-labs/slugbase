@@ -1854,6 +1854,29 @@ function readDefinition(definition: Cursor): {
   return found;
 }
 
+/**
+ * The object of a GRANT the reader places as safe: the tables it names, or undefined in `tables` when it
+ * names a schema, a sequence, a database or `ALL ... IN SCHEMA`. Undefined when the statement is not such a GRANT.
+ */
+export function grantObject(statement: AnalysedStatement): { tables: TableName[] | undefined } | undefined {
+  const [operation, ...rest] = statement.operations;
+  if (operation?.kind !== "safe" || rest.length > 0) {
+    return undefined;
+  }
+  let tokens: Token[];
+  try {
+    tokens = tokenize(statement.text);
+  } catch {
+    return undefined;
+  }
+  if (tokens[0]?.kind !== "word" || tokens[0].text !== "grant") {
+    return undefined;
+  }
+  const cursor = new Cursor(tokens);
+  cursor.position = 1;
+  return privilegesOn(cursor);
+}
+
 /** Splits a migration file into statements and reads each. Throws when the file cannot be scanned. */
 export function analyseSql(source: string): AnalysedStatement[] {
   const statements = splitSql(source);

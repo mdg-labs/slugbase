@@ -1,4 +1,6 @@
 import { execFileSync } from "node:child_process";
+import { splitStatements } from "../migrate.ts";
+import { analyseSql, grantObject, type AnalysedStatement, type TableName } from "./migration-statements.ts";
 
 // What the expand/contract rule reads from git: the latest release tag, and the
 // migrations and tables the package held at it (doc 05 section 5.2: "existed in
@@ -16,8 +18,12 @@ import { execFileSync } from "node:child_process";
 // and tags, so it is refused outright, as is a package that is not in a git work
 // tree. A full clone that lists no release tag has nothing to compare with, and
 // then every object counts as unreleased.
+//
+// The release also states which table privileges its custom SQL left (see
+// `readReleasedPrivileges`): a migration that re-emits src/sql/ carries them again.
 
 const RELEASE_TAG = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/;
+const CUSTOM_SQL_MARKER = /^-- slugbase:custom-sql sha256=[0-9a-f]{64}\b/;
 const GIT_TIMEOUT_MS = 30_000;
 const GIT_MAX_BUFFER = 64 * 1024 * 1024;
 
@@ -190,4 +196,99 @@ export function readReleaseState(packageDir: string, tag: string): ReleaseState 
 export function latestRelease(packageDir: string): ReleaseState | undefined {
   const tag = releaseTags(packageDir).at(-1);
   return tag === undefined ? undefined : readReleaseState(packageDir, tag);
+}
+
+/** A GRANT or REVOKE on tables, or on a wider object (`tables` undefined), as it is compared with the release's. */
+export interface PrivilegeStatement {
+  /** The statement with its comments removed and its whitespace runs collapsed to one space (see `privilegeStatements`). */
+  form: string;
+  revoke: boolean;
+  tables: TableName[] | undefined;
+}
+
+/**
+ * The custom-SQL step of a migration file: its statements from the one that starts with
+ * `-- slugbase:custom-sql` to the end of the file (the generator appends the step after the schema
+ * statements), or undefined when the file has none. Throws when the step cannot be scanned.
+ */
+export function customStep(sql: string): AnalysedStatement[] | undefined {
+  const chunks = splitStatements(sql);
+  const start = chunks.findIndex((chunk) => CUSTOM_SQL_MARKER.test(chunk));
+  return start === -1 ? undefined : chunks.slice(start).flatMap((chunk) => analyseSql(chunk));
+}
+
+/**
+ * The table-privilege statements of a step in order: every GRANT and REVOKE that is not on a function or
+ * a schema's CREATE, which can change what a role may do on a table. A statement is compared in the form
+ * `analyseSql` gives, with its whitespace runs collapsed to one space, so a re-emit that only breaks lines
+ * differently matches. Letter case, the order of roles and tables and the quoting of names are kept as
+ * written: a statement that differs in any of them is another statement. A statement with a quoted name or
+ * a string is compared as written outright, since whitespace inside quotes belongs to the name.
+ *
+ * Undefined when a GRANT or REVOKE of the step is one the reader does not place, since the step then does
+ * not show what it leaves a table's privileges as.
+ */
+export function privilegeStatements(step: readonly AnalysedStatement[]): PrivilegeStatement[] | undefined {
+  const found: PrivilegeStatement[] = [];
+  for (const statement of step) {
+    const [operation, ...rest] = statement.operations;
+    const text = statement.text.trim();
+    const form = /['"$]/.test(text) ? text : text.replace(/[ \t\n\r\f\v]+/g, " ");
+    if (operation?.kind === "revoke" && rest.length === 0) {
+      found.push({ form, revoke: true, tables: operation.tables });
+      continue;
+    }
+    if (!/^(grant|revoke)\b/i.test(text)) {
+      continue;
+    }
+    const object = grantObject(statement);
+    if (object !== undefined) {
+      found.push({ form, revoke: false, tables: object.tables });
+    } else if (statement.operations.some((candidate) => candidate.kind === "unknown")) {
+      return undefined;
+    }
+  }
+  return found;
+}
+
+/**
+ * Whether two steps leave a table the same privileges: the statements that name the table, or a wider
+ * object (a schema, `ALL TABLES IN SCHEMA`), are the same in the same order. What a REVOKE does depends on
+ * the GRANTs that follow or precede it on the table, so a REVOKE counts as already applied only when all
+ * of them are the release's.
+ */
+export function sameTablePrivileges(release: readonly PrivilegeStatement[], step: readonly PrivilegeStatement[], table: TableName): boolean {
+  const forms = (statements: readonly PrivilegeStatement[]): string[] =>
+    statements
+      .filter((statement) => statement.tables === undefined || statement.tables.some((named) => named.schema === table.schema && named.name === table.name))
+      .map((statement) => statement.form);
+  const before = forms(release);
+  const after = forms(step);
+  return before.length === after.length && before.every((form, index) => form === after[index]);
+}
+
+/**
+ * The table-privilege statements (see `privilegeStatements`) of the latest custom-SQL step of the release,
+ * read from git at the tag: what a migration of the release ran for src/sql/, which a later step, re-emitting
+ * all of src/sql/, runs again. Only the latest step counts: it re-emits every file, so a statement an
+ * earlier step ran and the latest left out is no longer one of the release's.
+ *
+ * Undefined when the release has no custom step, and when its step cannot be read: nothing is then shown
+ * to be applied by the release, and every statement stays judged on its own. A file of the journal that git
+ * cannot show at the tag is an error.
+ */
+export function readReleasedPrivileges(packageDir: string, release: ReleaseState): PrivilegeStatement[] | undefined {
+  const prefix = git(packageDir, ["rev-parse", "--show-prefix"]).trim();
+  for (const migration of [...release.migrations].reverse()) {
+    const sql = showAtTag(packageDir, prefix, release.tag, `migrations/${migration}.sql`);
+    try {
+      const step = customStep(sql);
+      if (step !== undefined) {
+        return privilegeStatements(step);
+      }
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
 }
