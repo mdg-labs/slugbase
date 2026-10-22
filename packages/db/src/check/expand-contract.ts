@@ -1,6 +1,6 @@
-import { analyseSql, identifierForm, mentionOfAny, setsSessionTimeout, SYSTEM_ROLE, TENANT_FUNCTIONS, type AnalysedStatement, type ColumnType, type FunctionIdentity, type Operation, type TableName, type TriggerForm } from "./migration-statements.ts";
+import { analyseSql, functionArityKey, functionStatementOf, identifierForm, mentionOfAny, setsSessionTimeout, SYSTEM_ROLE, TENANT_FUNCTIONS, type AnalysedStatement, type ColumnType, type FunctionIdentity, type FunctionStatement, type Operation, type TableName, type TriggerForm } from "./migration-statements.ts";
 import { readJournal, readMigration } from "./migration-files.ts";
-import { customStep, privilegeStatements, readReleasedPrivileges, readReleaseState, releaseTags, sameTablePrivileges, type PrivilegeStatement, type ReleaseState } from "./release-history.ts";
+import { customStep, functionPrivilegeStatements, privilegeStatements, readReleasedPrivileges, readReleasedStep, readReleaseState, releaseTags, sameFunctionPrivileges, sameTablePrivileges, statementForm, type FunctionPrivilege, type PrivilegeStatement, type ReleaseState } from "./release-history.ts";
 import type { CheckRule, ContractMarker, Finding } from "./types.ts";
 
 // Doc 05 section 5.2 and Q52: several replicas run during a rolling deploy, so a
@@ -61,7 +61,9 @@ import type { CheckRule, ContractMarker, Finding } from "./types.ts";
 //   - replacing a function the chain declares (CREATE OR REPLACE FUNCTION) with a
 //     different return type, or where an earlier statement this check could not
 //     read may have created it, so that it cannot show the signature and return
-//     type stay as they were (DROP FUNCTION is a form it does not read at all),
+//     type stay as they were,
+//   - DROP FUNCTION [IF EXISTS] f(args), and a REVOKE on one function other than the system-function form
+//     below, unless an earlier migration already ran the same statement (below),
 //   - any statement this check does not positively read as one of the forms it
 //     lists as safe (CREATE TABLE of a column list and nothing after it,
 //     CREATE INDEX/POLICY/EXTENSION/SEQUENCE/SCHEMA, an enum CREATE TYPE, the
@@ -154,10 +156,37 @@ import type { CheckRule, ContractMarker, Finding } from "./types.ts";
 // GRANTs or REVOKEs differ from the release's (a GRANT dropped, moved before the REVOKE or
 // added), leaves the table other privileges than the release did and is judged as above. A
 // REVOKE on a schema, a sequence, a database or ALL TABLES IN SCHEMA is never accepted this
-// way, nor is any other statement a re-emit repeats (a DROP FUNCTION, say, which this check
-// does not read at all): they are judged as above. Where the release has no custom step, or
-// either step holds a GRANT or REVOKE the reader does not place, no statement counts as
-// already applied.
+// way, nor is any other statement a re-emit repeats: they are judged as above. Where the
+// release has no custom step, or either step holds a GRANT or REVOKE the reader does not
+// place, no statement counts as already applied.
+//
+// A re-emitted function statement is the other exception. A contract migration that drops a function
+// keeps its DROP FUNCTION IF EXISTS in a src/sql/ file (and one that takes a role's access to a function
+// away keeps its REVOKE ... ON FUNCTION ... FROM there), so every later custom step carries the statement
+// again. The reader places a DROP FUNCTION [IF EXISTS] of one function with an argument list, no CASCADE
+// and a name of printable ASCII within 63 bytes, and a REVOKE on one such function without CASCADE, as
+// statements of that shape (migration-statements.ts, `FunctionStatement`); anything else of either kind stays
+// a statement it cannot place. Such a statement is accepted without a header only when it stands in the
+// migration's own custom step and an earlier migration of the journal, a shipped one or one added since the
+// release, ran the identical statement (compared as the REVOKE statements above are: comments removed, whitespace
+// runs collapsed, everything else as written) in its custom step while carrying a valid contract header, so
+// the statement is the contract half of a pair that already shipped or is already checked. An earlier
+// migration without a valid header licenses nothing. The licence ends where the chain may have undone the
+// statement: at a migration or statement this check cannot read, and, for a drop, at a CREATE FUNCTION of a
+// function with the same schema, name and number of arguments (the eight-argument function a migration
+// dropped does not end it when the nine-argument function of the same name is declared). A re-emitted REVOKE
+// on a function also needs the migration's custom step to leave the function the GRANT and REVOKE
+// statements on it (and on any wider object) that the latest custom step before it left it, in the same
+// order, so a later GRANT of the function in src/sql/ is not undone unseen. A drop or a REVOKE of the same
+// shape that no earlier marked migration ran is judged as above, and needs the header and the marker.
+//
+// How such a statement counts for the statements after it: a DROP FUNCTION without CASCADE fails when a
+// trigger, a column or index default or a policy depends on the function, and a REVOKE on a function touches
+// no object a statement of this check reads, so neither can create, replace, rename or remove a trigger or
+// change a type, whether it is accepted or not. They do not make the statements after them unreadable: the
+// trigger and type checks go on to judge those statements on their own, as they would without the drop. The
+// dropped function leaves the model of functions and trigger functions the chain declares. A statement the
+// reader cannot place (a CASCADE drop, say) still does.
 //
 // Everything else the rules above reject is accepted only in the contract half of an
 // expand/contract pair, and only with both of:
@@ -304,6 +333,12 @@ class Released {
   // The triggers the migration has dropped and not yet created again, by table and name, with the function and form each had when it was first
   // dropped (undefined when none was known to exist).
   private dropped = new Map<string, { readonly table: TableName; readonly name: string; readonly trigger: TriggerDefinition | undefined }>();
+  // The DROP FUNCTION and function REVOKE statements that an earlier migration with a valid contract header ran in its custom step, by action,
+  // function name and number of arguments (see `functionArityKey`), with the form of each statement (see `FunctionStatement`); forgotten when the chain may have undone them: at a statement or
+  // migration this check cannot read, and for a drop where a function of that name and arity is declared again. pendingFunctionStatements holds those of the
+  // migration being read, which count once the migration's header is shown valid.
+  private ranFunctionStatements = new Map<string, Set<string>>();
+  private pendingFunctionStatements = new Map<string, Set<string>>();
 
   readonly tag: string | undefined;
 
@@ -332,6 +367,8 @@ class Released {
    */
   taint(): void {
     this.functionsKnown = false;
+    this.ranFunctionStatements.clear();
+    this.pendingFunctionStatements.clear();
     this.forgetTriggers();
     for (const name of this.types.keys()) {
       if (name !== CITEXT) {
@@ -350,6 +387,30 @@ class Released {
     this.declared = new Set();
     this.creatable = new Set();
     this.dropped = new Map();
+    this.pendingFunctionStatements = new Map();
+  }
+
+  /** Whether an earlier migration with a valid contract header ran this statement, with nothing since that may have brought back what it removed. */
+  ranBefore({ action, fn }: FunctionStatement, form: string): boolean {
+    return this.ranFunctionStatements.get(`${action}\0${functionArityKey(fn)}`)?.has(form) === true;
+  }
+
+  /** Notes a DROP FUNCTION or function REVOKE of the migration being read, which counts as run once `commitFunctionStatements` says its header is valid. */
+  noteFunctionStatement({ action, fn }: FunctionStatement, form: string): void {
+    const key = `${action}\0${functionArityKey(fn)}`;
+    this.pendingFunctionStatements.set(key, new Set([...(this.pendingFunctionStatements.get(key) ?? []), form]));
+  }
+
+  /** The migration read has a valid contract header: the statements it noted count as run by it. */
+  commitFunctionStatements(): void {
+    for (const [key, forms] of this.pendingFunctionStatements) {
+      this.ranFunctionStatements.set(key, new Set([...(this.ranFunctionStatements.get(key) ?? []), ...forms]));
+    }
+    this.pendingFunctionStatements = new Map();
+  }
+
+  hasPendingFunctionStatements(): boolean {
+    return this.pendingFunctionStatements.size > 0;
   }
 
   /**
@@ -378,6 +439,9 @@ class Released {
       if (!TENANT_FUNCTIONS.has(name)) {
         this.functionNames.add(identifierForm(operation.fn.name.name));
       }
+      // A function of this name exists again, so a DROP of it that an earlier migration ran would drop this one.
+      this.ranFunctionStatements.delete(`drop\0${functionArityKey(operation.fn)}`);
+      this.pendingFunctionStatements.delete(`drop\0${functionArityKey(operation.fn)}`);
     } else if (operation.kind === "creates-trigger") {
       this.triggers.set(triggerKey(operation.table, operation.name), { fn: operation.fn, form: operation.form });
     } else if (operation.kind === "drops-trigger") {
@@ -398,6 +462,13 @@ class Released {
     } else if (operation.kind === "retypes") {
       for (const name of operation.names) {
         this.types.set(key(name), UNPROVEN);
+      }
+    } else if (operation.kind === "unknown" && operation.function !== undefined) {
+      // A DROP FUNCTION without CASCADE fails when a trigger, a default or an index depends on the function, so it removes no trigger and changes no
+      // type (the statement is rejected on its own unless an earlier migration ran it): it taints nothing, and only the function itself leaves the model.
+      if (operation.function.action === "drop") {
+        this.functions.delete(functionKey(operation.function.fn));
+        this.triggerFunctions.delete(functionKey(operation.function.fn));
       }
     } else if (operation.kind === "unknown" && operation.keepsTypes !== true) {
       // The statements marked keepsTypes (CREATE DOMAIN, ALTER DOMAIN and ALTER TYPE) name a type and no table, so they create,
@@ -691,19 +762,31 @@ function headerProblem(packageDir: string, content: string, tags: readonly strin
 }
 
 /**
- * The operations of a migration the release holds, for the types it declares, or undefined when
- * this check cannot read the file: it then cannot tell what the file did to the types.
+ * A migration the release holds with its statements, for what it declares, or undefined when
+ * this check cannot read the file: it then cannot tell what the file did to the types, the functions and the triggers.
  */
-function declarationsOf(packageDir: string, tag: string): Operation[] | undefined {
+function analysedOf(packageDir: string, tag: string): { content: string; statements: AnalysedStatement[] } | undefined {
   const content = readMigration(packageDir, tag);
   if (content === undefined) {
     return undefined;
   }
   try {
-    return analyseSql(content).flatMap((statement) => statement.operations);
+    return { content, statements: analyseSql(content) };
   } catch {
     return undefined;
   }
+}
+
+/**
+ * The custom step of a migration (undefined when it has none) and, when the step as the migration carries it stands at the end of the file's
+ * statements, those statements: only they are a re-emit of src/sql/. `stepIsTail` is false when the step does not stand there, and `inStep` is then
+ * empty. Throws when the step cannot be scanned.
+ */
+function customStepOf(content: string, statements: readonly AnalysedStatement[]): { step: AnalysedStatement[] | undefined; stepIsTail: boolean; inStep: Set<AnalysedStatement> } {
+  const step = customStep(content);
+  const tail = step === undefined ? [] : statements.slice(Math.max(0, statements.length - step.length));
+  const stepIsTail = step !== undefined && tail.length === step.length && step.every((statement, index) => statement.text === tail[index]?.text);
+  return { step, stepIsTail, inStep: new Set(stepIsTail ? tail : []) };
 }
 
 export const expandContractRule: CheckRule = {
@@ -729,18 +812,48 @@ export const expandContractRule: CheckRule = {
       }
       return releasedPrivileges;
     };
+    // The GRANT and REVOKE statements on functions of the latest custom step so far: of the latest migration added since the release that has one,
+    // and before any, of the release's (read once, and only when a REVOKE on a function needs them). undefined is a step this check cannot show.
+    let latestStep: { readonly privileges: FunctionPrivilege[] | undefined } | undefined;
+    let releasedFunctions: { readonly privileges: FunctionPrivilege[] | undefined } | undefined;
+    const previousFunctionPrivileges = (): FunctionPrivilege[] | undefined => {
+      if (latestStep !== undefined) {
+        return latestStep.privileges;
+      }
+      if (releasedFunctions === undefined) {
+        const step = release === undefined ? undefined : readReleasedStep(packageDir, release);
+        releasedFunctions = { privileges: step === undefined ? undefined : functionPrivilegeStatements(step) };
+      }
+      return releasedFunctions.privileges;
+    };
     const findings: Finding[] = [];
 
     for (const { tag } of journal) {
       if (shipped.has(tag)) {
-        const declared = declarationsOf(packageDir, tag);
-        if (declared === undefined) {
+        const read = analysedOf(packageDir, tag);
+        if (read === undefined) {
           released.taint();
-        } else {
-          for (const operation of declared) {
+          continue;
+        }
+        // A migration of the release with a valid contract header ran its DROP FUNCTION and function REVOKE statements for every database that
+        // reached the release; a later re-emit of them is judged against these as it is against the ones of a migration added since.
+        released.startFile();
+        let inStep = new Set<AnalysedStatement>();
+        try {
+          inStep = headerLines(read.content).length > 0 && headerProblem(packageDir, read.content, tags, journalTags) === undefined ? customStepOf(read.content, read.statements).inStep : inStep;
+        } catch {
+          inStep = new Set();
+        }
+        for (const statement of read.statements) {
+          const functionStatement = inStep.has(statement) ? functionStatementOf(statement) : undefined;
+          for (const operation of statement.operations) {
             released.track(operation);
           }
+          if (functionStatement !== undefined) {
+            released.noteFunctionStatement(functionStatement, statementForm(statement));
+          }
         }
+        released.commitFunctionStatements();
         continue;
       }
       const object = `migrations/${tag}.sql`;
@@ -750,6 +863,7 @@ export const expandContractRule: CheckRule = {
       }
       const problems: string[] = [];
       released.startFile();
+      let stepFunctionPrivileges: FunctionPrivilege[] | undefined;
       try {
         const timeout = setsSessionTimeout(content);
         if (timeout !== undefined) {
@@ -762,13 +876,29 @@ export const expandContractRule: CheckRule = {
         const statements = analyseSql(content);
         // A table REVOKE is already applied only inside the file's custom step, and only when the step leaves the
         // table the privileges the release's custom step left it (all its GRANTs and REVOKEs on it, in order).
-        const step = customStep(content);
-        const tail = step === undefined ? [] : statements.slice(Math.max(0, statements.length - step.length));
-        const stepIsTail = step !== undefined && tail.length === step.length && step.every((statement, index) => statement.text === tail[index]?.text);
-        const inStep = new Set(stepIsTail ? tail : []);
-        const stepPrivileges = stepIsTail ? privilegeStatements(step) : undefined;
+        const { step, stepIsTail, inStep } = customStepOf(content, statements);
+        const stepPrivileges = stepIsTail && step !== undefined ? privilegeStatements(step) : undefined;
+        stepFunctionPrivileges = stepIsTail && step !== undefined ? functionPrivilegeStatements(step) : undefined;
+        // A DROP FUNCTION or a function REVOKE is already run only inside the file's custom step, and only when an earlier migration with a valid
+        // contract header ran the same statement there with nothing since that may bring back what it removed. A REVOKE also needs the step to
+        // leave the function the GRANT and REVOKE statements the latest custom step left it.
+        const alreadyRun = (functionStatement: FunctionStatement, form: string): boolean => {
+          if (!released.ranBefore(functionStatement, form)) {
+            return false;
+          }
+          if (functionStatement.action === "drop") {
+            return true;
+          }
+          const before = previousFunctionPrivileges();
+          return before !== undefined && stepFunctionPrivileges !== undefined && sameFunctionPrivileges(before, stepFunctionPrivileges, functionStatement.fn);
+        };
         for (const statement of statements) {
           problems.push(...released.callProblem(statement));
+          const functionStatement = inStep.has(statement) ? functionStatementOf(statement) : undefined;
+          const functionForm = functionStatement === undefined ? "" : statementForm(statement);
+          if (functionStatement !== undefined && alreadyRun(functionStatement, functionForm)) {
+            continue;
+          }
           const [operation, ...rest] = statement.operations;
           const revoked = inStep.has(statement) && operation?.kind === "revoke" && rest.length === 0 ? operation.tables : undefined;
           const before = revoked === undefined || stepPrivileges === undefined ? undefined : releasedFor();
@@ -779,18 +909,28 @@ export const expandContractRule: CheckRule = {
             }
             problems.push(...released.apply(operation, alreadyApplied));
           }
+          if (functionStatement !== undefined) {
+            released.noteFunctionStatement(functionStatement, functionForm);
+          }
         }
         problems.push(...released.endFile());
+        latestStep = step === undefined ? latestStep : { privileges: stepFunctionPrivileges };
       } catch (error) {
         released.taint();
+        latestStep = { privileges: undefined };
         problems.push(
           `cannot be read by this check (${error instanceof Error ? error.message : "unknown error"}), so it cannot show that the file keeps the previous release working`,
         );
       }
+      // The statements this migration ran count for the later ones only when its contract header is valid (the label of a pull request is judged below).
+      const judged = problems.length > 0 || released.hasPendingFunctionStatements();
+      const header = judged ? headerProblem(packageDir, content, tags, journalTags) : undefined;
+      if (judged && header === undefined) {
+        released.commitFunctionStatements();
+      }
       if (problems.length === 0) {
         continue;
       }
-      const header = headerProblem(packageDir, content, tags, journalTags);
       const marker = contractMarker ?? "unset";
       if (header !== undefined) {
         const missing = marker === "unset" ? `, and the contract marker is not set (${MARKER_HINT})` : "";
