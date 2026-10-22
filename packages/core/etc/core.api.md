@@ -984,6 +984,9 @@ export function createOwnedWorkspaceEntitlements(service: EntitlementService): O
 // @public (undocumented)
 export function createPasswordPolicy(input?: PasswordPolicyOptions): PasswordPolicy;
 
+// @public (undocumented)
+export function createSeatEntitlements(service: EntitlementService): SeatEntitlements;
+
 // @public
 export function createWorkspace(input: WorkspaceCreationDependencies, ask: WorkspaceCreationAsk): Promise<WorkspaceCreationOutcome>;
 
@@ -1336,6 +1339,7 @@ export interface IdentityAcceptance {
     readonly mayCreate: boolean;
     readonly onAccepted: (accepted: {
         readonly workspaceId: string;
+        readonly invitationId: string;
         readonly role: WorkspaceRole;
         readonly accountId: string;
         readonly displayName: string;
@@ -2120,6 +2124,7 @@ export interface InvitationDependencies {
 
 // @public (undocumented)
 export interface InvitationIdentityAsk {
+    readonly accountId?: string;
     readonly displayName: string;
     // (undocumented)
     readonly email: string;
@@ -2377,6 +2382,7 @@ export type InvitationRole = (typeof INVITATION_ROLES)[number];
 
 // @public (undocumented)
 export interface InvitationSignupAsk {
+    readonly accountId?: string;
     // (undocumented)
     readonly displayName: string;
     // (undocumented)
@@ -2650,6 +2656,7 @@ export interface NewAccountAcceptance {
     readonly locale: string;
     readonly onAccepted: (accepted: {
         readonly workspaceId: string;
+        readonly invitationId: string;
         readonly role: WorkspaceRole;
     }) => InvitationSignupRecords;
     readonly passwordHash: string;
@@ -2969,6 +2976,11 @@ export interface SealedSecret {
     // (undocumented)
     readonly ciphertext: Uint8Array;
     readonly keyId: string;
+}
+
+// @public
+export interface SeatEntitlements {
+    limit(accountId: string, workspaceId: string, request: object): Promise<number | null>;
 }
 
 // @public (undocumented)

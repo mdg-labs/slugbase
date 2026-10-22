@@ -310,6 +310,28 @@ export function createOwnedWorkspaceEntitlements(service: EntitlementService): O
   };
 }
 
+/**
+ * What accepting an invitation asks of the workspace-scoped entitlement `seats.max` (doc 01 sections 7.5 and 13.1,
+ * doc 10 T11): the ceiling on the members, read for a workspace the acting account is about to join. A failing source
+ * rejects, so an acceptance is refused with an error and never granted without a ceiling.
+ */
+export interface SeatEntitlements {
+  /**
+   * The workspace's `seats.max` as the count of members it may hold, `null` for no ceiling. The workspace is read from
+   * the source as it is now, since the account is no member yet and cannot read the version of the row.
+   */
+  limit(accountId: string, workspaceId: string, request: object): Promise<number | null>;
+}
+
+export function createSeatEntitlements(service: EntitlementService): SeatEntitlements {
+  return {
+    async limit(accountId, workspaceId, request) {
+      const limit = (await service.forRequest(request, accountId).forJoiningWorkspace(workspaceId)).values["seats.max"];
+      return limit === "unlimited" ? null : limit;
+    },
+  };
+}
+
 function isHeld(value: unknown): boolean {
   return value === true || value === "unlimited" || (typeof value === "number" && value > 0);
 }

@@ -71,6 +71,7 @@ export interface IdentityAcceptance {
    */
   readonly onAccepted: (accepted: {
     readonly workspaceId: string;
+    readonly invitationId: string;
     readonly role: WorkspaceRole;
     readonly accountId: string;
     readonly displayName: string;
@@ -95,6 +96,8 @@ export interface InvitationIdentityDependencies {
 
 export interface InvitationIdentityAsk {
   readonly tokenHash: Buffer;
+  /** A UUIDv7 for the account when the acceptance creates one, when the caller has told a seat check of it already; made here otherwise. */
+  readonly accountId?: string;
   readonly provider: string;
   readonly subject: string;
   readonly email: string;
@@ -115,7 +118,7 @@ export function acceptInvitationWithIdentity({ store, newId }: InvitationIdentit
   return store.acceptWithIdentity({
     ...ask,
     identityId: newId(),
-    accountId: newId(),
+    accountId: ask.accountId ?? newId(),
     onAccepted: ({ workspaceId, role, accountId, displayName, created }) => {
       const events: InvitationSignupEvent[] = [];
       if (created) {

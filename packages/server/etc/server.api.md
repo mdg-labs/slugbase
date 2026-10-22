@@ -463,6 +463,7 @@ export const HOOK_NAMES: readonly ["seatCheck", "deletionGuard", "registrationPo
 
 // @public
 export interface HookDispatcher {
+    acceptanceSeatLimit(input: SeatCheckInput, request: object): Promise<number | null>;
     clientErrorReportDsn(request: ClientErrorReportRequest): Promise<string | null>;
     deletionGuard(input: DeletionGuardInput): Promise<HookResult<DeletionRefusalCode>>;
     registrationPolicy(input: RegistrationPolicyInput): Promise<HookResult<RegistrationRefusalCode>>;

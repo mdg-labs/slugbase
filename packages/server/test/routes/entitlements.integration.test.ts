@@ -161,7 +161,7 @@ describe("GET /entitlements", () => {
   });
 
   it("is a 503 when the composition configured no entitlement source, never a grant", async () => {
-    const world = harness.serve();
+    const world = harness.serve({ entitlementSource: unconfigured().entitlements });
     const { people } = await workspaceWith(world, ["owner"]);
 
     const response = await send(world, "GET", ENTITLEMENTS, { cookie: people[0]?.cookie ?? "" });

@@ -300,6 +300,8 @@ export const acceptInvitation = defineOperation({
       "The body did not pass validation (a display name without a password or the reverse included), the password is outside 12 to 256 characters or is on the breached list (weak_password), or the workspace has no seat left (seat_limit_reached); nothing is written and the invitation stays pending",
     ),
     429: rateLimitedResponse("Too many attempts from this address, or from this account; Retry-After says when to try again"),
-    503: problemResponse("The service is temporarily unavailable"),
+    503: problemResponse(
+      "The service is temporarily unavailable, or a module that decides the seat limit failed or did not answer in time (unavailable); nothing is written and the invitation stays pending",
+    ),
   },
 });

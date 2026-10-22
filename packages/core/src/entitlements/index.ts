@@ -25,6 +25,7 @@ export {
   createEntitlementUpgradeCheck,
   createEntitlementService,
   createOwnedWorkspaceEntitlements,
+  createSeatEntitlements,
   parseAccountEntitlements,
   parseWorkspaceEntitlements,
   withEntitlementChange,
@@ -42,4 +43,5 @@ export type {
   JoiningEntitlements,
   OwnedWorkspaceEntitlements,
   RequestEntitlements,
+  SeatEntitlements,
 } from "./engine.ts";

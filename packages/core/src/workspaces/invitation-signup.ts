@@ -58,7 +58,7 @@ export interface NewAccountAcceptance {
   readonly seatLimit: number | null;
   readonly session: InvitationSignupSession;
   /** Called inside the transaction once the invitation is accepted; what it returns is written in that transaction. */
-  readonly onAccepted: (accepted: { readonly workspaceId: string; readonly role: WorkspaceRole }) => InvitationSignupRecords;
+  readonly onAccepted: (accepted: { readonly workspaceId: string; readonly invitationId: string; readonly role: WorkspaceRole }) => InvitationSignupRecords;
 }
 
 export interface InvitationSignupStore {
@@ -79,6 +79,8 @@ export interface InvitationSignupDependencies {
 export interface InvitationSignupAsk {
   /** The token the link carries. */
   readonly token: string;
+  /** A UUIDv7 for the account, when the caller has told a seat check of it already; made here otherwise. */
+  readonly accountId?: string;
   readonly displayName: string;
   /** An argon2id PHC string of the password the policy accepted. */
   readonly passwordHash: string;
@@ -97,7 +99,7 @@ export async function acceptInvitationWithAccount({ store, newId }: InvitationSi
   if (tokenHash === undefined) {
     return { kind: "gone" };
   }
-  const accountId = newId();
+  const accountId = ask.accountId ?? newId();
   return store.acceptWithNewAccount({
     tokenHash,
     accountId,

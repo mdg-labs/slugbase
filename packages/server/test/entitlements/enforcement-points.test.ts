@@ -20,9 +20,9 @@ describe("the enforcement-point inventory", () => {
     expect(stage9.sort()).toEqual(declared.map((operation) => [operation.operationId, operation.entitlement]).sort());
   });
 
-  it("lists each operation once, under a key of the catalog, and only a handler decides an account-scoped key", () => {
-    const ids = ENFORCEMENT_POINTS.map((point) => point.operationId);
-    expect(new Set(ids).size).toBe(ids.length);
+  it("lists each operation once per entitlement, under a key of the catalog, and only a handler decides an account-scoped key", () => {
+    const pairs = ENFORCEMENT_POINTS.map((point) => `${point.operationId} ${point.entitlement}`);
+    expect(new Set(pairs).size).toBe(pairs.length);
     for (const point of ENFORCEMENT_POINTS) {
       expect(isEntitlementKey(point.entitlement), point.operationId).toBe(true);
       if (isEntitlementKey(point.entitlement) && ENTITLEMENT_CATALOG[point.entitlement].scope === "account") {

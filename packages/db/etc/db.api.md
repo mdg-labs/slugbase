@@ -865,6 +865,7 @@ export interface NewInvitationAccount {
     readonly locale: string;
     readonly onAccepted: (accepted: {
         readonly workspaceId: string;
+        readonly invitationId: string;
         readonly role: WorkspaceRole;
     }) => InvitationAccountWrites;
     readonly passwordHash: string;
@@ -888,6 +889,7 @@ export interface NewInvitationIdentity {
     readonly mayCreate: boolean;
     readonly onAccepted: (accepted: {
         readonly workspaceId: string;
+        readonly invitationId: string;
         readonly role: WorkspaceRole;
         readonly accountId: string;
         readonly displayName: string;

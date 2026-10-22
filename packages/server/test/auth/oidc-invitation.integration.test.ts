@@ -1,13 +1,13 @@
 import { createHash } from "node:crypto";
 import { generateCredentialToken, type SecretBoxPort } from "@slugbase/core";
-import { FakeIdentity, type FakeIdentityGrant } from "@slugbase/testing";
+import { FakeIdentity, LimitedEntitlementSource, type FakeIdentityGrant } from "@slugbase/testing";
 import { useTestDatabase } from "@slugbase/testing/db";
 import type { AuthStore } from "@slugbase/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createAccountOnlyTenantResolver } from "../../src/auth/tenant-resolver.ts";
 import { createRateLimitRegistry } from "../../src/config/index.ts";
 import { createServer, type Server, type ServerModule } from "../../src/create-server.ts";
-import { HookResult } from "../../src/hooks/index.ts";
+import { HookResult, type SeatCheckAnswer, type SeatCheckInput } from "../../src/hooks/index.ts";
 import { runMigrations } from "../../src/migrate/index.ts";
 import { appUrl, tenantDatabase } from "../contract/support.ts";
 import { memoryRateLimiter } from "../http/rate-limit-support.ts";
@@ -71,7 +71,7 @@ function provider(keys: Record<string, string> = {}): Record<string, string> {
 function serve(
   env: Record<string, string> = provider(),
   modules: readonly ServerModule[] = [],
-  options: { readonly secretBox?: SecretBoxPort } = {},
+  options: { readonly secretBox?: SecretBoxPort; readonly entitlements?: LimitedEntitlementSource } = {},
 ): World {
   const config = serverConfig({
     NODE_ENV: "test",
@@ -88,6 +88,7 @@ function serve(
     adapters: {
       ...adapters(config),
       rateLimit: memoryRateLimiter(createRateLimitRegistry(config)),
+      ...(options.entitlements === undefined ? {} : { entitlements: options.entitlements }),
       tenantResolver: createAccountOnlyTenantResolver(),
       secretBox: options.secretBox ?? testSecretBox(testKey("oidc-1")),
       identity: { available: true, listProviders: () => fake.listProviders(), begin: (request) => fake.begin(request), complete: (request) => fake.complete(request) },
@@ -668,6 +669,89 @@ describe("accepting an invitation through a provider", () => {
 
       expect(response.status).toBe(503);
       expect(await stateRecords()).toEqual([]);
+    });
+  });
+
+  // The seat limit of the callback (completeOidcSignIn, intent invite): the workspace's `seats.max`, replaced by the
+  // seat-check hooks of the composed modules, reaches the operation that counts the members under the workspace's lock.
+  describe("counts the seats of the workspace (completeOidcSignIn)", () => {
+    const grant = { subject: "seat-subject", email: "seat@example.test", emailVerified: true } as const;
+
+    function seatModule(answer: (input: SeatCheckInput) => SeatCheckAnswer | Promise<SeatCheckAnswer>, asked: SeatCheckInput[] = []): ServerModule {
+      return {
+        name: "test/seats",
+        hooks: {
+          seatCheck: (input) => {
+            asked.push(input);
+            return answer(input);
+          },
+        },
+        register: () => ({}),
+      };
+    }
+
+    it("ends on the generic failure at the limit, creates no account and leaves the invitation pending, then accepts once a seat is free", async () => {
+      const source = new LimitedEntitlementSource().grant("seats.max", 1);
+      const world = serve(provider(), [], { entitlements: source });
+      const target = await invitation("seat@example.test");
+
+      expectFailed(await accepted(world, target.token, grant));
+      await expectUntouched(target, 1);
+
+      source.grant("seats.max", 2);
+      const response = await accepted(world, target.token, { ...grant, subject: "seat-subject-2" });
+      expect(response.headers.get("location")).toBe("/");
+      expect(Object.values(await membersOf(target.workspaceId)).sort()).toEqual(["member", "owner"]);
+      expect(await jobData("event.member.joined")).toHaveLength(1);
+    });
+
+    it("keeps accepting where the source has no ceiling", async () => {
+      const world = serve(provider(), [], { entitlements: new LimitedEntitlementSource() });
+      const target = await invitation("seat@example.test");
+
+      expect((await accepted(world, target.token, grant)).headers.get("location")).toBe("/");
+      expect(Object.values(await membersOf(target.workspaceId))).toHaveLength(2);
+    });
+
+    it("asks a module's hook about the account that accepts, and refuses at the module's lower limit", async () => {
+      const asked: SeatCheckInput[] = [];
+      const world = serve(provider(), [seatModule(() => ({ seatLimit: 1 }), asked)], { entitlements: new LimitedEntitlementSource().grant("seats.max", 10) });
+      const holder = await verifiedAccount("seat@example.test");
+      const target = await invitation("seat@example.test");
+
+      expectFailed(await accepted(world, target.token, grant));
+
+      expect(asked).toEqual([{ workspaceId: target.workspaceId, accountId: holder.id, invitationId: target.id }]);
+      expect(await invitationState(target.id)).toEqual({ status: "pending", accepted_by: null });
+      expect(Object.values(await membersOf(target.workspaceId))).toEqual(["owner"]);
+      expect(await identityRows()).toEqual([]);
+      expect(await sessionRows(database(), holder.id)).toEqual([]);
+    });
+
+    it("tells a hook the identifier of the account the acceptance then creates", async () => {
+      const asked: SeatCheckInput[] = [];
+      const world = serve(provider(), [seatModule(() => ({ seatLimit: null }), asked)], { entitlements: new LimitedEntitlementSource().grant("seats.max", 1) });
+      const target = await invitation("seat@example.test");
+
+      expect((await accepted(world, target.token, grant)).headers.get("location")).toBe("/");
+
+      const created = (await accountRows()).find((row) => row.email === "seat@example.test");
+      expect(created).toBeDefined();
+      expect(asked).toEqual([{ workspaceId: target.workspaceId, accountId: created?.id, invitationId: target.id }]);
+    });
+
+    it("answers 503 and writes nothing when a hook throws", async () => {
+      const world = serve(provider(), [seatModule(() => Promise.reject(new Error("billing is down")))], { entitlements: new LimitedEntitlementSource() });
+      const target = await invitation("seat@example.test");
+
+      const response = await accepted(world, target.token, grant);
+
+      expect(response.status).toBe(503);
+      expect(await invitationState(target.id)).toEqual({ status: "pending", accepted_by: null });
+      expect(Object.values(await membersOf(target.workspaceId))).toEqual(["owner"]);
+      expect(await accountRows()).toHaveLength(1);
+      expect(await identityRows()).toEqual([]);
+      expect(await jobData("event.member.joined")).toEqual([]);
     });
   });
 });

@@ -1,6 +1,7 @@
-import { UNSET_INSTANCE_SETTINGS, unconfigured, type Adapters, type TenantResolver } from "@slugbase/core";
+import { UNSET_INSTANCE_SETTINGS, unconfigured, type Adapters, type SeatEntitlements, type TenantResolver } from "@slugbase/core";
 import type { AuthStore, Database } from "@slugbase/db";
 import { defineOperation, jsonResponse, problemResponse, type OperationDefinition } from "@slugbase/contracts";
+import { LimitedEntitlementSource } from "@slugbase/testing";
 import { z } from "zod";
 import type { ChainDependencies } from "../src/http/chain.ts";
 import { createRateLimitRegistry, loadConfig } from "../src/config/index.ts";
@@ -43,20 +44,25 @@ export function serverConfig(overrides: Record<string, string | undefined> = {})
  * Every port unconfigured except the rate limiter, which is in memory: the unconfigured one refuses every limited route.
  * The entitlement source is unconfigured too (stage 9 refuses every declared entitlement) apart from the account-scoped
  * ceiling, which is unlimited: every registration, verification and workspace creation asks for it, so a source that
- * cannot answer would end each of them in `503`.
+ * cannot answer would end each of them in `503`. It also reads the workspace as the full, unlimited source does, since
+ * accepting an invitation reads the seat limit from it whichever check decides the flags.
  */
 export function adapters(config: ModuleContext["config"] = serverConfig()): Adapters {
   const unconfiguredSource = unconfigured().entitlements;
+  const full = new LimitedEntitlementSource();
   return {
     ...unconfigured(),
     rateLimit: memoryRateLimiter(createRateLimitRegistry(config)),
-    entitlements: { ...unconfiguredSource, forAccount: () => Promise.resolve({ "workspaces.ownMax": "unlimited" }) },
+    entitlements: { ...unconfiguredSource, forWorkspace: (workspaceId) => full.forWorkspace(workspaceId), forAccount: () => Promise.resolve({ "workspaces.ownMax": "unlimited" }) },
   };
 }
 
+/** A seat entitlement that grants every workspace no ceiling, for tests that do not exercise seats. */
+export const unlimitedSeats: SeatEntitlements = { limit: () => Promise.resolve(null) };
+
 /** A hook dispatcher over the unconfigured client error-report source, for tests that do not exercise hooks. */
 export function hookDispatcher(registrations: readonly HookRegistration[] = [], logger: Logger = recordingLogger()): HookDispatcher {
-  return createHookDispatcher({ registrations, clientErrorReport: adapters().clientErrorReport, logger });
+  return createHookDispatcher({ registrations, clientErrorReport: adapters().clientErrorReport, seats: unlimitedSeats, logger });
 }
 
 export interface FakeDatabase extends Database {

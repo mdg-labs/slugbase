@@ -1,7 +1,7 @@
 import { setTimeout as sleep } from "node:timers/promises";
 import { createAdaptorServer, type ServerType } from "@hono/node-server";
 import { getHealth, getReady, getVersion } from "@slugbase/contracts";
-import { createEntitlementCheck, createEntitlementService, createEntitlementUpgradeCheck, createOwnedWorkspaceEntitlements, createPasswordPolicy, loadBreachedPasswords, sessionCookieSpec, type Adapters, type RegistrationSettings } from "@slugbase/core";
+import { createEntitlementCheck, createEntitlementService, createEntitlementUpgradeCheck, createOwnedWorkspaceEntitlements, createPasswordPolicy, createSeatEntitlements, loadBreachedPasswords, sessionCookieSpec, type Adapters, type RegistrationSettings } from "@slugbase/core";
 import { createAuthStore, createDatabase, entitlementRepository, instanceRepository, type AuthStore, type Database, type MigrationChain } from "@slugbase/db";
 import { Hono } from "hono";
 import { DEVELOPMENT_BUILD_INFO, type BuildInfo } from "./build-info.ts";
@@ -691,6 +691,8 @@ export function createServer(options: CreateServerOptions): Server {
     hooks: createHookDispatcher({
       registrations: composition.hooks,
       clientErrorReport: adapters.clientErrorReport,
+      // An acceptance's seat limit starts from the engine's `seats.max` and is then replaced by what the seat-check hooks answer (doc 01 section 13.1).
+      seats: createSeatEntitlements(entitlementService),
       logger,
       ...(options.hookTimeoutMs === undefined ? {} : { timeoutMs: options.hookTimeoutMs }),
     }),

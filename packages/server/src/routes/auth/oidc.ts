@@ -39,6 +39,7 @@ import { queueDomainEvent } from "../../events/publish.ts";
 import type { ChainContext, RouteBinding } from "../../http/chain.ts";
 import { ProblemError } from "../../http/problem.ts";
 import { networkPrefixOf } from "../../http/trusted-proxy.ts";
+import { InvitationLearned } from "../invitations/learned.ts";
 import { route } from "../register.ts";
 
 // GET /api/v1/auth/oidc/{provider}/start and /callback (doc 04 sections 4.4, 4.5 and 10.2, doc 02 section 2.8,
@@ -284,39 +285,59 @@ export function oidcRoutes({
     const mayCreate = !invitation.accountExists && (await registrationAllowed(context, provider, normalizeEmail(invitation.email), "invitation"));
     const token = newSessionToken();
     const carried = cookieHeader === null ? undefined : readCookie(cookieHeader, sessionCookie.name);
-    const outcome = await acceptInvitationWithIdentity(
-      {
-        store: {
-          acceptWithIdentity: (acceptance) =>
-            store.acceptInvitationWithIdentity({
-              ...acceptance,
-              onAccepted: (accepted) => {
-                const { audit, events } = acceptance.onAccepted(accepted);
-                return { audit, jobs: events.map(eventJob) };
-              },
-            }),
-        },
-        newId: uuidv7,
+    const ask = {
+      tokenHash,
+      provider,
+      subject: claims.subject,
+      email,
+      displayName: federatedDisplayName(claims.displayName, email),
+      locale: registrationLocale(context.req.raw.headers.get("accept-language")),
+      mayCreate,
+      session: {
+        id: uuidv7(),
+        tokenHash: token.hash,
+        replacedTokenHash: carried === undefined ? null : (hashSessionToken(carried) ?? null),
+        ipPrefix: networkPrefixOf(context.get("clientIp")) ?? null,
+        userAgent: truncateUserAgent(context.req.raw.headers.get("user-agent")),
       },
-      {
-        tokenHash,
-        provider,
-        subject: claims.subject,
-        email,
-        displayName: federatedDisplayName(claims.displayName, email),
-        locale: registrationLocale(context.req.raw.headers.get("accept-language")),
-        mayCreate,
-        // Seats are unlimited until the entitlement engine supplies a limit (doc 01 section 13.1).
-        seatLimit: null,
-        session: {
-          id: uuidv7(),
-          tokenHash: token.hash,
-          replacedTokenHash: carried === undefined ? null : (hashSessionToken(carried) ?? null),
-          ipPrefix: networkPrefixOf(context.get("clientIp")) ?? null,
-          userAgent: truncateUserAgent(context.req.raw.headers.get("user-agent")),
+    };
+    const acceptAs = (accountId: string, learn: boolean, seatLimit: number | null) =>
+      acceptInvitationWithIdentity(
+        {
+          store: {
+            acceptWithIdentity: (acceptance) =>
+              store.acceptInvitationWithIdentity({
+                ...acceptance,
+                onAccepted: (accepted) => {
+                  if (learn) {
+                    throw new InvitationLearned({ workspaceId: accepted.workspaceId, invitationId: accepted.invitationId, accountId: accepted.accountId });
+                  }
+                  const { audit, events } = acceptance.onAccepted(accepted);
+                  return { audit, jobs: events.map(eventJob) };
+                },
+              }),
+          },
+          newId: uuidv7,
         },
-      },
-    );
+        { ...ask, accountId, seatLimit },
+      );
+    // Which account accepts is the database operation's to decide, so the acceptance is first run with no seat limit and
+    // abandoned once it names the workspace, the invitation and the account; the seat-check hooks are asked about those
+    // before anything is written, and the acceptance that writes carries the limit.
+    let outcome: InvitationIdentityResult;
+    try {
+      outcome = await acceptAs(uuidv7(), true, null);
+    } catch (error) {
+      if (!(error instanceof InvitationLearned)) {
+        throw error;
+      }
+      const hooks = context.get("hooks");
+      if (hooks === undefined) {
+        throw new Error("the OIDC callback was reached without the hook dispatcher");
+      }
+      const seatLimit = await hooks.acceptanceSeatLimit(error.learned, context.req.raw);
+      outcome = await acceptAs(error.learned.accountId, false, seatLimit);
+    }
     if (outcome.kind !== "accepted") {
       refused(context, provider, `invitation_${outcome.kind}`);
       return failure;

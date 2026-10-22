@@ -7,6 +7,7 @@ import {
   createEntitlementService,
   createEntitlementUpgradeCheck,
   createOwnedWorkspaceEntitlements,
+  createSeatEntitlements,
   withEntitlementChange,
   type AccountEntitlementValues,
   type EntitlementSource,
@@ -431,5 +432,35 @@ describe("the owned-workspace entitlements", () => {
     expect(await owned.upgradeAvailable(ACCOUNT, [A], {})).toBe(false);
     expect(await owned.upgradeAvailable(ACCOUNT, [A, B], {})).toBe(true);
     expect(await owned.upgradeAvailable(ACCOUNT, [], {})).toBe(false);
+  });
+});
+
+describe("the seat ceiling of an acceptance", () => {
+  it("answers the workspace's seats.max as a count, and null for unlimited", async () => {
+    const world = rig();
+    world.values.set(A, { ...FULL, "seats.max": 3 });
+    const seats = createSeatEntitlements(createEntitlementService(world));
+
+    expect(await seats.limit(ACCOUNT, A, {})).toBe(3);
+    expect(await seats.limit(ACCOUNT, B, {})).toBeNull();
+  });
+
+  it("reads the workspace as it is now for an account that is no member, never through the version of the row, and zero is a ceiling of zero", async () => {
+    const world = rig();
+    world.values.set(A, { ...FULL, "seats.max": 0 });
+    const seats = createSeatEntitlements(createEntitlementService(world));
+
+    expect(await seats.limit(ACCOUNT, A, {})).toBe(0);
+    expect(world.reads.versions).toBe(0);
+    expect(world.reads.workspaces).toEqual([A]);
+  });
+
+  it("lets a failing source reject, so the acceptance is refused with an error and never granted without a ceiling", async () => {
+    const world = rig();
+    const seats = createSeatEntitlements(
+      createEntitlementService({ ...world, source: { ...world.source, forWorkspace: () => Promise.reject(new PortUnavailable("entitlements", "unavailable")) } }),
+    );
+
+    await expect(seats.limit(ACCOUNT, A, {})).rejects.toBeInstanceOf(PortUnavailable);
   });
 });

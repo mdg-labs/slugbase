@@ -4475,7 +4475,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The service is temporarily unavailable */
+            /** @description The service is temporarily unavailable, or a module that decides the seat limit failed or did not answer in time (unavailable); nothing is written and the invitation stays pending */
             503: {
                 headers: {
                     [name: string]: unknown;
