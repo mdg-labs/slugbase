@@ -15,7 +15,9 @@ const CORS_HEADER_PREFIX = "access-control-";
 
 // Scripts load from the app's own origin only; no source allows an inline script
 // or `eval`, and a page that needs an inline script takes a hash or a nonce
-// (doc 01 section 4 step 2). Favicons come from the app's own proxy.
+// (doc 01 section 4 step 2). Styles load from the app's own origin too: there is
+// no `style-src`, so no inline `<style>` element and no `style` attribute. Favicons
+// come from the app's own proxy.
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "script-src 'self'",

@@ -4,11 +4,12 @@
 -- the schema for the length of those statements.
 GRANT CREATE ON SCHEMA public TO slugbase_system;
 
--- sys_oidc_state_create(..., invitation_token_hash): the overload of sys_oidc_state_create (170-oidc.sql) that also
--- stores the intent `invite`. The record of that intent holds the SHA-256 of the invitation token the handshake will
--- accept, never the token, and no link account; every other intent holds none. The eight-argument overload stays for
--- the previous release's replicas during a rolling deploy. Any argument that breaks a check of the table is refused
--- with invalid_parameter_value.
+-- sys_oidc_state_create(..., invitation_token_hash): stores the state of a handshake that is starting, with the
+-- intent `invite` among the intents it accepts. The state arrives as its SHA-256 and the PKCE verifier already sealed
+-- by the secret box with the id of the key that sealed it; the record expires 10 minutes from now, on the database
+-- clock. The record of the `invite` intent holds the SHA-256 of the invitation token the handshake will accept, never
+-- the token, and no link account; every other intent holds no token hash, and the link account is given for the link
+-- and reauth intents only. Any argument that breaks a check of the table is refused with invalid_parameter_value.
 CREATE OR REPLACE FUNCTION public.sys_oidc_state_create(
   p_state_hash bytea,
   p_provider text,
@@ -51,7 +52,7 @@ BEGIN
 END
 $$;
 
--- sys_oidc_state_take(state_hash, provider): sys_oidc_state_consume (170-oidc.sql) with the invitation the record
+-- sys_oidc_state_take(state_hash, provider): the state of a handshake that is ending, with the invitation the record
 -- names. It deletes the record and returns it in one statement, so a state is answered once whatever the number of
 -- concurrent callbacks, and so the invitation token hash it holds is used by at most one callback; no row comes back
 -- for an unknown state, one that expired, one already consumed and one of another provider, which a caller does not

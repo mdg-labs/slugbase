@@ -6,8 +6,8 @@
 -- from the entitlement source (NULL: no ceiling), and judge it against the count made here, under the lock of the
 -- account's row, in the transaction that inserts the workspace. Two creations for one account queue on that row, so the
 -- second counts the workspace the first made and a ceiling of one is never exceeded by a pair that runs in parallel.
--- The lock is the one sys_create_personal_workspace and the account deletion take (the deletion locks the workspaces
--- it deletes first and the account after them; these functions lock no workspace row that exists, only the account's).
+-- The lock is the one the account deletion takes (the deletion locks the workspaces it deletes first and the account
+-- after them; these functions lock no workspace row that exists, only the account's).
 GRANT CREATE ON SCHEMA public TO slugbase_system;
 
 -- sys_create_workspace_limited(account_id, workspace_id, name, owned_max): sys_create_workspace, unless the account
@@ -63,8 +63,9 @@ END
 $$;
 
 -- sys_create_personal_workspace_limited(account_id, workspace_id, name_suffix, owned_max):
--- sys_create_personal_workspace with the ceiling of sys_create_workspace_limited. An account that owns a workspace
--- already is 'exists', whatever the ceiling; an account that owns none and is at the ceiling (a ceiling of zero) is
+-- gives the account the workspace "<display name><suffix>" (the display name is cut so that the whole name fits the 64
+-- characters a workspace name may have), under the ceiling of sys_create_workspace_limited. An account that owns a
+-- workspace already is 'exists', whatever the ceiling; an account that owns none and is at the ceiling (a ceiling of zero) is
 -- 'limit_reached' and gets no workspace, so the registration or the verification that asked still succeeds and the
 -- account is left without one. Answers 'created', 'exists', 'limit_reached' or 'unavailable' for an account that does
 -- not exist or is disabled.

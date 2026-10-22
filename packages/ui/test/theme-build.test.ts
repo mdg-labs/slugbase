@@ -47,6 +47,19 @@ describe("bundled fonts", () => {
   });
 });
 
+describe("the scrollbar class of the library's scroll area", () => {
+  // Base UI hides the scrollbars of a scroll area with a class, and ships the rule in a <style> element that
+  // the page's Content Security Policy blocks; ThemeProvider turns that element off, so the rule is here.
+  const rule = parseBlocks(css)
+    .find((block) => block.prelude === "@layer base")
+    ?.body.replace(/\s+/g, " ");
+
+  it("hides the scrollbar of an element that carries the class", () => {
+    expect(rule).toContain(".base-ui-disable-scrollbar { scrollbar-width: none; }");
+    expect(rule).toContain(".base-ui-disable-scrollbar::-webkit-scrollbar { display: none; }");
+  });
+});
+
 describe("theme.css compiled with Tailwind", () => {
   async function build(candidates: string[]): Promise<string> {
     const compiler = await compile(css, {

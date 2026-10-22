@@ -22,7 +22,7 @@
 -- the grants it needs are in 150-api-tokens.sql.
 --
 -- oidc_login_states: past expires_at. A state that was consumed is already gone;
--- sys_oidc_state_consume refuses an expired one from the moment it is, so
+-- sys_oidc_state_take refuses an expired one from the moment it is, so
 -- deleting the row later changes no answer. The grants it needs are in
 -- 170-oidc.sql.
 --

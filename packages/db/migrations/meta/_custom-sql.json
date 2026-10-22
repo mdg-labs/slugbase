@@ -1,4 +1,4 @@
 {
-  "sha256": "eeb324b090b5fbeb21258cde75d6b8057fdb77398aab84bbcdde3cb64f08cd43",
-  "migration": "20261022065037_add_workspace_limit"
+  "sha256": "c48c402a8eecda19c9f04953b1c251d104e66cac89b90a69a7bb7902d619a33a",
+  "migration": "20261022142217_drop_workspace_function_grant"
 }

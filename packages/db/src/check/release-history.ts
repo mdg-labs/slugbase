@@ -1,8 +1,11 @@
 import { execFileSync } from "node:child_process";
+import { splitStatements } from "../migrate.ts";
+import { analyseSql, createdTableOf, functionNameKey, functionStatementOf, grantObject, type AnalysedStatement, type FunctionIdentity, type TableName } from "./migration-statements.ts";
 
 // What the expand/contract rule reads from git: the latest release tag, and the
 // migrations and tables the package held at it (doc 05 section 5.2: "existed in
-// the previous release").
+// the previous release"). The tables are those of the drizzle snapshot of the tag's last
+// migration and those that the release's custom SQL creates (`readCustomTables`).
 //
 // Release tags are `v<major>.<minor>.<patch>` with an optional semver
 // pre-release suffix (`v1.0.0`, `v1.0.0-rc.1`); the leading `v` is optional.
@@ -16,8 +19,14 @@ import { execFileSync } from "node:child_process";
 // and tags, so it is refused outright, as is a package that is not in a git work
 // tree. A full clone that lists no release tag has nothing to compare with, and
 // then every object counts as unreleased.
+//
+// The release also states which table privileges its custom SQL left (see
+// `readReleasedPrivileges`): a migration that re-emits src/sql/ carries them again. The function
+// GRANT and REVOKE statements of a custom step are read the same way (`functionPrivilegeStatements`),
+// for the REVOKE statements on functions that an earlier contract migration ran.
 
 const RELEASE_TAG = /^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/;
+const CUSTOM_SQL_MARKER = /^-- slugbase:custom-sql sha256=[0-9a-f]{64}\b/;
 const GIT_TIMEOUT_MS = 30_000;
 const GIT_MAX_BUFFER = 64 * 1024 * 1024;
 
@@ -25,6 +34,12 @@ export interface ReleasedTable {
   schema: string;
   name: string;
   columns: string[];
+  /**
+   * Only for a table that the release's custom SQL creates: the column list of its CREATE TABLE statement, in the form
+   * `createdTableOf` gives. A later `CREATE TABLE IF NOT EXISTS` of the table leaves an existing table as it is, so the
+   * rule compares the column list of a re-emit with this one.
+   */
+  definition?: string;
 }
 
 export interface ReleaseState {
@@ -32,7 +47,7 @@ export interface ReleaseState {
   tag: string;
   /** The migration tags the journal listed at the release. */
   migrations: string[];
-  /** The tables and columns the last migration of the release left behind. */
+  /** The tables and columns the last migration of the release left behind, and the tables its custom SQL creates. */
   tables: ReleasedTable[];
 }
 
@@ -136,6 +151,103 @@ function objectField(value: unknown, key: string): unknown {
   return typeof value === "object" && value !== null && key in value ? (value as Record<string, unknown>)[key] : undefined;
 }
 
+/**
+ * The statements of the latest custom-SQL step of the release, unanalysed, as the chunks the generator wrote them in (a
+ * file of src/sql/ each, the first starting with the marker), or undefined when no migration of the release has a step.
+ */
+function latestCustomChunks(packageDir: string, prefix: string, tag: string, migrations: readonly string[]): string[] | undefined {
+  for (const migration of [...migrations].reverse()) {
+    const chunks = splitStatements(showAtTag(packageDir, prefix, tag, `migrations/${migration}.sql`));
+    const start = chunks.findIndex((chunk) => CUSTOM_SQL_MARKER.test(chunk));
+    if (start !== -1) {
+      return chunks.slice(start);
+    }
+  }
+  return undefined;
+}
+
+/** A chunk that may create a table, which `readCustomTables` then must be able to scan. */
+const MAY_CREATE_TABLE = /\bcreate\b[^]*\btable\b/i;
+
+/**
+ * The tables that the release's custom SQL creates, which the drizzle snapshot does not hold (it holds the tables of the
+ * Drizzle schema only): every `CREATE [UNLOGGED] TABLE [IF NOT EXISTS]` of the latest custom step of the release, read from
+ * git at the tag, with the columns of its list, and the columns that `ALTER TABLE ... ADD/DROP/RENAME COLUMN` of the same
+ * step add, remove or rename, and without a table the step drops or moves. The latest step re-emits all of src/sql/, so it
+ * holds every such table; an earlier step is not read. A table the snapshot already holds is the snapshot's.
+ *
+ * Throws when the step creates a table whose columns this check cannot name (a LIKE clause, `CREATE TABLE ... AS`), or has
+ * a chunk that may create one and cannot be scanned: the release then holds a table the rule cannot show, and a rule that
+ * cannot tell what it measures against must not pass. A chunk that cannot be scanned and creates no table (a function
+ * with a BEGIN ATOMIC body, say) is skipped.
+ */
+function readCustomTables(packageDir: string, prefix: string, tag: string, migrations: readonly string[], snapshot: readonly ReleasedTable[]): ReleasedTable[] {
+  const chunks = latestCustomChunks(packageDir, prefix, tag, migrations);
+  const id = (table: TableName): string => `${table.schema}.${table.name}`;
+  const inSnapshot = new Set(snapshot.map(id));
+  const custom = new Map<string, ReleasedTable>();
+  for (const chunk of chunks ?? []) {
+    let statements: AnalysedStatement[];
+    try {
+      statements = analyseSql(chunk);
+    } catch (error) {
+      if (MAY_CREATE_TABLE.test(chunk)) {
+        throw new Error(`the latest custom SQL step of ${tag} has a statement that may create a table and cannot be scanned (${error instanceof Error ? error.message : "unknown error"})`);
+      }
+      continue;
+    }
+    for (const statement of statements) {
+      const created = createdTableOf(statement);
+      if (created?.kind === "unread") {
+        throw new Error(`the latest custom SQL step of ${tag} creates a table this check cannot read: ${created.reason}`);
+      }
+      if (created?.kind === "read" && !inSnapshot.has(id(created.table)) && !custom.has(id(created.table))) {
+        custom.set(id(created.table), { ...created.table, columns: created.columns, definition: created.definition });
+      }
+      for (const operation of statement.operations) {
+        switch (operation.kind) {
+          case "add-column": {
+            const table = custom.get(id(operation.table));
+            if (table !== undefined && !table.columns.includes(operation.column)) {
+              table.columns.push(operation.column);
+            }
+            break;
+          }
+          case "drop-column": {
+            const table = custom.get(id(operation.table));
+            if (table !== undefined) {
+              table.columns = table.columns.filter((column) => column !== operation.column);
+            }
+            break;
+          }
+          case "rename-column": {
+            const table = custom.get(id(operation.table));
+            if (table !== undefined) {
+              table.columns = table.columns.map((column) => (column === operation.column ? operation.to : column));
+            }
+            break;
+          }
+          case "drop-table":
+            custom.delete(id(operation.table));
+            break;
+          case "rename-table":
+          case "set-schema": {
+            const table = custom.get(id(operation.table));
+            if (table !== undefined) {
+              custom.delete(id(operation.table));
+              custom.set(id(operation.to), { schema: operation.to.schema, name: operation.to.name, columns: table.columns });
+            }
+            break;
+          }
+          default:
+            break;
+        }
+      }
+    }
+  }
+  return [...custom.values()];
+}
+
 /** The migrations and tables of the package at a release tag. */
 export function readReleaseState(packageDir: string, tag: string): ReleaseState {
   const prefix = git(packageDir, ["rev-parse", "--show-prefix"]).trim();
@@ -183,6 +295,7 @@ export function readReleaseState(packageDir: string, tag: string): ReleaseState 
       }),
     });
   }
+  released.push(...readCustomTables(packageDir, prefix, tag, migrations, released));
   return { tag, migrations, tables: released };
 }
 
@@ -190,4 +303,184 @@ export function readReleaseState(packageDir: string, tag: string): ReleaseState 
 export function latestRelease(packageDir: string): ReleaseState | undefined {
   const tag = releaseTags(packageDir).at(-1);
   return tag === undefined ? undefined : readReleaseState(packageDir, tag);
+}
+
+/** A GRANT or REVOKE on tables, or on a wider object (`tables` undefined), as it is compared with the release's. */
+export interface PrivilegeStatement {
+  /** The statement with its comments removed and its whitespace runs collapsed to one space (see `privilegeStatements`). */
+  form: string;
+  revoke: boolean;
+  tables: TableName[] | undefined;
+}
+
+/**
+ * The custom-SQL step of a migration file: its statements from the one that starts with
+ * `-- slugbase:custom-sql` to the end of the file (the generator appends the step after the schema
+ * statements), or undefined when the file has none. Throws when the step cannot be scanned.
+ */
+export function customStep(sql: string): AnalysedStatement[] | undefined {
+  const chunks = splitStatements(sql);
+  const start = chunks.findIndex((chunk) => CUSTOM_SQL_MARKER.test(chunk));
+  return start === -1 ? undefined : chunks.slice(start).flatMap((chunk) => analyseSql(chunk));
+}
+
+/**
+ * A statement in the form two statements are compared in: its comments removed, as `analyseSql` gives it, and its
+ * whitespace runs collapsed to one space. A statement with a quoted name or a string is compared as written, since
+ * whitespace inside quotes belongs to the name. Letter case and the order of names stay as written.
+ */
+export function statementForm(statement: AnalysedStatement): string {
+  const text = statement.text.trim();
+  return /['"$]/.test(text) ? text : text.replace(/[ \t\n\r\f\v]+/g, " ");
+}
+
+/**
+ * The table-privilege statements of a step in order: every GRANT and REVOKE that is not on a function or
+ * a schema's CREATE, which can change what a role may do on a table. A statement is compared in the form
+ * `analyseSql` gives, with its whitespace runs collapsed to one space, so a re-emit that only breaks lines
+ * differently matches. Letter case, the order of roles and tables and the quoting of names are kept as
+ * written: a statement that differs in any of them is another statement. A statement with a quoted name or
+ * a string is compared as written outright, since whitespace inside quotes belongs to the name.
+ *
+ * Undefined when a GRANT or REVOKE of the step is one the reader does not place, since the step then does
+ * not show what it leaves a table's privileges as.
+ */
+export function privilegeStatements(step: readonly AnalysedStatement[]): PrivilegeStatement[] | undefined {
+  const found: PrivilegeStatement[] = [];
+  for (const statement of step) {
+    const [operation, ...rest] = statement.operations;
+    const text = statement.text.trim();
+    const form = statementForm(statement);
+    if (operation?.kind === "revoke" && rest.length === 0) {
+      found.push({ form, revoke: true, tables: operation.tables });
+      continue;
+    }
+    // A REVOKE on one function touches no table, and a step that holds one still shows what it leaves a table as.
+    if (!/^(grant|revoke)\b/i.test(text) || functionStatementOf(statement) !== undefined) {
+      continue;
+    }
+    const object = grantObject(statement);
+    if (object !== undefined) {
+      found.push({ form, revoke: false, tables: object.tables });
+    } else if (statement.operations.some((candidate) => candidate.kind === "unknown")) {
+      return undefined;
+    }
+  }
+  return found;
+}
+
+/**
+ * Whether two steps leave a table the same privileges: the statements that name the table, or a wider
+ * object (a schema, `ALL TABLES IN SCHEMA`), are the same in the same order. What a REVOKE does depends on
+ * the GRANTs that follow or precede it on the table, so a REVOKE counts as already applied only when all
+ * of them are the release's.
+ */
+export function sameTablePrivileges(release: readonly PrivilegeStatement[], step: readonly PrivilegeStatement[], table: TableName): boolean {
+  const forms = (statements: readonly PrivilegeStatement[]): string[] =>
+    statements
+      .filter((statement) => statement.tables === undefined || statement.tables.some((named) => named.schema === table.schema && named.name === table.name))
+      .map((statement) => statement.form);
+  const before = forms(release);
+  const after = forms(step);
+  return before.length === after.length && before.every((form, index) => form === after[index]);
+}
+
+/**
+ * The statements of the latest custom-SQL step of the release, read from git at the tag: what a migration of the
+ * release ran for src/sql/, which a later step, re-emitting all of src/sql/, runs again. Only the latest step
+ * counts: it re-emits every file, so a statement an earlier step ran and the latest left out is no longer one of
+ * the release's.
+ *
+ * Undefined when the release has no custom step, and when its step cannot be read: nothing is then shown
+ * to be applied by the release, and every statement stays judged on its own. A file of the journal that git
+ * cannot show at the tag is an error.
+ */
+export function readReleasedStep(packageDir: string, release: ReleaseState): AnalysedStatement[] | undefined {
+  const prefix = git(packageDir, ["rev-parse", "--show-prefix"]).trim();
+  for (const migration of [...release.migrations].reverse()) {
+    const sql = showAtTag(packageDir, prefix, release.tag, `migrations/${migration}.sql`);
+    try {
+      const step = customStep(sql);
+      if (step !== undefined) {
+        return step;
+      }
+    } catch {
+      return undefined;
+    }
+  }
+  return undefined;
+}
+
+/** The table-privilege statements (see `privilegeStatements`) of the latest custom-SQL step of the release (see `readReleasedStep`). */
+export function readReleasedPrivileges(packageDir: string, release: ReleaseState): PrivilegeStatement[] | undefined {
+  const step = readReleasedStep(packageDir, release);
+  return step === undefined ? undefined : privilegeStatements(step);
+}
+
+/** A GRANT or REVOKE of a step that can change who may run a function: on one function, or on a wider object (`fn` undefined). */
+export interface FunctionPrivilege {
+  /** The statement in the form `statementForm` gives. */
+  form: string;
+  fn: FunctionIdentity | undefined;
+}
+
+/** Whether a function is named with printable ASCII and within the 63 bytes PostgreSQL keeps, so that its name is compared as PostgreSQL compares it. */
+function comparable({ name }: FunctionIdentity): boolean {
+  return [name.schema, name.name].every((part) => /^[\x20-\x7e]*$/.test(part) && Buffer.byteLength(part) <= 63);
+}
+
+/**
+ * The GRANT and REVOKE statements of a step in order that can change who may run a function: those on one
+ * function (EXECUTE to slugbase_app, ALL from PUBLIC, and a REVOKE read by its whole shape) and those on a
+ * wider object (a schema, `ALL FUNCTIONS IN SCHEMA`, a sequence, a database). A statement on tables, and the
+ * GRANT and REVOKE of CREATE on a schema, cannot.
+ *
+ * Undefined when a GRANT or REVOKE of the step is one the reader does not place, or names a function the
+ * rule does not compare by name, since the step then does not show what it leaves a function's privileges as.
+ */
+export function functionPrivilegeStatements(step: readonly AnalysedStatement[]): FunctionPrivilege[] | undefined {
+  const found: FunctionPrivilege[] = [];
+  for (const statement of step) {
+    if (!/^(grant|revoke)\b/i.test(statement.text.trim())) {
+      continue;
+    }
+    const form = statementForm(statement);
+    const [operation, ...rest] = statement.operations;
+    const fn = rest.length === 0 && operation !== undefined ? (operation.kind === "grants-function-execute" || operation.kind === "revokes-function-public" ? operation.fn : functionStatementOf(statement)?.fn) : undefined;
+    if (fn !== undefined) {
+      if (!comparable(fn)) {
+        return undefined;
+      }
+      found.push({ form, fn });
+    } else if (rest.length === 0 && (operation?.kind === "grants-schema-create" || operation?.kind === "revokes-schema-create")) {
+      continue;
+    } else if (rest.length === 0 && operation?.kind === "revoke") {
+      if (operation.tables === undefined) {
+        found.push({ form, fn: undefined });
+      }
+    } else {
+      const object = grantObject(statement);
+      if (object === undefined) {
+        return undefined;
+      }
+      if (object.tables === undefined) {
+        found.push({ form, fn: undefined });
+      }
+    }
+  }
+  return found;
+}
+
+/**
+ * Whether two steps leave the functions of a name the same privileges: the statements that name a function of
+ * that name (whatever its argument types), or a wider object, are the same in the same order. What a REVOKE
+ * does depends on the GRANT statements that follow or precede it, so a REVOKE counts as already run only when
+ * all of them are the earlier step's.
+ */
+export function sameFunctionPrivileges(before: readonly FunctionPrivilege[], after: readonly FunctionPrivilege[], fn: FunctionIdentity): boolean {
+  const forms = (statements: readonly FunctionPrivilege[]): string[] =>
+    statements.filter((statement) => statement.fn === undefined || functionNameKey(statement.fn) === functionNameKey(fn)).map((statement) => statement.form);
+  const earlier = forms(before);
+  const later = forms(after);
+  return earlier.length === later.length && earlier.every((form, index) => form === later[index]);
 }

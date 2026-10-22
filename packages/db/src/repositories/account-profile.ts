@@ -74,7 +74,11 @@ function onboardingOf(stored: unknown): Onboarding {
 }
 
 export interface AccountProfileRepository {
-  /** The account of the transaction; undefined when no such row is visible. Works in an account-level transaction. */
+  /**
+   * The account of the transaction; undefined when no such row is visible, which includes an account that another
+   * transaction deleted while this one was reading: the profile is read in three statements, and a commit can land
+   * between them. Works in an account-level transaction.
+   */
   profile(): Promise<AccountProfile | undefined>;
   /**
    * Writes the changes to the account of the transaction and answers its profile afterwards; undefined when no
@@ -113,13 +117,21 @@ export function accountProfileRepository(tx: TenantTx): AccountProfileRepository
       }
       const flag = await handle.execute<{ has_password: boolean | null }>(sql`SELECT public.sys_account_has_password() AS has_password`);
       const hasPassword = flag[0]?.has_password;
+      // The function answers NULL for an account that no longer exists, so a NULL after the row was read means the account
+      // was deleted in between; any other answer that is not a boolean is a breach of the function's contract.
+      if (hasPassword === null || hasPassword === undefined) {
+        return undefined;
+      }
       if (typeof hasPassword !== "boolean") {
-        throw new Error("sys_account_has_password did not answer for a visible account");
+        throw new Error("sys_account_has_password did not answer a boolean");
       }
       const mfa = await handle.execute<{ mfa_enabled: boolean | null }>(sql`SELECT public.sys_account_mfa_enabled() AS mfa_enabled`);
       const mfaEnabled = mfa[0]?.mfa_enabled;
+      if (mfaEnabled === null || mfaEnabled === undefined) {
+        return undefined;
+      }
       if (typeof mfaEnabled !== "boolean") {
-        throw new Error("sys_account_mfa_enabled did not answer for a visible account");
+        throw new Error("sys_account_mfa_enabled did not answer a boolean");
       }
       return {
         id: row.id,

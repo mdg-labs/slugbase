@@ -18,6 +18,9 @@
 // DEFERRED FOR EACH ROW EXECUTE FUNCTION f() are read the same way, by their whole shape,
 // and DROP TRIGGER [IF EXISTS] name ON table, which a constraint trigger needs to be
 // created again (PostgreSQL has no CREATE OR REPLACE for it).
+// DROP FUNCTION [IF EXISTS] f(args) and REVOKE ... ON FUNCTION f(args) FROM roles are read by
+// their whole shape too (`FunctionStatement`), but stay `unknown` to the rule, which accepts one only
+// where an earlier marked contract migration already ran the same statement.
 
 export interface TableName {
   schema: string;
@@ -28,6 +31,47 @@ export interface FunctionIdentity {
   name: TableName;
   /** The types of the input arguments, in order, as written and separated by `, `. */
   args: string;
+}
+
+/**
+ * A DROP FUNCTION or a REVOKE on a function that the reader places by its whole shape: one named function with
+ * an argument list, no CASCADE, a name PostgreSQL and this check spell alike. The statement is still `unknown`
+ * to the rule, which accepts it only where an earlier marked contract migration already ran it (see
+ * expand-contract.ts); the shape tells the rule what the statement is, and that it removes no trigger and
+ * changes no type, so it leaves what the statements after it depend on as it was.
+ */
+export interface FunctionStatement {
+  action: "drop" | "revoke";
+  fn: FunctionIdentity;
+}
+
+/**
+ * The key of every function of one name, whatever its argument types: its schema and its name. Two spellings
+ * of one signature (`int` and `integer`) are not recognised as one function, so what must hold for a function
+ * of a name is held for all of them.
+ */
+export function functionNameKey({ name }: FunctionIdentity): string {
+  return `${name.schema}.${name.name}`;
+}
+
+/**
+ * The key of every function of one name that takes as many arguments: its schema, its name and the number of its
+ * input arguments. Two spellings of one signature (`int` and `integer`) are not recognised as one function, but
+ * they take as many arguments, so what must hold for a function is held for every function under its key.
+ */
+export function functionArityKey(fn: FunctionIdentity): string {
+  let depth = 0;
+  let count = fn.args === "" ? 0 : 1;
+  for (const character of fn.args) {
+    if (character === "(") {
+      depth += 1;
+    } else if (character === ")") {
+      depth -= 1;
+    } else if (character === "," && depth === 0) {
+      count += 1;
+    }
+  }
+  return `${functionNameKey(fn)}/${String(count)}`;
 }
 
 /** The role that owns the system operations (doc 05 section 3.3). */
@@ -74,7 +118,8 @@ export type Operation =
   | { kind: "data-change"; statement: string }
   | { kind: "safe" }
   // keepsTypes: the statement is one the reader places as unsafe to run, but it declares a type or leaves every type as it is.
-  | { kind: "unknown"; reason: string; keepsTypes?: true };
+  // function: the statement is a DROP FUNCTION or a function REVOKE read by its whole shape (see `FunctionStatement`), which keeps every type and trigger as it is.
+  | { kind: "unknown"; reason: string; keepsTypes?: true; function?: FunctionStatement };
 
 /**
  * The type of a column or the base type of a domain: `builtin` for a type of PostgreSQL's
@@ -690,7 +735,49 @@ function drop(cursor: Cursor): Operation[] {
   if (cursor.take("trigger")) {
     return dropTrigger(cursor);
   }
+  if (cursor.take("function")) {
+    return dropFunction(cursor);
+  }
   return unknown("a DROP form this check does not read");
+}
+
+/**
+ * The reason a DROP FUNCTION or function REVOKE, when it is read, is still a statement the rule cannot place:
+ * it takes access or an object from the previous release, and the rule accepts it only where an earlier marked
+ * contract migration already ran the same statement.
+ */
+const FUNCTION_STATEMENT_REASON = "DROP FUNCTION or REVOKE on a function, which this check accepts only where an earlier marked contract migration already ran the same statement";
+
+/**
+ * A function name and argument list with a name PostgreSQL and this check spell alike: printable ASCII, and no
+ * longer than the 63 bytes PostgreSQL keeps (the names `createFunction` reads are the same). Undefined for any
+ * other, so that two spellings of one name never stand for two functions.
+ */
+function comparableFunction(cursor: Cursor): FunctionIdentity | undefined {
+  const start = cursor.position;
+  const fn = functionIdentity(cursor);
+  if (fn === undefined) {
+    return undefined;
+  }
+  const head = cursor.tokens.slice(start, cursor.position);
+  const written = head.slice(0, head.findIndex((token) => token.kind === "punct" && token.text === "("));
+  const ascii = written.every((token) => PRINTABLE_ASCII.test(token.kind === "word" ? token.raw : token.text));
+  return ascii && !exceedsIdentifierLimit(fn.name.name) && !exceedsIdentifierLimit(fn.name.schema) ? fn : undefined;
+}
+
+/**
+ * DROP FUNCTION [IF EXISTS] name(arguments) [RESTRICT]: one function, named with an argument list and no
+ * CASCADE. Without CASCADE the drop fails when a trigger, a column default, an index or a policy depends on
+ * the function, so it removes no trigger and leaves every type as it is. The operation stays `unknown`: the
+ * rule judges it (see `FunctionStatement`).
+ */
+function dropFunction(cursor: Cursor): Operation[] {
+  cursor.take("if", "exists");
+  const fn = comparableFunction(cursor);
+  cursor.take("restrict");
+  return fn !== undefined && cursor.done()
+    ? [{ kind: "unknown", reason: FUNCTION_STATEMENT_REASON, keepsTypes: true, function: { action: "drop", fn } }]
+    : unknown("a DROP form this check does not read");
 }
 
 /**
@@ -1510,11 +1597,16 @@ function revokeFunctionOrSchemaCreate(cursor: Cursor): Operation[] | undefined {
     }
   };
   if (words !== undefined && cursor.take("on", "function")) {
-    const fn = functionIdentity(cursor);
+    const fn = comparableFunction(cursor);
     const roles = fn !== undefined && cursor.take("from") ? plainNames(cursor) : undefined;
+    const cascade = cursor.isWord("cascade");
     restrict();
-    return fn !== undefined && words.length === 1 && words[0] === "all" && roles?.length === 1 && roles[0] === "public" && cursor.done()
-      ? [{ kind: "revokes-function-public", fn }]
+    if (fn !== undefined && words.length === 1 && words[0] === "all" && roles?.length === 1 && roles[0] === "public" && cursor.done()) {
+      return [{ kind: "revokes-function-public", fn }];
+    }
+    // Any other REVOKE on one function, read to its end without CASCADE, is a statement for the rule to judge (see `FunctionStatement`).
+    return fn !== undefined && roles !== undefined && !cascade && cursor.done()
+      ? [{ kind: "unknown", reason: FUNCTION_STATEMENT_REASON, keepsTypes: true, function: { action: "revoke", fn } }]
       : unknown("REVOKE on a function other than ALL from PUBLIC");
   }
   if (words?.length === 1 && words[0] === "create" && cursor.take("on", "schema")) {
@@ -1852,6 +1944,124 @@ function readDefinition(definition: Cursor): {
     }
   }
   return found;
+}
+
+/**
+ * The object of a GRANT the reader places as safe: the tables it names, or undefined in `tables` when it
+ * names a schema, a sequence, a database or `ALL ... IN SCHEMA`. Undefined when the statement is not such a GRANT.
+ */
+export function grantObject(statement: AnalysedStatement): { tables: TableName[] | undefined } | undefined {
+  const [operation, ...rest] = statement.operations;
+  if (operation?.kind !== "safe" || rest.length > 0) {
+    return undefined;
+  }
+  let tokens: Token[];
+  try {
+    tokens = tokenize(statement.text);
+  } catch {
+    return undefined;
+  }
+  if (tokens[0]?.kind !== "word" || tokens[0].text !== "grant") {
+    return undefined;
+  }
+  const cursor = new Cursor(tokens);
+  cursor.position = 1;
+  return privilegesOn(cursor);
+}
+
+/** A table a CREATE TABLE statement creates, as the release state reads it from the custom SQL of a release. */
+export type CreatedTable =
+  | {
+      kind: "read";
+      table: TableName;
+      /** The names of the columns of the column list, in order; the table constraints of the list are not columns. */
+      columns: string[];
+      /** The column list as its tokens, comments and whitespace left out, so that two spellings of one list are equal. */
+      definition: string;
+    }
+  | { kind: "unread"; reason: string };
+
+/** The tokens of a column list in a form that does not depend on layout: words in lower case, quoted names and strings as written. */
+function definitionOf(tokens: readonly Token[]): string {
+  return tokens.map((token) => (token.kind === "ident" ? JSON.stringify(token.text) : token.text)).join(" ");
+}
+
+/**
+ * The persistent table a `CREATE [UNLOGGED] TABLE [IF NOT EXISTS] name (column list) ...` statement creates, with the names
+ * of the columns of its list. Undefined when the statement is no CREATE TABLE, or creates a temporary table. `unread` when
+ * it creates a table whose columns the reader cannot name from the list: a list item that is a LIKE clause or has no name,
+ * or a table with no column list (`CREATE TABLE name AS ...`, `PARTITION OF`, `OF type`). Whatever follows the column list
+ * (INHERITS, PARTITION BY, WITH) is not read: the table and the columns of the list are still there.
+ */
+export function createdTableOf(statement: AnalysedStatement): CreatedTable | undefined {
+  let tokens: Token[];
+  try {
+    tokens = tokenize(statement.text);
+  } catch {
+    return /^\s*create\b[^]*\btable\b/i.test(statement.text) ? { kind: "unread", reason: "its text cannot be scanned" } : undefined;
+  }
+  const cursor = new Cursor(tokens);
+  if (!cursor.take("create")) {
+    return undefined;
+  }
+  while (cursor.isWord("unlogged") || cursor.isWord("global") || cursor.isWord("local")) {
+    cursor.position += 1;
+  }
+  if (cursor.isWord("temp") || cursor.isWord("temporary")) {
+    return undefined;
+  }
+  if (!cursor.take("table")) {
+    return undefined;
+  }
+  cursor.take("if", "not", "exists");
+  const table = cursor.tableName();
+  if (table === undefined) {
+    return { kind: "unread", reason: "its name cannot be read" };
+  }
+  const open = cursor.position;
+  if (!cursor.skipParenthesised()) {
+    return { kind: "unread", reason: `${table.name} has no column list this check can read` };
+  }
+  const inside = tokens.slice(open + 1, cursor.position - 1);
+  const items: Token[][] = [];
+  let depth = 0;
+  let item: Token[] = [];
+  for (const token of inside) {
+    if (token.kind === "punct" && token.text === "(") {
+      depth += 1;
+    } else if (token.kind === "punct" && token.text === ")") {
+      depth -= 1;
+    }
+    if (depth === 0 && token.kind === "punct" && token.text === ",") {
+      items.push(item);
+      item = [];
+    } else {
+      item.push(token);
+    }
+  }
+  if (item.length > 0 || items.length > 0) {
+    items.push(item);
+  }
+  const columns: string[] = [];
+  for (const [first] of items) {
+    if (first === undefined || (first.kind !== "word" && first.kind !== "ident")) {
+      return { kind: "unread", reason: `${table.name} has a column list item this check cannot read` };
+    }
+    if (first.kind === "word" && first.text === "like") {
+      return { kind: "unread", reason: `${table.name} copies columns with LIKE` };
+    }
+    if (first.kind === "word" && NOT_A_COLUMN.has(first.text)) {
+      continue;
+    }
+    columns.push(first.text);
+  }
+  return { kind: "read", table, columns, definition: definitionOf(inside) };
+}
+
+/** The DROP FUNCTION or function REVOKE a statement is, when the reader places it by its whole shape and as nothing else; otherwise undefined. */
+export function functionStatementOf(statement: AnalysedStatement): FunctionStatement | undefined {
+  const [operation, ...rest] = statement.operations;
+  return rest.length === 0 && operation?.kind === "unknown" ? operation.function : undefined;
 }
 
 /** Splits a migration file into statements and reads each. Throws when the file cannot be scanned. */

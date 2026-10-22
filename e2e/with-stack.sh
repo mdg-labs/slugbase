@@ -4,6 +4,11 @@
 #
 #   bash e2e/with-stack.sh pnpm test:e2e
 #   bash e2e/with-stack.sh pnpm test:e2e -- --grep "home"
+#   bash e2e/with-stack.sh bash e2e/in-image.sh node run-tests.ts
+#
+# The first two run the journeys on the host with the browsers installed there; the
+# last runs them in the pinned Playwright image of e2e/Dockerfile on the host's
+# network (e2e/in-image.sh), which is what CI does and needs no browser on the host.
 #
 # The stack is the one scripts/smoke-image.sh starts, through its start_stack
 # function: a compose project of its own, a free port on 127.0.0.1, secrets that

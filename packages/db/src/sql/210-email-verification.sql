@@ -1,6 +1,6 @@
--- The system operations behind verifying a registered address and the personal
--- workspace of the account, and the read that tells a sign-in whether the address
--- was verified (doc 05 section 3.3, doc 02 sections 2.2, 2.3 and 2.6, doc 04
+-- The system operations behind verifying a registered address, and the read that
+-- tells a sign-in whether the address was verified (doc 05 section 3.3, doc 02
+-- sections 2.2, 2.3 and 2.6, doc 04
 -- section 10.2, doc 10 T4 and T8). All are entered in src/system/registry.ts.
 -- slugbase_owner creates each function and hands it to slugbase_system, which
 -- needs CREATE on the schema for the length of those statements.
@@ -144,52 +144,6 @@ BEGIN
 END
 $$;
 
--- sys_create_personal_workspace(account_id, workspace_id, name_suffix): gives the
--- account the workspace "<display name><suffix>" through sys_create_workspace,
--- unless it already owns a workspace, in which case it writes nothing, so a
--- repeated call and a verification after a registration that provisioned
--- leave one. The display name is cut so that the whole name fits the 64
--- characters a workspace name may have. The account's row is locked first, so
--- two calls for one account queue and the second finds the first's workspace.
--- Answers 'created', 'exists', or 'unavailable' for an account that does not
--- exist or is disabled.
-CREATE OR REPLACE FUNCTION public.sys_create_personal_workspace(p_account_id uuid, p_workspace_id uuid, p_name_suffix text)
-  RETURNS text
-  LANGUAGE plpgsql VOLATILE SECURITY DEFINER
-  SET search_path = pg_catalog, public, pg_temp
-  AS $$
-DECLARE
-  v_display_name text;
-BEGIN
-  IF NOT coalesce(
-    p_account_id IS NOT NULL AND p_workspace_id IS NOT NULL AND char_length(p_name_suffix) BETWEEN 1 AND 32,
-    false
-  ) THEN
-    RAISE EXCEPTION 'sys_create_personal_workspace needs an account, a workspace id and a name suffix of 1 to 32 characters'
-      USING ERRCODE = 'invalid_parameter_value';
-  END IF;
-
-  SELECT a.display_name INTO v_display_name
-  FROM public.accounts a
-  WHERE a.id = p_account_id AND a.disabled_at IS NULL
-  FOR UPDATE;
-  IF NOT FOUND THEN
-    RETURN 'unavailable';
-  END IF;
-
-  IF EXISTS (SELECT 1 FROM public.workspace_members m WHERE m.account_id = p_account_id AND m.role = 'owner') THEN
-    RETURN 'exists';
-  END IF;
-
-  IF NOT public.sys_create_workspace(
-    p_account_id, p_workspace_id, rtrim(left(v_display_name, 64 - char_length(p_name_suffix))) || p_name_suffix
-  ) THEN
-    RAISE EXCEPTION 'the personal workspace could not be created';
-  END IF;
-  RETURN 'created';
-END
-$$;
-
 -- sys_account_email_verified(account_id): whether the address of the account was
 -- verified (email_verified_at is set), which is all a sign-in may learn of that
 -- column and is asked only once the password is known good. False for an
@@ -206,14 +160,11 @@ CREATE OR REPLACE FUNCTION public.sys_account_email_verified(p_account_id uuid) 
 
 ALTER FUNCTION public.account_mark_verified(uuid, text) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_email_verify(bytea, text, uuid, bytea, cidr, text, bytea) OWNER TO slugbase_system;
-ALTER FUNCTION public.sys_create_personal_workspace(uuid, uuid, text) OWNER TO slugbase_system;
 ALTER FUNCTION public.sys_account_email_verified(uuid) OWNER TO slugbase_system;
 REVOKE CREATE ON SCHEMA public FROM slugbase_system;
 
 REVOKE ALL ON FUNCTION public.account_mark_verified(uuid, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sys_email_verify(bytea, text, uuid, bytea, cidr, text, bytea) FROM PUBLIC;
-REVOKE ALL ON FUNCTION public.sys_create_personal_workspace(uuid, uuid, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sys_account_email_verified(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.sys_email_verify(bytea, text, uuid, bytea, cidr, text, bytea) TO slugbase_app;
-GRANT EXECUTE ON FUNCTION public.sys_create_personal_workspace(uuid, uuid, text) TO slugbase_app;
 GRANT EXECUTE ON FUNCTION public.sys_account_email_verified(uuid) TO slugbase_app;

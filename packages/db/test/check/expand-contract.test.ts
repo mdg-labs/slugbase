@@ -1196,3 +1196,217 @@ describe("the statement reader", () => {
     expect(analyseSql("COPY t TO stdout")[0]?.operations[0]?.kind).toBe("unknown");
   });
 });
+
+// A custom-SQL step re-emits all of src/sql/ in every migration that changes it (doc 05 section 5.1), so the REVOKE statements of
+// the release come back unchanged. The rule accepts a table REVOKE only inside the migration's own custom step and only when that
+// step leaves the table the GRANT and REVOKE statements, in order, that the latest custom-SQL step of the release left it
+// (doc 05 section 5.2).
+describe("a custom-SQL step that re-emits the REVOKE statements of the release", () => {
+  const BREAKPOINT = "\n--> statement-breakpoint\n";
+  const HASH = "a".repeat(64);
+  const REVOKE_BOOKMARKS = "REVOKE ALL ON TABLE public.bookmarks FROM PUBLIC, slugbase_app;";
+  const TABLES = [
+    { name: "bookmarks", columns: BOOKMARKS },
+    { name: "notes", columns: ["id", "body"] },
+  ];
+
+  /** The statements a migration carries from src/sql/: the first starts with the marker, then one per file. */
+  function customStep(...files: string[]): string {
+    return files
+      .map((body, index) => `${index === 0 ? `-- slugbase:custom-sql sha256=${HASH}\n` : ""}-- src/sql/${String(index * 10 + 10).padStart(3, "0")}-file.sql\n${body}`)
+      .join(BREAKPOINT);
+  }
+
+  /** A repository whose release holds `bookmarks` and `notes` and the given first migration. */
+  function releasedWith(firstMigration: string): GitPackage {
+    const repository = new GitPackage();
+    repositories.push(repository);
+    repository.migration(FIRST, firstMigration, TABLES);
+    repository.commit("first release");
+    repository.tag("v1.0.0");
+    return repository;
+  }
+
+  const CREATE = 'CREATE TABLE "bookmarks" ("id" uuid PRIMARY KEY, "title" text, "legacy_title" text);\n--> statement-breakpoint\nCREATE TABLE "notes" ("id" uuid PRIMARY KEY, "body" text);';
+
+  /** The release's custom step holds REVOKE_BOOKMARKS; `reEmit` is the custom step of the migration added after it. */
+  async function reEmitted(reEmit: string, release = customStep(REVOKE_BOOKMARKS), marker?: boolean | "pending"): Promise<readonly Finding[]> {
+    const repository = releasedWith(`${CREATE}${BREAKPOINT}${release}`);
+    repository.migration(SECOND, reEmit, TABLES);
+    return inspect(repository, marker);
+  }
+
+  it("accepts a re-emit of the same src/sql without a contract header", async () => {
+    expect(await reEmitted(customStep(REVOKE_BOOKMARKS))).toEqual([]);
+  });
+
+  it("accepts it under every contract marker", async () => {
+    expect(await reEmitted(customStep(REVOKE_BOOKMARKS), customStep(REVOKE_BOOKMARKS), true)).toEqual([]);
+    expect(await reEmitted(customStep(REVOKE_BOOKMARKS), customStep(REVOKE_BOOKMARKS), "pending")).toEqual([]);
+  });
+
+  it("rejects a new REVOKE on a table of the release beside the re-emitted ones, naming only the new one", async () => {
+    const findings = await reEmitted(customStep(REVOKE_BOOKMARKS, "REVOKE ALL ON TABLE public.notes FROM PUBLIC, slugbase_app;"));
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.object).toBe(`migrations/${SECOND}.sql`);
+    expect(findings[0]?.message).toContain("revokes privileges on table notes, which exists at v1.0.0");
+    expect(findings[0]?.message).toContain(MARKER_HINT);
+  });
+
+  it("accepts a re-emit that moves the statement to another file or adds a GRANT on another table", async () => {
+    const reEmit = customStep("GRANT SELECT ON TABLE public.notes TO slugbase_app;", REVOKE_BOOKMARKS);
+    expect(await reEmitted(reEmit)).toEqual([]);
+  });
+
+  it("compares the statement with its whitespace and line breaks normalised", async () => {
+    expect(await reEmitted(customStep("REVOKE   ALL\n  ON TABLE public.bookmarks\n  FROM PUBLIC,\n       slugbase_app;"))).toEqual([]);
+  });
+
+  it("accepts the statement when the release wrote it in several lines and the re-emit in one", async () => {
+    expect(await reEmitted(customStep(REVOKE_BOOKMARKS), customStep("REVOKE ALL ON TABLE public.bookmarks\n  FROM PUBLIC, slugbase_app;"))).toEqual([]);
+  });
+
+  it.each([
+    ["other privileges", "REVOKE SELECT ON TABLE public.bookmarks FROM PUBLIC, slugbase_app;"],
+    ["other roles", "REVOKE ALL ON TABLE public.bookmarks FROM PUBLIC;"],
+    ["another spelling of the table", "REVOKE ALL ON TABLE bookmarks FROM PUBLIC, slugbase_app;"],
+    ["another letter case", "revoke all on table public.bookmarks from public, slugbase_app;"],
+    ["a column list", "REVOKE ALL (title) ON TABLE public.bookmarks FROM PUBLIC, slugbase_app;"],
+    ["CASCADE", "REVOKE ALL ON TABLE public.bookmarks FROM PUBLIC, slugbase_app CASCADE;"],
+  ])("rejects a REVOKE that differs from the release's in %s", async (_label, statement) => {
+    const findings = await reEmitted(customStep(statement));
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("revokes privileges on table bookmarks, which exists at v1.0.0");
+  });
+
+  describe("when a GRANT follows the REVOKE in the release", () => {
+    const GRANT_BOOKMARKS = "GRANT SELECT, INSERT ON TABLE public.bookmarks TO slugbase_app;";
+    const release = customStep(`${REVOKE_BOOKMARKS}\n${GRANT_BOOKMARKS}`);
+
+    it("accepts the unchanged pair", async () => {
+      expect(await reEmitted(release, release)).toEqual([]);
+    });
+
+    it("rejects a re-emit that drops the GRANT, which would leave the table without the access the release granted", async () => {
+      const findings = await reEmitted(customStep(REVOKE_BOOKMARKS), release);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]?.message).toContain("revokes privileges on table bookmarks, which exists at v1.0.0");
+      expect(findings[0]?.message).toContain(MARKER_HINT);
+    });
+
+    it("rejects a re-emit that puts the GRANT before the REVOKE", async () => {
+      const findings = await reEmitted(customStep(`${GRANT_BOOKMARKS}\n${REVOKE_BOOKMARKS}`), release);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]?.message).toContain("revokes privileges on table bookmarks");
+    });
+
+    it("rejects a re-emit that changes the GRANT", async () => {
+      const findings = await reEmitted(customStep(`${REVOKE_BOOKMARKS}\nGRANT SELECT ON TABLE public.bookmarks TO slugbase_app;`), release);
+      expect(findings).toHaveLength(1);
+    });
+
+    it("rejects a re-emit that adds a GRANT on the table in another file", async () => {
+      const findings = await reEmitted(customStep(`${REVOKE_BOOKMARKS}\n${GRANT_BOOKMARKS}`, "GRANT DELETE ON TABLE public.bookmarks TO slugbase_app;"), release);
+      expect(findings).toHaveLength(1);
+    });
+
+    it("rejects a re-emit that adds a GRANT on every table of the schema", async () => {
+      const findings = await reEmitted(customStep(`${REVOKE_BOOKMARKS}\n${GRANT_BOOKMARKS}`, "GRANT SELECT ON ALL TABLES IN SCHEMA public TO slugbase_app;"), release);
+      expect(findings).toHaveLength(1);
+    });
+
+    it("rejects a re-emit when the GRANT is one the check does not read", async () => {
+      const unread = "GRANT SELECT ON TABLE public.bookmarks TO slugbase_app GRANTED BY slugbase_owner;";
+      const findings = await reEmitted(customStep(`${REVOKE_BOOKMARKS}\n${unread}`), customStep(`${REVOKE_BOOKMARKS}\n${unread}`));
+      expect(findings.some((finding) => finding.message.includes("revokes privileges on table bookmarks"))).toBe(true);
+    });
+  });
+
+  describe("when the matching REVOKE is not in the migration's custom step", () => {
+    it("rejects it in a migration that has no custom step", async () => {
+      const findings = await reEmitted(REVOKE_BOOKMARKS);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]?.message).toContain("revokes privileges on table bookmarks, which exists at v1.0.0");
+    });
+
+    it("rejects it in the schema statements before the custom step, which holds the same statement", async () => {
+      const findings = await reEmitted(`${REVOKE_BOOKMARKS}${BREAKPOINT}${customStep(REVOKE_BOOKMARKS)}`);
+      expect(findings).toHaveLength(1);
+      expect(findings[0]?.message).toContain("revokes privileges on table bookmarks");
+    });
+  });
+
+  it("compares a statement with a quoted name as written", async () => {
+    const quoted = 'REVOKE ALL ON TABLE public."bookmarks" FROM PUBLIC, slugbase_app;';
+    expect(await reEmitted(customStep(quoted), customStep(quoted))).toEqual([]);
+    const findings = await reEmitted(customStep('REVOKE ALL ON TABLE public."bookmarks"  FROM PUBLIC, slugbase_app;'), customStep(quoted));
+    expect(findings).toHaveLength(1);
+  });
+
+  it("rejects a REVOKE on a table of the release that the release's custom step does not hold", async () => {
+    const findings = await reEmitted(customStep("REVOKE ALL ON TABLE public.notes FROM PUBLIC, slugbase_app;"), customStep(REVOKE_BOOKMARKS));
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("revokes privileges on table notes, which exists at v1.0.0");
+  });
+
+  it("reads the latest custom step of the release, not an earlier one", async () => {
+    const repository = releasedWith(`${CREATE}${BREAKPOINT}${customStep(REVOKE_BOOKMARKS)}`);
+    repository.migration("20260115000000_change_sql", customStep("GRANT SELECT ON TABLE public.bookmarks TO slugbase_app;"), TABLES);
+    repository.commit("second release step");
+    repository.tag("v1.1.0");
+    repository.migration(SECOND, customStep(REVOKE_BOOKMARKS), TABLES);
+    const findings = await inspect(repository);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("revokes privileges on table bookmarks, which exists at v1.1.0");
+  });
+
+  it("reads the release from git, not from the working tree", async () => {
+    const repository = releasedWith(`${CREATE}${BREAKPOINT}${customStep(REVOKE_BOOKMARKS)}`);
+    repository.migration(SECOND, customStep(REVOKE_BOOKMARKS), TABLES);
+    repository.write(customStep("GRANT SELECT ON TABLE public.bookmarks TO slugbase_app;"), "migrations", `${FIRST}.sql`);
+    expect(await inspect(repository)).toEqual([]);
+  });
+
+  it("does not count a REVOKE of the release outside its custom step", async () => {
+    const findings = await reEmitted(customStep(REVOKE_BOOKMARKS), `${REVOKE_BOOKMARKS}${BREAKPOINT}${customStep("GRANT SELECT ON TABLE public.notes TO slugbase_app;")}`);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("revokes privileges on table bookmarks");
+  });
+
+  it("rejects the statement when the release holds no custom step", async () => {
+    const repository = releasedWith(`${CREATE}\n--> statement-breakpoint\n${REVOKE_BOOKMARKS}`);
+    repository.migration(SECOND, customStep(REVOKE_BOOKMARKS), TABLES);
+    const findings = await inspect(repository);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("revokes privileges on table bookmarks");
+  });
+
+  it("flags nothing while the repository has no release tag", async () => {
+    const repository = new GitPackage();
+    repositories.push(repository);
+    repository.migration(FIRST, `${CREATE}${BREAKPOINT}${customStep(REVOKE_BOOKMARKS)}`, TABLES);
+    expect(await inspect(repository)).toEqual([]);
+  });
+
+  it("still rejects a REVOKE on a schema or on every table of a schema that the release also holds", async () => {
+    const statements = ["REVOKE USAGE ON SCHEMA public FROM slugbase_app;", "REVOKE SELECT ON ALL TABLES IN SCHEMA public FROM slugbase_app;"];
+    for (const statement of statements) {
+      const findings = await reEmitted(customStep(statement), customStep(statement));
+      expect(findings).toHaveLength(1);
+      expect(findings[0]?.message).toContain("revokes privileges on a schema, sequence, database or every object of a kind");
+    }
+  });
+
+  it("does not let an identical statement hide a second one in the same text", async () => {
+    const findings = await reEmitted(customStep(`${REVOKE_BOOKMARKS}\nREVOKE ALL ON TABLE public.notes FROM PUBLIC, slugbase_app;`));
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("revokes privileges on table notes");
+  });
+
+  it("still holds a statement between GRANT CREATE ON SCHEMA and its REVOKE to the function statements", async () => {
+    const reEmit = customStep(`GRANT CREATE ON SCHEMA public TO slugbase_system;\n${REVOKE_BOOKMARKS}\nREVOKE CREATE ON SCHEMA public FROM slugbase_system;`);
+    const findings = await reEmitted(reEmit);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("between GRANT CREATE ON SCHEMA");
+  });
+});
