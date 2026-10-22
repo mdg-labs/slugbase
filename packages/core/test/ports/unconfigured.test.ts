@@ -13,7 +13,9 @@ const PORTS: Record<
   ai: { methods: ["suggest"], behaviour: "rejects", code: "ai_unavailable" },
   identity: { methods: ["begin", "complete", "listProviders"], behaviour: "rejects", code: "unavailable" },
   billing: {
-    methods: ["cancel", "changePlan", "changeQuantity", "documentPdf", "listDocuments", "planState", "receiveEvent", "startCheckout"],
+    methods: [
+      "cancel", "changePlan", "changeQuantity", "checkoutState", "customerDetails", "documentPdf", "legal", "listContracts", "listDocuments", "planState", "plans", "previewChange", "quote", "receiveEvent", "resume", "startCheckout", "subscriptionDetails", "updateBillingDetails", "updatePaymentMethod", "withdraw",
+    ],
     behaviour: "rejects",
     code: "billing_unavailable",
     answers: { planState: "none" },

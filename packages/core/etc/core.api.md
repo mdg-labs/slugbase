@@ -532,6 +532,64 @@ export function base32Encode(bytes: Uint8Array): string;
 export function bearerApiToken(authorization: string): string | undefined;
 
 // @public
+export const BILLING_ERROR_CODES: readonly ["billing_unavailable", "already_subscribed", "subscription_not_changeable", "renewal_pending", "charge_changed", "plan_not_available", "quantity_below_minimum", "quantity_below_members", "mandate_required", "checkout_expired", "idempotency_conflict", "rate_limited", "checkout_paused", "plan_checkout_paused"];
+
+// @public
+export type BillingAccountScope = Pick<BillingScope, "accountId">;
+
+// @public (undocumented)
+export interface BillingAddress {
+    // (undocumented)
+    readonly city: string;
+    readonly country: string;
+    // (undocumented)
+    readonly line1: string;
+    // (undocumented)
+    readonly line2?: string;
+    // (undocumented)
+    readonly postalCode: string;
+    // (undocumented)
+    readonly region?: string;
+}
+
+// @public (undocumented)
+export type BillingChangeIneligibleReason = Extract<BillingErrorCode, "subscription_not_changeable" | "renewal_pending" | "plan_not_available" | "quantity_below_minimum" | "quantity_below_members">;
+
+// @public
+export type BillingChangeOptions = {
+    readonly timing: "period_end";
+} | {
+    readonly timing: "immediate";
+    readonly consent: BillingConsent;
+    readonly expectedCharge: BillingMoney;
+};
+
+// @public
+export interface BillingChangePreview {
+    readonly asOf: string;
+    readonly charge: BillingMoney;
+    // (undocumented)
+    readonly chargeForRemainingTime: BillingMoney;
+    // (undocumented)
+    readonly creditForUnusedTime: BillingMoney;
+    // (undocumented)
+    readonly eligible: boolean;
+    readonly ineligibleReason: BillingChangeIneligibleReason | null;
+    readonly newPeriod: BillingPeriod | null;
+    readonly nextChargeDate: string;
+    // (undocumented)
+    readonly tax: BillingTaxBreakdown;
+}
+
+// @public
+export interface BillingChangeRequest {
+    // (undocumented)
+    readonly planCode?: string;
+    // (undocumented)
+    readonly quantity?: number;
+}
+
+// @public
 export interface BillingCheckout {
     // (undocumented)
     readonly id: string;
@@ -540,11 +598,63 @@ export interface BillingCheckout {
 }
 
 // @public (undocumented)
+export type BillingCheckoutRefusal = Extract<BillingErrorCode, "already_subscribed" | "plan_not_available" | "quantity_below_minimum" | "mandate_required" | "checkout_paused" | "plan_checkout_paused">;
+
+// @public (undocumented)
 export interface BillingCheckoutRequest {
+    // (undocumented)
+    readonly consent: BillingConsent;
     // (undocumented)
     readonly planCode: string;
     // (undocumented)
     readonly quantity?: number;
+}
+
+// @public (undocumented)
+export interface BillingCheckoutState {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly status: "open" | "completed" | "expired";
+}
+
+// @public
+export interface BillingConsent {
+    readonly acceptedAt: string;
+    // (undocumented)
+    readonly legal: readonly BillingLegalAcceptance[];
+}
+
+// @public (undocumented)
+export interface BillingContract {
+    // (undocumented)
+    readonly endedAt: string | null;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly planCode: string;
+    readonly startedAt: string;
+    readonly withdrawable: boolean;
+    // (undocumented)
+    readonly withdrawnAt: string | null;
+}
+
+// @public (undocumented)
+export interface BillingCustomerDetails {
+    // (undocumented)
+    readonly details: BillingDetails | null;
+}
+
+// @public (undocumented)
+export interface BillingDetails {
+    // (undocumented)
+    readonly address: BillingAddress;
+    // (undocumented)
+    readonly email: string;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly taxId?: string;
 }
 
 // @public (undocumented)
@@ -572,6 +682,16 @@ export interface BillingDocumentPdf {
 }
 
 // @public
+export class BillingError extends Error {
+    constructor(code: string);
+    // (undocumented)
+    readonly code: BillingErrorCode;
+}
+
+// @public (undocumented)
+export type BillingErrorCode = (typeof BILLING_ERROR_CODES)[number];
+
+// @public
 export interface BillingEventDelivery {
     // (undocumented)
     readonly body: string;
@@ -591,6 +711,32 @@ export interface BillingEventOutcome {
 export type BillingInterval = "month" | "year";
 
 // @public
+export interface BillingLegalAcceptance {
+    // (undocumented)
+    readonly code: string;
+    // (undocumented)
+    readonly version: string;
+}
+
+// @public
+export interface BillingLegalLink {
+    readonly locale: string;
+    // (undocumented)
+    readonly url: string;
+}
+
+// @public
+export interface BillingLegalText {
+    // (undocumented)
+    readonly code: string;
+    readonly effectiveAt: string;
+    // (undocumented)
+    readonly links: readonly BillingLegalLink[];
+    // (undocumented)
+    readonly version: string;
+}
+
+// @public
 export interface BillingMoney {
     // (undocumented)
     readonly amountMinor: number;
@@ -606,6 +752,33 @@ export interface BillingPage<T> {
     readonly nextCursor: string | null;
 }
 
+// @public (undocumented)
+export interface BillingPeriod {
+    // (undocumented)
+    readonly end: string;
+    readonly start: string;
+}
+
+// @public (undocumented)
+export interface BillingPlan {
+    readonly checkoutOpen: boolean;
+    // (undocumented)
+    readonly code: string;
+    readonly maxQuantity: number | null;
+    // (undocumented)
+    readonly minQuantity: number;
+    // (undocumented)
+    readonly prices: readonly BillingPlanPrice[];
+}
+
+// @public
+export interface BillingPlanPrice {
+    // (undocumented)
+    readonly interval: BillingInterval;
+    // (undocumented)
+    readonly unitAmount: BillingMoney;
+}
+
 // @public
 export type BillingPlanState = "none" | "active" | "cancelling" | "past_due";
 
@@ -614,19 +787,66 @@ export interface BillingPort extends Port {
     // (undocumented)
     cancel(scope: BillingScope): Promise<BillingSubscription>;
     // (undocumented)
-    changePlan(scope: BillingScope, planCode: string): Promise<BillingSubscription>;
+    changePlan(scope: BillingScope, planCode: string, options?: BillingChangeOptions): Promise<BillingSubscription>;
     // (undocumented)
-    changeQuantity(scope: BillingScope, quantity: number): Promise<BillingSubscription>;
+    changeQuantity(scope: BillingScope, quantity: number, options?: BillingChangeOptions): Promise<BillingSubscription>;
+    // (undocumented)
+    checkoutState(scope: BillingScope, id: string): Promise<BillingCheckoutState>;
+    // (undocumented)
+    customerDetails(scope: BillingScope): Promise<BillingCustomerDetails>;
     // (undocumented)
     documentPdf(scope: BillingScope, id: string): Promise<BillingDocumentPdf>;
+    legal(scope: BillingAccountScope): Promise<readonly BillingLegalText[]>;
+    // (undocumented)
+    listContracts(scope: BillingScope, cursor?: string): Promise<BillingPage<BillingContract>>;
     // (undocumented)
     listDocuments(scope: BillingScope, cursor?: string): Promise<BillingPage<BillingDocument>>;
     // (undocumented)
+    plans(scope: BillingAccountScope): Promise<readonly BillingPlan[]>;
+    // (undocumented)
     planState(scope: BillingScope): Promise<BillingPlanState>;
+    // (undocumented)
+    previewChange(scope: BillingScope, request: BillingChangeRequest): Promise<BillingChangePreview>;
+    quote(scope: BillingAccountScope, request: BillingQuoteRequest): Promise<BillingQuote>;
     // (undocumented)
     receiveEvent(delivery: BillingEventDelivery): Promise<BillingEventOutcome>;
     // (undocumented)
+    resume(scope: BillingScope): Promise<BillingSubscription>;
+    // (undocumented)
     startCheckout(scope: BillingScope, request: BillingCheckoutRequest): Promise<BillingCheckout>;
+    subscriptionDetails(scope: BillingScope): Promise<BillingSubscriptionDetails | null>;
+    // (undocumented)
+    updateBillingDetails(scope: BillingScope, details: BillingDetails): Promise<BillingCustomerDetails>;
+    // (undocumented)
+    updatePaymentMethod(scope: BillingScope): Promise<BillingRedirect>;
+    // (undocumented)
+    withdraw(scope: BillingScope, withdrawal: BillingWithdrawal): Promise<BillingContract>;
+}
+
+// @public (undocumented)
+export interface BillingQuote {
+    readonly refusal: BillingCheckoutRefusal | null;
+    // (undocumented)
+    readonly tax: BillingTaxBreakdown;
+}
+
+// @public
+export interface BillingQuoteRequest {
+    readonly country: string;
+    // (undocumented)
+    readonly interval: BillingInterval;
+    // (undocumented)
+    readonly planCode: string;
+    // (undocumented)
+    readonly quantity?: number;
+    // (undocumented)
+    readonly taxId?: string;
+}
+
+// @public
+export interface BillingRedirect {
+    // (undocumented)
+    readonly redirectUrl: string;
 }
 
 // @public
@@ -651,6 +871,42 @@ export interface BillingSubscription {
     readonly quantity: number;
     // (undocumented)
     readonly state: Exclude<BillingPlanState, "none">;
+}
+
+// @public
+export interface BillingSubscriptionDetails extends BillingSubscription {
+    readonly nextChargeDate: string | null;
+    // (undocumented)
+    readonly unitAmount: BillingMoney;
+}
+
+// @public
+export interface BillingTaxBreakdown {
+    // (undocumented)
+    readonly gross: BillingMoney;
+    // (undocumented)
+    readonly lines: readonly BillingTaxLine[];
+    // (undocumented)
+    readonly net: BillingMoney;
+    // (undocumented)
+    readonly tax: BillingMoney;
+}
+
+// @public
+export interface BillingTaxLine {
+    // (undocumented)
+    readonly amount: BillingMoney;
+    // (undocumented)
+    readonly label: string;
+    // (undocumented)
+    readonly rateBasisPoints: number;
+}
+
+// @public (undocumented)
+export interface BillingWithdrawal {
+    // (undocumented)
+    readonly contractId: string;
+    readonly declaration: string;
 }
 
 // @public
@@ -2768,6 +3024,9 @@ export interface TenantResolver extends Port {
 export interface TenantResolveRequest {
     readonly requestId: string;
 }
+
+// @public
+export function toBillingErrorCode(code: string): BillingErrorCode;
 
 // @public (undocumented)
 export const TOTP_DIGITS = 6;

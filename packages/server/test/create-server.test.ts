@@ -90,8 +90,33 @@ describe("createServer", () => {
       };
     }
 
-    it("answers a billing operation of the CE default as 503 billing_unavailable", async () => {
-      const { server } = compose([billingModule((billing) => billing.startCheckout(SCOPE, { planCode: "p" }))]);
+    const CONSENT = { legal: [{ code: "terms", version: "1" }], acceptedAt: "2026-01-01T00:00:00.000Z" };
+    const MONEY = { amountMinor: 100, currency: "EUR" };
+    const DETAILS = { name: "n", email: "a@example.com", address: { line1: "l", postalCode: "p", city: "c", country: "DE" } };
+    const OPERATIONS: Record<string, (billing: Adapters["billing"]) => Promise<unknown>> = {
+      plans: (billing) => billing.plans(SCOPE),
+      legal: (billing) => billing.legal(SCOPE),
+      quote: (billing) => billing.quote(SCOPE, { planCode: "p", interval: "month", country: "DE" }),
+      startCheckout: (billing) => billing.startCheckout(SCOPE, { planCode: "p", consent: CONSENT }),
+      checkoutState: (billing) => billing.checkoutState(SCOPE, "c"),
+      previewChange: (billing) => billing.previewChange(SCOPE, { quantity: 2 }),
+      changeQuantity: (billing) => billing.changeQuantity(SCOPE, 2, { timing: "immediate", consent: CONSENT, expectedCharge: MONEY }),
+      changePlan: (billing) => billing.changePlan(SCOPE, "p"),
+      cancel: (billing) => billing.cancel(SCOPE),
+      resume: (billing) => billing.resume(SCOPE),
+      updatePaymentMethod: (billing) => billing.updatePaymentMethod(SCOPE),
+      updateBillingDetails: (billing) => billing.updateBillingDetails(SCOPE, DETAILS),
+      subscriptionDetails: (billing) => billing.subscriptionDetails(SCOPE),
+      customerDetails: (billing) => billing.customerDetails(SCOPE),
+      listContracts: (billing) => billing.listContracts(SCOPE),
+      withdraw: (billing) => billing.withdraw(SCOPE, { contractId: "k", declaration: "d" }),
+      listDocuments: (billing) => billing.listDocuments(SCOPE),
+      documentPdf: (billing) => billing.documentPdf(SCOPE, "d"),
+      receiveEvent: (billing) => billing.receiveEvent({ body: "{}", signature: "s", timestamp: "0" }),
+    };
+
+    it.each(Object.entries(OPERATIONS))("answers %s of the CE default as 503 billing_unavailable", async (_name, call) => {
+      const { server } = compose([billingModule(call)]);
       const response = await server.fetch(new Request("http://localhost/api/v1/billing-probe"));
       expect(response.status).toBe(503);
       expect(await response.json()).toMatchObject({ status: 503, code: "billing_unavailable", detail: "Billing is not available on this instance." });
