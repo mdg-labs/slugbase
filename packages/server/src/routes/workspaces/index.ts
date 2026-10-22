@@ -56,7 +56,7 @@ import { acceptedVersions, entityTagOf } from "./if-match.ts";
 // GET /api/v1/workspaces and POST /api/v1/workspaces (doc 04 section 10.4, doc 02 section 3.2, doc 05
 // sections 2.2, 2.9 and 3.3, doc 10 T1). Both act on the signed-in session's own account in an account-level
 // transaction: the list reads its memberships on row-level security, and the creation makes the workspace
-// for the account of that transaction through `sys_create_workspace`, never for one the request names (the
+// for the account of that transaction through `sys_create_workspace_limited`, never for one the request names (the
 // body is a closed object with a name and nothing else). The workspace, its owner membership and settings,
 // the `workspace.created` event job and the audit event are one transaction, so a failure of any of them
 // leaves none. The account-scoped entitlement `workspaces.ownMax` caps the workspaces the account owns (doc 01
