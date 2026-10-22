@@ -179,7 +179,11 @@ jobs:
       - run: pnpm db:check
         env:
           SLUGBASE_DB_CHECK_CONTRACT: ${{ github.event_name == 'push' && 'pending' || contains(github.event.pull_request.labels.*.name, 'migration:contract') }}
+      # The db package's integration tests run `pnpm db:check` themselves, so they
+      # get the same marker as the step above.
       - run: pnpm test:integration
+        env:
+          SLUGBASE_DB_CHECK_CONTRACT: ${{ github.event_name == 'push' && 'pending' || contains(github.event.pull_request.labels.*.name, 'migration:contract') }}
 
   # The only job that is not in the node container: it builds the image and starts
   # it with Docker Compose (scripts/smoke-image.sh), which needs the runner's own

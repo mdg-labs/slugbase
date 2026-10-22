@@ -150,7 +150,8 @@ describe("committed migrations", () => {
       migration: string;
     };
     expect(record.sha256).toBe(hashSqlFiles(files));
-    const migration = readFileSync(join(PACKAGE, "migrations", `${record.migration}.sql`), "utf8");
+    // The contract header of a marked migration sits in the leading comment block, which can be the first file's own.
+    const migration = readFileSync(join(PACKAGE, "migrations", `${record.migration}.sql`), "utf8").replace(/^-- slugbase:contract .*\n/m, "");
     expect(migration).toContain(`-- slugbase:custom-sql sha256=${record.sha256}`);
     for (const file of files) {
       expect(migration).toContain(file.content.trim());

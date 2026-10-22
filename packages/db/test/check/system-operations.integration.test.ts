@@ -134,7 +134,6 @@ describe("the shipped chain", () => {
       "sys_account_mfa_enabled",
       "sys_api_token_lookup",
       "sys_oidc_state_create",
-      "sys_oidc_state_consume",
       "sys_identity_sign_in",
       "sys_identity_link",
       "sys_identity_link_by_email",

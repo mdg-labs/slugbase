@@ -90,8 +90,21 @@ function signIn(overrides: Partial<Parameters<AuthStore["signInWithIdentity"]>[0
 describe("the OIDC system operations", () => {
   it("are registered", () => {
     expect(systemOperations).toEqual(
-      expect.arrayContaining(["sys_oidc_state_create", "sys_oidc_state_consume", "sys_identity_sign_in", "sys_identity_link", "sys_identity_link_by_email", "sys_identity_unlink", "sys_identity_reauth", "sys_password_set_initial"]),
+      expect.arrayContaining(["sys_oidc_state_create", "sys_oidc_state_take", "sys_identity_sign_in", "sys_identity_link", "sys_identity_link_by_email", "sys_identity_unlink", "sys_identity_reauth", "sys_password_set_initial"]),
     );
+    expect(systemOperations).not.toContain("sys_oidc_state_consume");
+  });
+
+  it("leave one sys_oidc_state_create, with the invitation token hash, and no sys_oidc_state_consume", async () => {
+    const functions = await db.owner<{ name: string; arguments: string }[]>`
+      SELECT p.proname AS name, pg_get_function_identity_arguments(p.oid) AS arguments
+      FROM pg_proc p
+      WHERE p.pronamespace = 'public'::regnamespace AND p.proname IN ('sys_oidc_state_create', 'sys_oidc_state_consume', 'sys_oidc_state_take')
+      ORDER BY p.proname, p.pronargs`;
+    expect(functions.map(({ name, arguments: args }) => `${name}(${args})`)).toEqual([
+      "sys_oidc_state_create(p_state_hash bytea, p_provider text, p_intent text, p_nonce text, p_code_verifier bytea, p_code_verifier_key_id text, p_return_to text, p_link_account_id uuid, p_invitation_token_hash bytea)",
+      "sys_oidc_state_take(p_state_hash bytea, p_provider text)",
+    ]);
   });
 });
 
