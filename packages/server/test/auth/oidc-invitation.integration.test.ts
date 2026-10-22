@@ -88,7 +88,7 @@ function serve(
     adapters: {
       ...adapters(config),
       rateLimit: memoryRateLimiter(createRateLimitRegistry(config)),
-      ...(options.entitlements === undefined ? {} : { entitlements: options.entitlements }),
+      entitlements: options.entitlements ?? new LimitedEntitlementSource(),
       tenantResolver: createAccountOnlyTenantResolver(),
       secretBox: options.secretBox ?? testSecretBox(testKey("oidc-1")),
       identity: { available: true, listProviders: () => fake.listProviders(), begin: (request) => fake.begin(request), complete: (request) => fake.complete(request) },
@@ -672,6 +672,61 @@ describe("accepting an invitation through a provider", () => {
     });
   });
 
+  // The entitlement of the callback (completeOidcSignIn, intent invite): the token names the workspace and the operation
+  // declares no entitlement, so the callback asks the source about `members.invite` after the acceptance, run with no
+  // limit and rolled back, has named the workspace, and before anything is written.
+  describe("needs members.invite for the workspace of the invitation (completeOidcSignIn)", () => {
+    const grant = { subject: "invite-subject", email: "entitled@example.test", emailVerified: true } as const;
+
+    it("ends on the generic failure, creates no account and leaves the invitation pending, then accepts once the source grants it", async () => {
+      const source = new LimitedEntitlementSource().deny("members.invite");
+      const world = serve(provider(), [], { entitlements: source });
+      const target = await invitation("entitled@example.test");
+
+      expectFailed(await accepted(world, target.token, grant));
+
+      await expectUntouched(target, 1);
+      expect(await auditEvents(target.workspaceId)).toEqual([]);
+      expect(world.logs.entries.at(-1)).toMatchObject({ fields: { reason: "entitlement_required" } });
+
+      source.grant("members.invite", true);
+      const response = await accepted(world, target.token, { ...grant, subject: "invite-subject-2" });
+      expect(response.headers.get("location")).toBe("/");
+      expect(Object.values(await membersOf(target.workspaceId)).sort()).toEqual(["member", "owner"]);
+      expect(await jobData("event.member.joined")).toHaveLength(1);
+    });
+
+    it("links no identity and opens no session for the account that holds the invited address", async () => {
+      const world = serve(provider(), [], { entitlements: new LimitedEntitlementSource().deny("members.invite") });
+      const holder = await verifiedAccount("entitled@example.test");
+      const target = await invitation("entitled@example.test");
+
+      expectFailed(await accepted(world, target.token, grant));
+
+      await expectUntouched(target, 2);
+      expect(await sessionRows(database(), holder.id)).toEqual([]);
+    });
+
+    it("asks no seat-check hook when the entitlement is withheld", async () => {
+      const asked: SeatCheckInput[] = [];
+      const hooks: ServerModule = { name: "test/seats", hooks: { seatCheck: (input) => (asked.push(input), { seatLimit: null }) }, register: () => ({}) };
+      const world = serve(provider(), [hooks], { entitlements: new LimitedEntitlementSource().deny("members.invite") });
+      const target = await invitation("entitled@example.test");
+
+      expectFailed(await accepted(world, target.token, grant));
+
+      expect(asked).toEqual([]);
+    });
+
+    it("keeps accepting under the source of the Community Edition", async () => {
+      const world = serve(provider(), [], { entitlements: new LimitedEntitlementSource() });
+      const target = await invitation("entitled@example.test");
+
+      expect((await accepted(world, target.token, grant)).headers.get("location")).toBe("/");
+      expect(Object.values(await membersOf(target.workspaceId)).sort()).toEqual(["member", "owner"]);
+    });
+  });
+
   // The seat limit of the callback (completeOidcSignIn, intent invite): the workspace's `seats.max`, replaced by the
   // seat-check hooks of the composed modules, reaches the operation that counts the members under the workspace's lock.
   describe("counts the seats of the workspace (completeOidcSignIn)", () => {
@@ -738,6 +793,31 @@ describe("accepting an invitation through a provider", () => {
       const created = (await accountRows()).find((row) => row.email === "seat@example.test");
       expect(created).toBeDefined();
       expect(asked).toEqual([{ workspaceId: target.workspaceId, accountId: created?.id, invitationId: target.id }]);
+    });
+
+    it("refuses and writes nothing when the account that would accept is not the one the hook was told", async () => {
+      const asked: SeatCheckInput[] = [];
+      let holder: SeededAccount | undefined;
+      const world = serve(
+        provider(),
+        [
+          seatModule(async () => {
+            holder = await verifiedAccount("seat@example.test");
+            return { seatLimit: null };
+          }, asked),
+        ],
+        { entitlements: new LimitedEntitlementSource() },
+      );
+      const target = await invitation("seat@example.test");
+
+      expectFailed(await accepted(world, target.token, grant));
+
+      expect(holder).toBeDefined();
+      expect(asked).toHaveLength(1);
+      expect(asked[0]?.accountId).not.toBe(holder?.id);
+      await expectUntouched(target, 2);
+      expect(await sessionRows(database(), holder?.id ?? "")).toEqual([]);
+      expect(world.logs.entries.at(-1)).toMatchObject({ fields: { reason: "invitation_account_changed" } });
     });
 
     it("answers 503 and writes nothing when a hook throws", async () => {

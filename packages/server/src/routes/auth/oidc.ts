@@ -17,6 +17,7 @@ import {
   safeReturnTo,
   truncateUserAgent,
   PortUnavailable,
+  type EntitlementCheck,
   type IdentityClaims,
   type IdentityPort,
   type IdentityProviderConfig,
@@ -77,6 +78,12 @@ import { route } from "../register.ts";
 // says because the invitation authorises it (Q31), after the registration policy answered for the path `invitation`. The
 // link, the account, the membership, the accepted invitation and the session are one transaction. The browser comes
 // back with a full session that acts in the workspace joined, and any other outcome ends on the generic failure.
+// The token names the workspace and the operation declares no entitlement, so the callback decides `members.invite`
+// and the seat limit itself (doc 01 sections 7.5 and 13.1, doc 10 T3 and T11), as `POST /invitations/accept` does: it runs
+// the acceptance once with no seat limit to learn the workspace, the invitation and the account, and rolls that back;
+// asks the entitlement source about `members.invite` for the workspace as it is now; asks the seat-check hooks; and only
+// then runs the acceptance that writes. A workspace without `members.invite` or without a free seat, a hook that fails
+// to answer, or an account other than the one asked about ends with nothing written and the invitation pending.
 // The PKCE verifier is sealed together with the instant the handshake began. A callback that cannot open it (its
 // secret-box key was removed meanwhile) ends like any other failure. A `reauth` callback hands that instant to
 // the identity port, which refuses an ID token that was authenticated before it (doc 04 section 4.5).
@@ -86,6 +93,7 @@ type NewFederatedAccount = NonNullable<NonNullable<Parameters<AuthStore["signInW
 const SUBKEY_BYTES = 32;
 const FAILURE_LOCATION = `/login?error=${OIDC_FAILURE_CODE}`;
 const MAX_CODE_LENGTH = 2048;
+const MEMBERS_INVITE = "members.invite";
 // What is sealed in `oidc_login_states.code_verifier`: the instant the handshake began in milliseconds, a colon
 // and the PKCE verifier.
 const SEALED_VERIFIER = /^(\d{1,16}):([A-Za-z0-9_-]{1,128})$/;
@@ -117,6 +125,8 @@ export interface OidcRoutesOptions {
   readonly sessionCookie: SessionCookieSpec;
   /** Counts the redemption of an invitation token by a start of the `invite` intent against the `token_redeem` limits. */
   readonly takeRedeemLimit: TakeTokenRedeemLimit;
+  /** Decides `members.invite` for the workspace of an invitation, which accepting it through a provider needs. */
+  readonly entitlements: EntitlementCheck;
   /** The instant, in milliseconds, a session's `reauth_at` is compared with; defaults to the system clock. */
   readonly now?: () => number;
 }
@@ -142,6 +152,8 @@ type Refusal =
   | "identity_in_use"
   | "unknown_account"
   | "invalid_invitation"
+  | "entitlement_required"
+  | "invitation_account_changed"
   | `invitation_${Exclude<InvitationIdentityResult["kind"], "accepted">}`;
 
 function preAuthAttributes(spec: OidcPreAuthCookieSpec, maxAge: number): string {
@@ -190,6 +202,14 @@ function fromTheApplication(context: ChainContext): boolean {
   return site === "same-origin" || site === "none";
 }
 
+/** Thrown from the transaction of the acceptance that writes, to roll it back, when the account it finds is not the one the checks before it were made for. */
+class AcceptingAccountChanged extends Error {
+  constructor() {
+    super("the account that accepts is not the one the seat check was told");
+    this.name = "AcceptingAccountChanged";
+  }
+}
+
 /** The job of a domain event the acceptance queues. */
 function eventJob(event: InvitationSignupEvent) {
   return event.name === "account.created"
@@ -212,6 +232,7 @@ export function oidcRoutes({
   sessionSecret,
   sessionCookie,
   takeRedeemLimit,
+  entitlements,
   now = Date.now,
 }: OidcRoutesOptions): RouteBinding[] {
   const preAuth = oidcPreAuthCookieSpec(appOrigin);
@@ -312,6 +333,9 @@ export function oidcRoutes({
                   if (learn) {
                     throw new InvitationLearned({ workspaceId: accepted.workspaceId, invitationId: accepted.invitationId, accountId: accepted.accountId });
                   }
+                  if (accepted.accountId !== accountId) {
+                    throw new AcceptingAccountChanged();
+                  }
                   const { audit, events } = acceptance.onAccepted(accepted);
                   return { audit, jobs: events.map(eventJob) };
                 },
@@ -322,8 +346,10 @@ export function oidcRoutes({
         { ...ask, accountId, seatLimit },
       );
     // Which account accepts is the database operation's to decide, so the acceptance is first run with no seat limit and
-    // abandoned once it names the workspace, the invitation and the account; the seat-check hooks are asked about those
-    // before anything is written, and the acceptance that writes carries the limit.
+    // abandoned once it names the workspace, the invitation and the account. The workspace must hold `members.invite`, as
+    // for `POST /invitations/accept`, and the seat-check hooks are asked about those, in that order and before anything is
+    // written. The acceptance that writes then carries the limit and is abandoned if the account it finds is no longer the
+    // one the entitlement and the hooks were asked about.
     let outcome: InvitationIdentityResult;
     try {
       outcome = await acceptAs(uuidv7(), true, null);
@@ -331,12 +357,25 @@ export function oidcRoutes({
       if (!(error instanceof InvitationLearned)) {
         throw error;
       }
+      const { learned } = error;
+      if (!(await entitlements(MEMBERS_INVITE, { accountId: learned.accountId, workspaceId: learned.workspaceId, joining: true }, context.req.raw))) {
+        refused(context, provider, "entitlement_required");
+        return failure;
+      }
       const hooks = context.get("hooks");
       if (hooks === undefined) {
         throw new Error("the OIDC callback was reached without the hook dispatcher");
       }
-      const seatLimit = await hooks.acceptanceSeatLimit(error.learned, context.req.raw);
-      outcome = await acceptAs(error.learned.accountId, false, seatLimit);
+      const seatLimit = await hooks.acceptanceSeatLimit(learned, context.req.raw);
+      try {
+        outcome = await acceptAs(learned.accountId, false, seatLimit);
+      } catch (changed) {
+        if (!(changed instanceof AcceptingAccountChanged)) {
+          throw changed;
+        }
+        refused(context, provider, "invitation_account_changed");
+        return failure;
+      }
     }
     if (outcome.kind !== "accepted") {
       refused(context, provider, `invitation_${outcome.kind}`);

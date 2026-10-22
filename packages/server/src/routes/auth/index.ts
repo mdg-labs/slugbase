@@ -1,4 +1,4 @@
-import { sessionCookieSpec, type IdentityPort, type IdentityProviderConfig, type MailPort, type PasswordPolicy, type RegistrationSettings, type SecretBoxPort } from "@slugbase/core";
+import { sessionCookieSpec, type EntitlementCheck, type IdentityPort, type IdentityProviderConfig, type MailPort, type PasswordPolicy, type RegistrationSettings, type SecretBoxPort } from "@slugbase/core";
 import type { AuthStore } from "@slugbase/db";
 import { createApiTokenAuthenticator } from "../../auth/api-tokens.ts";
 import { createSessionAuthenticator } from "../../auth/authenticator.ts";
@@ -42,6 +42,8 @@ export interface AuthRoutesOptions {
   readonly oidcProviders: readonly Pick<IdentityProviderConfig, "slug" | "autoCreate" | "allowedDomains">[];
   /** Counts the redemption of an invitation token by an OIDC start against the `token_redeem` limits. */
   readonly takeRedeemLimit: TakeTokenRedeemLimit;
+  /** Decides `members.invite` for the workspace of an invitation, which accepting it through a provider needs. */
+  readonly entitlements: EntitlementCheck;
   /** The `workspaces.ownMax` of an account, asked of the entitlement source: whether the personal workspace of a registered, verified or federated account is made. */
   readonly ownedWorkspaceLimit: OwnedWorkspaceLimit;
   /** The instant a code is checked at, in milliseconds; defaults to the system clock. */
@@ -68,12 +70,13 @@ export function authContribution({
   identity,
   oidcProviders,
   takeRedeemLimit,
+  entitlements,
   ownedWorkspaceLimit,
   now = Date.now,
 }: AuthRoutesOptions): ModuleContribution {
   const cookie = sessionCookieSpec(appOrigin);
   return {
-    routes: [loginRoute({ store, passwords, mail, registration, cookie }), registerRoute({ store, settings: registration, mail, passwordPolicy, hashPassword, ownedWorkspaceLimit }), verifyEmailRoute({ store, passwordPolicy, hashPassword, cookie, ownedWorkspaceLimit }), resendVerificationRoute({ store, mail }), forgotPasswordRoute({ store, mail }), resetPasswordRoute({ store, passwordPolicy, hashPassword, cookie, mail }), ...oidcRoutes({ store, identity, secretBox, providers: oidcProviders, registration, ownedWorkspaceLimit, appOrigin, sessionSecret, sessionCookie: cookie, takeRedeemLimit, now }), verifyMfaRoute({ store, mail, secretBox, verifyCode: verifyHash, now, cookie }), logoutRoute({ store, cookie }), ...sessionRoutes({ store, cookie, cursorSecret: sessionSecret }),
+    routes: [loginRoute({ store, passwords, mail, registration, cookie }), registerRoute({ store, settings: registration, mail, passwordPolicy, hashPassword, ownedWorkspaceLimit }), verifyEmailRoute({ store, passwordPolicy, hashPassword, cookie, ownedWorkspaceLimit }), resendVerificationRoute({ store, mail }), forgotPasswordRoute({ store, mail }), resetPasswordRoute({ store, passwordPolicy, hashPassword, cookie, mail }), ...oidcRoutes({ store, identity, secretBox, providers: oidcProviders, registration, ownedWorkspaceLimit, appOrigin, sessionSecret, sessionCookie: cookie, takeRedeemLimit, entitlements, now }), verifyMfaRoute({ store, mail, secretBox, verifyCode: verifyHash, now, cookie }), logoutRoute({ store, cookie }), ...sessionRoutes({ store, cookie, cursorSecret: sessionSecret }),
       ...securityRoutes({ store, passwords, passwordPolicy, hashPassword, cookie, mail, secretBox, verifyCode: verifyHash, now }),
     ],
     authenticators: [createSessionAuthenticator({ store, cookie }), createApiTokenAuthenticator({ store })],

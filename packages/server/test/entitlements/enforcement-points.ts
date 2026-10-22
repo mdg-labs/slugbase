@@ -28,6 +28,7 @@ export const ENFORCEMENT_POINTS: readonly EnforcementPoint[] = [
   { operationId: "createInvitationLink", entitlement: "members.invite", decidedBy: "stage-9", test: DECLARED },
   { operationId: "acceptInvitation", entitlement: "members.invite", decidedBy: "handler", test: INVITATIONS },
   { operationId: "acceptInvitation", entitlement: "seats.max", decidedBy: "handler", test: SEATS },
+  { operationId: "completeOidcSignIn", entitlement: "members.invite", decidedBy: "handler", test: OIDC_INVITATIONS },
   { operationId: "completeOidcSignIn", entitlement: "seats.max", decidedBy: "handler", test: OIDC_INVITATIONS },
   { operationId: "createWorkspace", entitlement: "workspaces.ownMax", decidedBy: "handler", test: WORKSPACE_LIMIT },
 ];
