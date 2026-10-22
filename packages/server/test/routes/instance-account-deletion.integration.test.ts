@@ -37,6 +37,94 @@ beforeEach(async () => {
   });
 });
 
+const PROFILE_PAUSE_KEY = 548_001;
+
+/** The number of backends that wait for a lock. */
+async function waitingBackends(): Promise<number> {
+  const rows = await database().owner<{ waiting: string }[]>`SELECT count(DISTINCT pid) AS waiting FROM pg_locks WHERE NOT granted`;
+  return Number(only(rows, 0).waiting);
+}
+
+async function untilWaiting(backends: number): Promise<void> {
+  for (let attempt = 0; attempt < 400; attempt += 1) {
+    if ((await waitingBackends()) >= backends) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error(`fewer than ${String(backends)} backends are waiting for a lock`);
+}
+
+/**
+ * Two locks held on one connection of the owner (its pool has two): the row locks of the account's backup codes, which the
+ * deletions of the account queue on, and the advisory lock the paused profile read waits for. Each is released on its own.
+ */
+interface Locks {
+  readonly releaseBackupCodes: () => Promise<void>;
+  readonly releasePause: () => Promise<void>;
+}
+
+async function holdLocks(accountId: string): Promise<Locks> {
+  const connection = await database().owner.reserve();
+  let open = true;
+  let backupCodes = true;
+  await connection`SELECT pg_advisory_lock(${PROFILE_PAUSE_KEY})`;
+  await connection`BEGIN`;
+  await connection`SET LOCAL ROLE slugbase_system`;
+  await connection`SELECT 1 FROM mfa_backup_codes WHERE account_id = ${accountId} FOR UPDATE`;
+  return {
+    releaseBackupCodes: async () => {
+      if (backupCodes) {
+        backupCodes = false;
+        await connection`COMMIT`;
+      }
+    },
+    releasePause: async () => {
+      if (open) {
+        open = false;
+        if (backupCodes) {
+          backupCodes = false;
+          await connection`ROLLBACK`;
+        }
+        await connection`SELECT pg_advisory_unlock(${PROFILE_PAUSE_KEY})`;
+        connection.release();
+      }
+    },
+  };
+}
+
+/**
+ * Makes the read of the second-factor flag that the profile ends with wait, for the account `accountId` only, until the test releases
+ * the pause lock, and runs `during`. The flag is read by a statement of its own after the profile's row has been read, so the pause
+ * is the point between the two where a commit of another transaction can land. The function is put back as it was.
+ */
+async function withPausedProfileRead<T>(accountId: string, during: () => Promise<T>): Promise<T> {
+  const original = only(
+    await database().owner<{ definition: string }[]>`SELECT pg_get_functiondef('public.sys_account_mfa_enabled()'::regprocedure) AS definition`,
+    0,
+  ).definition;
+  const paused = `
+    CREATE OR REPLACE FUNCTION public.sys_account_mfa_enabled() RETURNS boolean
+      LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+      SET search_path = pg_catalog, public, pg_temp
+      AS $$
+    BEGIN
+      IF public.app_account_id() = '${accountId}'::uuid THEN
+        PERFORM pg_advisory_xact_lock_shared(${String(PROFILE_PAUSE_KEY)});
+      END IF;
+      RETURN (SELECT a.mfa_enabled_at IS NOT NULL FROM public.accounts a WHERE a.id = public.app_account_id());
+    END
+    $$`;
+  const replace = (definition: string): Promise<unknown> =>
+    database().owner.unsafe(definition);
+  await replace(paused);
+  try {
+    return await during();
+  } finally {
+    await replace(original);
+  }
+}
+
 function guardModule(guard: NonNullable<ServerHooks["deletionGuard"]>): ServerModule {
   return { name: "test/billing", hooks: { deletionGuard: guard }, hookRefusals: { deletionGuard: ["billing_active"] }, register: () => ({}) };
 }
@@ -404,6 +492,36 @@ describe("DELETE /api/v1/instance/accounts/{id} and the last instance admin", ()
     // Either the admin's deletion wins and the account's own is answered 503 unavailable (its account is gone) or 401 (its session is gone),
     // or the account's own wins and the admin finds the account gone (404).
     expect(["204,503", "204,401", "404,204"]).toContain(statuses.join(","));
+    expect(await instanceAdmins()).toEqual([ada.account.id]);
+  });
+
+  it("answers DELETE /me with 503 unavailable, not 500, when an admin deletes the account between the statements that read its profile", async () => {
+    const world = harness.serve();
+    const ada = await admin(world);
+    const grace = await admin(world);
+    const locks = await holdLocks(grace.account.id);
+
+    let statuses: number[] = [];
+    try {
+      statuses = await withPausedProfileRead(grace.account.id, async () => {
+        // The admin's deletion queues on the account's backup codes first, then the account's own request, which has read the account's
+        // row, waits at the paused second-factor read; releasing the codes lets the admin's deletion commit before the request goes on.
+        const deleted = remove(world, ada, grace.account.id);
+        await untilWaiting(1);
+        const own = send(world, "DELETE", ME, { cookie: grace.cookie }, { email: grace.account.email });
+        await untilWaiting(2);
+        await locks.releaseBackupCodes();
+        const first = (await deleted).status;
+        await locks.releasePause();
+        return [first, (await own).status];
+      });
+    } finally {
+      await locks.releaseBackupCodes();
+      await locks.releasePause();
+    }
+
+    expect(statuses).toEqual([204, 503]);
+    expect(await accountExists(grace.account.id)).toBe(false);
     expect(await instanceAdmins()).toEqual([ada.account.id]);
   });
 });

@@ -279,3 +279,92 @@ describe("the application role's update privilege on accounts", () => {
     expect([...outside]).toEqual([]);
   });
 });
+
+// The profile is read in three statements: the row, then the two flags that the column privileges keep out of the application's
+// reach. A commit of another transaction can land between them, and then a flag function answers NULL for the vanished account.
+// The test stops the profile's read inside one flag function for its account only, deletes the account on another connection,
+// and lets the read go on, so the cut falls at the same place on every run.
+
+const FLAG_PAUSE_KEY = 548_002;
+
+type FlagFunction = "sys_account_has_password" | "sys_account_mfa_enabled";
+
+const FLAG_COLUMN: Record<FlagFunction, string> = {
+  sys_account_has_password: "a.password_hash IS NOT NULL",
+  sys_account_mfa_enabled: "a.mfa_enabled_at IS NOT NULL",
+};
+
+/** Resolves once a backend waits for the advisory lock of `key`. */
+async function untilWaitingForAdvisoryLock(key: number): Promise<void> {
+  for (let attempt = 0; attempt < 400; attempt += 1) {
+    const [waiting] = await db.owner<{ waiting: string }[]>`
+      SELECT count(*) AS waiting FROM pg_locks WHERE locktype = 'advisory' AND NOT granted AND objid = ${key}`;
+    if (Number(waiting?.waiting) > 0) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error("no backend waits for the pause lock");
+}
+
+/**
+ * Replaces `fn` by a function that waits for the shared advisory lock of FLAG_PAUSE_KEY when it is called for `accountId`, and
+ * otherwise answers as before, then runs `during`; the function is put back as it was.
+ */
+async function withPausedFlag<T>(fn: FlagFunction, accountId: string, during: () => Promise<T>): Promise<T> {
+  const [stored] = await db.owner<{ definition: string }[]>`SELECT pg_get_functiondef(${`public.${fn}()`}::regprocedure) AS definition`;
+  const original = stored?.definition;
+  if (original === undefined) {
+    throw new Error(`${fn} is not defined`);
+  }
+  const paused = `
+    CREATE OR REPLACE FUNCTION public.${fn}() RETURNS boolean
+      LANGUAGE plpgsql VOLATILE SECURITY DEFINER
+      SET search_path = pg_catalog, public, pg_temp
+      AS $$
+    BEGIN
+      IF public.app_account_id() = '${accountId}'::uuid THEN
+        PERFORM pg_advisory_xact_lock_shared(${String(FLAG_PAUSE_KEY)});
+      END IF;
+      RETURN (SELECT ${FLAG_COLUMN[fn]} FROM public.accounts a WHERE a.id = public.app_account_id());
+    END
+    $$`;
+  await db.owner.unsafe(paused);
+  try {
+    return await during();
+  } finally {
+    await db.owner.unsafe(original);
+  }
+}
+
+describe("profile when the account is deleted while it is read", () => {
+  it.each<FlagFunction>(["sys_account_has_password", "sys_account_mfa_enabled"])(
+    "answers undefined, and does not throw, when the account is deleted and committed before %s answers",
+    async (fn) => {
+      const id = await account();
+      const other = await account();
+      const connection = await db.owner.reserve();
+      let held = false;
+      try {
+        await connection`SELECT pg_advisory_lock(${FLAG_PAUSE_KEY})`;
+        held = true;
+        const profile = await withPausedFlag(fn, id, async () => {
+          const reading = tenant(id, (tx) => accountProfileRepository(tx).profile());
+          await untilWaitingForAdvisoryLock(FLAG_PAUSE_KEY);
+          await asSystem(db, (tx) => tx`DELETE FROM accounts WHERE id = ${id}`);
+          await connection`SELECT pg_advisory_unlock(${FLAG_PAUSE_KEY})`;
+          held = false;
+          return reading;
+        });
+        expect(profile).toBeUndefined();
+        expect(await row(id)).toBeUndefined();
+        expect(await tenant(other, (tx) => accountProfileRepository(tx).profile())).toMatchObject({ id: other, hasPassword: true, mfaEnabled: false });
+      } finally {
+        if (held) {
+          await connection`SELECT pg_advisory_unlock(${FLAG_PAUSE_KEY})`;
+        }
+        connection.release();
+      }
+    },
+  );
+});
