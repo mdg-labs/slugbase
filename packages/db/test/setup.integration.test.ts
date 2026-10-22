@@ -1,7 +1,7 @@
 import type { AuditRecord } from "@slugbase/core";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createAuthStore, type AuthStore, type CompleteSetup } from "../src/index.ts";
-import { systemOperations } from "../src/system/registry.ts";
+import { internalSystemOperations, systemOperations } from "../src/system/registry.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, freshToken, seedAccount, sessionRows, sha256 } from "./support/auth-fixture.ts";
 
@@ -220,16 +220,19 @@ describe("sys_create_account", () => {
   });
 });
 
+// sys_create_workspace is internal (doc 05 section 3.3): the application role cannot call it, so these cases call it as
+// slugbase_system, the role of the operations that do (sys_complete_setup, sys_create_workspace_limited).
 describe("sys_create_workspace", () => {
-  it("is a registered system operation", () => {
+  it("is a registered internal system operation", () => {
     expect(systemOperations).toContain("sys_create_workspace");
+    expect(internalSystemOperations).toContain("sys_create_workspace");
   });
 
   it("creates the workspace, the owner membership and the settings row together", async () => {
     const owner = freshId();
     await seedAccount(db, { id: owner, email: "owner@example.test", passwordHash: "$argon2id$stub" });
     const id = freshId();
-    const created = await db.app`SELECT sys_create_workspace(${owner}::uuid, ${id}::uuid, 'Made') AS created`;
+    const created = await asSystem(db, (tx) => tx`SELECT sys_create_workspace(${owner}::uuid, ${id}::uuid, 'Made') AS created`);
     expect(created[0]?.created).toBe(true);
     const rows = await asSystem(
       db,
@@ -247,7 +250,7 @@ describe("sys_create_workspace", () => {
     const disabled = freshId();
     await seedAccount(db, { id: disabled, email: "off@example.test", passwordHash: "$argon2id$stub", disabledAt: new Date() });
     for (const accountId of [freshId(), disabled]) {
-      const created = await db.app`SELECT sys_create_workspace(${accountId}::uuid, ${freshId()}::uuid, 'Nope') AS created`;
+      const created = await asSystem(db, (tx) => tx`SELECT sys_create_workspace(${accountId}::uuid, ${freshId()}::uuid, 'Nope') AS created`);
       expect(created[0]?.created).toBe(false);
     }
     expect(await counts()).toEqual({ ...NOTHING, accounts: 1 });
@@ -256,7 +259,7 @@ describe("sys_create_workspace", () => {
   it("leaves no workspace and no membership when a later row is refused", async () => {
     const owner = freshId();
     await seedAccount(db, { id: owner, email: "owner2@example.test", passwordHash: "$argon2id$stub" });
-    await expect(db.app`SELECT sys_create_workspace(${owner}::uuid, ${freshId()}::uuid, ${"x".repeat(65)})`).rejects.toMatchObject({ code: "23514" });
+    await expect(asSystem(db, (tx) => tx`SELECT sys_create_workspace(${owner}::uuid, ${freshId()}::uuid, ${"x".repeat(65)})`)).rejects.toMatchObject({ code: "23514" });
     expect(await counts()).toEqual({ ...NOTHING, accounts: 1 });
   });
 });

@@ -311,7 +311,7 @@ describe("verifyEmail", () => {
 
     const second = await account();
     const existing = freshId();
-    await db.app`SELECT sys_create_workspace(${second}::uuid, ${existing}::uuid, 'Already here'::text)`;
+    await asSystem(db, (tx) => tx`SELECT sys_create_workspace(${second}::uuid, ${existing}::uuid, 'Already here'::text)`);
     await store.verifyEmail(verification(await issue(second)));
 
     expect((await workspacesOf(second)).map((workspace) => workspace.name)).toEqual(["Already here"]);

@@ -221,12 +221,13 @@ ALTER FUNCTION public.sys_complete_setup(uuid, uuid, uuid, text, text, text, tex
 REVOKE CREATE ON SCHEMA public FROM slugbase_system;
 
 REVOKE ALL ON FUNCTION public.sys_create_account(uuid, text, text, text, text, boolean) FROM PUBLIC;
+-- sys_create_workspace is an internal system operation (src/system/registry.ts): sys_complete_setup and
+-- sys_create_workspace_limited, which run as slugbase_system, call it, and slugbase_app has no EXECUTE on it.
 REVOKE ALL ON FUNCTION public.sys_create_workspace(uuid, uuid, text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sys_setup_status() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sys_setup_token_set(bytea) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.sys_complete_setup(uuid, uuid, uuid, text, text, text, text, text, boolean, bytea, bytea, cidr, text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.sys_create_account(uuid, text, text, text, text, boolean) TO slugbase_app;
-GRANT EXECUTE ON FUNCTION public.sys_create_workspace(uuid, uuid, text) TO slugbase_app;
 GRANT EXECUTE ON FUNCTION public.sys_setup_status() TO slugbase_app;
 GRANT EXECUTE ON FUNCTION public.sys_setup_token_set(bytea) TO slugbase_app;
 GRANT EXECUTE ON FUNCTION public.sys_complete_setup(uuid, uuid, uuid, text, text, text, text, text, boolean, bytea, bytea, cidr, text) TO slugbase_app;

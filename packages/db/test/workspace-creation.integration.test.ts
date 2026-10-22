@@ -156,18 +156,27 @@ describe("create", () => {
   });
 });
 
+// sys_create_workspace is internal: the application role cannot call it, so the cases below call it as slugbase_system,
+// the role of the operations that do, with the tenant account set the way a transaction of the application sets it.
+async function createAsSystem(actingAccount: string | null, owner: string, id: string, name: string): Promise<boolean> {
+  return asSystem(db, async (tx) => {
+    if (actingAccount !== null) {
+      await tx`SELECT set_config('app.account_id', ${actingAccount}, true)`;
+    }
+    const rows = await tx<{ created: boolean }[]>`SELECT public.sys_create_workspace(${owner}::uuid, ${id}::uuid, ${name}::text) AS created`;
+    return rows[0]?.created === true;
+  });
+}
+
 describe("sys_create_workspace named for another account", () => {
   it("creates nothing when a transaction acting for one account names another as the owner, and the other account owns nothing", async () => {
     const caller = await account();
     const victim = await account();
     const id = freshId();
 
-    const rows = await db.tenant.withTenant({ accountId: caller, requestId: "workspaces-test" }, async (tx) => {
-      // A caller that reached the system operation with the victim's id, as a handler that passed the wrong account would.
-      return tenantHandle(tx).execute<{ created: boolean }>(sql`SELECT public.sys_create_workspace(${victim}::uuid, ${id}::uuid, 'Stolen'::text) AS created`);
-    });
+    // A caller that reached the system operation with the victim's id, as a handler that passed the wrong account would.
+    expect(await createAsSystem(caller, victim, id, "Stolen")).toBe(false);
 
-    expect(rows[0]?.created).toBe(false);
     expect(await stored(id)).toEqual({ workspace: undefined, members: [], settings: 0 });
     expect(await ownedBy(victim)).toBe(0);
   });
@@ -176,16 +185,44 @@ describe("sys_create_workspace named for another account", () => {
     const owner = await account();
     const id = freshId();
 
-    const [row] = await db.app<{ created: boolean }[]>`SELECT sys_create_workspace(${owner}::uuid, ${id}::uuid, 'First workspace'::text) AS created`;
-
-    expect(row?.created).toBe(true);
+    expect(await createAsSystem(null, owner, id, "First workspace")).toBe(true);
     expect((await stored(id)).members).toEqual([{ account_id: owner, role: "owner" }]);
   });
 
   it("refuses a name the table does not accept", async () => {
     const owner = await account();
 
-    await expect(db.app`SELECT sys_create_workspace(${owner}::uuid, ${freshId()}::uuid, ${"x".repeat(65)}::text)`).rejects.toMatchObject({ code: "23514" });
+    await expect(createAsSystem(null, owner, freshId(), "x".repeat(65))).rejects.toMatchObject({ code: "23514" });
+  });
+
+  it("is not callable by the application role, which would get round the ceiling on the workspaces an account owns", async () => {
+    const owner = await account();
+    const id = freshId();
+
+    await expect(db.app`SELECT sys_create_workspace(${owner}::uuid, ${id}::uuid, 'Past the limit'::text)`).rejects.toMatchObject({ code: "42501" });
+    await expect(
+      db.tenant.withTenant({ accountId: owner, requestId: "workspaces-test" }, (tx) =>
+        tenantHandle(tx).execute(sql`SELECT public.sys_create_workspace(${owner}::uuid, ${id}::uuid, 'Past the limit'::text)`),
+      ),
+    ).rejects.toMatchObject({ cause: { code: "42501" } });
+
+    expect(await stored(id)).toEqual({ workspace: undefined, members: [], settings: 0 });
+    expect(await ownedBy(owner)).toBe(0);
+  });
+
+  it("still lets the application role create workspaces through the limited functions", async () => {
+    const owner = await account();
+    const first = freshId();
+    const personal = freshId();
+    const other = await account();
+
+    const [limited] = await db.app<{ outcome: string }[]>`SELECT outcome FROM sys_create_workspace_limited(${owner}::uuid, ${first}::uuid, 'Through the limit'::text, 5::integer)`;
+    const [made] = await db.app<{ outcome: string }[]>`SELECT sys_create_personal_workspace_limited(${other}::uuid, ${personal}::uuid, ' workspace'::text, 5::integer) AS outcome`;
+
+    expect(limited?.outcome).toBe("created");
+    expect(made?.outcome).toBe("created");
+    expect((await stored(first)).members).toEqual([{ account_id: owner, role: "owner" }]);
+    expect(await ownedBy(other)).toBe(1);
   });
 });
 

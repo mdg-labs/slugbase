@@ -8,6 +8,12 @@
  * here and for an entry without a function. Adding an entry is a risk-flagged
  * change (doc 10): the function it names ships in a migration of the same
  * change, under the rules of the `system-operations` rule.
+ *
+ * An entry of `internalSystemOperations` is an internal operation: other system
+ * operations call it, and the application never does. The rule holds it to
+ * every check of the others, except that `slugbase_app` must not be able to
+ * execute it, so a ceiling or a guard the callers apply cannot be got round by
+ * calling it directly.
  */
 export const systemOperations: readonly string[] = [
   "sys_rate_limit_take",
@@ -97,3 +103,9 @@ export const systemOperations: readonly string[] = [
   "sys_create_workspace_limited",
   "sys_create_personal_workspace_limited",
 ];
+
+/**
+ * The system operations that only other system operations call (doc 05 section
+ * 3.3). Each is also listed in `systemOperations`.
+ */
+export const internalSystemOperations: readonly string[] = ["sys_create_workspace"];

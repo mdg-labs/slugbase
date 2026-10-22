@@ -1,4 +1,4 @@
-import { systemOperations } from "../system/registry.ts";
+import { internalSystemOperations, systemOperations } from "../system/registry.ts";
 import { requireDatabase, type CheckRule, type Finding } from "./types.ts";
 
 // Doc 05 section 3.3 and doc 10 T1: a function that runs with the privileges
@@ -6,7 +6,10 @@ import { requireDatabase, type CheckRule, type Finding } from "./types.ts";
 // named in the reviewed registry (src/system/registry.ts) and every registered
 // function follows the rules of the section: owned by slugbase_system, a
 // pinned search_path, no dynamic SQL, EXECUTE revoked from PUBLIC and granted
-// to slugbase_app.
+// to slugbase_app. An internal operation (src/system/registry.ts), one that only
+// other system operations call, follows the same rules except the last: neither
+// slugbase_app nor PUBLIC may execute it, so a limit or a guard its callers
+// apply cannot be got round by calling it directly.
 //
 // The pinned search_path is exactly `pg_catalog, public, pg_temp`. PostgreSQL
 // searches the session's temporary schema first, for table and type names,
@@ -54,14 +57,18 @@ function qualified(entry: string): string {
   return entry.includes(".") ? entry : `public.${entry}`;
 }
 
-/** The rule over a given registry; `systemOperationsRule` is the one over the shipped registry. */
-export function createSystemOperationsRule(registry: readonly string[]): CheckRule {
+/**
+ * The rule over a given registry and the internal operations among its entries;
+ * `systemOperationsRule` is the one over the shipped registry.
+ */
+export function createSystemOperationsRule(registry: readonly string[], internal: readonly string[] = []): CheckRule {
   return {
     id: ID,
-    description: `every SECURITY DEFINER function is registered, and every registered function is owned by ${SYSTEM_ROLE} with search_path ${SEARCH_PATH_VALUE}, no dynamic SQL, EXECUTE revoked from PUBLIC and EXECUTE granted to ${APP_ROLE}`,
+    description: `every SECURITY DEFINER function is registered, and every registered function is owned by ${SYSTEM_ROLE} with search_path ${SEARCH_PATH_VALUE}, no dynamic SQL, EXECUTE revoked from PUBLIC and EXECUTE granted to ${APP_ROLE}, except an internal operation, which ${APP_ROLE} cannot execute`,
     async run(context) {
       const sql = requireDatabase(context);
       const registered = new Set(registry.map(qualified));
+      const internalEntries = new Set(internal.map(qualified));
       const functions = await sql<FunctionRow[]>`
         SELECT n.nspname AS schema,
                p.proname AS name,
@@ -118,7 +125,12 @@ export function createSystemOperationsRule(registry: readonly string[]): CheckRu
         if (fn.publicExecute) {
           findings.push({ rule: ID, object, message: "has EXECUTE granted to PUBLIC" });
         }
-        if (!fn.appExecute) {
+        if (internalEntries.has(key)) {
+          // PUBLIC already has its finding above; an app role that can execute through PUBLIC alone is not reported twice.
+          if (fn.appExecute && !fn.publicExecute) {
+            findings.push({ rule: ID, object, message: `is an internal system operation but ${APP_ROLE} can execute it` });
+          }
+        } else if (!fn.appExecute) {
           findings.push({ rule: ID, object, message: `does not grant EXECUTE to ${APP_ROLE}` });
         }
       }
@@ -127,9 +139,14 @@ export function createSystemOperationsRule(registry: readonly string[]): CheckRu
           findings.push({ rule: ID, object: `function ${entry}`, message: "is in the system operation registry but no such function exists" });
         }
       }
+      for (const entry of internalEntries) {
+        if (!registered.has(entry)) {
+          findings.push({ rule: ID, object: `function ${entry}`, message: "is marked internal but is not in the system operation registry" });
+        }
+      }
       return findings;
     },
   };
 }
 
-export const systemOperationsRule: CheckRule = createSystemOperationsRule(systemOperations);
+export const systemOperationsRule: CheckRule = createSystemOperationsRule(systemOperations, internalSystemOperations);
