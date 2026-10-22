@@ -1,10 +1,11 @@
 import { execFileSync } from "node:child_process";
 import { splitStatements } from "../migrate.ts";
-import { analyseSql, functionNameKey, functionStatementOf, grantObject, type AnalysedStatement, type FunctionIdentity, type TableName } from "./migration-statements.ts";
+import { analyseSql, createdTableOf, functionNameKey, functionStatementOf, grantObject, type AnalysedStatement, type FunctionIdentity, type TableName } from "./migration-statements.ts";
 
 // What the expand/contract rule reads from git: the latest release tag, and the
 // migrations and tables the package held at it (doc 05 section 5.2: "existed in
-// the previous release").
+// the previous release"). The tables are those of the drizzle snapshot of the tag's last
+// migration and those that the release's custom SQL creates (`readCustomTables`).
 //
 // Release tags are `v<major>.<minor>.<patch>` with an optional semver
 // pre-release suffix (`v1.0.0`, `v1.0.0-rc.1`); the leading `v` is optional.
@@ -33,6 +34,12 @@ export interface ReleasedTable {
   schema: string;
   name: string;
   columns: string[];
+  /**
+   * Only for a table that the release's custom SQL creates: the column list of its CREATE TABLE statement, in the form
+   * `createdTableOf` gives. A later `CREATE TABLE IF NOT EXISTS` of the table leaves an existing table as it is, so the
+   * rule compares the column list of a re-emit with this one.
+   */
+  definition?: string;
 }
 
 export interface ReleaseState {
@@ -40,7 +47,7 @@ export interface ReleaseState {
   tag: string;
   /** The migration tags the journal listed at the release. */
   migrations: string[];
-  /** The tables and columns the last migration of the release left behind. */
+  /** The tables and columns the last migration of the release left behind, and the tables its custom SQL creates. */
   tables: ReleasedTable[];
 }
 
@@ -144,6 +151,103 @@ function objectField(value: unknown, key: string): unknown {
   return typeof value === "object" && value !== null && key in value ? (value as Record<string, unknown>)[key] : undefined;
 }
 
+/**
+ * The statements of the latest custom-SQL step of the release, unanalysed, as the chunks the generator wrote them in (a
+ * file of src/sql/ each, the first starting with the marker), or undefined when no migration of the release has a step.
+ */
+function latestCustomChunks(packageDir: string, prefix: string, tag: string, migrations: readonly string[]): string[] | undefined {
+  for (const migration of [...migrations].reverse()) {
+    const chunks = splitStatements(showAtTag(packageDir, prefix, tag, `migrations/${migration}.sql`));
+    const start = chunks.findIndex((chunk) => CUSTOM_SQL_MARKER.test(chunk));
+    if (start !== -1) {
+      return chunks.slice(start);
+    }
+  }
+  return undefined;
+}
+
+/** A chunk that may create a table, which `readCustomTables` then must be able to scan. */
+const MAY_CREATE_TABLE = /\bcreate\b[^]*\btable\b/i;
+
+/**
+ * The tables that the release's custom SQL creates, which the drizzle snapshot does not hold (it holds the tables of the
+ * Drizzle schema only): every `CREATE [UNLOGGED] TABLE [IF NOT EXISTS]` of the latest custom step of the release, read from
+ * git at the tag, with the columns of its list, and the columns that `ALTER TABLE ... ADD/DROP/RENAME COLUMN` of the same
+ * step add, remove or rename, and without a table the step drops or moves. The latest step re-emits all of src/sql/, so it
+ * holds every such table; an earlier step is not read. A table the snapshot already holds is the snapshot's.
+ *
+ * Throws when the step creates a table whose columns this check cannot name (a LIKE clause, `CREATE TABLE ... AS`), or has
+ * a chunk that may create one and cannot be scanned: the release then holds a table the rule cannot show, and a rule that
+ * cannot tell what it measures against must not pass. A chunk that cannot be scanned and creates no table (a function
+ * with a BEGIN ATOMIC body, say) is skipped.
+ */
+function readCustomTables(packageDir: string, prefix: string, tag: string, migrations: readonly string[], snapshot: readonly ReleasedTable[]): ReleasedTable[] {
+  const chunks = latestCustomChunks(packageDir, prefix, tag, migrations);
+  const id = (table: TableName): string => `${table.schema}.${table.name}`;
+  const inSnapshot = new Set(snapshot.map(id));
+  const custom = new Map<string, ReleasedTable>();
+  for (const chunk of chunks ?? []) {
+    let statements: AnalysedStatement[];
+    try {
+      statements = analyseSql(chunk);
+    } catch (error) {
+      if (MAY_CREATE_TABLE.test(chunk)) {
+        throw new Error(`the latest custom SQL step of ${tag} has a statement that may create a table and cannot be scanned (${error instanceof Error ? error.message : "unknown error"})`);
+      }
+      continue;
+    }
+    for (const statement of statements) {
+      const created = createdTableOf(statement);
+      if (created?.kind === "unread") {
+        throw new Error(`the latest custom SQL step of ${tag} creates a table this check cannot read: ${created.reason}`);
+      }
+      if (created?.kind === "read" && !inSnapshot.has(id(created.table)) && !custom.has(id(created.table))) {
+        custom.set(id(created.table), { ...created.table, columns: created.columns, definition: created.definition });
+      }
+      for (const operation of statement.operations) {
+        switch (operation.kind) {
+          case "add-column": {
+            const table = custom.get(id(operation.table));
+            if (table !== undefined && !table.columns.includes(operation.column)) {
+              table.columns.push(operation.column);
+            }
+            break;
+          }
+          case "drop-column": {
+            const table = custom.get(id(operation.table));
+            if (table !== undefined) {
+              table.columns = table.columns.filter((column) => column !== operation.column);
+            }
+            break;
+          }
+          case "rename-column": {
+            const table = custom.get(id(operation.table));
+            if (table !== undefined) {
+              table.columns = table.columns.map((column) => (column === operation.column ? operation.to : column));
+            }
+            break;
+          }
+          case "drop-table":
+            custom.delete(id(operation.table));
+            break;
+          case "rename-table":
+          case "set-schema": {
+            const table = custom.get(id(operation.table));
+            if (table !== undefined) {
+              custom.delete(id(operation.table));
+              custom.set(id(operation.to), { schema: operation.to.schema, name: operation.to.name, columns: table.columns });
+            }
+            break;
+          }
+          default:
+            break;
+        }
+      }
+    }
+  }
+  return [...custom.values()];
+}
+
 /** The migrations and tables of the package at a release tag. */
 export function readReleaseState(packageDir: string, tag: string): ReleaseState {
   const prefix = git(packageDir, ["rev-parse", "--show-prefix"]).trim();
@@ -191,6 +295,7 @@ export function readReleaseState(packageDir: string, tag: string): ReleaseState 
       }),
     });
   }
+  released.push(...readCustomTables(packageDir, prefix, tag, migrations, released));
   return { tag, migrations, tables: released };
 }
 

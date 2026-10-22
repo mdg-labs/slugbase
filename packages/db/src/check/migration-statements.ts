@@ -1969,6 +1969,95 @@ export function grantObject(statement: AnalysedStatement): { tables: TableName[]
   return privilegesOn(cursor);
 }
 
+/** A table a CREATE TABLE statement creates, as the release state reads it from the custom SQL of a release. */
+export type CreatedTable =
+  | {
+      kind: "read";
+      table: TableName;
+      /** The names of the columns of the column list, in order; the table constraints of the list are not columns. */
+      columns: string[];
+      /** The column list as its tokens, comments and whitespace left out, so that two spellings of one list are equal. */
+      definition: string;
+    }
+  | { kind: "unread"; reason: string };
+
+/** The tokens of a column list in a form that does not depend on layout: words in lower case, quoted names and strings as written. */
+function definitionOf(tokens: readonly Token[]): string {
+  return tokens.map((token) => (token.kind === "ident" ? JSON.stringify(token.text) : token.text)).join(" ");
+}
+
+/**
+ * The persistent table a `CREATE [UNLOGGED] TABLE [IF NOT EXISTS] name (column list) ...` statement creates, with the names
+ * of the columns of its list. Undefined when the statement is no CREATE TABLE, or creates a temporary table. `unread` when
+ * it creates a table whose columns the reader cannot name from the list: a list item that is a LIKE clause or has no name,
+ * or a table with no column list (`CREATE TABLE name AS ...`, `PARTITION OF`, `OF type`). Whatever follows the column list
+ * (INHERITS, PARTITION BY, WITH) is not read: the table and the columns of the list are still there.
+ */
+export function createdTableOf(statement: AnalysedStatement): CreatedTable | undefined {
+  let tokens: Token[];
+  try {
+    tokens = tokenize(statement.text);
+  } catch {
+    return /^\s*create\b[^]*\btable\b/i.test(statement.text) ? { kind: "unread", reason: "its text cannot be scanned" } : undefined;
+  }
+  const cursor = new Cursor(tokens);
+  if (!cursor.take("create")) {
+    return undefined;
+  }
+  while (cursor.isWord("unlogged") || cursor.isWord("global") || cursor.isWord("local")) {
+    cursor.position += 1;
+  }
+  if (cursor.isWord("temp") || cursor.isWord("temporary")) {
+    return undefined;
+  }
+  if (!cursor.take("table")) {
+    return undefined;
+  }
+  cursor.take("if", "not", "exists");
+  const table = cursor.tableName();
+  if (table === undefined) {
+    return { kind: "unread", reason: "its name cannot be read" };
+  }
+  const open = cursor.position;
+  if (!cursor.skipParenthesised()) {
+    return { kind: "unread", reason: `${table.name} has no column list this check can read` };
+  }
+  const inside = tokens.slice(open + 1, cursor.position - 1);
+  const items: Token[][] = [];
+  let depth = 0;
+  let item: Token[] = [];
+  for (const token of inside) {
+    if (token.kind === "punct" && token.text === "(") {
+      depth += 1;
+    } else if (token.kind === "punct" && token.text === ")") {
+      depth -= 1;
+    }
+    if (depth === 0 && token.kind === "punct" && token.text === ",") {
+      items.push(item);
+      item = [];
+    } else {
+      item.push(token);
+    }
+  }
+  if (item.length > 0 || items.length > 0) {
+    items.push(item);
+  }
+  const columns: string[] = [];
+  for (const [first] of items) {
+    if (first === undefined || (first.kind !== "word" && first.kind !== "ident")) {
+      return { kind: "unread", reason: `${table.name} has a column list item this check cannot read` };
+    }
+    if (first.kind === "word" && first.text === "like") {
+      return { kind: "unread", reason: `${table.name} copies columns with LIKE` };
+    }
+    if (first.kind === "word" && NOT_A_COLUMN.has(first.text)) {
+      continue;
+    }
+    columns.push(first.text);
+  }
+  return { kind: "read", table, columns, definition: definitionOf(inside) };
+}
+
 /** The DROP FUNCTION or function REVOKE a statement is, when the reader places it by its whole shape and as nothing else; otherwise undefined. */
 export function functionStatementOf(statement: AnalysedStatement): FunctionStatement | undefined {
   const [operation, ...rest] = statement.operations;

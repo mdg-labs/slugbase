@@ -1,4 +1,4 @@
-import { analyseSql, functionArityKey, functionStatementOf, identifierForm, mentionOfAny, setsSessionTimeout, SYSTEM_ROLE, TENANT_FUNCTIONS, type AnalysedStatement, type ColumnType, type FunctionIdentity, type FunctionStatement, type Operation, type TableName, type TriggerForm } from "./migration-statements.ts";
+import { analyseSql, createdTableOf, functionArityKey, functionStatementOf, identifierForm, mentionOfAny, setsSessionTimeout, SYSTEM_ROLE, TENANT_FUNCTIONS, type AnalysedStatement, type ColumnType, type CreatedTable, type FunctionIdentity, type FunctionStatement, type Operation, type TableName, type TriggerForm } from "./migration-statements.ts";
 import { readJournal, readMigration } from "./migration-files.ts";
 import { customStep, functionPrivilegeStatements, privilegeStatements, readReleasedPrivileges, readReleasedStep, readReleaseState, releaseTags, sameFunctionPrivileges, sameTablePrivileges, statementForm, type FunctionPrivilege, type PrivilegeStatement, type ReleaseState } from "./release-history.ts";
 import type { CheckRule, ContractMarker, Finding } from "./types.ts";
@@ -56,8 +56,7 @@ import type { CheckRule, ContractMarker, Finding } from "./types.ts";
 //     database, ALL TABLES IN SCHEMA ...): a running replica may lose the access
 //     it uses. A REVOKE on tables the release does not hold passes, and so does
 //     a re-emitted one (below). The release state holds tables only, so a view
-//     or sequence of the release named as a bare table, or an object only custom
-//     SQL creates, is not seen,
+//     or sequence of the release named as a bare table is not seen,
 //   - replacing a function the chain declares (CREATE OR REPLACE FUNCTION) with a
 //     different return type, or where an earlier statement this check could not
 //     read may have created it, so that it cannot show the signature and return
@@ -225,10 +224,22 @@ import type { CheckRule, ContractMarker, Finding } from "./types.ts";
 // body (DO, a function) is not seen and stays a statement it cannot place.
 //
 // The tables and columns "at the tag" come from the snapshot of the tag's last
-// migration, so objects that only custom SQL creates (functions, policies) are
-// not part of it. Without a release tag in a full clone every object counts as
-// unreleased. Without a way to tell (a shallow clone, no git) the rule fails;
-// see release-history.ts.
+// migration and from the custom SQL of the release. The snapshot holds the tables of
+// the Drizzle schema, so a table that only custom SQL can create (an UNLOGGED one,
+// say) is read from the latest custom step of the release, as release-history.ts
+// reads the journal: every CREATE [UNLOGGED] TABLE [IF NOT EXISTS] of it, with the
+// columns of its list and the columns its ALTER TABLE statements add, drop or rename.
+// Such a table is judged by every rule above as a table of the snapshot is, and the
+// re-emitted REVOKE exception applies to it the same way. The re-emit of its CREATE TABLE
+// is accepted while its column list is the one the release created the table with:
+// CREATE TABLE IF NOT EXISTS leaves an existing table as it is, so another list would
+// never reach a database that has the table, and is reported (a column is added or
+// dropped with ALTER TABLE instead). The release must be readable for that: a custom
+// step that creates a table whose columns the reader cannot name (a LIKE clause, CREATE
+// TABLE ... AS) makes the rule fail. Views, sequences and other objects that custom SQL
+// creates (functions and policies as well) are not part of the release state.
+// Without a release tag in a full clone every object counts as unreleased. Without a way
+// to tell (a shallow clone, no git) the rule fails; see release-history.ts.
 
 const ID = "expand-contract";
 const CITEXT = "public.citext";
@@ -307,6 +318,8 @@ const UNPROVEN: TypeState = { constraints: true, volatileDefault: true };
 /** The tables and columns of the release, which the added migrations change as they go. */
 class Released {
   private readonly tables = new Map<string, Set<string>>();
+  // The column list of the CREATE TABLE statement of each table the release's custom SQL creates (see `ReleasedTable.definition`), by table.
+  private readonly definitions = new Map<string, string>();
   // The types the migration chain declares: constraints is true when the type is, or may be, a domain with
   // constraints, and volatileDefault when it has, or may have, a default that is not a constant or a stable call.
   // citext is the type of the extension this package installs (doc 05 section 1), which is no domain.
@@ -346,7 +359,24 @@ class Released {
     this.tag = tag;
     for (const table of state?.tables ?? []) {
       this.tables.set(key(table), new Set(table.columns));
+      if (table.definition !== undefined) {
+        this.definitions.set(key(table), table.definition);
+      }
     }
+  }
+
+  /**
+   * The problem of a CREATE TABLE statement of a table that the release's custom SQL created, when its column list is not the one the
+   * release created the table with. The statement is the re-emit of src/sql/ (`CREATE TABLE IF NOT EXISTS` leaves a table that exists
+   * as it is, and a CREATE TABLE without IF NOT EXISTS fails on it), so a changed column list never reaches a database that has the
+   * table: the database and the source then disagree on the table. A column is added or dropped with ALTER TABLE, which the
+   * rules above judge. A table the migration dropped or moved is not one of the release any more.
+   */
+  createProblem(created: CreatedTable): string[] {
+    if (created.kind !== "read" || this.definitions.get(key(created.table)) === undefined || this.definitions.get(key(created.table)) === created.definition) {
+      return [];
+    }
+    return [`creates table ${describe(created.table)} again with a column list other than the one the custom SQL of ${this.tag ?? "the latest release"} created it with: the table exists there, and the statement leaves an existing table as it is (or fails on it), so the change never reaches a database that has the table (add or drop a column with ALTER TABLE)`];
   }
 
   hasTable(table: TableName): boolean {
@@ -541,12 +571,14 @@ class Released {
           return [];
         }
         this.tables.delete(key(operation.table));
+        this.definitions.delete(key(operation.table));
         return [(`drops table ${describe(operation.table)}, which exists at ${at}: the previous release still reads it during a rolling deploy`)];
       }
       case "drop-schema": {
         const dropped = [...this.tables.keys()].filter((name) => name.startsWith(`${operation.schema}.`));
         for (const name of dropped) {
           this.tables.delete(name);
+          this.definitions.delete(name);
         }
         return dropped.map((name) => (`drops schema ${operation.schema}, which holds table ${name} that exists at ${at}`));
       }
@@ -564,6 +596,7 @@ class Released {
           return [];
         }
         this.tables.delete(key(operation.table));
+        this.definitions.delete(key(operation.table));
         this.tables.set(key(operation.to), columns);
         const verb = operation.kind === "rename-table" ? "renames" : "moves";
         return [(`${verb} table ${describe(operation.table)} to ${describe(operation.to)}, and it exists under its old name at ${at}`)];
@@ -900,6 +933,10 @@ export const expandContractRule: CheckRule = {
             continue;
           }
           const [operation, ...rest] = statement.operations;
+          const created = createdTableOf(statement);
+          if (created !== undefined) {
+            problems.push(...released.createProblem(created));
+          }
           const revoked = inStep.has(statement) && operation?.kind === "revoke" && rest.length === 0 ? operation.tables : undefined;
           const before = revoked === undefined || stepPrivileges === undefined ? undefined : releasedFor();
           const alreadyApplied = revoked !== undefined && before !== undefined && stepPrivileges !== undefined && revoked.every((table) => sameTablePrivileges(before, stepPrivileges, table));
