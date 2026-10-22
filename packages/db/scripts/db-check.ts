@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import { checkRules, contractMarkerFromEnv, formatReport, runChecks, type ContractMarker, type RuleResult } from "../src/check/index.ts";
+import { checkRules, formatReport, runChecks, type RuleResult } from "../src/check/index.ts";
 import { withTestDatabase } from "../src/testing.ts";
 import { hashSqlFiles } from "./migration-sql.ts";
 
@@ -8,11 +8,9 @@ import { hashSqlFiles } from "./migration-sql.ts";
 // the server of SLUGBASE_TEST_PG_URL, the development Postgres by default),
 // runs every rule of src/check/ against it and the migrations folder, and drops
 // the database. It exits 1 when a rule finds anything, and also when a rule
-// could not run: a check that did not look is not a pass. The one finding that
-// does not fail the run is a contract migration with a valid header that awaits
-// the `migration:contract` label (SLUGBASE_DB_CHECK_CONTRACT=pending, which CI
-// sets on a push); it is printed as AWAIT. A value of that variable other than
-// true, false or pending exits 2.
+// could not run: a check that did not look is not a pass. It reads no
+// environment value to decide a verdict: a contract migration passes on its
+// valid header alone (Q52).
 
 const USAGE = "usage: db-check.ts [--package <directory>]";
 
@@ -39,23 +37,16 @@ async function main(): Promise<number> {
     process.stderr.write(`db:check: ${error instanceof Error ? error.message : String(error)}\n`);
     return 2;
   }
-  let contractMarker: ContractMarker;
-  try {
-    contractMarker = contractMarkerFromEnv(process.env);
-  } catch (error) {
-    process.stderr.write(`db:check: ${error instanceof Error ? error.message : String(error)}\n`);
-    return 2;
-  }
   let results: RuleResult[];
   try {
     results = await withTestDatabase((database) =>
-      runChecks(checkRules, { packageDir, sql: database.app, hashSqlFiles, contractMarker }),
+      runChecks(checkRules, { packageDir, sql: database.app, hashSqlFiles }),
     );
   } catch (error) {
     process.stderr.write(
       `db:check: the freshly migrated database could not be built or dropped: ${error instanceof Error ? error.message : "unknown error"}\n`,
     );
-    results = await runChecks(checkRules, { packageDir, sql: undefined, hashSqlFiles, contractMarker });
+    results = await runChecks(checkRules, { packageDir, sql: undefined, hashSqlFiles });
   }
   const { passed, lines } = formatReport(results);
   process.stdout.write(`${lines.join("\n")}\n`);

@@ -3,7 +3,7 @@ import { hashSqlFiles } from "../../scripts/migration-sql.ts";
 import { expandContractRule } from "../../src/check/expand-contract.ts";
 import { analyseSql, createdTableOf } from "../../src/check/migration-statements.ts";
 import { readReleaseState } from "../../src/check/release-history.ts";
-import type { ContractMarker, Finding } from "../../src/check/types.ts";
+import type { Finding } from "../../src/check/types.ts";
 import { FIRST, GitPackage, SECOND } from "./git-package.ts";
 
 // A table that only custom SQL creates (src/sql/, UNLOGGED for instance, which the Drizzle schema cannot express) is not in
@@ -24,7 +24,7 @@ const CREATE_BUCKETS = `CREATE UNLOGGED TABLE IF NOT EXISTS ${BUCKETS} (
 const GRANT_SYSTEM = `GRANT SELECT, INSERT, UPDATE ON TABLE ${BUCKETS} TO slugbase_system;`;
 const REVOKE_PUBLIC = `REVOKE ALL ON TABLE ${BUCKETS} FROM PUBLIC, slugbase_app;`;
 const REVOKE_SYSTEM = `REVOKE ALL ON TABLE ${BUCKETS} FROM slugbase_system;`;
-const MARKER_HINT = "contract marker is not set";
+const NO_HEADER = "has no contract header";
 
 const repositories: GitPackage[] = [];
 
@@ -60,15 +60,15 @@ function released(releaseFile = RELEASE_FILE): GitPackage {
   return repository;
 }
 
-function inspect(repository: GitPackage, marker?: ContractMarker): Promise<readonly Finding[]> {
-  return Promise.resolve(expandContractRule.run({ packageDir: repository.dir, sql: undefined, hashSqlFiles, ...(marker === undefined ? {} : { contractMarker: marker }) }));
+function inspect(repository: GitPackage): Promise<readonly Finding[]> {
+  return Promise.resolve(expandContractRule.run({ packageDir: repository.dir, sql: undefined, hashSqlFiles }));
 }
 
 /** What the rule says about the migration added after the release. */
-async function added(sql: string, marker?: ContractMarker, releaseFile?: string): Promise<readonly Finding[]> {
+async function added(sql: string, releaseFile?: string): Promise<readonly Finding[]> {
   const repository = released(releaseFile);
   repository.migration(SECOND, sql, SNAPSHOT);
-  return inspect(repository, marker);
+  return inspect(repository);
 }
 
 describe("the failure scenario: a privilege change on a table only custom SQL creates", () => {
@@ -80,13 +80,13 @@ describe("the failure scenario: a privilege change on a table only custom SQL cr
       expect(finding.rule).toBe("expand-contract");
       expect(finding.object).toBe(`migrations/${SECOND}.sql`);
       expect(finding.message).toContain("revokes privileges on table rate_limit_buckets, which exists at v1.0.0");
-      expect(finding.message).toContain(MARKER_HINT);
+      expect(finding.message).toContain(NO_HEADER);
     }
   });
 
   it("rejects the release's GRANT deleted from the re-emit, since the REVOKE then leaves the table other privileges", async () => {
     const release = `${CREATE_BUCKETS}\n${GRANT_SYSTEM}\n${REVOKE_PUBLIC}`;
-    const findings = await added(customStep(`${CREATE_BUCKETS}\n${REVOKE_PUBLIC}`), undefined, release);
+    const findings = await added(customStep(`${CREATE_BUCKETS}\n${REVOKE_PUBLIC}`), release);
     expect(findings).toHaveLength(1);
     expect(findings[0]?.message).toContain("revokes privileges on table rate_limit_buckets, which exists at v1.0.0");
   });
@@ -97,10 +97,8 @@ describe("the failure scenario: a privilege change on a table only custom SQL cr
     expect(findings[0]?.message).toContain("revokes privileges on table rate_limit_buckets");
   });
 
-  it("accepts an unchanged re-emit, whatever the contract marker says", async () => {
-    for (const marker of [undefined, "unset", "set", "pending"] as const) {
-      expect(await added(customStep(RELEASE_FILE), marker)).toEqual([]);
-    }
+  it("accepts an unchanged re-emit without a contract header", async () => {
+    expect(await added(customStep(RELEASE_FILE))).toEqual([]);
   });
 
   it("accepts a re-emit that only lays the statements out differently", async () => {
@@ -110,18 +108,14 @@ describe("the failure scenario: a privilege change on a table only custom SQL cr
 
   it("accepts the REVOKE with the release's GRANT order kept, in the release that already holds it", async () => {
     const release = `${CREATE_BUCKETS}\n${GRANT_SYSTEM}\n${REVOKE_PUBLIC}`;
-    expect(await added(customStep(release), undefined, release)).toEqual([]);
+    expect(await added(customStep(release), release)).toEqual([]);
   });
 
-  it("rejects it in the marked contract half only when the contract marker is not set", async () => {
-    const step = marked(RELEASE_FILE, REVOKE_SYSTEM);
-    const unset = await added(step, "unset");
-    expect(unset).toHaveLength(2);
-    expect(unset.every((finding) => finding.message.includes(MARKER_HINT))).toBe(true);
-    const pending = await added(step, "pending");
-    expect(pending).toHaveLength(2);
-    expect(pending.every((finding) => finding.awaiting === true)).toBe(true);
-    expect(await added(step, "set")).toEqual([]);
+  it("accepts it in the contract half with a header, and rejects it without one", async () => {
+    const bare = await added(customStep(RELEASE_FILE, REVOKE_SYSTEM));
+    expect(bare).toHaveLength(2);
+    expect(bare.every((finding) => finding.message.includes(NO_HEADER))).toBe(true);
+    expect(await added(marked(RELEASE_FILE, REVOKE_SYSTEM))).toEqual([]);
   });
 });
 
@@ -149,7 +143,7 @@ describe("what else is judged on a table only custom SQL creates", () => {
     const release = `${CREATE_BUCKETS}\nALTER TABLE ${BUCKETS} ADD COLUMN IF NOT EXISTS burst real;\nALTER TABLE ${BUCKETS} DROP COLUMN updated_at;\nALTER TABLE ${BUCKETS} RENAME COLUMN tokens TO balance;`;
     const state = readReleaseState(released(release).dir, "v1.0.0");
     expect(state.tables.find((table) => table.name === "rate_limit_buckets")?.columns).toEqual(["key", "balance", "burst"]);
-    const findings = await added(`ALTER TABLE ${BUCKETS} DROP COLUMN burst;${BREAKPOINT}${customStep(release)}`, undefined, release);
+    const findings = await added(`ALTER TABLE ${BUCKETS} DROP COLUMN burst;${BREAKPOINT}${customStep(release)}`, release);
     expect(findings.map((finding) => finding.message).join("\n")).toContain("drops column rate_limit_buckets.burst");
   });
 
@@ -176,7 +170,7 @@ describe("a re-emitted CREATE TABLE of a table of the release", () => {
     const findings = await added(customStep(reEmit));
     expect(findings).toHaveLength(1);
     expect(findings[0]?.message).toContain("creates table rate_limit_buckets again with a column list other than the one the custom SQL of v1.0.0 created it with");
-    expect(findings[0]?.message).toContain(MARKER_HINT);
+    expect(findings[0]?.message).toContain(NO_HEADER);
   });
 
   it("rejects an added column in the list", async () => {
@@ -188,7 +182,7 @@ describe("a re-emitted CREATE TABLE of a table of the release", () => {
   it("accepts the changed list in the marked contract half that also drops the column", async () => {
     const reEmit = RELEASE_FILE.replace(",\n  tokens real NOT NULL", "");
     const step = marked(reEmit, `ALTER TABLE ${BUCKETS} DROP COLUMN IF EXISTS tokens;`);
-    expect(await added(step, "set")).toEqual([]);
+    expect(await added(step)).toEqual([]);
   });
 
   it("accepts the same list when it stands in the schema statements", async () => {

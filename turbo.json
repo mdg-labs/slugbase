@@ -52,7 +52,7 @@
     },
     "test:integration": {
       "dependsOn": ["^build"],
-      "passThroughEnv": ["SLUGBASE_TEST_PG_URL", "SLUGBASE_DB_CHECK_CONTRACT"],
+      "passThroughEnv": ["SLUGBASE_TEST_PG_URL"],
       "outputs": [],
       "cache": false
     },
@@ -88,7 +88,7 @@
     },
     "db:check": {
       "dependsOn": ["^build"],
-      "passThroughEnv": ["SLUGBASE_TEST_PG_URL", "SLUGBASE_DB_CHECK_CONTRACT"],
+      "passThroughEnv": ["SLUGBASE_TEST_PG_URL"],
       "outputs": [],
       "cache": false
     },

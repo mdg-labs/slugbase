@@ -81,29 +81,14 @@ describe("the shipped chain", () => {
     expect(await inspect(database, ownershipRule)).toEqual([]);
   }, HOOK_TIMEOUT_MS);
 
-  // The command runs with the environment of the test run, so it reads the same
-  // SLUGBASE_DB_CHECK_CONTRACT as the `pnpm db:check` step beside it. With the
-  // marker `pending` (a push, or a local run while a marked contract migration
-  // awaits its label) the summary may say that a rule awaits the label; with any
-  // other marker every rule must have passed. The two summary lines are compared
-  // whole, never by a substring that fits both.
+  // The shipped chain holds marked contract migrations, which pass on their
+  // valid headers alone: no environment value is read, and every rule passes.
   it("passes pnpm db:check", () => {
     const result = spawnSync(process.execPath, [SCRIPT], { encoding: "utf8", timeout: HOOK_TIMEOUT_MS });
-    const total = String(checkRules.length);
     const lines = result.stdout.trimEnd().split("\n");
-    const summary = lines.at(-1) ?? "";
-    const allPassed = `db:check: ${total} rule(s) passed`;
-    const awaiting = new RegExp(
-      `^db:check: \\d+ of ${total} rule\\(s\\) passed, [1-9]\\d* awaiting the migration:contract label: `,
-    );
     expect(result.stderr).toBe("");
     expect(lines.filter((line) => line.startsWith("db:check: FAIL"))).toEqual([]);
-    if (process.env["SLUGBASE_DB_CHECK_CONTRACT"] === "pending") {
-      expect(summary === allPassed || awaiting.test(summary), summary).toBe(true);
-    } else {
-      expect(summary).toBe(allPassed);
-      expect(lines.filter((line) => line.startsWith("db:check: AWAIT"))).toEqual([]);
-    }
+    expect(lines.at(-1)).toBe(`db:check: ${String(checkRules.length)} rule(s) passed`);
     expect(result.status).toBe(0);
   }, HOOK_TIMEOUT_MS);
 });

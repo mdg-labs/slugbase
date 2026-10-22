@@ -117,7 +117,7 @@ Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40
 | Q19 | Hono | Decided (default) |
 | Q7 | Run the current Active LTS | Decided (default) |
 | Q51 | Declarative SQL files under `packages/db/src/sql/` (policies, grants, `SECURITY DEFINER` functions, triggers), emitted into the generated… | Decided (default) · confirmed by the first code in Phase 1 |
-| Q52 | CI rejects destructive or table-rewriting steps unless the PR carries `migration:contract` and the dropped object was unused in the previous release | Decided (default) |
+| Q52 | CI rejects destructive or table-rewriting steps unless the file is the contract half of an expand/contract pair, proven by its contract header, and the dropped object was unused in the previous release | Decided (maintainer, 2026-10-22) |
 | Q85 | Ladle | Decided (default) |
 | Q91 | Identifiers (UUIDv7) are generated in the application, not by a database function | Decided (default) |
 | Q93 | Generic extension points for composed deployments, listed in one place in doc 01 | Decided (default) |
@@ -471,10 +471,10 @@ One runtime version keeps the matrix small; the three-month window avoids early-
 drizzle-kit can model basic policies and roles but not column privileges, `SECURITY DEFINER` functions or deferred constraint triggers. The spike confirms that the custom-step wrapper keeps "migrations are generated, never hand-edited" true, and that the CI drift check covers the SQL files.
 
 ### Q52 — Contract migrations in CI
-**Status:** Decided (default) · **Due:** Phase 1 · **Affects:** doc 05 §5.2, doc 08 (CI)
+**Status:** Decided (maintainer, 2026-10-22) · **Due:** Phase 1 · **Affects:** doc 05 §5.2, doc 08 (CI)
 
-**Decision: CI rejects destructive or table-rewriting steps unless the PR carries `migration:contract` and the dropped object was unused in the previous release; the label is maintainer-only (`labels.maintainerOnly` in `.claude/workflow.json`).**
-Expand/contract is what makes rolling deploys with several replicas safe; agents should not be able to opt out of it on their own.
+**Decision: CI rejects destructive or table-rewriting steps unless the file is the contract half of an expand/contract pair, which the check proves from the file alone: a generated contract header (`-- slugbase:contract expand=<migration tag> release=<version>`) naming a migration of the journal that the release tag already contains. A valid header passes and a missing or invalid one fails, on every event; no pull-request label or environment value is read. The maintainer approves the step by merging the pull request that carries it.**
+Expand/contract is what makes rolling deploys with several replicas safe; an agent cannot opt out of it, because the header is checked mechanically against the release history and the expand migration must have shipped first. A required status check must not depend on a label, and approval by merge is the review step that remains.
 
 ### Q85 — Component workshop for `@slugbase/ui`
 **Status:** Decided (default) · **Due:** Phase 1 · **Affects:** doc 08 §7

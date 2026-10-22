@@ -10,11 +10,7 @@ name: CI
 on:
   push:
     branches: ["**"]
-  # labeled and unlabeled are listed because the integration job reads the
-  # maintainer-applied `migration:contract` label from the pull request (Q52);
-  # adding or removing it must re-run the check with or without the marker.
   pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 permissions:
   contents: read
@@ -167,23 +163,12 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends postgresql-client
-      # SLUGBASE_DB_CHECK_CONTRACT is a flag of this check, not a product
-      # environment variable. A pull request run sets it to true when the pull
-      # request carries the maintainer-applied `migration:contract` label (Q52)
-      # and to false when it does not. A push has no pull request and so no label
-      # (this repository lands on dev by cherry-pick), so a push run sets it to
-      # pending: a destructive migration step with a valid contract header is then
-      # reported as awaiting the label and does not fail, while one with no header
-      # or an invalid one fails on every event. The pull request that promotes dev
-      # to main is the run that checks the label.
+      # The migration check reads nothing from the event: a contract migration
+      # passes on its generated contract header alone, on a push and on a pull
+      # request (Q52), and the maintainer approves it by merging the pull request.
+      # The db package's integration tests run `pnpm db:check` themselves.
       - run: pnpm db:check
-        env:
-          SLUGBASE_DB_CHECK_CONTRACT: ${{ github.event_name == 'push' && 'pending' || contains(github.event.pull_request.labels.*.name, 'migration:contract') }}
-      # The db package's integration tests run `pnpm db:check` themselves, so they
-      # get the same marker as the step above.
       - run: pnpm test:integration
-        env:
-          SLUGBASE_DB_CHECK_CONTRACT: ${{ github.event_name == 'push' && 'pending' || contains(github.event.pull_request.labels.*.name, 'migration:contract') }}
 
   # The only job that is not in the node container: it builds the image and starts
   # it with Docker Compose (scripts/smoke-image.sh), which needs the runner's own
