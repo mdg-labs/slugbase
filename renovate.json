@@ -75,6 +75,15 @@
       ],
       "groupName": "docker minor and patch",
       "groupSlug": "docker-minor-patch"
+    },
+    {
+      "description": "The Playwright image of the journeys and @playwright/test move together, in every update type: e2e/support/playwright-image.test.ts fails when their versions differ. Listed after the batches above so that it wins over them",
+      "matchPackageNames": [
+        "@playwright/test",
+        "mcr.microsoft.com/playwright"
+      ],
+      "groupName": "playwright",
+      "groupSlug": "playwright"
     }
   ]
 }
