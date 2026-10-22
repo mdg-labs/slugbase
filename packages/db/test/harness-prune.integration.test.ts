@@ -157,7 +157,8 @@ describe("pruning stale templates", () => {
         await database.drop();
       }
       const after = await pruneTestTemplates({ serverUrl, names: [template], keep: [] });
-      expect(after.dropped).toEqual([template]);
+      // The whole result, so that a template kept for a reason names it.
+      expect(after).toEqual({ dropped: [template], skipped: [] });
       expect(await exists(template)).toBe(false);
     }, HOOK_TIMEOUT_MS);
 

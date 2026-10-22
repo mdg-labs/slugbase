@@ -9,6 +9,10 @@ import { validatorFor } from "./support/schema.ts";
 // that the mock cannot follow fails in the same commit.
 
 const BASE = "http://mock.test";
+// The error test builds the handlers of every declared error status and validates each
+// answer against the whole document; it took 5 s on a loaded CI runner where it takes
+// about 0.2 s alone, so it runs under a limit sized for that runner, not vitest's 5 s default.
+const ERROR_TEST_TIMEOUT_MS = 30_000;
 const METHODS = ["get", "put", "post", "delete", "patch", "head", "options"];
 
 const document = readOpenApiDocument();
@@ -53,6 +57,20 @@ const operations = declared();
 
 function url(operation: Declared): string {
   return `${BASE}${operation.path.replaceAll(/\{[^}]+\}/g, "sample")}`;
+}
+
+// Most operations declare the same few problem schemas by reference, and compiling a
+// validator walks the whole schema, so each distinct schema is compiled once.
+const validators = new Map<string, ReturnType<typeof validatorFor>>();
+
+function validatorOnce(schema: Record<string, unknown>): ReturnType<typeof validatorFor> {
+  const key = JSON.stringify(schema);
+  let validator = validators.get(key);
+  if (validator === undefined) {
+    validator = validatorFor(raw, schema);
+    validators.set(key, validator);
+  }
+  return validator;
 }
 
 function build(scenario?: Scenario): RequestHandler[] {
@@ -148,12 +166,12 @@ describe("the generated handlers", () => {
           const body = (await response.json()) as Record<string, unknown>;
           expect(body.status).toBe(status);
           expect(typeof body.code).toBe("string");
-          expect(validatorFor(raw, schema).safeParse(body).success, `${operation.operationId} ${String(status)}`).toBe(true);
+          expect(validatorOnce(schema).safeParse(body).success, `${operation.operationId} ${String(status)}`).toBe(true);
         }
       }
     }
     expect(problems).toBeGreaterThan(0);
-  });
+  }, ERROR_TEST_TIMEOUT_MS);
 
   it("send a numeric Retry-After with every generated 429", async () => {
     let limited = 0;

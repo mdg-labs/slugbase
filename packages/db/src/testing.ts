@@ -514,7 +514,7 @@ export async function dropTestTemplate(name: string, options: Pick<TestDatabaseO
  * Why a template was kept: it is the current one or one named in `keep`
  * (`"current"`); a process is building or dropping it (`"building"`); a test
  * database cloned from it exists or a process is about to clone it (`"in use"`);
- * a session is connected to it (`"connected"`).
+ * a backend other than an autovacuum worker is connected to it (`"connected"`).
  */
 export type PruneSkipReason = "current" | "building" | "in use" | "connected";
 
@@ -595,12 +595,18 @@ async function tryLock(admin: TestSql, label: string): Promise<boolean> {
 
 const OBJECT_IN_USE = "55006";
 
-// The drop has no FORCE: a connection that opens after the check makes it
-// fail, and the template is marked again as it was.
+// Any backend on the template counts as a connection, except an autovacuum
+// worker. An autovacuum worker visits every database, a template included, and
+// must not keep a template that nothing uses. A plain DROP DATABASE waits up to
+// 5 s for every other backend on the database and signals only the autovacuum
+// workers (CountOtherDBBackends in procarray.c); a backend of any other type
+// that is still attached after that makes the drop fail with 55006, which is
+// reported as "connected" and leaves the template marked. The drop has no FORCE,
+// so it never cuts off a session.
 async function dropUnusedTemplate(admin: TestSql, name: string): Promise<PruneSkipReason | undefined> {
   const state = await admin<{ template: boolean; connections: number }[]>`
     SELECT d.datistemplate AS template,
-           (SELECT count(*)::int FROM pg_stat_activity a WHERE a.datname = d.datname) AS connections
+           (SELECT count(*)::int FROM pg_stat_activity a WHERE a.datname = d.datname AND a.backend_type <> 'autovacuum worker') AS connections
     FROM pg_database d WHERE d.datname = ${name}`;
   const row = state[0];
   if (row === undefined) {
