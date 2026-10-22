@@ -1,4 +1,4 @@
-import type { WorkspaceAdministrationStore, WorkspaceRenameRequest, WorkspaceRenameResult, WorkspaceSettings, WorkspaceSettingsChange, WorkspaceSettingsPatch } from "@slugbase/core";
+import type { WorkspaceAdministrationStore, WorkspaceRenameRequest, WorkspaceRenameResult, WorkspaceSettings, WorkspaceSettingsChange, WorkspaceSettingsPatch, WorkspaceStoreResult } from "@slugbase/core";
 import { sql } from "drizzle-orm";
 import { enqueueInTenantTransaction, type QueuedJob } from "../system/queue.ts";
 import type { MemberRole } from "../schema/workspaces.ts";
@@ -8,7 +8,7 @@ import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
 // doc 04 section 10.4). The list reads the account's own membership rows, whose workspaces the `workspaces`
 // policy shows through `app_member_workspace_ids()`, and the member count of each from
 // `app_member_workspace_counts()`, which counts the members of the workspaces the account belongs to and
-// shows no member's identity. A workspace is created by the system operation `sys_create_workspace`; the
+// shows no member's identity. A workspace is created by the system operation `sys_create_workspace_limited`; the
 // account it makes the owner is always the one `withTenant` was opened for, never one the caller passes, and
 // the operation itself refuses another account while a tenant account is set. The workspace of the
 // transaction is read with the role of the account in it and renamed, and its settings are read and
@@ -30,6 +30,8 @@ export interface NewWorkspace {
   readonly id: string;
   /** 1 to 64 characters. */
   readonly name: string;
+  /** The account's `workspaces.ownMax`: the most workspaces it may own, null for no ceiling. Judged under the lock of the account's row. */
+  readonly ownedMax: number | null;
   /** Jobs queued in the same transaction, only when the workspace is created. */
   readonly jobs: readonly QueuedJob[];
 }
@@ -54,10 +56,11 @@ export interface WorkspaceRepository extends WorkspaceAdministrationStore {
   list(): Promise<readonly WorkspaceSummary[]>;
   /**
    * Creates the workspace with the account of the transaction as its owner and its settings row, and queues
-   * the jobs, in the open transaction. False, with nothing written, when the account does not exist or is
-   * disabled.
+   * the jobs, in the open transaction, through `sys_create_workspace_limited`: the account's row is locked, the
+   * workspaces it owns are counted and the workspace is inserted in that one call, so two creations for one
+   * account are never counted against the same state. Nothing is written for `limit_reached` and `unavailable`.
    */
-  create(workspace: NewWorkspace): Promise<boolean>;
+  create(workspace: NewWorkspace): Promise<WorkspaceStoreResult>;
   /**
    * Points the full session `sessionId` of the account of the transaction at a workspace that account is a
    * member of and that is not being deleted, through `sys_session_set_active_workspace`, which judges the
@@ -106,7 +109,8 @@ interface ListedRow extends Record<string, unknown> {
 }
 
 interface CreatedRow extends Record<string, unknown> {
-  created: boolean;
+  outcome: string;
+  owned: number | null;
 }
 
 interface MarkedRow extends Record<string, unknown> {
@@ -168,19 +172,30 @@ export function workspaceRepository(tx: TenantTx): WorkspaceRepository {
     },
 
     async create(workspace) {
-      const rows = await tenantHandle(tx).execute<CreatedRow>(sql`
-        SELECT public.sys_create_workspace(${tx.accountId}::uuid, ${workspace.id}::uuid, ${workspace.name}::text) AS created`);
+      const handle = tenantHandle(tx);
+      const rows = await handle.execute<CreatedRow>(sql`
+        SELECT outcome, owned FROM public.sys_create_workspace_limited(${tx.accountId}::uuid, ${workspace.id}::uuid, ${workspace.name}::text, ${workspace.ownedMax}::integer)`);
       const row = rows[0];
       if (rows.length !== 1 || row === undefined) {
-        throw new Error("sys_create_workspace did not return exactly one row");
+        throw new Error("sys_create_workspace_limited did not return exactly one row");
       }
-      if (!row.created) {
-        return false;
+      if (row.outcome === "unavailable") {
+        return { kind: "unavailable" };
+      }
+      if (row.outcome === "limit_reached") {
+        // The count the function judged the refusal against, returned with the outcome.
+        if (row.owned === null) {
+          throw new Error("sys_create_workspace_limited refused without the count it judged");
+        }
+        return { kind: "limit_reached", used: row.owned };
+      }
+      if (row.outcome !== "created") {
+        throw new Error("sys_create_workspace_limited returned an outcome outside created, limit_reached and unavailable");
       }
       for (const job of workspace.jobs) {
         await enqueueInTenantTransaction(tx, job);
       }
-      return true;
+      return { kind: "created" };
     },
 
     async setActive(sessionId, workspaceId) {

@@ -39,9 +39,19 @@ export function serverConfig(overrides: Record<string, string | undefined> = {})
   return loadConfig("server", productionEnv({ MIGRATE_ON_START: "false", ...overrides })).config;
 }
 
-/** Every port unconfigured except the rate limiter, which is in memory: the unconfigured one refuses every limited route. */
+/**
+ * Every port unconfigured except the rate limiter, which is in memory: the unconfigured one refuses every limited route.
+ * The entitlement source is unconfigured too (stage 9 refuses every declared entitlement) apart from the account-scoped
+ * ceiling, which is unlimited: every registration, verification and workspace creation asks for it, so a source that
+ * cannot answer would end each of them in `503`.
+ */
 export function adapters(config: ModuleContext["config"] = serverConfig()): Adapters {
-  return { ...unconfigured(), rateLimit: memoryRateLimiter(createRateLimitRegistry(config)) };
+  const unconfiguredSource = unconfigured().entitlements;
+  return {
+    ...unconfigured(),
+    rateLimit: memoryRateLimiter(createRateLimitRegistry(config)),
+    entitlements: { ...unconfiguredSource, forAccount: () => Promise.resolve({ "workspaces.ownMax": "unlimited" }) },
+  };
 }
 
 /** A hook dispatcher over the unconfigured client error-report source, for tests that do not exercise hooks. */

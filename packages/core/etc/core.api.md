@@ -924,7 +924,7 @@ export interface BreachedPasswords {
 }
 
 // @public
-export function canCreateWorkspace(input: WorkspaceCreationPolicy): boolean;
+export function canCreateWorkspace(input: WorkspaceCreationCapacity): boolean;
 
 // @public
 export interface ChallengePort extends Port {
@@ -977,6 +977,9 @@ export function createInstanceWorkspace(input: InstanceWorkspaceDependencies, as
 
 // @public
 export function createInvitationLink(input: Omit<InvitationActionDependencies, "newId">, ask: InvitationActionAsk): Promise<InvitationLinkOutcome>;
+
+// @public (undocumented)
+export function createOwnedWorkspaceEntitlements(service: EntitlementService): OwnedWorkspaceEntitlements;
 
 // @public (undocumented)
 export function createPasswordPolicy(input?: PasswordPolicyOptions): PasswordPolicy;
@@ -2730,6 +2733,12 @@ export interface OtpauthOptions {
 // @public
 export function otpauthUri(input: OtpauthOptions): string;
 
+// @public
+export interface OwnedWorkspaceEntitlements {
+    limit(accountId: string, request: object): Promise<EntitlementLimit>;
+    upgradeAvailable(accountId: string, ownedWorkspaceIds: readonly string[], request: object): Promise<boolean>;
+}
+
 // @public (undocumented)
 export interface OwnershipTransferAsk {
     // (undocumented)
@@ -2819,7 +2828,7 @@ export interface PersonalWorkspaceDependencies {
 }
 
 // @public
-export type PersonalWorkspaceOutcome = "created" | "exists";
+export type PersonalWorkspaceOutcome = "created" | "exists" | "limit_reached";
 
 // @public (undocumented)
 export interface PersonalWorkspaceRequest {
@@ -2832,6 +2841,7 @@ export interface PersonalWorkspaceRequest {
     readonly events: readonly DomainEvent<"workspace.created">[];
     // (undocumented)
     readonly nameSuffix: string;
+    readonly ownedMax: EntitlementLimit;
     readonly workspaceId: string;
 }
 
@@ -2866,7 +2876,7 @@ export type PortUnavailableCode = Extract<ProblemCode, "unavailable" | "mail_una
 export function prepareAuditRecord<Name extends AuditAction>(event: AuditEventInput<Name>, newId: () => string): AuditRecord;
 
 // @public
-export function provisionPersonalWorkspace(input: PersonalWorkspaceDependencies, accountId: string): Promise<PersonalWorkspaceOutcome>;
+export function provisionPersonalWorkspace(input: PersonalWorkspaceDependencies, accountId: string, ownedMax: EntitlementLimit): Promise<PersonalWorkspaceOutcome>;
 
 // @public (undocumented)
 export interface RateLimitDecision {
@@ -3071,6 +3081,9 @@ export function verifyTotp(secret: Uint8Array, code: string, nowMs: number): num
 export function withEntitlementChange<T>(writer: EntitlementVersionWriter, change: () => Promise<T>): Promise<T>;
 
 // @public
+export function withinOwnedWorkspaceLimit(owned: number, ownedMax: EntitlementLimit): boolean;
+
+// @public
 export const WORKSPACE_LIMIT_ENTITLEMENTS: readonly WorkspaceLimitEntitlement[];
 
 // @public
@@ -3109,6 +3122,13 @@ export interface WorkspaceCreationAsk extends WorkspaceCreationPolicy {
     readonly ipPrefix: string | null;
     // (undocumented)
     readonly name: string;
+    readonly ownedMax: EntitlementLimit;
+}
+
+// @public (undocumented)
+export interface WorkspaceCreationCapacity extends WorkspaceCreationPolicy {
+    readonly owned: number;
+    readonly ownedMax: EntitlementLimit;
 }
 
 // @public (undocumented)
@@ -3130,6 +3150,12 @@ export type WorkspaceCreationOutcome = {
 } | {
     readonly kind: "unverified";
 }
+/** The account owns `used` workspaces, as many as `limit` allows. */
+| {
+    readonly kind: "limit_reached";
+    readonly limit: number;
+    readonly used: number;
+}
 /** The account does not exist or is disabled. */
 | {
     readonly kind: "unavailable";
@@ -3148,6 +3174,7 @@ export interface WorkspaceCreationRequest {
     readonly events: readonly DomainEvent<"workspace.created">[];
     // (undocumented)
     readonly name: string;
+    readonly ownedMax: EntitlementLimit;
     readonly workspaceId: string;
 }
 
@@ -3312,8 +3339,22 @@ export type WorkspaceSettingsPatch = {
 
 // @public (undocumented)
 export interface WorkspaceStore {
-    create(request: WorkspaceCreationRequest): Promise<boolean>;
+    create(request: WorkspaceCreationRequest): Promise<WorkspaceStoreResult>;
 }
+
+// @public (undocumented)
+export type WorkspaceStoreResult = {
+    readonly kind: "created";
+}
+/** The account owns `used` workspaces, which is as many as `ownedMax` allows. */
+| {
+    readonly kind: "limit_reached";
+    readonly used: number;
+}
+/** The account does not exist or is disabled. */
+| {
+    readonly kind: "unavailable";
+};
 
 // (No @packageDocumentation comment for this package)
 

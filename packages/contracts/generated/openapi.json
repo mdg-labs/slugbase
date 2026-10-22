@@ -2925,7 +2925,7 @@
         "additionalProperties": false,
         "properties": {
           "canCreate": {
-            "description": "Whether the account can create a workspace: the deployment lets accounts create them and the account's email address is verified. The UI hides the action when it is false",
+            "description": "Whether the account can create a workspace: the deployment lets accounts create them, the account's email address is verified and the account owns fewer workspaces than its workspaces.ownMax entitlement allows. The UI hides the action, or shows the upgrade path in its place, when it is false",
             "type": "boolean"
           },
           "items": {
@@ -10372,7 +10372,7 @@
                 }
               }
             },
-            "description": "The body did not pass validation (a name that is blank or outside 1 to 64 characters, or a field the operation does not declare)"
+            "description": "The body did not pass validation (a name that is blank or outside 1 to 64 characters, or a field the operation does not declare), or the account already owns as many workspaces as its workspaces.ownMax entitlement allows (workspace_limit_reached; the problem carries limit, used and upgradeAvailable). Nothing is written"
           },
           "429": {
             "content": {
@@ -10403,7 +10403,7 @@
                 }
               }
             },
-            "description": "The service is temporarily unavailable"
+            "description": "The service is temporarily unavailable, or the entitlement source could not say how many workspaces the account may own"
           }
         },
         "summary": "Create a workspace",

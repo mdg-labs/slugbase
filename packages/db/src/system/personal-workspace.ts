@@ -13,6 +13,8 @@ export interface NewPersonalWorkspace {
   readonly workspaceId: string;
   /** What follows the account's display name in the workspace's name. */
   readonly nameSuffix: string;
+  /** The account's `workspaces.ownMax`: the most workspaces it may own, null for no ceiling. Judged under the lock of the account's row. */
+  readonly ownedMax: number | null;
   /** Jobs queued in the same transaction, only when the workspace is created. */
   readonly jobs: readonly QueuedJob[];
   /**
@@ -22,13 +24,17 @@ export interface NewPersonalWorkspace {
   readonly audit?: (created: { readonly name: string; readonly displayName: string }) => AuditRecord;
 }
 
-/** `created`; `exists` when the account already owns a workspace; `unavailable` for an account that does not exist or is disabled. */
-export type PersonalWorkspaceResult = "created" | "exists" | "unavailable";
+/**
+ * `created`; `exists` when the account already owns a workspace; `limit_reached` when it owns none and `ownedMax`
+ * allows none; `unavailable` for an account that does not exist or is disabled.
+ */
+export type PersonalWorkspaceResult = "created" | "exists" | "limit_reached" | "unavailable";
 
 export interface PersonalWorkspaceWriter {
   /**
    * Creates the workspace with its owner membership and settings, and queues the jobs, in the open
-   * transaction, unless the account already owns a workspace. Nothing is written for `exists` and `unavailable`.
+   * transaction, unless the account already owns a workspace or is at its ceiling. Nothing is written for `exists`,
+   * `limit_reached` and `unavailable`.
    */
   create(workspace: NewPersonalWorkspace): Promise<PersonalWorkspaceResult>;
 }
@@ -38,7 +44,7 @@ interface OutcomeRow {
 }
 
 function isResult(value: string): value is PersonalWorkspaceResult {
-  return value === "created" || value === "exists" || value === "unavailable";
+  return value === "created" || value === "exists" || value === "limit_reached" || value === "unavailable";
 }
 
 /** Binds the writer to an open transaction on a pool that connects as the application role. */
@@ -46,16 +52,17 @@ export function bindPersonalWorkspaceWriter(tx: postgres.TransactionSql): Person
   return {
     async create(workspace) {
       const rows = await tx<OutcomeRow[]>`
-        SELECT sys_create_personal_workspace(
+        SELECT sys_create_personal_workspace_limited(
           ${workspace.accountId}::uuid,
           ${workspace.workspaceId}::uuid,
-          ${workspace.nameSuffix}::text) AS outcome`;
+          ${workspace.nameSuffix}::text,
+          ${workspace.ownedMax}::integer) AS outcome`;
       const row = rows[0];
       if (rows.length !== 1 || row === undefined) {
-        throw new Error("sys_create_personal_workspace did not return exactly one row");
+        throw new Error("sys_create_personal_workspace_limited did not return exactly one row");
       }
       if (!isResult(row.outcome)) {
-        throw new Error("sys_create_personal_workspace returned an outcome outside created, exists and unavailable");
+        throw new Error("sys_create_personal_workspace_limited returned an outcome outside created, exists, limit_reached and unavailable");
       }
       if (row.outcome === "created") {
         if (workspace.audit !== undefined) {

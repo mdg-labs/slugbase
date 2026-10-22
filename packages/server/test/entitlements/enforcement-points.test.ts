@@ -20,11 +20,14 @@ describe("the enforcement-point inventory", () => {
     expect(stage9.sort()).toEqual(declared.map((operation) => [operation.operationId, operation.entitlement]).sort());
   });
 
-  it("lists each operation once, under a key of the catalog", () => {
+  it("lists each operation once, under a key of the catalog, and only a handler decides an account-scoped key", () => {
     const ids = ENFORCEMENT_POINTS.map((point) => point.operationId);
     expect(new Set(ids).size).toBe(ids.length);
     for (const point of ENFORCEMENT_POINTS) {
-      expect(isEntitlementKey(point.entitlement) && ENTITLEMENT_CATALOG[point.entitlement].scope === "workspace").toBe(true);
+      expect(isEntitlementKey(point.entitlement), point.operationId).toBe(true);
+      if (isEntitlementKey(point.entitlement) && ENTITLEMENT_CATALOG[point.entitlement].scope === "account") {
+        expect(point.decidedBy, point.operationId).toBe("handler");
+      }
     }
   });
 
@@ -36,11 +39,12 @@ describe("the enforcement-point inventory", () => {
     }
   });
 
-  it("holds the handler-decided points to operations that cannot declare an entitlement to stage 9", () => {
+  it("holds the handler-decided points to operations that declare no entitlement to stage 9: an anonymous operation whose token names the workspace, or an account operation whose key is account-scoped", () => {
     const document = readOperations(loadOpenApiDocument()).operations;
     for (const point of ENFORCEMENT_POINTS.filter((entry) => entry.decidedBy === "handler")) {
       const operation = document.find((candidate) => candidate.operationId === point.operationId);
-      expect(operation?.auth, point.operationId).toBe("anonymous");
+      const accountScoped = isEntitlementKey(point.entitlement) && ENTITLEMENT_CATALOG[point.entitlement].scope === "account";
+      expect(operation?.auth, point.operationId).toBe(accountScoped ? "account" : "anonymous");
       expect(operation?.entitlement, point.operationId).toBeUndefined();
     }
   });

@@ -2,7 +2,7 @@ import { verifyEmail } from "@slugbase/contracts";
 import { hashCredentialToken, truncateUserAgent, type PasswordPolicy, type SessionCookieSpec } from "@slugbase/core";
 import type { AuthStore } from "@slugbase/db";
 import { readCookie, setSessionCookie } from "../../auth/cookie.ts";
-import { provisionWorkspaceIn } from "../../auth/personal-workspace.ts";
+import { provisionWorkspaceWithLimit, type OwnedWorkspaceLimit } from "../../auth/personal-workspace.ts";
 import { hashSessionToken, newSessionToken } from "../../auth/session-token.ts";
 import { uuidv7 } from "../../auth/uuidv7.ts";
 import type { RouteBinding } from "../../http/chain.ts";
@@ -13,7 +13,7 @@ import { route } from "../register.ts";
 // POST /api/v1/auth/verify-email (doc 04 sections 4.5 and 10.2, doc 02 sections 2.2 and 2.6, doc 10 T4 and
 // T8). The emailed token is redeemed once; the address is marked verified, the personal workspace is
 // created and the account is signed in, all in one database transaction, so a failure at any step leaves
-// the token unused. An account whose address was never verified is one a visitor registered, and the
+// the token unused. An account at its `workspaces.ownMax` gets no workspace and is verified all the same. An account whose address was never verified is one a visitor registered, and the
 // visitor is not necessarily the owner of the address: the owner chooses the password here, and it replaces
 // the one the registration set, and every session the account had ends with it.
 //
@@ -32,9 +32,11 @@ export interface VerifyEmailRouteOptions {
   /** Hashes the password into an argon2id PHC string. */
   readonly hashPassword: (password: string) => Promise<string>;
   readonly cookie: SessionCookieSpec;
+  /** The `workspaces.ownMax` of the verified account, which decides whether its personal workspace is made. */
+  readonly ownedWorkspaceLimit: OwnedWorkspaceLimit;
 }
 
-export function verifyEmailRoute({ store, passwordPolicy, hashPassword, cookie }: VerifyEmailRouteOptions): RouteBinding {
+export function verifyEmailRoute({ store, passwordPolicy, hashPassword, cookie, ownedWorkspaceLimit }: VerifyEmailRouteOptions): RouteBinding {
   return route(verifyEmail).handle(async ({ body }, context) => {
     const problems = passwordPolicy.check(body.password);
     if (problems.length > 0) {
@@ -60,7 +62,7 @@ export function verifyEmailRoute({ store, passwordPolicy, hashPassword, cookie }
       ipPrefix: networkPrefixOf(context.get("clientIp")) ?? null,
       userAgent: truncateUserAgent(context.req.raw.headers.get("user-agent")),
       replacedTokenHash: carried === undefined ? null : (hashSessionToken(carried) ?? null),
-      afterVerified: provisionWorkspaceIn,
+      afterVerified: provisionWorkspaceWithLimit(ownedWorkspaceLimit),
     });
     if (verified === undefined) {
       throw new ProblemError("token_expired", REFUSED);

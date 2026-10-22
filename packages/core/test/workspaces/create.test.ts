@@ -3,10 +3,12 @@ import {
   canCreateWorkspace,
   createAuditWriter,
   createWorkspace,
+  withinOwnedWorkspaceLimit,
   type AuditRecord,
   type AuditStore,
   type WorkspaceCreationRequest,
   type WorkspaceStore,
+  type WorkspaceStoreResult,
 } from "../../src/index.ts";
 
 const ACCOUNT = "0192f3a0-bbbb-7000-8000-000000000001";
@@ -20,7 +22,7 @@ function ids(): () => string {
 }
 
 /** The stores of one transaction: what they were asked for in order, and what stays when it ends. */
-function world(options: { account?: "enabled" | "missing"; auditFails?: boolean } = {}) {
+function world(options: { account?: "enabled" | "missing"; auditFails?: boolean; atLimit?: number } = {}) {
   const log: string[] = [];
   const requests: WorkspaceCreationRequest[] = [];
   const audits: AuditRecord[] = [];
@@ -28,7 +30,9 @@ function world(options: { account?: "enabled" | "missing"; auditFails?: boolean 
     create(request) {
       log.push("workspace");
       requests.push(request);
-      return Promise.resolve(options.account !== "missing");
+      const result: WorkspaceStoreResult =
+        options.account === "missing" ? { kind: "unavailable" } : options.atLimit !== undefined ? { kind: "limit_reached", used: options.atLimit } : { kind: "created" };
+      return Promise.resolve(result);
     },
   };
   const auditStore: AuditStore = {
@@ -45,14 +49,35 @@ function world(options: { account?: "enabled" | "missing"; auditFails?: boolean 
   return { log, requests, audits, dependencies: { store, audit: createAuditWriter({ store: auditStore, newId }), newId } };
 }
 
-const ASKING = { accountId: ACCOUNT, displayName: "Ada", emailVerified: true, creationAllowed: true, ipPrefix: "203.0.0.0/16", name: "Research" };
+const ASKING = { accountId: ACCOUNT, displayName: "Ada", emailVerified: true, creationAllowed: true, ipPrefix: "203.0.0.0/16", name: "Research", ownedMax: "unlimited" } as const;
 
 describe("canCreateWorkspace", () => {
+  const room = { owned: 0, ownedMax: "unlimited" } as const;
+
   it("is true only for a verified account on a deployment that lets accounts create workspaces", () => {
-    expect(canCreateWorkspace({ creationAllowed: true, emailVerified: true })).toBe(true);
-    expect(canCreateWorkspace({ creationAllowed: true, emailVerified: false })).toBe(false);
-    expect(canCreateWorkspace({ creationAllowed: false, emailVerified: true })).toBe(false);
-    expect(canCreateWorkspace({ creationAllowed: false, emailVerified: false })).toBe(false);
+    expect(canCreateWorkspace({ creationAllowed: true, emailVerified: true, ...room })).toBe(true);
+    expect(canCreateWorkspace({ creationAllowed: true, emailVerified: false, ...room })).toBe(false);
+    expect(canCreateWorkspace({ creationAllowed: false, emailVerified: true, ...room })).toBe(false);
+    expect(canCreateWorkspace({ creationAllowed: false, emailVerified: false, ...room })).toBe(false);
+  });
+
+  it("is false for an account that owns as many workspaces as its ceiling allows, and true below it", () => {
+    const allowed = { creationAllowed: true, emailVerified: true } as const;
+
+    expect(canCreateWorkspace({ ...allowed, owned: 1, ownedMax: 1 })).toBe(false);
+    expect(canCreateWorkspace({ ...allowed, owned: 2, ownedMax: 1 })).toBe(false);
+    expect(canCreateWorkspace({ ...allowed, owned: 0, ownedMax: 0 })).toBe(false);
+    expect(canCreateWorkspace({ ...allowed, owned: 0, ownedMax: 1 })).toBe(true);
+    expect(canCreateWorkspace({ ...allowed, owned: 1000, ownedMax: "unlimited" })).toBe(true);
+  });
+});
+
+describe("withinOwnedWorkspaceLimit", () => {
+  it("admits one more workspace only below the ceiling", () => {
+    expect(withinOwnedWorkspaceLimit(0, 1)).toBe(true);
+    expect(withinOwnedWorkspaceLimit(1, 1)).toBe(false);
+    expect(withinOwnedWorkspaceLimit(0, 0)).toBe(false);
+    expect(withinOwnedWorkspaceLimit(5, "unlimited")).toBe(true);
   });
 });
 
@@ -121,6 +146,36 @@ describe("createWorkspace", () => {
     expect(await createWorkspace(dependencies, ASKING)).toEqual({ kind: "unavailable" });
     expect(audits).toEqual([]);
     expect(log).toEqual(["workspace"]);
+  });
+
+  it("hands the ceiling to the store, which judges it where it inserts", async () => {
+    const { dependencies, requests } = world();
+
+    await createWorkspace(dependencies, { ...ASKING, ownedMax: 3 });
+
+    expect(requests[0]?.ownedMax).toBe(3);
+  });
+
+  it("reports the limit and the usage, and writes no audit row and announces nothing, when the store refuses at the ceiling", async () => {
+    const { dependencies, audits, log } = world({ atLimit: 1 });
+
+    expect(await createWorkspace(dependencies, { ...ASKING, ownedMax: 1 })).toEqual({ kind: "limit_reached", limit: 1, used: 1 });
+    expect(audits).toEqual([]);
+    expect(log).toEqual(["workspace"]);
+  });
+
+  it("does not report a refusal under an unlimited ceiling, which no store can have made", async () => {
+    const { dependencies } = world({ atLimit: 1 });
+
+    await expect(createWorkspace(dependencies, ASKING)).rejects.toThrow("unlimited ceiling");
+  });
+
+  it("judges the policy and the name before the ceiling", async () => {
+    const { dependencies, log } = world({ atLimit: 1 });
+
+    expect(await createWorkspace(dependencies, { ...ASKING, ownedMax: 1, emailVerified: false })).toEqual({ kind: "unverified" });
+    await expect(createWorkspace(dependencies, { ...ASKING, ownedMax: 1, name: "" })).rejects.toBeInstanceOf(RangeError);
+    expect(log).toEqual([]);
   });
 
   it("lets a failure of the audit write reach the caller, so the transaction that created the workspace does not commit", async () => {

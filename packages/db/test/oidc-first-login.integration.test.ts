@@ -230,7 +230,7 @@ describe("a first login that creates an account", () => {
     const made = create({
       afterCreated: async (accountId, workspaces) => {
         seen.push(accountId);
-        expect(await workspaces.create({ accountId, workspaceId: freshId(), nameSuffix: "'s workspace", jobs: [] })).toBe("created");
+        expect(await workspaces.create({ accountId, workspaceId: freshId(), nameSuffix: "'s workspace", ownedMax: null, jobs: [] })).toBe("created");
       },
     });
 
@@ -244,7 +244,7 @@ describe("a first login that creates an account", () => {
   it("leaves no account, identity, session, workspace or job when afterCreated rejects", async () => {
     const made = create({
       afterCreated: async (accountId, workspaces) => {
-        await workspaces.create({ accountId, workspaceId: freshId(), nameSuffix: "'s workspace", jobs: [] });
+        await workspaces.create({ accountId, workspaceId: freshId(), nameSuffix: "'s workspace", ownedMax: null, jobs: [] });
         throw new Error("the workspace could not be made");
       },
     });

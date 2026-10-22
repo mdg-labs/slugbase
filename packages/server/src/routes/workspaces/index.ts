@@ -22,6 +22,7 @@ import {
   workspaceCreationAllowed,
   type AuditActor,
   type MailPort,
+  type OwnedWorkspaceEntitlements,
   type SessionCookieSpec,
   type WorkspaceStore,
 } from "@slugbase/core";
@@ -58,7 +59,11 @@ import { acceptedVersions, entityTagOf } from "./if-match.ts";
 // for the account of that transaction through `sys_create_workspace`, never for one the request names (the
 // body is a closed object with a name and nothing else). The workspace, its owner membership and settings,
 // the `workspace.created` event job and the audit event are one transaction, so a failure of any of them
-// leaves none. The operations declare no token scope, so an API token is refused before the handler runs,
+// leaves none. The account-scoped entitlement `workspaces.ownMax` caps the workspaces the account owns (doc 01
+// section 7.5, doc 10 T11): the handler reads it from the composition's entitlement source and the database counts
+// the owned workspaces and inserts under the lock of the account's row, so two creations at the limit minus one
+// make one; at the limit the answer is `422 workspace_limit_reached` with `limit`, `used` and `upgradeAvailable`,
+// and nothing is written. The list reports `canCreate: false` there so the UI offers the upgrade instead of an error. The operations declare no token scope, so an API token is refused before the handler runs,
 // and neither changes the session's active workspace.
 //
 // PUT /api/v1/session/active-workspace moves the session to a workspace the account is a member of through
@@ -103,6 +108,7 @@ const UNAUTHENTICATED = "Authentication is required.";
 const NOT_ALLOWED = "This deployment does not let accounts create workspaces.";
 const NO_SUCH_WORKSPACE = "There is no such workspace.";
 const UNVERIFIED = "Verify your email address before you create a workspace.";
+const AT_LIMIT = "Your plan allows no more workspaces owned by one account.";
 
 const NO_WORKSPACE = "No such resource.";
 const DELETION_REFUSED = "The workspace cannot be deleted while its subscription is active; cancel the subscription first.";
@@ -123,6 +129,8 @@ export interface WorkspaceRoutesOptions {
   readonly cookie: SessionCookieSpec;
   /** The mail port of the composition; the recipient of an ownership transfer is mailed only when it can send. */
   readonly mail: Pick<MailPort, "available">;
+  /** The account-scoped `workspaces.ownMax` of the entitlement source, and whether a better plan exists for the account's workspaces. */
+  readonly ownedWorkspaces: OwnedWorkspaceEntitlements;
 }
 
 function sessionOf(context: ChainContext): { readonly sessionId: string; readonly accountId: string } {
@@ -155,11 +163,11 @@ function actorOf(context: ChainContext, displayName: string): Extract<AuditActor
 function storeOf(tx: TenantTx): WorkspaceStore {
   const repository = workspaceRepository(tx);
   return {
-    create({ accountId, workspaceId, name, events }) {
+    create({ accountId, workspaceId, name, ownedMax, events }) {
       if (accountId.toLowerCase() !== tx.accountId) {
         throw new Error("a workspace is created for the account of the transaction only");
       }
-      return repository.create({ id: workspaceId, name, jobs: events.map((event) => queueDomainEvent(event.eventId, event.name, event.payload)) });
+      return repository.create({ id: workspaceId, name, ownedMax: ownedMax === "unlimited" ? null : ownedMax, jobs: events.map((event) => queueDomainEvent(event.eventId, event.name, event.payload)) });
     },
   };
 }
@@ -169,10 +177,11 @@ function workspaceBody(workspace: WorkspaceDetail): z.input<typeof WorkspaceSche
   return { id, name, role, memberCount, createdAt: createdAt.toISOString(), version };
 }
 
-export function workspaceRoutes({ withTenant, creationDefault, cookie, mail }: WorkspaceRoutesOptions): RouteBinding[] {
+export function workspaceRoutes({ withTenant, creationDefault, cookie, mail, ownedWorkspaces }: WorkspaceRoutesOptions): RouteBinding[] {
   return [
     route(listWorkspaces).handle(async (_request, context) => {
       const accountId = accountOf(context);
+      const ownedMax = await ownedWorkspaces.limit(accountId, context.req.raw);
       const { workspaces, profile, creationAllowed } = await withTenant({ accountId, requestId: requestIdOf(context) }, async (tx) => ({
         workspaces: await workspaceRepository(tx).list(),
         profile: await accountProfileRepository(tx).profile(),
@@ -185,7 +194,12 @@ export function workspaceRoutes({ withTenant, creationDefault, cookie, mail }: W
         status: 200,
         body: {
           items: workspaces.map(({ id, name, role, memberCount }) => ({ id, name, role, memberCount })),
-          canCreate: canCreateWorkspace({ creationAllowed, emailVerified: profile.emailVerified }),
+          canCreate: canCreateWorkspace({
+            creationAllowed,
+            emailVerified: profile.emailVerified,
+            owned: workspaces.filter((workspace) => workspace.role === "owner").length,
+            ownedMax,
+          }),
         },
       };
     }),
@@ -193,16 +207,22 @@ export function workspaceRoutes({ withTenant, creationDefault, cookie, mail }: W
     route(createWorkspaceOperation).handle(async ({ body }, context) => {
       const accountId = accountOf(context);
       const ipPrefix = networkPrefixOf(context.get("clientIp")) ?? null;
+      const ownedMax = await ownedWorkspaces.limit(accountId, context.req.raw);
       const outcome = await withTenant({ accountId, requestId: requestIdOf(context) }, async (tx) => {
         const profile = await accountProfileRepository(tx).profile();
         if (profile === undefined) {
           return { kind: "unavailable" } as const;
         }
         const creationAllowed = workspaceCreationAllowed(await instanceRepository(tx).settings(), creationDefault);
-        return createWorkspace(
+        const created = await createWorkspace(
           { store: storeOf(tx), audit: createAuditWriter({ store: auditEventRepository(tx), newId: uuidv7 }), newId: uuidv7 },
-          { accountId, displayName: profile.displayName, emailVerified: profile.emailVerified, creationAllowed, ipPrefix, name: body.name },
+          { accountId, displayName: profile.displayName, emailVerified: profile.emailVerified, creationAllowed, ipPrefix, name: body.name, ownedMax },
         );
+        if (created.kind !== "limit_reached") {
+          return created;
+        }
+        const owning = (await workspaceRepository(tx).list()).filter((workspace) => workspace.role === "owner").map((workspace) => workspace.id);
+        return { ...created, owning };
       });
       switch (outcome.kind) {
         case "created":
@@ -211,6 +231,10 @@ export function workspaceRoutes({ withTenant, creationDefault, cookie, mail }: W
           throw new ProblemError("forbidden", NOT_ALLOWED);
         case "unverified":
           throw new ProblemError("email_unverified", UNVERIFIED);
+        case "limit_reached":
+          throw new ProblemError("workspace_limit_reached", AT_LIMIT, {
+            members: { limit: outcome.limit, used: outcome.used, upgradeAvailable: await ownedWorkspaces.upgradeAvailable(accountId, outcome.owning, context.req.raw) },
+          });
         case "unavailable":
           throw new ProblemError("unauthenticated", UNAUTHENTICATED);
       }

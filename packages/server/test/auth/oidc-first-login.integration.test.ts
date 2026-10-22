@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
-import type { SecretBoxPort } from "@slugbase/core";
-import { FakeIdentity, type FakeIdentityGrant } from "@slugbase/testing";
+import type { EntitlementSource, SecretBoxPort } from "@slugbase/core";
+import { FakeIdentity, LimitedEntitlementSource, type FakeIdentityGrant } from "@slugbase/testing";
 import { useTestDatabase } from "@slugbase/testing/db";
 import type { AuthStore } from "@slugbase/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -70,7 +70,7 @@ function provider(keys: Record<string, string> = {}): Record<string, string> {
 function serve(
   env: Record<string, string> = provider(),
   modules: readonly ServerModule[] = [],
-  options: { readonly fake?: FakeIdentity; readonly secretBox?: SecretBoxPort } = {},
+  options: { readonly fake?: FakeIdentity; readonly secretBox?: SecretBoxPort; readonly entitlements?: EntitlementSource } = {},
 ): World {
   const config = serverConfig({
     NODE_ENV: "test",
@@ -87,6 +87,7 @@ function serve(
       rateLimit: memoryRateLimiter(createRateLimitRegistry(config)),
       tenantResolver: createAccountOnlyTenantResolver(),
       secretBox: options.secretBox ?? testSecretBox(testKey("oidc-1")),
+      ...(options.entitlements === undefined ? {} : { entitlements: options.entitlements }),
       identity: { available: true, listProviders: () => fake.listProviders(), begin: (request) => fake.begin(request), complete: (request) => fake.complete(request) },
     },
     modules,
@@ -453,6 +454,20 @@ describe("a first login that creates an account", () => {
     expectFailed(await login(world, { subject: "unverified-subject", email: "newcomer@example.test", emailVerified: false }));
 
     expect(await accountRows()).toEqual([]);
+  });
+
+  it("creates the account and signs it in without a personal workspace when the account is at its workspaces.ownMax", async () => {
+    const world = serve(provider({ OIDC_IDP_AUTO_CREATE: "true", PUBLIC_REGISTRATION: "true" }), [], { entitlements: new LimitedEntitlementSource().grant("workspaces.ownMax", 0) });
+
+    const response = await login(world, { subject: "limited-subject", email: "limited@example.test", emailVerified: true, displayName: "Ada Lovelace" });
+
+    expect(response.headers.get("location")).toBe("/go/docs");
+    expect(issuedToken(response)).toBeDefined();
+    const accounts = await accountRows();
+    expect(accounts).toHaveLength(1);
+    expect(await workspaceCountOf(accounts[0]?.id ?? "")).toBe(0);
+    expect(await workspaceAudit()).toEqual([]);
+    expect(await eventsQueued()).toEqual([{ accountId: accounts[0]?.id, path: "oidc" }]);
   });
 
   it("creates a verified account without a password and signs it in, with a personal workspace and the account.created event when public registration is on", async () => {

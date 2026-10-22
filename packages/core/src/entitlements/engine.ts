@@ -278,6 +278,38 @@ export function createEntitlementUpgradeCheck(service: EntitlementService): Enti
   };
 }
 
+/**
+ * What creating a workspace asks of the account-scoped entitlement `workspaces.ownMax` (doc 01 section 7.5, doc 10
+ * T11): the ceiling itself, which a flag check cannot say, and whether a better plan exists for the account's
+ * workspaces. A failing source rejects, so a creation is refused with an error and never granted without a ceiling.
+ */
+export interface OwnedWorkspaceEntitlements {
+  /** The account's `workspaces.ownMax`, asked of the source for the acting account on every request that needs it. */
+  limit(accountId: string, request: object): Promise<EntitlementLimit>;
+  /**
+   * Whether the plan behind any of the workspaces the account owns has a better one to offer. False for an account
+   * that owns none and for a workspace that cannot be seen.
+   */
+  upgradeAvailable(accountId: string, ownedWorkspaceIds: readonly string[], request: object): Promise<boolean>;
+}
+
+export function createOwnedWorkspaceEntitlements(service: EntitlementService): OwnedWorkspaceEntitlements {
+  return {
+    async limit(accountId, request) {
+      return (await service.forRequest(request, accountId).forAccount()).values["workspaces.ownMax"];
+    },
+    async upgradeAvailable(accountId, ownedWorkspaceIds, request) {
+      const entitlements = service.forRequest(request, accountId);
+      for (const workspaceId of ownedWorkspaceIds) {
+        if ((await entitlements.forWorkspace(workspaceId))?.upgradeAvailable === true) {
+          return true;
+        }
+      }
+      return false;
+    },
+  };
+}
+
 function isHeld(value: unknown): boolean {
   return value === true || value === "unlimited" || (typeof value === "number" && value > 0);
 }

@@ -2112,7 +2112,7 @@ export interface components {
             version: number;
         };
         WorkspaceList: {
-            /** @description Whether the account can create a workspace: the deployment lets accounts create them and the account's email address is verified. The UI hides the action when it is false */
+            /** @description Whether the account can create a workspace: the deployment lets accounts create them, the account's email address is verified and the account owns fewer workspaces than its workspaces.ownMax entitlement allows. The UI hides the action, or shows the upgrade path in its place, when it is false */
             canCreate: boolean;
             /** @description The workspaces the account is a member of, without one being deleted, the most recently active first */
             items: components["schemas"]["WorkspaceSummary"][];
@@ -7717,7 +7717,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation (a name that is blank or outside 1 to 64 characters, or a field the operation does not declare) */
+            /** @description The body did not pass validation (a name that is blank or outside 1 to 64 characters, or a field the operation does not declare), or the account already owns as many workspaces as its workspaces.ownMax entitlement allows (workspace_limit_reached; the problem carries limit, used and upgradeAvailable). Nothing is written */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -7737,7 +7737,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The service is temporarily unavailable */
+            /** @description The service is temporarily unavailable, or the entitlement source could not say how many workspaces the account may own */
             503: {
                 headers: {
                     [name: string]: unknown;

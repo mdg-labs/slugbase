@@ -10,7 +10,9 @@ import { seedMember, seedWorkspace, workspaceChecksum } from "./support/workspac
 // 10.4, doc 10 T1). The failure scenarios: a workspace made for an account other than the one the transaction
 // acts for (which would get round the limit on the workspaces an account owns), a workspace that exists
 // without its owner, its settings or the job that announces it, a list or a count that reaches a workspace
-// the account is not a member of, and a member count that names a member.
+// the account is not a member of, and a member count that names a member. The ceiling `workspaces.ownMax` (doc
+// 10 T11) is judged where the workspace is inserted, under the lock of the account's row: a second creation at the
+// ceiling, a pair that runs in parallel at the ceiling minus one, and the personal workspace of an account at it.
 
 const HOOK_TIMEOUT_MS = 300_000;
 const QUEUE = "event.workspace.created";
@@ -58,7 +60,7 @@ function accountLevel<T>(accountId: string, work: Parameters<typeof db.tenant.wi
 }
 
 function newWorkspace(overrides: Partial<NewWorkspace> = {}): NewWorkspace {
-  return { id: freshId(), name: "Research", jobs: [], ...overrides };
+  return { id: freshId(), name: "Research", ownedMax: null, jobs: [], ...overrides };
 }
 
 function jobFor(workspaceId: string, accountId: string, queue = QUEUE) {
@@ -90,7 +92,7 @@ describe("create", () => {
     const owner = await account();
     const workspace = newWorkspace({ name: "Ada's research" });
 
-    expect(await accountLevel(owner, (tx) => workspaceRepository(tx).create(workspace))).toBe(true);
+    expect(await accountLevel(owner, (tx) => workspaceRepository(tx).create(workspace))).toEqual({ kind: "created" });
 
     expect(await stored(workspace.id)).toEqual({
       workspace: { id: workspace.id, name: "Ada's research", created_by: owner },
@@ -125,7 +127,7 @@ describe("create", () => {
     const owner = await account({ disabled: true });
     const workspace = newWorkspace();
 
-    expect(await accountLevel(owner, (tx) => workspaceRepository(tx).create({ ...workspace, jobs: [jobFor(workspace.id, owner)] }))).toBe(false);
+    expect(await accountLevel(owner, (tx) => workspaceRepository(tx).create({ ...workspace, jobs: [jobFor(workspace.id, owner)] }))).toEqual({ kind: "unavailable" });
 
     expect(await stored(workspace.id)).toEqual({ workspace: undefined, members: [], settings: 0 });
     expect(await db.app`SELECT id FROM pgboss.job`).toEqual([]);
@@ -176,6 +178,193 @@ describe("sys_create_workspace named for another account", () => {
     const owner = await account();
 
     await expect(db.app`SELECT sys_create_workspace(${owner}::uuid, ${freshId()}::uuid, ${"x".repeat(65)}::text)`).rejects.toMatchObject({ code: "23514" });
+  });
+});
+
+const ceiling = (ownedMax: number | null) => ({ ownedMax });
+
+async function createdBy(owner: string, overrides: Partial<NewWorkspace> = {}) {
+  const workspace = newWorkspace(overrides);
+  const result = await accountLevel(owner, (tx) => workspaceRepository(tx).create(workspace));
+  return { workspace, result };
+}
+
+describe("the ceiling on the workspaces an account owns", () => {
+  it("makes the workspace of an account below its ceiling", async () => {
+    const owner = await account();
+    await createdBy(owner, ceiling(2));
+
+    const { workspace, result } = await createdBy(owner, ceiling(2));
+
+    expect(result).toEqual({ kind: "created" });
+    expect((await stored(workspace.id)).members).toEqual([{ account_id: owner, role: "owner" }]);
+  });
+
+  it("refuses the creation at the ceiling with the number of workspaces owned, and writes and queues nothing", async () => {
+    const owner = await account();
+    await createdBy(owner, ceiling(1));
+    const second = newWorkspace({ ...ceiling(1), jobs: [] });
+    const withJob = { ...second, jobs: [jobFor(second.id, owner)] };
+
+    const result = await accountLevel(owner, (tx) => workspaceRepository(tx).create(withJob));
+
+    expect(result).toEqual({ kind: "limit_reached", used: 1 });
+    expect(await stored(second.id)).toEqual({ workspace: undefined, members: [], settings: 0 });
+    expect(await db.app`SELECT id FROM pgboss.job`).toEqual([]);
+    expect(await ownedBy(owner)).toBe(1);
+  });
+
+  it("reports as the usage the count of workspaces the refusal was judged against, not the ceiling", async () => {
+    const owner = await account();
+    await createdBy(owner, ceiling(null));
+    await createdBy(owner, ceiling(null));
+    await createdBy(owner, ceiling(null));
+
+    const { result } = await createdBy(owner, ceiling(2));
+
+    expect(result).toEqual({ kind: "limit_reached", used: 3 });
+  });
+
+  it("refuses every creation under a ceiling of zero", async () => {
+    const owner = await account();
+
+    const { workspace, result } = await createdBy(owner, ceiling(0));
+
+    expect(result).toEqual({ kind: "limit_reached", used: 0 });
+    expect(await stored(workspace.id)).toEqual({ workspace: undefined, members: [], settings: 0 });
+  });
+
+  it("counts the workspaces the account owns and not those it only belongs to, or those being deleted", async () => {
+    const owner = await account();
+    const other = await account();
+    const joined = await seedWorkspace(db, { name: "Joined" });
+    const administered = await seedWorkspace(db, { name: "Administered" });
+    const going = await seedWorkspace(db, { name: "Going", deletingAt: new Date() });
+    await seedMember(db, { workspaceId: joined, accountId: owner, role: "member" });
+    await seedMember(db, { workspaceId: administered, accountId: owner, role: "admin" });
+    await seedMember(db, { workspaceId: going, accountId: owner, role: "owner" });
+    await seedMember(db, { workspaceId: joined, accountId: other, role: "owner" });
+
+    const { result } = await createdBy(owner, ceiling(1));
+
+    expect(result).toEqual({ kind: "created" });
+  });
+
+  it("does not count the workspaces of another account", async () => {
+    const busy = await account();
+    const owner = await account();
+    await createdBy(busy, ceiling(null));
+    await createdBy(busy, ceiling(null));
+
+    expect((await createdBy(owner, ceiling(1))).result).toEqual({ kind: "created" });
+  });
+
+  it("makes one workspace of two creations that run in parallel at the ceiling minus one", async () => {
+    const owner = await account();
+    const first = newWorkspace(ceiling(1));
+    const second = newWorkspace(ceiling(1));
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let firstInserted: () => void = () => undefined;
+    const inserted = new Promise<void>((resolve) => {
+      firstInserted = resolve;
+    });
+
+    // The first transaction has inserted and not committed when the second starts, so only the lock on the account's
+    // row keeps the second from counting the state before the first workspace.
+    const one = accountLevel(owner, async (tx) => {
+      const result = await workspaceRepository(tx).create(first);
+      firstInserted();
+      await held;
+      return result;
+    });
+    await inserted;
+    let settled = false;
+    const two = accountLevel(owner, (tx) => workspaceRepository(tx).create(second)).finally(() => {
+      settled = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(settled).toBe(false);
+    release();
+    const results = await Promise.all([one, two]);
+
+    expect(results).toEqual([{ kind: "created" }, { kind: "limit_reached", used: 1 }]);
+    expect(await ownedBy(owner)).toBe(1);
+    expect((await stored(second.id)).workspace).toBeUndefined();
+  });
+
+  it("counts a workspace the first transaction made when the second one starts after it commits", async () => {
+    const owner = await account();
+    const [one, two] = await Promise.all([createdBy(owner, ceiling(1)), createdBy(owner, ceiling(1))]);
+
+    expect([one.result.kind, two.result.kind].sort()).toEqual(["created", "limit_reached"]);
+    expect(await ownedBy(owner)).toBe(1);
+  });
+
+  it("refuses a negative ceiling", async () => {
+    const owner = await account();
+
+    await expect(createdBy(owner, ceiling(-1))).rejects.toMatchObject({ cause: { code: "22023" } });
+  });
+
+  it("creates nothing for the account it names when a transaction acts for another", async () => {
+    const caller = await account();
+    const victim = await account();
+    const id = freshId();
+
+    const rows = await db.tenant.withTenant({ accountId: caller, requestId: "workspaces-test" }, (tx) =>
+      tenantHandle(tx).execute<{ outcome: string }>(sql`SELECT outcome FROM public.sys_create_workspace_limited(${victim}::uuid, ${id}::uuid, 'Stolen'::text, NULL::integer)`),
+    );
+
+    expect(rows[0]?.outcome).toBe("unavailable");
+    expect(await stored(id)).toEqual({ workspace: undefined, members: [], settings: 0 });
+  });
+});
+
+describe("sys_create_personal_workspace_limited", () => {
+  const SUFFIX = "'s workspace";
+
+  function personal(accountId: string, ownedMax: number | null) {
+    const id = freshId();
+    return db.app<{ outcome: string }[]>`
+      SELECT sys_create_personal_workspace_limited(${accountId}::uuid, ${id}::uuid, ${SUFFIX}::text, ${ownedMax}::integer) AS outcome`.then((rows) => ({ id, outcome: rows[0]?.outcome }));
+  }
+
+  it("creates the workspace of an account that owns none and is below its ceiling, and names it after the account", async () => {
+    const owner = await account();
+
+    const { id, outcome } = await personal(owner, 1);
+
+    expect(outcome).toBe("created");
+    expect((await stored(id)).workspace?.name).toMatch(/'s workspace$/);
+  });
+
+  it("creates no workspace for an account whose ceiling allows none, and does not fail", async () => {
+    const owner = await account();
+
+    const { id, outcome } = await personal(owner, 0);
+
+    expect(outcome).toBe("limit_reached");
+    expect(await stored(id)).toEqual({ workspace: undefined, members: [], settings: 0 });
+    expect(await ownedBy(owner)).toBe(0);
+  });
+
+  it("answers exists for an account that owns a workspace already, whatever its ceiling", async () => {
+    const owner = await account();
+    await personal(owner, null);
+
+    expect((await personal(owner, 0)).outcome).toBe("exists");
+    expect((await personal(owner, null)).outcome).toBe("exists");
+    expect(await ownedBy(owner)).toBe(1);
+  });
+
+  it("answers unavailable for a disabled account and an account that does not exist", async () => {
+    const disabled = await account({ disabled: true });
+
+    expect((await personal(disabled, null)).outcome).toBe("unavailable");
+    expect((await personal(freshId(), null)).outcome).toBe("unavailable");
   });
 });
 

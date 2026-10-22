@@ -27,10 +27,10 @@ import {
   type SecretBoxPort,
   type SessionCookieSpec,
 } from "@slugbase/core";
-import type { AuthStore } from "@slugbase/db";
+import type { AuthStore, PersonalWorkspaceWriter } from "@slugbase/db";
 import { hkdfSync } from "node:crypto";
 import { readCookie, setSessionCookie } from "../../auth/cookie.ts";
-import { provisionWorkspaceIn } from "../../auth/personal-workspace.ts";
+import { provisionWorkspaceIn, type OwnedWorkspaceLimit } from "../../auth/personal-workspace.ts";
 import { assertRegistrationAllowed } from "../../auth/registration-gate.ts";
 import { hashSessionToken, newSessionToken } from "../../auth/session-token.ts";
 import type { TakeTokenRedeemLimit } from "../../auth/token-redeem-limit.ts";
@@ -107,6 +107,8 @@ export interface OidcRoutesOptions {
   readonly providers: readonly Pick<IdentityProviderConfig, "slug" | "autoCreate" | "allowedDomains">[];
   /** The settings in force for public registration: an account created for an identity gets a personal workspace when it is open. */
   readonly registration: RegistrationSettings;
+  /** The `workspaces.ownMax` of an account created for an identity, which decides whether its personal workspace is made. */
+  readonly ownedWorkspaceLimit: OwnedWorkspaceLimit;
   /** `APP_ORIGIN`: the callback address registered with the providers, and the scheme of the cookies. */
   readonly appOrigin: string;
   /** `SESSION_SECRET`: the pre-auth cookie is a keyed hash made with a key derived from it. */
@@ -204,6 +206,7 @@ export function oidcRoutes({
   secretBox,
   providers,
   registration,
+  ownedWorkspaceLimit,
   appOrigin,
   sessionSecret,
   sessionCookie,
@@ -228,12 +231,13 @@ export function oidcRoutes({
       return undefined;
     }
     const accountId = uuidv7();
+    const ownedMax = registration.publicRegistration ? await ownedWorkspaceLimit(accountId) : undefined;
     return {
       accountId,
       displayName: federatedDisplayName(claims.displayName, email),
       locale: registrationLocale(context.req.raw.headers.get("accept-language")),
       onCreated: [queueDomainEvent(uuidv7(), "account.created", { accountId, path: "oidc" })],
-      ...(registration.publicRegistration ? { afterCreated: provisionWorkspaceIn } : {}),
+      ...(ownedMax === undefined ? {} : { afterCreated: (id: string, writer: PersonalWorkspaceWriter) => provisionWorkspaceIn(id, writer, ownedMax) }),
     };
   };
 

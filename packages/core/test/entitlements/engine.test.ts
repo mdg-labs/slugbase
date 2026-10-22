@@ -6,6 +6,7 @@ import {
   createEntitlementCheck,
   createEntitlementService,
   createEntitlementUpgradeCheck,
+  createOwnedWorkspaceEntitlements,
   withEntitlementChange,
   type AccountEntitlementValues,
   type EntitlementSource,
@@ -396,5 +397,39 @@ describe("withEntitlementChange", () => {
 
   it("fails when the version cannot be raised, so the transaction holding the change rolls it back", async () => {
     await expect(withEntitlementChange({ bump: () => Promise.resolve(undefined) }, () => Promise.resolve(1))).rejects.toBeInstanceOf(EntitlementVersionError);
+  });
+});
+
+describe("the owned-workspace entitlements", () => {
+  it("answers the account's own ceiling, asked of the source for that account", async () => {
+    const world = rig();
+    world.accountValues.set(ACCOUNT, { "workspaces.ownMax": 1 });
+    const owned = createOwnedWorkspaceEntitlements(createEntitlementService(world));
+
+    expect(await owned.limit(ACCOUNT, {})).toBe(1);
+    expect(await owned.limit(OTHER_ACCOUNT, {})).toBe("unlimited");
+    expect(world.reads.accounts).toEqual([ACCOUNT, OTHER_ACCOUNT]);
+  });
+
+  it("lets a failing source reject, so the creation is refused with an error and never granted without a ceiling", async () => {
+    const world = rig();
+    const owned = createOwnedWorkspaceEntitlements(
+      createEntitlementService({ ...world, source: { ...world.source, forAccount: () => Promise.reject(new PortUnavailable("entitlements", "unavailable")) } }),
+    );
+
+    await expect(owned.limit(ACCOUNT, {})).rejects.toBeInstanceOf(PortUnavailable);
+  });
+
+  it("offers an upgrade when any workspace the account owns has a better plan, and not for an account that owns none", async () => {
+    const world = rig();
+    const source: EntitlementSource = {
+      ...world.source,
+      forWorkspace: (workspaceId) => Promise.resolve({ values: FULL, upgradeAvailable: workspaceId === B }),
+    };
+    const owned = createOwnedWorkspaceEntitlements(createEntitlementService({ ...world, source }));
+
+    expect(await owned.upgradeAvailable(ACCOUNT, [A], {})).toBe(false);
+    expect(await owned.upgradeAvailable(ACCOUNT, [A, B], {})).toBe(true);
+    expect(await owned.upgradeAvailable(ACCOUNT, [], {})).toBe(false);
   });
 });
