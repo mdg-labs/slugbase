@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { workspaceRepository, type NewWorkspace } from "../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
+import { systemOperations } from "../src/system/registry.ts";
 import { tenantHandle } from "../src/tenant.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
 import { seedMember, seedWorkspace, workspaceChecksum } from "./support/workspace-fixture.ts";
@@ -43,7 +44,7 @@ beforeEach(async () => {
 });
 
 let emailNumber = 0;
-async function account(options: { disabled?: boolean } = {}): Promise<string> {
+async function account(options: { disabled?: boolean; displayName?: string } = {}): Promise<string> {
   emailNumber += 1;
   const id = freshId();
   await seedAccount(db, {
@@ -52,6 +53,13 @@ async function account(options: { disabled?: boolean } = {}): Promise<string> {
     passwordHash: "$argon2id$stub",
     disabledAt: options.disabled === true ? new Date() : null,
   });
+  if (options.displayName !== undefined) {
+    const displayName = options.displayName;
+    await db.owner.begin(async (tx) => {
+      await tx`SELECT set_config('app.account_id', ${id}, true)`;
+      await tx`UPDATE accounts SET display_name = ${displayName} WHERE id = ${id}`;
+    });
+  }
   return id;
 }
 
@@ -365,6 +373,60 @@ describe("sys_create_personal_workspace_limited", () => {
 
     expect((await personal(disabled, null)).outcome).toBe("unavailable");
     expect((await personal(freshId(), null)).outcome).toBe("unavailable");
+    expect(await ownedBy(disabled)).toBe(0);
+  });
+
+  it("creates one workspace, with the owner membership and the settings row, when called at once", async () => {
+    const owner = await account();
+
+    const results = await Promise.all(Array.from({ length: 6 }, () => personal(owner, null)));
+
+    expect(results.filter(({ outcome }) => outcome === "created")).toHaveLength(1);
+    expect(results.filter(({ outcome }) => outcome === "exists")).toHaveLength(5);
+    expect(await ownedBy(owner)).toBe(1);
+    const created = results.find(({ outcome }) => outcome === "created");
+    expect(await stored(created?.id ?? "")).toMatchObject({ members: [{ account_id: owner, role: "owner" }], settings: 1 });
+  });
+
+  it("cuts a long display name so the whole name is 64 characters at most", async () => {
+    const owner = await account({ displayName: "Ö".repeat(100) });
+
+    const { id, outcome } = await personal(owner, null);
+
+    expect(outcome).toBe("created");
+    const name = (await stored(id)).workspace?.name ?? "";
+    expect(Array.from(name)).toHaveLength(64);
+    expect(name.endsWith(SUFFIX)).toBe(true);
+  });
+
+  it("refuses a missing argument, a suffix that is empty or too long, and a negative ceiling", async () => {
+    const owner = await account();
+
+    for (const suffix of ["", "x".repeat(33)]) {
+      await expect(db.app`SELECT sys_create_personal_workspace_limited(${owner}::uuid, ${freshId()}::uuid, ${suffix}::text, NULL::integer)`).rejects.toMatchObject({ code: "22023" });
+    }
+    await expect(db.app`SELECT sys_create_personal_workspace_limited(${owner}::uuid, NULL, ${SUFFIX}::text, NULL::integer)`).rejects.toMatchObject({ code: "22023" });
+    await expect(db.app`SELECT sys_create_personal_workspace_limited(${owner}::uuid, ${freshId()}::uuid, ${SUFFIX}::text, -1::integer)`).rejects.toMatchObject({ code: "22023" });
+    expect(await ownedBy(owner)).toBe(0);
+  });
+});
+
+describe("the unlimited creation functions after the contract step", () => {
+  it("leaves no sys_create_personal_workspace in the database or the registry, and the limited functions in both", async () => {
+    const functions = await db.owner<{ name: string }[]>`
+      SELECT p.proname AS name FROM pg_proc p
+      WHERE p.pronamespace = 'public'::regnamespace AND p.proname LIKE 'sys\_create\_%workspace%'
+      ORDER BY p.proname`;
+    expect(functions.map(({ name }) => name)).toEqual(["sys_create_personal_workspace_limited", "sys_create_workspace", "sys_create_workspace_limited"]);
+    expect(systemOperations).not.toContain("sys_create_personal_workspace");
+    expect(systemOperations).toEqual(expect.arrayContaining(["sys_create_workspace", "sys_create_workspace_limited", "sys_create_personal_workspace_limited"]));
+  });
+
+  it("refuses the application role a call of sys_create_personal_workspace", async () => {
+    const owner = await account();
+
+    await expect(db.app`SELECT sys_create_personal_workspace(${owner}::uuid, ${freshId()}::uuid, 'x'::text)`).rejects.toMatchObject({ code: "42883" });
+    expect(await ownedBy(owner)).toBe(0);
   });
 });
 

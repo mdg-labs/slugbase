@@ -1,4 +1,4 @@
 {
-  "sha256": "8022cd211ac603a19bef4cb378b4946f2baafcb1f95705168db285c7adc8d68a",
-  "migration": "20261022121616_drop_oidc_state_functions"
+  "sha256": "321faa8b496055e9c2a1122684c6023f2ca4762b5ccd591a42779f72a01fa789",
+  "migration": "20261022133245_drop_personal_workspace_function"
 }

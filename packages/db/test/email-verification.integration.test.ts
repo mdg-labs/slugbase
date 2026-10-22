@@ -254,7 +254,7 @@ async function queued(): Promise<{ name: string; data: Record<string, unknown> }
 describe("the system operations", () => {
   it("are registered", () => {
     expect(systemOperations).toContain("sys_email_verify");
-    expect(systemOperations).toContain("sys_create_personal_workspace");
+    expect(systemOperations).not.toContain("sys_create_personal_workspace");
     expect(systemOperations).toContain("sys_account_email_verified");
   });
 });
@@ -648,62 +648,6 @@ describe("verifyEmail", () => {
 
   it("is not reachable by the application role through the tables it reads", async () => {
     await expect(db.app`SELECT 1 FROM credential_tokens`).rejects.toMatchObject({ code: "42501" });
-  });
-});
-
-describe("sys_create_personal_workspace", () => {
-  async function create(accountId: string, workspaceId = freshId(), suffix = SUFFIX): Promise<string> {
-    const rows = await db.app`SELECT sys_create_personal_workspace(${accountId}::uuid, ${workspaceId}::uuid, ${suffix}::text) AS outcome`;
-    return String(rows[0]?.["outcome"]);
-  }
-
-  it("creates the workspace through sys_create_workspace, with the owner membership and the settings row, once", async () => {
-    const owner = await account({ displayName: "Grace" });
-
-    expect(await create(owner)).toBe("created");
-    expect(await create(owner)).toBe("exists");
-
-    expect(await workspacesOf(owner)).toMatchObject([{ name: "Grace's workspace", created_by: owner, role: "owner" }]);
-    const settings = await asSystem(db, (tx) => tx`SELECT count(*)::int AS n FROM workspace_settings`);
-    expect(settings[0]?.["n"]).toBe(1);
-  });
-
-  it("creates one workspace when called at once", async () => {
-    const owner = await account();
-
-    const outcomes = await Promise.all(Array.from({ length: PARALLEL_CALLS }, () => create(owner)));
-
-    expect(outcomes.filter((outcome) => outcome === "created")).toHaveLength(1);
-    expect(outcomes.filter((outcome) => outcome === "exists")).toHaveLength(PARALLEL_CALLS - 1);
-    expect(await workspacesOf(owner)).toHaveLength(1);
-  });
-
-  it("cuts a long display name so the whole name is 64 characters at most", async () => {
-    const owner = await account({ displayName: "Ö".repeat(100) });
-
-    expect(await create(owner)).toBe("created");
-
-    const [workspace] = await workspacesOf(owner);
-    expect(Array.from(workspace?.name ?? "")).toHaveLength(64);
-    expect(workspace?.name.endsWith(SUFFIX)).toBe(true);
-  });
-
-  it("answers unavailable, writing nothing, for an unknown or a disabled account", async () => {
-    const disabled = await account({ disabled: true });
-
-    expect(await create(freshId())).toBe("unavailable");
-    expect(await create(disabled)).toBe("unavailable");
-
-    expect(await workspacesOf(disabled)).toEqual([]);
-  });
-
-  it("refuses a missing argument and a suffix that is empty or too long", async () => {
-    const owner = await account();
-
-    for (const suffix of ["", "x".repeat(33)]) {
-      await expect(create(owner, freshId(), suffix)).rejects.toMatchObject({ code: "22023" });
-    }
-    await expect(db.app`SELECT sys_create_personal_workspace(${owner}::uuid, NULL, ${SUFFIX}::text)`).rejects.toMatchObject({ code: "22023" });
   });
 });
 
