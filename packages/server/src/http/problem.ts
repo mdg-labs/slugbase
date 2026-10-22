@@ -76,6 +76,7 @@ const MAPPED_DETAILS = {
   unavailable: "The service is temporarily unavailable.",
   mail_unavailable: "Email delivery is not available on this instance.",
   ai_unavailable: "AI suggestions are not available on this instance.",
+  billing_unavailable: "Billing is not available on this instance.",
 } as const satisfies Partial<Record<ProblemCode, string>>;
 
 /** The `detail` of a `validation_failed` problem; the fields are in `errors[]`. */

@@ -8,7 +8,7 @@ export interface Port {
 }
 
 /** The problem codes an unavailable port answers with (doc 04 section 3.2). */
-export type PortUnavailableCode = Extract<ProblemCode, "unavailable" | "mail_unavailable" | "ai_unavailable">;
+export type PortUnavailableCode = Extract<ProblemCode, "unavailable" | "mail_unavailable" | "ai_unavailable" | "billing_unavailable">;
 
 /**
  * Thrown by a port with no adapter behind it when it is used. The problem

@@ -138,6 +138,8 @@ export interface Adapters {
     // (undocumented)
     readonly analytics: AnalyticsPort;
     // (undocumented)
+    readonly billing: BillingPort;
+    // (undocumented)
     readonly challenge: ChallengePort;
     // (undocumented)
     readonly clientErrorReport: ClientErrorReportPort;
@@ -528,6 +530,128 @@ export function base32Encode(bytes: Uint8Array): string;
 
 // @public
 export function bearerApiToken(authorization: string): string | undefined;
+
+// @public
+export interface BillingCheckout {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly redirectUrl: string;
+}
+
+// @public (undocumented)
+export interface BillingCheckoutRequest {
+    // (undocumented)
+    readonly planCode: string;
+    // (undocumented)
+    readonly quantity?: number;
+}
+
+// @public (undocumented)
+export interface BillingDocument {
+    // (undocumented)
+    readonly id: string;
+    readonly issuedAt: string;
+    // (undocumented)
+    readonly kind: BillingDocumentKind;
+    // (undocumented)
+    readonly number: string;
+    // (undocumented)
+    readonly total: BillingMoney;
+}
+
+// @public (undocumented)
+export type BillingDocumentKind = "invoice" | "credit_note" | "cancellation_invoice";
+
+// @public (undocumented)
+export interface BillingDocumentPdf {
+    // (undocumented)
+    readonly content: Uint8Array;
+    // (undocumented)
+    readonly filename: string;
+}
+
+// @public
+export interface BillingEventDelivery {
+    // (undocumented)
+    readonly body: string;
+    // (undocumented)
+    readonly signature: string;
+    readonly timestamp: string;
+}
+
+// @public (undocumented)
+export interface BillingEventOutcome {
+    readonly duplicate: boolean;
+    // (undocumented)
+    readonly eventId: string;
+}
+
+// @public (undocumented)
+export type BillingInterval = "month" | "year";
+
+// @public
+export interface BillingMoney {
+    // (undocumented)
+    readonly amountMinor: number;
+    // (undocumented)
+    readonly currency: string;
+}
+
+// @public
+export interface BillingPage<T> {
+    // (undocumented)
+    readonly items: readonly T[];
+    // (undocumented)
+    readonly nextCursor: string | null;
+}
+
+// @public
+export type BillingPlanState = "none" | "active" | "cancelling" | "past_due";
+
+// @public
+export interface BillingPort extends Port {
+    // (undocumented)
+    cancel(scope: BillingScope): Promise<BillingSubscription>;
+    // (undocumented)
+    changePlan(scope: BillingScope, planCode: string): Promise<BillingSubscription>;
+    // (undocumented)
+    changeQuantity(scope: BillingScope, quantity: number): Promise<BillingSubscription>;
+    // (undocumented)
+    documentPdf(scope: BillingScope, id: string): Promise<BillingDocumentPdf>;
+    // (undocumented)
+    listDocuments(scope: BillingScope, cursor?: string): Promise<BillingPage<BillingDocument>>;
+    // (undocumented)
+    planState(scope: BillingScope): Promise<BillingPlanState>;
+    // (undocumented)
+    receiveEvent(delivery: BillingEventDelivery): Promise<BillingEventOutcome>;
+    // (undocumented)
+    startCheckout(scope: BillingScope, request: BillingCheckoutRequest): Promise<BillingCheckout>;
+}
+
+// @public
+export interface BillingScope {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public
+export interface BillingSubscription {
+    readonly cancelAt: string | null;
+    // (undocumented)
+    readonly interval: BillingInterval;
+    // (undocumented)
+    readonly periodEnd: string;
+    readonly periodStart: string;
+    // (undocumented)
+    readonly planCode: string;
+    // (undocumented)
+    readonly quantity: number;
+    // (undocumented)
+    readonly state: Exclude<BillingPlanState, "none">;
+}
 
 // @public
 export function bindOidcState(key: Uint8Array, state: string): string;
@@ -2480,7 +2604,7 @@ export class PortUnavailable extends Error {
 }
 
 // @public
-export type PortUnavailableCode = Extract<ProblemCode, "unavailable" | "mail_unavailable" | "ai_unavailable">;
+export type PortUnavailableCode = Extract<ProblemCode, "unavailable" | "mail_unavailable" | "ai_unavailable" | "billing_unavailable">;
 
 // @public
 export function prepareAuditRecord<Name extends AuditAction>(event: AuditEventInput<Name>, newId: () => string): AuditRecord;

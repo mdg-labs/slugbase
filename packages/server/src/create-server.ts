@@ -270,6 +270,7 @@ const ADAPTER_PORTS: Record<keyof Adapters, true> = {
   ai: true,
   identity: true,
   analytics: true,
+  billing: true,
   errors: true,
   clientErrorReport: true,
   challenge: true,

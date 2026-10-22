@@ -73,6 +73,62 @@ describe("createServer", () => {
     expect(error.message).toContain("mail, egress, rateLimit");
   });
 
+  describe("billing", () => {
+    const SCOPE = { workspaceId: "w-1", accountId: "a-1" };
+
+    function billingModule(use: (billing: Adapters["billing"]) => Promise<unknown>): ServerModule {
+      return {
+        name: "billing-probe",
+        register: (context) => ({
+          routes: [
+            {
+              operation: operation("get", "/api/v1/billing-probe", "billingProbe"),
+              handler: async () => Response.json({ result: await use(context.adapters.billing) }),
+            },
+          ],
+        }),
+      };
+    }
+
+    it("answers a billing operation of the CE default as 503 billing_unavailable", async () => {
+      const { server } = compose([billingModule((billing) => billing.startCheckout(SCOPE, { planCode: "p" }))]);
+      const response = await server.fetch(new Request("http://localhost/api/v1/billing-probe"));
+      expect(response.status).toBe(503);
+      expect(await response.json()).toMatchObject({ status: 503, code: "billing_unavailable", detail: "Billing is not available on this instance." });
+    });
+
+    it("answers the plan state of the CE default as none, so no decision waits on billing", async () => {
+      const { server } = compose([billingModule((billing) => billing.planState(SCOPE))]);
+      const response = await server.fetch(new Request("http://localhost/api/v1/billing-probe"));
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ result: "none" });
+    });
+
+    it("hands modules the billing adapter of the composition", async () => {
+      const ports = adapters();
+      const seen: unknown[] = [];
+      const billing: Adapters["billing"] = {
+        ...ports.billing,
+        available: true,
+        planState: (scope) => {
+          seen.push(scope);
+          return Promise.resolve("active");
+        },
+      };
+      const { server } = compose([billingModule((given) => given.planState(SCOPE))], { adapters: { ...ports, billing } });
+      const response = await server.fetch(new Request("http://localhost/api/v1/billing-probe"));
+      expect(await response.json()).toEqual({ result: "active" });
+      expect(seen).toEqual([SCOPE]);
+    });
+
+    it("names the billing port when the adapter map lacks it", () => {
+      const incomplete = { ...unconfigured(), billing: undefined } as unknown as Adapters;
+      const error = failure(() => compose([], { adapters: incomplete }));
+      expect(error.code).toBe("missing_adapter");
+      expect(error.message).toContain("billing");
+    });
+  });
+
   it("serves the routes a module registers through the chain", async () => {
     const { server } = compose([pingModule()]);
     const response = await server.fetch(new Request("http://localhost/api/v1/ping"));

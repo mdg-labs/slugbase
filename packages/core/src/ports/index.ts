@@ -1,6 +1,22 @@
 export type { Adapters } from "./adapters.ts";
 export type { AiSuggestPort, AiSuggestRequest, AiSuggestion } from "./ai-suggest.ts";
 export type { AnalyticsEvent, AnalyticsPort } from "./analytics.ts";
+export type {
+  BillingCheckout,
+  BillingCheckoutRequest,
+  BillingDocument,
+  BillingDocumentKind,
+  BillingDocumentPdf,
+  BillingEventDelivery,
+  BillingEventOutcome,
+  BillingInterval,
+  BillingMoney,
+  BillingPage,
+  BillingPlanState,
+  BillingPort,
+  BillingScope,
+  BillingSubscription,
+} from "./billing.ts";
 export type { ChallengePort, ChallengeVerdict } from "./challenge.ts";
 export type { ClientErrorReportPort, ClientErrorReportRequest } from "./client-error-report.ts";
 export type { EntitlementSource, WorkspaceEntitlementGrant } from "./entitlements.ts";

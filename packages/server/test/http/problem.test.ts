@@ -131,7 +131,7 @@ describe("mapError", () => {
     expect(JSON.stringify(problem)).not.toContain("secret-value-91");
   });
 
-  it.each(["unavailable", "mail_unavailable", "ai_unavailable"] as const)(
+  it.each(["unavailable", "mail_unavailable", "ai_unavailable", "billing_unavailable"] as const)(
     "maps a PortUnavailable carrying %s to a 503 with that code and no port name",
     (code) => {
       const problem = mapError(new PortUnavailable("secretBox", code));
