@@ -61,7 +61,7 @@ import type { RequestTenant } from "../../http/tenant.ts";
 import { networkPrefixOf } from "../../http/trusted-proxy.ts";
 import { queueInvitationMail } from "../../worker/jobs/invitation-mail.ts";
 import { route } from "../register.ts";
-import { InvitationLearned, type LearnedInvitation } from "./learned.ts";
+import { InvitationLearned, needsInviteEntitlement, type LearnedInvitation } from "./learned.ts";
 
 // The invitation operations of doc 04 section 10.5 ( doc 02 section 3.4, doc 10 T1, T4 and T19). It acts in the workspace
 // the request is bound to and names no other: the authorization stage lets an admin or owner of it through, and
@@ -103,18 +103,20 @@ import { InvitationLearned, type LearnedInvitation } from "./learned.ts";
 // carried is replaced. An address that has an account is 409 email_taken and nothing is written. Both forms count
 // against the `token_redeem` bucket of the client address.
 //
-// Both forms also need the workspace of the invitation to hold `members.invite` and a free seat (doc 01 sections 7.5 and
-// 13.1, doc 10 T11 and T19). The token names the workspace and the operation declares none, so the handler decides both,
-// after the token has proved to be a pending invitation's (a dead token is the same 410 whatever the plan) and before
-// anything is committed. Each form runs the acceptance once with no seat limit to learn the workspace and the invitation,
-// which it abandons by rolling the transaction back (the refusals that need no entitlement end there: another address, a
-// member already, an address that has an account). Then it asks the source whether the workspace holds `members.invite`,
-// reading the workspace as it is now since the invited account is no member to read the version of the row, and asks the
-// hook dispatcher for the seat limit: the workspace's `seats.max`, replaced by the seat-check hooks of the modules. A hook
-// that fails or does not answer in time refuses the acceptance with 503 and nothing is written. The acceptance that
-// writes is run only then, and carries the limit to `sys_invitation_accept` or `sys_invitation_accept_new_account`,
-// which count the members under the workspace's lock and answer `422 seat_limit_reached` at the limit, leaving the
-// invitation pending. Sending, resending and listing invitations count no seat.
+// Both forms also need the workspace of the invitation to hold `members.invite` and a free seat (doc 01 sections 7.5
+// and 13.1, doc 10 T11 and T19); the owner invitation an instance admin issues is exempt from `members.invite` and not
+// from the seat limit, since seating the first owner of a workspace is not inviting a member. The token names the
+// workspace and the operation declares none, so the handler decides both, after the token has proved to be a pending
+// invitation's (a dead token is the same 410 whatever the plan) and before anything is committed. Each form runs the
+// acceptance once with no seat limit to learn the workspace and the invitation, which it abandons by rolling the
+// transaction back (the refusals that need no entitlement end there: another address, a member already, an address that
+// has an account). Then it asks the source whether the workspace holds `members.invite`, reading the workspace as it is
+// now since the invited account is no member to read the version of the row, and asks the hook dispatcher for the seat
+// limit: the workspace's `seats.max`, replaced by the seat-check hooks of the modules. A hook that fails or does not
+// answer in time refuses the acceptance with 503 and nothing is written. The acceptance that writes is run only then,
+// and carries the limit to `sys_invitation_accept` or `sys_invitation_accept_new_account`, which count the members
+// under the workspace's lock and answer `422 seat_limit_reached` at the limit, leaving the invitation pending. Sending,
+// resending and listing invitations count no seat.
 
 const UNAUTHENTICATED = "Authentication is required.";
 const NO_WORKSPACE = "No such resource.";
@@ -153,7 +155,7 @@ export interface InvitationRoutesOptions {
   readonly passwordPolicy: PasswordPolicy;
   /** Hashes the password into an argon2id PHC string. */
   readonly hashPassword: (password: string) => Promise<string>;
-  /** Decides `members.invite` for the workspace of an invitation, which accepting it needs. */
+  /** Decides `members.invite` for the workspace of an invitation, which accepting it needs unless it is the owner invitation an instance admin issues. */
   readonly entitlements: EntitlementCheck;
   /** Says whether a workspace without it has a better plan to offer. */
   readonly upgradeAvailable: EntitlementUpgradeCheck;
@@ -261,7 +263,12 @@ export function invitationRoutes({
   const cursors = createPageCursorCodec(cursorSecret, "invitations");
 
   // Refuses with 403 entitlement_required unless the workspace the account is joining holds `members.invite`.
-  const requireInviteEntitlement = async (context: ChainContext, accountId: string, workspaceId: string): Promise<void> => {
+  // The owner invitation of an instance admin is exempt (see `needsInviteEntitlement`).
+  const requireInviteEntitlement = async (context: ChainContext, accountId: string, learned: InvitationLearned): Promise<void> => {
+    if (!needsInviteEntitlement(learned.role)) {
+      return;
+    }
+    const { workspaceId } = learned.learned;
     const subject = { accountId, workspaceId, joining: true };
     if (!(await entitlements(MEMBERS_INVITE, subject, context.req.raw))) {
       throw entitlementRequired(MEMBERS_INVITE, await upgradeAvailable(MEMBERS_INVITE, subject, context.req.raw));
@@ -323,7 +330,7 @@ export function invitationRoutes({
                 ...acceptance,
                 onAccepted: (accepted) => {
                   if (learn) {
-                    throw new InvitationLearned({ workspaceId: accepted.workspaceId, invitationId: accepted.invitationId, accountId });
+                    throw new InvitationLearned({ workspaceId: accepted.workspaceId, invitationId: accepted.invitationId, accountId }, accepted.role);
                   }
                   const { audit, events } = acceptance.onAccepted(accepted);
                   return { audit, jobs: events.map(eventJob) };
@@ -342,7 +349,7 @@ export function invitationRoutes({
         throw error;
       }
       // The entitlement and the seat limit are known before anything is written, and the acceptance that writes carries the limit.
-      await requireInviteEntitlement(context, accountId, error.learned.workspaceId);
+      await requireInviteEntitlement(context, accountId, error);
       outcome = await acceptAs(false, await seatLimitOf(context, error.learned));
     }
     switch (outcome.kind) {
@@ -389,23 +396,23 @@ export function invitationRoutes({
         }
         const result = await invitationAcceptanceRepository(tx).accept(tokenHash, null);
         if (result.kind === "accepted") {
-          throw new InvitationLearned({ workspaceId: result.workspaceId, invitationId: result.invitationId, accountId });
+          throw new InvitationLearned({ workspaceId: result.workspaceId, invitationId: result.invitationId, accountId }, result.role);
         }
         return result;
       }).catch((error: unknown) => {
         if (error instanceof InvitationLearned) {
-          return error.learned;
+          return error;
         }
         throw error;
       });
       if (learned === undefined) {
         throw new ProblemError("unauthenticated", UNAUTHENTICATED);
       }
-      if ("kind" in learned) {
+      if (!(learned instanceof InvitationLearned)) {
         throw acceptanceRefusal(learned.kind);
       }
-      await requireInviteEntitlement(context, accountId, learned.workspaceId);
-      const seatLimit = await seatLimitOf(context, learned);
+      await requireInviteEntitlement(context, accountId, learned);
+      const seatLimit = await seatLimitOf(context, learned.learned);
       const outcome = await withTenant({ accountId, requestId: requestIdOf(context) }, async (tx) => {
         const profile = await accountProfileRepository(tx).profile();
         if (profile === undefined) {

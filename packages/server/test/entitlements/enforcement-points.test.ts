@@ -39,6 +39,17 @@ describe("the enforcement-point inventory", () => {
     }
   });
 
+  it("records the one exemption of members.invite, the owner invitation an instance admin issues, at both places a token is accepted, and no other", () => {
+    const exempt = ENFORCEMENT_POINTS.filter((point) => point.exemption !== undefined).map((point) => [point.operationId, point.entitlement, point.exemption]);
+    expect(exempt.sort()).toEqual([
+      ["acceptInvitation", "members.invite", "the owner invitation an instance admin issues"],
+      ["completeOidcSignIn", "members.invite", "the owner invitation an instance admin issues"],
+    ]);
+    for (const point of ENFORCEMENT_POINTS.filter((entry) => entry.exemption !== undefined)) {
+      expect(readFileSync(join(HERE, point.test), "utf8"), `${point.test} for ${point.operationId}`).toContain("owner invitation");
+    }
+  });
+
   it("holds the handler-decided points to operations that declare no entitlement to stage 9: an anonymous operation whose token names the workspace, or an account operation whose key is account-scoped", () => {
     const document = readOperations(loadOpenApiDocument()).operations;
     for (const point of ENFORCEMENT_POINTS.filter((entry) => entry.decidedBy === "handler")) {

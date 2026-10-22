@@ -137,6 +137,21 @@ async function invitation(email: string, options: { readonly role?: "admin" | "m
   return { id, workspaceId, token: token.value };
 }
 
+/** A workspace without an owner and the owner invitation of the instance admin into it (`instance_issued`, role owner), found by the hash of a token the test holds. */
+async function ownerInvitation(email: string): Promise<Invitation> {
+  invitationNumber += 1;
+  const workspaceId = await seedWorkspace(database(), { name: "Waiting for an owner" });
+  const token = generateCredentialToken();
+  const id = `0192f3a0-eeee-7000-8000-${invitationNumber.toString(16).padStart(12, "0")}`;
+  await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    await tx`
+      INSERT INTO workspace_invitations (id, workspace_id, email, role, instance_issued, token_hash, expires_at)
+      VALUES (${id}, ${workspaceId}, ${email}, 'owner', true, ${token.hash}, now() + interval '1 day')`;
+  });
+  return { id, workspaceId, token: token.value };
+}
+
 function startUrl(token: string, extra = ""): string {
   return `${START}?intent=invite&invitation=${token}&returnTo=/${extra}`;
 }
@@ -694,6 +709,27 @@ describe("accepting an invitation through a provider", () => {
       expect(response.headers.get("location")).toBe("/");
       expect(Object.values(await membersOf(target.workspaceId)).sort()).toEqual(["member", "owner"]);
       expect(await jobData("event.member.joined")).toHaveLength(1);
+    });
+
+    it("accepts the owner invitation of an instance admin while the source withholds it, and the workspace gets its owner", async () => {
+      const world = serve(provider(), [], { entitlements: new LimitedEntitlementSource().deny("members.invite") });
+      const target = await ownerInvitation("entitled@example.test");
+
+      const response = await accepted(world, target.token, grant);
+
+      expect(response.headers.get("location")).toBe("/");
+      expect(Object.values(await membersOf(target.workspaceId))).toEqual(["owner"]);
+      expect((await invitationState(target.id)).status).toBe("accepted");
+    });
+
+    it("still counts the seats for the owner invitation of an instance admin", async () => {
+      const world = serve(provider(), [], { entitlements: new LimitedEntitlementSource().deny("members.invite").grant("seats.max", 0) });
+      const target = await ownerInvitation("entitled@example.test");
+
+      expectFailed(await accepted(world, target.token, grant));
+
+      expect(await membersOf(target.workspaceId)).toEqual({});
+      expect((await invitationState(target.id)).status).toBe("pending");
     });
 
     it("links no identity and opens no session for the account that holds the invited address", async () => {

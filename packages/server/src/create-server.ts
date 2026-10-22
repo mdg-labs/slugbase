@@ -523,7 +523,7 @@ export function createServer(options: CreateServerOptions): Server {
         metrics.recordRateLimitRejection(bucket);
       },
     }),
-    // The check below answers it, as it does for the invitation routes: accepting an invitation through a provider needs `members.invite`.
+    // The check below answers it, as it does for the invitation routes: accepting an invitation through a provider needs `members.invite`, except the owner invitation an instance admin issues.
     entitlements: (entitlement, subject, request) => entitlementCheck(entitlement, subject, request),
     // The engine below answers it: a registration, a verification or a first federated sign-in asks the source for the account's `workspaces.ownMax`.
     ownedWorkspaceLimit: (accountId) => ownedWorkspaceEntitlements.limit(accountId, {}),

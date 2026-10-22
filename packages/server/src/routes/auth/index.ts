@@ -42,7 +42,7 @@ export interface AuthRoutesOptions {
   readonly oidcProviders: readonly Pick<IdentityProviderConfig, "slug" | "autoCreate" | "allowedDomains">[];
   /** Counts the redemption of an invitation token by an OIDC start against the `token_redeem` limits. */
   readonly takeRedeemLimit: TakeTokenRedeemLimit;
-  /** Decides `members.invite` for the workspace of an invitation, which accepting it through a provider needs. */
+  /** Decides `members.invite` for the workspace of an invitation, which accepting it through a provider needs unless it is the owner invitation an instance admin issues. */
   readonly entitlements: EntitlementCheck;
   /** The `workspaces.ownMax` of an account, asked of the entitlement source: whether the personal workspace of a registered, verified or federated account is made. */
   readonly ownedWorkspaceLimit: OwnedWorkspaceLimit;

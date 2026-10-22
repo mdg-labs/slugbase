@@ -40,7 +40,7 @@ import { queueDomainEvent } from "../../events/publish.ts";
 import type { ChainContext, RouteBinding } from "../../http/chain.ts";
 import { ProblemError } from "../../http/problem.ts";
 import { networkPrefixOf } from "../../http/trusted-proxy.ts";
-import { InvitationLearned } from "../invitations/learned.ts";
+import { InvitationLearned, needsInviteEntitlement } from "../invitations/learned.ts";
 import { route } from "../register.ts";
 
 // GET /api/v1/auth/oidc/{provider}/start and /callback (doc 04 sections 4.4, 4.5 and 10.2, doc 02 section 2.8,
@@ -81,7 +81,8 @@ import { route } from "../register.ts";
 // The token names the workspace and the operation declares no entitlement, so the callback decides `members.invite`
 // and the seat limit itself (doc 01 sections 7.5 and 13.1, doc 10 T3 and T11), as `POST /invitations/accept` does: it runs
 // the acceptance once with no seat limit to learn the workspace, the invitation and the account, and rolls that back;
-// asks the entitlement source about `members.invite` for the workspace as it is now; asks the seat-check hooks; and only
+// asks the entitlement source about `members.invite` for the workspace as it is now, unless the invitation is the owner
+// invitation of an instance admin, which is exempt; asks the seat-check hooks; and only
 // then runs the acceptance that writes. A workspace without `members.invite` or without a free seat, a hook that fails
 // to answer, or an account other than the one asked about ends with nothing written and the invitation pending.
 // The PKCE verifier is sealed together with the instant the handshake began. A callback that cannot open it (its
@@ -125,7 +126,7 @@ export interface OidcRoutesOptions {
   readonly sessionCookie: SessionCookieSpec;
   /** Counts the redemption of an invitation token by a start of the `invite` intent against the `token_redeem` limits. */
   readonly takeRedeemLimit: TakeTokenRedeemLimit;
-  /** Decides `members.invite` for the workspace of an invitation, which accepting it through a provider needs. */
+  /** Decides `members.invite` for the workspace of an invitation, which accepting it through a provider needs unless it is the owner invitation an instance admin issues. */
   readonly entitlements: EntitlementCheck;
   /** The instant, in milliseconds, a session's `reauth_at` is compared with; defaults to the system clock. */
   readonly now?: () => number;
@@ -331,7 +332,7 @@ export function oidcRoutes({
                 ...acceptance,
                 onAccepted: (accepted) => {
                   if (learn) {
-                    throw new InvitationLearned({ workspaceId: accepted.workspaceId, invitationId: accepted.invitationId, accountId: accepted.accountId });
+                    throw new InvitationLearned({ workspaceId: accepted.workspaceId, invitationId: accepted.invitationId, accountId: accepted.accountId }, accepted.role);
                   }
                   if (accepted.accountId !== accountId) {
                     throw new AcceptingAccountChanged();
@@ -358,7 +359,7 @@ export function oidcRoutes({
         throw error;
       }
       const { learned } = error;
-      if (!(await entitlements(MEMBERS_INVITE, { accountId: learned.accountId, workspaceId: learned.workspaceId, joining: true }, context.req.raw))) {
+      if (needsInviteEntitlement(error.role) && !(await entitlements(MEMBERS_INVITE, { accountId: learned.accountId, workspaceId: learned.workspaceId, joining: true }, context.req.raw))) {
         refused(context, provider, "entitlement_required");
         return failure;
       }
