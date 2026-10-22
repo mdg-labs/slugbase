@@ -5,6 +5,9 @@ import {
   PortUnavailable,
   createEntitlementCheck,
   createEntitlementService,
+  createEntitlementUpgradeCheck,
+  createOwnedWorkspaceEntitlements,
+  createSeatEntitlements,
   withEntitlementChange,
   type AccountEntitlementValues,
   type EntitlementSource,
@@ -305,6 +308,71 @@ describe("the entitlement check", () => {
   });
 });
 
+describe("a workspace the account is joining", () => {
+  const joining = { accountId: ACCOUNT, workspaceId: A, joining: true };
+
+  it("is read from the source without the version row, which only a member can read, and is not kept for the next request", async () => {
+    const world = rig();
+    world.versionOf.delete(A);
+    const check = createEntitlementCheck(createEntitlementService(world));
+    world.values.set(A, { ...FULL, "members.invite": false });
+
+    expect(await check("members.invite", { accountId: ACCOUNT, workspaceId: A }, {})).toBe(false);
+    expect(await check("members.invite", joining, {})).toBe(false);
+    world.values.set(A, FULL);
+    expect(await check("members.invite", joining, {})).toBe(true);
+    expect(world.reads.versions).toBe(1);
+  });
+
+  it("reads the source once per request", async () => {
+    const world = rig();
+    const check = createEntitlementCheck(createEntitlementService(world));
+    const request = {};
+
+    await check("members.invite", joining, request);
+    await check("audit.log", joining, request);
+
+    expect(world.reads.workspaces).toEqual([A]);
+  });
+
+  it("does not grant when the source fails or answers outside the catalog", async () => {
+    const world = rig();
+    const failing = createEntitlementCheck(createEntitlementService({ ...world, source: { ...world.source, forWorkspace: () => Promise.reject(new Error("down")) } }));
+    await expect(failing("members.invite", joining, {})).rejects.toThrow("down");
+
+    world.values.set(A, { ...FULL, "members.invite": "yes" } as unknown as WorkspaceEntitlementValues);
+    await expect(createEntitlementCheck(createEntitlementService(world))("members.invite", joining, {})).rejects.toBeInstanceOf(EntitlementSourceError);
+  });
+});
+
+describe("the upgrade check", () => {
+  function offering(upgradeAvailable: boolean): Rig {
+    const world = rig();
+    return { ...world, source: { ...world.source, forWorkspace: (id) => world.source.forWorkspace(id).then((grant) => ({ ...grant, upgradeAvailable })) } };
+  }
+  const subject = { accountId: ACCOUNT, workspaceId: A };
+
+  it("reports what the source says of the workspace, member or joining", async () => {
+    const yes = createEntitlementUpgradeCheck(createEntitlementService(offering(true)));
+    const no = createEntitlementUpgradeCheck(createEntitlementService(offering(false)));
+
+    expect(await yes("members.invite", subject, {})).toBe(true);
+    expect(await yes("members.invite", { ...subject, joining: true }, {})).toBe(true);
+    expect(await no("members.invite", subject, {})).toBe(false);
+  });
+
+  it("reports none for a key outside the catalog, an account key, no workspace and a workspace that cannot be seen", async () => {
+    const world = offering(true);
+    world.versionOf.delete(B);
+    const check = createEntitlementUpgradeCheck(createEntitlementService(world));
+
+    expect(await check("probe.premium", subject, {})).toBe(false);
+    expect(await check("workspaces.ownMax", subject, {})).toBe(false);
+    expect(await check("members.invite", { accountId: ACCOUNT }, {})).toBe(false);
+    expect(await check("members.invite", { accountId: ACCOUNT, workspaceId: B }, {})).toBe(false);
+  });
+});
+
 describe("withEntitlementChange", () => {
   it("raises the version after the change and returns what the change returned", async () => {
     const order: string[] = [];
@@ -330,5 +398,69 @@ describe("withEntitlementChange", () => {
 
   it("fails when the version cannot be raised, so the transaction holding the change rolls it back", async () => {
     await expect(withEntitlementChange({ bump: () => Promise.resolve(undefined) }, () => Promise.resolve(1))).rejects.toBeInstanceOf(EntitlementVersionError);
+  });
+});
+
+describe("the owned-workspace entitlements", () => {
+  it("answers the account's own ceiling, asked of the source for that account", async () => {
+    const world = rig();
+    world.accountValues.set(ACCOUNT, { "workspaces.ownMax": 1 });
+    const owned = createOwnedWorkspaceEntitlements(createEntitlementService(world));
+
+    expect(await owned.limit(ACCOUNT, {})).toBe(1);
+    expect(await owned.limit(OTHER_ACCOUNT, {})).toBe("unlimited");
+    expect(world.reads.accounts).toEqual([ACCOUNT, OTHER_ACCOUNT]);
+  });
+
+  it("lets a failing source reject, so the creation is refused with an error and never granted without a ceiling", async () => {
+    const world = rig();
+    const owned = createOwnedWorkspaceEntitlements(
+      createEntitlementService({ ...world, source: { ...world.source, forAccount: () => Promise.reject(new PortUnavailable("entitlements", "unavailable")) } }),
+    );
+
+    await expect(owned.limit(ACCOUNT, {})).rejects.toBeInstanceOf(PortUnavailable);
+  });
+
+  it("offers an upgrade when any workspace the account owns has a better plan, and not for an account that owns none", async () => {
+    const world = rig();
+    const source: EntitlementSource = {
+      ...world.source,
+      forWorkspace: (workspaceId) => Promise.resolve({ values: FULL, upgradeAvailable: workspaceId === B }),
+    };
+    const owned = createOwnedWorkspaceEntitlements(createEntitlementService({ ...world, source }));
+
+    expect(await owned.upgradeAvailable(ACCOUNT, [A], {})).toBe(false);
+    expect(await owned.upgradeAvailable(ACCOUNT, [A, B], {})).toBe(true);
+    expect(await owned.upgradeAvailable(ACCOUNT, [], {})).toBe(false);
+  });
+});
+
+describe("the seat ceiling of an acceptance", () => {
+  it("answers the workspace's seats.max as a count, and null for unlimited", async () => {
+    const world = rig();
+    world.values.set(A, { ...FULL, "seats.max": 3 });
+    const seats = createSeatEntitlements(createEntitlementService(world));
+
+    expect(await seats.limit(ACCOUNT, A, {})).toBe(3);
+    expect(await seats.limit(ACCOUNT, B, {})).toBeNull();
+  });
+
+  it("reads the workspace as it is now for an account that is no member, never through the version of the row, and zero is a ceiling of zero", async () => {
+    const world = rig();
+    world.values.set(A, { ...FULL, "seats.max": 0 });
+    const seats = createSeatEntitlements(createEntitlementService(world));
+
+    expect(await seats.limit(ACCOUNT, A, {})).toBe(0);
+    expect(world.reads.versions).toBe(0);
+    expect(world.reads.workspaces).toEqual([A]);
+  });
+
+  it("lets a failing source reject, so the acceptance is refused with an error and never granted without a ceiling", async () => {
+    const world = rig();
+    const seats = createSeatEntitlements(
+      createEntitlementService({ ...world, source: { ...world.source, forWorkspace: () => Promise.reject(new PortUnavailable("entitlements", "unavailable")) } }),
+    );
+
+    await expect(seats.limit(ACCOUNT, A, {})).rejects.toBeInstanceOf(PortUnavailable);
   });
 });

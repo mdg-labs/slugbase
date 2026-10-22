@@ -73,6 +73,87 @@ describe("createServer", () => {
     expect(error.message).toContain("mail, egress, rateLimit");
   });
 
+  describe("billing", () => {
+    const SCOPE = { workspaceId: "w-1", accountId: "a-1" };
+
+    function billingModule(use: (billing: Adapters["billing"]) => Promise<unknown>): ServerModule {
+      return {
+        name: "billing-probe",
+        register: (context) => ({
+          routes: [
+            {
+              operation: operation("get", "/api/v1/billing-probe", "billingProbe"),
+              handler: async () => Response.json({ result: await use(context.adapters.billing) }),
+            },
+          ],
+        }),
+      };
+    }
+
+    const CONSENT = { legal: [{ code: "terms", version: "1" }], acceptedAt: "2026-01-01T00:00:00.000Z" };
+    const MONEY = { amountMinor: 100, currency: "EUR" };
+    const DETAILS = { name: "n", email: "a@example.com", address: { line1: "l", postalCode: "p", city: "c", country: "DE" } };
+    const OPERATIONS: Record<string, (billing: Adapters["billing"]) => Promise<unknown>> = {
+      plans: (billing) => billing.plans(SCOPE),
+      legal: (billing) => billing.legal(SCOPE),
+      quote: (billing) => billing.quote(SCOPE, { planCode: "p", interval: "month", country: "DE" }),
+      startCheckout: (billing) => billing.startCheckout(SCOPE, { planCode: "p", consent: CONSENT }),
+      checkoutState: (billing) => billing.checkoutState(SCOPE, "c"),
+      previewChange: (billing) => billing.previewChange(SCOPE, { quantity: 2 }),
+      changeQuantity: (billing) => billing.changeQuantity(SCOPE, 2, { timing: "immediate", consent: CONSENT, expectedCharge: MONEY }),
+      changePlan: (billing) => billing.changePlan(SCOPE, "p"),
+      cancel: (billing) => billing.cancel(SCOPE),
+      resume: (billing) => billing.resume(SCOPE),
+      updatePaymentMethod: (billing) => billing.updatePaymentMethod(SCOPE),
+      updateBillingDetails: (billing) => billing.updateBillingDetails(SCOPE, DETAILS),
+      subscriptionDetails: (billing) => billing.subscriptionDetails(SCOPE),
+      customerDetails: (billing) => billing.customerDetails(SCOPE),
+      listContracts: (billing) => billing.listContracts(SCOPE),
+      withdraw: (billing) => billing.withdraw(SCOPE, { contractId: "k", declaration: "d" }),
+      listDocuments: (billing) => billing.listDocuments(SCOPE),
+      documentPdf: (billing) => billing.documentPdf(SCOPE, "d"),
+      receiveEvent: (billing) => billing.receiveEvent({ body: "{}", signature: "s", timestamp: "0" }),
+    };
+
+    it.each(Object.entries(OPERATIONS))("answers %s of the CE default as 503 billing_unavailable", async (_name, call) => {
+      const { server } = compose([billingModule(call)]);
+      const response = await server.fetch(new Request("http://localhost/api/v1/billing-probe"));
+      expect(response.status).toBe(503);
+      expect(await response.json()).toMatchObject({ status: 503, code: "billing_unavailable", detail: "Billing is not available on this instance." });
+    });
+
+    it("answers the plan state of the CE default as none, so no decision waits on billing", async () => {
+      const { server } = compose([billingModule((billing) => billing.planState(SCOPE))]);
+      const response = await server.fetch(new Request("http://localhost/api/v1/billing-probe"));
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ result: "none" });
+    });
+
+    it("hands modules the billing adapter of the composition", async () => {
+      const ports = adapters();
+      const seen: unknown[] = [];
+      const billing: Adapters["billing"] = {
+        ...ports.billing,
+        available: true,
+        planState: (scope) => {
+          seen.push(scope);
+          return Promise.resolve("active");
+        },
+      };
+      const { server } = compose([billingModule((given) => given.planState(SCOPE))], { adapters: { ...ports, billing } });
+      const response = await server.fetch(new Request("http://localhost/api/v1/billing-probe"));
+      expect(await response.json()).toEqual({ result: "active" });
+      expect(seen).toEqual([SCOPE]);
+    });
+
+    it("names the billing port when the adapter map lacks it", () => {
+      const incomplete = { ...unconfigured(), billing: undefined } as unknown as Adapters;
+      const error = failure(() => compose([], { adapters: incomplete }));
+      expect(error.code).toBe("missing_adapter");
+      expect(error.message).toContain("billing");
+    });
+  });
+
   it("serves the routes a module registers through the chain", async () => {
     const { server } = compose([pingModule()]);
     const response = await server.fetch(new Request("http://localhost/api/v1/ping"));

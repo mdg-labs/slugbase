@@ -1,7 +1,7 @@
 import { register } from "@slugbase/contracts";
 import { normalizeEmail, registrationLocale, registrationUnavailable, type MailPort, type PasswordPolicy, type RegistrationSettings } from "@slugbase/core";
-import type { RegistrationStore } from "@slugbase/db";
-import { provisionWorkspaceIn } from "../../auth/personal-workspace.ts";
+import type { PersonalWorkspaceWriter, RegistrationStore } from "@slugbase/db";
+import { provisionWorkspaceIn, type OwnedWorkspaceLimit } from "../../auth/personal-workspace.ts";
 import { assertRegistrationAllowed } from "../../auth/registration-gate.ts";
 import { uuidv7 } from "../../auth/uuidv7.ts";
 import { queueDomainEvent } from "../../events/publish.ts";
@@ -37,9 +37,11 @@ export interface RegisterRouteOptions {
   readonly passwordPolicy: PasswordPolicy;
   /** Hashes the password into an argon2id PHC string. */
   readonly hashPassword: (password: string) => Promise<string>;
+  /** The `workspaces.ownMax` of the new account, which decides whether its personal workspace is made. */
+  readonly ownedWorkspaceLimit: OwnedWorkspaceLimit;
 }
 
-export function registerRoute({ store, settings, mail, passwordPolicy, hashPassword }: RegisterRouteOptions): RouteBinding {
+export function registerRoute({ store, settings, mail, passwordPolicy, hashPassword, ownedWorkspaceLimit }: RegisterRouteOptions): RouteBinding {
   return route(register).handle(async ({ body }, context) => {
     const unavailable = registrationUnavailable(settings, mail.available);
     if (unavailable === "registration_closed") {
@@ -65,6 +67,8 @@ export function registerRoute({ store, settings, mail, passwordPolicy, hashPassw
 
     const accountId = uuidv7();
     const passwordHash = await hashPassword(body.password);
+    // Asked before the transaction and whatever it finds, so that the answer for a new address and for a taken one cost the same.
+    const ownedMax = settings.emailVerificationRequired ? undefined : await ownedWorkspaceLimit(accountId);
     const mailJobs = mail.available ? [queueMailSend(uuidv7(), "verifyEmail", accountId)] : [];
     await store.registerAccount({
       accountId,
@@ -75,7 +79,7 @@ export function registerRoute({ store, settings, mail, passwordPolicy, hashPassw
       onCreated: [...mailJobs, queueDomainEvent(uuidv7(), "account.created", { accountId, path: "self-registration" })],
       onTaken: mailJobs,
       // With no verification to wait for, the personal workspace is made with the account (doc 02 section 2.2).
-      ...(settings.emailVerificationRequired ? {} : { afterCreated: provisionWorkspaceIn }),
+      ...(ownedMax === undefined ? {} : { afterCreated: (id: string, writer: PersonalWorkspaceWriter) => provisionWorkspaceIn(id, writer, ownedMax) }),
     });
     return { status: 202 };
   });

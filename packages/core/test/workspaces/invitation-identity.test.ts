@@ -30,6 +30,7 @@ function world(result: InvitationIdentityResult, accepted: { accountId?: string;
         written.push(
           acceptance.onAccepted({
             workspaceId: result.workspaceId,
+            invitationId: result.invitationId,
             role: result.role,
             accountId: accepted.accountId ?? result.accountId,
             displayName: accepted.displayName ?? "Grace Hopper",
@@ -80,6 +81,14 @@ describe("accepting an invitation through a provider", () => {
     expect(acceptance?.identityId).toMatch(/^0192f3a0-aaaa-7000-8000-/);
     expect(acceptance?.accountId).toMatch(/^0192f3a0-aaaa-7000-8000-/);
     expect(acceptance?.identityId).not.toBe(acceptance?.accountId);
+  });
+
+  it("hands the store the account identifier the caller named, so a seat check and the acceptance that follows it name one account", async () => {
+    const w = world({ kind: "accepted", workspaceId: WORKSPACE, invitationId: INVITATION, role: "member", accountId: ACCOUNT, created: true });
+
+    await acceptInvitationWithIdentity(w.dependencies, { ...ask(), accountId: ACCOUNT });
+
+    expect(w.asked[0]?.accountId).toBe(ACCOUNT);
   });
 
   it("records member.joined as an audit event and a domain event, and account.created with the path invitation only when the acceptance created the account", async () => {

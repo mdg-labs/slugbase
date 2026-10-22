@@ -449,6 +449,13 @@
       "when": 1792572474606,
       "tag": "20261021084754_add_instance_owner_invitation",
       "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1792651837102,
+      "tag": "20261022065037_add_workspace_limit",
+      "breakpoints": true
     }
   ]
 }

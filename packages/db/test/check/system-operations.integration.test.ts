@@ -184,6 +184,8 @@ describe("the shipped chain", () => {
       "sys_instance_resend_verification",
       "sys_instance_account_deletion_scope",
       "sys_instance_delete_account",
+      "sys_create_workspace_limited",
+      "sys_create_personal_workspace_limited",
     ]);
     expect(checkRules).toContain(systemOperationsRule);
     const database = await scratch();

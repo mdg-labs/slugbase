@@ -26,7 +26,9 @@ export const WorkspaceListSchema = z
     items: z.array(WorkspaceSummarySchema).describe("The workspaces the account is a member of, without one being deleted, the most recently active first"),
     canCreate: z
       .boolean()
-      .describe("Whether the account can create a workspace: the deployment lets accounts create them and the account's email address is verified. The UI hides the action when it is false"),
+      .describe(
+        "Whether the account can create a workspace: the deployment lets accounts create them, the account's email address is verified and the account owns fewer workspaces than its workspaces.ownMax entitlement allows. The UI hides the action, or shows the upgrade path in its place, when it is false",
+      ),
   })
   .meta({ id: "WorkspaceList" });
 
@@ -125,9 +127,11 @@ export const createWorkspace = defineOperation({
     403: problemResponse(
       "The request did not come from the application itself (cross_site_request), the credential is an API token, the deployment does not let accounts create workspaces (forbidden), or the account's email address is not verified (email_unverified). Nothing is written",
     ),
-    422: problemResponse("The body did not pass validation (a name that is blank or outside 1 to 64 characters, or a field the operation does not declare)"),
+    422: problemResponse(
+      "The body did not pass validation (a name that is blank or outside 1 to 64 characters, or a field the operation does not declare), or the account already owns as many workspaces as its workspaces.ownMax entitlement allows (workspace_limit_reached; the problem carries limit, used and upgradeAvailable). Nothing is written",
+    ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
-    503: problemResponse("The service is temporarily unavailable"),
+    503: problemResponse("The service is temporarily unavailable, or the entitlement source could not say how many workspaces the account may own"),
   },
 });
 

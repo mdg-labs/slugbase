@@ -1,4 +1,4 @@
-import type { ClientErrorReportPort, ClientErrorReportRequest } from "@slugbase/core";
+import type { ClientErrorReportPort, ClientErrorReportRequest, SeatEntitlements } from "@slugbase/core";
 import type { Logger } from "../create-server.ts";
 import { ProblemError } from "../http/problem.ts";
 import {
@@ -29,6 +29,8 @@ export interface HookRegistration {
 export interface HookDispatcherOptions {
   readonly registrations: readonly HookRegistration[];
   readonly clientErrorReport: ClientErrorReportPort;
+  /** The workspace's `seats.max`, which an acceptance's limit starts from before the seat-check hooks are consulted. */
+  readonly seats: SeatEntitlements;
   readonly logger: Logger;
   /** How long one hook may take to answer; a hook that is still running is treated as failed. */
   readonly timeoutMs?: number;
@@ -44,6 +46,12 @@ export interface HookDispatcherOptions {
 export interface HookDispatcher {
   /** The seat limit of an invitation acceptance: the lowest hook limit, else `entitlementLimit`. `null` is unlimited. */
   seatLimit(input: SeatCheckInput, entitlementLimit: number | null): Promise<number | null>;
+  /**
+   * The seat limit an acceptance passes to the database: the workspace's `seats.max` as the entitlement engine reads it for
+   * `request` (a source that fails rejects, so nothing is accepted without a ceiling), replaced by the lowest limit the
+   * seat-check hooks answer. `null` is unlimited.
+   */
+  acceptanceSeatLimit(input: SeatCheckInput, request: object): Promise<number | null>;
   /** Allow, or the first refusal in registration order. */
   deletionGuard(input: DeletionGuardInput): Promise<HookResult<DeletionRefusalCode>>;
   /** Allow, or `registration_refused` whatever the reason a hook gave. */
@@ -142,7 +150,7 @@ export function invalidHookRefusals(refusals: unknown): string | undefined {
 }
 
 export function createHookDispatcher(options: HookDispatcherOptions): HookDispatcher {
-  const { registrations, clientErrorReport, logger } = options;
+  const { registrations, clientErrorReport, seats, logger } = options;
   const timeoutMs = options.timeoutMs ?? DEFAULT_HOOK_TIMEOUT_MS;
 
   // Runs the hooks of one kind in registration order; every answer is validated
@@ -191,15 +199,21 @@ export function createHookDispatcher(options: HookDispatcherOptions): HookDispat
     (answer.outcome === "allow" ||
       (answer.outcome === "refuse" && typeof answer.code === "string" && answer.code !== ""));
 
+  const seatLimit: HookDispatcher["seatLimit"] = async (input, entitlementLimit) => {
+    const answers = await consult("seatCheck", input, isSeatAnswer);
+    if (answers.length === 0) {
+      return entitlementLimit;
+    }
+    // Hooks replace the entitlement's value; null is unlimited, so only a number can lower the limit.
+    const limits = answers.flatMap((answer) => (answer.seatLimit === null ? [] : [answer.seatLimit]));
+    return limits.length === 0 ? null : Math.min(...limits);
+  };
+
   return {
-    async seatLimit(input, entitlementLimit) {
-      const answers = await consult("seatCheck", input, isSeatAnswer);
-      if (answers.length === 0) {
-        return entitlementLimit;
-      }
-      // Hooks replace the entitlement's value; null is unlimited, so only a number can lower the limit.
-      const limits = answers.flatMap((answer) => (answer.seatLimit === null ? [] : [answer.seatLimit]));
-      return limits.length === 0 ? null : Math.min(...limits);
+    seatLimit,
+
+    async acceptanceSeatLimit(input, request) {
+      return seatLimit(input, await seats.limit(input.accountId, input.workspaceId, request));
     },
 
     async deletionGuard(input) {

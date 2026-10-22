@@ -36,6 +36,7 @@ export interface NewInvitationIdentity {
   /** Called in the transaction once the invitation is accepted; the audit events and jobs it returns are written in that transaction. */
   readonly onAccepted: (accepted: {
     readonly workspaceId: string;
+    readonly invitationId: string;
     readonly role: WorkspaceRole;
     readonly accountId: string;
     readonly displayName: string;
@@ -138,6 +139,7 @@ export function bindInvitationIdentityStore(client: postgres.Sql): InvitationIde
               const role = roleOf(row.accepted_role);
               const writes = acceptance.onAccepted({
                 workspaceId: row.accepted_workspace_id,
+                invitationId: row.accepted_invitation_id,
                 role,
                 accountId: row.accepted_account_id,
                 displayName: row.accepted_display_name,

@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createServer, type RunningServer } from "../../src/create-server.ts";
-import { adapters, fakeDatabase, recordingLogger, serverConfig } from "../support.ts";
+import { adapters, fakeAuthStore, fakeDatabase, recordingLogger, serverConfig } from "../support.ts";
 
 // The web root over a real socket, where the request target reaches the server
 // as the client wrote it (doc 01 section 7.1). The client is a raw socket: the
@@ -69,6 +69,7 @@ async function listen(): Promise<number> {
     migrations: [],
     logger: recordingLogger(),
     database: fakeDatabase(),
+    authStore: fakeAuthStore(),
     webRoot: join(base, "web"),
   });
   listening = await server.start({ port: 0 });

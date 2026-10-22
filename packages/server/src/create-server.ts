@@ -1,7 +1,7 @@
 import { setTimeout as sleep } from "node:timers/promises";
 import { createAdaptorServer, type ServerType } from "@hono/node-server";
 import { getHealth, getReady, getVersion } from "@slugbase/contracts";
-import { createEntitlementCheck, createEntitlementService, createPasswordPolicy, loadBreachedPasswords, sessionCookieSpec, type Adapters, type RegistrationSettings } from "@slugbase/core";
+import { createEntitlementCheck, createEntitlementService, createEntitlementUpgradeCheck, createOwnedWorkspaceEntitlements, createPasswordPolicy, createSeatEntitlements, loadBreachedPasswords, sessionCookieSpec, type Adapters, type RegistrationSettings } from "@slugbase/core";
 import { createAuthStore, createDatabase, entitlementRepository, instanceRepository, type AuthStore, type Database, type MigrationChain } from "@slugbase/db";
 import { Hono } from "hono";
 import { DEVELOPMENT_BUILD_INFO, type BuildInfo } from "./build-info.ts";
@@ -13,7 +13,7 @@ import { createMembershipTenantResolver, defersToMembershipResolver } from "./au
 import { createTokenRedeemLimit } from "./auth/token-redeem-limit.ts";
 import { createRateLimitRegistry, type ServerConfig, type WorkerConfig } from "./config/index.ts";
 import type { Authenticator } from "./http/authenticate.ts";
-import { denyEntitlements, type EntitlementCheck, type SecondFactorCheck } from "./http/authorize.ts";
+import { denyEntitlements, noUpgradeAvailable, type EntitlementCheck, type SecondFactorCheck } from "./http/authorize.ts";
 import { bodyLimits } from "./http/body-limits.ts";
 import {
   RouteTable,
@@ -270,6 +270,7 @@ const ADAPTER_PORTS: Record<keyof Adapters, true> = {
   ai: true,
   identity: true,
   analytics: true,
+  billing: true,
   errors: true,
   clientErrorReport: true,
   challenge: true,
@@ -522,6 +523,10 @@ export function createServer(options: CreateServerOptions): Server {
         metrics.recordRateLimitRejection(bucket);
       },
     }),
+    // The check below answers it, as it does for the invitation routes: accepting an invitation through a provider needs `members.invite`, except the owner invitation an instance admin issues.
+    entitlements: (entitlement, subject, request) => entitlementCheck(entitlement, subject, request),
+    // The engine below answers it: a registration, a verification or a first federated sign-in asks the source for the account's `workspaces.ownMax`.
+    ownedWorkspaceLimit: (accountId) => ownedWorkspaceEntitlements.limit(accountId, {}),
     now: options.now ?? Date.now,
   });
   builtInRoutes.push(...(auth.routes ?? []));
@@ -554,6 +559,10 @@ export function createServer(options: CreateServerOptions): Server {
     },
   });
   builtInRoutes.push(...entitlementRoutes({ withTenant: context.withTenant, service: entitlementService }));
+  const ownedWorkspaceEntitlements = createOwnedWorkspaceEntitlements(entitlementService);
+  // Stage 9 and the handlers that decide an entitlement themselves (accepting an invitation) ask the same check, so an operation is gated the same way wherever it is decided.
+  const entitlementCheck: EntitlementCheck = options.entitlements ?? (adapters.entitlements.available ? createEntitlementCheck(entitlementService) : denyEntitlements);
+  const upgradeCheck = options.entitlements === undefined && adapters.entitlements.available ? createEntitlementUpgradeCheck(entitlementService) : noUpgradeAvailable;
   // The CE instance admin's operations are part of the server and mounted in every composition: the policy admits no one on a deployment
   // where no account holds the flag (Q44), so a composition needs no switch of its own.
   builtInRoutes.push(
@@ -575,7 +584,7 @@ export function createServer(options: CreateServerOptions): Server {
   // So is the deletion of the account: it deletes the account of the session and the workspaces where it is the only member, after the deletion guard of the composition allows it.
   builtInRoutes.push(...accountDeletionRoutes({ withTenant: context.withTenant, cookie: sessionCookieSpec(config.APP_ORIGIN) }));
   // So are the account's workspaces: listed, with the creation policy (the stored instance setting, else the composition root's default), created and switched to in an account-level transaction; the ownership transfer rotates the caller's session token and mails the new owner.
-  builtInRoutes.push(...workspaceRoutes({ withTenant: context.withTenant, creationDefault: options.allowWorkspaceCreation ?? false, cookie: sessionCookieSpec(config.APP_ORIGIN), mail: adapters.mail }));
+  builtInRoutes.push(...workspaceRoutes({ withTenant: context.withTenant, creationDefault: options.allowWorkspaceCreation ?? false, cookie: sessionCookieSpec(config.APP_ORIGIN), mail: adapters.mail, ownedWorkspaces: ownedWorkspaceEntitlements }));
   // So are the members of the active workspace: listed with the co-member projection of their accounts, and their roles changed under the last-owner rule the database enforces.
   builtInRoutes.push(...memberRoutes({ cursorSecret: config.SESSION_SECRET, cookie: sessionCookieSpec(config.APP_ORIGIN) }));
   // So are the invitations of the active workspace: an admin invites an address, and the invitation's email is queued with it when the composition can send mail; the pending ones are listed, resent, linked and revoked.
@@ -589,6 +598,8 @@ export function createServer(options: CreateServerOptions): Server {
       cookie: sessionCookieSpec(config.APP_ORIGIN),
       passwordPolicy,
       hashPassword,
+      entitlements: entitlementCheck,
+      upgradeAvailable: upgradeCheck,
     }),
   );
   // So are the account's personal API tokens: created, listed and revoked in an account-level transaction on the account's own rows.
@@ -682,6 +693,8 @@ export function createServer(options: CreateServerOptions): Server {
     hooks: createHookDispatcher({
       registrations: composition.hooks,
       clientErrorReport: adapters.clientErrorReport,
+      // An acceptance's seat limit starts from the engine's `seats.max` and is then replaced by what the seat-check hooks answer (doc 01 section 13.1).
+      seats: createSeatEntitlements(entitlementService),
       logger,
       ...(options.hookTimeoutMs === undefined ? {} : { timeoutMs: options.hookTimeoutMs }),
     }),
@@ -698,7 +711,8 @@ export function createServer(options: CreateServerOptions): Server {
       : adapters.tenantResolver,
     withTenant: context.withTenant,
     ...(options.now === undefined ? {} : { now: options.now }),
-    entitlements: options.entitlements ?? (adapters.entitlements.available ? createEntitlementCheck(entitlementService) : denyEntitlements),
+    entitlements: entitlementCheck,
+    upgradeAvailable: upgradeCheck,
     // Stage 9 asks the database whether the admin's account has a second factor; the default check reads it in an account-level transaction of its own, not on the request's.
     secondFactor:
       options.secondFactor ??

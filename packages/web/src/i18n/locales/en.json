@@ -1590,6 +1590,12 @@
       }
     }
   },
+  "entitlements": {
+    "required": {
+      "title": "Not available in this workspace",
+      "description": "This workspace does not include that feature."
+    }
+  },
   "workspaces": {
     "switcher": {
       "label": "Workspace",
@@ -1612,6 +1618,9 @@
     "create": {
       "title": "New workspace",
       "description": "A workspace holds your bookmarks, folders and members.",
+      "limit": {
+        "title": "Workspace limit reached"
+      },
       "close": "Close",
       "dismiss": "Not now",
       "cancel": "Cancel",

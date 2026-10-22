@@ -19,7 +19,7 @@ function ids(): () => string {
 }
 
 /** A store that keeps the first workspace it is asked for, as the database does, and answers `exists` to every later request. */
-function memoryStore(account: "enabled" | "missing" = "enabled") {
+function memoryStore(account: "enabled" | "missing" = "enabled", ownedMax?: number) {
   const requests: PersonalWorkspaceRequest[] = [];
   const created: PersonalWorkspaceRequest[] = [];
   const store: PersonalWorkspaceStore = {
@@ -27,6 +27,9 @@ function memoryStore(account: "enabled" | "missing" = "enabled") {
       requests.push(request);
       if (account === "missing") {
         return Promise.resolve(undefined);
+      }
+      if (created.length === 0 && ownedMax !== undefined && ownedMax <= 0) {
+        return Promise.resolve("limit_reached");
       }
       const outcome: PersonalWorkspaceOutcome = created.length === 0 ? "created" : "exists";
       if (outcome === "created") {
@@ -42,7 +45,7 @@ describe("provisionPersonalWorkspace", () => {
   it("asks for the personal name of the account's workspace with a fresh identifier and announces workspace.created for it", async () => {
     const { store, requests } = memoryStore();
 
-    expect(await provisionPersonalWorkspace({ store, newId: ids() }, ACCOUNT)).toBe("created");
+    expect(await provisionPersonalWorkspace({ store, newId: ids() }, ACCOUNT, "unlimited")).toBe("created");
 
     expect(requests).toHaveLength(1);
     const [request] = requests;
@@ -59,7 +62,7 @@ describe("provisionPersonalWorkspace", () => {
   it("hands the store the audit event of the workspace to write once it knows the name the database gave it", async () => {
     const { store, requests } = memoryStore();
 
-    await provisionPersonalWorkspace({ store, newId: ids() }, ACCOUNT);
+    await provisionPersonalWorkspace({ store, newId: ids() }, ACCOUNT, "unlimited");
 
     const request = requests[0];
     const record = request?.audit({ name: "Ada's workspace", displayName: "Ada" });
@@ -81,8 +84,8 @@ describe("provisionPersonalWorkspace", () => {
     const { store, created } = memoryStore();
     const deps = { store, newId: ids() };
 
-    expect(await provisionPersonalWorkspace(deps, ACCOUNT)).toBe("created");
-    expect(await provisionPersonalWorkspace(deps, ACCOUNT)).toBe("exists");
+    expect(await provisionPersonalWorkspace(deps, ACCOUNT, "unlimited")).toBe("created");
+    expect(await provisionPersonalWorkspace(deps, ACCOUNT, "unlimited")).toBe("exists");
 
     expect(created).toHaveLength(1);
   });
@@ -90,12 +93,27 @@ describe("provisionPersonalWorkspace", () => {
   it("refuses to report success for an account that does not exist or is disabled, so the surrounding transaction does not commit", async () => {
     const { store } = memoryStore("missing");
 
-    await expect(provisionPersonalWorkspace({ store, newId: ids() }, ACCOUNT)).rejects.toBeInstanceOf(PersonalWorkspaceUnavailableError);
+    await expect(provisionPersonalWorkspace({ store, newId: ids() }, ACCOUNT, "unlimited")).rejects.toBeInstanceOf(PersonalWorkspaceUnavailableError);
+  });
+
+  it("hands the ceiling to the store, which judges it where it inserts", async () => {
+    const { store, requests } = memoryStore();
+
+    await provisionPersonalWorkspace({ store, newId: ids() }, ACCOUNT, 1);
+
+    expect(requests[0]?.ownedMax).toBe(1);
+  });
+
+  it("reports that the account is at its ceiling instead of failing, so the registration or verification that asked still succeeds", async () => {
+    const { store, created } = memoryStore("enabled", 0);
+
+    expect(await provisionPersonalWorkspace({ store, newId: ids() }, ACCOUNT, 0)).toBe("limit_reached");
+    expect(created).toHaveLength(0);
   });
 
   it("lets a store failure through", async () => {
     const store: PersonalWorkspaceStore = { create: () => Promise.reject(new Error("the database is down")) };
 
-    await expect(provisionPersonalWorkspace({ store, newId: ids() }, ACCOUNT)).rejects.toThrow("the database is down");
+    await expect(provisionPersonalWorkspace({ store, newId: ids() }, ACCOUNT, "unlimited")).rejects.toThrow("the database is down");
   });
 });

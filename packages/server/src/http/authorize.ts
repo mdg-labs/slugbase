@@ -1,5 +1,5 @@
 import type { AuthPolicy, OperationDefinition } from "@slugbase/contracts";
-import { reauthenticatedRecently, type EntitlementCheck, type WorkspaceRole } from "@slugbase/core";
+import { reauthenticatedRecently, type EntitlementCheck, type EntitlementUpgradeCheck, type WorkspaceRole } from "@slugbase/core";
 import type { Principal } from "./authenticate.ts";
 import type { RequestStage } from "./chain.ts";
 import { ProblemError, requestIdOf } from "./problem.ts";
@@ -17,10 +17,23 @@ const ROLE_REQUIRED: Readonly<Partial<Record<AuthPolicy, WorkspaceRole>>> = {
   owner: "owner",
 };
 
-export type { EntitlementCheck, EntitlementSubject } from "@slugbase/core";
+export type { EntitlementCheck, EntitlementSubject, EntitlementUpgradeCheck } from "@slugbase/core";
 
 /** No entitlement source is configured: an operation that declares one is refused. */
 export const denyEntitlements: EntitlementCheck = () => false;
+
+/** No entitlement source is configured: no plan is read as having a better one to offer. */
+export const noUpgradeAvailable: EntitlementUpgradeCheck = () => false;
+
+/**
+ * The `403 entitlement_required` of an entitlement the workspace does not hold (doc 04 section 3.2): the problem
+ * carries the entitlement that is missing and whether the plan behind the workspace has a better one to offer.
+ * Stage 9 raises it for an operation that declares an entitlement; a handler that decides one itself (accepting an
+ * invitation, which names its workspace only through the token) raises it the same way.
+ */
+export function entitlementRequired(entitlement: string, upgradeAvailable: boolean): ProblemError {
+  return new ProblemError("entitlement_required", DETAILS.entitlement_required, { members: { entitlement, upgradeAvailable } });
+}
 
 /**
  * Whether the account has a second factor enrolled, which the `instanceAdmin` policy needs besides the flag (doc 04
@@ -34,6 +47,8 @@ export const denySecondFactor: SecondFactorCheck = () => Promise.resolve(false);
 export interface AuthorizationOptions {
   /** Defaults to refusing every entitlement. */
   readonly entitlements?: EntitlementCheck;
+  /** Whether a refused entitlement has a better plan to offer; by default none has. */
+  readonly upgradeAvailable?: EntitlementUpgradeCheck;
   /** Defaults to reading every account as having no second factor. */
   readonly secondFactor?: SecondFactorCheck;
   /** The instant, in milliseconds, a session's `reauth_at` is compared with; defaults to the system clock. */
@@ -87,7 +102,12 @@ export function refuseUncallableToken(principal: Principal | undefined, operatio
  * re-authenticated within the window of `reauthenticatedRecently` (`401 reauth_required`); a declared
  * entitlement must be held (`403 entitlement_required`).
  */
-export function createAuthorization({ entitlements = denyEntitlements, secondFactor = denySecondFactor, now = Date.now }: AuthorizationOptions = {}): RequestStage {
+export function createAuthorization({
+  entitlements = denyEntitlements,
+  upgradeAvailable = noUpgradeAvailable,
+  secondFactor = denySecondFactor,
+  now = Date.now,
+}: AuthorizationOptions = {}): RequestStage {
   return async (context, next) => {
     const operation = context.get("route")?.operation;
     if (operation === undefined) {
@@ -99,7 +119,7 @@ export function createAuthorization({ entitlements = denyEntitlements, secondFac
 
     if (auth === "anonymous" || auth === "machine") {
       if (entitlement !== undefined) {
-        throw new ProblemError("entitlement_required", DETAILS.entitlement_required);
+        throw entitlementRequired(entitlement, false);
       }
       return next();
     }
@@ -142,16 +162,12 @@ export function createAuthorization({ entitlements = denyEntitlements, secondFac
     }
 
     if (entitlement !== undefined) {
-      const held = await entitlements(
-        entitlement,
-        {
-          accountId: principal.accountId,
-          ...(tenant === undefined ? {} : { workspaceId: tenant.workspaceId }),
-        },
-        context.req.raw,
-      );
-      if (!held) {
-        throw new ProblemError("entitlement_required", DETAILS.entitlement_required);
+      const subject = {
+        accountId: principal.accountId,
+        ...(tenant === undefined ? {} : { workspaceId: tenant.workspaceId }),
+      };
+      if (!(await entitlements(entitlement, subject, context.req.raw))) {
+        throw entitlementRequired(entitlement, await upgradeAvailable(entitlement, subject, context.req.raw));
       }
     }
     return next();

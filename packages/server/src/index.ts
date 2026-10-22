@@ -42,7 +42,7 @@ export type {
   ResponseResult,
 } from "./routes/register.ts";
 export type { ProblemErrorOptions, ProblemFieldError } from "./http/problem.ts";
-export type { EntitlementCheck, EntitlementSubject, SecondFactorCheck } from "./http/authorize.ts";
+export type { EntitlementCheck, EntitlementSubject, EntitlementUpgradeCheck, SecondFactorCheck } from "./http/authorize.ts";
 export type { InstanceAdminGrantCheck } from "./routes/instance/index.ts";
 export type {
   ApiTokenPrincipal,

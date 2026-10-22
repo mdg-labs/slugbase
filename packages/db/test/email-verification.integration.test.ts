@@ -146,6 +146,7 @@ function verification(tokenHash: Buffer, overrides: Partial<EmailVerification> =
         accountId,
         workspaceId,
         nameSuffix: SUFFIX,
+        ownedMax: null,
         jobs: [workspaceCreated(accountId, workspaceId)],
         audit: workspaceAudit(accountId, workspaceId),
       });
@@ -330,6 +331,7 @@ describe("verifyEmail", () => {
               accountId,
               workspaceId,
               nameSuffix: SUFFIX,
+        ownedMax: null,
               jobs: [workspaceCreated(accountId, workspaceId)],
               audit: workspaceAudit(accountId, workspaceId, { action: "x".repeat(65) as AuditRecord["action"] }),
             });
@@ -356,6 +358,7 @@ describe("verifyEmail", () => {
               accountId,
               workspaceId: freshId(),
               nameSuffix: SUFFIX,
+        ownedMax: null,
               jobs: [],
               audit: workspaceAudit(accountId, freshId()),
             });
@@ -598,7 +601,8 @@ describe("verifyEmail", () => {
       store.verifyEmail(
         verification(token, {
           afterVerified: async (accountId, workspaces) => {
-            await workspaces.create({ accountId, workspaceId: freshId(), nameSuffix: SUFFIX, jobs: [] });
+            await workspaces.create({ accountId, workspaceId: freshId(), nameSuffix: SUFFIX,
+        ownedMax: null, jobs: [] });
             throw new Error("the workspace step failed");
           },
         }),
@@ -621,7 +625,8 @@ describe("verifyEmail", () => {
       store.verifyEmail(
         verification(token, {
           afterVerified: async (accountId, workspaces) => {
-            await workspaces.create({ accountId, workspaceId: freshId(), nameSuffix: SUFFIX, jobs: [{ id: freshId(), queue: "event.missing", data: {} }] });
+            await workspaces.create({ accountId, workspaceId: freshId(), nameSuffix: SUFFIX,
+        ownedMax: null, jobs: [{ id: freshId(), queue: "event.missing", data: {} }] });
           },
         }),
       ),
@@ -721,7 +726,8 @@ describe("registerAccount with afterCreated", () => {
 
   const provision: NewRegistration["afterCreated"] = async (accountId, workspaces) => {
     const workspaceId = freshId();
-    await workspaces.create({ accountId, workspaceId, nameSuffix: SUFFIX, jobs: [workspaceCreated(accountId, workspaceId)] });
+    await workspaces.create({ accountId, workspaceId, nameSuffix: SUFFIX,
+        ownedMax: null, jobs: [workspaceCreated(accountId, workspaceId)] });
   };
 
   it("creates the personal workspace and queues its event in the transaction that creates the account", async () => {
@@ -757,7 +763,8 @@ describe("registerAccount with afterCreated", () => {
   it("leaves no account when afterCreated rejects", async () => {
     const input = registration({
       afterCreated: async (accountId, workspaces) => {
-        await workspaces.create({ accountId, workspaceId: freshId(), nameSuffix: SUFFIX, jobs: [] });
+        await workspaces.create({ accountId, workspaceId: freshId(), nameSuffix: SUFFIX,
+        ownedMax: null, jobs: [] });
         throw new Error("the workspace step failed");
       },
     });

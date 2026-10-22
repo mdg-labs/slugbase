@@ -7,11 +7,19 @@ type Behaviour = "rejects" | "no-op" | "disabled";
 // problem code a rejection carries (doc 04 section 3.2).
 const PORTS: Record<
   keyof Adapters,
-  { methods: string[]; behaviour: Behaviour; code: PortUnavailableCode }
+  { methods: string[]; behaviour: Behaviour; code: PortUnavailableCode; answers?: Record<string, unknown> }
 > = {
   mail: { methods: ["send"], behaviour: "rejects", code: "mail_unavailable" },
   ai: { methods: ["suggest"], behaviour: "rejects", code: "ai_unavailable" },
   identity: { methods: ["begin", "complete", "listProviders"], behaviour: "rejects", code: "unavailable" },
+  billing: {
+    methods: [
+      "cancel", "changePlan", "changeQuantity", "checkoutState", "customerDetails", "documentPdf", "legal", "listContracts", "listDocuments", "planState", "plans", "previewChange", "quote", "receiveEvent", "resume", "startCheckout", "subscriptionDetails", "updateBillingDetails", "updatePaymentMethod", "withdraw",
+    ],
+    behaviour: "rejects",
+    code: "billing_unavailable",
+    answers: { planState: "none" },
+  },
   analytics: { methods: ["track"], behaviour: "no-op", code: "unavailable" },
   errors: { methods: ["capture"], behaviour: "no-op", code: "unavailable" },
   clientErrorReport: { methods: ["dsn"], behaviour: "no-op", code: "unavailable" },
@@ -59,8 +67,14 @@ describe("unconfigured()", () => {
       expect(port().available).toBe(false);
     });
 
+    if (spec.answers) {
+      it.each(Object.entries(spec.answers))(`answers ${name}.%s with %j`, async (method, answer) => {
+        await expect(call(port(), method)).resolves.toEqual(answer);
+      });
+    }
+
     if (spec.behaviour === "rejects") {
-      it.each(spec.methods)(`rejects ${name}.%s with PortUnavailable carrying ${spec.code}`, async (method) => {
+      it.each(spec.methods.filter((method) => !(spec.answers && method in spec.answers)))(`rejects ${name}.%s with PortUnavailable carrying ${spec.code}`, async (method) => {
         const rejection = await call(port(), method).then(
           () => undefined,
           (error: unknown) => error,

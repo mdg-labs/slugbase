@@ -1345,7 +1345,7 @@ export interface components {
             "audit.log": boolean;
             /** @description How many bookmarks the workspace may hold, plan-archived ones not counted */
             "bookmarks.max": number | "unlimited";
-            /** @description Whether invitations may be created, listed, resent, linked and accepted */
+            /** @description Whether invitations may be created, listed, resent, linked and accepted; the owner invitation an instance admin issues is accepted without it */
             "members.invite": boolean;
             /** @description How many members the workspace may have; accepted invitations count, pending ones do not */
             "seats.max": number | "unlimited";
@@ -2112,7 +2112,7 @@ export interface components {
             version: number;
         };
         WorkspaceList: {
-            /** @description Whether the account can create a workspace: the deployment lets accounts create them and the account's email address is verified. The UI hides the action when it is false */
+            /** @description Whether the account can create a workspace: the deployment lets accounts create them, the account's email address is verified and the account owns fewer workspaces than its workspaces.ownMax entitlement allows. The UI hides the action, or shows the upgrade path in its place, when it is false */
             canCreate: boolean;
             /** @description The workspaces the account is a member of, without one being deleted, the most recently active first */
             items: components["schemas"]["WorkspaceSummary"][];
@@ -2417,7 +2417,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The handshake is over and the browser is sent on to the returnTo of the start, a path of this application. For the login intent, when the identity is linked to an account that can sign in, a new full session cookie is set; so it is for an identity nobody linked when the provider asserted its address as verified and either an enabled account that has verified that address gets the identity linked, or the provider allows accounts to be created, the address passes its allowed domains and the registration policy accepts it, and an account is created and the identity linked to it. For the invite intent, when the provider asserts the invited address, and no other, as verified, the identity is linked to the account it belongs to or to the enabled account that holds the invited address verified, or an account is created for the invited address (whatever the provider's auto-create setting says, because the invitation authorises it, and when the registration policy accepts it), the account becomes a member of the invitation's workspace with exactly the invited role, the invitation is accepted, and a new full session cookie is set that acts in that workspace. For the link intent the identity is added to the account that started the handshake, which must be the account of the browser's current session, and no session changes. For the reauth intent the browser's current session, which must be a session of the account that started the handshake and of an account the provider's identity is linked to, counts as re-authenticated from now. For every other outcome (a missing, reused, expired or foreign state, a refusal by the provider, a token that fails validation, an identity nobody linked whose address the provider did not assert as verified or that neither links nor creates an account, an invite intent whose provider address is not the invited one or is not verified or whose invitation is no longer pending, an address held by an unverified account, a disabled account, a registration the policy refuses, a link or reauth in a browser whose session is not the one that started it, a link whose session has not re-authenticated within the last ten minutes at the callback, an identity already linked to another account) nothing is changed and the browser goes to /login?error=oidc_failed, one answer that does not say which. The pre-auth cookie is cleared either way */
+            /** @description The handshake is over and the browser is sent on to the returnTo of the start, a path of this application. For the login intent, when the identity is linked to an account that can sign in, a new full session cookie is set; so it is for an identity nobody linked when the provider asserted its address as verified and either an enabled account that has verified that address gets the identity linked, or the provider allows accounts to be created, the address passes its allowed domains and the registration policy accepts it, and an account is created and the identity linked to it. For the invite intent, when the provider asserts the invited address, and no other, as verified, the identity is linked to the account it belongs to or to the enabled account that holds the invited address verified, or an account is created for the invited address (whatever the provider's auto-create setting says, because the invitation authorises it, and when the registration policy accepts it), the account becomes a member of the invitation's workspace with exactly the invited role, the invitation is accepted, and a new full session cookie is set that acts in that workspace. For the link intent the identity is added to the account that started the handshake, which must be the account of the browser's current session, and no session changes. For the reauth intent the browser's current session, which must be a session of the account that started the handshake and of an account the provider's identity is linked to, counts as re-authenticated from now. For every other outcome (a missing, reused, expired or foreign state, a refusal by the provider, a token that fails validation, an identity nobody linked whose address the provider did not assert as verified or that neither links nor creates an account, an invite intent whose provider address is not the invited one or is not verified or whose invitation is no longer pending or whose workspace does not hold the members.invite entitlement or has no free seat (the callback decides both after the token has proved to be a pending invitation's and before anything is written, members.invite first; the owner invitation an instance admin issued is accepted without the members.invite check) or whose accepting account is no longer the one those checks were made for, an address held by an unverified account, a disabled account, a registration the policy refuses, a link or reauth in a browser whose session is not the one that started it, a link whose session has not re-authenticated within the last ten minutes at the callback, an identity already linked to another account) nothing is changed and the browser goes to /login?error=oidc_failed, one answer that does not say which. The pre-auth cookie is cleared either way */
             302: {
                 headers: {
                     /** @description A path of this application: the returnTo of the start, or /login?error=oidc_failed */
@@ -2457,7 +2457,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The service is temporarily unavailable */
+            /** @description The service is temporarily unavailable, or, for the invite intent, a seat-check hook of the composed modules failed or did not answer in time and nothing was written */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -4428,7 +4428,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the account's verified email address is not the invited one, an unverified address included (forbidden, field code invitation_email_mismatch), or the deployment's registration policy refused the invited address for the account to create (registration_refused, one answer for every reason). Nothing is written and the invitation stays pending */
+            /** @description The request did not come from the application itself (cross_site_request), or the account's verified email address is not the invited one, an unverified address included (forbidden, field code invitation_email_mismatch), or the deployment's registration policy refused the invited address for the account to create (registration_refused, one answer for every reason), or the workspace of the invitation does not hold the members.invite entitlement (entitlement_required, in either form; the problem carries entitlement and upgradeAvailable); the owner invitation an instance admin issued is accepted without that check. Nothing is written and the invitation stays pending */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4475,7 +4475,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The service is temporarily unavailable */
+            /** @description The service is temporarily unavailable, or a module that decides the seat limit failed or did not answer in time (unavailable); nothing is written and the invitation stays pending */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -7717,7 +7717,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation (a name that is blank or outside 1 to 64 characters, or a field the operation does not declare) */
+            /** @description The body did not pass validation (a name that is blank or outside 1 to 64 characters, or a field the operation does not declare), or the account already owns as many workspaces as its workspaces.ownMax entitlement allows (workspace_limit_reached; the problem carries limit, used and upgradeAvailable). Nothing is written */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -7737,7 +7737,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The service is temporarily unavailable */
+            /** @description The service is temporarily unavailable, or the entitlement source could not say how many workspaces the account may own */
             503: {
                 headers: {
                     [name: string]: unknown;

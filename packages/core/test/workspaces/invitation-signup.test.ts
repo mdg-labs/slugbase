@@ -27,7 +27,7 @@ function world(result: InvitationSignupResult) {
     acceptWithNewAccount(acceptance) {
       asked.push(acceptance);
       if (result.kind === "accepted") {
-        written.push(acceptance.onAccepted({ workspaceId: result.workspaceId, role: result.role }));
+        written.push(acceptance.onAccepted({ workspaceId: result.workspaceId, invitationId: result.invitationId, role: result.role }));
       }
       return Promise.resolve(result);
     },
@@ -76,6 +76,17 @@ describe("accepting an invitation with registration fields", () => {
       { name: "account.created", payload: { accountId, path: "invitation" } },
       { name: "member.joined", payload: { workspaceId: WORKSPACE, accountId, role: "admin" } },
     ]);
+  });
+
+  it("hands the store the account identifier the caller named, so a seat check and the acceptance that follows it name one account", async () => {
+    const token = generateCredentialToken();
+    const w = world({ kind: "accepted", workspaceId: WORKSPACE, invitationId: INVITATION, role: "member" });
+    const accountId = "0192f3a0-eeee-7000-8000-000000000009";
+
+    await acceptInvitationWithAccount(w.dependencies, { ...ask(token.value), accountId });
+
+    expect(w.asked[0]?.accountId).toBe(accountId);
+    expect(w.written[0]?.events.map((event) => event.payload)).toEqual([{ accountId, path: "invitation" }, { workspaceId: WORKSPACE, accountId, role: "member" }]);
   });
 
   it("passes every refusal on and prepares no record for it", async () => {

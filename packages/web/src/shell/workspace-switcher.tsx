@@ -1,9 +1,10 @@
 import { feedbackToast, type WorkspaceSwitcherAction, type WorkspaceSwitcherProps } from "@slugbase/ui/patterns";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { meQuery } from "../account/me.ts";
+import { ENTITLEMENTS_QUERY_KEY, WorkspaceLimitDialog, useWorkspaceLimitReached } from "../entitlements/index.ts";
 import { Slot, useSlotFilled } from "../extensions/index.ts";
 import { CreateWorkspaceDialog } from "./create-workspace-dialog.tsx";
 import { useSwitchFailureMessage, useWorkspaceSwitch, workspacesQuery } from "./workspaces.ts";
@@ -18,25 +19,29 @@ const WORKSPACE_SETTINGS_PATH = "/settings/workspace";
 export function useWorkspaceSwitcher(): { switcher: WorkspaceSwitcherProps; dialog: ReactElement | null } {
   const { t } = useTranslation();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const api = router.options.context.api;
   const me = useQuery({ ...meQuery(api), staleTime: Number.POSITIVE_INFINITY });
   const list = useQuery(workspacesQuery(api));
   const { pending, switchTo } = useWorkspaceSwitch();
   const switchFailureMessage = useSwitchFailureMessage();
+  const limitReached = useWorkspaceLimitReached();
   const planFilled = useSlotFilled("sidebar.workspacePlan");
-  const [creating, setCreating] = useState(false);
+  // Which dialog "New workspace" opened is settled when it opens: a workspace it creates raises the count, and the limit may be reached while it is open.
+  const [creating, setCreating] = useState<"form" | "limit" | undefined>(undefined);
 
   const activeId = me.data?.activeWorkspaceId ?? undefined;
   const activeName =
     me.data?.memberships.find(({ workspaceId }) => workspaceId === activeId)?.name ?? list.data?.items.find(({ id }) => id === activeId)?.name;
 
   const actions: WorkspaceSwitcherAction[] = [];
-  if (list.data?.canCreate === true) {
+  // At the account's limit the action stays, and opens the upgrade path in place of the form.
+  if (list.data?.canCreate === true || limitReached) {
     actions.push({
       id: "new",
       label: t("workspaces.switcher.new"),
       onSelect: () => {
-        setCreating(true);
+        setCreating(limitReached ? "limit" : "form");
       },
     });
   }
@@ -48,6 +53,12 @@ export function useWorkspaceSwitcher(): { switcher: WorkspaceSwitcherProps; dial
         void router.navigate({ to: WORKSPACE_SETTINGS_PATH });
       },
     });
+  }
+
+  // A workspace the dialog created counts against the limit, and the entitlements say how much.
+  function closeCreating(): void {
+    setCreating(undefined);
+    void queryClient.invalidateQueries({ queryKey: ENTITLEMENTS_QUERY_KEY });
   }
 
   const switcher: WorkspaceSwitcherProps = {
@@ -82,12 +93,11 @@ export function useWorkspaceSwitcher(): { switcher: WorkspaceSwitcherProps; dial
 
   return {
     switcher,
-    dialog: creating ? (
-      <CreateWorkspaceDialog
-        onClose={() => {
-          setCreating(false);
-        }}
-      />
-    ) : null,
+    dialog:
+      creating === "limit" ? (
+        <WorkspaceLimitDialog onClose={closeCreating} />
+      ) : creating === "form" ? (
+        <CreateWorkspaceDialog onClose={closeCreating} />
+      ) : null,
   };
 }

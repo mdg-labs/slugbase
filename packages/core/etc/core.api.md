@@ -138,6 +138,8 @@ export interface Adapters {
     // (undocumented)
     readonly analytics: AnalyticsPort;
     // (undocumented)
+    readonly billing: BillingPort;
+    // (undocumented)
     readonly challenge: ChallengePort;
     // (undocumented)
     readonly clientErrorReport: ClientErrorReportPort;
@@ -530,6 +532,384 @@ export function base32Encode(bytes: Uint8Array): string;
 export function bearerApiToken(authorization: string): string | undefined;
 
 // @public
+export const BILLING_ERROR_CODES: readonly ["billing_unavailable", "already_subscribed", "subscription_not_changeable", "renewal_pending", "charge_changed", "plan_not_available", "quantity_below_minimum", "quantity_below_members", "mandate_required", "checkout_expired", "idempotency_conflict", "rate_limited", "checkout_paused", "plan_checkout_paused"];
+
+// @public
+export type BillingAccountScope = Pick<BillingScope, "accountId">;
+
+// @public (undocumented)
+export interface BillingAddress {
+    // (undocumented)
+    readonly city: string;
+    readonly country: string;
+    // (undocumented)
+    readonly line1: string;
+    // (undocumented)
+    readonly line2?: string;
+    // (undocumented)
+    readonly postalCode: string;
+    // (undocumented)
+    readonly region?: string;
+}
+
+// @public (undocumented)
+export type BillingChangeIneligibleReason = Extract<BillingErrorCode, "subscription_not_changeable" | "renewal_pending" | "plan_not_available" | "quantity_below_minimum" | "quantity_below_members">;
+
+// @public
+export type BillingChangeOptions = {
+    readonly timing: "period_end";
+} | {
+    readonly timing: "immediate";
+    readonly consent: BillingConsent;
+    readonly expectedCharge: BillingMoney;
+};
+
+// @public
+export interface BillingChangePreview {
+    readonly asOf: string;
+    readonly charge: BillingMoney;
+    // (undocumented)
+    readonly chargeForRemainingTime: BillingMoney;
+    // (undocumented)
+    readonly creditForUnusedTime: BillingMoney;
+    // (undocumented)
+    readonly eligible: boolean;
+    readonly ineligibleReason: BillingChangeIneligibleReason | null;
+    readonly newPeriod: BillingPeriod | null;
+    readonly nextChargeDate: string;
+    // (undocumented)
+    readonly tax: BillingTaxBreakdown;
+}
+
+// @public
+export interface BillingChangeRequest {
+    // (undocumented)
+    readonly planCode?: string;
+    // (undocumented)
+    readonly quantity?: number;
+}
+
+// @public
+export interface BillingCheckout {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly redirectUrl: string;
+}
+
+// @public (undocumented)
+export type BillingCheckoutRefusal = Extract<BillingErrorCode, "already_subscribed" | "plan_not_available" | "quantity_below_minimum" | "mandate_required" | "checkout_paused" | "plan_checkout_paused">;
+
+// @public (undocumented)
+export interface BillingCheckoutRequest {
+    // (undocumented)
+    readonly consent: BillingConsent;
+    // (undocumented)
+    readonly planCode: string;
+    // (undocumented)
+    readonly quantity?: number;
+}
+
+// @public (undocumented)
+export interface BillingCheckoutState {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly status: "open" | "completed" | "expired";
+}
+
+// @public
+export interface BillingConsent {
+    readonly acceptedAt: string;
+    // (undocumented)
+    readonly legal: readonly BillingLegalAcceptance[];
+}
+
+// @public (undocumented)
+export interface BillingContract {
+    // (undocumented)
+    readonly endedAt: string | null;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly planCode: string;
+    readonly startedAt: string;
+    readonly withdrawable: boolean;
+    // (undocumented)
+    readonly withdrawnAt: string | null;
+}
+
+// @public (undocumented)
+export interface BillingCustomerDetails {
+    // (undocumented)
+    readonly details: BillingDetails | null;
+}
+
+// @public (undocumented)
+export interface BillingDetails {
+    // (undocumented)
+    readonly address: BillingAddress;
+    // (undocumented)
+    readonly email: string;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly taxId?: string;
+}
+
+// @public (undocumented)
+export interface BillingDocument {
+    // (undocumented)
+    readonly id: string;
+    readonly issuedAt: string;
+    // (undocumented)
+    readonly kind: BillingDocumentKind;
+    // (undocumented)
+    readonly number: string;
+    // (undocumented)
+    readonly total: BillingMoney;
+}
+
+// @public (undocumented)
+export type BillingDocumentKind = "invoice" | "credit_note" | "cancellation_invoice";
+
+// @public (undocumented)
+export interface BillingDocumentPdf {
+    // (undocumented)
+    readonly content: Uint8Array;
+    // (undocumented)
+    readonly filename: string;
+}
+
+// @public
+export class BillingError extends Error {
+    constructor(code: string);
+    // (undocumented)
+    readonly code: BillingErrorCode;
+}
+
+// @public (undocumented)
+export type BillingErrorCode = (typeof BILLING_ERROR_CODES)[number];
+
+// @public
+export interface BillingEventDelivery {
+    // (undocumented)
+    readonly body: string;
+    // (undocumented)
+    readonly signature: string;
+    readonly timestamp: string;
+}
+
+// @public (undocumented)
+export interface BillingEventOutcome {
+    readonly duplicate: boolean;
+    // (undocumented)
+    readonly eventId: string;
+}
+
+// @public (undocumented)
+export type BillingInterval = "month" | "year";
+
+// @public
+export interface BillingLegalAcceptance {
+    // (undocumented)
+    readonly code: string;
+    // (undocumented)
+    readonly version: string;
+}
+
+// @public
+export interface BillingLegalLink {
+    readonly locale: string;
+    // (undocumented)
+    readonly url: string;
+}
+
+// @public
+export interface BillingLegalText {
+    // (undocumented)
+    readonly code: string;
+    readonly effectiveAt: string;
+    // (undocumented)
+    readonly links: readonly BillingLegalLink[];
+    // (undocumented)
+    readonly version: string;
+}
+
+// @public
+export interface BillingMoney {
+    // (undocumented)
+    readonly amountMinor: number;
+    // (undocumented)
+    readonly currency: string;
+}
+
+// @public
+export interface BillingPage<T> {
+    // (undocumented)
+    readonly items: readonly T[];
+    // (undocumented)
+    readonly nextCursor: string | null;
+}
+
+// @public (undocumented)
+export interface BillingPeriod {
+    // (undocumented)
+    readonly end: string;
+    readonly start: string;
+}
+
+// @public (undocumented)
+export interface BillingPlan {
+    readonly checkoutOpen: boolean;
+    // (undocumented)
+    readonly code: string;
+    readonly maxQuantity: number | null;
+    // (undocumented)
+    readonly minQuantity: number;
+    // (undocumented)
+    readonly prices: readonly BillingPlanPrice[];
+}
+
+// @public
+export interface BillingPlanPrice {
+    // (undocumented)
+    readonly interval: BillingInterval;
+    // (undocumented)
+    readonly unitAmount: BillingMoney;
+}
+
+// @public
+export type BillingPlanState = "none" | "active" | "cancelling" | "past_due";
+
+// @public
+export interface BillingPort extends Port {
+    // (undocumented)
+    cancel(scope: BillingScope): Promise<BillingSubscription>;
+    // (undocumented)
+    changePlan(scope: BillingScope, planCode: string, options?: BillingChangeOptions): Promise<BillingSubscription>;
+    // (undocumented)
+    changeQuantity(scope: BillingScope, quantity: number, options?: BillingChangeOptions): Promise<BillingSubscription>;
+    // (undocumented)
+    checkoutState(scope: BillingScope, id: string): Promise<BillingCheckoutState>;
+    // (undocumented)
+    customerDetails(scope: BillingScope): Promise<BillingCustomerDetails>;
+    // (undocumented)
+    documentPdf(scope: BillingScope, id: string): Promise<BillingDocumentPdf>;
+    legal(scope: BillingAccountScope): Promise<readonly BillingLegalText[]>;
+    // (undocumented)
+    listContracts(scope: BillingScope, cursor?: string): Promise<BillingPage<BillingContract>>;
+    // (undocumented)
+    listDocuments(scope: BillingScope, cursor?: string): Promise<BillingPage<BillingDocument>>;
+    // (undocumented)
+    plans(scope: BillingAccountScope): Promise<readonly BillingPlan[]>;
+    // (undocumented)
+    planState(scope: BillingScope): Promise<BillingPlanState>;
+    // (undocumented)
+    previewChange(scope: BillingScope, request: BillingChangeRequest): Promise<BillingChangePreview>;
+    quote(scope: BillingAccountScope, request: BillingQuoteRequest): Promise<BillingQuote>;
+    // (undocumented)
+    receiveEvent(delivery: BillingEventDelivery): Promise<BillingEventOutcome>;
+    // (undocumented)
+    resume(scope: BillingScope): Promise<BillingSubscription>;
+    // (undocumented)
+    startCheckout(scope: BillingScope, request: BillingCheckoutRequest): Promise<BillingCheckout>;
+    subscriptionDetails(scope: BillingScope): Promise<BillingSubscriptionDetails | null>;
+    // (undocumented)
+    updateBillingDetails(scope: BillingScope, details: BillingDetails): Promise<BillingCustomerDetails>;
+    // (undocumented)
+    updatePaymentMethod(scope: BillingScope): Promise<BillingRedirect>;
+    // (undocumented)
+    withdraw(scope: BillingScope, withdrawal: BillingWithdrawal): Promise<BillingContract>;
+}
+
+// @public (undocumented)
+export interface BillingQuote {
+    readonly refusal: BillingCheckoutRefusal | null;
+    // (undocumented)
+    readonly tax: BillingTaxBreakdown;
+}
+
+// @public
+export interface BillingQuoteRequest {
+    readonly country: string;
+    // (undocumented)
+    readonly interval: BillingInterval;
+    // (undocumented)
+    readonly planCode: string;
+    // (undocumented)
+    readonly quantity?: number;
+    // (undocumented)
+    readonly taxId?: string;
+}
+
+// @public
+export interface BillingRedirect {
+    // (undocumented)
+    readonly redirectUrl: string;
+}
+
+// @public
+export interface BillingScope {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public
+export interface BillingSubscription {
+    readonly cancelAt: string | null;
+    // (undocumented)
+    readonly interval: BillingInterval;
+    // (undocumented)
+    readonly periodEnd: string;
+    readonly periodStart: string;
+    // (undocumented)
+    readonly planCode: string;
+    // (undocumented)
+    readonly quantity: number;
+    // (undocumented)
+    readonly state: Exclude<BillingPlanState, "none">;
+}
+
+// @public
+export interface BillingSubscriptionDetails extends BillingSubscription {
+    readonly nextChargeDate: string | null;
+    // (undocumented)
+    readonly unitAmount: BillingMoney;
+}
+
+// @public
+export interface BillingTaxBreakdown {
+    // (undocumented)
+    readonly gross: BillingMoney;
+    // (undocumented)
+    readonly lines: readonly BillingTaxLine[];
+    // (undocumented)
+    readonly net: BillingMoney;
+    // (undocumented)
+    readonly tax: BillingMoney;
+}
+
+// @public
+export interface BillingTaxLine {
+    // (undocumented)
+    readonly amount: BillingMoney;
+    // (undocumented)
+    readonly label: string;
+    // (undocumented)
+    readonly rateBasisPoints: number;
+}
+
+// @public (undocumented)
+export interface BillingWithdrawal {
+    // (undocumented)
+    readonly contractId: string;
+    readonly declaration: string;
+}
+
+// @public
 export function bindOidcState(key: Uint8Array, state: string): string;
 
 // @public
@@ -544,7 +924,7 @@ export interface BreachedPasswords {
 }
 
 // @public
-export function canCreateWorkspace(input: WorkspaceCreationPolicy): boolean;
+export function canCreateWorkspace(input: WorkspaceCreationCapacity): boolean;
 
 // @public
 export interface ChallengePort extends Port {
@@ -589,6 +969,9 @@ export function createEntitlementCheck(service: EntitlementService): Entitlement
 // @public (undocumented)
 export function createEntitlementService(input: EntitlementServiceOptions): EntitlementService;
 
+// @public (undocumented)
+export function createEntitlementUpgradeCheck(service: EntitlementService): EntitlementUpgradeCheck;
+
 // @public
 export function createInstanceWorkspace(input: InstanceWorkspaceDependencies, ask: InstanceWorkspaceCreationAsk): Promise<InstanceWorkspaceCreationOutcome>;
 
@@ -596,7 +979,13 @@ export function createInstanceWorkspace(input: InstanceWorkspaceDependencies, as
 export function createInvitationLink(input: Omit<InvitationActionDependencies, "newId">, ask: InvitationActionAsk): Promise<InvitationLinkOutcome>;
 
 // @public (undocumented)
+export function createOwnedWorkspaceEntitlements(service: EntitlementService): OwnedWorkspaceEntitlements;
+
+// @public (undocumented)
 export function createPasswordPolicy(input?: PasswordPolicyOptions): PasswordPolicy;
+
+// @public (undocumented)
+export function createSeatEntitlements(service: EntitlementService): SeatEntitlements;
 
 // @public
 export function createWorkspace(input: WorkspaceCreationDependencies, ask: WorkspaceCreationAsk): Promise<WorkspaceCreationOutcome>;
@@ -866,12 +1255,16 @@ export class EntitlementSourceError extends Error {
 export interface EntitlementSubject {
     // (undocumented)
     readonly accountId: string;
+    readonly joining?: boolean;
     // (undocumented)
     readonly workspaceId?: string;
 }
 
 // @public (undocumented)
 export type EntitlementType = "flag" | "limit";
+
+// @public
+export type EntitlementUpgradeCheck = (entitlement: string, subject: EntitlementSubject, request: object) => boolean | Promise<boolean>;
 
 // @public
 export class EntitlementVersionError extends Error {
@@ -946,6 +1339,7 @@ export interface IdentityAcceptance {
     readonly mayCreate: boolean;
     readonly onAccepted: (accepted: {
         readonly workspaceId: string;
+        readonly invitationId: string;
         readonly role: WorkspaceRole;
         readonly accountId: string;
         readonly displayName: string;
@@ -1730,6 +2124,7 @@ export interface InvitationDependencies {
 
 // @public (undocumented)
 export interface InvitationIdentityAsk {
+    readonly accountId?: string;
     readonly displayName: string;
     // (undocumented)
     readonly email: string;
@@ -1987,6 +2382,7 @@ export type InvitationRole = (typeof INVITATION_ROLES)[number];
 
 // @public (undocumented)
 export interface InvitationSignupAsk {
+    readonly accountId?: string;
     // (undocumented)
     readonly displayName: string;
     // (undocumented)
@@ -2080,6 +2476,14 @@ export function isInstanceAuditAction(value: unknown): value is InstanceAuditAct
 
 // @public
 export function issueInstanceResetLink(input: InstanceRecoveryDependencies, ask: InstanceResetLinkAsk): Promise<InstanceResetLinkOutcome>;
+
+// @public
+export interface JoiningEntitlements {
+    // (undocumented)
+    readonly upgradeAvailable: boolean;
+    // (undocumented)
+    readonly values: WorkspaceEntitlementValues;
+}
 
 // @public
 export function listInstanceAccounts(input: InstanceAccountDependencies, ask: InstanceAccountAsk): Promise<readonly InstanceAccount[]>;
@@ -2252,6 +2656,7 @@ export interface NewAccountAcceptance {
     readonly locale: string;
     readonly onAccepted: (accepted: {
         readonly workspaceId: string;
+        readonly invitationId: string;
         readonly role: WorkspaceRole;
     }) => InvitationSignupRecords;
     readonly passwordHash: string;
@@ -2334,6 +2739,12 @@ export interface OtpauthOptions {
 
 // @public
 export function otpauthUri(input: OtpauthOptions): string;
+
+// @public
+export interface OwnedWorkspaceEntitlements {
+    limit(accountId: string, request: object): Promise<EntitlementLimit>;
+    upgradeAvailable(accountId: string, ownedWorkspaceIds: readonly string[], request: object): Promise<boolean>;
+}
 
 // @public (undocumented)
 export interface OwnershipTransferAsk {
@@ -2424,7 +2835,7 @@ export interface PersonalWorkspaceDependencies {
 }
 
 // @public
-export type PersonalWorkspaceOutcome = "created" | "exists";
+export type PersonalWorkspaceOutcome = "created" | "exists" | "limit_reached";
 
 // @public (undocumented)
 export interface PersonalWorkspaceRequest {
@@ -2437,6 +2848,7 @@ export interface PersonalWorkspaceRequest {
     readonly events: readonly DomainEvent<"workspace.created">[];
     // (undocumented)
     readonly nameSuffix: string;
+    readonly ownedMax: EntitlementLimit;
     readonly workspaceId: string;
 }
 
@@ -2465,13 +2877,13 @@ export class PortUnavailable extends Error {
 }
 
 // @public
-export type PortUnavailableCode = Extract<ProblemCode, "unavailable" | "mail_unavailable" | "ai_unavailable">;
+export type PortUnavailableCode = Extract<ProblemCode, "unavailable" | "mail_unavailable" | "ai_unavailable" | "billing_unavailable">;
 
 // @public
 export function prepareAuditRecord<Name extends AuditAction>(event: AuditEventInput<Name>, newId: () => string): AuditRecord;
 
 // @public
-export function provisionPersonalWorkspace(input: PersonalWorkspaceDependencies, accountId: string): Promise<PersonalWorkspaceOutcome>;
+export function provisionPersonalWorkspace(input: PersonalWorkspaceDependencies, accountId: string, ownedMax: EntitlementLimit): Promise<PersonalWorkspaceOutcome>;
 
 // @public (undocumented)
 export interface RateLimitDecision {
@@ -2532,6 +2944,7 @@ export function renameWorkspace(input: WorkspaceAdministrationDependencies, ask:
 // @public (undocumented)
 export interface RequestEntitlements {
     forAccount(): Promise<AccountEntitlementSet>;
+    forJoiningWorkspace(workspaceId: string): Promise<JoiningEntitlements>;
     forWorkspace(workspaceId: string): Promise<EntitlementSet | undefined>;
 }
 
@@ -2563,6 +2976,11 @@ export interface SealedSecret {
     // (undocumented)
     readonly ciphertext: Uint8Array;
     readonly keyId: string;
+}
+
+// @public
+export interface SeatEntitlements {
+    limit(accountId: string, workspaceId: string, request: object): Promise<number | null>;
 }
 
 // @public (undocumented)
@@ -2629,6 +3047,9 @@ export interface TenantResolveRequest {
     readonly requestId: string;
 }
 
+// @public
+export function toBillingErrorCode(code: string): BillingErrorCode;
+
 // @public (undocumented)
 export const TOTP_DIGITS = 6;
 
@@ -2672,6 +3093,9 @@ export function verifyTotp(secret: Uint8Array, code: string, nowMs: number): num
 export function withEntitlementChange<T>(writer: EntitlementVersionWriter, change: () => Promise<T>): Promise<T>;
 
 // @public
+export function withinOwnedWorkspaceLimit(owned: number, ownedMax: EntitlementLimit): boolean;
+
+// @public
 export const WORKSPACE_LIMIT_ENTITLEMENTS: readonly WorkspaceLimitEntitlement[];
 
 // @public
@@ -2710,6 +3134,13 @@ export interface WorkspaceCreationAsk extends WorkspaceCreationPolicy {
     readonly ipPrefix: string | null;
     // (undocumented)
     readonly name: string;
+    readonly ownedMax: EntitlementLimit;
+}
+
+// @public (undocumented)
+export interface WorkspaceCreationCapacity extends WorkspaceCreationPolicy {
+    readonly owned: number;
+    readonly ownedMax: EntitlementLimit;
 }
 
 // @public (undocumented)
@@ -2731,6 +3162,12 @@ export type WorkspaceCreationOutcome = {
 } | {
     readonly kind: "unverified";
 }
+/** The account owns `used` workspaces, as many as `limit` allows. */
+| {
+    readonly kind: "limit_reached";
+    readonly limit: number;
+    readonly used: number;
+}
 /** The account does not exist or is disabled. */
 | {
     readonly kind: "unavailable";
@@ -2749,6 +3186,7 @@ export interface WorkspaceCreationRequest {
     readonly events: readonly DomainEvent<"workspace.created">[];
     // (undocumented)
     readonly name: string;
+    readonly ownedMax: EntitlementLimit;
     readonly workspaceId: string;
 }
 
@@ -2913,8 +3351,22 @@ export type WorkspaceSettingsPatch = {
 
 // @public (undocumented)
 export interface WorkspaceStore {
-    create(request: WorkspaceCreationRequest): Promise<boolean>;
+    create(request: WorkspaceCreationRequest): Promise<WorkspaceStoreResult>;
 }
+
+// @public (undocumented)
+export type WorkspaceStoreResult = {
+    readonly kind: "created";
+}
+/** The account owns `used` workspaces, which is as many as `ownedMax` allows. */
+| {
+    readonly kind: "limit_reached";
+    readonly used: number;
+}
+/** The account does not exist or is disabled. */
+| {
+    readonly kind: "unavailable";
+};
 
 // (No @packageDocumentation comment for this package)
 

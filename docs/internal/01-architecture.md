@@ -280,7 +280,7 @@ Entitlement keys are a closed, typed catalog in `@slugbase/core` (`entitlements/
 | `ai.suggestions` | workspace | boolean | `true` (still needs a configured `AiSuggestPort` and the workspace toggle) | The AI suggestion endpoint and UI |
 | `sharing.members` | workspace | boolean | `true` | Sharing a bookmark or folder with an individual member |
 | `sharing.teams` | workspace | boolean | `true` | Sharing with teams; teams as sharing targets |
-| `members.invite` | workspace | boolean | `true` | Creating, listing, resending and linking invitations, and accepting them; revoking one is not gated |
+| `members.invite` | workspace | boolean | `true` | Creating, listing, resending and linking invitations, and accepting them, except the owner invitation an instance admin issues; revoking one is not gated |
 | `teams.manage` | workspace | boolean | `true` | Teams administration (create, edit, membership) |
 | `audit.log` | workspace | boolean | `true` | Reading the audit log (audit events are always written; only reading is gated) |
 | `seats.max` | workspace | number or `unlimited` | `unlimited` | The member ceiling (accepted invitations count, pending ones do not) |
@@ -298,7 +298,7 @@ These are not entitlements on any edition: personal API tokens, folders, tags, s
 | Create workspace | `workspaces.owned < workspaces.ownMax` | `422 workspace_limit_reached` |
 | AI suggestion | `ai.suggestions`, a configured port, the workspace toggle and the member not opted out | `403 entitlement_required`, or `503 ai_unavailable` |
 | Share with a member or a team | `sharing.members` or `sharing.teams` | `403 entitlement_required` |
-| Create, list, resend or link an invitation, or accept one | `members.invite` on each; `seats.used < seats.max` on acceptance, inside the acceptance transaction through the seat check (§13.1) | `403 entitlement_required`; `422 seat_limit_reached` |
+| Create, list, resend or link an invitation, or accept one | `members.invite` on each, except that accepting the owner invitation an instance admin issues does not need it (it seats the first owner of a workspace and invites nobody); `seats.used < seats.max` on every acceptance, with the limit decided before the accepting transaction through the seat check and the members counted in it under the workspace row lock (§13.1) | `403 entitlement_required`; `422 seat_limit_reached` |
 | Teams administration | `teams.manage` | `403 entitlement_required` |
 | Read the audit log | `audit.log` | `403 entitlement_required` |
 
@@ -433,7 +433,7 @@ Doc 10 is the threat model; this is the shape that implements it.
 
 | Hook | Kind | Signature sketch | Runs | Default (nothing registered) |
 |---|---|---|---|---|
-| Seat check | Module hook | `seatCheck({ workspaceId, accountId, invitationId }) → { seatLimit: number \| null }` | When an invitation is accepted | Limit is the workspace's `seats.max` entitlement, unlimited on CE |
+| Seat check | Module hook | `seatCheck({ workspaceId, accountId, invitationId }) → { seatLimit: number \| null }` | When an invitation is accepted, before the transaction that accepts it | Limit is the workspace's `seats.max` entitlement, unlimited on CE |
 | Deletion veto | Module hook | `deletionGuard({ kind: 'workspace' \| 'account', workspaceId?, accountId, requestedBy }) → allow \| refuse(code)` | Before a workspace or an account is deleted | Allow |
 | Archive operation | Exported core service | `archiveBookmarks(tx, { workspaceId, bookmarkIds }) → { archived }` and `restoreBookmarks(...)` | When a composition calls it from its own job | Never called, so nothing is archived |
 | Client error-report source | Adapter | `clientErrorReport.dsn({ accountId, workspaceId }) → string \| null` | When the signed-in account's own profile is read | `null`: no field, no browser reporter |
@@ -441,7 +441,7 @@ Doc 10 is the threat model; this is the shape that implements it.
 
 ### 13.1 Seat check
 
-Runs inside the invitation-accept transaction, after the workspace row is locked and before the membership is inserted. The hook returns the seat limit (`null` means unlimited); CE counts the workspace's members under the lock and refuses with `422 seat_limit_reached` when the count already equals the limit, leaving the invitation pending and usable. Two people accepting the last free seat therefore never both succeed. Sending, resending and listing invitations never call the hook, and a pending invitation holds no seat. A registered hook replaces the value that the entitlement engine would supply, so a composition whose source already supplies `seats.max` needs the hook only when its limit differs from that entitlement; `member.joined` is emitted after a successful accept, so a module can recount.
+Runs before the transaction that accepts the invitation, so no lock is held and no transaction of the acceptance is open while it runs. The token names the workspace, so a first pass of the acceptance, always rolled back, learns the workspace, the invitation and the accepting account (the signed-in account, the account the provider's identity leads to, or the identifier a new account will get). The hook is asked with that workspace, that account and that invitation and returns the seat limit (`null` means unlimited); the limit is resolved as the workspace's `seats.max`, replaced by the answers of the registered hooks. The acceptance that writes carries the limit, and CE counts the workspace's members under the workspace row lock in that transaction and refuses with `422 seat_limit_reached` when the count already equals the limit, leaving the invitation pending and usable. The count under the lock is the authority, so two people accepting the last free seat never both succeed. Sending, resending and listing invitations never call the hook, and a pending invitation holds no seat. A registered hook replaces the value that the entitlement engine would supply, so a composition whose source already supplies `seats.max` needs the hook only when its limit differs from that entitlement; `member.joined` is emitted after a successful accept, so a module can recount.
 
 ### 13.2 Deletion veto
 

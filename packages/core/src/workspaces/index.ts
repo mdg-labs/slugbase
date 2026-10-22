@@ -5,14 +5,16 @@ export type {
   PersonalWorkspaceRequest,
   PersonalWorkspaceStore,
 } from "./personal.ts";
-export { WORKSPACE_NAME_MAX_LENGTH, canCreateWorkspace, createWorkspace } from "./create.ts";
+export { WORKSPACE_NAME_MAX_LENGTH, canCreateWorkspace, createWorkspace, withinOwnedWorkspaceLimit } from "./create.ts";
 export type {
   WorkspaceCreationAsk,
+  WorkspaceCreationCapacity,
   WorkspaceCreationDependencies,
   WorkspaceCreationOutcome,
   WorkspaceCreationPolicy,
   WorkspaceCreationRequest,
   WorkspaceStore,
+  WorkspaceStoreResult,
 } from "./create.ts";
 export { changeWorkspaceSettings, renameWorkspace } from "./manage.ts";
 export type {

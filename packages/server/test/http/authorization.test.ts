@@ -22,7 +22,7 @@ import {
   type SessionPrincipal,
 } from "../../src/create-server.ts";
 import { RouteTable, installChain, type ChainEnv } from "../../src/http/chain.ts";
-import type { EntitlementCheck, EntitlementSubject } from "../../src/http/authorize.ts";
+import type { EntitlementCheck, EntitlementSubject, EntitlementUpgradeCheck } from "../../src/http/authorize.ts";
 import { adapters, documentOf, fakeDatabase, hookDispatcher, recordingLogger, serverConfig, tenantDependencies, rateLimitDependencies } from "../support.ts";
 
 // Stages 4, 7 and 9 of the chain (doc 01 section 4), exercised through the
@@ -834,7 +834,7 @@ describe("the order of the stages", () => {
 });
 
 describe("an entitlement source", () => {
-  function gated(check: EntitlementCheck) {
+  function gated(check: EntitlementCheck, upgradeAvailable?: EntitlementUpgradeCheck) {
     const app = new Hono<ChainEnv>();
     const handled: string[] = [];
     const operation = operationOf("/api/v1/teams", "listTeams", "member", { scope: "read", entitlement: "teams.manage" });
@@ -850,6 +850,7 @@ describe("an entitlement source", () => {
         hooks: hookDispatcher(),
         responseValidation: "throw",
         entitlements: check,
+        ...(upgradeAvailable === undefined ? {} : { upgradeAvailable }),
         ...tenantDependencies(), ...rateLimitDependencies(),
       },
       {
@@ -886,6 +887,26 @@ describe("an entitlement source", () => {
     expect(response.status).toBe(403);
     expect(await codeOf(response)).toBe("entitlement_required");
     expect(handled).toEqual([]);
+  });
+
+  it("names the missing entitlement in the problem, with no upgrade path unless the source offers one", async () => {
+    const plain = await gated(() => false).app.request("http://localhost/api/v1/teams");
+    expect(await plain.json()).toMatchObject({ code: "entitlement_required", status: 403, entitlement: "teams.manage", upgradeAvailable: false });
+
+    const asked: [string, EntitlementSubject][] = [];
+    const offered = await gated(
+      () => false,
+      (entitlement, subject) => (asked.push([entitlement, subject]), true),
+    ).app.request("http://localhost/api/v1/teams");
+    expect(await offered.json()).toMatchObject({ code: "entitlement_required", entitlement: "teams.manage", upgradeAvailable: true });
+    expect(asked).toEqual([["teams.manage", { accountId: ACCOUNTS.owner, workspaceId: WORKSPACE }]]);
+  });
+
+  it("asks nothing of the upgrade check when the entitlement is held", async () => {
+    const asked: string[] = [];
+    const { app } = gated(() => true, (entitlement) => (asked.push(entitlement), true));
+    expect((await app.request("http://localhost/api/v1/teams")).status).toBe(200);
+    expect(asked).toEqual([]);
   });
 
   it("fails the request when the source cannot decide", async () => {

@@ -26,7 +26,7 @@ export interface NewInvitationAccount {
   readonly seatLimit: number | null;
   readonly session: InvitationSignupSession;
   /** Called in the transaction once the invitation is accepted; the audit events and jobs it returns are written in that transaction. */
-  readonly onAccepted: (accepted: { readonly workspaceId: string; readonly role: WorkspaceRole }) => InvitationAccountWrites;
+  readonly onAccepted: (accepted: { readonly workspaceId: string; readonly invitationId: string; readonly role: WorkspaceRole }) => InvitationAccountWrites;
 }
 
 export interface InvitationAccountStore {
@@ -94,7 +94,7 @@ export function bindInvitationAccountStore(client: postgres.Sql): InvitationAcco
               throw new Error("sys_invitation_accept_new_account accepted without naming the workspace, the invitation and the role");
             }
             const role = roleOf(row.accepted_role);
-            const writes = acceptance.onAccepted({ workspaceId: row.accepted_workspace_id, role });
+            const writes = acceptance.onAccepted({ workspaceId: row.accepted_workspace_id, invitationId: row.accepted_invitation_id, role });
             await insertAuditRecords(tx, { accountId: acceptance.accountId, workspaceId: row.accepted_workspace_id }, writes.audit);
             for (const job of writes.jobs) {
               await enqueueInTransaction(tx, job);

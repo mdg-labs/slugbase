@@ -47,6 +47,7 @@ import type { WorkspaceRole } from '@slugbase/core';
 import type { WorkspaceSettings } from '@slugbase/core';
 import type { WorkspaceSettingsChange } from '@slugbase/core';
 import type { WorkspaceSettingsPatch } from '@slugbase/core';
+import type { WorkspaceStoreResult } from '@slugbase/core';
 
 // @public (undocumented)
 export const ACCENT_PRESETS: readonly ["periwinkle", "violet", "rose", "amber", "green", "teal"];
@@ -864,6 +865,7 @@ export interface NewInvitationAccount {
     readonly locale: string;
     readonly onAccepted: (accepted: {
         readonly workspaceId: string;
+        readonly invitationId: string;
         readonly role: WorkspaceRole;
     }) => InvitationAccountWrites;
     readonly passwordHash: string;
@@ -887,6 +889,7 @@ export interface NewInvitationIdentity {
     readonly mayCreate: boolean;
     readonly onAccepted: (accepted: {
         readonly workspaceId: string;
+        readonly invitationId: string;
         readonly role: WorkspaceRole;
         readonly accountId: string;
         readonly displayName: string;
@@ -926,6 +929,7 @@ export interface NewPersonalWorkspace {
     }) => AuditRecord;
     readonly jobs: readonly QueuedJob[];
     readonly nameSuffix: string;
+    readonly ownedMax: number | null;
     readonly workspaceId: string;
 }
 
@@ -962,6 +966,7 @@ export interface NewWorkspace {
     readonly id: string;
     readonly jobs: readonly QueuedJob[];
     readonly name: string;
+    readonly ownedMax: number | null;
 }
 
 // @public
@@ -1035,7 +1040,7 @@ export interface PasswordResetStore {
 }
 
 // @public
-export type PersonalWorkspaceResult = "created" | "exists" | "unavailable";
+export type PersonalWorkspaceResult = "created" | "exists" | "limit_reached" | "unavailable";
 
 // @public (undocumented)
 export interface PersonalWorkspaceWriter {
@@ -1363,7 +1368,7 @@ export const workspacePurgeOrder: readonly string[];
 // @public (undocumented)
 export interface WorkspaceRepository extends WorkspaceAdministrationStore {
     changeSettings(patch: WorkspaceSettingsPatch): Promise<WorkspaceSettingsChange | undefined>;
-    create(workspace: NewWorkspace): Promise<boolean>;
+    create(workspace: NewWorkspace): Promise<WorkspaceStoreResult>;
     current(): Promise<WorkspaceDetail | undefined>;
     list(): Promise<readonly WorkspaceSummary[]>;
     markDeleting(jobs: readonly QueuedJob[]): Promise<boolean>;

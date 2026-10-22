@@ -310,7 +310,7 @@ describe("POST /instance/workspaces for an owner invitation", () => {
   });
 
   it("is the link the owner redeems: the inspection names the workspace, and the account that holds the address becomes its owner", async () => {
-    const world = harness.serve();
+    const world = harness.serve({ entitlements: () => true });
     const root = await admin(world);
     const invitee = await harness.person(world);
     const created = await send(world, "POST", LIST, { cookie: root.cookie }, { name: "Waiting", ownerEmail: invitee.account.email });

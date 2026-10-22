@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createServer, type RunningServer } from "../../src/create-server.ts";
-import { adapters, fakeDatabase, recordingLogger, serverConfig } from "../support.ts";
+import { adapters, fakeAuthStore, fakeDatabase, recordingLogger, serverConfig } from "../support.ts";
 
 // /ready stays 503 for as long as the server's own migration runs, even when the
 // database already reports the level of the build: the pg-boss schema, which
@@ -43,6 +43,7 @@ describe("GET /ready while the server migrates", () => {
       migrations: [],
       logger: recordingLogger(),
       database: fakeDatabase(),
+      authStore: fakeAuthStore(),
     });
     const starting = server.start({ port: 0 }).then((handle) => {
       running.push(handle);

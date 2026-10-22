@@ -1,5 +1,6 @@
 import type { AiSuggestPort } from "./ai-suggest.ts";
 import type { AnalyticsPort } from "./analytics.ts";
+import type { BillingPort } from "./billing.ts";
 import type { ChallengePort } from "./challenge.ts";
 import type { ClientErrorReportPort } from "./client-error-report.ts";
 import type { EgressPort } from "./egress.ts";
@@ -13,14 +14,14 @@ import type { TenantResolver } from "./tenant-resolver.ts";
 
 /**
  * The adapter selected for each port: the `adapters` argument of `createServer`
- * (doc 01 section 7.1). `BillingPort` joins the map with the first Cloud billing
- * operation.
+ * (doc 01 section 7.1).
  */
 export interface Adapters {
   readonly mail: MailPort;
   readonly ai: AiSuggestPort;
   readonly identity: IdentityPort;
   readonly analytics: AnalyticsPort;
+  readonly billing: BillingPort;
   readonly errors: ErrorReportPort;
   readonly clientErrorReport: ClientErrorReportPort;
   readonly challenge: ChallengePort;

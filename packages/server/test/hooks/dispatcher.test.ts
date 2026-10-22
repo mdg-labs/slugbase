@@ -1,4 +1,4 @@
-import type { ClientErrorReportPort } from "@slugbase/core";
+import type { ClientErrorReportPort, SeatEntitlements } from "@slugbase/core";
 import { describe, expect, it } from "vitest";
 import { ProblemError } from "../../src/http/problem.ts";
 import {
@@ -11,7 +11,7 @@ import {
   type HookRegistration,
   type ServerHooks,
 } from "../../src/hooks/index.ts";
-import { adapters, recordingLogger } from "../support.ts";
+import { adapters, recordingLogger, unlimitedSeats } from "../support.ts";
 
 const seat = { workspaceId: "w1", accountId: "a1", invitationId: "i1" } as const;
 const workspaceDeletion: DeletionGuardInput = { kind: "workspace", workspaceId: "w1", accountId: "a1", requestedBy: "member" };
@@ -24,13 +24,14 @@ const module = (name: string, hooks: ServerHooks, refusals: HookRegistration["re
 });
 const hanging = (): Promise<never> => new Promise(() => undefined);
 
-function dispatcher(registrations: readonly HookRegistration[], overrides: { port?: ClientErrorReportPort; timeoutMs?: number } = {}) {
+function dispatcher(registrations: readonly HookRegistration[], overrides: { port?: ClientErrorReportPort; seats?: SeatEntitlements; timeoutMs?: number } = {}) {
   const logger = recordingLogger();
   return {
     logger,
     hooks: createHookDispatcher({
       registrations,
       clientErrorReport: overrides.port ?? adapters().clientErrorReport,
+      seats: overrides.seats ?? unlimitedSeats,
       logger,
       timeoutMs: overrides.timeoutMs ?? 25,
     }),
@@ -84,6 +85,36 @@ describe("the seat check", () => {
     const limited = module("b", { seatCheck: () => Promise.resolve({ seatLimit: 7 }) });
     await expect(dispatcher([unlimited, limited]).hooks.seatLimit(seat, 2)).resolves.toBe(7);
     await expect(dispatcher([unlimited]).hooks.seatLimit(seat, 2)).resolves.toBeNull();
+  });
+
+  it("starts an acceptance's limit from the engine's seats.max for the workspace, the account and the request", async () => {
+    const asked: unknown[][] = [];
+    const request = {};
+    const seats: SeatEntitlements = {
+      limit: (accountId, workspaceId, given) => {
+        asked.push([accountId, workspaceId, given]);
+        return Promise.resolve(3);
+      },
+    };
+    await expect(dispatcher([], { seats }).hooks.acceptanceSeatLimit(seat, request)).resolves.toBe(3);
+    expect(asked).toEqual([["a1", "w1", request]]);
+  });
+
+  it("lets a hook's lower limit replace the engine's, and a hook's answer replace it when higher", async () => {
+    const seats: SeatEntitlements = { limit: () => Promise.resolve(5) };
+    const lower = module("lower", { seatCheck: () => ({ seatLimit: 2 }) });
+    const higher = module("higher", { seatCheck: () => ({ seatLimit: 9 }) });
+    await expect(dispatcher([lower], { seats }).hooks.acceptanceSeatLimit(seat, {})).resolves.toBe(2);
+    await expect(dispatcher([higher, lower], { seats }).hooks.acceptanceSeatLimit(seat, {})).resolves.toBe(2);
+    await expect(dispatcher([higher], { seats }).hooks.acceptanceSeatLimit(seat, {})).resolves.toBe(9);
+  });
+
+  it("rejects, and consults no hook, when the engine cannot read the limit", async () => {
+    const consulted: string[] = [];
+    const seats: SeatEntitlements = { limit: () => Promise.reject(new Error("the source is down")) };
+    const hook = module("a", { seatCheck: () => { consulted.push("a"); return { seatLimit: 1 }; } });
+    await expect(dispatcher([hook], { seats }).hooks.acceptanceSeatLimit(seat, {})).rejects.toThrow("the source is down");
+    expect(consulted).toEqual([]);
   });
 
   it("runs the hooks in registration order", async () => {

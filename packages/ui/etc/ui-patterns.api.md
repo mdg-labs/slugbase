@@ -302,9 +302,9 @@ export interface EmptyStateProps {
 
 // @public
 export const feedbackToast: {
-    info: (title: string, description?: string) => string;
-    success: (title: string, description?: string) => string;
-    error: (title: string, description?: string) => string;
+    info: (title: string, description?: ReactNode) => string;
+    success: (title: string, description?: ReactNode) => string;
+    error: (title: string, description?: ReactNode) => string;
 };
 
 // @public

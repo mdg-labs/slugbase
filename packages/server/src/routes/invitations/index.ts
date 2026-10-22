@@ -15,6 +15,7 @@ import {
   acceptInvitationWithAccount,
   createAuditWriter,
   createInvitationLink as makeInvitationLink,
+  hashCredentialToken,
   inspectInvitation as inspectPending,
   invitationLink,
   inviteMember,
@@ -25,6 +26,8 @@ import {
   type InvitationActionAsk,
   type InvitationListing,
   type InvitationRecord,
+  type EntitlementCheck,
+  type EntitlementUpgradeCheck,
   type InvitationSignupEvent,
   type MailPort,
   type PasswordPolicy,
@@ -51,12 +54,14 @@ import { assertRegistrationAllowed } from "../../auth/registration-gate.ts";
 import { hashSessionToken, newSessionToken } from "../../auth/session-token.ts";
 import { uuidv7 } from "../../auth/uuidv7.ts";
 import { queueDomainEvent } from "../../events/publish.ts";
+import { entitlementRequired } from "../../http/authorize.ts";
 import type { ChainContext, RouteBinding } from "../../http/chain.ts";
 import { ProblemError, requestIdOf } from "../../http/problem.ts";
 import type { RequestTenant } from "../../http/tenant.ts";
 import { networkPrefixOf } from "../../http/trusted-proxy.ts";
 import { queueInvitationMail } from "../../worker/jobs/invitation-mail.ts";
 import { route } from "../register.ts";
+import { InvitationLearned, needsInviteEntitlement, type LearnedInvitation } from "./learned.ts";
 
 // The invitation operations of doc 04 section 10.5 ( doc 02 section 3.4, doc 10 T1, T4 and T19). It acts in the workspace
 // the request is bound to and names no other: the authorization stage lets an admin or owner of it through, and
@@ -96,8 +101,22 @@ import { route } from "../register.ts";
 // the invited address, its membership, the accepted invitation and a full session in one transaction with the
 // `account.created` and `member.joined` events and the `member.joined` audit event; a session cookie the request
 // carried is replaced. An address that has an account is 409 email_taken and nothing is written. Both forms count
-// against the `token_redeem` bucket of the client address. The seat limit is null (unlimited) until the entitlement
-// engine supplies one.
+// against the `token_redeem` bucket of the client address.
+//
+// Both forms also need the workspace of the invitation to hold `members.invite` and a free seat (doc 01 sections 7.5
+// and 13.1, doc 10 T11 and T19); the owner invitation an instance admin issues is exempt from `members.invite` and not
+// from the seat limit, since seating the first owner of a workspace is not inviting a member. The token names the
+// workspace and the operation declares none, so the handler decides both, after the token has proved to be a pending
+// invitation's (a dead token is the same 410 whatever the plan) and before anything is committed. Each form runs the
+// acceptance once with no seat limit to learn the workspace and the invitation, which it abandons by rolling the
+// transaction back (the refusals that need no entitlement end there: another address, a member already, an address that
+// has an account). Then it asks the source whether the workspace holds `members.invite`, reading the workspace as it is
+// now since the invited account is no member to read the version of the row, and asks the hook dispatcher for the seat
+// limit: the workspace's `seats.max`, replaced by the seat-check hooks of the modules. A hook that fails or does not
+// answer in time refuses the acceptance with 503 and nothing is written. The acceptance that writes is run only then,
+// and carries the limit to `sys_invitation_accept` or `sys_invitation_accept_new_account`, which count the members
+// under the workspace's lock and answer `422 seat_limit_reached` at the limit, leaving the invitation pending. Sending,
+// resending and listing invitations count no seat.
 
 const UNAUTHENTICATED = "Authentication is required.";
 const NO_WORKSPACE = "No such resource.";
@@ -136,6 +155,26 @@ export interface InvitationRoutesOptions {
   readonly passwordPolicy: PasswordPolicy;
   /** Hashes the password into an argon2id PHC string. */
   readonly hashPassword: (password: string) => Promise<string>;
+  /** Decides `members.invite` for the workspace of an invitation, which accepting it needs unless it is the owner invitation an instance admin issues. */
+  readonly entitlements: EntitlementCheck;
+  /** Says whether a workspace without it has a better plan to offer. */
+  readonly upgradeAvailable: EntitlementUpgradeCheck;
+}
+
+const MEMBERS_INVITE = "members.invite";
+
+/** The problem the signed-in form answers a refused acceptance with. */
+function acceptanceRefusal(kind: "gone" | "email_mismatch" | "already_member" | "seat_limit_reached"): ProblemError {
+  switch (kind) {
+    case "gone":
+      return new ProblemError("token_expired", TOKEN_REFUSED);
+    case "email_mismatch":
+      return new ProblemError("forbidden", EMAIL_MISMATCH, { errors: [{ path: "token", code: "invitation_email_mismatch" }] });
+    case "already_member":
+      return new ProblemError("already_member", ACCEPT_ALREADY_MEMBER);
+    case "seat_limit_reached":
+      return new ProblemError("seat_limit_reached", NO_SEAT);
+  }
 }
 
 /** The invitation as the contract's `Invitation` schema has it. */
@@ -208,8 +247,42 @@ function eventJob(event: InvitationSignupEvent) {
     : queueDomainEvent(event.eventId, event.name, event.payload);
 }
 
-export function invitationRoutes({ mail, cursorSecret, appOrigin, store, withTenant, ttlSeconds = INVITATION_TTL_SECONDS, cookie, passwordPolicy, hashPassword }: InvitationRoutesOptions): RouteBinding[] {
+export function invitationRoutes({
+  mail,
+  cursorSecret,
+  appOrigin,
+  store,
+  withTenant,
+  ttlSeconds = INVITATION_TTL_SECONDS,
+  cookie,
+  passwordPolicy,
+  hashPassword,
+  entitlements,
+  upgradeAvailable,
+}: InvitationRoutesOptions): RouteBinding[] {
   const cursors = createPageCursorCodec(cursorSecret, "invitations");
+
+  // Refuses with 403 entitlement_required unless the workspace the account is joining holds `members.invite`.
+  // The owner invitation of an instance admin is exempt (see `needsInviteEntitlement`).
+  const requireInviteEntitlement = async (context: ChainContext, accountId: string, learned: InvitationLearned): Promise<void> => {
+    if (!needsInviteEntitlement(learned.role)) {
+      return;
+    }
+    const { workspaceId } = learned.learned;
+    const subject = { accountId, workspaceId, joining: true };
+    if (!(await entitlements(MEMBERS_INVITE, subject, context.req.raw))) {
+      throw entitlementRequired(MEMBERS_INVITE, await upgradeAvailable(MEMBERS_INVITE, subject, context.req.raw));
+    }
+  };
+
+  // The seats the workspace may hold: its `seats.max`, replaced by the seat-check hooks of the composed modules (doc 01 section 13.1). A hook that fails refuses the acceptance with 503.
+  const seatLimitOf = async (context: ChainContext, input: LearnedInvitation): Promise<number | null> => {
+    const hooks = context.get("hooks");
+    if (hooks === undefined) {
+      throw new Error("the accept route was reached without the hook dispatcher");
+    }
+    return hooks.acceptanceSeatLimit(input, context.req.raw);
+  };
 
   // The form of the acceptance with registration fields. Whether the address has an account is told only after the
   // registration policy has answered for it, so a refused address learns nothing from the answer.
@@ -232,36 +305,53 @@ export function invitationRoutes({ mail, cursorSecret, appOrigin, store, withTen
     const token = newSessionToken();
     const header = context.req.raw.headers.get("cookie");
     const carried = header === null ? undefined : readCookie(header, cookie.name);
-    const outcome = await acceptInvitationWithAccount(
-      {
-        store: {
-          acceptWithNewAccount: (acceptance) =>
-            store.acceptInvitationWithNewAccount({
-              ...acceptance,
-              onAccepted: (accepted) => {
-                const { audit, events } = acceptance.onAccepted(accepted);
-                return { audit, jobs: events.map(eventJob) };
-              },
-            }),
-        },
-        newId: uuidv7,
+    // The account does not exist yet; the seat check is told the identifier it will get.
+    const accountId = uuidv7();
+    const ask = {
+      token: request.token,
+      accountId,
+      displayName: request.displayName,
+      passwordHash: await hashPassword(request.password),
+      locale: registrationLocale(context.req.raw.headers.get("accept-language")),
+      session: {
+        id: uuidv7(),
+        tokenHash: token.hash,
+        replacedTokenHash: carried === undefined ? null : (hashSessionToken(carried) ?? null),
+        ipPrefix: networkPrefixOf(context.get("clientIp")) ?? null,
+        userAgent: truncateUserAgent(context.req.raw.headers.get("user-agent")),
       },
-      {
-        token: request.token,
-        displayName: request.displayName,
-        passwordHash: await hashPassword(request.password),
-        locale: registrationLocale(context.req.raw.headers.get("accept-language")),
-        // Seats are unlimited until the entitlement engine supplies a limit (doc 01 section 13.1).
-        seatLimit: null,
-        session: {
-          id: uuidv7(),
-          tokenHash: token.hash,
-          replacedTokenHash: carried === undefined ? null : (hashSessionToken(carried) ?? null),
-          ipPrefix: networkPrefixOf(context.get("clientIp")) ?? null,
-          userAgent: truncateUserAgent(context.req.raw.headers.get("user-agent")),
+    };
+    const acceptAs = (learn: boolean, seatLimit: number | null) =>
+      acceptInvitationWithAccount(
+        {
+          store: {
+            acceptWithNewAccount: (acceptance) =>
+              store.acceptInvitationWithNewAccount({
+                ...acceptance,
+                onAccepted: (accepted) => {
+                  if (learn) {
+                    throw new InvitationLearned({ workspaceId: accepted.workspaceId, invitationId: accepted.invitationId, accountId }, accepted.role);
+                  }
+                  const { audit, events } = acceptance.onAccepted(accepted);
+                  return { audit, jobs: events.map(eventJob) };
+                },
+              }),
+          },
+          newId: uuidv7,
         },
-      },
-    );
+        { ...ask, seatLimit },
+      );
+    let outcome: Awaited<ReturnType<typeof acceptAs>>;
+    try {
+      outcome = await acceptAs(true, null);
+    } catch (error) {
+      if (!(error instanceof InvitationLearned)) {
+        throw error;
+      }
+      // The entitlement and the seat limit are known before anything is written, and the acceptance that writes carries the limit.
+      await requireInviteEntitlement(context, accountId, error);
+      outcome = await acceptAs(false, await seatLimitOf(context, error.learned));
+    }
     switch (outcome.kind) {
       case "accepted":
         return { status: 201, headers: { "Set-Cookie": setSessionCookie(cookie, token.value) }, body: { workspaceId: outcome.workspaceId, role: outcome.role } } as const;
@@ -294,6 +384,35 @@ export function invitationRoutes({ mail, cursorSecret, appOrigin, store, withTen
       }
       await takeAccountLimit(context, accountId);
       const ipPrefix = networkPrefixOf(context.get("clientIp")) ?? null;
+      const tokenHash = hashCredentialToken(body.token);
+      if (tokenHash === undefined) {
+        throw new ProblemError("token_expired", TOKEN_REFUSED);
+      }
+      // The entitlement and the seat limit are asked about the workspace the token names, and the seat limit goes to the
+      // acceptance that writes. The first transaction learns the workspace and the invitation and is always rolled back.
+      const learned = await withTenant({ accountId, requestId: requestIdOf(context) }, async (tx) => {
+        if ((await accountProfileRepository(tx).profile()) === undefined) {
+          return undefined;
+        }
+        const result = await invitationAcceptanceRepository(tx).accept(tokenHash, null);
+        if (result.kind === "accepted") {
+          throw new InvitationLearned({ workspaceId: result.workspaceId, invitationId: result.invitationId, accountId }, result.role);
+        }
+        return result;
+      }).catch((error: unknown) => {
+        if (error instanceof InvitationLearned) {
+          return error;
+        }
+        throw error;
+      });
+      if (learned === undefined) {
+        throw new ProblemError("unauthenticated", UNAUTHENTICATED);
+      }
+      if (!(learned instanceof InvitationLearned)) {
+        throw acceptanceRefusal(learned.kind);
+      }
+      await requireInviteEntitlement(context, accountId, learned);
+      const seatLimit = await seatLimitOf(context, learned.learned);
       const outcome = await withTenant({ accountId, requestId: requestIdOf(context) }, async (tx) => {
         const profile = await accountProfileRepository(tx).profile();
         if (profile === undefined) {
@@ -303,32 +422,23 @@ export function invitationRoutes({ mail, cursorSecret, appOrigin, store, withTen
         return acceptPending(
           {
             store: {
-              accept: (tokenHash, seatLimit) => repository.accept(tokenHash, seatLimit),
+              accept: (hash, limit) => repository.accept(hash, limit),
               queueEvents: (events) => repository.enqueue(events.map((event) => queueDomainEvent(event.eventId, event.name, event.payload))),
               activate: (session, workspaceId) => workspaceRepository(tx).setActive(session, workspaceId),
             },
             audit: createAuditWriter({ store: auditEventRepository(tx), newId: uuidv7 }),
             newId: uuidv7,
           },
-          // Seats are unlimited until the entitlement engine supplies a limit (doc 01 section 13.1).
-          { token: body.token, actor: { type: "account", accountId, label: profile.displayName }, sessionId, seatLimit: null, ipPrefix },
+          { token: body.token, actor: { type: "account", accountId, label: profile.displayName }, sessionId, seatLimit, ipPrefix },
         );
       });
       if (outcome === undefined) {
         throw new ProblemError("unauthenticated", UNAUTHENTICATED);
       }
-      switch (outcome.kind) {
-        case "accepted":
-          return { status: 200, body: { workspaceId: outcome.workspaceId, role: outcome.role } };
-        case "gone":
-          throw new ProblemError("token_expired", TOKEN_REFUSED);
-        case "email_mismatch":
-          throw new ProblemError("forbidden", EMAIL_MISMATCH, { errors: [{ path: "token", code: "invitation_email_mismatch" }] });
-        case "already_member":
-          throw new ProblemError("already_member", ACCEPT_ALREADY_MEMBER);
-        case "seat_limit_reached":
-          throw new ProblemError("seat_limit_reached", NO_SEAT);
+      if (outcome.kind !== "accepted") {
+        throw acceptanceRefusal(outcome.kind);
       }
+      return { status: 200, body: { workspaceId: outcome.workspaceId, role: outcome.role } };
     }),
 
     route(createInvitation).handle(async ({ body }, context) => {

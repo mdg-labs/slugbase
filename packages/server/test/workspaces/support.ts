@@ -82,6 +82,8 @@ export interface WorkspaceHarness {
     readonly modules?: readonly ServerModule[];
     /** The composition's decision on granting the instance-admin flag (Q44). */
     readonly instanceAdminGrant?: InstanceAdminGrantCheck;
+    /** How long a hook may take to answer; by default the server's. */
+    readonly hookTimeoutMs?: number;
   }): World;
   /** A verified account with a session that re-authenticated just now. */
   person(world: World): Promise<Person>;
@@ -153,6 +155,7 @@ export function workspaceHarness(database: () => TestDatabase): WorkspaceHarness
         ...(options.allowWorkspaceCreation === undefined ? {} : { allowWorkspaceCreation: options.allowWorkspaceCreation }),
         ...(options.entitlements === undefined ? {} : { entitlements: options.entitlements }),
         ...(options.instanceAdminGrant === undefined ? {} : { instanceAdminGrant: options.instanceAdminGrant }),
+        ...(options.hookTimeoutMs === undefined ? {} : { hookTimeoutMs: options.hookTimeoutMs }),
       });
       return { server, origin: config.APP_ORIGIN };
     },

@@ -18,7 +18,7 @@ export const EntitlementSetSchema = z
     "ai.suggestions": z.boolean().describe("Whether AI suggestions may be requested in the workspace"),
     "sharing.members": z.boolean().describe("Whether bookmarks and folders may be shared with individual members"),
     "sharing.teams": z.boolean().describe("Whether sharing with teams is available"),
-    "members.invite": z.boolean().describe("Whether invitations may be created, listed, resent, linked and accepted"),
+    "members.invite": z.boolean().describe("Whether invitations may be created, listed, resent, linked and accepted; the owner invitation an instance admin issues is accepted without it"),
     "teams.manage": z.boolean().describe("Whether teams may be administered"),
     "audit.log": z.boolean().describe("Whether the audit log may be read; events are written whatever this says"),
   })

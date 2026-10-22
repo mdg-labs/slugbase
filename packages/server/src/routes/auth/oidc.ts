@@ -17,6 +17,7 @@ import {
   safeReturnTo,
   truncateUserAgent,
   PortUnavailable,
+  type EntitlementCheck,
   type IdentityClaims,
   type IdentityPort,
   type IdentityProviderConfig,
@@ -27,10 +28,10 @@ import {
   type SecretBoxPort,
   type SessionCookieSpec,
 } from "@slugbase/core";
-import type { AuthStore } from "@slugbase/db";
+import type { AuthStore, PersonalWorkspaceWriter } from "@slugbase/db";
 import { hkdfSync } from "node:crypto";
 import { readCookie, setSessionCookie } from "../../auth/cookie.ts";
-import { provisionWorkspaceIn } from "../../auth/personal-workspace.ts";
+import { provisionWorkspaceIn, type OwnedWorkspaceLimit } from "../../auth/personal-workspace.ts";
 import { assertRegistrationAllowed } from "../../auth/registration-gate.ts";
 import { hashSessionToken, newSessionToken } from "../../auth/session-token.ts";
 import type { TakeTokenRedeemLimit } from "../../auth/token-redeem-limit.ts";
@@ -39,6 +40,7 @@ import { queueDomainEvent } from "../../events/publish.ts";
 import type { ChainContext, RouteBinding } from "../../http/chain.ts";
 import { ProblemError } from "../../http/problem.ts";
 import { networkPrefixOf } from "../../http/trusted-proxy.ts";
+import { InvitationLearned, needsInviteEntitlement } from "../invitations/learned.ts";
 import { route } from "../register.ts";
 
 // GET /api/v1/auth/oidc/{provider}/start and /callback (doc 04 sections 4.4, 4.5 and 10.2, doc 02 section 2.8,
@@ -76,6 +78,13 @@ import { route } from "../register.ts";
 // says because the invitation authorises it (Q31), after the registration policy answered for the path `invitation`. The
 // link, the account, the membership, the accepted invitation and the session are one transaction. The browser comes
 // back with a full session that acts in the workspace joined, and any other outcome ends on the generic failure.
+// The token names the workspace and the operation declares no entitlement, so the callback decides `members.invite`
+// and the seat limit itself (doc 01 sections 7.5 and 13.1, doc 10 T3 and T11), as `POST /invitations/accept` does: it runs
+// the acceptance once with no seat limit to learn the workspace, the invitation and the account, and rolls that back;
+// asks the entitlement source about `members.invite` for the workspace as it is now, unless the invitation is the owner
+// invitation of an instance admin, which is exempt; asks the seat-check hooks; and only
+// then runs the acceptance that writes. A workspace without `members.invite` or without a free seat, a hook that fails
+// to answer, or an account other than the one asked about ends with nothing written and the invitation pending.
 // The PKCE verifier is sealed together with the instant the handshake began. A callback that cannot open it (its
 // secret-box key was removed meanwhile) ends like any other failure. A `reauth` callback hands that instant to
 // the identity port, which refuses an ID token that was authenticated before it (doc 04 section 4.5).
@@ -85,6 +94,7 @@ type NewFederatedAccount = NonNullable<NonNullable<Parameters<AuthStore["signInW
 const SUBKEY_BYTES = 32;
 const FAILURE_LOCATION = `/login?error=${OIDC_FAILURE_CODE}`;
 const MAX_CODE_LENGTH = 2048;
+const MEMBERS_INVITE = "members.invite";
 // What is sealed in `oidc_login_states.code_verifier`: the instant the handshake began in milliseconds, a colon
 // and the PKCE verifier.
 const SEALED_VERIFIER = /^(\d{1,16}):([A-Za-z0-9_-]{1,128})$/;
@@ -107,6 +117,8 @@ export interface OidcRoutesOptions {
   readonly providers: readonly Pick<IdentityProviderConfig, "slug" | "autoCreate" | "allowedDomains">[];
   /** The settings in force for public registration: an account created for an identity gets a personal workspace when it is open. */
   readonly registration: RegistrationSettings;
+  /** The `workspaces.ownMax` of an account created for an identity, which decides whether its personal workspace is made. */
+  readonly ownedWorkspaceLimit: OwnedWorkspaceLimit;
   /** `APP_ORIGIN`: the callback address registered with the providers, and the scheme of the cookies. */
   readonly appOrigin: string;
   /** `SESSION_SECRET`: the pre-auth cookie is a keyed hash made with a key derived from it. */
@@ -114,6 +126,8 @@ export interface OidcRoutesOptions {
   readonly sessionCookie: SessionCookieSpec;
   /** Counts the redemption of an invitation token by a start of the `invite` intent against the `token_redeem` limits. */
   readonly takeRedeemLimit: TakeTokenRedeemLimit;
+  /** Decides `members.invite` for the workspace of an invitation, which accepting it through a provider needs unless it is the owner invitation an instance admin issues. */
+  readonly entitlements: EntitlementCheck;
   /** The instant, in milliseconds, a session's `reauth_at` is compared with; defaults to the system clock. */
   readonly now?: () => number;
 }
@@ -139,6 +153,8 @@ type Refusal =
   | "identity_in_use"
   | "unknown_account"
   | "invalid_invitation"
+  | "entitlement_required"
+  | "invitation_account_changed"
   | `invitation_${Exclude<InvitationIdentityResult["kind"], "accepted">}`;
 
 function preAuthAttributes(spec: OidcPreAuthCookieSpec, maxAge: number): string {
@@ -187,6 +203,14 @@ function fromTheApplication(context: ChainContext): boolean {
   return site === "same-origin" || site === "none";
 }
 
+/** Thrown from the transaction of the acceptance that writes, to roll it back, when the account it finds is not the one the checks before it were made for. */
+class AcceptingAccountChanged extends Error {
+  constructor() {
+    super("the account that accepts is not the one the seat check was told");
+    this.name = "AcceptingAccountChanged";
+  }
+}
+
 /** The job of a domain event the acceptance queues. */
 function eventJob(event: InvitationSignupEvent) {
   return event.name === "account.created"
@@ -204,10 +228,12 @@ export function oidcRoutes({
   secretBox,
   providers,
   registration,
+  ownedWorkspaceLimit,
   appOrigin,
   sessionSecret,
   sessionCookie,
   takeRedeemLimit,
+  entitlements,
   now = Date.now,
 }: OidcRoutesOptions): RouteBinding[] {
   const preAuth = oidcPreAuthCookieSpec(appOrigin);
@@ -228,12 +254,13 @@ export function oidcRoutes({
       return undefined;
     }
     const accountId = uuidv7();
+    const ownedMax = registration.publicRegistration ? await ownedWorkspaceLimit(accountId) : undefined;
     return {
       accountId,
       displayName: federatedDisplayName(claims.displayName, email),
       locale: registrationLocale(context.req.raw.headers.get("accept-language")),
       onCreated: [queueDomainEvent(uuidv7(), "account.created", { accountId, path: "oidc" })],
-      ...(registration.publicRegistration ? { afterCreated: provisionWorkspaceIn } : {}),
+      ...(ownedMax === undefined ? {} : { afterCreated: (id: string, writer: PersonalWorkspaceWriter) => provisionWorkspaceIn(id, writer, ownedMax) }),
     };
   };
 
@@ -280,39 +307,77 @@ export function oidcRoutes({
     const mayCreate = !invitation.accountExists && (await registrationAllowed(context, provider, normalizeEmail(invitation.email), "invitation"));
     const token = newSessionToken();
     const carried = cookieHeader === null ? undefined : readCookie(cookieHeader, sessionCookie.name);
-    const outcome = await acceptInvitationWithIdentity(
-      {
-        store: {
-          acceptWithIdentity: (acceptance) =>
-            store.acceptInvitationWithIdentity({
-              ...acceptance,
-              onAccepted: (accepted) => {
-                const { audit, events } = acceptance.onAccepted(accepted);
-                return { audit, jobs: events.map(eventJob) };
-              },
-            }),
-        },
-        newId: uuidv7,
+    const ask = {
+      tokenHash,
+      provider,
+      subject: claims.subject,
+      email,
+      displayName: federatedDisplayName(claims.displayName, email),
+      locale: registrationLocale(context.req.raw.headers.get("accept-language")),
+      mayCreate,
+      session: {
+        id: uuidv7(),
+        tokenHash: token.hash,
+        replacedTokenHash: carried === undefined ? null : (hashSessionToken(carried) ?? null),
+        ipPrefix: networkPrefixOf(context.get("clientIp")) ?? null,
+        userAgent: truncateUserAgent(context.req.raw.headers.get("user-agent")),
       },
-      {
-        tokenHash,
-        provider,
-        subject: claims.subject,
-        email,
-        displayName: federatedDisplayName(claims.displayName, email),
-        locale: registrationLocale(context.req.raw.headers.get("accept-language")),
-        mayCreate,
-        // Seats are unlimited until the entitlement engine supplies a limit (doc 01 section 13.1).
-        seatLimit: null,
-        session: {
-          id: uuidv7(),
-          tokenHash: token.hash,
-          replacedTokenHash: carried === undefined ? null : (hashSessionToken(carried) ?? null),
-          ipPrefix: networkPrefixOf(context.get("clientIp")) ?? null,
-          userAgent: truncateUserAgent(context.req.raw.headers.get("user-agent")),
+    };
+    const acceptAs = (accountId: string, learn: boolean, seatLimit: number | null) =>
+      acceptInvitationWithIdentity(
+        {
+          store: {
+            acceptWithIdentity: (acceptance) =>
+              store.acceptInvitationWithIdentity({
+                ...acceptance,
+                onAccepted: (accepted) => {
+                  if (learn) {
+                    throw new InvitationLearned({ workspaceId: accepted.workspaceId, invitationId: accepted.invitationId, accountId: accepted.accountId }, accepted.role);
+                  }
+                  if (accepted.accountId !== accountId) {
+                    throw new AcceptingAccountChanged();
+                  }
+                  const { audit, events } = acceptance.onAccepted(accepted);
+                  return { audit, jobs: events.map(eventJob) };
+                },
+              }),
+          },
+          newId: uuidv7,
         },
-      },
-    );
+        { ...ask, accountId, seatLimit },
+      );
+    // Which account accepts is the database operation's to decide, so the acceptance is first run with no seat limit and
+    // abandoned once it names the workspace, the invitation and the account. The workspace must hold `members.invite`, as
+    // for `POST /invitations/accept`, and the seat-check hooks are asked about those, in that order and before anything is
+    // written. The acceptance that writes then carries the limit and is abandoned if the account it finds is no longer the
+    // one the entitlement and the hooks were asked about.
+    let outcome: InvitationIdentityResult;
+    try {
+      outcome = await acceptAs(uuidv7(), true, null);
+    } catch (error) {
+      if (!(error instanceof InvitationLearned)) {
+        throw error;
+      }
+      const { learned } = error;
+      if (needsInviteEntitlement(error.role) && !(await entitlements(MEMBERS_INVITE, { accountId: learned.accountId, workspaceId: learned.workspaceId, joining: true }, context.req.raw))) {
+        refused(context, provider, "entitlement_required");
+        return failure;
+      }
+      const hooks = context.get("hooks");
+      if (hooks === undefined) {
+        throw new Error("the OIDC callback was reached without the hook dispatcher");
+      }
+      const seatLimit = await hooks.acceptanceSeatLimit(learned, context.req.raw);
+      try {
+        outcome = await acceptAs(learned.accountId, false, seatLimit);
+      } catch (changed) {
+        if (!(changed instanceof AcceptingAccountChanged)) {
+          throw changed;
+        }
+        refused(context, provider, "invitation_account_changed");
+        return failure;
+      }
+    }
     if (outcome.kind !== "accepted") {
       refused(context, provider, `invitation_${outcome.kind}`);
       return failure;

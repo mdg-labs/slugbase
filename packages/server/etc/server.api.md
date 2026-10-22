@@ -15,6 +15,7 @@ import { DomainEventPayload } from '@slugbase/core';
 import { EmptyResponse } from '@slugbase/contracts';
 import { EntitlementCheck } from '@slugbase/core';
 import { EntitlementSubject } from '@slugbase/core';
+import { EntitlementUpgradeCheck } from '@slugbase/core';
 import { IdentityProviderConfig } from '@slugbase/core';
 import { JsonResponse } from '@slugbase/contracts';
 import { MigrateResult } from '@slugbase/db';
@@ -269,6 +270,8 @@ export { EntitlementCheck }
 
 export { EntitlementSubject }
 
+export { EntitlementUpgradeCheck }
+
 // @public
 export function envBoolean(): z.ZodPipe<z.ZodString, z.ZodTransform<boolean, string>>;
 
@@ -460,6 +463,7 @@ export const HOOK_NAMES: readonly ["seatCheck", "deletionGuard", "registrationPo
 
 // @public
 export interface HookDispatcher {
+    acceptanceSeatLimit(input: SeatCheckInput, request: object): Promise<number | null>;
     clientErrorReportDsn(request: ClientErrorReportRequest): Promise<string | null>;
     deletionGuard(input: DeletionGuardInput): Promise<HookResult<DeletionRefusalCode>>;
     registrationPolicy(input: RegistrationPolicyInput): Promise<HookResult<RegistrationRefusalCode>>;

@@ -44,6 +44,8 @@ export interface WorkspaceServerOptions {
   readonly put?: (request: Request, count: number) => Promise<Response>;
   /** Answers `POST /workspaces` instead of creating. */
   readonly post?: (request: Request, count: number) => Promise<Response>;
+  /** Answers `GET /entitlements`; without it the call is unexpected, as it is for any route a test does not use. */
+  readonly entitlements?: (request: Request, count: number) => Promise<Response> | Response;
   readonly extraConfig?: object;
 }
 
@@ -112,6 +114,9 @@ export function stubWorkspaceServer(options: WorkspaceServerOptions = {}) {
       }
       active = (JSON.parse(text) as { workspaceId: string }).workspaceId;
       return new Response(null, { status: 204 });
+    }
+    if (pathname === "/api/v1/entitlements" && request.method === "GET" && options.entitlements !== undefined) {
+      return options.entitlements(request, count);
     }
     throw new Error(`unexpected call ${request.method} ${pathname}`);
   });

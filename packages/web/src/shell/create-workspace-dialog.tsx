@@ -5,6 +5,7 @@ import { useRouter } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactElement, type SyntheticEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiProblemError, isSessionEnded } from "../api/client.ts";
+import { ENTITLEMENTS_QUERY_KEY, WorkspaceLimitContent } from "../entitlements/index.ts";
 import {
   addMembership,
   createWorkspace,
@@ -31,6 +32,10 @@ function createFailureOf(error: unknown): CreateFailure | undefined {
     if (error.status === 429) {
       return { kind: "rateLimited", seconds: error.retryAfterSeconds };
     }
+    // The limit is reached between reading the entitlements and submitting, or in another tab; it comes as a 422 too.
+    if (error.code === "workspace_limit_reached") {
+      return { kind: "limitReached" };
+    }
     if (error.status === 422) {
       return { kind: "invalidName" };
     }
@@ -39,9 +44,6 @@ function createFailureOf(error: unknown): CreateFailure | undefined {
     }
     if (error.code === "forbidden") {
       return { kind: "notAllowed" };
-    }
-    if (error.code === "workspace_limit_reached") {
-      return { kind: "limitReached" };
     }
   }
   return { kind: "unavailable" };
@@ -109,7 +111,12 @@ export function CreateWorkspaceDialog({ onClose, onCreated }: { onClose: () => v
     } catch (caught) {
       if (!own.signal.aborted) {
         setPending(false);
-        setFailure(createFailureOf(caught));
+        const next = createFailureOf(caught);
+        if (next?.kind === "limitReached") {
+          // The entitlements read earlier did not show the limit; the switcher's next open must.
+          void queryClient.invalidateQueries({ queryKey: ENTITLEMENTS_QUERY_KEY });
+        }
+        setFailure(next);
       }
       return;
     }
@@ -151,10 +158,11 @@ export function CreateWorkspaceDialog({ onClose, onCreated }: { onClose: () => v
   }
 
   const nameFailure = failure?.kind === "invalidName";
+  const limitReached = failure?.kind === "limitReached";
   return (
     <FormOverlay
       closeLabel={t("workspaces.create.close")}
-      description={switchFailed ? undefined : t("workspaces.create.description")}
+      description={switchFailed || limitReached ? undefined : t("workspaces.create.description")}
       onOpenChange={(open) => {
         if (!open && !pending) {
           onClose();
@@ -163,7 +171,9 @@ export function CreateWorkspaceDialog({ onClose, onCreated }: { onClose: () => v
       open
       title={t("workspaces.create.title")}
     >
-      {created !== undefined && switchFailed ? (
+      {limitReached ? (
+        <WorkspaceLimitContent onClose={onClose} />
+      ) : created !== undefined && switchFailed ? (
         <div className="flex flex-col gap-4">
           <Banner
             description={

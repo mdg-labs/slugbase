@@ -1,6 +1,49 @@
 export type { Adapters } from "./adapters.ts";
 export type { AiSuggestPort, AiSuggestRequest, AiSuggestion } from "./ai-suggest.ts";
 export type { AnalyticsEvent, AnalyticsPort } from "./analytics.ts";
+export { BILLING_ERROR_CODES, BillingError, toBillingErrorCode } from "./billing.ts";
+export type {
+  BillingAccountScope,
+  BillingAddress,
+  BillingChangeIneligibleReason,
+  BillingChangeOptions,
+  BillingChangePreview,
+  BillingChangeRequest,
+  BillingCheckout,
+  BillingCheckoutRefusal,
+  BillingCheckoutRequest,
+  BillingCheckoutState,
+  BillingConsent,
+  BillingContract,
+  BillingCustomerDetails,
+  BillingDetails,
+  BillingDocument,
+  BillingDocumentKind,
+  BillingDocumentPdf,
+  BillingErrorCode,
+  BillingEventDelivery,
+  BillingEventOutcome,
+  BillingInterval,
+  BillingLegalAcceptance,
+  BillingLegalLink,
+  BillingLegalText,
+  BillingMoney,
+  BillingPage,
+  BillingPeriod,
+  BillingPlan,
+  BillingPlanPrice,
+  BillingPlanState,
+  BillingPort,
+  BillingQuote,
+  BillingQuoteRequest,
+  BillingRedirect,
+  BillingScope,
+  BillingSubscription,
+  BillingSubscriptionDetails,
+  BillingTaxBreakdown,
+  BillingTaxLine,
+  BillingWithdrawal,
+} from "./billing.ts";
 export type { ChallengePort, ChallengeVerdict } from "./challenge.ts";
 export type { ClientErrorReportPort, ClientErrorReportRequest } from "./client-error-report.ts";
 export type { EntitlementSource, WorkspaceEntitlementGrant } from "./entitlements.ts";

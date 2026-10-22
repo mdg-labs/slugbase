@@ -288,7 +288,7 @@ export const acceptInvitation = defineOperation({
     400: problemResponse("The request was malformed"),
     401: problemResponse("A request with the token alone has no session (an API token is not one), or its second factor is not complete"),
     403: problemResponse(
-      "The request did not come from the application itself (cross_site_request), or the account's verified email address is not the invited one, an unverified address included (forbidden, field code invitation_email_mismatch), or the deployment's registration policy refused the invited address for the account to create (registration_refused, one answer for every reason). Nothing is written and the invitation stays pending",
+      "The request did not come from the application itself (cross_site_request), or the account's verified email address is not the invited one, an unverified address included (forbidden, field code invitation_email_mismatch), or the deployment's registration policy refused the invited address for the account to create (registration_refused, one answer for every reason), or the workspace of the invitation does not hold the members.invite entitlement (entitlement_required, in either form; the problem carries entitlement and upgradeAvailable); the owner invitation an instance admin issued is accepted without that check. Nothing is written and the invitation stays pending",
     ),
     409: problemResponse(
       "The account is a member of the workspace already (already_member), or a request that creates an account found one holding the invited address (email_taken): the person signs in and accepts with the token alone. Nothing is written and the invitation stays pending",
@@ -300,6 +300,8 @@ export const acceptInvitation = defineOperation({
       "The body did not pass validation (a display name without a password or the reverse included), the password is outside 12 to 256 characters or is on the breached list (weak_password), or the workspace has no seat left (seat_limit_reached); nothing is written and the invitation stays pending",
     ),
     429: rateLimitedResponse("Too many attempts from this address, or from this account; Retry-After says when to try again"),
-    503: problemResponse("The service is temporarily unavailable"),
+    503: problemResponse(
+      "The service is temporarily unavailable, or a module that decides the seat limit failed or did not answer in time (unavailable); nothing is written and the invitation stays pending",
+    ),
   },
 });

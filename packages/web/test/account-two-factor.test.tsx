@@ -22,6 +22,9 @@ const BACKUP_CODES = ["ABCDEFGH23", "JKLMNPQR45", "STUVWXYZ67", "BCDFGHJK89", "M
 const NEW_CODES = BACKUP_CODES.map((code) => code.split("").reverse().join(""));
 // The wizard flow plus three full-body axe scans runs past vitest's 5s default on a CI runner.
 const AXE_WIZARD_TEST_TIMEOUT_MS = 30_000;
+// A test that mounts the whole app and walks the enrolment wizard step by step ran 4 to 5 s on a CI runner
+// that also runs the other packages' suites, against about 1 s alone, so it runs under a limit sized for that.
+const WIZARD_FLOW_TEST_TIMEOUT_MS = 30_000;
 
 interface Call {
   readonly method: string;
@@ -267,7 +270,7 @@ describe("the enrolment wizard", () => {
       expect(document.body.textContent).not.toContain(code);
     }
     expectNotInCache([SECRETS[0], "otpauth://", ...BACKUP_CODES]);
-  });
+  }, WIZARD_FLOW_TEST_TIMEOUT_MS);
 
   it("keeps Done disabled until the backup codes are acknowledged, and does not finish on Enter before", async () => {
     stubServer(false);
@@ -283,7 +286,7 @@ describe("the enrolment wizard", () => {
     expect(screen.getByRole("heading", { level: 2, name: "Save your backup codes" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Back" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
-  });
+  }, WIZARD_FLOW_TEST_TIMEOUT_MS);
 
   it("opens no wizard and sends nothing again when the member closes the re-authentication prompt", async () => {
     const server = stubServer(false, { enrolment: () => reauthRequired() });
@@ -333,7 +336,7 @@ describe("the enrolment wizard", () => {
     expect(screen.queryByRole("heading", { level: 2, name: "Save your backup codes" })).toBeNull();
     expect(server.to("POST", CONFIRM_PATH)).toHaveLength(1);
     expect(screen.queryByText("On")).toBeNull();
-  });
+  }, WIZARD_FLOW_TEST_TIMEOUT_MS);
 
   it("shows a rate-limited code in a banner and no backup codes", async () => {
     stubServer(false, { confirm: () => withErrors(429, "rate_limited", [], { "Retry-After": "30" }) });
@@ -345,7 +348,7 @@ describe("the enrolment wizard", () => {
 
     expect(await screen.findByText("Too many attempts. Try again in 30 seconds.")).toBeTruthy();
     expect(screen.queryByRole("heading", { level: 2, name: "Save your backup codes" })).toBeNull();
-  });
+  }, WIZARD_FLOW_TEST_TIMEOUT_MS);
 
   it("asks for all six digits before sending anything", async () => {
     const server = stubServer(false);
@@ -358,7 +361,7 @@ describe("the enrolment wizard", () => {
 
     expect(screen.getByText("Enter the six-digit code.")).toBeTruthy();
     expect(server.to("POST", CONFIRM_PATH)).toEqual([]);
-  });
+  }, WIZARD_FLOW_TEST_TIMEOUT_MS);
 
   it("sends a complete code once", async () => {
     const server = stubServer(false);
@@ -370,7 +373,7 @@ describe("the enrolment wizard", () => {
     await screen.findByRole("heading", { level: 2, name: "Save your backup codes" });
 
     expect(server.to("POST", CONFIRM_PATH)).toHaveLength(1);
-  });
+  }, WIZARD_FLOW_TEST_TIMEOUT_MS);
 
   it("goes back to the key, and a cancelled wizard leaves neither secret nor code, and a new one gets a new secret", async () => {
     const server = stubServer(false);
@@ -391,7 +394,7 @@ describe("the enrolment wizard", () => {
     expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Setup key" }).value).toBe(SECRETS[1]);
     await click("Next");
     expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Authentication code" }).value).toBe("");
-  });
+  }, WIZARD_FLOW_TEST_TIMEOUT_MS);
 });
 
 describe("the backup codes", () => {

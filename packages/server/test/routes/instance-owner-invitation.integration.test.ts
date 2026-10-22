@@ -109,7 +109,7 @@ const accept = (world: World, cookie: string, token: string) => send(world, "POS
 
 describe("POST /instance/workspaces/{id}/owner-invitation where no mail is configured", () => {
   it("replaces an expired owner invitation: the new link makes the invitee the owner and the old link no longer works", async () => {
-    const world = harness.serve();
+    const world = harness.serve({ entitlements: () => true });
     const root = await signInAdmin(database(), world);
     const invitee = await harness.person(world);
     const { id, invitation } = await createWaiting(world, root.cookie, invitee.account.email);
@@ -156,7 +156,7 @@ describe("POST /instance/workspaces/{id}/owner-invitation where no mail is confi
   });
 
   it("invites the given address instead of the previous one, whose link ends, and writes one instance audit event naming no address", async () => {
-    const world = harness.serve();
+    const world = harness.serve({ entitlements: () => true });
     const root = await signInAdmin(database(), world);
     const previous = await harness.person(world);
     const next = await harness.person(world);
@@ -204,7 +204,7 @@ describe("POST /instance/workspaces/{id}/owner-invitation where no mail is confi
   });
 
   it("answers 409 once the invitation was accepted, and leaves the owner", async () => {
-    const world = harness.serve();
+    const world = harness.serve({ entitlements: () => true });
     const root = await signInAdmin(database(), world);
     const invitee = await harness.person(world);
     const { id, invitation } = await createWaiting(world, root.cookie, invitee.account.email);
@@ -376,7 +376,7 @@ describe("POST /instance/workspaces/{id}/owner-invitation where no mail is confi
 
 describe("the owner invitation where mail is configured", () => {
   it("mails the invitation of POST /instance/workspaces in the language of the admin and returns no link; the message link makes the invitee the owner", async () => {
-    const world = harness.serve({ mail });
+    const world = harness.serve({ mail, entitlements: () => true });
     const root = await signInAdmin(database(), world);
     await setLocale(root.accountId, "de");
     const invitee = await harness.person(world);
@@ -404,7 +404,7 @@ describe("the owner invitation where mail is configured", () => {
   });
 
   it("mails the new invitation of the operation, returns no link, and the job of the replaced invitation mails nothing", async () => {
-    const world = harness.serve({ mail });
+    const world = harness.serve({ mail, entitlements: () => true });
     const root = await signInAdmin(database(), world);
     const invitee = await harness.person(world);
     const { id } = await createWaiting(world, root.cookie, invitee.account.email);

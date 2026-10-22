@@ -159,6 +159,14 @@ describe("GET /api/config", () => {
     expect(await features(ai)).toEqual({ mail: false, ai: true });
   });
 
+  it("reports no billing feature, whether or not a billing adapter is configured", async () => {
+    const ports = adapters();
+    const billing = { ...ports, billing: { ...ports.billing, available: true } };
+    const features = async (given: Adapters) =>
+      ((await (await get(start({}, { adapters: given }), "/api/config")).json()) as { features: object }).features;
+    expect(await features(billing)).toEqual({ mail: false, ai: false });
+  });
+
   describe("signIn.oidc", () => {
     const SECRET = "client-secret-qx86";
     const ISSUER = "https://accounts.example.com/private-issuer";
