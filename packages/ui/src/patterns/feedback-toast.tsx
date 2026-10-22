@@ -14,11 +14,12 @@ export function FeedbackToastProvider({ children, regionLabel }: FeedbackToastPr
 
 /**
  * Short feedback for an action. An error is announced at once; the others wait for the
- * screen reader to finish. Returns the id of the toast.
+ * screen reader to finish. The description is rendered in a paragraph, so it holds phrasing
+ * content only. Returns the id of the toast.
  */
 export const feedbackToast = {
-  info: (title: string, description?: string): string => toastManager.add({ type: "info", title, description }),
-  success: (title: string, description?: string): string => toastManager.add({ type: "success", title, description }),
-  error: (title: string, description?: string): string =>
+  info: (title: string, description?: ReactNode): string => toastManager.add({ type: "info", title, description }),
+  success: (title: string, description?: ReactNode): string => toastManager.add({ type: "success", title, description }),
+  error: (title: string, description?: ReactNode): string =>
     toastManager.add({ type: "error", title, description, priority: "high" }),
 };

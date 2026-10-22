@@ -294,7 +294,13 @@ describe("a failed mutation", () => {
   });
 
   it("raises no error toast when it failed because the session ended", async () => {
-    stubApi(() => Promise.resolve(problem(401, "unauthenticated", "req-1", INTERNAL_DETAIL)));
+    // Only the mutation is answered with the end of the session: the transport here settles in microtasks, so
+    // a read that was answered the same way would be asked for again, and its answer cleared again, without end.
+    stubApi((request) =>
+      new URL(request.url).pathname === "/version"
+        ? Promise.resolve(problem(401, "unauthenticated", "req-1", INTERNAL_DETAIL))
+        : Promise.reject(new Error("unexpected call")),
+    );
     await save();
 
     await waitFor(() => {

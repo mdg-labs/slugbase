@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { FeedbackToastProvider, feedbackToast } from "../../src/patterns/index.ts";
 import { expectNoViolations, stubBrowserApis } from "../support.tsx";
@@ -53,6 +53,17 @@ describe("FeedbackToastProvider", () => {
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).toContain("The change was not saved");
     expect(alert.textContent).toContain("Try again.");
+  });
+
+  it("renders a description that is an element, such as an action the app places in the toast", async () => {
+    render(<FeedbackToastProvider regionLabel="Notifications">{null}</FeedbackToastProvider>);
+
+    act(() => {
+      feedbackToast.error("Not available", <a href="/upgrade">Upgrade</a>);
+    });
+
+    const alert = await screen.findByRole("alert");
+    expect(within(alert).getByRole("link", { name: "Upgrade" }).getAttribute("href")).toBe("/upgrade");
   });
 
   it("does not announce an info toast as an alert", async () => {

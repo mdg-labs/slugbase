@@ -48,11 +48,29 @@ it("mounts the app on #root and shows the product name that /api/config answers 
     items: [{ id: "0192f3a0-cccc-7000-8000-000000000001", name: "Home", role: "owner", memberCount: 1 }],
     canCreate: false,
   };
+  const entitlements: ComponentTypes["schemas"]["Entitlements"] = {
+    entitlements: {
+      "bookmarks.max": "unlimited",
+      "seats.max": "unlimited",
+      "workspaces.ownMax": "unlimited",
+      "ai.suggestions": true,
+      "sharing.members": true,
+      "sharing.teams": true,
+      "members.invite": true,
+      "teams.manage": true,
+      "audit.log": true,
+    },
+    usage: { "bookmarks.used": 0, "seats.used": 1, "workspaces.owned": 1 },
+    upgradeAvailable: false,
+  };
   vi.stubGlobal("fetch", (request: Request) => {
     const { pathname } = new URL(request.url);
     requested.push(pathname);
     if (pathname === "/api/v1/me") {
       return Promise.resolve(Response.json(me));
+    }
+    if (pathname === "/api/v1/entitlements") {
+      return Promise.resolve(Response.json(entitlements));
     }
     return Promise.resolve(Response.json(pathname === "/api/v1/workspaces" ? workspaces : config));
   });
@@ -71,5 +89,5 @@ it("mounts the app on #root and shows the product name that /api/config answers 
 
   const heading = await screen.findByRole("heading", { name: "Welcome to Bookmarks Entry Test" });
   expect(heading.closest("#root")).not.toBeNull();
-  expect(requested).toEqual(["/api/config", "/api/v1/me/sessions", "/api/v1/me", "/api/v1/workspaces"]);
+  expect(requested).toEqual(["/api/config", "/api/v1/me/sessions", "/api/v1/me", "/api/v1/workspaces", "/api/v1/entitlements"]);
 });

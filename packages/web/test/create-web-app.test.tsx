@@ -71,7 +71,13 @@ describe("createWebApp", () => {
     await renderApp(<App />);
 
     expect(await screen.findByRole("heading", { name: WELCOME })).toBeTruthy();
-    expect(fetch.mock.calls.map(([request]) => new URL(request.url).pathname)).toEqual(["/api/config", SESSION_PATH, ME_PATH, WORKSPACES_PATH]);
+    expect(fetch.mock.calls.map(([request]) => new URL(request.url).pathname)).toEqual([
+      "/api/config",
+      SESSION_PATH,
+      ME_PATH,
+      WORKSPACES_PATH,
+      "/api/v1/entitlements",
+    ]);
   });
 
   it("renders nothing of the product while the configuration is on its way", async () => {

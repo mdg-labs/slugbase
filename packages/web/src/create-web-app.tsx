@@ -11,6 +11,7 @@ import { createReauth, reauthMiddleware } from "./auth/reauth.ts";
 import { fetchConfig, type ConfigResult } from "./config/bootstrap.ts";
 import { ConfigFailure } from "./config/config-failure.tsx";
 import { ConfigProvider } from "./config/config-context.tsx";
+import { EntitlementRequiredToasts } from "./entitlements/index.ts";
 import { rememberSetupRequired } from "./config/setup-state.ts";
 import { ExtensionsProvider, type WebExtension } from "./extensions/index.ts";
 import { AccountI18nProvider } from "./i18n/account-i18n-provider.tsx";
@@ -84,6 +85,7 @@ export function createWebApp({ extensions }: CreateWebAppOptions): ComponentType
               <AppFeedback expiry={sessionExpiry} router={router}>
                 <ReauthProvider reauth={reauth}>
                   <ExtensionsProvider extensions={extensions}>
+                    <EntitlementRequiredToasts router={router} />
                     <RouterProvider router={router} />
                   </ExtensionsProvider>
                   <ReauthPrompt api={api} reauth={reauth} />

@@ -1590,6 +1590,12 @@
       }
     }
   },
+  "entitlements": {
+    "required": {
+      "title": "In diesem Workspace nicht verfügbar",
+      "description": "Diese Funktion ist in diesem Workspace nicht enthalten."
+    }
+  },
   "workspaces": {
     "switcher": {
       "label": "Workspace",
@@ -1612,6 +1618,9 @@
     "create": {
       "title": "Neuer Workspace",
       "description": "Ein Workspace enthält deine Lesezeichen, Ordner und Mitglieder.",
+      "limit": {
+        "title": "Workspace-Limit erreicht"
+      },
       "close": "Schließen",
       "dismiss": "Später",
       "cancel": "Abbrechen",
