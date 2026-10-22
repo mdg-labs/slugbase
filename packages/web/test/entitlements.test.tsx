@@ -1,3 +1,4 @@
+import { focusManager } from "@tanstack/react-query";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Entitlements } from "../src/entitlements/index.ts";
@@ -191,6 +192,24 @@ describe("the invitations behind members.invite", () => {
     await screen.findByRole("button", { name: /^Workspace: / });
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(stub.counts.entitlements).toBe(1);
+  }, SLOW_TEST_TIMEOUT_MS);
+
+  it("reads the entitlements again when the window regains focus, so a grant made elsewhere opens the gate", async () => {
+    const stub = membersServer((_request, count) => json(entitlementsBody({ entitlements: { "members.invite": count > 1 } })));
+    await mount("/settings/workspace/members", [UPGRADE]);
+
+    expect(await screen.findByText("Upgrade plan")).toBeTruthy();
+    try {
+      await act(async () => {
+        focusManager.setFocused(false);
+        focusManager.setFocused(true);
+        await Promise.resolve();
+      });
+      expect(await screen.findByRole("button", { name: "Invite people" })).toBeTruthy();
+      expect(stub.counts.entitlements).toBe(2);
+    } finally {
+      focusManager.setFocused(undefined);
+    }
   }, SLOW_TEST_TIMEOUT_MS);
 });
 
