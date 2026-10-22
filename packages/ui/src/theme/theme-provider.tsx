@@ -1,3 +1,4 @@
+import { CSPProvider } from "@base-ui/react/csp-provider";
 import {
   createContext,
   useCallback,
@@ -106,9 +107,12 @@ export interface ThemeProviderProps {
  * Keeps the light, dark or system choice and applies it as a `light` or `dark`
  * class on the root element, which `theme.css` styles. The class is set from
  * script that ships with the app bundle, so no inline script is needed and a
- * `script-src 'self'` policy holds. The accent is a `data-accent` attribute on
- * the root element. Both choices live in `localStorage`, which the page shows
- * until the app applies the account's own.
+ * `script-src 'self'` policy holds. Base UI adds a `<style>` element for the
+ * scroll area and the select popup, which a policy without `'unsafe-inline'`
+ * blocks; the provider turns that element off and `theme.css` carries its rule,
+ * so the policy needs no source for inline styles. The accent is a
+ * `data-accent` attribute on the root element. Both choices live in
+ * `localStorage`, which the page shows until the app applies the account's own.
  */
 export function ThemeProvider({
   children,
@@ -157,7 +161,11 @@ export function ThemeProvider({
     [theme, resolvedTheme, setTheme, accent, setAccent],
   );
 
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+  return (
+    <ThemeContext.Provider value={value}>
+      <CSPProvider disableStyleElements>{children}</CSPProvider>
+    </ThemeContext.Provider>
+  );
 }
 
 export function useTheme(): ThemeContextValue {

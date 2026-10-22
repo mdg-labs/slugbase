@@ -508,6 +508,16 @@
   body {
     @apply bg-background font-sans text-foreground text-sm antialiased;
   }
+
+  /* The rule Base UI's scroll area and select popup would add in a <style> element, which the page's
+     Content Security Policy blocks; ThemeProvider turns that element off. */
+  .base-ui-disable-scrollbar {
+    scrollbar-width: none;
+  }
+
+  .base-ui-disable-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
 }
 
 @keyframes skeleton {

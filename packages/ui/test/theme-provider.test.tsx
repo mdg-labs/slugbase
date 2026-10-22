@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { ACCENT_STORAGE_KEY, THEME_STORAGE_KEY, ThemeProvider, useTheme, type Accent, type Theme } from "../src/index.ts";
-import "./support.tsx";
+import { ACCENT_STORAGE_KEY, ScrollArea, THEME_STORAGE_KEY, ThemeProvider, useTheme, type Accent, type Theme } from "../src/index.ts";
+import { ResizeObserverStub } from "./support.tsx";
 
 interface SystemTheme {
   setDark: (dark: boolean) => void;
@@ -213,6 +213,23 @@ describe("the accent", () => {
     );
     expect(screen.getByTestId("accent").textContent).toBe("none");
     expect(document.documentElement.hasAttribute("data-accent")).toBe(false);
+  });
+});
+
+describe("ThemeProvider and the Content Security Policy", () => {
+  it("keeps the library's components from adding a <style> element to the page", () => {
+    stubSystemTheme(false);
+    vi.stubGlobal("ResizeObserver", ResizeObserverStub);
+    render(
+      <ThemeProvider>
+        <ScrollArea>
+          <p>content</p>
+        </ScrollArea>
+      </ThemeProvider>,
+    );
+
+    expect(screen.getByText("content")).toBeTruthy();
+    expect(document.querySelectorAll("style")).toHaveLength(0);
   });
 });
 
