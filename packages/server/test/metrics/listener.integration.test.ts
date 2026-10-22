@@ -1,7 +1,7 @@
 import { createServer as createNetServer, connect, type Server as NetServer } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { createServer, type ModuleContext, type RunningServer, type ServerModule } from "../../src/create-server.ts";
-import { adapters, fakeDatabase, operation, recordingLogger, serverConfig, documentOf } from "../support.ts";
+import { adapters, fakeAuthStore, fakeDatabase, operation, recordingLogger, serverConfig, documentOf } from "../support.ts";
 import { get, sample } from "./support.ts";
 
 // Metrics over real sockets (doc 01 section 12, doc 04 section 2.1): the
@@ -90,6 +90,7 @@ async function start(env: Record<string, string | undefined> = {}, ports: { port
     migrations: [],
     logger,
     database,
+    authStore: fakeAuthStore(),
   });
   const listening = await server.start(ports);
   running.push(listening);

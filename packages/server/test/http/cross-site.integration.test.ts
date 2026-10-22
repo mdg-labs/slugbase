@@ -3,7 +3,7 @@ import { defineOperation, jsonResponse, problemResponse } from "@slugbase/contra
 import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { createServer, type RouteBinding, type RunningServer } from "../../src/create-server.ts";
-import { acceptAnyBearer, adapters, fakeDatabase, recordingLogger, serverConfig, documentOf } from "../support.ts";
+import { acceptAnyBearer, adapters, fakeAuthStore, fakeDatabase, recordingLogger, serverConfig, documentOf } from "../support.ts";
 
 // The cross-site rule over a real socket (doc 01 section 4 step 5, doc 10 T5):
 // the request the listener hands the chain is what a browser's form post and a
@@ -71,6 +71,7 @@ async function listen(): Promise<number> {
     migrations: [],
     logger: recordingLogger(),
     database: fakeDatabase(),
+    authStore: fakeAuthStore(),
   });
   const started = await server.start({ port: 0 });
   running.push(started);

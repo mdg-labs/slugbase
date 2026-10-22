@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { createServer, type RunningServer, type ServerModule } from "../../src/create-server.ts";
 import { DEFAULT_MAX_BODY_BYTES } from "../../src/http/body-limits.ts";
-import { adapters, fakeDatabase, recordingLogger, serverConfig, documentOf } from "../support.ts";
+import { adapters, fakeAuthStore, fakeDatabase, recordingLogger, serverConfig, documentOf } from "../support.ts";
 
 // The failure scenario of the body-limits stage over a real socket: a chunked
 // upload with no Content-Length that would run to a gibibyte is refused soon
@@ -106,6 +106,7 @@ describe("the body-limits stage over a socket", () => {
       migrations: [],
       logger: recordingLogger(),
       database: fakeDatabase(),
+      authStore: fakeAuthStore(),
     });
     const started = await server.start({ port: 0 });
     running.push(started);
