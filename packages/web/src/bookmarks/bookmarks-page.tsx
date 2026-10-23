@@ -6,11 +6,13 @@ import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { useFormat } from "../i18n/use-format.ts";
 import { BookmarkCard } from "./bookmark-card.tsx";
+import { BookmarksBulkBar } from "./bookmarks-bulk-bar.tsx";
 import { BookmarksTable } from "./bookmarks-table.tsx";
-import { usePendingPins, useDeleteBookmark, usePinBookmark } from "./bookmark-list-actions.ts";
+import { useBulkBookmarks, usePendingPins, useDeleteBookmark, usePinBookmark } from "./bookmark-list-actions.ts";
+import { useBookmarkSelection, useSelectionShortcuts } from "./bookmark-selection.ts";
 import { bookmarkFailureOf, bookmarkListQuery, type Bookmark } from "./bookmarks.ts";
 import { BookmarksToolbar } from "./bookmarks-toolbar.tsx";
-import { BOOKMARK_PAGE_SIZES, DEFAULT_SORT, hasActiveFilters, listParamsOf, pageSizeOfSearch, useBookmarkListControls, useBookmarkListSearch, type BookmarkView } from "./list-search.ts";
+import { BOOKMARK_PAGE_SIZES, DEFAULT_SORT, filterParamsOf, hasActiveFilters, listParamsOf, pageSizeOfSearch, useBookmarkListControls, useBookmarkListSearch, type BookmarkView } from "./list-search.ts";
 import { useBookmarkModal } from "./modal-search.ts";
 import { usePasteToCreate } from "./use-paste-to-create.ts";
 
@@ -55,7 +57,14 @@ export function BookmarksPage(): ReactElement {
   const pin = usePinBookmark();
   const pendingPins = usePendingPins();
   const [deleting, setDeleting] = useState<Bookmark | undefined>(undefined);
+  const filters = filterParamsOf(search);
+  // The selection belongs to the filters it was made under; the sort, the view and the size do not change which bookmarks match.
+  const selection = useBookmarkSelection(JSON.stringify(filters));
+  const bulk = useBulkBookmarks(selection);
   const remove = useDeleteBookmark(() => {
+    if (deleting !== undefined) {
+      selection.toggle(deleting.id, false);
+    }
     setDeleting(undefined);
   });
 
@@ -63,12 +72,19 @@ export function BookmarksPage(): ReactElement {
     remove.reset();
     setDeleting(target);
   };
+  const selectBookmark = (target: Bookmark, selected: boolean): void => {
+    selection.toggle(target.id, selected);
+  };
   const editBookmark = (target: Bookmark): void => {
     modal.edit(target.id);
   };
 
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];
   const lastPage = query.data?.pages.at(-1);
+  useSelectionShortcuts(
+    selection,
+    items.map((bookmark) => bookmark.id),
+  );
   const filtered = hasActiveFilters(search);
   const newBookmark = (
     <Button
@@ -161,10 +177,12 @@ export function BookmarksPage(): ReactElement {
             onDelete={startDelete}
             onEdit={editBookmark}
             onPin={pin.pin}
+            onSelectedChange={selectBookmark}
             onSort={(sort) => {
               controls.update({ sort: sort === DEFAULT_SORT ? undefined : sort });
             }}
             pendingPins={pendingPins}
+            selected={selection.ids}
             sort={search.sort}
           />
         ) : (
@@ -176,7 +194,10 @@ export function BookmarksPage(): ReactElement {
                 onDelete={startDelete}
                 onEdit={editBookmark}
                 onPin={pin.pin}
+                onSelectedChange={selectBookmark}
                 pinPending={pendingPins.has(bookmark.id)}
+                selected={selection.has(bookmark.id)}
+                selectionActive={selection.ids.size > 0}
               />
             ))}
           </CardGrid>
@@ -211,6 +232,10 @@ export function BookmarksPage(): ReactElement {
       {heading}
       <BookmarksToolbar controls={controls} search={search} />
       {body}
+      <BookmarksBulkBar bulk={bulk} filters={filters} selection={selection} total={lastPage?.total ?? null} />
+      <p aria-live="polite" className="sr-only" role="status">
+        {bulk.announcement}
+      </p>
       <Confirm
         cancelLabel={t("bookmarks.list.delete.cancel")}
         confirmLabel={t("bookmarks.list.delete.confirm")}

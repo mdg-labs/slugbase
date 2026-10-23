@@ -11,6 +11,9 @@ export type BookmarksTableProps = Pick<BookmarkActionHandlers, "onEdit" | "onPin
   readonly bookmarks: readonly Bookmark[];
   /** The bookmarks whose pin is being saved. */
   readonly pendingPins: ReadonlySet<string>;
+  /** The identifiers of the selected bookmarks. */
+  readonly selected: ReadonlySet<string>;
+  readonly onSelectedChange: (bookmark: Bookmark, selected: boolean) => void;
   /** The order the rows are in now. */
   readonly sort: BookmarkSort | undefined;
   readonly onSort: (sort: BookmarkSort) => void;
@@ -73,7 +76,7 @@ function ActionsCell(props: BookmarkActionHandlers): ReactElement {
  * from their headers, and the actions of the card. The address holds the order; below `md` each row is a card. The
  * folders and tags columns stay empty until those features arrive.
  */
-export function BookmarksTable({ bookmarks, pendingPins, sort: current, onSort, onEdit, onPin, onDelete }: BookmarksTableProps): ReactElement {
+export function BookmarksTable({ bookmarks, pendingPins, sort: current, selected, onSelectedChange, onSort, onEdit, onPin, onDelete }: BookmarksTableProps): ReactElement {
   const { t } = useTranslation();
   const format = useFormat();
   const sort = current ?? DEFAULT_SORT;
@@ -83,7 +86,15 @@ export function BookmarksTable({ bookmarks, pendingPins, sort: current, onSort, 
       header: t("bookmarks.list.table.select"),
       hideHeader: true,
       cardSlot: "leading",
-      cell: (bookmark) => <SelectCheckbox label={t("bookmarks.list.select", { title: bookmark.title })} />,
+      cell: (bookmark) => (
+        <SelectCheckbox
+          checked={selected.has(bookmark.id)}
+          label={t("bookmarks.list.select", { title: bookmark.title })}
+          onCheckedChange={(next) => {
+            onSelectedChange(bookmark, next);
+          }}
+        />
+      ),
     },
     {
       id: "title",
@@ -140,5 +151,5 @@ export function BookmarksTable({ bookmarks, pendingPins, sort: current, onSort, 
       cell: (bookmark) => <ActionsCell bookmark={bookmark} onDelete={onDelete} onEdit={onEdit} onPin={onPin} pinPending={pendingPins.has(bookmark.id)} />,
     },
   ];
-  return <DataTable columns={columns} label={t("bookmarks.list.label")} rowKey={(bookmark) => bookmark.id} rows={bookmarks} />;
+  return <DataTable columns={columns} label={t("bookmarks.list.label")} rowKey={(bookmark) => bookmark.id} rowSelected={(bookmark) => selected.has(bookmark.id)} rows={bookmarks} />;
 }

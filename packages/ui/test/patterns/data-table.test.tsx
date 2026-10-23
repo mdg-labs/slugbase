@@ -94,4 +94,13 @@ describe("DataTable", () => {
     expect(within(row).getByRole("button", { name: "Open Alpha" })).toBeTruthy();
     expect(within(card.querySelector("dl") as HTMLElement).getAllByRole("term").map((term) => term.textContent)).toEqual(["Size"]);
   });
+
+  it("marks the selected rows and names every row for the page", () => {
+    stubMatchMedia(false);
+    render(<DataTable columns={COLUMNS} label="Files" rowKey={(row) => row.id} rowSelected={(row) => row.id === "b"} rows={ROWS} />);
+
+    const rows = screen.getAllByRole("row").slice(1);
+    expect(rows.map((row) => row.getAttribute("data-state"))).toEqual([null, "selected"]);
+    expect(rows.map((row) => row.getAttribute("data-item-id"))).toEqual(["a", "b"]);
+  });
 });

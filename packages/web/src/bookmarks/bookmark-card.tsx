@@ -14,7 +14,12 @@ export interface BookmarkActionHandlers {
   readonly onDelete: (bookmark: Bookmark) => void;
 }
 
-export type BookmarkCardProps = BookmarkActionHandlers;
+export type BookmarkCardProps = BookmarkActionHandlers & {
+  readonly selected: boolean;
+  /** Whether any bookmark of the list is selected, which keeps every card's checkbox in view. */
+  readonly selectionActive: boolean;
+  readonly onSelectedChange: (bookmark: Bookmark, selected: boolean) => void;
+};
 
 /** The actions of one bookmark, which its card and its table row show as one list. */
 export function useBookmarkActions({ bookmark, pinPending, onEdit, onPin, onDelete }: BookmarkActionHandlers): readonly RowAction[] {
@@ -33,7 +38,7 @@ export function useBookmarkActions({ bookmark, pinPending, onEdit, onPin, onDele
  * title follows the bookmark's address in the same tab, and only when that is an `http` or `https` address (T14); the
  * open is counted without waiting for the answer. The menu button and the context menu show one list of actions.
  */
-export function BookmarkCard({ bookmark, pinPending, onEdit, onPin, onDelete }: BookmarkCardProps): ReactElement {
+export function BookmarkCard({ bookmark, pinPending, selected, selectionActive, onEdit, onPin, onDelete, onSelectedChange }: BookmarkCardProps): ReactElement {
   const { t } = useTranslation();
   const format = useFormat();
   const router = useRouter();
@@ -51,6 +56,7 @@ export function BookmarkCard({ bookmark, pinPending, onEdit, onPin, onDelete }: 
       actions={actions}
       actionsLabel={t("bookmarks.list.actionsFor", { title: bookmark.title })}
       {...(isHttpUrl(bookmark.url) ? { href: bookmark.url } : {})}
+      itemId={bookmark.id}
       indicator={
         bookmark.pinned ? (
           <span className="text-muted-foreground" role="img" aria-label={t("bookmarks.list.pinned")}>
@@ -62,6 +68,11 @@ export function BookmarkCard({ bookmark, pinPending, onEdit, onPin, onDelete }: 
       onOpen={() => {
         recordOpen(router.options.context.api, bookmark.id);
       }}
+      onSelectedChange={(next) => {
+        onSelectedChange(bookmark, next);
+      }}
+      selected={selected}
+      selectionActive={selectionActive}
       selectLabel={t("bookmarks.list.select", { title: bookmark.title })}
       subtitle={bookmark.host}
       title={bookmark.title}

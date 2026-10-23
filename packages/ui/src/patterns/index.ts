@@ -4,6 +4,7 @@ export { AccountMenu, type AccountMenuItem, type AccountMenuProps } from "./acco
 export { AppShell, MAIN_CONTENT_ID, type AppShellLabels, type AppShellProps } from "./app-shell.tsx";
 export { AuthCard, AuthLayout, type AuthCardProps, type AuthLayoutProps } from "./auth-card.tsx";
 export { Banner, type BannerProps, type BannerVariant } from "./banner.tsx";
+export { BulkBar, BulkBarButton, type BulkBarAction, type BulkBarButtonProps, type BulkBarProps } from "./bulk-bar.tsx";
 export { CardGrid, CardGridItem, type CardGridItemProps, type CardGridProps } from "./card-grid.tsx";
 export { CheckboxField, type CheckboxFieldProps } from "./checkbox-field.tsx";
 export { ChoiceCards, type ChoiceCardOption, type ChoiceCardsProps } from "./choice-cards.tsx";

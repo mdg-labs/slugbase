@@ -158,6 +158,49 @@ export type BannerVariant = "error" | "info" | "success" | "warning";
 export { BookmarkIcon }
 
 // @public
+export function BulkBar(input: BulkBarProps): ReactElement;
+
+// @public (undocumented)
+export interface BulkBarAction {
+    destructive?: boolean;
+    icon?: ReactNode;
+    id: string;
+    // (undocumented)
+    label: string;
+    loading?: boolean;
+    // (undocumented)
+    onSelect: () => void;
+}
+
+// @public
+export function BulkBarButton(input: BulkBarButtonProps): ReactElement;
+
+// @public (undocumented)
+export interface BulkBarButtonProps {
+    // (undocumented)
+    children: ReactNode;
+    // (undocumented)
+    disabled?: boolean;
+    loading?: boolean;
+    // (undocumented)
+    onClick: () => void;
+}
+
+// @public (undocumented)
+export interface BulkBarProps {
+    // (undocumented)
+    actions: readonly BulkBarAction[];
+    busy?: boolean;
+    children?: ReactNode;
+    clear: {
+        label: string;
+        onClear: () => void;
+    };
+    count: ReactNode;
+    label: string;
+}
+
+// @public
 export function CardGrid(input: CardGridProps): ReactElement;
 
 // @public
@@ -170,8 +213,13 @@ export interface CardGridItemProps {
     children?: ReactNode;
     href?: string;
     indicator?: ReactNode;
+    itemId?: string;
     monogram: string;
     onOpen?: () => void;
+    // (undocumented)
+    onSelectedChange?: (selected: boolean) => void;
+    selected?: boolean;
+    selectionActive?: boolean;
     selectLabel: string;
     subtitle?: string;
     title: string;
@@ -343,6 +391,7 @@ export interface DataTableProps<Row extends object> {
     rowKey: (row: Row) => string;
     // (undocumented)
     rows: readonly Row[];
+    rowSelected?: (row: Row) => boolean;
 }
 
 // @public

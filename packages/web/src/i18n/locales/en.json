@@ -132,6 +132,39 @@
       },
       "deleted": "Bookmark deleted."
     },
+    "bulk": {
+      "label": "Selected bookmarks",
+      "count": "{count, plural, one {# selected} other {# selected}}",
+      "clear": "Clear selection",
+      "pin": "Pin",
+      "unpin": "Unpin",
+      "delete": {
+        "action": "Delete",
+        "title": "Delete {count, plural, one {# bookmark} other {# bookmarks}}?",
+        "description": "{count, plural, one {Its slug stops forwarding immediately. This cannot be undone.} other {Their slugs stop forwarding immediately. This cannot be undone.}}",
+        "confirm": "{count, plural, one {Delete bookmark} other {Delete bookmarks}}",
+        "cancel": "Cancel"
+      },
+      "selectAll": {
+        "all": "Select all {total} matching",
+        "cappedOf": "Select the first {cap} of {total} matching",
+        "capped": "Select the first {cap} matching",
+        "cappedNote": "More bookmarks match than the {cap} that can be selected at once.",
+        "error": "The matching bookmarks could not be selected. Try again in a moment."
+      },
+      "done": {
+        "delete": "{count, plural, one {# bookmark deleted.} other {# bookmarks deleted.}}",
+        "pin": "{count, plural, one {# bookmark pinned.} other {# bookmarks pinned.}}",
+        "unpin": "{count, plural, one {# bookmark unpinned.} other {# bookmarks unpinned.}}"
+      },
+      "skipped": "{count, plural, one {# bookmark was skipped because it no longer exists or can’t be changed.} other {# bookmarks were skipped because they no longer exist or can’t be changed.}}",
+      "error": {
+        "delete": "The bookmarks could not be deleted. Nothing was changed. Try again in a moment.",
+        "pin": "The bookmarks could not be pinned. Nothing was changed. Try again in a moment.",
+        "unpin": "The bookmarks could not be unpinned. Nothing was changed. Try again in a moment.",
+        "partial": "Only {done, number} of {total, number} bookmarks were changed before an error. The rest are still selected; try again in a moment."
+      }
+    },
     "modal": {
       "close": "Close",
       "cancel": "Cancel",

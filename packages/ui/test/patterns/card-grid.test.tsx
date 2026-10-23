@@ -111,4 +111,23 @@ describe("CardGrid", () => {
     expect(fromContext).toEqual(["Edit", "Delete"]);
     expect(fromButton).toEqual(fromContext);
   });
+
+  it("reports the checkbox, shows what is selected, and keeps the checkbox in view while anything is selected", () => {
+    const onSelectedChange = vi.fn<(selected: boolean) => void>();
+    const { container } = renderCard({ itemId: "b1", selected: true, selectionActive: true, onSelectedChange });
+
+    const checkbox = screen.getByRole("checkbox", { name: "Select Example" });
+    expect(checkbox.getAttribute("aria-checked")).toBe("true");
+    expect(checkbox.className).toContain("opacity-100");
+    expect(container.querySelector("li")?.getAttribute("data-item-id")).toBe("b1");
+    expect(container.querySelector("[data-selected='true']")).not.toBeNull();
+    fireEvent.click(checkbox);
+    expect(onSelectedChange).toHaveBeenCalledWith(false);
+  });
+
+  it("hides the checkbox of a card that is not selected until it is hovered or focused", () => {
+    renderCard({ selected: false, selectionActive: false });
+
+    expect(screen.getByRole("checkbox", { name: "Select Example" }).className).toContain("opacity-0");
+  });
 });

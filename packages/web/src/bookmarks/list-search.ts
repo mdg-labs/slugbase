@@ -111,15 +111,20 @@ export interface BookmarkListParams {
   readonly limit: BookmarkPageSize;
 }
 
-export function listParamsOf(search: BookmarkListSearch): BookmarkListParams {
+/** The parameters that choose which bookmarks the list holds; the sort and the size only shape how they are laid out. */
+export type BookmarkFilterParams = Omit<BookmarkListParams, "sort" | "limit">;
+
+export function filterParamsOf(search: BookmarkListSearch): BookmarkFilterParams {
   return {
     ...(search.pinned === true ? { pinned: "true" as const } : {}),
     ...(search.hasSlug === true ? { hasSlug: "true" as const } : {}),
     ...(search.forwarding === true ? { forwarding: "true" as const } : {}),
     ...(search.scope === undefined ? {} : { scope: search.scope }),
-    sort: search.sort ?? DEFAULT_SORT,
-    limit: pageSizeOfSearch(search),
   };
+}
+
+export function listParamsOf(search: BookmarkListSearch): BookmarkListParams {
+  return { ...filterParamsOf(search), sort: search.sort ?? DEFAULT_SORT, limit: pageSizeOfSearch(search) };
 }
 
 export interface BookmarkListControls {

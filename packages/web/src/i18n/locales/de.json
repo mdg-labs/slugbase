@@ -132,6 +132,39 @@
       },
       "deleted": "Lesezeichen gelöscht."
     },
+    "bulk": {
+      "label": "Ausgewählte Lesezeichen",
+      "count": "{count, plural, one {# ausgewählt} other {# ausgewählt}}",
+      "clear": "Auswahl aufheben",
+      "pin": "Anheften",
+      "unpin": "Anheftung lösen",
+      "delete": {
+        "action": "Löschen",
+        "title": "{count, plural, one {# Lesezeichen} other {# Lesezeichen}} löschen?",
+        "description": "{count, plural, one {Sein Slug leitet sofort nicht mehr weiter. Das lässt sich nicht rückgängig machen.} other {Ihre Slugs leiten sofort nicht mehr weiter. Das lässt sich nicht rückgängig machen.}}",
+        "confirm": "{count, plural, one {Lesezeichen löschen} other {Lesezeichen löschen}}",
+        "cancel": "Abbrechen"
+      },
+      "selectAll": {
+        "all": "Alle {total} Treffer auswählen",
+        "cappedOf": "Die ersten {cap} von {total} Treffern auswählen",
+        "capped": "Die ersten {cap} Treffer auswählen",
+        "cappedNote": "Es gibt mehr Treffer, als sich auf einmal auswählen lassen ({cap}).",
+        "error": "Die passenden Lesezeichen konnten nicht ausgewählt werden. Versuche es gleich noch einmal."
+      },
+      "done": {
+        "delete": "{count, plural, one {# Lesezeichen gelöscht.} other {# Lesezeichen gelöscht.}}",
+        "pin": "{count, plural, one {# Lesezeichen angeheftet.} other {# Lesezeichen angeheftet.}}",
+        "unpin": "{count, plural, one {Anheftung von # Lesezeichen gelöst.} other {Anheftung von # Lesezeichen gelöst.}}"
+      },
+      "skipped": "{count, plural, one {# Lesezeichen wurde übersprungen, weil es nicht mehr existiert oder sich nicht ändern lässt.} other {# Lesezeichen wurden übersprungen, weil sie nicht mehr existieren oder sich nicht ändern lassen.}}",
+      "error": {
+        "delete": "Die Lesezeichen konnten nicht gelöscht werden. Es wurde nichts geändert. Versuche es gleich noch einmal.",
+        "pin": "Die Lesezeichen konnten nicht angeheftet werden. Es wurde nichts geändert. Versuche es gleich noch einmal.",
+        "unpin": "Die Anheftung der Lesezeichen konnte nicht gelöst werden. Es wurde nichts geändert. Versuche es gleich noch einmal.",
+        "partial": "Nur {done, number} von {total, number} Lesezeichen wurden vor einem Fehler geändert. Die übrigen bleiben ausgewählt; versuche es gleich noch einmal."
+      }
+    },
     "modal": {
       "close": "Schließen",
       "cancel": "Abbrechen",

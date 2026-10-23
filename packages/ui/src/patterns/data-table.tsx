@@ -33,6 +33,8 @@ export interface DataTableProps<Row extends object> {
   rows: readonly Row[];
   /** Keys a row; it must stay the same for the same record. */
   rowKey: (row: Row) => string;
+  /** Marks the rows that are selected; the column that selects them is the caller's. */
+  rowSelected?: (row: Row) => boolean;
   className?: string;
 }
 
@@ -43,7 +45,7 @@ const features = tableFeatures({});
  * can order the rows from its header. On a narrow screen each row becomes a card that lists the columns under their
  * headers, the first column without a card slot as its title.
  */
-export function DataTable<Row extends object>({ label, columns, rows, rowKey, className }: DataTableProps<Row>): ReactElement {
+export function DataTable<Row extends object>({ label, columns, rows, rowKey, rowSelected, className }: DataTableProps<Row>): ReactElement {
   const narrow = useIsMobile();
   const columnDefs = useMemo(
     () =>
@@ -77,8 +79,8 @@ export function DataTable<Row extends object>({ label, columns, rows, rowKey, cl
             return cell === undefined ? null : <table.FlexRender cell={cell} />;
           };
           return (
-            <li key={row.id}>
-              <Card className="gap-3 p-4">
+            <li data-item-id={row.id} key={row.id}>
+              <Card className="gap-3 p-4 data-[selected=true]:ring-2 data-[selected=true]:ring-primary/60" data-selected={rowSelected?.(row.original) === true ? "true" : undefined}>
                 <div className="flex items-start gap-3">
                   {leading.map((header) => (
                     <div key={header.id}>{renderCell(header.column.id)}</div>
@@ -144,7 +146,7 @@ export function DataTable<Row extends object>({ label, columns, rows, rowKey, cl
         </TableHeader>
         <TableBody>
           {table.getRowModel().rows.map((row) => (
-            <TableRow key={row.id}>
+            <TableRow data-item-id={row.id} data-state={rowSelected?.(row.original) === true ? "selected" : undefined} key={row.id}>
               {row.getAllCells().map((cell) => (
                 <TableCell className={options.get(cell.column.id)?.className} key={cell.id}>
                   <table.FlexRender cell={cell} />

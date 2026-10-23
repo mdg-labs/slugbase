@@ -1,8 +1,9 @@
 import type { MouseEvent, ReactElement, ReactNode } from "react";
 import { Card } from "../components/ui/card.tsx";
-import { Checkbox } from "../components/ui/checkbox.tsx";
+import { cn } from "../lib/utils.ts";
 import { ContextActions } from "./context-actions.tsx";
 import { RowActions, type RowAction } from "./row-actions.tsx";
+import { SelectCheckbox } from "./select-checkbox.tsx";
 
 export interface CardGridProps {
   /** Names the list for assistive technology. */
@@ -41,18 +42,28 @@ export interface CardGridItemProps {
   actionsLabel: string;
   /** Names the checkbox that appears on hover or focus. */
   selectLabel: string;
+  /** Tells the list which card this is: it is set as `data-item-id`, which the page reads to find the card that holds focus. */
+  itemId?: string;
+  /** Whether the card is selected; left out, the checkbox keeps its own state. */
+  selected?: boolean;
+  onSelectedChange?: (selected: boolean) => void;
+  /** Shows every checkbox, not only those of cards that are hovered or focused, as long as anything in the list is selected. */
+  selectionActive?: boolean;
 }
 
 /**
  * One card of a `CardGrid`: a monogram, the title as the link, a subtitle in mono and the content under them, with a
  * checkbox that appears on hover or focus and the card's actions in a menu button and a context menu. The whole card
- * follows the link; the checkbox and the menu button keep their own clicks.
+ * follows the link; the checkbox and the menu button keep their own clicks. A card is selected by its checkbox.
  */
-export function CardGridItem({ title, href, onOpen, monogram, subtitle, indicator, children, actions, actionsLabel, selectLabel }: CardGridItemProps): ReactElement {
+export function CardGridItem({ title, href, onOpen, monogram, subtitle, indicator, children, actions, actionsLabel, selectLabel, itemId, selected, onSelectedChange, selectionActive = false }: CardGridItemProps): ReactElement {
   return (
-    <li className="group/card">
+    <li className="group/card" data-item-id={itemId}>
       <ContextActions actions={actions} className="h-full" label={actionsLabel}>
-        <Card className="h-full gap-2 p-4 transition-colors focus-within:ring-2 focus-within:ring-ring hover:bg-accent/30">
+        <Card
+          className="h-full gap-2 p-4 transition-colors focus-within:ring-2 focus-within:ring-ring hover:bg-accent/30 data-[selected=true]:bg-accent/40 data-[selected=true]:ring-2 data-[selected=true]:ring-primary/60"
+          data-selected={selected === true ? "true" : undefined}
+        >
           <div className="flex items-start gap-3">
             <span
               aria-hidden="true"
@@ -91,9 +102,14 @@ export function CardGridItem({ title, href, onOpen, monogram, subtitle, indicato
             </div>
             <div className="relative z-10 -mt-1.5 -me-1.5 flex items-center gap-1">
               {indicator}
-              <Checkbox
-                aria-label={selectLabel}
-                className="opacity-0 transition-opacity focus-visible:opacity-100 group-focus-within/card:opacity-100 group-hover/card:opacity-100"
+              <SelectCheckbox
+                {...(selected === undefined ? {} : { checked: selected })}
+                className={cn(
+                  "transition-opacity focus-visible:opacity-100 group-focus-within/card:opacity-100 group-hover/card:opacity-100",
+                  selectionActive ? "opacity-100" : "opacity-0",
+                )}
+                label={selectLabel}
+                {...(onSelectedChange === undefined ? {} : { onCheckedChange: onSelectedChange })}
               />
               <RowActions actions={actions} label={actionsLabel} />
             </div>

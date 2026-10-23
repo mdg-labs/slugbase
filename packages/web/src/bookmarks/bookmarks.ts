@@ -1,7 +1,9 @@
-import { CreateBookmarkRequestSchema, UpdateBookmarkRequestSchema, type ComponentTypes } from "@slugbase/contracts";
+import { BOOKMARK_BULK_IDS_MAX, CreateBookmarkRequestSchema, UpdateBookmarkRequestSchema, type ComponentTypes } from "@slugbase/contracts";
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { ApiProblemError, isSessionEnded, type ApiClient } from "../api/client.ts";
-import type { BookmarkListParams } from "./list-search.ts";
+import type { BookmarkFilterParams, BookmarkListParams } from "./list-search.ts";
+
+export { BOOKMARK_SELECT_ALL_CAP } from "@slugbase/contracts";
 
 export type Bookmark = ComponentTypes["schemas"]["Bookmark"];
 export type CreateBookmarkRequest = ComponentTypes["schemas"]["CreateBookmarkRequest"];
@@ -108,6 +110,64 @@ export async function deleteBookmark(api: ApiClient, id: string): Promise<void> 
   if (!response.ok) {
     throw new Error("The bookmark deletion did not answer with a problem document", { cause: error });
   }
+}
+
+export type BulkAction = ComponentTypes["schemas"]["BulkBookmarksRequest"]["action"];
+
+/** What a bulk request did, as counts. */
+export interface BulkTotals {
+  readonly requested: number;
+  readonly affected: number;
+  readonly skipped: number;
+}
+
+/** The identifiers of the bookmarks that match the filters of `params` (the sort and size do not matter), and whether more match than the select-all cap. */
+export async function listBookmarkIds(api: ApiClient, params: BookmarkFilterParams): Promise<ComponentTypes["schemas"]["BookmarkIds"]> {
+  const { data, error } = await api.GET("/api/v1/bookmarks/ids", { params: { query: params } });
+  if (data === undefined) {
+    throw new Error("The bookmark identifiers did not answer with a document", { cause: error });
+  }
+  return data;
+}
+
+/**
+ * A bulk request that stopped partway: `completed` is what the requests before the failed one did and `remaining` the
+ * identifiers they did not reach, which the failed one included. Nothing of the failed request itself was changed.
+ */
+export class BulkPartialError extends Error {
+  readonly completed: BulkTotals;
+  readonly remaining: readonly string[];
+
+  constructor(completed: BulkTotals, remaining: readonly string[], cause: unknown) {
+    super("A bulk request on bookmarks stopped before it reached every bookmark", { cause });
+    this.name = "BulkPartialError";
+    this.completed = completed;
+    this.remaining = remaining;
+  }
+}
+
+/**
+ * Deletes, pins or unpins the bookmarks `ids` (doc 04 section 6.2). The API takes at most 1 000 identifiers in a request
+ * and each request is one transaction, so a longer selection is sent in turns, one after the other, and stops at the first
+ * failure: a failure after the first turn raises a `BulkPartialError` that says how far it got.
+ */
+export async function bulkBookmarks(api: ApiClient, action: BulkAction, ids: readonly string[]): Promise<BulkTotals> {
+  let totals: BulkTotals = { requested: 0, affected: 0, skipped: 0 };
+  for (let start = 0; start < ids.length; start += BOOKMARK_BULK_IDS_MAX) {
+    try {
+      const { data, error } = await api.POST("/api/v1/bookmarks/bulk", { body: { action, ids: ids.slice(start, start + BOOKMARK_BULK_IDS_MAX) } });
+      if (data === undefined) {
+        throw new Error("The bulk request did not answer with a document", { cause: error });
+      }
+      totals = { requested: totals.requested + data.requested, affected: totals.affected + data.affected, skipped: totals.skipped + data.skipped };
+    } catch (error) {
+      if (start === 0) {
+        throw error;
+      }
+      throw new BulkPartialError(totals, ids.slice(start), error);
+    }
+  }
+  return totals;
 }
 
 export type FieldName = "url" | "title" | "description";
