@@ -81,11 +81,6 @@ export const BookmarkParamsSchema = z.strictObject({
   id: z.uuid().describe("The bookmark's identifier"),
 });
 
-const BookmarkCreatedHeaders = {
-  Location: { description: "The address of the new bookmark, /api/v1/bookmarks/<id>", schema: z.string() },
-  ETag: { description: 'The bookmark\'s version as an entity tag, for example "1"; the If-Match of the next change', schema: z.string() },
-} as const;
-
 /** The precondition of doc 04 section 2.4: the `ETag` of the version the caller read, as a quoted entity tag, or `*`. */
 export const BookmarkIfMatchHeaderSchema = z.object({
   "If-Match": z
@@ -107,22 +102,25 @@ export const createBookmark = defineOperation({
   auth: "member",
   rate: "write",
   scope: "write",
+  idempotency: true,
   request: { body: CreateBookmarkRequestSchema },
   responses: {
     201: jsonResponse(
-      "The bookmark, owned by the caller and private to them, with its version in the body and in the ETag and its address in Location. The workspace's bookmark count is raised by one in the same transaction, and bookmark.created is announced once it is committed",
+      "The bookmark, owned by the caller and private to them, with its id and its version in the body (the ETag of a later read repeats the version). The workspace's bookmark count is raised by one in the same transaction, and bookmark.created is announced once it is committed. A retry with the same Idempotency-Key and the same request answers this response again with Idempotency-Replayed: true and stores nothing; a replay restores the status and the body and no header, so the response carries none",
       BookmarkSchema,
-      { headers: BookmarkCreatedHeaders },
     ),
-    400: problemResponse("The request was malformed"),
+    400: problemResponse("The request was malformed, or the Idempotency-Key header is not a UUID"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse("The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"),
     404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),
+    409: problemResponse("The Idempotency-Key was used before for another request (idempotency_conflict); nothing is written"),
     422: problemResponse(
-      "The body did not pass validation (a missing, empty or over-long URL, title or description, a malformed URL, or a field the operation does not declare), the URL is not an http or https URL (url_not_allowed), or the workspace already holds as many bookmarks as its bookmarks.max entitlement allows (bookmark_limit_reached; the problem carries limit and used). Nothing is written",
+      "The body did not pass validation (a missing, empty or over-long URL, title or description, a malformed URL, or a field the operation does not declare), the URL is not an http or https URL (url_not_allowed), or the workspace already holds as many bookmarks as its bookmarks.max entitlement allows (bookmark_limit_reached; the problem carries limit and used). Nothing is written, and a refused request keeps no key, so a retry with it runs",
     ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
-    503: problemResponse("The service is temporarily unavailable, or the entitlement source could not say how many bookmarks the workspace may hold"),
+    503: problemResponse(
+      "The service is temporarily unavailable, the entitlement source could not say how many bookmarks the workspace may hold, or an earlier request with the same Idempotency-Key is still running",
+    ),
   },
 });
 

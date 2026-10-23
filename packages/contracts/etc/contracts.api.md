@@ -1122,6 +1122,7 @@ export const createBookmark: {
     readonly auth: "member";
     readonly rate: "write";
     readonly scope: "write";
+    readonly idempotency: true;
     readonly request: {
         readonly body: z.ZodObject<{
             url: z.ZodString;
@@ -1146,20 +1147,12 @@ export const createBookmark: {
         version: z.ZodNumber;
         createdAt: z.ZodISODateTime;
         updatedAt: z.ZodISODateTime;
-        }, z.core.$strict>, {
-        readonly Location: {
-        readonly description: "The address of the new bookmark, /api/v1/bookmarks/<id>";
-        readonly schema: z.ZodString;
-        };
-        readonly ETag: {
-        readonly description: "The bookmark's version as an entity tag, for example \"1\"; the If-Match of the next change";
-        readonly schema: z.ZodString;
-        };
-        }>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;
         readonly 403: ProblemResponse;
         readonly 404: ProblemResponse;
+        readonly 409: ProblemResponse;
         readonly 422: ProblemResponse;
         readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
@@ -3935,7 +3928,9 @@ export interface OperationTypes {
     createBookmark: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -3947,8 +3942,6 @@ export interface OperationTypes {
         responses: {
             201: {
                 headers: {
-                    ETag: string;
-                    Location: string;
                     [name: string]: unknown;
                 };
                 content: {
@@ -3980,6 +3973,14 @@ export interface OperationTypes {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -3012,7 +3012,10 @@ export interface operations {
     createBookmark: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description A client-generated UUID that makes a retry safe. A retry with the same key and the same request answers the stored successful response with Idempotency-Replayed: true instead of running again; the same key with another request is 409 idempotency_conflict. A key is kept for 24 hours and belongs to the account */
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -3022,20 +3025,16 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The bookmark, owned by the caller and private to them, with its version in the body and in the ETag and its address in Location. The workspace's bookmark count is raised by one in the same transaction, and bookmark.created is announced once it is committed */
+            /** @description The bookmark, owned by the caller and private to them, with its id and its version in the body (the ETag of a later read repeats the version). The workspace's bookmark count is raised by one in the same transaction, and bookmark.created is announced once it is committed. A retry with the same Idempotency-Key and the same request answers this response again with Idempotency-Replayed: true and stores nothing; a replay restores the status and the body and no header, so the response carries none */
             201: {
                 headers: {
-                    /** @description The bookmark's version as an entity tag, for example "1"; the If-Match of the next change */
-                    ETag: string;
-                    /** @description The address of the new bookmark, /api/v1/bookmarks/<id> */
-                    Location: string;
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["Bookmark"];
                 };
             };
-            /** @description The request was malformed */
+            /** @description The request was malformed, or the Idempotency-Key header is not a UUID */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -3071,7 +3070,16 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation (a missing, empty or over-long URL, title or description, a malformed URL, or a field the operation does not declare), the URL is not an http or https URL (url_not_allowed), or the workspace already holds as many bookmarks as its bookmarks.max entitlement allows (bookmark_limit_reached; the problem carries limit and used). Nothing is written */
+            /** @description The Idempotency-Key was used before for another request (idempotency_conflict); nothing is written */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation (a missing, empty or over-long URL, title or description, a malformed URL, or a field the operation does not declare), the URL is not an http or https URL (url_not_allowed), or the workspace already holds as many bookmarks as its bookmarks.max entitlement allows (bookmark_limit_reached; the problem carries limit and used). Nothing is written, and a refused request keeps no key, so a retry with it runs */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3091,7 +3099,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The service is temporarily unavailable, or the entitlement source could not say how many bookmarks the workspace may hold */
+            /** @description The service is temporarily unavailable, the entitlement source could not say how many bookmarks the workspace may hold, or an earlier request with the same Idempotency-Key is still running */
             503: {
                 headers: {
                     [name: string]: unknown;

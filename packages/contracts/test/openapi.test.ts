@@ -205,12 +205,14 @@ describe("declaration checks", () => {
       expect(problemsOf([headed]).join("\n")).toContain("response 201 documents headers");
     });
 
-    it("is declared by createInvitation in the committed document, as a header parameter of that operation only", () => {
+    it("is declared by createBookmark and createInvitation in the committed document, as a header parameter of those operations only", () => {
       const parsed = JSON.parse(committed) as { paths: Record<string, Record<string, Obj>> };
       const declaring = Object.values(parsed.paths).flatMap((item) => Object.values(item)).filter((entry) => entry["x-slugbase-idempotency"] === true);
-      expect(declaring.map((entry) => entry["operationId"])).toEqual(["createInvitation"]);
-      const parameters = declaring[0]?.["parameters"] as Obj[];
-      expect(parameters.map((parameter) => [parameter["name"], parameter["in"], parameter["required"]])).toEqual([["Idempotency-Key", "header", false]]);
+      expect(declaring.map((entry) => entry["operationId"]).sort()).toEqual(["createBookmark", "createInvitation"]);
+      for (const entry of declaring) {
+        const parameters = entry["parameters"] as Obj[];
+        expect(parameters.map((parameter) => [parameter["name"], parameter["in"], parameter["required"]])).toEqual([["Idempotency-Key", "header", false]]);
+      }
     });
   });
 

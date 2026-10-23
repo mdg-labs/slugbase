@@ -20,7 +20,10 @@ import { acceptedVersions, entityTagOf } from "../workspaces/if-match.ts";
 // answers 503 and writes nothing, never a creation without a ceiling), and the transaction takes one place under it:
 // `sys_bookmark_count_take` locks the workspace's row, compares the workspace's `bookmark_count` with the ceiling and
 // raises it, and the bookmark, the `bookmark.created` job and that count are one transaction, so two creations at the limit
-// minus one make one and a failure of any write gives the place back. At the limit the answer is
+// minus one make one and a failure of any write gives the place back. The operation accepts an `Idempotency-Key` (stage 9a, doc 04
+// section 6.3): the stage opens the transaction this handler joins and claims the key in it first, so the key, the bookmark and
+// the stored response commit together, and a replay restores the status and the body only, which is why the 201 carries no `Location`
+// or `ETag`. At the limit the answer is
 // `422 bookmark_limit_reached` with `limit` and `used`, and nothing is written. The operation declares no stage 9
 // entitlement, since a limit of zero must read as `bookmark_limit_reached`, so the handler decides it.
 //
@@ -119,11 +122,7 @@ export function bookmarkRoutes({ entitlements }: BookmarkRoutesOptions): RouteBi
       );
       switch (outcome.kind) {
         case "created":
-          return {
-            status: 201,
-            body: bookmarkBody(outcome.bookmark),
-            headers: { Location: `/api/v1/bookmarks/${outcome.bookmark.id}`, ETag: entityTagOf(outcome.bookmark.version) },
-          };
+          return { status: 201, body: bookmarkBody(outcome.bookmark) };
         case "url_refused":
           if (outcome.reason === "not_http") {
             throw new ProblemError("url_not_allowed", URL_NOT_ALLOWED, { errors: [{ path: "url", code: "url_not_allowed" }] });

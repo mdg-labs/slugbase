@@ -5,7 +5,7 @@ import { bearer, HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type Worl
 
 // POST, GET, PATCH and DELETE of /api/v1/bookmarks (doc 04 sections 2.3, 2.4, 3.2 and 10.6, doc 02 sections 5.1, 5.3 and 5.6, doc 05
 // sections 2.2 and 2.4, doc 10 T1, T2, T12 and T13), through the whole chain over the migrated database: what is stored for the URL, the
-// title and the description, the answer of a creation (201, Location, ETag, the version), that only the owner reads, changes and deletes
+// title and the description, the answer of a creation (201 and the version), that only the owner reads, changes and deletes
 // a bookmark and that another member's, another workspace's and an unknown one are the same 404, that a token needs the write scope to
 // create, change and delete and the read scope to read, that a refused creation writes, counts and announces nothing, that a change
 // is a merge patch under an optimistic version check, and that a delete is hard and gives the place under the ceiling back.
@@ -94,7 +94,7 @@ async function setup(world: World) {
 
 describe("createBookmark", () => {
   it(
-    "answers 201 with the bookmark, its version in the body and in the ETag and its address in Location, stores it for the caller, counts it and announces it once",
+    "answers 201 with the bookmark and its version in the body, stores it for the caller, counts it and announces it once",
     async () => {
       const world = harness.serve();
       const { owner, shared } = await setup(world);
@@ -120,8 +120,8 @@ describe("createBookmark", () => {
         updatedAt: bookmark.updatedAt,
       });
       expect(Number.isNaN(Date.parse(bookmark.createdAt))).toBe(false);
-      expect(response.headers.get("location")).toBe(`/api/v1/bookmarks/${bookmark.id}`);
-      expect(response.headers.get("etag")).toBe('"1"');
+      expect(response.headers.get("location")).toBeNull();
+      expect(response.headers.get("etag")).toBeNull();
       expect(await stored(shared.workspaceId)).toEqual({ rows: 1, counter: 1, jobs: 1 });
       const jobs = await database().owner<{ data: Record<string, string> }[]>`SELECT data FROM pgboss.job WHERE name = ${CREATED_JOB}`;
       expect(jobs[0]?.data).toMatchObject({ workspaceId: shared.workspaceId, bookmarkId: bookmark.id, accountId: owner.account.id });
