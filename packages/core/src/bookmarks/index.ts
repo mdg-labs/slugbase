@@ -27,3 +27,17 @@ export { deleteBookmark } from "./delete.ts";
 export type { BookmarkDeletionAsk, BookmarkDeletionDependencies } from "./delete.ts";
 export { BookmarkArchiveError, archiveBookmarks, restoreBookmarks } from "./archive.ts";
 export type { BookmarkArchiveRequest, BookmarkArchiveTransaction } from "./archive.ts";
+export { BOOKMARK_LIST_TOTAL_CAP, BOOKMARK_SORTS, listBookmarks } from "./list.ts";
+export type {
+  BookmarkCursors,
+  BookmarkListAsk,
+  BookmarkListDependencies,
+  BookmarkListFilter,
+  BookmarkListOutcome,
+  BookmarkListRequest,
+  BookmarkListRow,
+  BookmarkListStore,
+  BookmarkPosition,
+  BookmarkScope,
+  BookmarkSort,
+} from "./list.ts";

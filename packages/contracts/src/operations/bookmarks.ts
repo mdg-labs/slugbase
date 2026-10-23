@@ -5,7 +5,8 @@ import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimi
 // act in the workspace the request is bound to and name none (D11), and a bookmark is its owner's: another member's bookmark of
 // the same workspace and any bookmark of another workspace are answered 404, like one that does not exist (doc 04 section 2.4,
 // doc 10 T1 and T2). The URL is stored normalised and only `http` and `https` are stored (doc 02 section 5.1, doc 10 T12 and
-// T13). Listing, the slug and the folders and tags of a bookmark are other operations.
+// T13). The list pages through the caller's own bookmarks by a signed keyset cursor (doc 04 section 6.1). The slug and the folders and
+// tags of a bookmark are other operations.
 
 /** The longest bookmark URL, in characters (doc 02 section 5.1). */
 export const BOOKMARK_URL_MAX_LENGTH = 2048;
@@ -77,6 +78,59 @@ export const BookmarkSchema = z
   })
   .meta({ id: "Bookmark" });
 
+/** The most bookmarks a page returns (doc 04 section 6.1). */
+export const BOOKMARK_LIST_MAX_LIMIT = 100;
+
+/** The page size when `limit` is left out (doc 04 section 6.1). */
+export const BOOKMARK_LIST_DEFAULT_LIMIT = 48;
+
+/** Where the total of a list stops being counted (Q42). */
+export const BOOKMARK_LIST_TOTAL_CAP = 10_000;
+
+/**
+ * The longest cursor a client may send back. The largest one the server issues carries the lower-cased title of the last item
+ * (300 characters, up to 6 bytes each once JSON-escaped), the identifier and the signature, as base64url: about 2 600 characters.
+ */
+export const BOOKMARK_CURSOR_MAX_LENGTH = 4096;
+
+export const BookmarkSortSchema = z.enum(["recent", "oldest", "title_asc", "title_desc", "most_used", "recently_opened"]);
+
+const QueryBooleanSchema = z.enum(["true", "false"]);
+
+export const ListBookmarksQuerySchema = z.strictObject({
+  scope: z.enum(["all", "mine"]).default("all").describe("Whose bookmarks are listed. Only the caller's own bookmarks exist until sharing arrives, so both name the same bookmarks today"),
+  pinned: QueryBooleanSchema.optional().describe("true lists pinned bookmarks only and false unpinned ones only; left out, pinning is not filtered on"),
+  hasSlug: QueryBooleanSchema.optional().describe("true lists bookmarks with a slug only and false those without one; left out, slugs are not filtered on"),
+  forwarding: QueryBooleanSchema.optional().describe("true lists the bookmarks /go forwards to only and false those it does not; left out, forwarding is not filtered on"),
+  url: z
+    .string()
+    .min(1)
+    .max(BOOKMARK_URL_MAX_LENGTH)
+    .optional()
+    .describe(
+      "Lists the caller's bookmarks whose canonical URL equals the canonical form of this value, which the duplicate warning of a new bookmark uses. The value is normalised as a bookmark's URL is, and one that cannot be a bookmark's URL is refused with 422",
+    ),
+  sort: BookmarkSortSchema.default("recent").describe(
+    "The order, with the identifier as the tiebreak: recent (newest first), oldest, title_asc and title_desc (by title, ignoring case), most_used (most opens first) or recently_opened (last opened first, never-opened bookmarks last)",
+  ),
+  limit: z.coerce.number().int().min(1).max(BOOKMARK_LIST_MAX_LIMIT).default(BOOKMARK_LIST_DEFAULT_LIMIT).describe("The most bookmarks to return, at most 100"),
+  cursor: z
+    .string()
+    .min(1)
+    .max(BOOKMARK_CURSOR_MAX_LENGTH)
+    .optional()
+    .describe("The `nextCursor` of the previous page. It is valid only with the scope, filters and sort it was issued for, for the account and workspace that received it; any other cursor is refused with 400"),
+});
+
+export const BookmarkListSchema = z
+  .strictObject({
+    items: z.array(BookmarkSchema).describe("One page of the caller's bookmarks, in the order asked for; plan-archived bookmarks are never listed"),
+    nextCursor: z.string().nullable().describe("Passed as `cursor` to get the next page; null on the last page"),
+    total: z.number().int().min(0).nullable().describe("How many bookmarks match the filters, across all pages: exact up to 10 000, and null above that, where totalAtLeast says so"),
+    totalAtLeast: z.literal(BOOKMARK_LIST_TOTAL_CAP).optional().describe("Present, and 10 000, when total is null: the filters match more than 10 000 bookmarks"),
+  })
+  .meta({ id: "BookmarkList" });
+
 export const BookmarkParamsSchema = z.strictObject({
   id: z.uuid().describe("The bookmark's identifier"),
 });
@@ -121,6 +175,30 @@ export const createBookmark = defineOperation({
     503: problemResponse(
       "The service is temporarily unavailable, the entitlement source could not say how many bookmarks the workspace may hold, or an earlier request with the same Idempotency-Key is still running",
     ),
+  },
+});
+
+export const listBookmarks = defineOperation({
+  method: "get",
+  path: "/api/v1/bookmarks",
+  operationId: "listBookmarks",
+  tag: "bookmarks",
+  summary: "List bookmarks",
+  auth: "member",
+  rate: "read",
+  scope: "read",
+  request: { query: ListBookmarksQuerySchema },
+  responses: {
+    200: jsonResponse(
+      "One page of the caller's bookmarks in the order asked for, with the cursor of the next page and the total the filters match (exact up to 10 000, then null with totalAtLeast). Another member's bookmarks, those of another workspace and plan-archived ones are never listed",
+      BookmarkListSchema,
+    ),
+    400: problemResponse("The request was malformed, or the cursor is not one this account was issued for this workspace, these filters and this sort (bad_request)"),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),
+    422: problemResponse("The query did not pass validation (an unknown parameter or sort, a boolean other than true or false, a limit outside 1 to 100), or the url is not a URL a bookmark can have"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
   },
 });
 

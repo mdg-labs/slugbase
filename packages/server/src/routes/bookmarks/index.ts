@@ -1,7 +1,8 @@
-import { createBookmark as createBookmarkOperation, deleteBookmark as deleteBookmarkOperation, getBookmark, updateBookmark as updateBookmarkOperation, type BookmarkSchema } from "@slugbase/contracts";
-import { createBookmark, deleteBookmark, readBookmark, updateBookmark, type BookmarkEntitlements, type BookmarkRecord, type BookmarkStore } from "@slugbase/core";
+import { BOOKMARK_LIST_TOTAL_CAP, createBookmark as createBookmarkOperation, deleteBookmark as deleteBookmarkOperation, getBookmark, listBookmarks as listBookmarksOperation, updateBookmark as updateBookmarkOperation, type BookmarkSchema } from "@slugbase/contracts";
+import { createBookmark, deleteBookmark, listBookmarks, readBookmark, updateBookmark, type BookmarkCursors, type BookmarkEntitlements, type BookmarkListStore, type BookmarkRecord, type BookmarkStore } from "@slugbase/core";
 import { bookmarkRepository, type TenantTx } from "@slugbase/db";
 import type { z } from "zod";
+import { createPageCursorCodec } from "../../auth/page-cursor.ts";
 import { uuidv7 } from "../../auth/uuidv7.ts";
 import { queueDomainEvent } from "../../events/publish.ts";
 import type { ChainContext, RouteBinding } from "../../http/chain.ts";
@@ -31,6 +32,13 @@ import { acceptedVersions, entityTagOf } from "../workspaces/if-match.ts";
 // does not exist are the same `404 not_found` (doc 04 section 2.4), and the body carries the bookmark's version, which the `ETag`
 // repeats.
 //
+// GET /api/v1/bookmarks lists the caller's own bookmarks (doc 04 sections 6.1 and 10.6, doc 02 section 5.7): the filters `pinned`, `hasSlug`,
+// `forwarding` and `url` (the canonical form of the value, for the duplicate warning), six sorts with the identifier as tiebreak, and a page
+// of at most 100 that the `nextCursor` resumes. The cursor is the sort key and identifier of the last item, signed with a subkey derived
+// from the session secret for this list, over the account, the workspace, the filters and the sort it was issued for: a forged, altered or
+// mismatched cursor is `400 bad_request`. `total` counts the filter's matches up to 10 000 and is null above, with `totalAtLeast`. A
+// plan-archived bookmark is never listed. A `url` that cannot be a bookmark's URL is `422 validation_failed` on `url`.
+//
 // PATCH /api/v1/bookmarks/{id} is a JSON Merge Patch of the url, title, description and pinned fields. The URL goes through the
 // normalisation of a creation, so its canonical form and host are derived again. `If-Match` is compared with the version under
 // the bookmark's row lock and a mismatch is `412 precondition_failed` with nothing written; without the header the patch applies
@@ -47,9 +55,12 @@ const URL_NOT_ALLOWED = "Only http and https URLs can be saved as a bookmark.";
 const URL_INVALID = "The URL is not valid.";
 const STALE_VERSION = "The bookmark has changed since it was read; read it again and retry.";
 const AT_LIMIT = "Your plan allows no more bookmarks in this workspace.";
+const BAD_CURSOR = "The cursor is not valid.";
 const URL_FIELD_CODES = { empty: "too_small", too_long: "too_big", malformed: "invalid_url" } as const;
 
 export interface BookmarkRoutesOptions {
+  /** The server secret the list cursors are signed with, through a key derived for this list alone. */
+  readonly cursorSecret: string;
   /** The workspace's `bookmarks.max` of the entitlement source. */
   readonly entitlements: BookmarkEntitlements;
 }
@@ -79,6 +90,24 @@ function storeOf(tx: TenantTx): BookmarkStore {
   };
 }
 
+/** The list store over the repository of the open transaction. */
+function listStoreOf(tx: TenantTx): BookmarkListStore {
+  const repository = bookmarkRepository(tx);
+  return { list: (request) => repository.list(request), count: (filter, limit) => repository.count(filter, limit) };
+}
+
+function bookmarkCursors(secret: string): BookmarkCursors {
+  const codec = createPageCursorCodec(secret, "bookmarks");
+  return {
+    seal: (position, scope) => codec.encodeKey([position.key, position.id], scope),
+    open(cursor, scope) {
+      const key = codec.decodeKey(cursor, scope);
+      const [position, id, ...rest] = key ?? [];
+      return key === undefined || rest.length > 0 || position === undefined || typeof id !== "string" ? undefined : { key: position, id };
+    },
+  };
+}
+
 function bookmarkBody(bookmark: BookmarkRecord): z.input<typeof BookmarkSchema> {
   return {
     id: bookmark.id,
@@ -98,7 +127,8 @@ function bookmarkBody(bookmark: BookmarkRecord): z.input<typeof BookmarkSchema> 
   };
 }
 
-export function bookmarkRoutes({ entitlements }: BookmarkRoutesOptions): RouteBinding[] {
+export function bookmarkRoutes({ entitlements, cursorSecret }: BookmarkRoutesOptions): RouteBinding[] {
+  const cursors = bookmarkCursors(cursorSecret);
   return [
     route(createBookmarkOperation).handle(async ({ body }, context) => {
       const tenant = tenantOf(context);
@@ -132,6 +162,43 @@ export function bookmarkRoutes({ entitlements }: BookmarkRoutesOptions): RouteBi
           throw new ProblemError("bookmark_limit_reached", AT_LIMIT, { members: { limit: outcome.limit, used: outcome.used } });
         case "unavailable":
           throw new ProblemError("not_found", NO_WORKSPACE);
+      }
+    }),
+
+    route(listBookmarksOperation).handle(async ({ query }, context) => {
+      const tenant = tenantOf(context);
+      const outcome = await tenant.withTenant((tx) =>
+        listBookmarks(
+          { store: listStoreOf(tx), cursors },
+          {
+            workspaceId: tenant.workspaceId,
+            accountId: tenant.accountId,
+            scope: query.scope,
+            pinned: query.pinned === undefined ? undefined : query.pinned === "true",
+            hasSlug: query.hasSlug === undefined ? undefined : query.hasSlug === "true",
+            forwarding: query.forwarding === undefined ? undefined : query.forwarding === "true",
+            url: query.url,
+            sort: query.sort,
+            limit: query.limit,
+            cursor: query.cursor,
+          },
+        ),
+      );
+      switch (outcome.kind) {
+        case "listed":
+          return {
+            status: 200,
+            body: {
+              items: outcome.items.map(bookmarkBody),
+              nextCursor: outcome.nextCursor,
+              total: outcome.total,
+              ...(outcome.total === null ? { totalAtLeast: BOOKMARK_LIST_TOTAL_CAP } : {}),
+            },
+          };
+        case "bad_cursor":
+          throw new ProblemError("bad_request", BAD_CURSOR);
+        case "url_refused":
+          throw new ProblemError("validation_failed", URL_INVALID, { errors: [{ path: "url", code: outcome.reason === "not_http" ? "url_not_allowed" : URL_FIELD_CODES[outcome.reason] }] });
       }
     }),
 

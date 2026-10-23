@@ -939,6 +939,12 @@ export function bindOidcState(key: Uint8Array, state: string): string;
 export const BOOKMARK_DESCRIPTION_MAX_LENGTH = 1000;
 
 // @public
+export const BOOKMARK_LIST_TOTAL_CAP = 10000;
+
+// @public (undocumented)
+export const BOOKMARK_SORTS: readonly ["recent", "oldest", "title_asc", "title_desc", "most_used", "recently_opened"];
+
+// @public
 export const BOOKMARK_TITLE_MAX_LENGTH = 300;
 
 // @public
@@ -1030,6 +1036,13 @@ export interface BookmarkCreationRequest {
     readonly events: readonly DomainEvent<"bookmark.created">[];
 }
 
+// @public
+export interface BookmarkCursors {
+    open(cursor: string, scope: string): BookmarkPosition | undefined;
+    // (undocumented)
+    seal(position: BookmarkPosition, scope: string): string;
+}
+
 // @public (undocumented)
 export interface BookmarkDeletionAsk {
     readonly accountId: string;
@@ -1048,6 +1061,85 @@ export interface BookmarkEntitlements {
     limit(accountId: string, workspaceId: string, request: object): Promise<EntitlementLimit | undefined>;
 }
 
+// @public (undocumented)
+export interface BookmarkListAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly cursor: string | undefined;
+    // (undocumented)
+    readonly forwarding: boolean | undefined;
+    // (undocumented)
+    readonly hasSlug: boolean | undefined;
+    readonly limit: number;
+    // (undocumented)
+    readonly pinned: boolean | undefined;
+    // (undocumented)
+    readonly scope: BookmarkScope;
+    // (undocumented)
+    readonly sort: BookmarkSort;
+    readonly url: string | undefined;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface BookmarkListDependencies {
+    // (undocumented)
+    readonly cursors: BookmarkCursors;
+    // (undocumented)
+    readonly store: BookmarkListStore;
+}
+
+// @public (undocumented)
+export interface BookmarkListFilter {
+    readonly forwarding?: boolean | undefined;
+    readonly hasSlug?: boolean | undefined;
+    readonly ownerId: string;
+    readonly pinned?: boolean | undefined;
+    readonly urlCanonical?: string | undefined;
+}
+
+// @public (undocumented)
+export type BookmarkListOutcome = {
+    readonly kind: "listed";
+    readonly items: readonly BookmarkRecord[];
+    readonly nextCursor: string | null;
+    readonly total: number | null;
+}
+/** The cursor was not issued by this server for this account, workspace, filter and sort; nothing was read. */
+| {
+    readonly kind: "bad_cursor";
+}
+/** The `url` filter is not a URL a bookmark can have; nothing was read. */
+| {
+    readonly kind: "url_refused";
+    readonly reason: BookmarkUrlRefusal;
+};
+
+// @public (undocumented)
+export interface BookmarkListRequest {
+    readonly after: BookmarkPosition | undefined;
+    // (undocumented)
+    readonly filter: BookmarkListFilter;
+    // (undocumented)
+    readonly limit: number;
+    // (undocumented)
+    readonly sort: BookmarkSort;
+}
+
+// @public (undocumented)
+export interface BookmarkListRow {
+    // (undocumented)
+    readonly bookmark: BookmarkRecord;
+    readonly key: string | null;
+}
+
+// @public (undocumented)
+export interface BookmarkListStore {
+    count(filter: BookmarkListFilter, limit: number): Promise<number>;
+    list(request: BookmarkListRequest): Promise<readonly BookmarkListRow[]>;
+}
+
 // @public
 export interface BookmarkPatch {
     // (undocumented)
@@ -1058,6 +1150,14 @@ export interface BookmarkPatch {
     readonly title?: string;
     // (undocumented)
     readonly url?: string;
+}
+
+// @public
+export interface BookmarkPosition {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly key: string | null;
 }
 
 // @public (undocumented)
@@ -1102,6 +1202,12 @@ export interface BookmarkRecord {
     readonly url: string;
     readonly version: number;
 }
+
+// @public
+export type BookmarkScope = "all" | "mine";
+
+// @public (undocumented)
+export type BookmarkSort = (typeof BOOKMARK_SORTS)[number];
 
 // @public (undocumented)
 export interface BookmarkStore {
@@ -2804,6 +2910,9 @@ export interface JoiningEntitlements {
     // (undocumented)
     readonly values: WorkspaceEntitlementValues;
 }
+
+// @public
+export function listBookmarks(input: BookmarkListDependencies, ask: BookmarkListAsk): Promise<BookmarkListOutcome>;
 
 // @public
 export function listInstanceAccounts(input: InstanceAccountDependencies, ask: InstanceAccountAsk): Promise<readonly InstanceAccount[]>;

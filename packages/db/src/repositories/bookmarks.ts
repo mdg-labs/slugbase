@@ -1,5 +1,16 @@
-import { createAuditWriter, type BookmarkArchiveTransaction, type BookmarkRecord, type BookmarkUpdateRequest, type BookmarkUpdateResult, type NewBookmark } from "@slugbase/core";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import {
+  createAuditWriter,
+  type BookmarkArchiveTransaction,
+  type BookmarkListFilter,
+  type BookmarkListRequest,
+  type BookmarkListRow,
+  type BookmarkRecord,
+  type BookmarkSort,
+  type BookmarkUpdateRequest,
+  type BookmarkUpdateResult,
+  type NewBookmark,
+} from "@slugbase/core";
+import { and, eq, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import { bookmarks } from "../schema/bookmarks.ts";
 import { auditEventRepository } from "./audit-events.ts";
@@ -20,7 +31,11 @@ import { defineScopedRepository } from "./scoped.ts";
 // insert takes the place back with it, and two creations at the limit minus one make one. Archiving and restoring are the system
 // operation `sys_bookmark_archive_set`, which sets or clears `plan_archived_at` for the given bookmarks, moves the counter by the rows
 // that changed, in one call, because `slugbase_app` may write neither column; the `entitlement_version` is raised separately, through
-// `sys_workspace_bump_entitlement_version` (`withEntitlementChange`, doc 01 section 7.5).
+// `sys_workspace_bump_entitlement_version` (`withEntitlementChange`, doc 01 section 7.5). A list is one owner's bookmarks of the
+// workspace in one of six orderings, resumed by a keyset: the sort key of the last row and its identifier, compared as a row, so
+// the statement is a range scan of the index that serves the sort (doc 05 section 2.4) and the page costs the same at any depth.
+// The sort keys are read back as text and passed back as text, because a timestamp the driver turns into a `Date` loses the
+// microseconds the database keeps, and a row that shares its key with the cursor's would then be skipped or repeated.
 
 // `slugbase_app` may insert only the columns a request gives a new bookmark and update only the columns a change of its own fields
 // writes (src/sql/470-bookmarks.sql): not the slug, forwarding, the archive state, the usage, the owner or the version, so a row
@@ -96,9 +111,99 @@ export interface BookmarkRepository {
    * reached. Needs a transaction opened with a workspace.
    */
   setArchived(request: { readonly bookmarkIds: readonly string[]; readonly archived: boolean }): Promise<number | undefined>;
+  /**
+   * The bookmarks that `request.filter.ownerId` owns in the workspace of the transaction and that are not plan-archived, in the order
+   * of `request.sort` with the identifier as the tiebreak, starting after `request.after` and at most `request.limit` of them; each
+   * comes with its sort key as text, which a later call passes back in `after`. A never-opened bookmark sorts last under
+   * `recently_opened`. Needs a transaction opened with a workspace.
+   */
+  list(request: BookmarkListRequest): Promise<readonly BookmarkListRow[]>;
+  /**
+   * How many bookmarks the same filter matches, counting no further than `limit`: the cost of the answer is bounded by `limit`, not by
+   * the size of the library. Needs a transaction opened with a workspace.
+   */
+  count(filter: BookmarkListFilter, limit: number): Promise<number>;
 }
 
-function recordOf(row: BookmarkRow): BookmarkRecord {
+/** The predicate of a list and of its count: the workspace, the owner, never a plan-archived bookmark, and the filters given. */
+function listPredicate(workspaceId: string, filter: BookmarkListFilter): SQL {
+  const predicate = and(
+    eq(bookmarks.workspaceId, workspaceId),
+    eq(bookmarks.ownerId, filter.ownerId),
+    isNull(bookmarks.planArchivedAt),
+    filter.pinned === undefined ? undefined : filter.pinned ? isNotNull(bookmarks.pinnedAt) : isNull(bookmarks.pinnedAt),
+    filter.hasSlug === undefined ? undefined : filter.hasSlug ? isNotNull(bookmarks.slug) : isNull(bookmarks.slug),
+    filter.forwarding === undefined ? undefined : eq(bookmarks.forwarding, filter.forwarding),
+    filter.urlCanonical === undefined ? undefined : eq(bookmarks.urlCanonical, filter.urlCanonical),
+  );
+  if (predicate === undefined) {
+    throw new Error("a list predicate is never empty");
+  }
+  return predicate;
+}
+
+/** The rows after the cursor's place, compared as a row so the index serves the range. A never-opened bookmark is last, after every opened one. */
+function afterPosition(sort: BookmarkSort, after: { readonly key: string | null; readonly id: string }): SQL {
+  const { column, cast, direction } = SORT_ORDERS[sort];
+  const op = sql.raw(direction);
+  if (sort === "recently_opened") {
+    if (after.key === null) {
+      return sql`(${column} IS NULL AND ${bookmarks.id} < ${after.id}::uuid)`;
+    }
+    return sql`((${column}, ${bookmarks.id}) < (${after.key}::timestamptz, ${after.id}::uuid) OR ${column} IS NULL)`;
+  }
+  if (after.key === null) {
+    throw new Error("a cursor of this sort carries a sort key");
+  }
+  return sql`((${column}, ${bookmarks.id}) ${op} (${after.key}::${sql.raw(cast)}, ${after.id}::uuid))`;
+}
+
+/** The columns a bookmark record is made of; `search` and `url_canonical` are read by the database only. */
+type BookmarkRecordRow = Pick<
+  BookmarkRow,
+  "id" | "ownerId" | "url" | "host" | "title" | "description" | "slug" | "forwarding" | "pinnedAt" | "openCount" | "lastOpenedAt" | "version" | "createdAt" | "updatedAt"
+>;
+
+const RECORD_COLUMNS = {
+  id: bookmarks.id,
+  ownerId: bookmarks.ownerId,
+  url: bookmarks.url,
+  host: bookmarks.host,
+  title: bookmarks.title,
+  description: bookmarks.description,
+  slug: bookmarks.slug,
+  forwarding: bookmarks.forwarding,
+  pinnedAt: bookmarks.pinnedAt,
+  openCount: bookmarks.openCount,
+  lastOpenedAt: bookmarks.lastOpenedAt,
+  version: bookmarks.version,
+  createdAt: bookmarks.createdAt,
+  updatedAt: bookmarks.updatedAt,
+} as const;
+
+// The ordering of each sort, written the way its index is declared (`DESC NULLS LAST` for the descending ones, which is what
+// drizzle-kit writes for `desc()`), so the planner reads the index in order instead of sorting; an ascending sort of a
+// descending index reads it backwards, which turns `NULLS LAST` into `NULLS FIRST`. `key` is the sort key as text, `cast` the type
+// it is read back as and `after` the comparison that selects the rows after the cursor's.
+interface SortOrder {
+  /** The expression the index orders by. */
+  readonly column: SQL;
+  readonly key: SQL;
+  readonly cast: "timestamptz" | "text" | "bigint";
+  readonly order: SQL;
+  readonly direction: "<" | ">";
+}
+
+const SORT_ORDERS: Readonly<Record<BookmarkSort, SortOrder>> = {
+  recent: { column: sql`${bookmarks.createdAt}`, key: sql`${bookmarks.createdAt}::text`, cast: "timestamptz", order: sql`${bookmarks.createdAt} DESC NULLS LAST, ${bookmarks.id} DESC NULLS LAST`, direction: "<" },
+  oldest: { column: sql`${bookmarks.createdAt}`, key: sql`${bookmarks.createdAt}::text`, cast: "timestamptz", order: sql`${bookmarks.createdAt} ASC NULLS FIRST, ${bookmarks.id} ASC NULLS FIRST`, direction: ">" },
+  title_asc: { column: sql`lower(${bookmarks.title})`, key: sql`lower(${bookmarks.title})`, cast: "text", order: sql`lower(${bookmarks.title}) ASC NULLS LAST, ${bookmarks.id} ASC NULLS LAST`, direction: ">" },
+  title_desc: { column: sql`lower(${bookmarks.title})`, key: sql`lower(${bookmarks.title})`, cast: "text", order: sql`lower(${bookmarks.title}) DESC NULLS FIRST, ${bookmarks.id} DESC NULLS FIRST`, direction: "<" },
+  most_used: { column: sql`${bookmarks.openCount}`, key: sql`${bookmarks.openCount}::text`, cast: "bigint", order: sql`${bookmarks.openCount} DESC NULLS LAST, ${bookmarks.id} DESC NULLS LAST`, direction: "<" },
+  recently_opened: { column: sql`${bookmarks.lastOpenedAt}`, key: sql`${bookmarks.lastOpenedAt}::text`, cast: "timestamptz", order: sql`${bookmarks.lastOpenedAt} DESC NULLS LAST, ${bookmarks.id} DESC NULLS LAST`, direction: "<" },
+};
+
+function recordOf(row: BookmarkRecordRow): BookmarkRecord {
   return {
     id: row.id,
     ownerId: row.ownerId,
@@ -115,6 +220,34 @@ function recordOf(row: BookmarkRow): BookmarkRecord {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+}
+
+/** The statement of `BookmarkRepository.list`, exported for the test that plans it. Needs a transaction opened with a workspace. */
+export function listQuery(tx: TenantTx, { filter, sort, after, limit }: BookmarkListRequest) {
+  const workspaceId = requireListWorkspace(tx, "listing bookmarks");
+  const { key, order } = SORT_ORDERS[sort];
+  const predicate = after === undefined ? listPredicate(workspaceId, filter) : and(listPredicate(workspaceId, filter), afterPosition(sort, after));
+  return tenantHandle(tx)
+    .select({ ...RECORD_COLUMNS, sortKey: sql<string | null>`${key}`.as("sort_key") })
+    .from(bookmarks)
+    .where(predicate)
+    .orderBy(order)
+    .limit(limit);
+}
+
+/** The statement of `BookmarkRepository.count`, exported for the test that plans it. Needs a transaction opened with a workspace. */
+export function countQuery(tx: TenantTx, filter: BookmarkListFilter, limit: number) {
+  const workspaceId = requireListWorkspace(tx, "counting bookmarks");
+  const handle = tenantHandle(tx);
+  const capped = handle.select({ one: sql<number>`1`.as("one") }).from(bookmarks).where(listPredicate(workspaceId, filter)).limit(limit).as("capped");
+  return handle.select({ total: sql<number>`count(*)::int` }).from(capped);
+}
+
+function requireListWorkspace(tx: TenantTx, action: string): string {
+  if (tx.workspaceId === undefined) {
+    throw new TenantContextError("workspace_required", `${action} needs a tenant transaction opened with a workspace`);
+  }
+  return tx.workspaceId;
 }
 
 export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
@@ -235,6 +368,19 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
         throw new Error("sys_bookmark_archive_set did not return exactly one answer");
       }
       return row.changed ?? undefined;
+    },
+
+    async list(request) {
+      const found = await listQuery(tx, request);
+      return found.map(({ sortKey, ...row }) => ({ bookmark: recordOf(row), key: sortKey }));
+    },
+
+    async count(filter, limit) {
+      const [row] = await countQuery(tx, filter, limit);
+      if (row === undefined) {
+        throw new Error("counting bookmarks returned no row");
+      }
+      return row.total;
     },
   };
 }

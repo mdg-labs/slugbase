@@ -520,6 +520,49 @@
         ],
         "type": "object"
       },
+      "BookmarkList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "One page of the caller's bookmarks, in the order asked for; plan-archived bookmarks are never listed",
+            "items": {
+              "$ref": "#/components/schemas/Bookmark"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "description": "Passed as `cursor` to get the next page; null on the last page",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "total": {
+            "anyOf": [
+              {
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How many bookmarks match the filters, across all pages: exact up to 10 000, and null above that, where totalAtLeast says so"
+          },
+          "totalAtLeast": {
+            "const": 10000,
+            "description": "Present, and 10 000, when total is null: the filters match more than 10 000 bookmarks",
+            "type": "number"
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor",
+          "total"
+        ],
+        "type": "object"
+      },
       "CancelEmailChangeRequest": {
         "additionalProperties": false,
         "properties": {
@@ -4256,6 +4299,206 @@
       }
     },
     "/api/v1/bookmarks": {
+      "get": {
+        "operationId": "listBookmarks",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "description": "Whose bookmarks are listed. Only the caller's own bookmarks exist until sharing arrives, so both name the same bookmarks today",
+              "enum": [
+                "all",
+                "mine"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pinned",
+            "required": false,
+            "schema": {
+              "description": "true lists pinned bookmarks only and false unpinned ones only; left out, pinning is not filtered on",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hasSlug",
+            "required": false,
+            "schema": {
+              "description": "true lists bookmarks with a slug only and false those without one; left out, slugs are not filtered on",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "forwarding",
+            "required": false,
+            "schema": {
+              "description": "true lists the bookmarks /go forwards to only and false those it does not; left out, forwarding is not filtered on",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "url",
+            "required": false,
+            "schema": {
+              "description": "Lists the caller's bookmarks whose canonical URL equals the canonical form of this value, which the duplicate warning of a new bookmark uses. The value is normalised as a bookmark's URL is, and one that cannot be a bookmark's URL is refused with 422",
+              "maxLength": 2048,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "recent",
+              "description": "The order, with the identifier as the tiebreak: recent (newest first), oldest, title_asc and title_desc (by title, ignoring case), most_used (most opens first) or recently_opened (last opened first, never-opened bookmarks last)",
+              "enum": [
+                "recent",
+                "oldest",
+                "title_asc",
+                "title_desc",
+                "most_used",
+                "recently_opened"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 48,
+              "description": "The most bookmarks to return, at most 100",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "description": "The `nextCursor` of the previous page. It is valid only with the scope, filters and sort it was issued for, for the account and workspace that received it; any other cursor is refused with 400",
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookmarkList"
+                }
+              }
+            },
+            "description": "One page of the caller's bookmarks in the order asked for, with the cursor of the next page and the total the filters match (exact up to 10 000, then null with totalAtLeast). Another member's bookmarks, those of another workspace and plan-archived ones are never listed"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed, or the cursor is not one this account was issued for this workspace, these filters and this sort (bad_request)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace: the account has none, or the workspace is being deleted"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The query did not pass validation (an unknown parameter or sort, a boolean other than true or false, a limit outside 1 to 100), or the url is not a URL a bookmark can have"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "List bookmarks",
+        "tags": [
+          "bookmarks"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-rate": "read",
+        "x-slugbase-scope": "read"
+      },
       "post": {
         "operationId": "createBookmark",
         "parameters": [

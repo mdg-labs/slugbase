@@ -26,3 +26,36 @@ describe("the page cursor codec", () => {
     }
   });
 });
+
+describe("the page cursor codec with a sort key", () => {
+  const codec = createPageCursorCodec(SECRET, "bookmarks");
+  const KEY = ["2026-03-01 10:00:09.123456+00", ID] as const;
+
+  it("gives back the parts of the key it was issued for, a null part included, for the scope it was issued for", () => {
+    expect(codec.decodeKey(codec.encodeKey(KEY, "scope-a"), "scope-a")).toEqual(KEY);
+    expect(codec.decodeKey(codec.encodeKey([null, ID], "scope-a"), "scope-a")).toEqual([null, ID]);
+  });
+
+  it("refuses the cursor under another scope, another secret or another purpose", () => {
+    const cursor = codec.encodeKey(KEY, "scope-a");
+    expect(codec.decodeKey(cursor, "scope-b")).toBeUndefined();
+    expect(createPageCursorCodec("another-secret-of-the-test-run-at-least-32-chars", "bookmarks").decodeKey(cursor, "scope-a")).toBeUndefined();
+    expect(createPageCursorCodec(SECRET, "members").decodeKey(cursor, "scope-a")).toBeUndefined();
+  });
+
+  it("refuses a cursor with one byte of its payload flipped, or whose signature was cut or extended", () => {
+    const [payload = "", signature = ""] = codec.encodeKey(KEY, "scope-a").split(".");
+    const bytes = Buffer.from(payload, "base64url");
+    bytes[bytes.length - 3] = (bytes[bytes.length - 3] ?? 0) ^ 0x01;
+    const flipped = bytes.toString("base64url");
+    for (const cursor of [`${flipped}.${signature}`, `${payload}.${signature.slice(1)}`, `${payload}.${signature}A`, payload]) {
+      expect(codec.decodeKey(cursor, "scope-a"), cursor).toBeUndefined();
+    }
+  });
+
+  it("does not open a cursor of the other shape: an identifier-only cursor is no key and a key cursor is no identifier", () => {
+    expect(codec.decodeKey(codec.encode(ID, "scope-a"), "scope-a")).toBeUndefined();
+    expect(codec.decode(codec.encodeKey(KEY, "scope-a"), "scope-a")).toBeUndefined();
+  });
+});
+

@@ -224,6 +224,10 @@ export const FIXTURES: ContractFixtures = {
   // would own, so its valid request names a bookmark that no workspace holds, which is the declared 404 whoever would hold it, and so is a bookmark of
   // workspace B; the route tests read the walker's own bookmarks, and the matrix puts the bookmarks of workspace B in the path.
   createBookmark: { body: { url: "https://example.com/walker", title: "Walker bookmark" } },
+  // The list names no identifier and acts in the workspace of the request: the walker lists the bookmarks of the workspace it owns. The matrix picks
+  // the input `hasSlug` as one that can carry an identifier, because its name ends in `Slug`; it is a boolean filter, so the identifier the matrix puts
+  // in it is refused as a malformed query (422) and never reaches a bookmark, whichever workspace holds it.
+  listBookmarks: { foreign: { query: { hasSlug: UNKNOWN_BOOKMARK_ID } } },
   getBookmark: { path: { id: UNKNOWN_BOOKMARK_ID }, status: 404, foreign: { path: { id: UNKNOWN_BOOKMARK_ID } } },
   // The change and the deletion name a bookmark by identifier too, so their valid request is the declared 404 for the same reason: a bookmark no
   // workspace holds, and the matrix puts the bookmarks of workspace B in the path. The change takes a body, which is valid whoever would hold the bookmark.

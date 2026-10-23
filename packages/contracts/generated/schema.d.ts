@@ -195,7 +195,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List bookmarks */
+        get: operations["listBookmarks"];
         put?: never;
         /** Create a bookmark */
         post: operations["createBookmark"];
@@ -1282,6 +1283,19 @@ export interface components {
             url: string;
             /** @description Moves by one with every change; the ETag header carries it and If-Match takes it back */
             version: number;
+        };
+        BookmarkList: {
+            /** @description One page of the caller's bookmarks, in the order asked for; plan-archived bookmarks are never listed */
+            items: components["schemas"]["Bookmark"][];
+            /** @description Passed as `cursor` to get the next page; null on the last page */
+            nextCursor: string | null;
+            /** @description How many bookmarks match the filters, across all pages: exact up to 10 000, and null above that, where totalAtLeast says so */
+            total: number | null;
+            /**
+             * @description Present, and 10 000, when total is null: the filters match more than 10 000 bookmarks
+             * @constant
+             */
+            totalAtLeast?: 10000;
         };
         CancelEmailChangeRequest: {
             /** @description The token of the "this wasn't me" link mailed to the old address, from the fragment of /email-change/cancel#token=… */
@@ -2988,6 +3002,91 @@ export interface operations {
                 };
             };
             /** @description Too many requests from this address or for this email address; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listBookmarks: {
+        parameters: {
+            query?: {
+                scope?: "all" | "mine";
+                pinned?: "true" | "false";
+                hasSlug?: "true" | "false";
+                forwarding?: "true" | "false";
+                url?: string;
+                sort?: "recent" | "oldest" | "title_asc" | "title_desc" | "most_used" | "recently_opened";
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of the caller's bookmarks in the order asked for, with the cursor of the next page and the total the filters match (exact up to 10 000, then null with totalAtLeast). Another member's bookmarks, those of another workspace and plan-archived ones are never listed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookmarkList"];
+                };
+            };
+            /** @description The request was malformed, or the cursor is not one this account was issued for this workspace, these filters and this sort (bad_request) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The query did not pass validation (an unknown parameter or sort, a boolean other than true or false, a limit outside 1 to 100), or the url is not a URL a bookmark can have */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
             429: {
                 headers: {
                     /** @description Whole seconds to wait before the request can succeed */

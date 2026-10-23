@@ -244,7 +244,19 @@ export const AUTH_POLICIES: readonly ["anonymous", "partial", "account", "member
 export type AuthPolicy = (typeof AUTH_POLICIES)[number];
 
 // @public
+export const BOOKMARK_CURSOR_MAX_LENGTH = 4096;
+
+// @public
 export const BOOKMARK_DESCRIPTION_MAX_LENGTH = 1000;
+
+// @public
+export const BOOKMARK_LIST_DEFAULT_LIMIT = 48;
+
+// @public
+export const BOOKMARK_LIST_MAX_LIMIT = 100;
+
+// @public
+export const BOOKMARK_LIST_TOTAL_CAP = 10000;
 
 // @public
 export const BOOKMARK_TITLE_MAX_LENGTH = 300;
@@ -259,6 +271,29 @@ export const BOOKMARK_VIEWS: readonly ["grid", "table"];
 export const BookmarkIfMatchHeaderSchema: z.ZodObject<{
     "If-Match": z.ZodOptional<z.ZodString>;
 }, z.core.$strip>;
+
+// @public (undocumented)
+export const BookmarkListSchema: z.ZodObject<{
+    items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        ownerId: z.ZodNullable<z.ZodUUID>;
+        url: z.ZodString;
+        host: z.ZodString;
+        title: z.ZodString;
+        description: z.ZodNullable<z.ZodString>;
+        slug: z.ZodNullable<z.ZodString>;
+        forwarding: z.ZodBoolean;
+        pinned: z.ZodBoolean;
+        openCount: z.ZodNumber;
+        lastOpenedAt: z.ZodNullable<z.ZodISODateTime>;
+        version: z.ZodNumber;
+        createdAt: z.ZodISODateTime;
+        updatedAt: z.ZodISODateTime;
+    }, z.core.$strict>>;
+    nextCursor: z.ZodNullable<z.ZodString>;
+    total: z.ZodNullable<z.ZodNumber>;
+    totalAtLeast: z.ZodOptional<z.ZodLiteral<10000>>;
+}, z.core.$strict>;
 
 // @public (undocumented)
 export const BookmarkParamsSchema: z.ZodObject<{
@@ -282,6 +317,16 @@ export const BookmarkSchema: z.ZodObject<{
     createdAt: z.ZodISODateTime;
     updatedAt: z.ZodISODateTime;
 }, z.core.$strict>;
+
+// @public (undocumented)
+export const BookmarkSortSchema: z.ZodEnum<{
+    recent: "recent";
+    oldest: "oldest";
+    title_asc: "title_asc";
+    title_desc: "title_desc";
+    most_used: "most_used";
+    recently_opened: "recently_opened";
+}>;
 
 // @public (undocumented)
 export const cancelEmailChange: {
@@ -528,6 +573,12 @@ export interface ComponentTypes {
             updatedAt: string;
             url: string;
             version: number;
+        };
+        BookmarkList: {
+            items: ComponentTypes["schemas"]["Bookmark"][];
+            nextCursor: string | null;
+            total: number | null;
+            totalAtLeast?: 10000;
         };
         CancelEmailChangeRequest: {
             token: string;
@@ -2638,6 +2689,109 @@ export const listApiTokens: {
         readonly 503: ProblemResponse;
     };
 };
+
+// @public (undocumented)
+export const listBookmarks: {
+    readonly method: "get";
+    readonly path: "/api/v1/bookmarks";
+    readonly operationId: "listBookmarks";
+    readonly tag: "bookmarks";
+    readonly summary: "List bookmarks";
+    readonly auth: "member";
+    readonly rate: "read";
+    readonly scope: "read";
+    readonly request: {
+        readonly query: z.ZodObject<{
+            scope: z.ZodDefault<z.ZodEnum<{
+                all: "all";
+                mine: "mine";
+            }>>;
+            pinned: z.ZodOptional<z.ZodEnum<{
+                true: "true";
+                false: "false";
+            }>>;
+            hasSlug: z.ZodOptional<z.ZodEnum<{
+                true: "true";
+                false: "false";
+            }>>;
+            forwarding: z.ZodOptional<z.ZodEnum<{
+                true: "true";
+                false: "false";
+            }>>;
+            url: z.ZodOptional<z.ZodString>;
+            sort: z.ZodDefault<z.ZodEnum<{
+                recent: "recent";
+                oldest: "oldest";
+                title_asc: "title_asc";
+                title_desc: "title_desc";
+                most_used: "most_used";
+                recently_opened: "recently_opened";
+            }>>;
+            limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+            cursor: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        ownerId: z.ZodNullable<z.ZodUUID>;
+        url: z.ZodString;
+        host: z.ZodString;
+        title: z.ZodString;
+        description: z.ZodNullable<z.ZodString>;
+        slug: z.ZodNullable<z.ZodString>;
+        forwarding: z.ZodBoolean;
+        pinned: z.ZodBoolean;
+        openCount: z.ZodNumber;
+        lastOpenedAt: z.ZodNullable<z.ZodISODateTime>;
+        version: z.ZodNumber;
+        createdAt: z.ZodISODateTime;
+        updatedAt: z.ZodISODateTime;
+        }, z.core.$strict>>;
+        nextCursor: z.ZodNullable<z.ZodString>;
+        total: z.ZodNullable<z.ZodNumber>;
+        totalAtLeast: z.ZodOptional<z.ZodLiteral<10000>>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const ListBookmarksQuerySchema: z.ZodObject<{
+    scope: z.ZodDefault<z.ZodEnum<{
+        all: "all";
+        mine: "mine";
+    }>>;
+    pinned: z.ZodOptional<z.ZodEnum<{
+        true: "true";
+        false: "false";
+    }>>;
+    hasSlug: z.ZodOptional<z.ZodEnum<{
+        true: "true";
+        false: "false";
+    }>>;
+    forwarding: z.ZodOptional<z.ZodEnum<{
+        true: "true";
+        false: "false";
+    }>>;
+    url: z.ZodOptional<z.ZodString>;
+    sort: z.ZodDefault<z.ZodEnum<{
+        recent: "recent";
+        oldest: "oldest";
+        title_asc: "title_asc";
+        title_desc: "title_desc";
+        most_used: "most_used";
+        recently_opened: "recently_opened";
+    }>>;
+    limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+    cursor: z.ZodOptional<z.ZodString>;
+}, z.core.$strict>;
 
 // @public (undocumented)
 export const listIdentities: {
@@ -5896,6 +6050,84 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    listBookmarks: {
+        parameters: {
+            query?: {
+                scope?: "all" | "mine";
+                pinned?: "true" | "false";
+                hasSlug?: "true" | "false";
+                forwarding?: "true" | "false";
+                url?: string;
+                sort?: "recent" | "oldest" | "title_asc" | "title_desc" | "most_used" | "recently_opened";
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["BookmarkList"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     listIdentities: {
         parameters: {
             query?: {
@@ -8907,7 +9139,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: OperationTypes["listBookmarks"];
         put?: never;
         post: OperationTypes["createBookmark"];
         delete?: never;
