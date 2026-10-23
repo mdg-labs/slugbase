@@ -6,6 +6,7 @@
 
 import type { AccountDeletionScope } from '@slugbase/core';
 import type { AuditRecord } from '@slugbase/core';
+import type { BookmarkRecord } from '@slugbase/core';
 import type { CredentialTokenPurpose } from '@slugbase/core';
 import type { EntitlementVersionWriter } from '@slugbase/core';
 import { InferInsertModel } from 'drizzle-orm';
@@ -37,6 +38,7 @@ import type { InvitationSignupResult } from '@slugbase/core';
 import type { InvitationSignupSession } from '@slugbase/core';
 import type { InvitationStore } from '@slugbase/core';
 import type { MemberRoleStore } from '@slugbase/core';
+import type { NewBookmark } from '@slugbase/core';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import { SQL } from 'drizzle-orm';
@@ -272,6 +274,38 @@ export type BackupCodesRegenerationOutcome =
 /** The account does not exist, is disabled or has MFA off; nothing was written. */
 | "not_enabled";
 
+// @public (undocumented)
+export interface BookmarkCreation {
+    // (undocumented)
+    readonly bookmark: NewBookmark;
+    readonly ceiling: number | null;
+    readonly jobs: readonly QueuedJob[];
+}
+
+// @public (undocumented)
+export type BookmarkCreationResult = {
+    readonly kind: "created";
+    readonly bookmark: BookmarkRecord;
+}
+/** The workspace holds `used` bookmarks, which is as many as the ceiling allows. */
+| {
+    readonly kind: "limit_reached";
+    readonly used: number;
+}
+/** The workspace of the transaction cannot be reached: it is being deleted, or the account is no member of it. */
+| {
+    readonly kind: "unavailable";
+};
+
+// @public (undocumented)
+export interface BookmarkRepository {
+    create(creation: BookmarkCreation): Promise<BookmarkCreationResult>;
+    find(bookmarkId: string): Promise<BookmarkRecord | undefined>;
+}
+
+// @public (undocumented)
+export function bookmarkRepository(tx: TenantTx): BookmarkRepository;
+
 // @public
 export const CE_CHAIN: MigrationChain;
 
@@ -377,7 +411,7 @@ export interface DatabaseOptions {
 }
 
 // @public
-export function defineScopedRepository<T extends WorkspaceTable>(name: string, table: T): ScopedRepositoryDefinition<T>;
+export function defineScopedRepository<T extends WorkspaceTable, const M extends ScopedMethod = ScopedMethod>(name: string, table: T, options?: ScopedRepositoryOptions<T, M>): ScopedRepositoryDefinition<T, M>;
 
 // @public (undocumented)
 export interface EmailChangeRepository {
@@ -1153,12 +1187,18 @@ export interface ScopedRepository<T extends WorkspaceTable> {
 }
 
 // @public (undocumented)
-export interface ScopedRepositoryDefinition<T extends WorkspaceTable> {
-    bind(tx: TenantTx): ScopedRepository<T>;
+export interface ScopedRepositoryDefinition<T extends WorkspaceTable, M extends ScopedMethod = ScopedMethod> {
+    bind(tx: TenantTx): Pick<ScopedRepository<T>, M>;
     // (undocumented)
     readonly name: string;
     // (undocumented)
     readonly table: T;
+}
+
+// @public (undocumented)
+export interface ScopedRepositoryOptions<T extends WorkspaceTable, M extends ScopedMethod> {
+    readonly insertColumns?: readonly (keyof InferInsertModel<T> & string)[];
+    readonly methods?: readonly M[];
 }
 
 // @public

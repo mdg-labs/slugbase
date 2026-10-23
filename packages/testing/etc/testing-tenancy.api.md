@@ -203,7 +203,7 @@ export const OPERATION_KINDS: readonly ["tenant-scoped", "account-level", "anony
 // @public (undocumented)
 export type OperationKind = (typeof OPERATION_KINDS)[number];
 
-// @public (undocumented)
+// @public
 export const PATH_PARAMETER_MAPPING: PathParameterMapping;
 
 // @public
@@ -250,7 +250,7 @@ export interface ProbeOptions {
 // @public (undocumented)
 export type ProbePolicy = "workspace" | "permissive";
 
-// @public (undocumented)
+// @public
 export const REPOSITORY_SAMPLES: RepositorySamples;
 
 // @public

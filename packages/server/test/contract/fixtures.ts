@@ -32,6 +32,9 @@ export const UNKNOWN_ACCOUNT_ID = "0192f3a0-dddd-7000-8000-000000000009";
 /** The pending invitation the matrix seeds in workspace B, which the invitation operations of A name. */
 export const B_INVITATION_ID = "0192f3a0-cccc-7000-8000-000000000007";
 
+/** A bookmark no workspace holds: the walker's request to read it is the declared 404. */
+export const UNKNOWN_BOOKMARK_ID = "0192f3a0-cccc-7000-8000-000000000008";
+
 /** An invitation no workspace holds: the walker's request to resend, link or revoke it is the declared 404. */
 export const UNKNOWN_INVITATION_ID = "0192f3a0-cccc-7000-8000-000000000006";
 
@@ -215,6 +218,13 @@ export const FIXTURES: ContractFixtures = {
   resendInstanceAccountVerification: { path: { id: UNKNOWN_ACCOUNT_ID }, status: 503 },
   // The deletion names the account that does not exist too, the declared 404: the walker's own accounts are the callers of the calls that follow.
   deleteInstanceAccount: { path: { id: UNKNOWN_ACCOUNT_ID }, status: 404 },
+  // The bookmarks of the workspace of the request. The creation takes a destination and a title and names no identifier of any workspace, so there
+  // is none of workspace B to put in it; the walker that calls it is the owner of a workspace of its own and the server composes a source that limits
+  // nothing, so the valid request is the declared 201. The reading names a bookmark by identifier, and the walker cannot know the identifier of one it
+  // would own, so its valid request names a bookmark that no workspace holds, which is the declared 404 whoever would hold it, and so is a bookmark of
+  // workspace B; the route tests read the walker's own bookmarks, and the matrix puts the bookmarks of workspace B in the path.
+  createBookmark: { body: { url: "https://example.com/walker", title: "Walker bookmark" } },
+  getBookmark: { path: { id: UNKNOWN_BOOKMARK_ID }, status: 404, foreign: { path: { id: UNKNOWN_BOOKMARK_ID } } },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

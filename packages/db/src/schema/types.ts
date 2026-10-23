@@ -15,3 +15,10 @@ export const bytea = customType<{ data: Buffer }>({
     return "bytea";
   },
 });
+
+/** `tsvector`: the full-text search document of a bookmark, maintained by the database from the columns it is generated from. */
+export const tsvector = customType<{ data: string }>({
+  dataType() {
+    return "tsvector";
+  },
+});

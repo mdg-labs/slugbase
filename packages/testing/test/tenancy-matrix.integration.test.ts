@@ -1,4 +1,5 @@
 import { listRepositoryMethods, TenantContextError, type RepositoryMethodEntry } from "@slugbase/db";
+import type { TestDatabase } from "@slugbase/db/testing";
 import { beforeAll, describe, expect, it } from "vitest";
 import { useTestDatabase } from "../src/db.ts";
 import {
@@ -25,6 +26,22 @@ import {
 
 const HOOK_TIMEOUT_MS = 300_000;
 
+/**
+ * The rows a table that references the workspace needs: the fixture names the two workspaces but creates only the probe table. Each workspace gets a
+ * bookmark, so that a read of the bookmarks without a predicate has a row of B to leak.
+ */
+async function seedWorkspaceRows(database: TestDatabase, workspaces: readonly { readonly id: string; readonly bookmarkId: string }[]): Promise<void> {
+  await database.owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    for (const { id, bookmarkId } of workspaces) {
+      await tx`INSERT INTO workspaces (id, name) VALUES (${id}, 'Matrix workspace') ON CONFLICT DO NOTHING`;
+      await tx`
+        INSERT INTO bookmarks (id, workspace_id, url, url_canonical, host, title)
+        VALUES (${bookmarkId}, ${id}, 'https://example.com/matrix-seed', 'https://example.com/matrix-seed', 'example.com', 'matrix-bookmark-seed') ON CONFLICT DO NOTHING`;
+    }
+  });
+}
+
 const database = useTestDatabase();
 let scoped: Probe;
 let permissive: Probe;
@@ -48,18 +65,20 @@ describe("the matrix over the committed contract and the repository registry", (
   // test proves is the runner's own part: the classification of the document
   // and that every tenant-scoped operation is called by every principal of A,
   // the operations that name a member of B (the role change, the ownership transfer, the removal and the leaving) once for each member of B. The responder answers as the
-  // chain does for a member of B: 403 to a token (they declare no scope), to a plain member where the policy is the admin's (the leaving is a
-  // member's) and to an admin where it is the owner's (the ownership transfer), 404 to the rest. The invitation names a team of B in its body, and the
+  // chain does for a member of B: 403 to a token of an operation that declares no scope, or the write scope when the token may only read (the bookmark read takes
+  // a token of either scope), to a plain member where the policy is the admin's (the leaving and the bookmark read are a member's) and to an admin where it is the
+  // owner's (the ownership transfer), 404 to the rest. The invitation names a team of B in its body, and the
   // server refuses any team with 422 because no team can be invited into yet and none can be told from another, so the responder gives an admin and
   // an owner session that answer (the member and the tokens are refused with 403 before the handler).
   const answersAsTheChainDoes = (call: ApiCall): Promise<ApiResponse> => {
     if (call.operation.operationId === "createInvitation" && !("scope" in call.principal) && call.principal.role !== "member") {
       return Promise.resolve({ status: 422 });
     }
+    const tokenRefused = "scope" in call.principal && (call.operation.scope === undefined || (call.operation.scope === "write" && call.principal.scope !== "read-write"));
     return Promise.resolve({
       status:
-        "scope" in call.principal ||
-        (call.principal.role === "member" && call.operation.operationId !== "leaveWorkspace") ||
+        tokenRefused ||
+        (call.principal.role === "member" && call.operation.policy !== "member") ||
         (call.principal.role === "admin" && call.operation.policy === "owner")
           ? 403
           : 404,
@@ -80,7 +99,7 @@ describe("the matrix over the committed contract and the repository registry", (
         ],
       },
     };
-    const matrix = await runApiMatrix({ document, fixture, request: answersAsTheChainDoes, mapping: { accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation" } });
+    const matrix = await runApiMatrix({ document, fixture, request: answersAsTheChainDoes, mapping: { accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark" } });
     // The matrix expects 404 for an identifier of workspace B. The one exception is the 422 every team is refused with (see above), for the two sessions
     // of A that reach the handler of the invitation; it is named exactly, and every other failure stays one.
     const teamRefusal = (failure: MatrixFailure): boolean => failure.subject.startsWith("createInvitation ") && failure.kind === "unexpected_status" && /answered 422, expected 404/.test(failure.detail);
@@ -90,21 +109,29 @@ describe("the matrix over the committed contract and the repository registry", (
     expect(report.classified.total).toBe(classification.operations.length);
     expect(report.classified.total).toBeGreaterThan(0);
     expect(Object.values(report.classified.byKind).reduce((sum, count) => sum + count, 0)).toBe(report.classified.total);
-    // The operations on /workspace (reading, renaming and deleting it), /workspace/settings, the entitlements and the members list act in the workspace of the request and take no identifier of B;
+    // The operations on /workspace (reading, renaming and deleting it), /workspace/settings, the entitlements, the members list and the creation of a bookmark act in the workspace of the request and take no identifier of B;
     // the role change, the ownership transfer and the removal name a member by account identifier, the removal and the leaving a recipient, the invitation a team,
-    // and the resend, the link and the revocation of an invitation name an invitation; the invitation list takes no identifier.
-    expect(report.classified.byKind["tenant-scoped"]).toBe(16);
-    // Three sessions and six tokens of A, once on each of the eight operations that name no member, once for each of the three members of B on the role
+    // the resend, the link and the revocation of an invitation name an invitation, and the bookmark read names a bookmark; the invitation list takes no identifier.
+    expect(report.classified.byKind["tenant-scoped"]).toBe(18);
+    // Three sessions and six tokens of A, once on each of the nine operations that name no member, once for each of the three members of B on the role
     // change, on the ownership transfer and on the leaving, once for each pair of members of B (path and recipient) on the removal, once for the
-    // team of B on the invitation, and once for the invitation of B on each of the resend, the link and the revocation.
-    expect(report.attempts).toBe(9 * 9 + 9 * (3 + 3 + 3 + 3 * 3 + 3));
+    // team of B on the invitation, once for the invitation of B on each of the resend, the link and the revocation, and once for each of the two
+    // bookmarks of B on the bookmark read.
+    expect(report.attempts).toBe(9 * 10 + 9 * (3 + 3 + 3 + 3 * 3 + 3 + 2));
     assertMatrixPassed(report);
   });
 
   it("RLS-only mode passes over the scoped-repository registry as it stands", async () => {
+    // The tables of the registry that reference the workspace (the bookmarks) need the two workspaces of the fixture to exist, and a row of each.
+    await seedWorkspaceRows(database(), [
+      { id: PROBE_WORKSPACE_A, bookmarkId: "0192f3a0-2222-7000-8000-00000000a0b1" },
+      { id: PROBE_WORKSPACE_B, bookmarkId: "0192f3a0-2222-7000-8000-00000000b0b1" },
+    ]);
     const methods = listRepositoryMethods();
     const report = await runRlsOnlyMatrix({ tenant: database().tenant, fixture: { ...scoped.fixture, instanceAdmin: PROBE_INSTANCE_ADMIN }, methods });
     expect(report.methods).toBe(methods.length);
+    // the bookmarks repository is in the registry with the two methods the application role may run on the table, and no other
+    expect(methods.filter((entry) => entry.repository === "bookmarks").map((entry) => entry.method)).toEqual(["select", "insert"]);
     // every method ran once more as the instance admin of the fixture, which belongs to neither workspace
     expect(report.instanceAdminAttempts).toBeGreaterThanOrEqual(methods.length);
     assertMatrixPassed(report);

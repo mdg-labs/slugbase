@@ -243,8 +243,40 @@ export const AUTH_POLICIES: readonly ["anonymous", "partial", "account", "member
 // @public (undocumented)
 export type AuthPolicy = (typeof AUTH_POLICIES)[number];
 
+// @public
+export const BOOKMARK_DESCRIPTION_MAX_LENGTH = 1000;
+
+// @public
+export const BOOKMARK_TITLE_MAX_LENGTH = 300;
+
+// @public
+export const BOOKMARK_URL_MAX_LENGTH = 2048;
+
 // @public (undocumented)
 export const BOOKMARK_VIEWS: readonly ["grid", "table"];
+
+// @public (undocumented)
+export const BookmarkParamsSchema: z.ZodObject<{
+    id: z.ZodUUID;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const BookmarkSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    ownerId: z.ZodNullable<z.ZodUUID>;
+    url: z.ZodString;
+    host: z.ZodString;
+    title: z.ZodString;
+    description: z.ZodNullable<z.ZodString>;
+    slug: z.ZodNullable<z.ZodString>;
+    forwarding: z.ZodBoolean;
+    pinned: z.ZodBoolean;
+    openCount: z.ZodNumber;
+    lastOpenedAt: z.ZodNullable<z.ZodISODateTime>;
+    version: z.ZodNumber;
+    createdAt: z.ZodISODateTime;
+    updatedAt: z.ZodISODateTime;
+}, z.core.$strict>;
 
 // @public (undocumented)
 export const cancelEmailChange: {
@@ -476,6 +508,22 @@ export interface ComponentTypes {
             items: ComponentTypes["schemas"]["ApiToken"][];
             nextCursor: string | null;
         };
+        Bookmark: {
+            createdAt: string;
+            description: string | null;
+            forwarding: boolean;
+            host: string;
+            id: string;
+            lastOpenedAt: string | null;
+            openCount: number;
+            ownerId: string | null;
+            pinned: boolean;
+            slug: string | null;
+            title: string;
+            updatedAt: string;
+            url: string;
+            version: number;
+        };
         CancelEmailChangeRequest: {
             token: string;
         };
@@ -494,6 +542,12 @@ export interface ComponentTypes {
             name: string;
             scope: "read" | "read-write";
             workspaceId?: string;
+        };
+        CreateBookmarkRequest: {
+            description?: string;
+            pinned?: boolean;
+            title: string;
+            url: string;
         };
         CreateInstanceWorkspaceRequest: {
             name: string;
@@ -1048,6 +1102,68 @@ export const CreateApiTokenRequestSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
+export const createBookmark: {
+    readonly method: "post";
+    readonly path: "/api/v1/bookmarks";
+    readonly operationId: "createBookmark";
+    readonly tag: "bookmarks";
+    readonly summary: "Create a bookmark";
+    readonly auth: "member";
+    readonly rate: "write";
+    readonly scope: "write";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            url: z.ZodString;
+            title: z.ZodString;
+            description: z.ZodOptional<z.ZodString>;
+            pinned: z.ZodOptional<z.ZodBoolean>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 201: JsonResponse<z.ZodObject<{
+        id: z.ZodUUID;
+        ownerId: z.ZodNullable<z.ZodUUID>;
+        url: z.ZodString;
+        host: z.ZodString;
+        title: z.ZodString;
+        description: z.ZodNullable<z.ZodString>;
+        slug: z.ZodNullable<z.ZodString>;
+        forwarding: z.ZodBoolean;
+        pinned: z.ZodBoolean;
+        openCount: z.ZodNumber;
+        lastOpenedAt: z.ZodNullable<z.ZodISODateTime>;
+        version: z.ZodNumber;
+        createdAt: z.ZodISODateTime;
+        updatedAt: z.ZodISODateTime;
+        }, z.core.$strict>, {
+        readonly Location: {
+        readonly description: "The address of the new bookmark, /api/v1/bookmarks/<id>";
+        readonly schema: z.ZodString;
+        };
+        readonly ETag: {
+        readonly description: "The bookmark's version as an entity tag, for example \"1\"; the If-Match of the next change";
+        readonly schema: z.ZodString;
+        };
+        }>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const CreateBookmarkRequestSchema: z.ZodObject<{
+    url: z.ZodString;
+    title: z.ZodString;
+    description: z.ZodOptional<z.ZodString>;
+    pinned: z.ZodOptional<z.ZodBoolean>;
+}, z.core.$strict>;
+
+// @public (undocumented)
 export const CreatedApiTokenSchema: z.ZodObject<{
     id: z.ZodUUID;
     name: z.ZodString;
@@ -1544,6 +1660,52 @@ export const getApiConfig: {
         };
         }>;
         readonly 400: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const getBookmark: {
+    readonly method: "get";
+    readonly path: "/api/v1/bookmarks/{id}";
+    readonly operationId: "getBookmark";
+    readonly tag: "bookmarks";
+    readonly summary: "Read a bookmark";
+    readonly auth: "member";
+    readonly rate: "read";
+    readonly scope: "read";
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        id: z.ZodUUID;
+        ownerId: z.ZodNullable<z.ZodUUID>;
+        url: z.ZodString;
+        host: z.ZodString;
+        title: z.ZodString;
+        description: z.ZodNullable<z.ZodString>;
+        slug: z.ZodNullable<z.ZodString>;
+        forwarding: z.ZodBoolean;
+        pinned: z.ZodBoolean;
+        openCount: z.ZodNumber;
+        lastOpenedAt: z.ZodNullable<z.ZodISODateTime>;
+        version: z.ZodNumber;
+        createdAt: z.ZodISODateTime;
+        updatedAt: z.ZodISODateTime;
+        }, z.core.$strict>, {
+        readonly ETag: {
+        readonly description: "The bookmark's version as an entity tag, for example \"3\"; the If-Match of the next change";
+        readonly schema: z.ZodString;
+        };
+        }>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
     };
 };
 
@@ -3732,6 +3894,89 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    createBookmark: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["CreateBookmarkRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    ETag: string;
+                    Location: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["Bookmark"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     createInstanceWorkspace: {
         parameters: {
             query?: never;
@@ -4517,6 +4762,78 @@ export interface OperationTypes {
                 };
             };
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    getBookmark: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    ETag: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["Bookmark"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8366,6 +8683,40 @@ export interface paths {
         get?: never;
         put?: never;
         post: OperationTypes["resendVerifyEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/bookmarks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["createBookmark"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/bookmarks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["getBookmark"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;

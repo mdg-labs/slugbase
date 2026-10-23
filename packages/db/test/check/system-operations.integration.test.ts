@@ -185,6 +185,7 @@ describe("the shipped chain", () => {
       "sys_instance_delete_account",
       "sys_create_workspace_limited",
       "sys_create_personal_workspace_limited",
+      "sys_bookmark_count_take",
     ]);
     expect(internalSystemOperations).toEqual(["sys_create_workspace"]);
     expect(internalSystemOperations.every((name) => systemOperations.includes(name))).toBe(true);

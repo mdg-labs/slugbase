@@ -181,8 +181,8 @@ function setup(options: SetupOptions = {}) {
   const operations = {
     anonymous: operationOf("/api/v1/open", "openThing", "anonymous"),
     account: operationOf("/api/v1/account-check", "checkAccount", "account", { scope: "read" }),
-    member: operationOf("/api/v1/bookmarks", "listBookmarks", "member", { scope: "read" }),
-    memberWrite: operationOf("/api/v1/bookmarks", "createBookmark", "member", { method: "post", scope: "write", body: true }),
+    member: operationOf("/api/v1/test-items", "listTestItems", "member", { scope: "read" }),
+    memberWrite: operationOf("/api/v1/test-items", "createTestItem", "member", { method: "post", scope: "write", body: true }),
     admin: operationOf("/api/v1/admin-check", "adminCheck", "admin", { scope: "read" }),
     owner: operationOf("/api/v1/owner-check", "checkOwner", "owner", { scope: "read" }),
     unscoped: operationOf("/api/v1/tokens", "listTokens", "account"),
@@ -248,7 +248,7 @@ const cookieOf = (who: Who) => ({ cookie: `sid=${who}` });
 describe("the failure scenario (T3): an anonymous caller of an operation that requires a member", () => {
   it("answers 401 unauthenticated and never reaches the handler", async () => {
     const { server, seen, resolved } = setup();
-    const response = await server.fetch(get("/api/v1/bookmarks"));
+    const response = await server.fetch(get("/api/v1/test-items"));
     expect(response.status).toBe(401);
     expect(await codeOf(response)).toBe("unauthenticated");
     expect(seen).toEqual([]);
@@ -280,7 +280,7 @@ describe("stage 4: authentication", () => {
     expect(open.status).toBe(200);
     expect(seen).toEqual([{ operationId: "openThing", principal: undefined, tenant: undefined }]);
 
-    const guarded = await server.fetch(get("/api/v1/bookmarks", cookieOf("owner")));
+    const guarded = await server.fetch(get("/api/v1/test-items", cookieOf("owner")));
     expect(guarded.status).toBe(401);
     expect(seen).toHaveLength(1);
     expect(resolved).toEqual([]);
@@ -288,7 +288,7 @@ describe("stage 4: authentication", () => {
 
   it("answers 401 to an Authorization header that is not an API token of the server, whatever the module authenticators", async () => {
     const { server, seen, resolved } = setup({ authenticators: false });
-    for (const path of ["/api/v1/open", "/api/v1/bookmarks"]) {
+    for (const path of ["/api/v1/open", "/api/v1/test-items"]) {
       const response = await server.fetch(get(path, { authorization: "Bearer slb_member_write", ...cookieOf("owner") }));
       expect(response.status, path).toBe(401);
       expect(await codeOf(response)).toBe("unauthenticated");
@@ -299,7 +299,7 @@ describe("stage 4: authentication", () => {
 
   it("answers 401 to an Authorization header no authenticator accepts, and does not fall back to a valid cookie", async () => {
     const { server, seen, cookieCalls, bearerCalls, resolved } = setup();
-    for (const path of ["/api/v1/bookmarks", "/api/v1/open"]) {
+    for (const path of ["/api/v1/test-items", "/api/v1/open"]) {
       const response = await server.fetch(get(path, { authorization: "Bearer slb_unknown", ...cookieOf("owner") }));
       expect(response.status, path).toBe(401);
       expect(await codeOf(response)).toBe("unauthenticated");
@@ -312,7 +312,7 @@ describe("stage 4: authentication", () => {
 
   it("resolves a token and ignores the cookie when both are sent", async () => {
     const { server, seen, cookieCalls } = setup();
-    const response = await server.fetch(get("/api/v1/bookmarks", { authorization: "Bearer slb_member_read", ...cookieOf("owner") }));
+    const response = await server.fetch(get("/api/v1/test-items", { authorization: "Bearer slb_member_read", ...cookieOf("owner") }));
     expect(response.status).toBe(200);
     expect(cookieCalls).toEqual([]);
     expect(seen[0]?.principal).toEqual(token("member", "read"));
@@ -320,7 +320,7 @@ describe("stage 4: authentication", () => {
 
   it("resolves the session from the cookie", async () => {
     const { server, seen } = setup();
-    expect((await server.fetch(get("/api/v1/bookmarks", cookieOf("member")))).status).toBe(200);
+    expect((await server.fetch(get("/api/v1/test-items", cookieOf("member")))).status).toBe(200);
     expect(seen[0]?.principal).toEqual(session("member"));
   });
 
@@ -328,7 +328,7 @@ describe("stage 4: authentication", () => {
     const { server, seen } = setup();
     expect((await server.fetch(get("/api/v1/open", { cookie: "sid=expired" }))).status).toBe(200);
     expect(seen).toEqual([{ operationId: "openThing", principal: undefined, tenant: undefined }]);
-    expect((await server.fetch(get("/api/v1/bookmarks", { cookie: "sid=expired" }))).status).toBe(401);
+    expect((await server.fetch(get("/api/v1/test-items", { cookie: "sid=expired" }))).status).toBe(401);
     expect(seen).toHaveLength(1);
   });
 
@@ -393,7 +393,7 @@ describe("stage 4: authentication", () => {
 describe("stage 7: tenant resolution", () => {
   it("hands the handler a withTenant bound to the resolved workspace and the account", async () => {
     const { server, seen, resolved, transactions } = setup();
-    const response = await server.fetch(get("/api/v1/bookmarks", { ...cookieOf("member"), "x-request-id": "request-id-0001" }));
+    const response = await server.fetch(get("/api/v1/test-items", { ...cookieOf("member"), "x-request-id": "request-id-0001" }));
     expect(response.status).toBe(200);
     expect(resolved).toEqual([session("member")]);
     expect(seen[0]?.tenant).toMatchObject({ accountId: ACCOUNTS.member, workspaceId: WORKSPACE, memberId: MEMBER_ID, role: "member" });
@@ -402,7 +402,7 @@ describe("stage 7: tenant resolution", () => {
 
   it("resolves a token in the workspace it is bound to", async () => {
     const { server, seen, resolved } = setup();
-    expect((await server.fetch(get("/api/v1/bookmarks", { authorization: "Bearer slb_member_read" }))).status).toBe(200);
+    expect((await server.fetch(get("/api/v1/test-items", { authorization: "Bearer slb_member_read" }))).status).toBe(200);
     expect(resolved).toEqual([token("member", "read")]);
     expect(seen[0]?.tenant?.workspaceId).toBe(WORKSPACE);
   });
@@ -419,7 +419,7 @@ describe("stage 7: tenant resolution", () => {
     const stranger = setup({
       resolver: { available: true, resolve: () => Promise.resolve(undefined) },
     });
-    for (const path of ["/api/v1/bookmarks", "/api/v1/admin-check", "/api/v1/owner-check"]) {
+    for (const path of ["/api/v1/test-items", "/api/v1/admin-check", "/api/v1/owner-check"]) {
       const missing = await stranger.server.fetch(get(path, cookieOf("owner")));
       expect(missing.status, path).toBe(404);
       expect(await codeOf(missing), path).toBe("not_found");
@@ -442,14 +442,14 @@ describe("stage 7: tenant resolution", () => {
         },
       },
     });
-    const response = await server.fetch(get("/api/v1/bookmarks", { ...cookieOf("member"), "x-request-id": "req-from-the-edge" }));
+    const response = await server.fetch(get("/api/v1/test-items", { ...cookieOf("member"), "x-request-id": "req-from-the-edge" }));
     expect(response.status).toBe(200);
     expect(requests).toEqual(["req-from-the-edge"]);
   });
 
   it("resolves no workspace for a session still waiting for its second factor, and asks it for the factor", async () => {
     const { server, seen, resolved } = setup();
-    const response = await server.fetch(get("/api/v1/bookmarks", { cookie: "sid=member; state=partial" }));
+    const response = await server.fetch(get("/api/v1/test-items", { cookie: "sid=member; state=partial" }));
     expect(response.status).toBe(401);
     expect(await codeOf(response)).toBe("mfa_required");
     expect(resolved).toEqual([]);
@@ -458,7 +458,7 @@ describe("stage 7: tenant resolution", () => {
 
   it("answers 401 for a token whose workspace the resolver no longer finds", async () => {
     const { server, seen } = setup({ resolver: { available: true, resolve: () => Promise.resolve(undefined) } });
-    const response = await server.fetch(get("/api/v1/bookmarks", { authorization: "Bearer slb_member_read" }));
+    const response = await server.fetch(get("/api/v1/test-items", { authorization: "Bearer slb_member_read" }));
     expect(response.status).toBe(401);
     expect(await codeOf(response)).toBe("unauthenticated");
     expect(seen).toEqual([]);
@@ -477,7 +477,7 @@ describe("stage 7: tenant resolution", () => {
     const { server, seen } = setup({
       resolver: { available: false, resolve: () => Promise.reject(new PortUnavailable("tenantResolver", "unavailable")) },
     });
-    const response = await server.fetch(get("/api/v1/bookmarks", cookieOf("member")));
+    const response = await server.fetch(get("/api/v1/test-items", cookieOf("member")));
     expect(response.status).toBe(503);
     expect(seen).toEqual([]);
   });
@@ -485,9 +485,9 @@ describe("stage 7: tenant resolution", () => {
 
 describe("stage 9: authorization", () => {
   const MATRIX: readonly (readonly [string, Who | undefined, number])[] = [
-    ["/api/v1/bookmarks", "member", 200],
-    ["/api/v1/bookmarks", "admin", 200],
-    ["/api/v1/bookmarks", "owner", 200],
+    ["/api/v1/test-items", "member", 200],
+    ["/api/v1/test-items", "admin", 200],
+    ["/api/v1/test-items", "owner", 200],
     ["/api/v1/admin-check", "member", 403],
     ["/api/v1/admin-check", "admin", 200],
     ["/api/v1/admin-check", "owner", 200],
@@ -561,7 +561,7 @@ describe("stage 9: authorization", () => {
   describe("API tokens", () => {
     it("refuses a read-only token on a write operation with 403 token_scope", async () => {
       const { server, seen } = setup();
-      const response = await server.fetch(post("/api/v1/bookmarks", { authorization: "Bearer slb_member_read", "content-type": "application/json" }, '{"title":"x"}'));
+      const response = await server.fetch(post("/api/v1/test-items", { authorization: "Bearer slb_member_read", "content-type": "application/json" }, '{"title":"x"}'));
       expect(response.status).toBe(403);
       expect(await codeOf(response)).toBe("token_scope");
       expect(seen).toEqual([]);
@@ -569,10 +569,10 @@ describe("stage 9: authorization", () => {
 
     it("lets a read-write token write and a read-only token read", async () => {
       const { server, seen } = setup();
-      const written = await server.fetch(post("/api/v1/bookmarks", { authorization: "Bearer slb_member_write", "content-type": "application/json" }, '{"title":"x"}'));
+      const written = await server.fetch(post("/api/v1/test-items", { authorization: "Bearer slb_member_write", "content-type": "application/json" }, '{"title":"x"}'));
       expect(written.status).toBe(200);
-      expect((await server.fetch(get("/api/v1/bookmarks", { authorization: "Bearer slb_member_read" }))).status).toBe(200);
-      expect(seen.map((entry) => entry.operationId)).toEqual(["createBookmark", "listBookmarks"]);
+      expect((await server.fetch(get("/api/v1/test-items", { authorization: "Bearer slb_member_read" }))).status).toBe(200);
+      expect(seen.map((entry) => entry.operationId)).toEqual(["createTestItem", "listTestItems"]);
     });
 
     it("refuses a token on an operation that declares no scope with 403 forbidden", async () => {
@@ -705,14 +705,14 @@ describe("stage 9: declared re-authentication and completed second factor (T18)"
 
   it("does not ask for re-authentication on an operation that does not declare it", async () => {
     const { server } = setup();
-    expect((await server.fetch(get("/api/v1/bookmarks", withState("member", "stale")))).status).toBe(200);
+    expect((await server.fetch(get("/api/v1/test-items", withState("member", "stale")))).status).toBe(200);
     expect((await server.fetch(get("/api/v1/account-check", withState("member", "none")))).status).toBe(200);
   });
 
   describe("a session whose second factor is pending", () => {
     it.each([
       ["/api/v1/account-check", "member"],
-      ["/api/v1/bookmarks", "member"],
+      ["/api/v1/test-items", "member"],
       ["/api/v1/admin-check", "admin"],
       ["/api/v1/owner-check", "owner"],
       ["/api/v1/instance/probe", "instanceAdmin"],
@@ -809,7 +809,7 @@ describe("the order of the stages", () => {
   it("runs authentication before the cross-site check and the cross-site check before tenant resolution", async () => {
     const { server, seen, cookieCalls, resolved } = setup();
     const response = await server.fetch(
-      post("/api/v1/bookmarks", { origin: "https://evil.example", "content-type": "application/json", ...cookieOf("member") }, '{"title":"x"}'),
+      post("/api/v1/test-items", { origin: "https://evil.example", "content-type": "application/json", ...cookieOf("member") }, '{"title":"x"}'),
     );
     expect(response.status).toBe(403);
     expect(await codeOf(response)).toBe("cross_site_request");
@@ -821,13 +821,13 @@ describe("the order of the stages", () => {
   it("runs tenant resolution before validation and validation before authorization", async () => {
     const { server, seen, resolved } = setup();
     // The member passes stages 4 to 7, fails validation (422), and would also fail authorization on an admin operation.
-    const invalid = await server.fetch(post("/api/v1/bookmarks", { ...BROWSER_MUTATION, ...cookieOf("member") }, '{"unknown":1}'));
+    const invalid = await server.fetch(post("/api/v1/test-items", { ...BROWSER_MUTATION, ...cookieOf("member") }, '{"unknown":1}'));
     expect(invalid.status).toBe(422);
     expect(resolved).toEqual([session("member")]);
 
-    const anonymousInvalid = await server.fetch(post("/api/v1/bookmarks", BROWSER_MUTATION, '{"unknown":1}'));
+    const anonymousInvalid = await server.fetch(post("/api/v1/test-items", BROWSER_MUTATION, '{"unknown":1}'));
     expect(anonymousInvalid.status).toBe(422);
-    const anonymousValid = await server.fetch(post("/api/v1/bookmarks", BROWSER_MUTATION, '{"title":"x"}'));
+    const anonymousValid = await server.fetch(post("/api/v1/test-items", BROWSER_MUTATION, '{"title":"x"}'));
     expect(anonymousValid.status).toBe(401);
     expect(seen).toEqual([]);
   });

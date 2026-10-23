@@ -102,6 +102,7 @@ export const systemOperations: readonly string[] = [
   "sys_instance_delete_account",
   "sys_create_workspace_limited",
   "sys_create_personal_workspace_limited",
+  "sys_bookmark_count_take",
 ];
 
 /**

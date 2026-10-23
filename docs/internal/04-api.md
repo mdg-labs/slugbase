@@ -495,6 +495,8 @@ Unauthenticated, `Content-Type: application/opensearchdescription+xml`, built on
 | GET | `/favicons/{host}` | Proxied favicon (`image/png`, long private cache); placeholder on miss | mem | fetch |
 | GET | `/slugs/availability` | `?slug=&bookmarkId=` → `available` / `taken_by_me` / `invalid`, plus `othersUseCount` (how many others in the workspace use it, count only, for the collision hint) | mem† (read) | |
 
+`POST /bookmarks` is implemented as far as `{ url, title, description?, pinned? }`: it answers `201` with the bookmark (its `version` in the body), the `ETag` and a `Location` of `/api/v1/bookmarks/<id>`; a URL that is not `http` or `https` is `422 url_not_allowed`, and an empty, over-long (2 048 characters) or malformed one is `422 validation_failed` on `url`. It declares no entitlement to stage 9: the handler reads `bookmarks.max` and the database takes the place under the workspace's lock (doc 01 §7.5, doc 05 §3.3), so a ceiling of zero answers `422 bookmark_limit_reached` with `limit` and `used`, and not `403 entitlement_required`. `GET /bookmarks/{id}` answers the caller's own bookmark; another member's bookmark of the workspace, a bookmark of another workspace and a plan-archived one are `404 not_found`.
+
 ### 10.7 folders, tags, sharing
 
 | Method | Path | Summary | Auth | Ent |

@@ -477,6 +477,13 @@
       "when": 1792678937476,
       "tag": "20261022142217_drop_workspace_function_grant",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1792728880989,
+      "tag": "20261023041440_add_bookmarks",
+      "breakpoints": true
     }
   ]
 }

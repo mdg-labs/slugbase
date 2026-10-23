@@ -913,6 +913,163 @@ export interface BillingWithdrawal {
 export function bindOidcState(key: Uint8Array, state: string): string;
 
 // @public
+export const BOOKMARK_DESCRIPTION_MAX_LENGTH = 1000;
+
+// @public
+export const BOOKMARK_TITLE_MAX_LENGTH = 300;
+
+// @public
+export const BOOKMARK_URL_MAX_LENGTH = 2048;
+
+// @public (undocumented)
+export interface BookmarkCreationAsk {
+    readonly accountId: string;
+    readonly ceiling: EntitlementLimit;
+    // (undocumented)
+    readonly description: string | undefined;
+    // (undocumented)
+    readonly pinned: boolean | undefined;
+    // (undocumented)
+    readonly title: string;
+    // (undocumented)
+    readonly url: string;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface BookmarkCreationDependencies {
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: Pick<BookmarkStore, "create">;
+}
+
+// @public (undocumented)
+export type BookmarkCreationOutcome = {
+    readonly kind: "created";
+    readonly bookmark: BookmarkRecord;
+}
+/** The URL is refused; nothing was written. */
+| {
+    readonly kind: "url_refused";
+    readonly reason: BookmarkUrlRefusal;
+}
+/** The workspace holds `used` bookmarks, as many as `limit` allows; nothing was written. */
+| {
+    readonly kind: "limit_reached";
+    readonly limit: number;
+    readonly used: number;
+}
+/** The workspace cannot be reached; nothing was written. */
+| {
+    readonly kind: "unavailable";
+};
+
+// @public (undocumented)
+export interface BookmarkCreationRequest {
+    // (undocumented)
+    readonly bookmark: NewBookmark;
+    readonly ceiling: EntitlementLimit;
+    readonly events: readonly DomainEvent<"bookmark.created">[];
+}
+
+// @public (undocumented)
+export interface BookmarkEntitlements {
+    limit(accountId: string, workspaceId: string, request: object): Promise<EntitlementLimit | undefined>;
+}
+
+// @public (undocumented)
+export interface BookmarkReadAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly bookmarkId: string;
+}
+
+// @public (undocumented)
+export interface BookmarkReadDependencies {
+    // (undocumented)
+    readonly store: Pick<BookmarkStore, "find">;
+}
+
+// @public
+export interface BookmarkRecord {
+    // (undocumented)
+    readonly createdAt: Date;
+    // (undocumented)
+    readonly description: string | null;
+    // (undocumented)
+    readonly forwarding: boolean;
+    // (undocumented)
+    readonly host: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly lastOpenedAt: Date | null;
+    // (undocumented)
+    readonly openCount: number;
+    readonly ownerId: string | null;
+    // (undocumented)
+    readonly pinned: boolean;
+    // (undocumented)
+    readonly slug: string | null;
+    // (undocumented)
+    readonly title: string;
+    // (undocumented)
+    readonly updatedAt: Date;
+    // (undocumented)
+    readonly url: string;
+    readonly version: number;
+}
+
+// @public (undocumented)
+export interface BookmarkStore {
+    create(request: BookmarkCreationRequest): Promise<BookmarkStoreResult>;
+    find(bookmarkId: string): Promise<BookmarkRecord | undefined>;
+}
+
+// @public (undocumented)
+export type BookmarkStoreResult = {
+    readonly kind: "created";
+    readonly bookmark: BookmarkRecord;
+}
+/** The workspace already holds `used` bookmarks, which is as many as the ceiling allows. */
+| {
+    readonly kind: "limit_reached";
+    readonly used: number;
+}
+/** The workspace of the transaction cannot be reached: it does not exist, is being deleted, or the account is no member. */
+| {
+    readonly kind: "unavailable";
+};
+
+// @public (undocumented)
+export interface BookmarkUrl {
+    readonly canonical: string;
+    readonly host: string;
+    readonly url: string;
+}
+
+// @public (undocumented)
+export type BookmarkUrlRefusal =
+/** Nothing, or only whitespace. */
+"empty"
+/** More than `BOOKMARK_URL_MAX_LENGTH` characters, as given or once normalised. */
+| "too_long"
+/** Not an `http` or `https` URL: another scheme, a scheme-relative value or a value with no scheme. */
+| "not_http"
+/** An `http` or `https` URL that does not parse: no host, a forbidden character in the host, a control character. */
+| "malformed";
+
+// @public (undocumented)
+export type BookmarkUrlResult = {
+    readonly ok: true;
+    readonly value: BookmarkUrl;
+} | {
+    readonly ok: false;
+    readonly reason: BookmarkUrlRefusal;
+};
+
+// @public
 export class BreachedDatasetError extends Error {
     constructor(reason: string);
 }
@@ -959,6 +1116,12 @@ export interface ClientErrorReportRequest {
 
 // @public (undocumented)
 export function createAuditWriter(input: AuditWriterDependencies): AuditWriter;
+
+// @public
+export function createBookmark(input: BookmarkCreationDependencies, ask: BookmarkCreationAsk): Promise<BookmarkCreationOutcome>;
+
+// @public (undocumented)
+export function createBookmarkEntitlements(service: EntitlementService): BookmarkEntitlements;
 
 // @public
 export function createBreachedPasswords(records: Uint8Array): BreachedPasswords;
@@ -1076,6 +1239,17 @@ export const DOMAIN_EVENTS: {
         readonly role: {
             readonly type: "enum";
             readonly values: readonly ["owner", "admin", "member"];
+        };
+    };
+    readonly "bookmark.created": {
+        readonly workspaceId: {
+            readonly type: "uuid";
+        };
+        readonly bookmarkId: {
+            readonly type: "uuid";
+        };
+        readonly accountId: {
+            readonly type: "uuid";
         };
     };
 };
@@ -2667,6 +2841,24 @@ export interface NewAccountAcceptance {
     readonly tokenHash: Buffer;
 }
 
+// @public
+export interface NewBookmark {
+    // (undocumented)
+    readonly description: string | null;
+    // (undocumented)
+    readonly host: string;
+    readonly id: string;
+    readonly ownerId: string;
+    // (undocumented)
+    readonly pinned: boolean;
+    // (undocumented)
+    readonly title: string;
+    // (undocumented)
+    readonly url: string;
+    // (undocumented)
+    readonly urlCanonical: string;
+}
+
 // @public (undocumented)
 export interface NewInvitation {
     // (undocumented)
@@ -2684,6 +2876,9 @@ export interface NewInvitation {
 
 // @public
 export function newOidcHandshake(): OidcHandshake;
+
+// @public
+export function normalizeBookmarkUrl(input: string): BookmarkUrlResult;
 
 // @public
 export function normalizeEmail(raw: string): string;
@@ -2910,6 +3105,9 @@ export interface RateLimitRequest {
     readonly cost?: number;
     readonly key: string;
 }
+
+// @public
+export function readBookmark(input: BookmarkReadDependencies, ask: BookmarkReadAsk): Promise<BookmarkRecord | undefined>;
 
 // @public
 export const REAUTH_WINDOW_MS: number;

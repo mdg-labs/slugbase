@@ -188,6 +188,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/bookmarks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create a bookmark */
+        post: operations["createBookmark"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bookmarks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a bookmark */
+        get: operations["getBookmark"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/entitlements": {
         parameters: {
             query?: never;
@@ -1208,6 +1242,45 @@ export interface components {
             /** @description Passed as `cursor` to get the next page; null on the last page */
             nextCursor: string | null;
         };
+        Bookmark: {
+            /**
+             * Format: date-time
+             * @description When the bookmark was created, RFC 3339 UTC
+             */
+            createdAt: string;
+            /** @description The bookmark's description, null when it has none */
+            description: string | null;
+            /** @description Whether /go forwards to the bookmark by its slug */
+            forwarding: boolean;
+            /** @description The host name of the URL, lower case and in punycode */
+            host: string;
+            /**
+             * Format: uuid
+             * @description The bookmark's identifier
+             */
+            id: string;
+            /** @description When the bookmark was last opened, RFC 3339 UTC, null when it never was */
+            lastOpenedAt: string | null;
+            /** @description How many times the bookmark was opened */
+            openCount: number;
+            /** @description The account of the member who owns the bookmark; null once that member has left the workspace */
+            ownerId: string | null;
+            /** @description Whether the bookmark is pinned */
+            pinned: boolean;
+            /** @description The bookmark's slug, null when it has none */
+            slug: string | null;
+            /** @description The bookmark's title */
+            title: string;
+            /**
+             * Format: date-time
+             * @description When the bookmark last changed, RFC 3339 UTC
+             */
+            updatedAt: string;
+            /** @description The URL as stored: normalised, and always http or https */
+            url: string;
+            /** @description Moves by one with every change; the ETag header carries it and If-Match takes it back */
+            version: number;
+        };
         CancelEmailChangeRequest: {
             /** @description The token of the "this wasn't me" link mailed to the old address, from the fragment of /email-change/cancel#token=… */
             token: string;
@@ -1244,6 +1317,16 @@ export interface components {
              * @description The workspace to bind the token to, one the account is a member of; the workspace the request acts in when left out
              */
             workspaceId?: string;
+        };
+        CreateBookmarkRequest: {
+            /** @description The bookmark's description, 0 to 1 000 characters; surrounding whitespace is removed and an empty one is stored as none */
+            description?: string;
+            /** @description Whether the bookmark is pinned; not pinned when left out */
+            pinned?: boolean;
+            /** @description The bookmark's title, 1 to 300 characters; surrounding whitespace is removed and a title that is blank after that is refused */
+            title: string;
+            /** @description The address to save: an http or https URL of at most 2 048 characters. It is stored with a lower-case scheme and host, an internationalised host name in punycode, the default port left out and the fragment kept. Any other scheme is refused with 422 url_not_allowed */
+            url: string;
         };
         CreateInstanceWorkspaceRequest: {
             /** @description The workspace's name, 1 to 64 characters; surrounding whitespace is removed and a name that is blank after that is refused */
@@ -2893,6 +2976,179 @@ export interface operations {
                 };
             };
             /** @description Too many requests from this address or for this email address; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createBookmark: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBookmarkRequest"];
+            };
+        };
+        responses: {
+            /** @description The bookmark, owned by the caller and private to them, with its version in the body and in the ETag and its address in Location. The workspace's bookmark count is raised by one in the same transaction, and bookmark.created is announced once it is committed */
+            201: {
+                headers: {
+                    /** @description The bookmark's version as an entity tag, for example "1"; the If-Match of the next change */
+                    ETag: string;
+                    /** @description The address of the new bookmark, /api/v1/bookmarks/<id> */
+                    Location: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Bookmark"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation (a missing, empty or over-long URL, title or description, a malformed URL, or a field the operation does not declare), the URL is not an http or https URL (url_not_allowed), or the workspace already holds as many bookmarks as its bookmarks.max entitlement allows (bookmark_limit_reached; the problem carries limit and used). Nothing is written */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable, or the entitlement source could not say how many bookmarks the workspace may hold */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getBookmark: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's bookmark */
+            200: {
+                headers: {
+                    /** @description The bookmark's version as an entity tag, for example "3"; the If-Match of the next change */
+                    ETag: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Bookmark"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The workspace the request acts in has no bookmark of the caller with this identifier: another member's bookmark, a bookmark of another workspace and one that never existed are answered alike */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The identifier did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
             429: {
                 headers: {
                     /** @description Whole seconds to wait before the request can succeed */
