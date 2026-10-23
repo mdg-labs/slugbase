@@ -117,7 +117,7 @@ Numbers are stable: Q1–Q19 come from docs 00–01, Q20–Q39 from 02–03, Q40
 | Q19 | Hono | Decided (default) |
 | Q7 | Run the current Active LTS | Decided (default) |
 | Q51 | Declarative SQL files under `packages/db/src/sql/` (policies, grants, `SECURITY DEFINER` functions, triggers), emitted into the generated… | Decided (default) · confirmed by the first code in Phase 1 |
-| Q52 | CI rejects destructive or table-rewriting steps unless the file is the contract half of an expand/contract pair, proven by its contract header, and the dropped object was unused in the previous release | Decided (maintainer, 2026-10-22) |
+| Q52 | CI rejects destructive or table-rewriting steps unless the file is the contract half of an expand/contract pair, proven by its contract header, which names an expand migration the given release already contains | Decided (maintainer, 2026-10-22) |
 | Q85 | Ladle | Decided (default) |
 | Q91 | Identifiers (UUIDv7) are generated in the application, not by a database function | Decided (default) |
 | Q93 | Generic extension points for composed deployments, listed in one place in doc 01 | Decided (default) |
