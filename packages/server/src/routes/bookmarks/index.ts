@@ -1,5 +1,5 @@
-import { BOOKMARK_LIST_TOTAL_CAP, createBookmark as createBookmarkOperation, deleteBookmark as deleteBookmarkOperation, getBookmark, listBookmarks as listBookmarksOperation, updateBookmark as updateBookmarkOperation, type BookmarkSchema } from "@slugbase/contracts";
-import { createBookmark, deleteBookmark, listBookmarks, readBookmark, updateBookmark, type BookmarkCursors, type BookmarkEntitlements, type BookmarkListStore, type BookmarkRecord, type BookmarkStore } from "@slugbase/core";
+import { BOOKMARK_LIST_TOTAL_CAP, createBookmark as createBookmarkOperation, deleteBookmark as deleteBookmarkOperation, getBookmark, listBookmarks as listBookmarksOperation, openBookmark as openBookmarkOperation, updateBookmark as updateBookmarkOperation, type BookmarkSchema } from "@slugbase/contracts";
+import { createBookmark, deleteBookmark, listBookmarks, openBookmark, readBookmark, updateBookmark, type BookmarkCursors, type BookmarkEntitlements, type BookmarkListStore, type BookmarkRecord, type BookmarkStore, type BookmarkUsage } from "@slugbase/core";
 import { bookmarkRepository, type TenantTx } from "@slugbase/db";
 import type { z } from "zod";
 import { createPageCursorCodec } from "../../auth/page-cursor.ts";
@@ -48,10 +48,17 @@ import { acceptedVersions, entityTagOf } from "../workspaces/if-match.ts";
 // DELETE /api/v1/bookmarks/{id} is a hard delete answered `204`. A hard delete keeps no tombstone, so the repeat is `404` (doc 04
 // section 2.4), and the rows that reference the bookmark go with it by foreign key. Its place under `bookmarks.max` goes back in the
 // same transaction (`sys_bookmark_delete`) unless the bookmark was plan-archived, which its owner may delete too.
+//
+// POST /api/v1/bookmarks/{id}/open (doc 04 section 10.6, doc 02 section 5.5, doc 01 section 8.1, doc 10 T1, T2 and T12) answers the
+// destination of a bookmark the caller can read and counts the open in the usage buffer of this process, which a timer writes to
+// the database later (`sys_flush_open_counts`): the answer never waits for the database to take the count. A bookmark the caller
+// cannot read is `404` and counts nothing, and the stored URL is checked to be http or https again before it is handed back. It is
+// in the `go` rate bucket.
 
 const NO_WORKSPACE = "No such resource.";
 const NO_SUCH_BOOKMARK = "No such resource.";
 const URL_NOT_ALLOWED = "Only http and https URLs can be saved as a bookmark.";
+const DESTINATION_NOT_ALLOWED = "The bookmark's address is not an http or https URL, so it is not opened.";
 const URL_INVALID = "The URL is not valid.";
 const STALE_VERSION = "The bookmark has changed since it was read; read it again and retry.";
 const AT_LIMIT = "Your plan allows no more bookmarks in this workspace.";
@@ -63,6 +70,8 @@ export interface BookmarkRoutesOptions {
   readonly cursorSecret: string;
   /** The workspace's `bookmarks.max` of the entitlement source. */
   readonly entitlements: BookmarkEntitlements;
+  /** Where an open is counted; the usage buffer of the server process. */
+  readonly usage: BookmarkUsage;
 }
 
 function tenantOf(context: ChainContext): RequestTenant {
@@ -127,7 +136,7 @@ function bookmarkBody(bookmark: BookmarkRecord): z.input<typeof BookmarkSchema> 
   };
 }
 
-export function bookmarkRoutes({ entitlements, cursorSecret }: BookmarkRoutesOptions): RouteBinding[] {
+export function bookmarkRoutes({ entitlements, cursorSecret, usage }: BookmarkRoutesOptions): RouteBinding[] {
   const cursors = bookmarkCursors(cursorSecret);
   return [
     route(createBookmarkOperation).handle(async ({ body }, context) => {
@@ -230,6 +239,19 @@ export function bookmarkRoutes({ entitlements, cursorSecret }: BookmarkRoutesOpt
           throw new ProblemError("precondition_failed", STALE_VERSION);
         case "not_found":
           throw new ProblemError("not_found", NO_SUCH_BOOKMARK);
+      }
+    }),
+
+    route(openBookmarkOperation).handle(async ({ params }, context) => {
+      const tenant = tenantOf(context);
+      const outcome = await tenant.withTenant((tx) => openBookmark({ store: storeOf(tx), usage }, { bookmarkId: params.id, accountId: tenant.accountId }));
+      switch (outcome.kind) {
+        case "opened":
+          return { status: 200, body: { url: outcome.url } };
+        case "not_found":
+          throw new ProblemError("not_found", NO_SUCH_BOOKMARK);
+        case "url_refused":
+          throw new ProblemError("url_not_allowed", DESTINATION_NOT_ALLOWED);
       }
     }),
 

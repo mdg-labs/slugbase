@@ -5,8 +5,9 @@ import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimi
 // act in the workspace the request is bound to and name none (D11), and a bookmark is its owner's: another member's bookmark of
 // the same workspace and any bookmark of another workspace are answered 404, like one that does not exist (doc 04 section 2.4,
 // doc 10 T1 and T2). The URL is stored normalised and only `http` and `https` are stored (doc 02 section 5.1, doc 10 T12 and
-// T13). The list pages through the caller's own bookmarks by a signed keyset cursor (doc 04 section 6.1). The slug and the folders and
-// tags of a bookmark are other operations.
+// T13). The list pages through the caller's own bookmarks by a signed keyset cursor (doc 04 section 6.1). An open records that the
+// caller used a bookmark and answers the destination to go to (doc 02 section 5.5). The slug and the folders and tags of a bookmark
+// are other operations.
 
 /** The longest bookmark URL, in characters (doc 02 section 5.1). */
 export const BOOKMARK_URL_MAX_LENGTH = 2048;
@@ -130,6 +131,12 @@ export const BookmarkListSchema = z
     totalAtLeast: z.literal(BOOKMARK_LIST_TOTAL_CAP).optional().describe("Present, and 10 000, when total is null: the filters match more than 10 000 bookmarks"),
   })
   .meta({ id: "BookmarkList" });
+
+export const BookmarkOpenSchema = z
+  .strictObject({
+    url: z.string().describe("The destination to go to: the bookmark's URL as stored, checked again to be an http or https URL"),
+  })
+  .meta({ id: "BookmarkOpen" });
 
 export const BookmarkParamsSchema = z.strictObject({
   id: z.uuid().describe("The bookmark's identifier"),
@@ -277,6 +284,33 @@ export const deleteBookmark = defineOperation({
       "The workspace the request acts in has no bookmark of the caller with this identifier: another member's bookmark, a bookmark of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204",
     ),
     422: problemResponse("The identifier did not pass validation"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const openBookmark = defineOperation({
+  method: "post",
+  path: "/api/v1/bookmarks/{id}/open",
+  operationId: "openBookmark",
+  tag: "bookmarks",
+  summary: "Record an open of a bookmark",
+  auth: "member",
+  rate: "go",
+  scope: "write",
+  request: { params: BookmarkParamsSchema },
+  responses: {
+    200: jsonResponse(
+      "The destination of the bookmark. The open is counted asynchronously: the bookmark's open count and last opened time follow within seconds, and only that count and the latest time are kept, with no history, referrer or address",
+      BookmarkOpenSchema,
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    403: problemResponse("The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"),
+    404: problemResponse(
+      "The workspace the request acts in has no bookmark of the caller with this identifier: another member's bookmark, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike, and nothing is counted",
+    ),
+    422: problemResponse("The identifier did not pass validation, or the stored URL is not an http or https URL (url_not_allowed); nothing is counted"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },

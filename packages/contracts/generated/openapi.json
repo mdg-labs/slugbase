@@ -563,6 +563,19 @@
         ],
         "type": "object"
       },
+      "BookmarkOpen": {
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "description": "The destination to go to: the bookmark's URL as stored, checked again to be an http or https URL",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "type": "object"
+      },
       "CancelEmailChangeRequest": {
         "additionalProperties": false,
         "properties": {
@@ -5013,6 +5026,124 @@
         ],
         "x-slugbase-auth": "member",
         "x-slugbase-rate": "write",
+        "x-slugbase-scope": "write"
+      }
+    },
+    "/api/v1/bookmarks/{id}/open": {
+      "post": {
+        "operationId": "openBookmark",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The bookmark's identifier",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookmarkOpen"
+                }
+              }
+            },
+            "description": "The destination of the bookmark. The open is counted asynchronously: the bookmark's open count and last opened time follow within seconds, and only that count and the latest time are kept, with no history, referrer or address"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The workspace the request acts in has no bookmark of the caller with this identifier: another member's bookmark, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike, and nothing is counted"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The identifier did not pass validation, or the stored URL is not an http or https URL (url_not_allowed); nothing is counted"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Record an open of a bookmark",
+        "tags": [
+          "bookmarks"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-rate": "go",
         "x-slugbase-scope": "write"
       }
     },

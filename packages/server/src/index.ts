@@ -22,6 +22,8 @@ export type {
   SeatCheckInput,
   ServerHooks,
 } from "./hooks/index.ts";
+export { FLUSH_INTERVAL_MS, createUsageBuffer } from "./usage/buffer.ts";
+export type { UsageBuffer, UsageBufferOptions } from "./usage/buffer.ts";
 export { runMigrations } from "./migrate/index.ts";
 export type { MigrationRunOptions } from "./migrate/index.ts";
 export { assertRegistrationAllowed } from "./auth/registration-gate.ts";

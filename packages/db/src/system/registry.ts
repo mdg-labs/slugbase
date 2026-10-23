@@ -105,6 +105,7 @@ export const systemOperations: readonly string[] = [
   "sys_bookmark_count_take",
   "sys_bookmark_delete",
   "sys_bookmark_archive_set",
+  "sys_flush_open_counts",
 ];
 
 /**

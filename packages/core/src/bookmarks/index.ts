@@ -41,3 +41,5 @@ export type {
   BookmarkScope,
   BookmarkSort,
 } from "./list.ts";
+export { openBookmark } from "./open.ts";
+export type { BookmarkOpenAsk, BookmarkOpenDependencies, BookmarkOpenOutcome, BookmarkUsage } from "./open.ts";

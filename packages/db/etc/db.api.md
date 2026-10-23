@@ -406,6 +406,9 @@ export function createRateLimitStore(options: RateLimitStoreOptions): RateLimitS
 export function createRetentionStore(options: RetentionStoreOptions): RetentionStore;
 
 // @public
+export function createUsageStore(options: UsageStoreOptions): UsageStore;
+
+// @public
 export function createWorkspaceDeletionStore(options: WorkspaceDeletionStoreOptions): WorkspaceDeletionStore & {
     close(): Promise<void>;
 };
@@ -1059,6 +1062,15 @@ export interface Onboarding {
 }
 
 // @public
+export interface OpenCount {
+    // (undocumented)
+    readonly bookmarkId: string;
+    readonly count: number;
+    // (undocumented)
+    readonly lastOpenedAt: Date;
+}
+
+// @public
 export const OWNER_REQUIRED_CONSTRAINT = "workspace_members_owner_required";
 
 // @public
@@ -1367,6 +1379,21 @@ export interface UnusedBackupCode {
 export type UpdateValues<T extends WorkspaceTable> = Partial<Omit<InferInsertModel<T>, "workspaceId">> & {
     workspaceId?: string;
 };
+
+// @public
+export const USAGE_FLUSH_BATCH_SIZE = 10000;
+
+// @public (undocumented)
+export interface UsageStore {
+    close(): Promise<void>;
+    flush(opens: readonly OpenCount[]): Promise<void>;
+}
+
+// @public (undocumented)
+export interface UsageStoreOptions {
+    poolSize?: number;
+    url: string;
+}
 
 // @public (undocumented)
 export type VerificationResend = AddressJobs;

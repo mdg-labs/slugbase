@@ -2,7 +2,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import { createAdaptorServer, type ServerType } from "@hono/node-server";
 import { getHealth, getReady, getVersion } from "@slugbase/contracts";
 import { createBookmarkEntitlements, createEntitlementCheck, createEntitlementService, createEntitlementUpgradeCheck, createOwnedWorkspaceEntitlements, createPasswordPolicy, createSeatEntitlements, loadBreachedPasswords, sessionCookieSpec, type Adapters, type RegistrationSettings } from "@slugbase/core";
-import { createAuthStore, createDatabase, entitlementRepository, instanceRepository, type AuthStore, type Database, type MigrationChain } from "@slugbase/db";
+import { createAuthStore, createDatabase, createUsageStore, entitlementRepository, instanceRepository, type AuthStore, type Database, type MigrationChain } from "@slugbase/db";
 import { Hono } from "hono";
 import { DEVELOPMENT_BUILD_INFO, type BuildInfo } from "./build-info.ts";
 import { renderQrSvg } from "./auth/qr.ts";
@@ -51,6 +51,7 @@ import { memberRoutes } from "./routes/members/index.ts";
 import { workspaceRoutes } from "./routes/workspaces/index.ts";
 import { checkRegistrations, type ContractDocument } from "./routes/register.ts";
 import { WebRootError, serveWebRoot } from "./routes/static.ts";
+import { createUsageBuffer, type UsageBuffer } from "./usage/buffer.ts";
 import type { JobDefinition, ScheduleDefinition } from "./worker/job.ts";
 
 export type { ChainContext, ChainEnv, MatchedRoute, RouteBinding, RouteHandler, StageName, ValidatedInput } from "./http/chain.ts";
@@ -154,6 +155,12 @@ export interface CreateServerOptions {
    * The server closes it on shutdown, like the tenant database.
    */
   readonly authStore?: AuthStore;
+  /**
+   * Where opens of bookmarks are counted until the timer writes them to the database (doc 01 section 8.1); by default a buffer over
+   * a pool on `DATABASE_URL`. The server starts its timer once it listens and, on shutdown, flushes it a last time and closes it,
+   * like the tenant database.
+   */
+  readonly usage?: UsageBuffer;
   /**
    * What `PUBLIC_REGISTRATION` and `EMAIL_VERIFICATION_REQUIRED` mean when the operator left them unset
    * (doc 01 section 11): the composition root's choice, never an edition flag (D4). By default registration
@@ -494,6 +501,7 @@ export function createServer(options: CreateServerOptions): Server {
   // starting without it would accept every listed password while the check reads as on.
   const passwordPolicy = createPasswordPolicy({ breached: config.BREACHED_PASSWORD_CHECK ? loadBreachedPasswords() : undefined });
   const authStore = options.authStore ?? createAuthStore({ url: config.DATABASE_URL, poolSize: DEFAULT_AUTH_POOL_SIZE });
+  const usage = options.usage ?? createUsageBuffer({ store: createUsageStore({ url: config.DATABASE_URL }), logger });
   const registration = registrationSettings(config, options.registrationDefaults ?? DEFAULT_REGISTRATION);
   const builtInRoutes: RouteBinding[] = [
     ...probeRoutes({ buildInfo, databaseUrl: config.DATABASE_URL, chains: () => migrationSets, logger, migrating: () => progress.migrating }),
@@ -561,7 +569,7 @@ export function createServer(options: CreateServerOptions): Server {
   });
   builtInRoutes.push(...entitlementRoutes({ withTenant: context.withTenant, service: entitlementService }));
   // So are the bookmarks of the active workspace: created under the workspace's `bookmarks.max` (the ceiling is read from the engine, the count is taken in the database) and read back by their owner.
-  builtInRoutes.push(...bookmarkRoutes({ entitlements: createBookmarkEntitlements(entitlementService), cursorSecret: config.SESSION_SECRET }));
+  builtInRoutes.push(...bookmarkRoutes({ entitlements: createBookmarkEntitlements(entitlementService), cursorSecret: config.SESSION_SECRET, usage }));
   const ownedWorkspaceEntitlements = createOwnedWorkspaceEntitlements(entitlementService);
   // Stage 9 and the handlers that decide an entitlement themselves (accepting an invitation) ask the same check, so an operation is gated the same way wherever it is decided.
   const entitlementCheck: EntitlementCheck = options.entitlements ?? (adapters.entitlements.available ? createEntitlementCheck(entitlementService) : denyEntitlements);
@@ -654,6 +662,7 @@ export function createServer(options: CreateServerOptions): Server {
   } catch (error) {
     void database.close();
     void authStore.close();
+    void usage.stop();
     throw error;
   }
 
@@ -741,13 +750,13 @@ export function createServer(options: CreateServerOptions): Server {
             logger,
           });
         } catch (error) {
-          await Promise.all([database.close(), authStore.close()]);
+          await Promise.all([database.close(), authStore.close(), usage.stop()]);
           throw error;
         }
       }
       const migrateUrl = config.MIGRATE_ON_START ? config.DATABASE_MIGRATE_URL : undefined;
       if (config.MIGRATE_ON_START && migrateUrl === undefined) {
-        await Promise.all([database.close(), authStore.close()]);
+        await Promise.all([database.close(), authStore.close(), usage.stop()]);
         throw new Error("DATABASE_MIGRATE_URL is required while MIGRATE_ON_START is true");
       }
       let draining = false;
@@ -803,7 +812,7 @@ export function createServer(options: CreateServerOptions): Server {
           listener.closeAllConnections();
           await closed;
         }
-        await Promise.all([database.close(), authStore.close()]);
+        await Promise.all([database.close(), authStore.close(), usage.stop()]);
       };
 
       if (metricsRequested !== undefined) {
@@ -834,6 +843,9 @@ export function createServer(options: CreateServerOptions): Server {
       if (config.SETUP_ENABLED && config.SETUP_TOKEN_REQUIRED) {
         await ensureSetupToken({ store: authStore, logger });
       }
+
+      // The opens counted from here on are written every ten seconds, and once more when the server stops (doc 01 section 8.1).
+      usage.start();
 
       return {
         port,

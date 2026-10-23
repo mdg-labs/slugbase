@@ -99,7 +99,7 @@ describe("the matrix over the committed contract and the repository registry", (
         ],
       },
     };
-    const matrix = await runApiMatrix({ document, fixture, request: answersAsTheChainDoes, mapping: { accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "listBookmarks.hasSlug": "bookmark" } });
+    const matrix = await runApiMatrix({ document, fixture, request: answersAsTheChainDoes, mapping: { accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "listBookmarks.hasSlug": "bookmark" } });
     // The matrix expects 404 for an identifier of workspace B. The one exception is the 422 every team is refused with (see above), for the two sessions
     // of A that reach the handler of the invitation; it is named exactly, and every other failure stays one.
     const teamRefusal = (failure: MatrixFailure): boolean => failure.subject.startsWith("createInvitation ") && failure.kind === "unexpected_status" && /answered 422, expected 404/.test(failure.detail);
@@ -111,13 +111,13 @@ describe("the matrix over the committed contract and the repository registry", (
     expect(Object.values(report.classified.byKind).reduce((sum, count) => sum + count, 0)).toBe(report.classified.total);
     // The operations on /workspace (reading, renaming and deleting it), /workspace/settings, the entitlements, the members list and the creation of a bookmark act in the workspace of the request and take no identifier of B;
     // the role change, the ownership transfer and the removal name a member by account identifier, the removal and the leaving a recipient, the invitation a team,
-    // the resend, the link and the revocation of an invitation name an invitation, and the bookmark read, change and deletion name a bookmark; the invitation list takes no identifier.
-    expect(report.classified.byKind["tenant-scoped"]).toBe(21);
+    // the resend, the link and the revocation of an invitation name an invitation, and the bookmark read, change, deletion and open name a bookmark; the invitation list takes no identifier.
+    expect(report.classified.byKind["tenant-scoped"]).toBe(22);
     // Three sessions and six tokens of A, once on each of the nine operations that name no member, once for each of the three members of B on the role
     // change, on the ownership transfer and on the leaving, once for each pair of members of B (path and recipient) on the removal, once for the
     // team of B on the invitation, once for the invitation of B on each of the resend, the link and the revocation, and once for each of the two
-    // bookmarks of B on each of the bookmark read, change and deletion, and in the `hasSlug` filter of the bookmark list (picked by its name).
-    expect(report.attempts).toBe(9 * 10 + 9 * (3 + 3 + 3 + 3 * 3 + 3 + 3 * 2 + 2));
+    // bookmarks of B on each of the bookmark read, change, deletion and open, and in the `hasSlug` filter of the bookmark list (picked by its name).
+    expect(report.attempts).toBe(9 * 10 + 9 * (3 + 3 + 3 + 3 * 3 + 3 + 4 * 2 + 2));
     assertMatrixPassed(report);
   });
 

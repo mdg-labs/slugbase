@@ -630,3 +630,56 @@ describe("apps/slugbase main server as a role that is not held by row-level secu
     expect(output).not.toMatch(/postgresql?:\/\/[^\s"]*@/);
   }, 60_000);
 });
+
+describe("apps/slugbase main server and the usage counter", () => {
+  let database: TestDatabase;
+
+  beforeAll(async () => {
+    database = await createTestDatabase();
+  }, 300_000);
+
+  afterAll(async () => {
+    await database.drop();
+  }, 300_000);
+
+  const env = (): Record<string, string> => ({
+    NODE_ENV: "test",
+    DATABASE_URL: databaseUrl(database),
+    DATABASE_MIGRATE_URL: databaseUrl(database, "owner"),
+    SETUP_ENABLED: "true",
+    SETUP_TOKEN_REQUIRED: "false",
+  });
+  const first = { displayName: "Ada", email: "ada@example.test", password: "a long enough password for ada", workspaceName: "Home" };
+
+  // POST /api/v1/bookmarks/{id}/open is composed with the usage buffer of the composition: the open is answered at once, nothing is in the
+  // database while the process runs (the timer has not fired in the seconds this takes), and the graceful shutdown of the process writes it.
+  it("composes POST /api/v1/bookmarks/{id}/open: it answers the destination, and the SIGTERM shutdown writes the counted opens to the bookmark", async () => {
+    const as = (cookie: string, method: string, port: number, path: string, body?: unknown): Promise<string> => {
+      const text = body === undefined ? "" : JSON.stringify(body);
+      return send(
+        port,
+        `${method} ${path} HTTP/1.1\r\nHost: localhost\r\nOrigin: ${valid.APP_ORIGIN}\r\nCookie: ${cookie}\r\nContent-Type: application/json\r\nContent-Length: ${String(Buffer.byteLength(text))}\r\nConnection: close\r\n\r\n${text}`,
+      );
+    };
+    const { status, output, observed } = await runServer(env(), async (port) => {
+      const created = await post(port, "/api/v1/setup", first);
+      const cookie = /set-cookie: (__Host-slugbase_session=[A-Za-z0-9_-]+)/i.exec(created)?.[1] ?? "";
+      const bookmark = await as(cookie, "POST", port, "/api/v1/bookmarks", { url: "https://example.com/usage", title: "Usage" });
+      const id = /"id":"([0-9a-f-]{36})"/.exec(bookmark)?.[1] ?? "";
+      const opened = [await as(cookie, "POST", port, `/api/v1/bookmarks/${id}/open`), await as(cookie, "POST", port, `/api/v1/bookmarks/${id}/open`)];
+      return [id, ...opened.map((answer) => answer.split("\r\n")[0] ?? ""), opened[0] ?? ""].join("\n=====\n");
+    });
+    expect(status, output).toBe(0);
+    const [id = "", firstStatus = "", secondStatus = "", body = ""] = (observed ?? "").split("\n=====\n");
+    expect(id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(firstStatus).toMatch(/^HTTP\/1\.1 200 /);
+    expect(secondStatus).toMatch(/^HTTP\/1\.1 200 /);
+    expect(body).toContain('"url":"https://example.com/usage"');
+    const rows = await database.owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      return tx<{ open_count: string; last_opened_at: Date | null }[]>`SELECT open_count::text, last_opened_at FROM bookmarks WHERE id = ${id}`;
+    });
+    expect(rows[0]?.open_count).toBe("2");
+    expect(rows[0]?.last_opened_at).toBeInstanceOf(Date);
+  }, 60_000);
+});

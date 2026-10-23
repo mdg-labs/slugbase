@@ -1140,6 +1140,37 @@ export interface BookmarkListStore {
     list(request: BookmarkListRequest): Promise<readonly BookmarkListRow[]>;
 }
 
+// @public (undocumented)
+export interface BookmarkOpenAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly bookmarkId: string;
+}
+
+// @public (undocumented)
+export interface BookmarkOpenDependencies {
+    // (undocumented)
+    readonly store: Pick<BookmarkStore, "find">;
+    // (undocumented)
+    readonly usage: BookmarkUsage;
+}
+
+// @public (undocumented)
+export type BookmarkOpenOutcome =
+/** The destination, and the open is counted. */
+    {
+    readonly kind: "opened";
+    readonly url: string;
+}
+/** The account can read no such bookmark; which of the reasons it is stays unsaid. Nothing is counted. */
+| {
+    readonly kind: "not_found";
+}
+/** The stored URL is not an `http` or `https` URL. Nothing is counted. */
+| {
+    readonly kind: "url_refused";
+};
+
 // @public
 export interface BookmarkPatch {
     // (undocumented)
@@ -1317,6 +1348,11 @@ export type BookmarkUrlResult = {
     readonly ok: false;
     readonly reason: BookmarkUrlRefusal;
 };
+
+// @public
+export interface BookmarkUsage {
+    record(bookmarkId: string): void;
+}
 
 // @public
 export class BreachedDatasetError extends Error {
@@ -3179,6 +3215,9 @@ export function oidcPreAuthCookieSpec(appOrigin: string): OidcPreAuthCookieSpec;
 
 // @public
 export function oidcStateIsBound(key: Uint8Array, state: string, binding: string): boolean;
+
+// @public (undocumented)
+export function openBookmark(input: BookmarkOpenDependencies, ask: BookmarkOpenAsk): Promise<BookmarkOpenOutcome>;
 
 // @public (undocumented)
 export interface OtpauthOptions {
