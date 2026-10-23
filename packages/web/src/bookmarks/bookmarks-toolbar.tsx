@@ -1,16 +1,23 @@
 import { Button } from "@slugbase/ui";
-import { FilterXIcon, SegmentedChoice, SelectField } from "@slugbase/ui/patterns";
+import { FilterXIcon, LayoutGridIcon, SegmentedChoice, SelectField, TableIcon } from "@slugbase/ui/patterns";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { BOOKMARK_SORTS, DEFAULT_SORT, hasActiveFilters, type BookmarkListControls, type BookmarkListSearch, type BookmarkSort } from "./list-search.ts";
+import { useCachedAccount } from "../account/use-cached-account.ts";
+import { useUpdatePreferences } from "../account/use-update-preferences.ts";
+import { BOOKMARK_SORTS, DEFAULT_SORT, hasActiveFilters, type BookmarkListControls, type BookmarkListSearch, type BookmarkSort, type BookmarkView } from "./list-search.ts";
 
 export interface BookmarksToolbarProps {
-  readonly search: BookmarkListSearch;
+  /** The list's parameters, with the view the address or the account's default settles on. */
+  readonly search: BookmarkListSearch & { readonly view: BookmarkView };
   readonly controls: BookmarkListControls;
 }
 
 const ALL_SCOPE = "all";
 const MINE_SCOPE = "mine";
+
+function isView(value: string): value is BookmarkView {
+  return value === "grid" || value === "table";
+}
 
 function isSort(value: string): value is BookmarkSort {
   return (BOOKMARK_SORTS as readonly string[]).includes(value);
@@ -18,10 +25,27 @@ function isSort(value: string): value is BookmarkSort {
 
 /**
  * The filters and the sort of the bookmark list (doc 03 section 3.1). Each control writes to the address and reads
- * back from it, so what is shown is what a link would open. The folder, tag and text filters arrive with their items.
+ * back from it, so what is shown is what a link would open. The grid and table choice also becomes the account's
+ * default view, which applies to a list whose address names none (doc 02 section 2.1). The folder, tag and text filters arrive with their items.
  */
 export function BookmarksToolbar({ search, controls }: BookmarksToolbarProps): ReactElement {
   const { t } = useTranslation();
+  const account = useCachedAccount();
+  const preferences = useUpdatePreferences();
+  const viewOptions = [
+    { value: "grid", label: t("bookmarks.list.view.grid"), icon: <LayoutGridIcon aria-hidden="true" className="size-4" /> },
+    { value: "table", label: t("bookmarks.list.view.table"), icon: <TableIcon aria-hidden="true" className="size-4" /> },
+  ];
+  function changeView(value: string): void {
+    if (!isView(value)) {
+      return;
+    }
+    controls.update({ view: value });
+    // A failed save is reported by the app's mutation handler and leaves the account's default as it was.
+    if (account?.defaultView !== value) {
+      preferences.mutate({ defaultView: value });
+    }
+  }
   const sortOptions = [
     { value: "recent", label: t("bookmarks.list.sort.recent") },
     { value: "oldest", label: t("bookmarks.list.sort.oldest") },
@@ -44,6 +68,7 @@ export function BookmarksToolbar({ search, controls }: BookmarksToolbarProps): R
   ];
   return (
     <section aria-label={t("bookmarks.list.toolbar")} className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
+      <SegmentedChoice label={t("bookmarks.list.view.label")} onValueChange={changeView} options={viewOptions} value={search.view} />
       <SegmentedChoice
         label={t("bookmarks.list.scope.label")}
         onValueChange={changeScope}

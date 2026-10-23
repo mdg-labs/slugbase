@@ -1,7 +1,7 @@
 import type { ComponentTypes } from "@slugbase/contracts";
 import { createHandlers, type Scenario } from "@slugbase/testing/msw";
 import { createMockServer, readOpenApiDocument } from "@slugbase/testing/msw/node";
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { createWebApp } from "../src/index.ts";
 import { ACCOUNT_BODY, meOf, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
@@ -597,5 +597,205 @@ describe("in German", () => {
     expect(screen.getByText("1 von 1.234 angezeigt")).toBeDefined();
     expect(screen.getByRole("button", { name: "Mehr laden" })).toBeDefined();
     expect(screen.getByRole("button", { name: "Angeheftet" })).toBeDefined();
+  });
+});
+
+describe("the table view", () => {
+  const ME = "/api/v1/me";
+
+  /** The row of a bookmark by its title. */
+  async function row(title: string): Promise<HTMLElement> {
+    const link = await screen.findByRole("link", { name: title });
+    const tr = link.closest("tr");
+    expect(tr).not.toBeNull();
+    return tr as HTMLElement;
+  }
+
+  it("is `/bookmarks?view=table`: a table of the columns with a row per bookmark, loading 48 at a time", async () => {
+    const twoHoursAgo = new Date(Date.now() - 2 * 3_600_000).toISOString();
+    use({
+      fixtures: {
+        listBookmarks: page([
+          bookmark(1, { title: "<img src=x onerror=alert(1)>", pinned: true, openCount: 1234, lastOpenedAt: twoHoursAgo, slug: "mail" }),
+          bookmark(2, { url: "javascript:alert(1)" }),
+        ]),
+      },
+    });
+    await openApp("/bookmarks?view=table");
+
+    const table = await screen.findByRole("table", { name: "Bookmarks" });
+    expect(within(table).getAllByRole("columnheader").map((header) => header.textContent)).toEqual([
+      "Select",
+      "Title",
+      "Slug",
+      "Host",
+      "Folders",
+      "Tags",
+      "Opens",
+      "Last opened",
+      "Added",
+      "Actions",
+    ]);
+    expect(lists()[0]?.params.get("limit")).toBe("48");
+    const first = await row("<img src=x onerror=alert(1)>");
+    expect(first.querySelector("img")).toBeNull();
+    const cells = within(first).getAllByRole("cell");
+    expect(cells.map((cell) => cell.textContent)).toEqual(["", "s<img src=x onerror=alert(1)>", "/go/mail", "site1.example.com", "", "", "1,234", "2 hr. ago", "Oct 1, 2026", ""]);
+    expect(within(first).getByRole("img", { name: "Pinned" })).toBeDefined();
+    expect(within(first).getByRole("checkbox", { name: "Select <img src=x onerror=alert(1)>" })).toBeDefined();
+    expect(within(first).getByRole("button", { name: "Actions for <img src=x onerror=alert(1)>" })).toBeDefined();
+    // An address that is not a web address is shown as text and is not followed.
+    expect(screen.queryByRole("link", { name: "Bookmark 2" })).toBeNull();
+    expect(within(table).getByText("Bookmark 2")).toBeDefined();
+    expect(within(table).getAllByText("Never")).toHaveLength(1);
+  });
+
+  it("orders from a sortable header, keeps the loaded filters and the view, and says how the rows are ordered", async () => {
+    use({ fixtures: { listBookmarks: page([bookmark(1)]) } });
+    await openApp("/bookmarks?view=table&pinned=true");
+    await row("Bookmark 1");
+    const header = (name: string): HTMLElement => screen.getByRole("columnheader", { name });
+    expect(header("Added").getAttribute("aria-sort")).toBe("descending");
+    expect(header("Title").getAttribute("aria-sort")).toBe("none");
+    expect(within(header("Slug")).queryByRole("button")).toBeNull();
+
+    await press(within(header("Title")).getByRole("button"));
+    await waitFor(() => {
+      expect(window.location.search).toBe("?view=table&pinned=true&sort=title_asc");
+    });
+    await waitFor(() => {
+      expect(lists().at(-1)?.params.get("sort")).toBe("title_asc");
+    });
+    expect(lists().at(-1)?.params.get("pinned")).toBe("true");
+    expect(header("Title").getAttribute("aria-sort")).toBe("ascending");
+    expect(header("Added").getAttribute("aria-sort")).toBe("none");
+
+    await press(within(header("Title")).getByRole("button"));
+    await waitFor(() => {
+      expect(lists().at(-1)?.params.get("sort")).toBe("title_desc");
+    });
+    expect(header("Title").getAttribute("aria-sort")).toBe("descending");
+
+    for (const [column, sort] of [["Opens", "most_used"], ["Last opened", "recently_opened"], ["Added", "recent"], ["Added", "oldest"]] as const) {
+      await press(within(header(column)).getByRole("button"));
+      await waitFor(() => {
+        expect(lists().at(-1)?.params.get("sort")).toBe(sort);
+      });
+    }
+    expect(header("Added").getAttribute("aria-sort")).toBe("ascending");
+    await press(within(header("Added")).getByRole("button"));
+    await waitFor(() => {
+      expect(window.location.search).toBe("?view=table&pinned=true");
+    });
+    expect(lists().at(-1)?.params.get("sort")).toBe("recent");
+    // The sort control above the list follows the header.
+    expect(screen.getByRole("combobox", { name: "Sort by" }).textContent).toContain("Recently added");
+  });
+
+  it("applies the account's default view when the address names none, and the address wins over it", async () => {
+    use({ fixtures: { getMe: meOf({ ...ACCOUNT_BODY, defaultView: "table" }), listBookmarks: page([bookmark(1)]) } });
+    await openApp("/bookmarks");
+
+    await screen.findByRole("table", { name: "Bookmarks" });
+    expect(screen.getByRole("radio", { name: "Table" }).getAttribute("aria-checked")).toBe("true");
+    expect(lists()[0]?.params.get("limit")).toBe("48");
+    cleanup();
+    calls = [];
+
+    await openApp("/bookmarks?view=grid");
+
+    await screen.findByRole("list", { name: "Bookmarks" });
+    expect(screen.queryByRole("table")).toBeNull();
+    expect(screen.getByRole("radio", { name: "Grid" }).getAttribute("aria-checked")).toBe("true");
+    expect(lists()[0]?.params.get("limit")).toBe("24");
+    expect(to("PATCH", ME)).toHaveLength(0);
+  });
+
+  it("changes the view from the toggle, writes it to the address and saves it as the account's default", async () => {
+    use({ fixtures: { listBookmarks: page([bookmark(1)]), updateMe: { ...ACCOUNT_BODY, defaultView: "table" } } });
+    await openApp("/bookmarks?pinned=true");
+    await card("Bookmark 1");
+    expect(screen.getByRole("radio", { name: "Grid" }).getAttribute("aria-checked")).toBe("true");
+    expect(to("PATCH", ME)).toHaveLength(0);
+
+    await press(screen.getByRole("radio", { name: "Table" }));
+
+    await screen.findByRole("table", { name: "Bookmarks" });
+    expect(window.location.search).toBe("?pinned=true&view=table");
+    await waitFor(() => {
+      expect(to("PATCH", ME)).toHaveLength(1);
+    });
+    expect(await bodyOf(to("PATCH", ME)[0])).toEqual({ defaultView: "table" });
+    expect(lists().at(-1)?.params.get("pinned")).toBe("true");
+    expect(lists().at(-1)?.params.get("limit")).toBe("48");
+
+    await press(screen.getByRole("radio", { name: "Grid" }));
+    await screen.findByRole("list", { name: "Bookmarks" });
+    await waitFor(() => {
+      expect(to("PATCH", ME)).toHaveLength(2);
+    });
+    expect(await bodyOf(to("PATCH", ME)[1])).toEqual({ defaultView: "grid" });
+    expect(window.location.search).toBe("?pinned=true&view=grid");
+  });
+
+  it("saves nothing when the chosen view is the account's default already", async () => {
+    use({ fixtures: { getMe: meOf({ ...ACCOUNT_BODY, defaultView: "table" }), listBookmarks: page([bookmark(1)]) } });
+    await openApp("/bookmarks?view=grid");
+    await card("Bookmark 1");
+
+    await press(screen.getByRole("radio", { name: "Table" }));
+
+    await screen.findByRole("table", { name: "Bookmarks" });
+    expect(window.location.search).toBe("?view=table");
+    // A save would be sent within this wait.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+    expect(to("PATCH", ME)).toHaveLength(0);
+  });
+
+  it("keeps the chosen view when the default cannot be saved", async () => {
+    use({ statuses: { updateMe: 429 }, fixtures: { listBookmarks: page([bookmark(1)]) } });
+    await openApp("/bookmarks");
+    await card("Bookmark 1");
+
+    await press(screen.getByRole("radio", { name: "Table" }));
+
+    await waitFor(() => {
+      expect(to("PATCH", ME)).toHaveLength(1);
+    });
+    await screen.findByRole("table", { name: "Bookmarks" });
+    expect(window.location.search).toBe("?view=table");
+  });
+
+  it("shows each row as a card below md, with the same actions", async () => {
+    stubMatchMedia(true);
+    use({ fixtures: { listBookmarks: page([bookmark(1, { openCount: 3 })]) } });
+    await openApp("/bookmarks?view=table");
+
+    const list = await screen.findByRole("list", { name: "Bookmarks" });
+    expect(screen.queryByRole("table")).toBeNull();
+    const item = within(list).getAllByRole("listitem")[0] as HTMLElement;
+    expect(within(item).getByRole("link", { name: "Bookmark 1" })).toBeDefined();
+    expect(within(item).getByRole("checkbox", { name: "Select Bookmark 1" })).toBeDefined();
+    expect(within(item).getByText("Opens")).toBeDefined();
+    expect(within(item).getByText("site1.example.com")).toBeDefined();
+    await press(within(item).getByRole("button", { name: "Actions for Bookmark 1" }));
+    expect(await screen.findByRole("dialog", { name: "Actions for Bookmark 1" })).toBeDefined();
+  });
+
+  it("states what is wrong and what matches, as the grid does", async () => {
+    use({ statuses: { listBookmarks: 429 } });
+    await openApp("/bookmarks?view=table");
+
+    await screen.findByText("The bookmarks could not be loaded. Try again in a moment.");
+    expect(screen.queryByRole("table")).toBeNull();
+    cleanup();
+
+    use({ fixtures: { listBookmarks: page([]) } });
+    await openApp("/bookmarks?view=table&pinned=true");
+
+    await screen.findByText("No bookmarks match these filters");
+    expect(screen.queryByRole("table")).toBeNull();
   });
 });

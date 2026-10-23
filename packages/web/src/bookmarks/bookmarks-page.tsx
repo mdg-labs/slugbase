@@ -6,24 +6,33 @@ import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { useFormat } from "../i18n/use-format.ts";
 import { BookmarkCard } from "./bookmark-card.tsx";
+import { BookmarksTable } from "./bookmarks-table.tsx";
 import { usePendingPins, useDeleteBookmark, usePinBookmark } from "./bookmark-list-actions.ts";
 import { bookmarkFailureOf, bookmarkListQuery, type Bookmark } from "./bookmarks.ts";
 import { BookmarksToolbar } from "./bookmarks-toolbar.tsx";
-import { BOOKMARK_PAGE_SIZES, hasActiveFilters, listParamsOf, pageSizeOfSearch, useBookmarkListControls, useBookmarkListSearch } from "./list-search.ts";
+import { BOOKMARK_PAGE_SIZES, DEFAULT_SORT, hasActiveFilters, listParamsOf, pageSizeOfSearch, useBookmarkListControls, useBookmarkListSearch, type BookmarkView } from "./list-search.ts";
 import { useBookmarkModal } from "./modal-search.ts";
 import { usePasteToCreate } from "./use-paste-to-create.ts";
 
 const SKELETON_CARDS = ["a", "b", "c", "d", "e", "f"] as const;
 
-function CardsLoading(): ReactElement {
+function CardsLoading({ view }: { readonly view: BookmarkView }): ReactElement {
   const { t } = useTranslation();
   return (
     <Loading className="p-0" label={t("bookmarks.list.loading")}>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-        {SKELETON_CARDS.map((key) => (
-          <Skeleton className="h-28 rounded-2xl" key={key} />
-        ))}
-      </div>
+      {view === "table" ? (
+        <div className="flex flex-col gap-2">
+          {SKELETON_CARDS.map((key) => (
+            <Skeleton className="h-12 rounded-lg" key={key} />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          {SKELETON_CARDS.map((key) => (
+            <Skeleton className="h-28 rounded-2xl" key={key} />
+          ))}
+        </div>
+      )}
     </Loading>
   );
 }
@@ -49,6 +58,14 @@ export function BookmarksPage(): ReactElement {
   const remove = useDeleteBookmark(() => {
     setDeleting(undefined);
   });
+
+  const startDelete = (target: Bookmark): void => {
+    remove.reset();
+    setDeleting(target);
+  };
+  const editBookmark = (target: Bookmark): void => {
+    modal.edit(target.id);
+  };
 
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];
   const lastPage = query.data?.pages.at(-1);
@@ -82,7 +99,7 @@ export function BookmarksPage(): ReactElement {
 
   let body: ReactElement;
   if (query.isPending) {
-    body = <CardsLoading />;
+    body = <CardsLoading view={search.view} />;
   } else if (query.data === undefined) {
     body = (
       <Banner
@@ -138,23 +155,32 @@ export function BookmarksPage(): ReactElement {
             variant="error"
           />
         ) : null}
-        <CardGrid label={t("bookmarks.list.label")}>
-          {items.map((bookmark) => (
-            <BookmarkCard
-              bookmark={bookmark}
-              key={bookmark.id}
-              onDelete={(target) => {
-                remove.reset();
-                setDeleting(target);
-              }}
-              onEdit={(target) => {
-                modal.edit(target.id);
-              }}
-              onPin={pin.pin}
-              pinPending={pendingPins.has(bookmark.id)}
-            />
-          ))}
-        </CardGrid>
+        {search.view === "table" ? (
+          <BookmarksTable
+            bookmarks={items}
+            onDelete={startDelete}
+            onEdit={editBookmark}
+            onPin={pin.pin}
+            onSort={(sort) => {
+              controls.update({ sort: sort === DEFAULT_SORT ? undefined : sort });
+            }}
+            pendingPins={pendingPins}
+            sort={search.sort}
+          />
+        ) : (
+          <CardGrid label={t("bookmarks.list.label")}>
+            {items.map((bookmark) => (
+              <BookmarkCard
+                bookmark={bookmark}
+                key={bookmark.id}
+                onDelete={startDelete}
+                onEdit={editBookmark}
+                onPin={pin.pin}
+                pinPending={pendingPins.has(bookmark.id)}
+              />
+            ))}
+          </CardGrid>
+        )}
         <LoadMore
           count={
             lastPage?.totalAtLeast !== undefined && total === null

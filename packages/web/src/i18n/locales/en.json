@@ -68,6 +68,11 @@
         "hasSlug": "Has slug",
         "forwarding": "Forwarding on"
       },
+      "view": {
+        "label": "View",
+        "grid": "Grid",
+        "table": "Table"
+      },
       "scope": {
         "label": "Scope",
         "all": "All",
@@ -81,6 +86,19 @@
         "titleDesc": "Alphabetical Z–A",
         "mostUsed": "Most used",
         "recentlyOpened": "Recently opened"
+      },
+      "table": {
+        "select": "Select",
+        "title": "Title",
+        "slug": "Slug",
+        "host": "Host",
+        "folders": "Folders",
+        "tags": "Tags",
+        "opens": "Opens",
+        "lastOpened": "Last opened",
+        "added": "Added",
+        "actions": "Actions",
+        "never": "Never"
       },
       "actionsFor": "Actions for {title}",
       "select": "Select {title}",

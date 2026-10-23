@@ -1,4 +1,5 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
+import { useCachedAccount } from "../account/use-cached-account.ts";
 
 /** The orders the list offers, from the API's `sort` parameter (doc 02 section 5.7). */
 export const BOOKMARK_SORTS = ["recent", "oldest", "title_asc", "title_desc", "most_used", "recently_opened"] as const;
@@ -17,8 +18,9 @@ export type BookmarkScope = "all" | "mine";
 export const DEFAULT_SORT: BookmarkSort = "recent";
 
 /**
- * What the address of `/bookmarks` says about the list (doc 03 section 3.1). Every parameter is optional and only a
- * value that differs from the default is written, so the plain address is the plain list. The address has no page
+ * What the address of `/bookmarks` says about the list (doc 03 section 3.1). Every parameter is optional and a filter,
+ * sort or size is only written when it differs from the default, so the plain address is the plain list. The view is
+ * written once it is chosen, so a link opens the view it was copied from whatever the account's default is. The address has no page
  * number: the list loads further results with a button (keyset pagination, Q42).
  */
 export interface BookmarkListSearch {
@@ -30,7 +32,8 @@ export interface BookmarkListSearch {
   forwarding?: true;
   scope?: Exclude<BookmarkScope, "all">;
   sort?: BookmarkSort;
-  view?: Exclude<BookmarkView, "grid">;
+  /** How the list is shown; left out, the account's default view applies. */
+  view?: BookmarkView;
   size?: BookmarkPageSize;
 }
 
@@ -66,8 +69,8 @@ export function validateBookmarkListSearch(search: Record<string, unknown>): Boo
   if (isSort(search.sort) && search.sort !== DEFAULT_SORT) {
     result.sort = search.sort;
   }
-  if (search.view === "table") {
-    result.view = "table";
+  if (search.view === "table" || search.view === "grid") {
+    result.view = search.view;
   }
   const size = pageSizeOf(search.size);
   if (size !== undefined) {
@@ -81,8 +84,11 @@ export function validateBookmarkListSearch(search: Record<string, unknown>): Boo
  * parameters over the raw ones and keeps a raw value the validation dropped, so the page reads the validated ones
  * from here rather than from the router's search.
  */
-export function useBookmarkListSearch(): BookmarkListSearch {
-  return validateBookmarkListSearch(useSearch({ from: "/_app/bookmarks" }));
+export function useBookmarkListSearch(): BookmarkListSearch & { readonly view: BookmarkView } {
+  const search = validateBookmarkListSearch(useSearch({ from: "/_app/bookmarks" }));
+  const defaultView = useCachedAccount()?.defaultView;
+  // The address wins; without it the account's default view applies (doc 02 section 2.1), and the grid until the account is read.
+  return { ...search, view: search.view ?? defaultView ?? "grid" };
 }
 
 /** The size of a load when the address names none: the grid loads 24, the table 48 (doc 02 section 5.7). */

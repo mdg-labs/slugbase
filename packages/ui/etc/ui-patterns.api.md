@@ -12,6 +12,7 @@ import { FilterXIcon } from 'lucide-react';
 import type { FocusEvent as FocusEvent_2 } from 'react';
 import { HomeIcon } from 'lucide-react';
 import { InboxIcon } from 'lucide-react';
+import { LayoutGridIcon } from 'lucide-react';
 import { LifeBuoyIcon } from 'lucide-react';
 import { LockIcon } from 'lucide-react';
 import { LogOutIcon } from 'lucide-react';
@@ -24,6 +25,7 @@ import { ReactNode } from 'react';
 import { Ref } from 'react';
 import { SettingsIcon } from 'lucide-react';
 import { ShieldCheckIcon } from 'lucide-react';
+import { TableIcon } from 'lucide-react';
 import { Trash2Icon } from 'lucide-react';
 import { TriangleAlertIcon } from 'lucide-react';
 
@@ -311,8 +313,12 @@ export interface DangerZoneProps {
 // @public
 export function DataTable<Row extends object>(input: DataTableProps<Row>): ReactElement;
 
+// @public
+export type DataTableCardSlot = "leading" | "title" | "trailing";
+
 // @public (undocumented)
 export interface DataTableColumn<Row extends object> {
+    cardSlot?: DataTableCardSlot;
     // (undocumented)
     cell: (row: Row) => ReactNode;
     // (undocumented)
@@ -321,6 +327,10 @@ export interface DataTableColumn<Row extends object> {
     header: ReactNode;
     hideHeader?: boolean;
     id: string;
+    sort?: {
+        direction: DataTableSortDirection;
+        onSort: () => void;
+    };
 }
 
 // @public (undocumented)
@@ -334,6 +344,9 @@ export interface DataTableProps<Row extends object> {
     // (undocumented)
     rows: readonly Row[];
 }
+
+// @public
+export type DataTableSortDirection = "ascending" | "descending" | "none";
 
 // @public
 export function Disclosure(input: DisclosureProps): ReactElement;
@@ -427,6 +440,8 @@ export interface InlineNoteProps {
     className?: string;
     title?: ReactNode;
 }
+
+export { LayoutGridIcon }
 
 export { LifeBuoyIcon }
 
@@ -627,6 +642,20 @@ export interface SegmentedChoiceProps {
 }
 
 // @public
+export function SelectCheckbox(input: SelectCheckboxProps): ReactElement;
+
+// @public (undocumented)
+export interface SelectCheckboxProps {
+    // (undocumented)
+    checked?: boolean;
+    // (undocumented)
+    className?: string;
+    label: string;
+    // (undocumented)
+    onCheckedChange?: (checked: boolean) => void;
+}
+
+// @public
 export function SelectField(input: SelectFieldProps): ReactElement;
 
 // @public (undocumented)
@@ -761,6 +790,8 @@ export interface StatusBadgeProps {
 
 // @public (undocumented)
 export type StatusBadgeVariant = "info" | "neutral" | "success" | "warning" | "error";
+
+export { TableIcon }
 
 // @public
 export function TextareaField(input: TextareaFieldProps): ReactElement;

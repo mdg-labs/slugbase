@@ -11,7 +11,7 @@ export { Confirm, type ConfirmProps } from "./confirm.tsx";
 export { ContextActions, type ContextActionsProps } from "./context-actions.tsx";
 export { CopyValue, type CopyValueProps } from "./copy-value.tsx";
 export { DangerZone, type DangerZoneItem, type DangerZoneProps } from "./danger-zone.tsx";
-export { DataTable, type DataTableColumn, type DataTableProps } from "./data-table.tsx";
+export { DataTable, type DataTableCardSlot, type DataTableColumn, type DataTableProps, type DataTableSortDirection } from "./data-table.tsx";
 export { Disclosure, type DisclosureProps } from "./disclosure.tsx";
 export { EmptyState, type EmptyStateProps } from "./empty-state.tsx";
 export { FeedbackToastProvider, feedbackToast, type FeedbackToastProviderProps } from "./feedback-toast.tsx";
@@ -26,6 +26,7 @@ export { Picker, type PickerOption, type PickerProps } from "./picker.tsx";
 export { RowActions, type RowAction, type RowActionsProps } from "./row-actions.tsx";
 export { SecretInput, type SecretInputProps } from "./secret-input.tsx";
 export { SegmentedChoice, type SegmentedChoiceOption, type SegmentedChoiceProps } from "./segmented-choice.tsx";
+export { SelectCheckbox, type SelectCheckboxProps } from "./select-checkbox.tsx";
 export { SelectField, type SelectFieldProps, type SelectOption } from "./select-field.tsx";
 export { SettingSwitch, type SettingSwitchProps } from "./setting-switch.tsx";
 export { SettingsNav, type SettingsNavGroup, type SettingsNavItem, type SettingsNavProps } from "./settings-nav.tsx";
@@ -48,6 +49,7 @@ export {
   FilterXIcon,
   HomeIcon,
   InboxIcon,
+  LayoutGridIcon,
   LifeBuoyIcon,
   LockIcon,
   LogOutIcon,
@@ -57,6 +59,7 @@ export {
   PlusIcon,
   SettingsIcon,
   ShieldCheckIcon,
+  TableIcon,
   Trash2Icon,
   TriangleAlertIcon,
 } from "lucide-react";

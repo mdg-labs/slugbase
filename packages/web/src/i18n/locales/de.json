@@ -68,6 +68,11 @@
         "hasSlug": "Mit Slug",
         "forwarding": "Weiterleitung an"
       },
+      "view": {
+        "label": "Ansicht",
+        "grid": "Raster",
+        "table": "Tabelle"
+      },
       "scope": {
         "label": "Bereich",
         "all": "Alle",
@@ -81,6 +86,19 @@
         "titleDesc": "Alphabetisch Z–A",
         "mostUsed": "Am häufigsten genutzt",
         "recentlyOpened": "Zuletzt geöffnet"
+      },
+      "table": {
+        "select": "Auswählen",
+        "title": "Titel",
+        "slug": "Slug",
+        "host": "Host",
+        "folders": "Ordner",
+        "tags": "Tags",
+        "opens": "Aufrufe",
+        "lastOpened": "Zuletzt geöffnet",
+        "added": "Hinzugefügt",
+        "actions": "Aktionen",
+        "never": "Nie"
       },
       "actionsFor": "Aktionen für {title}",
       "select": "{title} auswählen",

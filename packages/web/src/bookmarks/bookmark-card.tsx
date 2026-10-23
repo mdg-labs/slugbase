@@ -5,13 +5,27 @@ import { useTranslation } from "react-i18next";
 import { useFormat } from "../i18n/use-format.ts";
 import { isHttpUrl, recordOpen, type Bookmark } from "./bookmarks.ts";
 
-export interface BookmarkCardProps {
+export interface BookmarkActionHandlers {
   readonly bookmark: Bookmark;
   /** Whether a pin or unpin of this bookmark is being saved; a second one waits for it. */
   readonly pinPending: boolean;
   readonly onEdit: (bookmark: Bookmark) => void;
   readonly onPin: (bookmark: Bookmark, pinned: boolean) => void;
   readonly onDelete: (bookmark: Bookmark) => void;
+}
+
+export type BookmarkCardProps = BookmarkActionHandlers;
+
+/** The actions of one bookmark, which its card and its table row show as one list. */
+export function useBookmarkActions({ bookmark, pinPending, onEdit, onPin, onDelete }: BookmarkActionHandlers): readonly RowAction[] {
+  const { t } = useTranslation();
+  return [
+    { id: "edit", label: t("bookmarks.list.edit"), icon: <PencilIcon aria-hidden="true" />, onSelect: () => { onEdit(bookmark); } },
+    bookmark.pinned
+      ? { id: "unpin", label: t("bookmarks.list.unpin"), icon: <PinOffIcon aria-hidden="true" />, disabled: pinPending, onSelect: () => { onPin(bookmark, false); } }
+      : { id: "pin", label: t("bookmarks.list.pin.action"), icon: <PinIcon aria-hidden="true" />, disabled: pinPending, onSelect: () => { onPin(bookmark, true); } },
+    { id: "delete", label: t("bookmarks.list.delete.action"), icon: <Trash2Icon aria-hidden="true" />, destructive: true, onSelect: () => { onDelete(bookmark); } },
+  ];
 }
 
 /**
@@ -31,13 +45,7 @@ export function BookmarkCard({ bookmark, pinPending, onEdit, onPin, onDelete }: 
   } else {
     usage = t("bookmarks.list.usage", { count: bookmark.openCount, when: format.relativeTime(new Date(bookmark.lastOpenedAt)) });
   }
-  const actions: readonly RowAction[] = [
-    { id: "edit", label: t("bookmarks.list.edit"), icon: <PencilIcon aria-hidden="true" />, onSelect: () => { onEdit(bookmark); } },
-    bookmark.pinned
-      ? { id: "unpin", label: t("bookmarks.list.unpin"), icon: <PinOffIcon aria-hidden="true" />, disabled: pinPending, onSelect: () => { onPin(bookmark, false); } }
-      : { id: "pin", label: t("bookmarks.list.pin.action"), icon: <PinIcon aria-hidden="true" />, disabled: pinPending, onSelect: () => { onPin(bookmark, true); } },
-    { id: "delete", label: t("bookmarks.list.delete.action"), icon: <Trash2Icon aria-hidden="true" />, destructive: true, onSelect: () => { onDelete(bookmark); } },
-  ];
+  const actions = useBookmarkActions({ bookmark, pinPending, onEdit, onPin, onDelete });
   return (
     <CardGridItem
       actions={actions}
@@ -73,6 +81,6 @@ export function BookmarkCard({ bookmark, pinPending, onEdit, onPin, onDelete }: 
 }
 
 /** The first letter of the host, which stands in for the favicon until real ones arrive. */
-function monogramOf(bookmark: Bookmark): string {
+export function monogramOf(bookmark: Bookmark): string {
   return Array.from(bookmark.host.replace(/^www\./i, ""))[0] ?? "";
 }
