@@ -48,7 +48,7 @@ The port is deliberately not `5432`, so a developer's own Postgres never collide
 pnpm install
 pnpm dev:env             # copies .env.example to .env (gitignored) and fills generated dev SESSION_SECRET/ENCRYPTION_KEY
 pnpm db:migrate          # applies the CE migration chain to slugbase_dev
-pnpm db:seed             # demo instance: admin + 2 workspaces, members, teams, ~300 bookmarks, shared folders
+pnpm db:seed             # demo instance: an admin and a member, a demo workspace of 300 bookmarks, a workspace of 5 000 (§1.4)
 pnpm dev                 # turbo: server (watch), worker (watch), web (Vite)
 ```
 
@@ -58,7 +58,13 @@ pnpm dev                 # turbo: server (watch), worker (watch), web (Vite)
 
 ### 1.4 Seed data
 
-`pnpm db:seed` builds a deterministic demo instance from `@slugbase/testing` factories (fixed random seed). It includes the shapes that break UIs: a workspace with 5 000 bookmarks, long titles, RTL and emoji titles, colliding slugs across members and via sharing (to exercise `/go` disambiguation), an over-cap Free workspace (entitlement banners), an account with MFA enrolled, and an expired invitation. The seeded passwords are printed once by the command and are only valid against `slugbase_dev`.
+`pnpm db:seed` builds a deterministic demo instance from `@slugbase/testing` factories (a fixed random seed and a fixed clock, so every run produces the same rows). The factories are plain data builders with no database in them: the seed script turns the instance into one SQL transaction, and the browser journeys import the same builders for their fixtures (`e2e/support/bookmark-fixtures.ts`).
+
+The instance has two accounts (an instance admin and a member), a demo workspace of 300 bookmarks that both use, and a workspace of 5 000 bookmarks owned by the admin. Every workspace starts with the bookmark shapes that break UIs: a title and a description at their length limits and a URL of about 2 000 characters, a title with no break opportunity, a one-character title, Arabic, Hebrew and mixed-direction titles, emoji titles (a ZWJ sequence, a flag, a skin tone), titles and descriptions with markup-like text (`<img src=x onerror=alert(1)>`, `<script>`, HTML entities), pinned rows, rows with opens and rows without, and three URLs that differ and share one canonical form (doc 02 §5.1). The rest is filler with the same mix: about 4 % pinned, a little over half opened, a few percent emoji or right-to-left, and a few percent duplicate canonical URLs. Colliding slugs across members and via sharing, shared folders, an over-cap Free workspace, an account with MFA enrolled and an expired invitation are added by the epics that introduce them; the 50 000-bookmark performance instance belongs to the performance suite (§5.3).
+
+**It writes through `slugbase_system`, not the application role.** The seed connects with `DATABASE_MIGRATE_URL` as `slugbase_migrator`, sets the role for its one transaction and creates the accounts and workspaces with the system operations the product uses (`sys_create_account`, `sys_create_workspace`). The application role cannot set a bookmark's usage (`open_count`, `last_opened_at`) and has no `UPDATE` on `workspaces.bookmark_count`, so the script inserts the bookmarks as the system role and then sets each workspace's `bookmark_count` to the number of its rows (doc 05 §2.2). `psql` must be on the `PATH`, as for the test harness; the script runs through it, so no database handle is created outside `packages/db`. Any failure rolls the whole script back, and a database that already holds one of the seeded addresses is refused as a whole.
+
+**It refuses any database but the development one.** Before it connects, `DATABASE_URL` and `DATABASE_MIGRATE_URL` must both name host `127.0.0.1` (or `localhost`), port `54329` and the database `slugbase_dev`, the address `compose.dev.yml` publishes, with no connection options in the URL, and the migrate URL must connect as `slugbase_migrator`. A value that is unset, unparsable or anything else is a refusal, never a fallback, and the child process gets only that connection and the `PATH`, so a `PG*` variable of the caller cannot redirect it. The passwords are random, made when the command runs and shown once on its output; only their argon2id hashes are stored, in `slugbase_dev`, and they open no other database. To seed again, start from an empty development database (`docker compose -f compose.dev.yml down -v`, `pnpm dev:services`, `pnpm db:migrate`).
 
 ### 1.5 Cloud development
 
