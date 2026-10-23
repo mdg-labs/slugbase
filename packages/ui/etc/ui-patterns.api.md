@@ -4,21 +4,27 @@
 
 ```ts
 
+import { BookmarkIcon } from 'lucide-react';
 import { ChangeEventHandler } from 'react';
 import type { ClipboardEvent as ClipboardEvent_2 } from 'react';
 import { CompassIcon } from 'lucide-react';
+import { FilterXIcon } from 'lucide-react';
 import type { FocusEvent as FocusEvent_2 } from 'react';
 import { HomeIcon } from 'lucide-react';
 import { InboxIcon } from 'lucide-react';
 import { LifeBuoyIcon } from 'lucide-react';
 import { LockIcon } from 'lucide-react';
 import { LogOutIcon } from 'lucide-react';
+import { PencilIcon } from 'lucide-react';
+import { PinIcon } from 'lucide-react';
+import { PinOffIcon } from 'lucide-react';
 import { PlusIcon } from 'lucide-react';
 import { ReactElement } from 'react';
 import { ReactNode } from 'react';
 import { Ref } from 'react';
 import { SettingsIcon } from 'lucide-react';
 import { ShieldCheckIcon } from 'lucide-react';
+import { Trash2Icon } from 'lucide-react';
 import { TriangleAlertIcon } from 'lucide-react';
 
 // @public
@@ -147,6 +153,34 @@ export interface BannerProps {
 // @public (undocumented)
 export type BannerVariant = "error" | "info" | "success" | "warning";
 
+export { BookmarkIcon }
+
+// @public
+export function CardGrid(input: CardGridProps): ReactElement;
+
+// @public
+export function CardGridItem(input: CardGridItemProps): ReactElement;
+
+// @public (undocumented)
+export interface CardGridItemProps {
+    actions: readonly RowAction[];
+    actionsLabel: string;
+    children?: ReactNode;
+    href?: string;
+    indicator?: ReactNode;
+    monogram: string;
+    onOpen?: () => void;
+    selectLabel: string;
+    subtitle?: string;
+    title: string;
+}
+
+// @public (undocumented)
+export interface CardGridProps {
+    children: ReactNode;
+    label: string;
+}
+
 // @public
 export function CheckboxField(input: CheckboxFieldProps): ReactElement;
 
@@ -219,6 +253,18 @@ export interface ConfirmProps {
     open: boolean;
     // (undocumented)
     title: ReactNode;
+}
+
+// @public
+export function ContextActions(input: ContextActionsProps): ReactElement;
+
+// @public (undocumented)
+export interface ContextActionsProps {
+    actions: readonly RowAction[];
+    children: ReactNode;
+    // (undocumented)
+    className?: string;
+    label: string;
 }
 
 // @public
@@ -333,6 +379,8 @@ export interface FeedbackToastProviderProps {
     regionLabel: string;
 }
 
+export { FilterXIcon }
+
 // @public
 export function FormField(input: FormFieldProps): ReactElement;
 
@@ -393,6 +441,30 @@ export interface LoadingProps {
     label: string;
 }
 
+// @public
+export function LoadMore(input: LoadMoreProps): ReactElement;
+
+// @public (undocumented)
+export interface LoadMorePageSize {
+    label: string;
+    // (undocumented)
+    onValueChange: (value: string) => void;
+    // (undocumented)
+    options: readonly SelectOption[];
+    value: string;
+}
+
+// @public (undocumented)
+export interface LoadMoreProps {
+    count: ReactNode;
+    hasMore: boolean;
+    loading?: boolean;
+    loadMoreLabel: string;
+    // (undocumented)
+    onLoadMore: () => void;
+    pageSize?: LoadMorePageSize;
+}
+
 export { LockIcon }
 
 export { LogOutIcon }
@@ -430,6 +502,8 @@ export interface PasswordStrengthProps {
     scoreLabel: string;
 }
 
+export { PencilIcon }
+
 // @public
 export function Picker(input: PickerProps): ReactElement;
 
@@ -460,6 +534,10 @@ export interface PickerProps {
     placeholder?: string;
     value: string | undefined;
 }
+
+export { PinIcon }
+
+export { PinOffIcon }
 
 export { PlusIcon }
 
@@ -734,6 +812,8 @@ export interface TotpProps {
     slotLabel: (position: number, length: number) => string;
     value: string;
 }
+
+export { Trash2Icon }
 
 export { TriangleAlertIcon }
 

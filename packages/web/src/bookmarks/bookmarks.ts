@@ -1,12 +1,18 @@
 import { CreateBookmarkRequestSchema, UpdateBookmarkRequestSchema, type ComponentTypes } from "@slugbase/contracts";
-import { queryOptions } from "@tanstack/react-query";
+import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { ApiProblemError, isSessionEnded, type ApiClient } from "../api/client.ts";
+import type { BookmarkListParams } from "./list-search.ts";
 
 export type Bookmark = ComponentTypes["schemas"]["Bookmark"];
 export type CreateBookmarkRequest = ComponentTypes["schemas"]["CreateBookmarkRequest"];
 export type UpdateBookmarkRequest = ComponentTypes["schemas"]["UpdateBookmarkRequest"];
 
+export type BookmarkPage = ComponentTypes["schemas"]["BookmarkList"];
+
 export const BOOKMARKS_QUERY_KEY = ["bookmarks"] as const;
+
+/** The key every loaded list of bookmarks is under, whatever its filters. */
+export const BOOKMARK_LISTS_QUERY_KEY = [...BOOKMARKS_QUERY_KEY, "list"] as const;
 
 export { BOOKMARK_DESCRIPTION_MAX_LENGTH, BOOKMARK_TITLE_MAX_LENGTH, BOOKMARK_URL_MAX_LENGTH } from "@slugbase/contracts";
 
@@ -21,6 +27,29 @@ export function bookmarkQuery(api: ApiClient, id: string) {
       }
       return data;
     },
+  });
+}
+
+/**
+ * The caller's bookmarks under `params`, a page at a time. The next page is asked for with the cursor the last one
+ * answered (keyset pagination, doc 04 section 6.1); a cursor is valid only with the filters and sort it was issued for,
+ * so the parameters are part of the key and a change of them starts a new list.
+ */
+export function bookmarkListQuery(api: ApiClient, params: BookmarkListParams) {
+  return infiniteQueryOptions({
+    queryKey: [...BOOKMARK_LISTS_QUERY_KEY, params],
+    initialPageParam: undefined as string | undefined,
+    queryFn: async ({ pageParam, signal }): Promise<BookmarkPage> => {
+      const { data, error } = await api.GET("/api/v1/bookmarks", {
+        params: { query: { ...params, ...(pageParam === undefined ? {} : { cursor: pageParam }) } },
+        signal,
+      });
+      if (data === undefined) {
+        throw new Error("The bookmark list did not answer with a document", { cause: error });
+      }
+      return data;
+    },
+    getNextPageParam: (last): string | undefined => last.nextCursor ?? undefined,
   });
 }
 
@@ -62,6 +91,16 @@ export async function updateBookmark(api: ApiClient, id: string, version: number
     throw new Error("The bookmark update did not answer with a document", { cause: error });
   }
   return data;
+}
+
+/**
+ * Counts an open of the bookmark (doc 04 section 4, `POST /bookmarks/{id}/open`). The page is on its way to the
+ * destination when this is sent, so the request is kept alive past the navigation, and nothing waits for the answer.
+ */
+export function recordOpen(api: ApiClient, id: string): void {
+  api.POST("/api/v1/bookmarks/{id}/open", { params: { path: { id } }, keepalive: true }).catch(() => {
+    // The count is a statistic and the member has left the page: a failed request has nobody to tell and is not retried.
+  });
 }
 
 export async function deleteBookmark(api: ApiClient, id: string): Promise<void> {

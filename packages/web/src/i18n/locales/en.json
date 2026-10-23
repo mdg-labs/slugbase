@@ -8,6 +8,7 @@
     "drawerClose": "Close navigation",
     "breadcrumb": "Breadcrumb",
     "home": "Home",
+    "bookmarks": "Bookmarks",
     "helpAndDocs": "Help & docs",
     "switchToDark": "Switch to dark theme",
     "switchToLight": "Switch to light theme",
@@ -41,8 +42,77 @@
   "bookmarks": {
     "new": "New bookmark",
     "page": {
-      "title": "Bookmarks",
-      "description": "Your bookmarks will be listed here. Paste a link anywhere on this page to save it, or create one yourself."
+      "title": "Bookmarks"
+    },
+    "list": {
+      "label": "Bookmarks",
+      "toolbar": "Filter and sort the bookmarks",
+      "loading": "Loading the bookmarks",
+      "loadFailed": "The bookmarks could not be loaded. Try again in a moment.",
+      "loadMoreFailed": "More bookmarks could not be loaded. Try again in a moment.",
+      "refreshFailed": "The list could not be refreshed, so it may be out of date. Try again in a moment.",
+      "retry": "Try again",
+      "empty": {
+        "title": "No bookmarks yet",
+        "description": "Give a bookmark a short, private slug and open it from anywhere through /go/. Paste a link anywhere on this page to save it, or create a bookmark yourself."
+      },
+      "noMatch": "No bookmarks match these filters",
+      "clearFilters": "Clear filters",
+      "count": "Showing {shown} of {total}",
+      "countAtLeast": "Showing {shown} of {total}+",
+      "loadMore": "Load more",
+      "pageSize": "Bookmarks per load",
+      "filter": {
+        "label": "Show only",
+        "pinned": "Pinned",
+        "hasSlug": "Has slug",
+        "forwarding": "Forwarding on"
+      },
+      "scope": {
+        "label": "Scope",
+        "all": "All",
+        "mine": "Mine"
+      },
+      "sort": {
+        "label": "Sort by",
+        "recent": "Recently added",
+        "oldest": "Oldest first",
+        "titleAsc": "Alphabetical A–Z",
+        "titleDesc": "Alphabetical Z–A",
+        "mostUsed": "Most used",
+        "recentlyOpened": "Recently opened"
+      },
+      "actionsFor": "Actions for {title}",
+      "select": "Select {title}",
+      "noSlug": "No slug",
+      "pinned": "Pinned",
+      "neverOpened": "Not opened yet",
+      "opens": "{count, plural, one {# open} other {# opens}}",
+      "usage": "{count, plural, one {# open} other {# opens}} · {when}",
+      "edit": "Edit",
+      "unpin": "Unpin",
+      "pin": {
+        "action": "Pin",
+        "error": {
+          "pin": "The bookmark could not be pinned. Try again in a moment.",
+          "unpin": "The bookmark could not be unpinned. Try again in a moment.",
+          "changedElsewhere": "This bookmark changed elsewhere. The list is up to date now; try again.",
+          "notFound": "This bookmark no longer exists."
+        }
+      },
+      "delete": {
+        "action": "Delete",
+        "title": "Delete this bookmark?",
+        "description": "“{title}” is deleted for good, along with its pin. This cannot be undone.",
+        "descriptionSlug": "“{title}” is deleted for good, and its slug stops forwarding immediately. This cannot be undone.",
+        "confirm": "Delete bookmark",
+        "cancel": "Cancel",
+        "error": {
+          "unavailable": "The bookmark could not be deleted right now. Try again in a moment.",
+          "notFound": "This bookmark no longer exists."
+        }
+      },
+      "deleted": "Bookmark deleted."
     },
     "modal": {
       "close": "Close",

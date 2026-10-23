@@ -4,9 +4,11 @@ export { AccountMenu, type AccountMenuItem, type AccountMenuProps } from "./acco
 export { AppShell, MAIN_CONTENT_ID, type AppShellLabels, type AppShellProps } from "./app-shell.tsx";
 export { AuthCard, AuthLayout, type AuthCardProps, type AuthLayoutProps } from "./auth-card.tsx";
 export { Banner, type BannerProps, type BannerVariant } from "./banner.tsx";
+export { CardGrid, CardGridItem, type CardGridItemProps, type CardGridProps } from "./card-grid.tsx";
 export { CheckboxField, type CheckboxFieldProps } from "./checkbox-field.tsx";
 export { ChoiceCards, type ChoiceCardOption, type ChoiceCardsProps } from "./choice-cards.tsx";
 export { Confirm, type ConfirmProps } from "./confirm.tsx";
+export { ContextActions, type ContextActionsProps } from "./context-actions.tsx";
 export { CopyValue, type CopyValueProps } from "./copy-value.tsx";
 export { DangerZone, type DangerZoneItem, type DangerZoneProps } from "./danger-zone.tsx";
 export { DataTable, type DataTableColumn, type DataTableProps } from "./data-table.tsx";
@@ -16,6 +18,7 @@ export { FeedbackToastProvider, feedbackToast, type FeedbackToastProviderProps }
 export { FormField, type FormFieldProps } from "./form-field.tsx";
 export { FormOverlay, type FormOverlayProps } from "./form-overlay.tsx";
 export { InlineNote, type InlineNoteProps } from "./inline-note.tsx";
+export { LoadMore, type LoadMorePageSize, type LoadMoreProps } from "./load-more.tsx";
 export { Loading, type LoadingProps } from "./loading.tsx";
 export { MetricTile, type MetricTileProps } from "./metric-tile.tsx";
 export { PasswordStrength, type PasswordScore, type PasswordStrengthProps } from "./password-strength.tsx";
@@ -39,4 +42,21 @@ export type { WorkspaceSwitcherAction, WorkspaceSwitcherItem, WorkspaceSwitcherP
 export type { Accent, ResolvedTheme } from "../theme/theme-provider.tsx";
 export { ThemeToggle, type ThemeToggleProps } from "./theme-toggle.tsx";
 // The icons the shell and the empty states of the app place; the app takes them from here so the icon library has one home.
-export { CompassIcon, HomeIcon, InboxIcon, LifeBuoyIcon, LockIcon, LogOutIcon, PlusIcon, SettingsIcon, ShieldCheckIcon, TriangleAlertIcon } from "lucide-react";
+export {
+  BookmarkIcon,
+  CompassIcon,
+  FilterXIcon,
+  HomeIcon,
+  InboxIcon,
+  LifeBuoyIcon,
+  LockIcon,
+  LogOutIcon,
+  PencilIcon,
+  PinIcon,
+  PinOffIcon,
+  PlusIcon,
+  SettingsIcon,
+  ShieldCheckIcon,
+  Trash2Icon,
+  TriangleAlertIcon,
+} from "lucide-react";
