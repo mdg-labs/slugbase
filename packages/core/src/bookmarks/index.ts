@@ -25,3 +25,5 @@ export type {
 } from "./update.ts";
 export { deleteBookmark } from "./delete.ts";
 export type { BookmarkDeletionAsk, BookmarkDeletionDependencies } from "./delete.ts";
+export { BookmarkArchiveError, archiveBookmarks, restoreBookmarks } from "./archive.ts";
+export type { BookmarkArchiveRequest, BookmarkArchiveTransaction } from "./archive.ts";

@@ -1,7 +1,9 @@
-import type { BookmarkRecord, BookmarkUpdateRequest, BookmarkUpdateResult, NewBookmark } from "@slugbase/core";
+import { createAuditWriter, type BookmarkArchiveTransaction, type BookmarkRecord, type BookmarkUpdateRequest, type BookmarkUpdateResult, type NewBookmark } from "@slugbase/core";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import { bookmarks } from "../schema/bookmarks.ts";
+import { auditEventRepository } from "./audit-events.ts";
+import { entitlementRepository } from "./entitlements.ts";
 import { enqueueInTenantTransaction, type QueuedJob } from "../system/queue.ts";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
 import { defineScopedRepository } from "./scoped.ts";
@@ -15,7 +17,10 @@ import { defineScopedRepository } from "./scoped.ts";
 // its place under `bookmarks.max` back in the same statement of the transaction, so the counter and the rows cannot part. The place under
 // `bookmarks.max` is taken by the system operation `sys_bookmark_count_take`, which locks the workspace's row, compares the
 // workspace's `bookmark_count` with the ceiling and raises it, in the transaction that inserts the bookmark: a failed
-// insert takes the place back with it, and two creations at the limit minus one make one.
+// insert takes the place back with it, and two creations at the limit minus one make one. Archiving and restoring are the system
+// operation `sys_bookmark_archive_set`, which sets or clears `plan_archived_at` for the given bookmarks, moves the counter by the rows
+// that changed, in one call, because `slugbase_app` may write neither column; the `entitlement_version` is raised separately, through
+// `sys_workspace_bump_entitlement_version` (`withEntitlementChange`, doc 01 section 7.5).
 
 // `slugbase_app` may insert only the columns a request gives a new bookmark and update only the columns a change of its own fields
 // writes (src/sql/470-bookmarks.sql): not the slug, forwarding, the archive state, the usage, the owner or the version, so a row
@@ -28,6 +33,8 @@ const scoped = defineScopedRepository("bookmarks", bookmarks, {
 
 type BookmarkRow = InferSelectModel<typeof bookmarks>;
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 interface TakenRow extends Record<string, unknown> {
   outcome: string;
   used: number | null;
@@ -35,6 +42,10 @@ interface TakenRow extends Record<string, unknown> {
 
 interface DeletedRow extends Record<string, unknown> {
   deleted: boolean | null;
+}
+
+interface ArchivedRow extends Record<string, unknown> {
+  changed: number | null;
 }
 
 export interface BookmarkCreation {
@@ -77,6 +88,14 @@ export interface BookmarkRepository {
    * session; another account is a programming error. Needs a transaction opened with a workspace.
    */
   remove(request: { readonly bookmarkId: string; readonly ownerId: string }): Promise<boolean>;
+  /**
+   * Sets or clears `plan_archived_at` of the given bookmarks of the workspace of the transaction through
+   * `sys_bookmark_archive_set`, whoever owns them, and answers how many rows changed; the workspace's `bookmark_count` moves by
+   * that number in the same call. The `entitlement_version` does not move here: that is `entitlementRepository(tx).bump()`. An
+   * identifier that names no bookmark of the workspace is skipped. Undefined, writing nothing, when the workspace cannot be
+   * reached. Needs a transaction opened with a workspace.
+   */
+  setArchived(request: { readonly bookmarkIds: readonly string[]; readonly archived: boolean }): Promise<number | undefined>;
 }
 
 function recordOf(row: BookmarkRow): BookmarkRecord {
@@ -200,5 +219,38 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
       }
       return row.deleted;
     },
+
+    async setArchived({ bookmarkIds, archived }) {
+      if (tx.workspaceId === undefined) {
+        throw new TenantContextError("workspace_required", "archiving bookmarks needs a tenant transaction opened with a workspace");
+      }
+      if (!bookmarkIds.every((id) => UUID.test(id))) {
+        throw new Error("archiving bookmarks takes identifiers only");
+      }
+      // One parameter, whatever the number of identifiers: a PostgreSQL array literal of UUIDs, which hold no character it would need to quote.
+      const changed = await tenantHandle(tx).execute<ArchivedRow>(sql`
+        SELECT public.sys_bookmark_archive_set(${tx.workspaceId}::uuid, ${`{${bookmarkIds.join(",")}}`}::uuid[], ${archived}::boolean) AS changed`);
+      const row = changed[0];
+      if (changed.length !== 1 || row === undefined) {
+        throw new Error("sys_bookmark_archive_set did not return exactly one answer");
+      }
+      return row.changed ?? undefined;
+    },
+  };
+}
+
+/**
+ * The transaction as `archiveBookmarks` and `restoreBookmarks` of `@slugbase/core` use it: the bookmarks repository, the entitlement
+ * version writer and the audit writer of the same open transaction, so the archive state, the counter, the entitlement version and
+ * the event commit or roll back together. `newId` is a fresh UUIDv7.
+ */
+export function bookmarkArchiveTransaction(tx: TenantTx, newId: () => string): BookmarkArchiveTransaction {
+  const repository = bookmarkRepository(tx);
+  const entitlements = entitlementRepository(tx);
+  return {
+    workspaceId: tx.workspaceId,
+    setArchived: (request) => repository.setArchived(request),
+    entitlementVersion: { bump: () => entitlements.bump() },
+    audit: createAuditWriter({ store: auditEventRepository(tx), newId }),
   };
 }

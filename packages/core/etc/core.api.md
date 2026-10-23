@@ -237,6 +237,11 @@ export interface ApiToken {
     readonly value: string;
 }
 
+// @public
+export function archiveBookmarks(tx: BookmarkArchiveTransaction, request: BookmarkArchiveRequest): Promise<{
+    readonly archived: number;
+}>;
+
 // @public (undocumented)
 export const AUDIT_ACTION_NAMES: readonly AuditAction[];
 
@@ -402,10 +407,26 @@ export const AUDIT_ACTIONS: {
             };
         };
     };
+    readonly "bookmark.archived": {
+        readonly category: "bookmark";
+        readonly metadata: {
+            readonly count: {
+                readonly type: "count";
+            };
+        };
+    };
+    readonly "bookmark.restored": {
+        readonly category: "bookmark";
+        readonly metadata: {
+            readonly count: {
+                readonly type: "count";
+            };
+        };
+    };
 };
 
 // @public
-export const AUDIT_CATEGORIES: readonly ["workspace", "member", "invitation"];
+export const AUDIT_CATEGORIES: readonly ["workspace", "member", "invitation", "bookmark"];
 
 // @public (undocumented)
 export type AuditAction = keyof typeof AUDIT_ACTIONS;
@@ -469,6 +490,8 @@ export type AuditMetadataField = {
     readonly maxLength: number;
 } | {
     readonly type: "uuid";
+} | {
+    readonly type: "count";
 };
 
 // @public
@@ -920,6 +943,28 @@ export const BOOKMARK_TITLE_MAX_LENGTH = 300;
 
 // @public
 export const BOOKMARK_URL_MAX_LENGTH = 2048;
+
+// @public
+export class BookmarkArchiveError extends Error {
+    constructor(message: string);
+}
+
+// @public (undocumented)
+export interface BookmarkArchiveRequest {
+    readonly bookmarkIds: readonly string[];
+    readonly workspaceId: string;
+}
+
+// @public
+export interface BookmarkArchiveTransaction {
+    readonly audit: AuditWriter;
+    readonly entitlementVersion: EntitlementVersionWriter;
+    setArchived(request: {
+        readonly bookmarkIds: readonly string[];
+        readonly archived: boolean;
+    }): Promise<number | undefined>;
+    readonly workspaceId: string | undefined;
+}
 
 // @public
 export interface BookmarkChanges {
@@ -3263,6 +3308,11 @@ export function resendInvitation(input: InvitationActionDependencies, ask: Invit
 
 // @public
 export function resetInstanceAccountMfa(input: InstanceRecoveryDependencies, ask: InstanceMfaResetAsk): Promise<InstanceMfaResetOutcome>;
+
+// @public
+export function restoreBookmarks(tx: BookmarkArchiveTransaction, request: BookmarkArchiveRequest): Promise<{
+    readonly restored: number;
+}>;
 
 // @public
 export function revokeInvitation(input: Pick<InvitationActionDependencies, "store" | "audit">, ask: InvitationActionAsk): Promise<InvitationRevokeOutcome>;

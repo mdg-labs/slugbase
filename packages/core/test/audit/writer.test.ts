@@ -51,7 +51,7 @@ function memoryStore(): { store: AuditStore; records: AuditRecord[] } {
 
 describe("the audit catalog", () => {
   it("groups the recorded actions by category and declares the metadata of each", () => {
-    expect(AUDIT_ACTION_NAMES).toEqual(["workspace.created", "workspace.renamed", "workspace.settings_changed", "workspace.deletion_requested", "workspace.ownership_transferred", "member.role_changed", "member.removed", "member.left", "member.joined", "member.instance_admin_joined", "invitation.created", "invitation.resent", "invitation.link_created", "invitation.revoked"]);
+    expect(AUDIT_ACTION_NAMES).toEqual(["workspace.created", "workspace.renamed", "workspace.settings_changed", "workspace.deletion_requested", "workspace.ownership_transferred", "member.role_changed", "member.removed", "member.left", "member.joined", "member.instance_admin_joined", "invitation.created", "invitation.resent", "invitation.link_created", "invitation.revoked", "bookmark.archived", "bookmark.restored"]);
     for (const name of AUDIT_ACTION_NAMES) {
       expect(AUDIT_ACTIONS[name].category).toBe(name.split(".")[0]);
     }
@@ -69,6 +69,8 @@ describe("the audit catalog", () => {
     expect(Object.keys(AUDIT_ACTIONS["invitation.resent"].metadata)).toEqual(["role"]);
     expect(Object.keys(AUDIT_ACTIONS["invitation.link_created"].metadata)).toEqual(["role"]);
     expect(Object.keys(AUDIT_ACTIONS["invitation.revoked"].metadata)).toEqual(["role"]);
+    expect(Object.keys(AUDIT_ACTIONS["bookmark.archived"].metadata)).toEqual(["count"]);
+    expect(Object.keys(AUDIT_ACTIONS["bookmark.restored"].metadata)).toEqual(["count"]);
   });
 
   it("knows its action names", () => {
@@ -170,6 +172,18 @@ describe("prepareAuditRecord", () => {
     expect(() => prepareAuditRecord(created({ workspaceId: "not-a-uuid" }), ids())).toThrow(AuditMetadataError);
     expect(() => prepareAuditRecord(created({ actor: { type: "account", accountId: ACCOUNT, label: "  " } }), ids())).toThrow(AuditMetadataError);
     expect(() => prepareAuditRecord(created({ entity: { type: "workspace", id: "x" } }), ids())).toThrow(AuditMetadataError);
+  });
+
+  it("takes a count as a whole number in decimal text and nothing else", () => {
+    const event = (count: string) => ({ action: "bookmark.archived", workspaceId: WORKSPACE, actor: { type: "system", label: "system" }, metadata: { count }, ipPrefix: null }) as AuditEventInput;
+
+    for (const count of ["0", "1", "250", "999999999"]) {
+      expect(prepareAuditRecord(event(count), ids()).metadata).toEqual({ count });
+    }
+    for (const count of ["", "-1", "01", "1.5", "1e3", " 1", "1 ", "ten", "1000000000", "https://example.com/"]) {
+      expect(() => prepareAuditRecord(event(count), ids()), count).toThrow(AuditMetadataError);
+    }
+    expect(() => prepareAuditRecord({ ...event("1"), metadata: { count: "1", title: "A title" } }, ids())).toThrow(AuditMetadataError);
   });
 
   it("copies the metadata, so a later change to the input does not reach the record", () => {

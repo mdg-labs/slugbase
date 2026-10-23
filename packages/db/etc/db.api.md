@@ -6,9 +6,10 @@
 
 import type { AccountDeletionScope } from '@slugbase/core';
 import type { AuditRecord } from '@slugbase/core';
-import type { BookmarkRecord } from '@slugbase/core';
-import type { BookmarkUpdateRequest } from '@slugbase/core';
-import type { BookmarkUpdateResult } from '@slugbase/core';
+import { BookmarkArchiveTransaction } from '@slugbase/core';
+import { BookmarkRecord } from '@slugbase/core';
+import { BookmarkUpdateRequest } from '@slugbase/core';
+import { BookmarkUpdateResult } from '@slugbase/core';
 import type { CredentialTokenPurpose } from '@slugbase/core';
 import type { EntitlementVersionWriter } from '@slugbase/core';
 import { InferInsertModel } from 'drizzle-orm';
@@ -40,7 +41,7 @@ import type { InvitationSignupResult } from '@slugbase/core';
 import type { InvitationSignupSession } from '@slugbase/core';
 import type { InvitationStore } from '@slugbase/core';
 import type { MemberRoleStore } from '@slugbase/core';
-import type { NewBookmark } from '@slugbase/core';
+import { NewBookmark } from '@slugbase/core';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import { SQL } from 'drizzle-orm';
@@ -276,6 +277,9 @@ export type BackupCodesRegenerationOutcome =
 /** The account does not exist, is disabled or has MFA off; nothing was written. */
 | "not_enabled";
 
+// @public
+export function bookmarkArchiveTransaction(tx: TenantTx, newId: () => string): BookmarkArchiveTransaction;
+
 // @public (undocumented)
 export interface BookmarkCreation {
     // (undocumented)
@@ -307,6 +311,10 @@ export interface BookmarkRepository {
         readonly bookmarkId: string;
         readonly ownerId: string;
     }): Promise<boolean>;
+    setArchived(request: {
+        readonly bookmarkIds: readonly string[];
+        readonly archived: boolean;
+    }): Promise<number | undefined>;
     update(request: BookmarkUpdateRequest): Promise<BookmarkUpdateResult>;
 }
 

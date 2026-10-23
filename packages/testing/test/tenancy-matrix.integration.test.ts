@@ -1,4 +1,4 @@
-import { listRepositoryMethods, TenantContextError, type RepositoryMethodEntry } from "@slugbase/db";
+import { bookmarkRepository, listRepositoryMethods, TenantContextError, type RepositoryMethodEntry } from "@slugbase/db";
 import type { TestDatabase } from "@slugbase/db/testing";
 import { beforeAll, describe, expect, it } from "vitest";
 import { useTestDatabase } from "../src/db.ts";
@@ -587,5 +587,62 @@ describe("RLS-only mode as an instance admin outside both workspaces", () => {
       samples: { [victim.repository]: victim.sample },
     });
     expect(await Promise.all([victim.fixture.checksum(PROBE_WORKSPACE_A), victim.fixture.checksum(PROBE_WORKSPACE_B)])).toEqual(before);
+  });
+});
+
+// The archive operation of doc 01 section 13.3 writes `bookmarks.plan_archived_at` and the counters of `workspaces`, which the application
+// role cannot write through a repository, so it is not an entry of the registry the matrix above runs: it is the system operation
+// `sys_bookmark_archive_set`, whose own guard is the workspace of the transaction and its membership. This runs it the way the RLS-only
+// mode runs a method, inside withTenant(A) and with the application layer left out (the function called by hand, naming B), against
+// the rows of B.
+describe("the archive operation across workspaces", () => {
+  const MEMBER_OF_A = "0192f3a0-3333-7000-8000-00000000a0a1";
+  const BOOKMARK_OF_A = "0192f3a0-2222-7000-8000-00000000a0b1";
+  const BOOKMARK_OF_B = "0192f3a0-2222-7000-8000-00000000b0b1";
+
+  interface Stored {
+    readonly archived: number;
+    readonly counter: number;
+    readonly version: number;
+  }
+
+  async function storedOf(workspaceId: string): Promise<Stored> {
+    const rows = await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      return tx<Stored[]>`
+        SELECT (SELECT count(*) FROM bookmarks WHERE workspace_id = ${workspaceId} AND plan_archived_at IS NOT NULL)::int AS archived,
+               bookmark_count AS counter, entitlement_version AS version
+        FROM workspaces WHERE id = ${workspaceId}`;
+    });
+    return rows[0] ?? { archived: -1, counter: -1, version: -1 };
+  }
+
+  it("changes no bookmark, counter or version of B from a transaction acting in A, through the repository or by naming B to the function", async () => {
+    await seedWorkspaceRows(database(), [
+      { id: PROBE_WORKSPACE_A, bookmarkId: BOOKMARK_OF_A },
+      { id: PROBE_WORKSPACE_B, bookmarkId: BOOKMARK_OF_B },
+    ]);
+    await database().owner.begin(async (tx) => {
+      await tx`SELECT set_config('app.account_id', ${MEMBER_OF_A}, true)`;
+      await tx`INSERT INTO accounts (id, email, display_name) VALUES (${MEMBER_OF_A}, 'archive-matrix@example.test', 'Matrix member') ON CONFLICT DO NOTHING`;
+    });
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`INSERT INTO workspace_members (workspace_id, account_id, role) VALUES (${PROBE_WORKSPACE_A}, ${MEMBER_OF_A}, 'owner') ON CONFLICT DO NOTHING`;
+    });
+    const before = { a: await storedOf(PROBE_WORKSPACE_A), b: await storedOf(PROBE_WORKSPACE_B) };
+    const context = { accountId: MEMBER_OF_A, workspaceId: PROBE_WORKSPACE_A, requestId: "matrix-archive" };
+
+    const byRepository = await database().tenant.withTenant(context, (tx) => bookmarkRepository(tx).setArchived({ bookmarkIds: [BOOKMARK_OF_B], archived: true }));
+    const namingB = await database().app.begin(async (tx) => {
+      await tx`SELECT set_config('app.account_id', ${MEMBER_OF_A}, true), set_config('app.workspace_id', ${PROBE_WORKSPACE_A}, true)`;
+      const rows = await tx<{ changed: number | null }[]>`
+        SELECT public.sys_bookmark_archive_set(${PROBE_WORKSPACE_B}::uuid, ${`{${BOOKMARK_OF_B}}`}::uuid[], true) AS changed`;
+      return rows[0]?.changed;
+    });
+
+    expect(byRepository).toBe(0);
+    expect(namingB).toBeNull();
+    expect({ a: await storedOf(PROBE_WORKSPACE_A), b: await storedOf(PROBE_WORKSPACE_B) }).toEqual({ a: before.a, b: before.b });
   });
 });
