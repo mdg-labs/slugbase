@@ -25,14 +25,22 @@ export interface RepositorySample {
 export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
 
 /**
- * The inputs of the committed contract that carry the identifier of a row. `getBookmark.id`, `updateBookmark.id` and `deleteBookmark.id` take
- * a bookmark; the other tenant-scoped operations that take an identifier (a member, a team, an invitation) are mapped by the suites that hold
- * a fixture with those rows.
+ * The inputs of the committed contract that carry the identifier of a bookmark: the path parameter `id` of `getBookmark`, `updateBookmark`,
+ * `deleteBookmark` and `openBookmark`, the query parameter `hasSlug` of `listBookmarks` and `listBookmarkIds` and the body inputs `ids[]` and
+ * `filter.hasSlug` of `bulkBookmarks`. `hasSlug` is a flag, not an identifier, but the classifier selects every name ending in `Slug`, so it is
+ * mapped like the others. The other tenant-scoped operations that take an identifier (a member, a team, an invitation) are mapped by the
+ * suites that hold a fixture with those rows. A test over the committed `openapi.json` fails when a bookmark operation has an input without an
+ * entry here.
  */
 export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
   "getBookmark.id": "bookmark",
   "updateBookmark.id": "bookmark",
   "deleteBookmark.id": "bookmark",
+  "openBookmark.id": "bookmark",
+  "listBookmarks.hasSlug": "bookmark",
+  "listBookmarkIds.hasSlug": "bookmark",
+  "bulkBookmarks.ids[]": "bookmark",
+  "bulkBookmarks.filter.hasSlug": "bookmark",
 };
 
 /**
