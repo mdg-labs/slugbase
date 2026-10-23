@@ -64,6 +64,10 @@ existing line by adding its PR number.
 
 - **refreshed only on refusal** — a client cache of a server-decided grant (the entitlements behind a UI gate) never goes stale and is refreshed only when the client itself is refused, so a grant made elsewhere (another tab, an upgrade) leaves the gate closed until a reload — PR 541
 
+## Input handling
+
+- **quadratic regex** — a regular expression with an end-anchored repetition (a trim's `[\s]+$` branch) runs on input whose length the function itself does not bound, relying on a caller's cap, so a long run of the repeated character followed by another one takes quadratic time — PR 558
+
 ## Shared helpers
 
 - **copy drops side duties** — a second copy of a shared routine (a rate-limit take) keeps its answers but leaves out the original's side duties (the rejection metric, the error report), so the copy's refusals and failures never reach monitoring — PR 520
