@@ -1,5 +1,6 @@
 import type { EntitlementLimit } from "../entitlements/catalog.ts";
 import type { DomainEvent } from "../events/catalog.ts";
+import type { BookmarkUpdateRequest, BookmarkUpdateResult } from "./update.ts";
 import { normalizeBookmarkUrl, type BookmarkUrlRefusal } from "./url.ts";
 
 // Creating a bookmark (doc 02 sections 5.1 and 5.2, doc 04 section 10.6, doc 01 section 7.5, doc 10 T1, T11, T12 and
@@ -74,6 +75,17 @@ export interface BookmarkStore {
   create(request: BookmarkCreationRequest): Promise<BookmarkStoreResult>;
   /** The bookmark of the workspace of the transaction with that identifier, whoever owns it; undefined when there is none. */
   find(bookmarkId: string): Promise<BookmarkRecord | undefined>;
+  /**
+   * Changes the bookmark of the workspace of the transaction that `request.ownerId` owns and that is not plan-archived, under the
+   * row's lock: a version outside `request.expectedVersions` is `stale`, a patch that names the values the bookmark has is
+   * `unchanged`, and the rest is written and moves the version by one. Nothing is written for `stale`, `unchanged` and `not_found`.
+   */
+  update(request: BookmarkUpdateRequest): Promise<BookmarkUpdateResult>;
+  /**
+   * Deletes the bookmark of the workspace of the transaction that `request.ownerId` owns, a plan-archived one included, and gives
+   * its place under `bookmarks.max` back unless it was archived. False, with nothing written, when there is no such bookmark.
+   */
+  remove(request: { readonly bookmarkId: string; readonly ownerId: string }): Promise<boolean>;
 }
 
 export interface BookmarkCreationDependencies {

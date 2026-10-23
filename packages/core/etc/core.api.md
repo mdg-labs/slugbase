@@ -921,6 +921,18 @@ export const BOOKMARK_TITLE_MAX_LENGTH = 300;
 // @public
 export const BOOKMARK_URL_MAX_LENGTH = 2048;
 
+// @public
+export interface BookmarkChanges {
+    // (undocumented)
+    readonly description?: string | null;
+    // (undocumented)
+    readonly pinned?: boolean;
+    // (undocumented)
+    readonly title?: string;
+    // (undocumented)
+    readonly url?: BookmarkUrl;
+}
+
 // @public (undocumented)
 export interface BookmarkCreationAsk {
     readonly accountId: string;
@@ -973,9 +985,34 @@ export interface BookmarkCreationRequest {
     readonly events: readonly DomainEvent<"bookmark.created">[];
 }
 
+// @public (undocumented)
+export interface BookmarkDeletionAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly bookmarkId: string;
+}
+
+// @public (undocumented)
+export interface BookmarkDeletionDependencies {
+    // (undocumented)
+    readonly store: Pick<BookmarkStore, "remove">;
+}
+
 // @public
 export interface BookmarkEntitlements {
     limit(accountId: string, workspaceId: string, request: object): Promise<EntitlementLimit | undefined>;
+}
+
+// @public
+export interface BookmarkPatch {
+    // (undocumented)
+    readonly description?: string | null;
+    // (undocumented)
+    readonly pinned?: boolean;
+    // (undocumented)
+    readonly title?: string;
+    // (undocumented)
+    readonly url?: string;
 }
 
 // @public (undocumented)
@@ -1025,6 +1062,11 @@ export interface BookmarkRecord {
 export interface BookmarkStore {
     create(request: BookmarkCreationRequest): Promise<BookmarkStoreResult>;
     find(bookmarkId: string): Promise<BookmarkRecord | undefined>;
+    remove(request: {
+        readonly bookmarkId: string;
+        readonly ownerId: string;
+    }): Promise<boolean>;
+    update(request: BookmarkUpdateRequest): Promise<BookmarkUpdateResult>;
 }
 
 // @public (undocumented)
@@ -1040,6 +1082,62 @@ export type BookmarkStoreResult = {
 /** The workspace of the transaction cannot be reached: it does not exist, is being deleted, or the account is no member. */
 | {
     readonly kind: "unavailable";
+};
+
+// @public (undocumented)
+export interface BookmarkUpdateAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly bookmarkId: string;
+    // (undocumented)
+    readonly expectedVersions: readonly number[] | undefined;
+    // (undocumented)
+    readonly patch: BookmarkPatch;
+}
+
+// @public (undocumented)
+export interface BookmarkUpdateDependencies {
+    // (undocumented)
+    readonly store: Pick<BookmarkStore, "update">;
+}
+
+// @public (undocumented)
+export type BookmarkUpdateOutcome = BookmarkUpdateResult
+/** The new URL is refused; nothing was written. */
+| {
+    readonly kind: "url_refused";
+    readonly reason: BookmarkUrlRefusal;
+};
+
+// @public (undocumented)
+export interface BookmarkUpdateRequest {
+    // (undocumented)
+    readonly bookmarkId: string;
+    // (undocumented)
+    readonly changes: BookmarkChanges;
+    readonly expectedVersions: readonly number[] | undefined;
+    readonly ownerId: string;
+}
+
+// @public (undocumented)
+export type BookmarkUpdateResult =
+/** The bookmark was changed; `bookmark` is the row after the change, its version moved by one. */
+    {
+    readonly kind: "updated";
+    readonly bookmark: BookmarkRecord;
+}
+/** The patch names the values the bookmark already has; nothing was written and the version stays. */
+| {
+    readonly kind: "unchanged";
+    readonly bookmark: BookmarkRecord;
+}
+/** The version of the bookmark, read under its lock, is none of the accepted ones; nothing was written. */
+| {
+    readonly kind: "stale";
+}
+/** The caller owns no such bookmark; nothing was written. */
+| {
+    readonly kind: "not_found";
 };
 
 // @public (undocumented)
@@ -1178,6 +1276,9 @@ export type CredentialTokenPurpose = (typeof CREDENTIAL_TOKEN_PURPOSES)[number];
 
 // @public
 export function deleteAccount<Code extends string>(input: AccountDeletionDependencies<Code>, ask: AccountDeletionAsk): Promise<AccountDeletionOutcome<Code>>;
+
+// @public
+export function deleteBookmark(input: BookmarkDeletionDependencies, ask: BookmarkDeletionAsk): Promise<boolean>;
 
 // @public
 export function deleteInstanceAccount<Code extends string>(input: InstanceAccountDeletionDependencies<Code>, ask: InstanceAccountDeletionAsk): Promise<InstanceAccountDeletionOutcome<Code>>;
@@ -3277,6 +3378,9 @@ export function unconfigured(): Adapters;
 
 // @public
 export const UNSET_INSTANCE_SETTINGS: InstanceSettings;
+
+// @public
+export function updateBookmark(input: BookmarkUpdateDependencies, ask: BookmarkUpdateAsk): Promise<BookmarkUpdateOutcome>;
 
 // @public
 export function updateInstanceAccount(input: InstanceAccountDependencies, ask: InstanceAccountUpdateAsk): Promise<InstanceAccountUpdateOutcome>;

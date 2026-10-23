@@ -225,6 +225,10 @@ export const FIXTURES: ContractFixtures = {
   // workspace B; the route tests read the walker's own bookmarks, and the matrix puts the bookmarks of workspace B in the path.
   createBookmark: { body: { url: "https://example.com/walker", title: "Walker bookmark" } },
   getBookmark: { path: { id: UNKNOWN_BOOKMARK_ID }, status: 404, foreign: { path: { id: UNKNOWN_BOOKMARK_ID } } },
+  // The change and the deletion name a bookmark by identifier too, so their valid request is the declared 404 for the same reason: a bookmark no
+  // workspace holds, and the matrix puts the bookmarks of workspace B in the path. The change takes a body, which is valid whoever would hold the bookmark.
+  updateBookmark: { path: { id: UNKNOWN_BOOKMARK_ID }, body: { title: "Walker bookmark" }, status: 404, foreign: { path: { id: UNKNOWN_BOOKMARK_ID }, body: { title: "Walker bookmark" } } },
+  deleteBookmark: { path: { id: UNKNOWN_BOOKMARK_ID }, status: 404, foreign: { path: { id: UNKNOWN_BOOKMARK_ID } } },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

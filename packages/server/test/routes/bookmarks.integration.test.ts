@@ -3,11 +3,12 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { queuedJobCount } from "../invitations/support.ts";
 import { bearer, HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
 
-// POST /api/v1/bookmarks and GET /api/v1/bookmarks/{id} (doc 04 sections 2.3, 2.4, 3.2 and 10.6, doc 02 section 5.1, doc 05 sections
-// 2.2 and 2.4, doc 10 T1, T2, T12 and T13), through the whole chain over the migrated database: what is stored for the URL, the title
-// and the description, the answer of a creation (201, Location, ETag, the version), that only the owner reads a bookmark and that
-// another member's, another workspace's and an unknown one are the same 404, that a token needs the write scope to create and the read
-// scope to read, and that a refused creation writes, counts and announces nothing.
+// POST, GET, PATCH and DELETE of /api/v1/bookmarks (doc 04 sections 2.3, 2.4, 3.2 and 10.6, doc 02 sections 5.1, 5.3 and 5.6, doc 05
+// sections 2.2 and 2.4, doc 10 T1, T2, T12 and T13), through the whole chain over the migrated database: what is stored for the URL, the
+// title and the description, the answer of a creation (201, Location, ETag, the version), that only the owner reads, changes and deletes
+// a bookmark and that another member's, another workspace's and an unknown one are the same 404, that a token needs the write scope to
+// create, change and delete and the read scope to read, that a refused creation writes, counts and announces nothing, that a change
+// is a merge patch under an optimistic version check, and that a delete is hard and gives the place under the ceiling back.
 
 const TEST_TIMEOUT_MS = 60_000;
 const BOOKMARKS = "/api/v1/bookmarks";
@@ -56,6 +57,9 @@ async function problemOf(response: Response): Promise<Problem> {
 
 const create = (world: World, as: Person, body: unknown) => send(world, "POST", BOOKMARKS, { cookie: as.cookie }, body);
 const read = (world: World, as: Person, id: string) => send(world, "GET", `${BOOKMARKS}/${id}`, { cookie: as.cookie });
+const patch = (world: World, as: Person, id: string, body: unknown, headers: Record<string, string> = {}) =>
+  send(world, "PATCH", `${BOOKMARKS}/${id}`, { cookie: as.cookie, ...headers }, body);
+const remove = (world: World, as: Person, id: string) => send(world, "DELETE", `${BOOKMARKS}/${id}`, { cookie: as.cookie });
 
 async function created(world: World, as: Person, body: unknown): Promise<Bookmark> {
   const response = await create(world, as, body);
@@ -352,5 +356,371 @@ describe("API tokens", () => {
 
     expect((await send(world, "GET", `${BOOKMARKS}/${made.id}`, bearer(memberToken))).status).toBe(404);
     expect((await send(world, "GET", `${BOOKMARKS}/${made.id}`, bearer(strangerToken))).status).toBe(404);
+  });
+});
+
+interface Row {
+  readonly url: string;
+  readonly url_canonical: string;
+  readonly host: string;
+  readonly title: string;
+  readonly description: string | null;
+  readonly pinned_at: Date | null;
+  readonly version: number;
+  readonly plan_archived_at: Date | null;
+}
+
+async function rowOf(id: string): Promise<Row | undefined> {
+  const rows = await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    return tx<Row[]>`SELECT url, url_canonical, host, title, description, pinned_at, version, plan_archived_at FROM bookmarks WHERE id = ${id}`;
+  });
+  return rows[0];
+}
+
+async function archive(id: string): Promise<void> {
+  await database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    await tx`UPDATE bookmarks SET plan_archived_at = now() WHERE id = ${id}`;
+    await tx`UPDATE workspaces SET bookmark_count = bookmark_count - 1 WHERE id = (SELECT workspace_id FROM bookmarks WHERE id = ${id})`;
+  });
+}
+
+describe("updateBookmark", () => {
+  it("applies a merge patch to the title, description, destination and pin, derives the canonical form and host again and bumps the version", async () => {
+    const world = harness.serve();
+    const { owner } = await setup(world);
+    const made = await created(world, owner, { url: "https://example.com/docs", title: "Docs", description: "The docs" });
+
+    const response = await patch(world, owner, made.id, { url: "HTTPS://Bücher.Example:443/New/?b=2&a=1&utm_source=feed#top", title: "  New title  ", description: "New description", pinned: true });
+
+    expect(response.status).toBe(200);
+    const bookmark = (await response.json()) as Bookmark;
+    expect(bookmark).toMatchObject({
+      id: made.id,
+      ownerId: owner.account.id,
+      url: "https://xn--bcher-kva.example/New/?b=2&a=1&utm_source=feed#top",
+      host: "xn--bcher-kva.example",
+      title: "New title",
+      description: "New description",
+      pinned: true,
+      slug: null,
+      forwarding: false,
+      version: 2,
+      createdAt: made.createdAt,
+    });
+    expect(response.headers.get("etag")).toBe('"2"');
+    expect(await rowOf(made.id)).toMatchObject({ url_canonical: "https://xn--bcher-kva.example/New?a=1&b=2", host: "xn--bcher-kva.example", version: 2 });
+    expect((await rowOf(made.id))?.pinned_at).toBeInstanceOf(Date);
+    expect((await (await read(world, owner, made.id)).json()) as Bookmark).toEqual(bookmark);
+  });
+
+  it("leaves a field that is left out as it is, clears the description with null and with an empty string, and unpins", async () => {
+    const world = harness.serve();
+    const { owner } = await setup(world);
+    const made = await created(world, owner, { url: "https://example.com/docs", title: "Docs", description: "The docs", pinned: true });
+
+    const titleOnly = (await (await patch(world, owner, made.id, { title: "Renamed" })).json()) as Bookmark;
+    expect(titleOnly).toMatchObject({ title: "Renamed", description: "The docs", pinned: true, url: "https://example.com/docs", version: 2 });
+
+    const cleared = (await (await patch(world, owner, made.id, { description: null, pinned: false })).json()) as Bookmark;
+    expect(cleared).toMatchObject({ title: "Renamed", description: null, pinned: false, version: 3 });
+    expect((await rowOf(made.id))?.pinned_at).toBeNull();
+
+    await patch(world, owner, made.id, { description: "Back" });
+    const emptied = (await (await patch(world, owner, made.id, { description: "   " })).json()) as Bookmark;
+    expect(emptied).toMatchObject({ description: null, version: 5 });
+  });
+
+  it("answers 200 with the unchanged ETag and writes nothing for an empty patch and for a patch that names the values the bookmark has", async () => {
+    const world = harness.serve();
+    const { owner } = await setup(world);
+    const made = await created(world, owner, { url: "https://example.com/docs", title: "Docs", description: "The docs", pinned: true });
+    const before = await rowOf(made.id);
+
+    for (const body of [{}, { title: "Docs" }, { url: "https://EXAMPLE.com:443/docs", description: "The docs", pinned: true }]) {
+      const response = await patch(world, owner, made.id, body);
+      expect(response.status, JSON.stringify(body)).toBe(200);
+      expect(response.headers.get("etag")).toBe('"1"');
+      expect(((await response.json()) as Bookmark).updatedAt).toBe(made.updatedAt);
+    }
+    expect(await rowOf(made.id)).toEqual(before);
+  });
+
+  it("refuses a stale If-Match with 412 precondition_failed and writes nothing, and applies a current one, a list holding it and *", async () => {
+    const world = harness.serve();
+    const { owner } = await setup(world);
+    const made = await created(world, owner, { url: "https://example.com/docs", title: "Docs" });
+    expect((await patch(world, owner, made.id, { title: "Second" }, { "if-match": '"1"' })).status).toBe(200);
+
+    const stale = await patch(world, owner, made.id, { title: "Overwrite" }, { "if-match": '"1"' });
+
+    expect(stale.status).toBe(412);
+    expect((await problemOf(stale)).code).toBe("precondition_failed");
+    expect(await rowOf(made.id)).toMatchObject({ title: "Second", version: 2 });
+    const current = await patch(world, owner, made.id, { title: "Third" }, { "if-match": '"2"' });
+    expect(current.status).toBe(200);
+    expect(current.headers.get("etag")).toBe('"3"');
+    expect((await patch(world, owner, made.id, { title: "Fourth" }, { "if-match": '"1", "3"' })).status).toBe(200);
+    expect((await patch(world, owner, made.id, { title: "Fifth" }, { "if-match": "*" })).status).toBe(200);
+    expect(await rowOf(made.id)).toMatchObject({ title: "Fifth", version: 5 });
+    for (const header of ['W/"5"', "5", "", '"abc"']) {
+      expect((await patch(world, owner, made.id, { title: "Weak" }, { "if-match": header })).status, header).toBe(412);
+    }
+    expect(await rowOf(made.id)).toMatchObject({ title: "Fifth", version: 5 });
+  });
+
+  it("applies a patch without If-Match, as an API token does, and answers the ETag of the new version", async () => {
+    const world = harness.serve();
+    const { owner, shared } = await setup(world);
+    const made = await created(world, owner, { url: "https://example.com/docs", title: "Docs" });
+    const token = await harness.token(shared.workspaceId, owner, "read-write");
+
+    const response = await send(world, "PATCH", `${BOOKMARKS}/${made.id}`, bearer(token), { title: "By token" });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("etag")).toBe('"2"');
+    expect(((await response.json()) as Bookmark).title).toBe("By token");
+  });
+
+  it("answers 404, and leaves the row and the counter as they are, when another member of the workspace patches the owner's private bookmark by id (T2)", async () => {
+    const world = harness.serve();
+    const { owner, member, shared } = await setup(world);
+    const theirs = await created(world, owner, { url: "https://example.com/private", title: "Owner's private bookmark" });
+    const before = await rowOf(theirs.id);
+    const counted = await stored(shared.workspaceId);
+
+    const response = await patch(world, member, theirs.id, { title: "Hijacked", url: "https://evil.example/", description: "x", pinned: true });
+    const withVersion = await patch(world, member, theirs.id, { title: "Hijacked" }, { "if-match": '"1"' });
+    const staleVersion = await patch(world, member, theirs.id, { title: "Hijacked" }, { "if-match": '"9"' });
+
+    for (const refused of [response, withVersion, staleVersion]) {
+      expect(refused.status).toBe(404);
+      const problem = await problemOf(refused);
+      expect(problem.code).toBe("not_found");
+      expect(JSON.stringify(problem)).not.toContain("private");
+    }
+    expect(await rowOf(theirs.id)).toEqual(before);
+    expect(await stored(shared.workspaceId)).toEqual(counted);
+  });
+
+  it("answers 404 for a bookmark of another workspace, an unknown one and a plan-archived one, whichever version the caller names", async () => {
+    const world = harness.serve();
+    const { owner, stranger, other } = await setup(world);
+    const ofOwner = await created(world, owner, { url: "https://example.com/mine", title: "Mine" });
+    const archived = await created(world, owner, { url: "https://example.com/archived", title: "Archived" });
+    await archive(archived.id);
+    const ofStranger = await created(world, stranger, { url: "https://example.com/theirs", title: "Theirs" });
+
+    expect((await patch(world, stranger, ofOwner.id, { title: "Hijacked" })).status).toBe(404);
+    expect((await patch(world, owner, ofStranger.id, { title: "Hijacked" })).status).toBe(404);
+    expect((await patch(world, owner, "0192f3a0-aaaa-7000-8000-00000000dead", { title: "Nothing" }, { "if-match": '"1"' })).status).toBe(404);
+    // Archiving moved the version to 2; the caller names the version the row has and is still refused.
+    expect((await patch(world, owner, archived.id, { title: "Edited" }, { "if-match": '"2"' })).status).toBe(404);
+    expect(await rowOf(ofOwner.id)).toMatchObject({ title: "Mine", version: 1 });
+    expect(await rowOf(ofStranger.id)).toMatchObject({ title: "Theirs", version: 1 });
+    expect(await rowOf(archived.id)).toMatchObject({ title: "Archived", version: 2 });
+    expect((await stored(other.workspaceId)).rows).toBe(1);
+  });
+
+  it("refuses a URL that is not http or https with 422 url_not_allowed, and an empty, over-long or malformed one with validation_failed, and writes nothing", async () => {
+    const world = harness.serve();
+    const { owner } = await setup(world);
+    const made = await created(world, owner, { url: "https://example.com/docs", title: "Docs" });
+
+    for (const url of ["javascript:alert(1)", "data:text/html,x", "file:///etc/passwd", "//example.com/", "example.com"]) {
+      const response = await patch(world, owner, made.id, { url });
+      expect(response.status, url).toBe(422);
+      expect(await problemOf(response), url).toMatchObject({ code: "url_not_allowed", errors: [{ path: "url", code: "url_not_allowed" }] });
+    }
+    for (const url of ["", `https://example.com/${"a".repeat(2048)}`, "https://", "https://exa mple.com/"]) {
+      const response = await patch(world, owner, made.id, { url });
+      expect(response.status, url.slice(0, 30)).toBe(422);
+      const problem = await problemOf(response);
+      expect(problem.code).toBe("validation_failed");
+      expect(problem.errors?.map((error) => error.path)).toEqual(["url"]);
+    }
+    expect(await rowOf(made.id)).toMatchObject({ url: "https://example.com/docs", version: 1 });
+  });
+
+  it("refuses a blank, over-long or null title, an over-long description, null where it is not allowed and a field the operation does not declare, with 422 validation_failed", async () => {
+    const world = harness.serve();
+    const { owner } = await setup(world);
+    const made = await created(world, owner, { url: "https://example.com/docs", title: "Docs" });
+
+    const bodies: [unknown, string][] = [
+      [{ title: "" }, "title"],
+      [{ title: "   " }, "title"],
+      [{ title: "t".repeat(301) }, "title"],
+      [{ title: null }, "title"],
+      [{ url: null }, "url"],
+      [{ pinned: null }, "pinned"],
+      [{ description: "d".repeat(1001) }, "description"],
+      [{ pinned: "yes" }, "pinned"],
+      [{ slug: "docs" }, "slug"],
+      [{ forwarding: true }, "forwarding"],
+      [{ ownerId: "0192f3a0-aaaa-7000-8000-000000000001" }, "ownerId"],
+      [{ version: 9 }, "version"],
+      [{ workspaceId: "0192f3a0-aaaa-7000-8000-000000000001" }, "workspaceId"],
+      [{ planArchivedAt: null }, "planArchivedAt"],
+    ];
+    for (const [body, path] of bodies) {
+      const response = await patch(world, owner, made.id, body);
+      expect(response.status, JSON.stringify(body)).toBe(422);
+      const problem = await problemOf(response);
+      expect(problem.code).toBe("validation_failed");
+      expect(problem.errors?.map((error) => error.path)).toContain(path);
+    }
+    expect((await patch(world, owner, "not-a-uuid", { title: "X" })).status).toBe(422);
+    expect(await rowOf(made.id)).toMatchObject({ title: "Docs", version: 1 });
+  });
+
+  it("is refused without a session (401), from another site (403 cross_site_request) and to a read-only token (403 token_scope), and writes nothing", async () => {
+    const world = harness.serve();
+    const { owner, shared } = await setup(world);
+    const made = await created(world, owner, { url: "https://example.com/docs", title: "Docs" });
+    const readOnly = await harness.token(shared.workspaceId, owner, "read");
+
+    expect((await send(world, "PATCH", `${BOOKMARKS}/${made.id}`, {}, { title: "Anonymous" })).status).toBe(401);
+    const crossSite = await send(world, "PATCH", `${BOOKMARKS}/${made.id}`, { cookie: owner.cookie, origin: "https://evil.example" }, { title: "Cross site" });
+    expect(crossSite.status).toBe(403);
+    expect((await problemOf(crossSite)).code).toBe("cross_site_request");
+    const scoped = await send(world, "PATCH", `${BOOKMARKS}/${made.id}`, bearer(readOnly), { title: "Read-only" });
+    expect(scoped.status).toBe(403);
+    expect((await problemOf(scoped)).code).toBe("token_scope");
+    expect(await rowOf(made.id)).toMatchObject({ title: "Docs", version: 1 });
+  });
+
+  it("lets two patches against one version make one change: the second is refused with 412", async () => {
+    const world = harness.serve();
+    const { owner } = await setup(world);
+    const made = await created(world, owner, { url: "https://example.com/docs", title: "Docs" });
+
+    const [first, second] = await Promise.all([
+      patch(world, owner, made.id, { title: "From tab one" }, { "if-match": '"1"' }),
+      patch(world, owner, made.id, { title: "From tab two" }, { "if-match": '"1"' }),
+    ]);
+
+    expect([first.status, second.status].sort()).toEqual([200, 412]);
+    expect((await rowOf(made.id))?.version).toBe(2);
+  });
+});
+
+describe("deleteBookmark", () => {
+  it("deletes the caller's bookmark for good with 204, gives its place back, leaves no row with its slug and answers 404 to a repeat", async () => {
+    const world = harness.serve();
+    const { owner, shared } = await setup(world);
+    const made = await created(world, owner, { url: "https://example.com/docs", title: "Docs" });
+    const other = await created(world, owner, { url: "https://example.com/other", title: "Other" });
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`UPDATE bookmarks SET slug = 'docs', forwarding = true WHERE id = ${made.id}`;
+    });
+    expect((await stored(shared.workspaceId)).counter).toBe(2);
+
+    const response = await remove(world, owner, made.id);
+
+    expect(response.status).toBe(204);
+    expect(await response.text()).toBe("");
+    expect(await rowOf(made.id)).toBeUndefined();
+    expect(await rowOf(other.id)).toBeDefined();
+    expect((await stored(shared.workspaceId))).toMatchObject({ rows: 1, counter: 1 });
+    expect((await read(world, owner, made.id)).status).toBe(404);
+    const again = await remove(world, owner, made.id);
+    expect(again.status).toBe(404);
+    expect((await problemOf(again)).code).toBe("not_found");
+    expect((await stored(shared.workspaceId))).toMatchObject({ rows: 1, counter: 1 });
+    // The slug lives on the row, so no row holds it once the bookmark is gone.
+    const holders = await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      return tx<{ n: number }[]>`SELECT count(*)::int AS n FROM bookmarks WHERE workspace_id = ${shared.workspaceId} AND slug = 'docs'`;
+    });
+    expect(holders[0]?.n).toBe(0);
+  });
+
+  it("answers 404, and leaves the row and the counter as they are, when another member of the workspace deletes the owner's private bookmark by id (T2)", async () => {
+    const world = harness.serve();
+    const { owner, member, shared } = await setup(world);
+    const theirs = await created(world, owner, { url: "https://example.com/private", title: "Owner's private bookmark" });
+    const before = await rowOf(theirs.id);
+    const counted = await stored(shared.workspaceId);
+
+    const response = await remove(world, member, theirs.id);
+
+    expect(response.status).toBe(404);
+    const problem = await problemOf(response);
+    expect(problem.code).toBe("not_found");
+    expect(JSON.stringify(problem)).not.toContain("private");
+    expect(await rowOf(theirs.id)).toEqual(before);
+    expect(await stored(shared.workspaceId)).toEqual(counted);
+    expect((await remove(world, owner, theirs.id)).status).toBe(204);
+  });
+
+  it("answers 404 for a bookmark of another workspace and an unknown one, and leaves the other workspace's bookmark and counter alone (T1)", async () => {
+    const world = harness.serve();
+    const { owner, stranger, shared, other } = await setup(world);
+    const ofOwner = await created(world, owner, { url: "https://example.com/mine", title: "Mine" });
+    const ofStranger = await created(world, stranger, { url: "https://example.com/theirs", title: "Theirs" });
+
+    expect((await remove(world, stranger, ofOwner.id)).status).toBe(404);
+    expect((await remove(world, owner, ofStranger.id)).status).toBe(404);
+    expect((await remove(world, owner, "0192f3a0-aaaa-7000-8000-00000000dead")).status).toBe(404);
+    expect(await stored(shared.workspaceId)).toMatchObject({ rows: 1, counter: 1 });
+    expect(await stored(other.workspaceId)).toMatchObject({ rows: 1, counter: 1 });
+  });
+
+  it("keeps the counter at the number of bookmarks that are not plan-archived: deleting one of each kind leaves the counter equal to the rows counted", async () => {
+    const world = harness.serve();
+    const { owner, shared } = await setup(world);
+    const live = await created(world, owner, { url: "https://example.com/live", title: "Live" });
+    const archived = await created(world, owner, { url: "https://example.com/archived", title: "Archived" });
+    const kept = await created(world, owner, { url: "https://example.com/kept", title: "Kept" });
+    await archive(archived.id);
+    const counter = async () =>
+      (
+        await database().owner.begin(async (tx) => {
+          await tx`SET LOCAL ROLE slugbase_system`;
+          return tx<{ counter: number; live: number; total: number }[]>`
+            SELECT (SELECT bookmark_count FROM workspaces WHERE id = ${shared.workspaceId}) AS counter,
+                   (SELECT count(*) FROM bookmarks WHERE workspace_id = ${shared.workspaceId} AND plan_archived_at IS NULL)::int AS live,
+                   (SELECT count(*) FROM bookmarks WHERE workspace_id = ${shared.workspaceId})::int AS total`;
+        })
+      )[0];
+    expect(await counter()).toEqual({ counter: 2, live: 2, total: 3 });
+
+    expect((await remove(world, owner, live.id)).status).toBe(204);
+    expect(await counter()).toEqual({ counter: 1, live: 1, total: 2 });
+    // The owner may delete a bookmark the plan archived; the counter never counted it.
+    expect((await remove(world, owner, archived.id)).status).toBe(204);
+    expect(await counter()).toEqual({ counter: 1, live: 1, total: 1 });
+    expect((await remove(world, owner, kept.id)).status).toBe(204);
+    expect(await counter()).toEqual({ counter: 0, live: 0, total: 0 });
+  });
+
+  it("is refused without a session (401), from another site (403 cross_site_request) and to a read-only token (403 token_scope), and deletes nothing; a read-write token deletes", async () => {
+    const world = harness.serve();
+    const { owner, shared } = await setup(world);
+    const made = await created(world, owner, { url: "https://example.com/docs", title: "Docs" });
+    const readOnly = await harness.token(shared.workspaceId, owner, "read");
+    const readWrite = await harness.token(shared.workspaceId, owner, "read-write");
+
+    expect((await send(world, "DELETE", `${BOOKMARKS}/${made.id}`, {})).status).toBe(401);
+    const crossSite = await send(world, "DELETE", `${BOOKMARKS}/${made.id}`, { cookie: owner.cookie, origin: "https://evil.example" });
+    expect(crossSite.status).toBe(403);
+    expect((await problemOf(crossSite)).code).toBe("cross_site_request");
+    const scoped = await send(world, "DELETE", `${BOOKMARKS}/${made.id}`, bearer(readOnly));
+    expect(scoped.status).toBe(403);
+    expect((await problemOf(scoped)).code).toBe("token_scope");
+    expect(await rowOf(made.id)).toBeDefined();
+
+    expect((await send(world, "DELETE", `${BOOKMARKS}/${made.id}`, bearer(readWrite))).status).toBe(204);
+    expect(await rowOf(made.id)).toBeUndefined();
+  });
+
+  it("answers 422 for an identifier that is no UUID", async () => {
+    const world = harness.serve();
+    const { owner } = await setup(world);
+
+    expect((await remove(world, owner, "not-a-uuid")).status).toBe(422);
   });
 });

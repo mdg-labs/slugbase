@@ -78,6 +78,14 @@ export interface ScopedRepositoryOptions<T extends WorkspaceTable, M extends Sco
    * Every column when left out.
    */
   readonly insertColumns?: readonly (keyof InferInsertModel<T> & string)[];
+  /**
+   * The columns an update may set, for a table whose privileges let the application role update some of its columns and not the
+   * others (a column grant, which never includes `workspace_id`). A value for a column outside the list is refused before the
+   * database is asked, and `workspaceId` is never part of the statement, in the RLS-only build as well: the privilege that keeps the
+   * application role from moving a row to another workspace is what the matrix then relies on, next to the policy. Every column
+   * when left out.
+   */
+  readonly updateColumns?: readonly (keyof InferInsertModel<T> & string)[];
 }
 
 function requireWorkspace(tx: TenantTx): string {
@@ -172,6 +180,7 @@ function build<T extends WorkspaceTable>(
   tx: TenantTx,
   applicationLayer: boolean,
   insertColumns?: readonly string[],
+  updateColumns?: readonly string[],
 ): ScopedRepository<T> {
   type Row = InferSelectModel<T>;
   // The generic table type is erased for the query builder, whose own types do not follow it through.
@@ -212,7 +221,15 @@ function build<T extends WorkspaceTable>(
       let columns: Record<string, unknown> = { ...set };
       if (applicationLayer) {
         checkForeignWorkspace(set.workspaceId, requireWorkspace(tx));
+      }
+      if (applicationLayer || updateColumns !== undefined) {
         columns = Object.fromEntries(Object.entries(set).filter(([column]) => column !== "workspaceId"));
+      }
+      if (updateColumns !== undefined) {
+        const refused = Object.keys(columns).find((column) => columns[column] !== undefined && !updateColumns.includes(column));
+        if (refused !== undefined) {
+          throw new Error(`the column ${refused} of ${getTableName(pgTable)} is not one the repository updates`);
+        }
       }
       const predicate = scope(where);
       const handle = tenantHandle(tx);
@@ -240,8 +257,9 @@ async function run(
   input: RepositoryInput,
   applicationLayer: boolean,
   insertColumns: readonly string[] | undefined,
+  updateColumns: readonly string[] | undefined,
 ): Promise<readonly unknown[]> {
-  const repository = build(table, tx, applicationLayer, insertColumns);
+  const repository = build(table, tx, applicationLayer, insertColumns, updateColumns);
   switch (method) {
     case "select":
       return repository.select(input.where);
@@ -264,7 +282,7 @@ async function run(
 export function scopedRepositoryMethods(
   name: string,
   table: WorkspaceTable,
-  options: { readonly methods?: readonly ScopedMethod[]; readonly insertColumns?: readonly string[] } = {},
+  options: { readonly methods?: readonly ScopedMethod[]; readonly insertColumns?: readonly string[]; readonly updateColumns?: readonly string[] } = {},
 ): RepositoryMethodEntry[] {
   assertWorkspaceColumn(name, table);
   const tableName = getTableName(table);
@@ -274,8 +292,8 @@ export function scopedRepositoryMethods(
     table: tableName,
     method,
     access: ACCESS[method],
-    invoke: (tx, input = {}) => run(table, method, tx, input, true, options.insertColumns),
-    invokeRlsOnly: (tx, input = {}) => run(table, method, tx, input, false, options.insertColumns),
+    invoke: (tx, input = {}) => run(table, method, tx, input, true, options.insertColumns, options.updateColumns),
+    invokeRlsOnly: (tx, input = {}) => run(table, method, tx, input, false, options.insertColumns, options.updateColumns),
   }));
 }
 
@@ -291,12 +309,20 @@ export function defineScopedRepository<T extends WorkspaceTable, const M extends
 ): ScopedRepositoryDefinition<T, M> {
   const methods: readonly ScopedMethod[] = options.methods ?? (Object.keys(ACCESS) as ScopedMethod[]);
   const insertColumns: readonly string[] | undefined = options.insertColumns;
-  registerRepositoryMethods(name, scopedRepositoryMethods(name, table, { methods, ...(insertColumns === undefined ? {} : { insertColumns }) }));
+  const updateColumns: readonly string[] | undefined = options.updateColumns;
+  registerRepositoryMethods(
+    name,
+    scopedRepositoryMethods(name, table, {
+      methods,
+      ...(insertColumns === undefined ? {} : { insertColumns }),
+      ...(updateColumns === undefined ? {} : { updateColumns }),
+    }),
+  );
   return {
     name,
     table,
     bind(tx) {
-      const repository = build(table, tx, true, insertColumns);
+      const repository = build(table, tx, true, insertColumns, updateColumns);
       return Object.fromEntries(methods.map((method) => [method, repository[method].bind(repository)])) as Pick<ScopedRepository<T>, M>;
     },
   };

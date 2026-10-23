@@ -216,10 +216,12 @@ export interface paths {
         get: operations["getBookmark"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Delete a bookmark */
+        delete: operations["deleteBookmark"];
         options?: never;
         head?: never;
-        patch?: never;
+        /** Change a bookmark */
+        patch: operations["updateBookmark"];
         trace?: never;
     };
     "/api/v1/entitlements": {
@@ -2104,6 +2106,16 @@ export interface components {
              */
             theme?: "light" | "dark" | "system";
         };
+        UpdateBookmarkRequest: {
+            /** @description The new description, 0 to 1 000 characters; surrounding whitespace is removed, and an empty one and null clear it. Left out, the description is left as it is */
+            description?: string | null;
+            /** @description Pins or unpins the bookmark; left out, the pin is left as it is */
+            pinned?: boolean;
+            /** @description The new title, 1 to 300 characters; surrounding whitespace is removed and a title that is blank after that is refused. It cannot be cleared. Left out, the title is left as it is */
+            title?: string;
+            /** @description The new address: an http or https URL of at most 2 048 characters, stored as a creation stores it; the canonical form and the host are derived again. Any other scheme is refused with 422 url_not_allowed. Left out, the address is left as it is */
+            url?: string;
+        };
         UpdateInstanceAccountRequest: {
             /** @description true disables the account, false enables it again; disabling deletes the target's sessions and refuses its API tokens */
             disabled?: boolean;
@@ -3140,6 +3152,195 @@ export interface operations {
                 };
             };
             /** @description The identifier did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteBookmark: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The bookmark is deleted for good: the rows that reference it (folder and tag links, shares, go preferences) go with it, its slug is free at once, and the workspace's bookmark count falls by one unless the bookmark was plan-archived */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The workspace the request acts in has no bookmark of the caller with this identifier: another member's bookmark, a bookmark of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The identifier did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateBookmark: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateBookmarkRequest"];
+            };
+        };
+        responses: {
+            /** @description The caller's bookmark after a JSON Merge Patch of its url, title, description and pinned fields. A change moves the version by one and the ETag is that of the new version; a patch that names the values the bookmark has, and an empty one, write nothing and answer with the unchanged version */
+            200: {
+                headers: {
+                    /** @description The bookmark's version as an entity tag, for example "3"; the If-Match of the next change */
+                    ETag: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Bookmark"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The workspace the request acts in has no bookmark of the caller with this identifier that can be changed: another member's bookmark, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description If-Match names a version other than the bookmark's current one (precondition_failed); the bookmark is unchanged */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The identifier or the body did not pass validation (a malformed, empty or over-long URL, a title that is blank or over-long, a description over 1 000 characters, a null title or URL, or a field the operation does not declare), or the URL is not an http or https URL (url_not_allowed). Nothing is written */
             422: {
                 headers: {
                     [name: string]: unknown;

@@ -99,7 +99,7 @@ describe("the matrix over the committed contract and the repository registry", (
         ],
       },
     };
-    const matrix = await runApiMatrix({ document, fixture, request: answersAsTheChainDoes, mapping: { accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark" } });
+    const matrix = await runApiMatrix({ document, fixture, request: answersAsTheChainDoes, mapping: { accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark" } });
     // The matrix expects 404 for an identifier of workspace B. The one exception is the 422 every team is refused with (see above), for the two sessions
     // of A that reach the handler of the invitation; it is named exactly, and every other failure stays one.
     const teamRefusal = (failure: MatrixFailure): boolean => failure.subject.startsWith("createInvitation ") && failure.kind === "unexpected_status" && /answered 422, expected 404/.test(failure.detail);
@@ -111,13 +111,13 @@ describe("the matrix over the committed contract and the repository registry", (
     expect(Object.values(report.classified.byKind).reduce((sum, count) => sum + count, 0)).toBe(report.classified.total);
     // The operations on /workspace (reading, renaming and deleting it), /workspace/settings, the entitlements, the members list and the creation of a bookmark act in the workspace of the request and take no identifier of B;
     // the role change, the ownership transfer and the removal name a member by account identifier, the removal and the leaving a recipient, the invitation a team,
-    // the resend, the link and the revocation of an invitation name an invitation, and the bookmark read names a bookmark; the invitation list takes no identifier.
-    expect(report.classified.byKind["tenant-scoped"]).toBe(18);
+    // the resend, the link and the revocation of an invitation name an invitation, and the bookmark read, change and deletion name a bookmark; the invitation list takes no identifier.
+    expect(report.classified.byKind["tenant-scoped"]).toBe(20);
     // Three sessions and six tokens of A, once on each of the nine operations that name no member, once for each of the three members of B on the role
     // change, on the ownership transfer and on the leaving, once for each pair of members of B (path and recipient) on the removal, once for the
     // team of B on the invitation, once for the invitation of B on each of the resend, the link and the revocation, and once for each of the two
-    // bookmarks of B on the bookmark read.
-    expect(report.attempts).toBe(9 * 10 + 9 * (3 + 3 + 3 + 3 * 3 + 3 + 2));
+    // bookmarks of B on each of the bookmark read, change and deletion.
+    expect(report.attempts).toBe(9 * 10 + 9 * (3 + 3 + 3 + 3 * 3 + 3 + 3 * 2));
     assertMatrixPassed(report);
   });
 
@@ -130,8 +130,8 @@ describe("the matrix over the committed contract and the repository registry", (
     const methods = listRepositoryMethods();
     const report = await runRlsOnlyMatrix({ tenant: database().tenant, fixture: { ...scoped.fixture, instanceAdmin: PROBE_INSTANCE_ADMIN }, methods });
     expect(report.methods).toBe(methods.length);
-    // the bookmarks repository is in the registry with the two methods the application role may run on the table, and no other
-    expect(methods.filter((entry) => entry.repository === "bookmarks").map((entry) => entry.method)).toEqual(["select", "insert"]);
+    // the bookmarks repository is in the registry with the three methods the application role may run on the table, and no other: a delete is a system operation
+    expect(methods.filter((entry) => entry.repository === "bookmarks").map((entry) => entry.method)).toEqual(["select", "insert", "update"]);
     // every method ran once more as the instance admin of the fixture, which belongs to neither workspace
     expect(report.instanceAdminAttempts).toBeGreaterThanOrEqual(methods.length);
     assertMatrixPassed(report);

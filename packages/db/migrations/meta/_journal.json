@@ -484,6 +484,13 @@
       "when": 1792728880989,
       "tag": "20261023041440_add_bookmarks",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1792735299633,
+      "tag": "20261023060139_add_bookmark_changes",
+      "breakpoints": true
     }
   ]
 }

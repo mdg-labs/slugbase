@@ -13,3 +13,15 @@ export type {
 } from "./create.ts";
 export { readBookmark } from "./read.ts";
 export type { BookmarkReadAsk, BookmarkReadDependencies } from "./read.ts";
+export { updateBookmark } from "./update.ts";
+export type {
+  BookmarkChanges,
+  BookmarkPatch,
+  BookmarkUpdateAsk,
+  BookmarkUpdateDependencies,
+  BookmarkUpdateOutcome,
+  BookmarkUpdateRequest,
+  BookmarkUpdateResult,
+} from "./update.ts";
+export { deleteBookmark } from "./delete.ts";
+export type { BookmarkDeletionAsk, BookmarkDeletionDependencies } from "./delete.ts";

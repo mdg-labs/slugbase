@@ -7,6 +7,8 @@
 import type { AccountDeletionScope } from '@slugbase/core';
 import type { AuditRecord } from '@slugbase/core';
 import type { BookmarkRecord } from '@slugbase/core';
+import type { BookmarkUpdateRequest } from '@slugbase/core';
+import type { BookmarkUpdateResult } from '@slugbase/core';
 import type { CredentialTokenPurpose } from '@slugbase/core';
 import type { EntitlementVersionWriter } from '@slugbase/core';
 import { InferInsertModel } from 'drizzle-orm';
@@ -301,6 +303,11 @@ export type BookmarkCreationResult = {
 export interface BookmarkRepository {
     create(creation: BookmarkCreation): Promise<BookmarkCreationResult>;
     find(bookmarkId: string): Promise<BookmarkRecord | undefined>;
+    remove(request: {
+        readonly bookmarkId: string;
+        readonly ownerId: string;
+    }): Promise<boolean>;
+    update(request: BookmarkUpdateRequest): Promise<BookmarkUpdateResult>;
 }
 
 // @public (undocumented)
@@ -1199,6 +1206,7 @@ export interface ScopedRepositoryDefinition<T extends WorkspaceTable, M extends 
 export interface ScopedRepositoryOptions<T extends WorkspaceTable, M extends ScopedMethod> {
     readonly insertColumns?: readonly (keyof InferInsertModel<T> & string)[];
     readonly methods?: readonly M[];
+    readonly updateColumns?: readonly (keyof InferInsertModel<T> & string)[];
 }
 
 // @public
