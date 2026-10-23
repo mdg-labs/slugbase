@@ -36,9 +36,11 @@
     "test:unit": "vitest run --project unit",
     "test:integration": "vitest run --project integration",
     "build": "tsc -p tsconfig.build.json",
+    "db:seed": "node --env-file-if-exists=../../.env scripts/seed.ts",
     "contracts:check": "node ../../tooling/api-report/api-report.ts check --package ."
   },
   "dependencies": {
+    "@node-rs/argon2": "2.2.2",
     "@slugbase/core": "workspace:*",
     "@slugbase/db": "workspace:*",
     "@slugbase/testing-ports": "workspace:*",

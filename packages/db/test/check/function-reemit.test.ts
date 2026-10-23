@@ -2,7 +2,7 @@ import { afterAll, describe, expect, it } from "vitest";
 import { hashSqlFiles } from "../../scripts/migration-sql.ts";
 import { expandContractRule } from "../../src/check/expand-contract.ts";
 import { analyseSql, functionStatementOf, type FunctionStatement } from "../../src/check/migration-statements.ts";
-import type { ContractMarker, Finding } from "../../src/check/types.ts";
+import type { Finding } from "../../src/check/types.ts";
 import { FIRST, GitPackage, releasedRepository, SECOND } from "./git-package.ts";
 
 // A custom-SQL step re-emits all of src/sql/ (doc 05 section 5.1), so the DROP FUNCTION and the function
@@ -51,21 +51,21 @@ function released(): GitPackage {
   return repository;
 }
 
-function inspect(repository: GitPackage, marker: ContractMarker | undefined): Promise<readonly Finding[]> {
-  return Promise.resolve(expandContractRule.run({ packageDir: repository.dir, sql: undefined, hashSqlFiles, ...(marker === undefined ? {} : { contractMarker: marker }) }));
+function inspect(repository: GitPackage): Promise<readonly Finding[]> {
+  return Promise.resolve(expandContractRule.run({ packageDir: repository.dir, sql: undefined, hashSqlFiles }));
 }
 
-/** What the rule says about one migration of a chain, with the contract marker set so that a marked migration is accepted. */
-async function about(tag: string, repository: GitPackage, marker: ContractMarker | undefined = "set"): Promise<readonly Finding[]> {
-  return (await inspect(repository, marker)).filter(({ object }) => object === `migrations/${tag}.sql`);
+/** What the rule says about one migration of a chain. */
+async function about(tag: string, repository: GitPackage): Promise<readonly Finding[]> {
+  return (await inspect(repository)).filter(({ object }) => object === `migrations/${tag}.sql`);
 }
 
 /** The chain SECOND, THIRD after the release; the findings about THIRD. */
-async function reEmitted(contract: string, reEmit: string, marker?: ContractMarker): Promise<readonly Finding[]> {
+async function reEmitted(contract: string, reEmit: string): Promise<readonly Finding[]> {
   const repository = released();
   repository.migration(SECOND, contract, BOOKMARKS);
   repository.migration(THIRD, reEmit);
-  return about(THIRD, repository, marker);
+  return about(THIRD, repository);
 }
 
 describe("a DROP FUNCTION that an earlier marked contract migration ran", () => {
@@ -77,19 +77,19 @@ describe("a DROP FUNCTION that an earlier marked contract migration ran", () => 
     expect(findings[0]?.message).toContain(NOT_ACCEPTED);
   });
 
-  it("is judged without the marker: the later migration needs neither the header nor the label", async () => {
-    expect(await reEmitted(marked(DROP_OLD), customStep(DROP_OLD), "unset")).toEqual([]);
-    expect(await reEmitted(marked(DROP_OLD), customStep(DROP_OLD), "pending")).toEqual([]);
+  it("is judged without a header: the later migration does not need one", async () => {
+    expect(await reEmitted(marked(DROP_OLD), customStep(DROP_OLD))).toEqual([]);
   });
 
-  it("is still reported in the marked migration that first drops it, which awaits the label", async () => {
+  it("is still reported in the migration that first drops it, unless that migration carries a header", async () => {
     const repository = released();
     repository.migration(SECOND, marked(DROP_OLD), BOOKMARKS);
-    const findings = await about(SECOND, repository, "pending");
+    expect(await about(SECOND, repository)).toEqual([]);
+    const bare = released();
+    bare.migration(SECOND, customStep(DROP_OLD), BOOKMARKS);
+    const findings = await about(SECOND, bare);
     expect(findings).toHaveLength(1);
-    expect(findings[0]?.awaiting).toBe(true);
-    expect(await about(SECOND, repository, "unset")).toHaveLength(1);
-    expect(await about(SECOND, repository, "set")).toEqual([]);
+    expect(findings[0]?.message).toContain("has no contract header");
   });
 
   it("passes in a chain of several re-emits, one after the other", async () => {
@@ -197,7 +197,7 @@ describe("a DROP FUNCTION that an earlier marked contract migration ran", () => 
     repository.commit("contract");
     repository.tag("v1.1.0");
     repository.migration(THIRD, customStep(DROP_OLD));
-    expect(await about(THIRD, repository, "unset")).toEqual([]);
+    expect(await about(THIRD, repository)).toEqual([]);
   });
 
   it("rejects the drop when the migration that ran it shipped without a header", async () => {
@@ -206,7 +206,7 @@ describe("a DROP FUNCTION that an earlier marked contract migration ran", () => 
     repository.commit("unmarked");
     repository.tag("v1.1.0");
     repository.migration(THIRD, customStep(DROP_OLD));
-    const findings = await about(THIRD, repository, "unset");
+    const findings = await about(THIRD, repository);
     expect(findings).toHaveLength(1);
     expect(findings[0]?.message).toContain(CANNOT_PLACE);
   });
@@ -223,11 +223,11 @@ describe("what a read DROP FUNCTION means for the statements after it", () => {
     expect(await reEmitted(marked(DROP_OLD), customStep(DROP_OLD, DECLARE, REPLACE))).toEqual([]);
   });
 
-  it("accepts a trigger replacement in the migration that first drops the function, once it is labelled", async () => {
+  it("accepts a trigger replacement in the migration that first drops the function, with its header", async () => {
     const repository = released();
     repository.migration(SECOND, marked(DROP_OLD, DECLARE, REPLACE), BOOKMARKS);
-    expect(await about(SECOND, repository, "set")).toEqual([]);
-    expect(await about(THIRD, repository, "set")).toEqual([]);
+    expect(await about(SECOND, repository)).toEqual([]);
+    expect(await about(THIRD, repository)).toEqual([]);
   });
 
   it("still rejects a trigger replacement after a statement the rule cannot place", async () => {
@@ -264,8 +264,8 @@ describe("a REVOKE on a function that an earlier marked contract migration ran",
     expect(findings[0]?.message).toContain(CANNOT_PLACE);
   });
 
-  it("is judged without the marker", async () => {
-    expect(await reEmitted(marked(SEQUENCE), customStep(SEQUENCE), "unset")).toEqual([]);
+  it("is judged without a header", async () => {
+    expect(await reEmitted(marked(SEQUENCE), customStep(SEQUENCE))).toEqual([]);
   });
 
   it("rejects the REVOKE when the later migration grants the function back", async () => {
@@ -329,7 +329,7 @@ describe("a REVOKE on a function that an earlier marked contract migration ran",
     repository.commit("contract");
     repository.tag("v1.1.0");
     repository.migration(THIRD, customStep(SEQUENCE));
-    expect(await about(THIRD, repository, "unset")).toEqual([]);
+    expect(await about(THIRD, repository)).toEqual([]);
   });
 
   it("rejects the REVOKE after a migration the rule cannot read, which may have granted the function back", async () => {
@@ -396,24 +396,28 @@ describe("a step that revokes EXECUTE on a registered system function from slugb
   const step = [TABLE_FILE, FUNCTION_FILE, DROP_OLD, CONTRACT_FILE];
 
   it("accepts the later unmarked re-emit of the whole step, and rejects it when the file grants EXECUTE to slugbase_app again", async () => {
-    expect(await reEmitted(marked(...step), customStep(...step), "unset")).toEqual([]);
+    expect(await reEmitted(marked(...step), customStep(...step))).toEqual([]);
     const granted = [TABLE_FILE, `${FUNCTION_FILE}\nGRANT EXECUTE ON FUNCTION public.sys_make(uuid, uuid, text) TO slugbase_app;`, DROP_OLD, CONTRACT_FILE];
-    const findings = await reEmitted(marked(...step), customStep(...granted), "unset");
+    const findings = await reEmitted(marked(...step), customStep(...granted));
     expect(findings).toHaveLength(1);
     expect(findings[0]?.message).toContain("REVOKE on a function");
   });
 
   it("accepts a re-emit in which a comment of a file changed", async () => {
     const edited = step.map((file) => `-- a comment that changed\n${file}`);
-    expect(await reEmitted(marked(...step), customStep(...edited), "unset")).toEqual([]);
+    expect(await reEmitted(marked(...step), customStep(...edited))).toEqual([]);
   });
 
-  it("holds the migration that first revokes EXECUTE to the label, and judges the drop beside it as before", async () => {
+  it("holds the migration that first revokes EXECUTE to its header, and judges the drop beside it as before", async () => {
     const repository = released();
     repository.migration(SECOND, marked(TABLE_FILE, FUNCTION_FILE, DROP_OLD), BOOKMARKS);
     repository.migration(THIRD, marked(...step));
-    expect(await about(THIRD, repository, "pending")).toHaveLength(1);
-    expect((await about(THIRD, repository, "pending"))[0]?.awaiting).toBe(true);
-    expect(await about(THIRD, repository, "set")).toEqual([]);
+    expect(await about(THIRD, repository)).toEqual([]);
+    const bare = released();
+    bare.migration(SECOND, marked(TABLE_FILE, FUNCTION_FILE, DROP_OLD), BOOKMARKS);
+    bare.migration(THIRD, customStep(...step));
+    const findings = await about(THIRD, bare);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("has no contract header");
   });
 });

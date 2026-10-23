@@ -477,6 +477,27 @@
       "when": 1792678937476,
       "tag": "20261022142217_drop_workspace_function_grant",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1792728880989,
+      "tag": "20261023041440_add_bookmarks",
+      "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1792735299633,
+      "tag": "20261023060139_add_bookmark_changes",
+      "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1792747048106,
+      "tag": "20261023091728_add_bookmark_archive",
+      "breakpoints": true
     }
   ]
 }

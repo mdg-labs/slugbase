@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { ESLint, type Linter } from "eslint";
@@ -609,9 +610,12 @@ describe("the repository config", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
 });
 
 describe("CLAUDE.md sweeps", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
-  function sweep(patterns: string[], glob: string): string[] {
-    const result = spawnSync("git", ["grep", "-l", ...patterns.flatMap((p) => ["-e", p]), "--", glob], {
-      cwd: ROOT,
+  // Turbo hashes the contents of untracked files into the cache key of this suite, so a pass computed while a
+  // file is still untracked is replayed after the file is committed. The sweeps therefore list the files turbo
+  // hashes: tracked ones plus untracked ones that .gitignore does not exclude.
+  function sweep(patterns: string[], glob: string, cwd: string = ROOT): string[] {
+    const result = spawnSync("git", ["grep", "-l", "--untracked", ...patterns.flatMap((p) => ["-e", p]), "--", glob], {
+      cwd,
       encoding: "utf8",
     });
     // git grep exits 1 for "no match" and above that for a failure.
@@ -621,17 +625,42 @@ describe("CLAUDE.md sweeps", { timeout: SUBPROCESS_TIMEOUT_MS }, () => {
     return result.stdout.split("\n").filter((line) => line !== "");
   }
 
-  // CLAUDE.md lists the files a plain text search finds, for the security audit.
-  // The test reads each tracked file's syntax instead, so it fails on an outbound
-  // request and not on a `fetch` method that serves requests in-process.
-  it("sweep-raw-fetch finds no outbound request outside packages/adapters/src/egress/", () => {
-    const listed = spawnSync("git", ["ls-files", "--", "packages/**/*.ts"], { cwd: ROOT, encoding: "utf8" });
+  function sourceFiles(glob: string, cwd: string = ROOT): string[] {
+    const listed = spawnSync("git", ["ls-files", "--cached", "--others", "--exclude-standard", "--", glob], { cwd, encoding: "utf8" });
     if (listed.status !== 0) {
       throw new Error(`git ls-files failed: ${listed.stderr}`);
     }
-    const files = listed.stdout
-      .split("\n")
-      .filter((file) => file !== "" && !file.startsWith("packages/adapters/src/egress/"));
+    return listed.stdout.split("\n").filter((file) => file !== "");
+  }
+
+  it("sweeps list an untracked file that matches and leave out an ignored one", () => {
+    const repo = mkdtempSync(resolve(tmpdir(), "sweep-untracked-"));
+    try {
+      const git = (...args: string[]): void => {
+        const run = spawnSync("git", args, { cwd: repo, encoding: "utf8" });
+        if (run.status !== 0) {
+          throw new Error(`git ${args.join(" ")} failed: ${run.stderr}`);
+        }
+      };
+      git("init", "--quiet");
+      mkdirSync(resolve(repo, "packages/a"), { recursive: true });
+      writeFileSync(resolve(repo, ".gitignore"), "ignored.ts\n");
+      writeFileSync(resolve(repo, "packages/a/tracked.ts"), "export const a = innerHTML;\n");
+      git("add", ".gitignore", "packages/a/tracked.ts");
+      writeFileSync(resolve(repo, "packages/a/untracked.ts"), "export const b = innerHTML;\n");
+      writeFileSync(resolve(repo, "packages/a/ignored.ts"), "export const c = innerHTML;\n");
+      expect(sweep(["innerHTML"], "packages/**/*.ts", repo).sort()).toEqual(["packages/a/tracked.ts", "packages/a/untracked.ts"]);
+      expect(sourceFiles("packages/**/*.ts", repo).sort()).toEqual(["packages/a/tracked.ts", "packages/a/untracked.ts"]);
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
+  });
+
+  // CLAUDE.md lists the files a plain text search finds, for the security audit.
+  // The test reads each file's syntax instead, so it fails on an outbound
+  // request and not on a `fetch` method that serves requests in-process.
+  it("sweep-raw-fetch finds no outbound request outside packages/adapters/src/egress/", () => {
+    const files = sourceFiles("packages/**/*.ts").filter((file) => !file.startsWith("packages/adapters/src/egress/"));
     expect(files.length).toBeGreaterThan(0);
     const offenders = files.flatMap((file) =>
       findRawOutbound(readFileSync(resolve(ROOT, file), "utf8"), file).map((found) => `${file} ${found}`),

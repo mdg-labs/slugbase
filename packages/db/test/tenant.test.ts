@@ -78,6 +78,8 @@ describe("the package entry point", () => {
         "accountProfileRepository",
         "apiTokenRepository",
         "auditEventRepository",
+        "bookmarkArchiveTransaction",
+        "bookmarkRepository",
         "connectionRole",
         "createAuthStore",
         "createDatabase",

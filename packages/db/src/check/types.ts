@@ -12,19 +12,7 @@ export interface Finding {
   /** What is wrong: a table, a migration file, a role-owned object. Always names it. */
   object: string;
   message: string;
-  /**
-   * Set when the run cannot decide this yet and a later run can: the finding is shown but does
-   * not fail the check. Every consumer that does not read the flag treats the finding as a failure.
-   */
-  awaiting?: true;
 }
-
-/**
- * What a run knows about the `migration:contract` label (see ./expand-contract.ts): `set` when the
- * pull request carries it, `unset` when it does not or the run is local, `pending` when the run has
- * no pull request to read it from (a push), so a valid contract header waits for the pull request run.
- */
-export type ContractMarker = "set" | "unset" | "pending";
 
 export interface CheckContext {
   /** The `packages/db` directory the rules inspect: `migrations/`, `src/schema/`, `src/sql/`. */
@@ -33,8 +21,6 @@ export interface CheckContext {
   sql: postgres.Sql | undefined;
   /** Hash of the `src/sql/` files, as the generator records it (scripts/migration-sql.ts). */
   hashSqlFiles: (files: readonly { name: string; content: string }[]) => string;
-  /** The contract marker of the run, from SLUGBASE_DB_CHECK_CONTRACT. Absent means `unset`. */
-  contractMarker?: ContractMarker;
 }
 
 export interface CheckRule {

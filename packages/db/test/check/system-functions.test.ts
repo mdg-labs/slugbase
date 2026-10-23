@@ -3,12 +3,12 @@ import { afterAll, describe, expect, it } from "vitest";
 import { hashSqlFiles } from "../../scripts/migration-sql.ts";
 import { expandContractRule } from "../../src/check/expand-contract.ts";
 import { analyseSql, identifierForm, mentionOfAny, type Operation } from "../../src/check/migration-statements.ts";
-import type { ContractMarker, Finding } from "../../src/check/types.ts";
+import type { Finding } from "../../src/check/types.ts";
 import { GitPackage, releasedRepository, SECOND } from "./git-package.ts";
 
 // The system-function forms of doc 05 section 3.3 in the expand/contract rule: what an unmarked
 // migration may use to add a system operation, and what stays rejected without the contract
-// header and marker.
+// header.
 
 const THIRD = "20260301000000_add_more";
 const BOOKMARKS = [{ name: "bookmarks", columns: ["id", "title", "legacy_title"] }];
@@ -35,17 +35,15 @@ function released(): GitPackage {
   return repository;
 }
 
-function inspect(repository: GitPackage, marker?: ContractMarker): Promise<readonly Finding[]> {
-  return Promise.resolve(
-    expandContractRule.run({ packageDir: repository.dir, sql: undefined, hashSqlFiles, ...(marker === undefined ? {} : { contractMarker: marker }) }),
-  );
+function inspect(repository: GitPackage): Promise<readonly Finding[]> {
+  return Promise.resolve(expandContractRule.run({ packageDir: repository.dir, sql: undefined, hashSqlFiles }));
 }
 
 /** What the rule says about one migration added after the release. */
-function added(sql: string, marker?: ContractMarker): Promise<readonly Finding[]> {
+function added(sql: string): Promise<readonly Finding[]> {
   const repository = released();
   repository.migration(SECOND, sql, BOOKMARKS);
-  return inspect(repository, marker);
+  return inspect(repository);
 }
 
 /** What the rule says about the last of two migrations added after the release. */
@@ -102,17 +100,17 @@ describe("what an unmarked migration may use to add a system operation", () => {
   });
 });
 
-describe("what stays rejected without the contract header and marker", () => {
+describe("what stays rejected without the contract header", () => {
   const RELEASED_TAKE = "CREATE FUNCTION public.take(p_key text, p_cost double precision) RETURNS boolean LANGUAGE sql AS 'SELECT false';";
 
-  function afterRelease(sql: string, marker?: ContractMarker): Promise<readonly Finding[]> {
+  function afterRelease(sql: string): Promise<readonly Finding[]> {
     const repository = new GitPackage();
     repositories.push(repository);
     repository.migration("20260101000000_add_take", RELEASED_TAKE, BOOKMARKS);
     repository.commit("release");
     repository.tag("v1.0.0");
     repository.migration(SECOND, sql);
-    return inspect(repository, marker);
+    return inspect(repository);
   }
 
   it.each([
@@ -128,21 +126,26 @@ describe("what stays rejected without the contract header and marker", () => {
     expect(findings[0]?.message).toContain(NOT_ACCEPTED);
   });
 
-  it("accepts the replacement that changes the return type in the marked contract half of a pair", async () => {
-    const repository = new GitPackage();
-    repositories.push(repository);
-    repository.migration("20260101000000_add_take", RELEASED_TAKE, BOOKMARKS);
-    repository.commit("release");
-    repository.tag("v1.0.0");
-    repository.migration(SECOND, "ALTER TABLE bookmarks ADD COLUMN extra text;");
-    repository.commit("expand");
-    repository.tag("v1.1.0");
-    repository.migration(
-      THIRD,
-      "-- slugbase:contract expand=20260201000000_add_notes release=1.1.0\nCREATE OR REPLACE FUNCTION public.take(p_key text, p_cost double precision) RETURNS integer LANGUAGE sql AS 'SELECT 1';",
-    );
-    expect(await inspect(repository, "set")).toEqual([]);
-    expect(await inspect(repository)).toHaveLength(1);
+  it("accepts the replacement that changes the return type in the contract half of a pair, and rejects it without the header", async () => {
+    const contractHalf = (header: string): GitPackage => {
+      const repository = new GitPackage();
+      repositories.push(repository);
+      repository.migration("20260101000000_add_take", RELEASED_TAKE, BOOKMARKS);
+      repository.commit("release");
+      repository.tag("v1.0.0");
+      repository.migration(SECOND, "ALTER TABLE bookmarks ADD COLUMN extra text;");
+      repository.commit("expand");
+      repository.tag("v1.1.0");
+      repository.migration(
+        THIRD,
+        `${header}CREATE OR REPLACE FUNCTION public.take(p_key text, p_cost double precision) RETURNS integer LANGUAGE sql AS 'SELECT 1';`,
+      );
+      return repository;
+    };
+    expect(await inspect(contractHalf("-- slugbase:contract expand=20260201000000_add_notes release=1.1.0\n"))).toEqual([]);
+    const findings = await inspect(contractHalf(""));
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("has no contract header");
   });
 
   it("rejects a replacement of a function it cannot show is new, after a statement it cannot place", async () => {

@@ -24,10 +24,34 @@ export interface RepositorySample {
 /** A repository name (as registered in the scoped-repository registry) to the sample its writes use. */
 export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
 
-// Phase 1 declares no tenant-scoped operation and registers no scoped
-// repository, so there is nothing to map yet.
-export const PATH_PARAMETER_MAPPING: PathParameterMapping = {};
-export const REPOSITORY_SAMPLES: RepositorySamples = {};
+/**
+ * The inputs of the committed contract that carry the identifier of a row. `getBookmark.id`, `updateBookmark.id` and `deleteBookmark.id` take
+ * a bookmark; the other tenant-scoped operations that take an identifier (a member, a team, an invitation) are mapped by the suites that hold
+ * a fixture with those rows.
+ */
+export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
+  "getBookmark.id": "bookmark",
+  "updateBookmark.id": "bookmark",
+  "deleteBookmark.id": "bookmark",
+};
+
+/**
+ * The columns the RLS-only mode writes to each scoped repository of `@slugbase/db`. The bookmarks repository updates the columns of a request
+ * only, so its update sample sets the title; the row of an insert has no owner, which keeps the sample independent of the membership rows of the
+ * fixture. The bookmarks repository has no delete: a delete is the system operation `sys_bookmark_delete`, which the API mode exercises.
+ */
+export const REPOSITORY_SAMPLES: RepositorySamples = {
+  bookmarks: {
+    values: {
+      id: "0192f3a0-2222-7000-8000-00000000b00c",
+      url: "https://example.com/matrix",
+      urlCanonical: "https://example.com/matrix",
+      host: "example.com",
+      title: "matrix-bookmark-inserted",
+    },
+    set: { title: "matrix-bookmark-updated" },
+  },
+};
 
 export function kindOfParameter(
   mapping: PathParameterMapping,

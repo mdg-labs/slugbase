@@ -15,7 +15,7 @@ const ACCOUNT = "0192f3a0-bbbb-7000-8000-000000000001";
 
 describe("the domain event catalog", () => {
   it("announces account.created with the account and how it came to exist", () => {
-    expect(DOMAIN_EVENT_NAMES).toEqual(["account.created", "account.deleted", "workspace.created", "workspace.deleted", "member.left", "member.joined"]);
+    expect(DOMAIN_EVENT_NAMES).toEqual(["account.created", "account.deleted", "workspace.created", "workspace.deleted", "member.left", "member.joined", "bookmark.created"]);
     expect(Object.keys(DOMAIN_EVENTS["account.created"])).toEqual(["accountId", "path"]);
     expect(ACCOUNT_CREATION_PATHS).toEqual(["self-registration", "invitation", "oidc", "setup"]);
   });
@@ -63,6 +63,15 @@ describe("the domain event catalog", () => {
     expect(MEMBER_CONTENT_CHOICES).toEqual(["transfer", "delete"]);
     for (const bad of [{ ...ids, content: "keep" }, { ...ids }, { ...ids, content: "delete", email: "a@example.test" }, { ...ids, content: "delete", transferTo: "someone" }]) {
       expect(() => parseDomainEventPayload("member.left", bad)).toThrow(DomainEventPayloadError);
+    }
+  });
+
+  it("announces bookmark.created with the workspace, the bookmark and the member who owns it, and nothing else", () => {
+    const ids = { workspaceId: "0192f3a0-cccc-7000-8000-000000000001", bookmarkId: "0192f3a0-cccc-7000-8000-000000000002", accountId: ACCOUNT };
+    expect(Object.keys(DOMAIN_EVENTS["bookmark.created"])).toEqual(["workspaceId", "bookmarkId", "accountId"]);
+    expect(parseDomainEventPayload("bookmark.created", ids)).toEqual(ids);
+    for (const bad of [{}, { workspaceId: ids.workspaceId, bookmarkId: ids.bookmarkId }, { ...ids, url: "https://example.test/" }, { ...ids, title: "Ada's notes" }, { ...ids, bookmarkId: "a-bookmark" }]) {
+      expect(() => parseDomainEventPayload("bookmark.created", bad)).toThrow(DomainEventPayloadError);
     }
   });
 

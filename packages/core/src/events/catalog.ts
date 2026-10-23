@@ -74,6 +74,16 @@ export const DOMAIN_EVENTS = {
     accountId: { type: "uuid" },
     role: { type: "enum", values: MEMBER_ROLES },
   },
+  /**
+   * A bookmark was created: queued in the transaction that inserts it, so it is announced exactly when the bookmark
+   * exists. `accountId` is the member who created it and owns it. A subscriber that needs the bookmark reads it by
+   * `bookmarkId`; the payload holds no URL or title.
+   */
+  "bookmark.created": {
+    workspaceId: { type: "uuid" },
+    bookmarkId: { type: "uuid" },
+    accountId: { type: "uuid" },
+  },
 } as const satisfies Record<string, Readonly<Record<string, DomainEventField>>>;
 
 export type DomainEventName = keyof typeof DOMAIN_EVENTS;

@@ -174,34 +174,19 @@ describe("runChecks", () => {
     expect(failed.lines).toContain("db:check: FAIL  a: x: bad");
   });
 
-  it("shows a finding that awaits the label as AWAIT, passes the run, and does not call the rule passed", () => {
-    const awaiting = { rule: "a", object: "x", message: "later", awaiting: true } as const;
-    const report = formatReport([
-      { rule: "a", description: "", findings: [awaiting] },
-      { rule: "b", description: "", findings: [] },
-    ]);
-    expect(report.passed).toBe(true);
-    expect(report.lines[0]).toBe("db:check: AWAIT a: x: later");
-    expect(report.lines).toContain("db:check: ok    b");
-    const summary = report.lines.at(-1) ?? "";
-    expect(summary).toContain("1 of 2 rule(s) passed, 1 awaiting the migration:contract label");
-    expect(report.lines).not.toContain("db:check: 2 rule(s) passed");
-  });
-
-  it("fails a rule that holds a failure next to an awaiting finding", () => {
+  it("counts a rule with several findings once, prints every finding, and fails the run", () => {
     const report = formatReport([
       {
         rule: "a",
         description: "",
         findings: [
-          { rule: "a", object: "x", message: "later", awaiting: true },
+          { rule: "a", object: "x", message: "first" },
           { rule: "a", object: "y", message: "bad" },
         ],
       },
+      { rule: "b", description: "", findings: [] },
     ]);
     expect(report.passed).toBe(false);
-    expect(report.lines).toContain("db:check: AWAIT a: x: later");
-    expect(report.lines).toContain("db:check: FAIL  a: y: bad");
-    expect(report.lines.at(-1)).toBe("db:check: 1 of 1 rule(s) failed");
+    expect(report.lines).toEqual(["db:check: FAIL  a: x: first", "db:check: FAIL  a: y: bad", "db:check: ok    b", "db:check: 1 of 2 rule(s) failed"]);
   });
 });

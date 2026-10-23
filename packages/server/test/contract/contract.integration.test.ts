@@ -13,7 +13,7 @@ import { urlOf } from "../migrate/support.ts";
 import { recordingLogger, serverConfig } from "../support.ts";
 import { buildDocument, type TestDocument } from "./build-document.ts";
 import { readOperations, type ContractFailure } from "./document.ts";
-import { seedAccount, seedMembership, seedWorkspace } from "../auth/support.ts";
+import { seedAccount, seedApiToken, seedMembership, seedWorkspace } from "../auth/support.ts";
 import { B_INVITATION_ID, FIXTURES, UNKNOWN_TEAM_ID, WALKER_ACCOUNT, WALKER_WORKSPACE_ID } from "./fixtures.ts";
 import { matrixRequest, tokenMatrixRequest } from "./matrix.ts";
 import { getProbeAdminRow, getProbeRow, probeFixtures, probeModule, probeOperations } from "./probe-module.ts";
@@ -98,6 +98,8 @@ describe("the walker over the committed document", () => {
   async function sessionHooks(server: Server, unentitled: Set<string>): Promise<PolicyHooks> {
     await seedAccount(database(), WALKER_ACCOUNT);
     const needsReauth = new Set(readOperations(committed).operations.filter((operation) => operation.reauth === true).map((operation) => operation.operationId));
+    // The account and the workspace of the walker the last sign-in made a member of a workspace of its own, for the token of an operation that writes.
+    const lastOwned: { current?: { readonly accountId: string; readonly workspaceId: string } } = {};
     const signIn = async (email: string, reauthenticate: boolean, member = false, role?: "owner" | "member", entitled = true, instanceAdmin = false): Promise<string> => {
       const account = await seedAccount(database(), { email, password: WALKER_ACCOUNT.password, instanceAdmin });
       if (!entitled) {
@@ -112,6 +114,7 @@ describe("the walker over the committed document", () => {
           await tx`INSERT INTO workspace_settings (workspace_id) VALUES (${workspaceId})`;
         });
         await seedMembership(database(), { workspaceId, accountId: account.id, role });
+        lastOwned.current = { accountId: account.id, workspaceId };
       }
       if (member) {
         // A token is bound to a workspace of the account, and a session is switched to one, so the walker that does either is a member of its own.
@@ -154,6 +157,9 @@ describe("the walker over the committed document", () => {
       return cookie;
     };
     const cookies = new Map<string, string>();
+    // The API token of an operation that writes, which may only read: the real token of the walker's own workspace.
+    const readOnlyTokens = new Map<string, string>();
+    const writing = new Set(readOperations(committed).operations.filter((operation) => operation.scope === "write").map((operation) => operation.operationId));
     const stale = new Map<string, string>();
     const below = new Map<string, string>();
     const without = new Map<string, string>();
@@ -163,6 +169,9 @@ describe("the walker over the committed document", () => {
         // Its owner, and the principal just below the policy: a member of a workspace of its own below `admin`, an account with no workspace below `member`.
         const email = `walker-${operationId}@example.test`.toLowerCase();
         cookies.set(operationId, await signIn(email, needsReauth.has(operationId), false, "owner"));
+        if (writing.has(operationId) && lastOwned.current !== undefined) {
+          readOnlyTokens.set(operationId, (await seedApiToken(database(), { ...lastOwned.current, scope: "read" })).value);
+        }
         if (needsReauth.has(operationId)) {
           // An owner of a workspace of its own that has not re-authenticated: the policy admits it, the re-authentication does not.
           stale.set(operationId, await signIn(`walker-${operationId}-stale@example.test`.toLowerCase(), false, false, "owner"));
@@ -207,6 +216,13 @@ describe("the walker over the committed document", () => {
       withoutReauth: ({ operationId }) => credentialsOf(stale, operationId),
       tooLowRole: ({ operationId }) => credentialsOf(below, operationId),
       withoutEntitlement: ({ operationId }) => credentialsOf(without, operationId),
+      readOnlyToken: ({ operationId }) => {
+        const token = readOnlyTokens.get(operationId);
+        if (token === undefined) {
+          throw new Error(`the walker holds no read-only token for ${operationId}`);
+        }
+        return { headers: { authorization: `Bearer ${token}` } };
+      },
       // The owner of the walker's own workspace names a member of workspace B, which it does not act in.
       workspaceA: ({ operationId }) => credentialsOf(cookies, operationId),
     };
@@ -231,12 +247,12 @@ describe("the walker over the committed document", () => {
     expect(report.failures.filter((failure) => !teamRefusal(failure))).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each anonymous operation and for the sign-in; each of the fifty-five operations that need a session
-    // also answers 401 without one, each of the seventeen that declare re-authentication answers 401 reauth_required without it, and each of
-    // the sixteen that need a role in the workspace answers the principal just below it (404 below member, 403 below admin), and each of the eight
-    // that name a member, a recipient, a team or an invitation answers for one of workspace B; each of the four that declare an entitlement answers 403 to an account without it;
-    // and each of the fourteen instance operations answers 403 to the ordinary account just below its policy.
-    expect(report.calls).toBe(operations.length + 115);
+    // One valid request for each operation. Each of the fifty-nine that need a session also answers 401 without one, each of the seventeen that declare
+    // re-authentication answers 401 reauth_required without it, and each of the thirty-five whose policy has a role below it (the eight of a member, the ten
+    // of an admin, the two of an owner and the fifteen of the instance admin) answers the principal just below it (404 below member, 403 below the others).
+    // Each of the three that declare the write scope answers 403 token_scope to a token that may only read, each of the four that declare an entitlement answers
+    // 403 to an account without it, and each of the eleven that name a member, a recipient, a team, an invitation or a bookmark answers for one of workspace B.
+    expect(report.calls).toBe(operations.length + 59 + 17 + 35 + 3 + 4 + 11);
   }, WALK_TIMEOUT_MS);
 });
 
@@ -365,7 +381,8 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
           coalesce((SELECT string_agg(s::text, '|') FROM workspace_settings s WHERE s.workspace_id = ${probe.fixture.b.id}), '') ||
           coalesce((SELECT string_agg(m::text, '|' ORDER BY m.account_id) FROM workspace_members m WHERE m.workspace_id = ${probe.fixture.b.id}), '') ||
           coalesce((SELECT string_agg(e::text, '|' ORDER BY e.id) FROM audit_events e WHERE e.workspace_id = ${probe.fixture.b.id}), '') ||
-          coalesce((SELECT string_agg(i::text, '|' ORDER BY i.id) FROM workspace_invitations i WHERE i.workspace_id = ${probe.fixture.b.id}), '')
+          coalesce((SELECT string_agg(i::text, '|' ORDER BY i.id) FROM workspace_invitations i WHERE i.workspace_id = ${probe.fixture.b.id}), '') ||
+          coalesce((SELECT string_agg(k::text, '|' ORDER BY k.id) FROM bookmarks k WHERE k.workspace_id = ${probe.fixture.b.id}), '')
         ) AS digest`;
     });
     return rows[0]?.digest ?? "";
@@ -397,9 +414,19 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
         INSERT INTO workspace_invitations (id, workspace_id, email, role, token_hash, expires_at)
         VALUES (${B_INVITATION_ID}, ${probe.fixture.b.id}, 'matrix-b-invitee@example.test', 'member', sha256('matrix-b-invitation'::bytea), now() + interval '7 days')`;
     });
+    // The two bookmarks of workspace B the fixture names, owned by its members: the matrix puts their identifiers in the path of the bookmark read.
+    const bookmarkIds = probe.fixture.b.identifiers.filter((identifier) => identifier.kind === "bookmark");
+    for (const [index, { id }] of bookmarkIds.entries()) {
+      await database().owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        await tx`
+          INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title)
+          VALUES (${id}, ${probe.fixture.b.id}, ${[probe.fixture.b.owner, probe.fixture.b.member][index % 2]?.accountId ?? null}, 'https://example.com/matrix-b', 'https://example.com/matrix-b', 'example.com', ${`matrix-bookmark-of-b-${String(index)}`})`;
+      });
+    }
   }
 
-  it("passes for the fifteen tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations and its audit log as they were", async () => {
+  it("passes for the twenty tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations, its bookmarks and its audit log as they were", async () => {
     await seedFixtureWorkspaces();
     const before = await contentOfB();
     // The deletion of the workspace takes no identifier, so the matrix repeats it as every principal of A (the sessions of the matrix have just
@@ -427,7 +454,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     const matrix = await runApiMatrix({
       document: committed,
       fixture,
-      mapping: { rowId: "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation" },
+      mapping: { rowId: "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark" },
       request: async (call) => {
         const response = await send(call);
         if ("instanceAdmin" in call.principal) {
@@ -444,15 +471,16 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     const report = { ...matrix, failures: matrix.failures.filter((failure) => !teamRefusal(failure)) };
     expect(matrix.failures.filter(teamRefusal).map((failure) => failure.detail.slice(0, "as owner of A".length))).toEqual(["as owner of A", "as admin of A"]);
     expect(report.failures).toEqual([]);
-    expect(report.classified.byKind["tenant-scoped"]).toBe(16);
-    // the three sessions and the six tokens (a read and a read-write one of each role) of A, once on each of the eight operations that name no member
-    // (the entitlements and the invitation list among them) and on the invitation, which names the one team of B,
+    expect(report.classified.byKind["tenant-scoped"]).toBe(20);
+    // the three sessions and the six tokens (a read and a read-write one of each role) of A, once on each of the nine operations that name no member
+    // (the entitlements, the invitation list and the creation of a bookmark among them) and on the invitation, which names the one team of B,
     // and on the operations that name members of B once for each of them: the role change, and the leaving, which names a recipient, once for each
     // of the three, and the ownership transfer, which names the member who becomes an owner, once for each of the three; the removal names both
     // a member and a recipient, once for each pair; the resend, the link and the revocation of an invitation name the one invitation of B once each
     // The instance admin is a tenth principal making the same thirty calls, and each of them is answered 404 whatever the policy of the operation:
     // it holds no membership, so there is no workspace for a handler to act in or a role to be refused for.
-    const calls = 9 + (3 + 3 + 3 + 3 * 3 + 3);
+    // The bookmark read, change and deletion name each of the two bookmarks of B once each.
+    const calls = 10 + (3 + 3 + 3 + 3 * 3 + 3) + 3 * 2;
     expect(report.attempts).toBe(10 * calls);
     expect(instanceAdminStatuses).toEqual(Array<number>(calls).fill(404));
     expect(await contentOfB()).toBe(before);
@@ -463,7 +491,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
       return tx<{ workspace_id: string; id: string; status: string }[]>`SELECT workspace_id, id, status FROM workspace_invitations WHERE workspace_id IN (${probe.fixture.a.id}, ${probe.fixture.b.id})`;
     });
     expect(written.map((row) => [row.workspace_id, row.id, row.status])).toEqual([[probe.fixture.b.id, B_INVITATION_ID, "pending"]]);
-    // The requests reached the handlers: the sessions of A renamed A and turned its AI suggestions off, and the tokens changed nothing.
+    // The requests reached the handlers: the sessions of A renamed A and turned its AI suggestions off, and the tokens changed nothing of the workspace.
     const [changed] = await database().owner.begin(async (tx) => {
       await tx`SET LOCAL ROLE slugbase_system`;
       return tx<{ name: string; ai_enabled: boolean; actions: string[] }[]>`
@@ -471,6 +499,16 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
         FROM workspaces w JOIN workspace_settings s ON s.workspace_id = w.id WHERE w.id = ${probe.fixture.a.id}`;
     });
     expect(changed).toEqual({ name: "Walker's renamed workspace", ai_enabled: false, actions: ["workspace.renamed", "workspace.settings_changed"] });
+    // The creation of a bookmark reached its handler for the three sessions and the three tokens that may write, each for the account it acts as, and a token
+    // that may only read was refused before it: six bookmarks in A, each counted once, and the two of B untouched.
+    const bookmarks = await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      return tx<{ counter: number; owner_id: string | null; created: string }[]>`
+        SELECT (SELECT bookmark_count FROM workspaces WHERE id = ${probe.fixture.a.id}) AS counter, owner_id, count(*)::text AS created
+        FROM bookmarks WHERE workspace_id = ${probe.fixture.a.id} GROUP BY owner_id ORDER BY owner_id`;
+    });
+    const principalsOfA = [probe.fixture.a.owner, probe.fixture.a.admin, probe.fixture.a.member].map((principal) => principal.accountId).sort();
+    expect(bookmarks.map((row) => [row.counter, row.owner_id, row.created])).toEqual(principalsOfA.map((accountId) => [6, accountId, "2"]));
   });
 });
 

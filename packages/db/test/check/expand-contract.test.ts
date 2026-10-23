@@ -4,20 +4,19 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { hashSqlFiles } from "../../scripts/migration-sql.ts";
-import { checkRules, contractMarkerFromEnv, runChecks } from "../../src/check/index.ts";
+import { checkRules, runChecks } from "../../src/check/index.ts";
 import { expandContractRule } from "../../src/check/expand-contract.ts";
 import { analyseSql, setsSessionTimeout } from "../../src/check/migration-statements.ts";
-import type { ContractMarker, Finding } from "../../src/check/types.ts";
+import type { Finding } from "../../src/check/types.ts";
 import { FIRST, GitPackage, releasedRepository, SECOND } from "./git-package.ts";
 
 // The expand/contract rule (doc 05 section 5.2, Q52) against temporary git
-// repositories with release tags. `pnpm db:check` itself, with the marker
-// taken from the environment, is driven in expand-contract.integration.test.ts.
+// repositories with release tags. `pnpm db:check` itself is driven in
+// expand-contract.integration.test.ts.
 
 const THIRD = "20260301000000_drop_legacy_title";
 const BOOKMARKS = ["id", "title", "legacy_title"];
 const REWRITES = "rewrites the table under an ACCESS EXCLUSIVE lock";
-const MARKER_HINT = "contract marker is not set";
 
 const repositories: GitPackage[] = [];
 const scratch: string[] = [];
@@ -37,24 +36,15 @@ function released(tag = "v1.0.0"): GitPackage {
   return repository;
 }
 
-/** `true` is the marker of a labelled pull request, `pending` that of a push. */
-function inspect(repository: GitPackage, marker?: boolean | "pending"): Promise<readonly Finding[]> {
-  const contractMarker: ContractMarker | undefined = marker === true ? "set" : marker === "pending" ? "pending" : marker === false ? "unset" : undefined;
-  return Promise.resolve(
-    expandContractRule.run({
-      packageDir: repository.dir,
-      sql: undefined,
-      hashSqlFiles,
-      ...(contractMarker === undefined ? {} : { contractMarker }),
-    }),
-  );
+function inspect(repository: GitPackage): Promise<readonly Finding[]> {
+  return Promise.resolve(expandContractRule.run({ packageDir: repository.dir, sql: undefined, hashSqlFiles }));
 }
 
 /** Adds one migration after the release and returns what the rule says about it. */
-async function added(sql: string, options: { marker?: boolean | "pending"; tables?: { name: string; columns: string[] }[] } = {}): Promise<readonly Finding[]> {
+async function added(sql: string, options: { tables?: { name: string; columns: string[] }[] } = {}): Promise<readonly Finding[]> {
   const repository = released();
   repository.migration(SECOND, sql, options.tables ?? [{ name: "bookmarks", columns: BOOKMARKS }]);
-  return inspect(repository, options.marker);
+  return inspect(repository);
 }
 
 describe("the failure scenario of a rolling deploy", () => {
@@ -218,8 +208,7 @@ describe("what is rejected in a migration added since the latest release tag", (
 
   it("follows a table through a rename in the same release", async () => {
     const findings = await added(
-      'ALTER TABLE "bookmarks" RENAME TO "links";\n--> statement-breakpoint\nALTER TABLE "links" DROP COLUMN "title";',
-      { marker: true },
+      'ALTER TABLE "bookmarks" RENAME TO "links";\n--> statement-breakpoint\nALTER TABLE "links" DROP COLUMN "title";'
     );
     expect(findings.map((finding) => finding.message)).toEqual([
       expect.stringContaining("renames table bookmarks to links"),
@@ -358,7 +347,7 @@ async function afterContract(declaration: string, sql: string): Promise<readonly
   const repository = released();
   repository.migration(SECOND, `${CONTRACT}${declaration}`, [{ name: "bookmarks", columns: BOOKMARKS }]);
   repository.migration(THIRD, sql);
-  return inspect(repository, true);
+  return inspect(repository);
 }
 
 describe("a column of a domain type on a table of the release", () => {
@@ -413,14 +402,17 @@ describe("a column of a domain type on a table of the release", () => {
     expect(findings[0]?.message).toContain(VALIDATES);
   });
 
-  it("accepts it in a contract migration with the header and the marker, and names the marker when only the header is there", async () => {
+  it("accepts it in a contract migration with the header, and names the missing header without one", async () => {
     const repository = released();
     repository.migration(SECOND, `${CONTRACT}${POSITIVE}`, [{ name: "bookmarks", columns: BOOKMARKS }]);
     repository.migration(THIRD, `${CONTRACT}ALTER TABLE "bookmarks" ADD COLUMN "a" d;`);
-    expect(await inspect(repository, true)).toEqual([]);
-    const findings = await inspect(repository);
+    expect(await inspect(repository)).toEqual([]);
+    const bare = released();
+    bare.migration(SECOND, `${CONTRACT}${POSITIVE}`, [{ name: "bookmarks", columns: BOOKMARKS }]);
+    bare.migration(THIRD, 'ALTER TABLE "bookmarks" ADD COLUMN "a" d;');
+    const findings = await inspect(bare);
     expect(findings.length).toBeGreaterThan(0);
-    expect(findings.every(({ message }) => message.includes(MARKER_HINT))).toBe(true);
+    expect(findings.every(({ message }) => message.includes("has no contract header"))).toBe(true);
     expect(findings.some(({ message }) => message.includes(VALIDATES))).toBe(true);
   });
 
@@ -460,7 +452,7 @@ describe("a column of a domain type on a table of the release", () => {
       repository.migration(SECOND, `${CONTRACT}${declaration}`, [{ name: "bookmarks", columns: BOOKMARKS }]);
       repository.migration(THIRD, `${CONTRACT}${change}\n${UNREADABLE}`);
       repository.migration(FOURTH, ADD);
-      const findings = await inspect(repository, true);
+      const findings = await inspect(repository);
       expect(findings).toHaveLength(1);
       expect(findings[0]?.object).toBe(`migrations/${FOURTH}.sql`);
       expect(findings[0]?.message).toContain("adds column bookmarks.a of type d");
@@ -489,7 +481,7 @@ describe("a column of a domain type on a table of the release", () => {
       repository.migration(SECOND, "CREATE TYPE kind AS ENUM ('a');", [{ name: "bookmarks", columns: BOOKMARKS }]);
       repository.migration(THIRD, `${CONTRACT}${UNREADABLE}`);
       repository.migration(FOURTH, 'ALTER TABLE "bookmarks" ADD COLUMN "a" kind;');
-      const findings = await inspect(repository, true);
+      const findings = await inspect(repository);
       expect(findings).toHaveLength(1);
       expect(findings[0]?.object).toBe(`migrations/${FOURTH}.sql`);
       expect(findings[0]?.message).toContain(VALIDATES);
@@ -502,7 +494,7 @@ describe("a column of a domain type on a table of the release", () => {
       repository.migration(SECOND, `${CONTRACT}CREATE DOMAIN d AS integer;`, [{ name: "bookmarks", columns: BOOKMARKS }]);
       repository.migration(THIRD, `${CONTRACT}${DO_BLOCK}`);
       repository.migration(FOURTH, ADD);
-      const findings = await inspect(repository, true);
+      const findings = await inspect(repository);
       expect(findings).toHaveLength(1);
       expect(findings[0]?.object).toBe(`migrations/${FOURTH}.sql`);
       expect(findings[0]?.message).toContain("adds column bookmarks.a of type d");
@@ -528,7 +520,7 @@ describe("a column of a domain type on a table of the release", () => {
       repository.migration(SECOND, "CREATE TYPE kind AS ENUM ('a');", [{ name: "bookmarks", columns: BOOKMARKS }]);
       repository.migration(THIRD, `${CONTRACT}DO $$ BEGIN PERFORM 1; END $$;`);
       repository.migration(FOURTH, 'ALTER TABLE "bookmarks" ADD COLUMN "a" kind;');
-      const findings = await inspect(repository, true);
+      const findings = await inspect(repository);
       expect(findings).toHaveLength(1);
       expect(findings[0]?.object).toBe(`migrations/${FOURTH}.sql`);
     });
@@ -538,7 +530,7 @@ describe("a column of a domain type on a table of the release", () => {
       repository.migration(SECOND, `${CONTRACT}${DO_BLOCK}`, [{ name: "bookmarks", columns: BOOKMARKS }]);
       repository.migration(THIRD, `${CONTRACT}CREATE TYPE kind AS ENUM ('a');\nCREATE DOMAIN d AS integer;`);
       repository.migration(FOURTH, 'ALTER TABLE "bookmarks" ADD COLUMN "a" integer, ADD COLUMN "b" citext, ADD COLUMN "e" kind, ADD COLUMN "f" d;');
-      expect(await inspect(repository, true)).toEqual([]);
+      expect(await inspect(repository)).toEqual([]);
     });
 
     it("still accepts a built-in type, the citext type and a type declared after it", async () => {
@@ -546,7 +538,7 @@ describe("a column of a domain type on a table of the release", () => {
       repository.migration(SECOND, `${CONTRACT}${UNREADABLE}`, [{ name: "bookmarks", columns: BOOKMARKS }]);
       repository.migration(THIRD, `${CONTRACT}CREATE TYPE kind AS ENUM ('a');\nCREATE DOMAIN d AS integer;`);
       repository.migration(FOURTH, 'ALTER TABLE "bookmarks" ADD COLUMN "a" integer, ADD COLUMN "b" citext, ADD COLUMN "c" text[], ADD COLUMN "e" kind, ADD COLUMN "f" d;');
-      expect(await inspect(repository, true)).toEqual([]);
+      expect(await inspect(repository)).toEqual([]);
     });
   });
 
@@ -557,7 +549,7 @@ describe("a column of a domain type on a table of the release", () => {
       { name: "notes", columns: ["id"] },
     ]);
     repository.migration(THIRD, 'ALTER TABLE "notes" ADD COLUMN "a" d;');
-    expect(await inspect(repository, true)).toEqual([]);
+    expect(await inspect(repository)).toEqual([]);
   });
 });
 
@@ -654,14 +646,17 @@ describe("a column of a domain with a default that is not provably constant or s
     expect(findings[0]?.message).toContain(VOLATILE);
   });
 
-  it("accepts it in a contract migration with the header and the marker, and names the marker when only the header is there", async () => {
+  it("accepts it in a contract migration with the header, and names the missing header without one", async () => {
     const repository = released();
     repository.migration(SECOND, `${CONTRACT}${VOLATILE_DOMAIN}`, [{ name: "bookmarks", columns: BOOKMARKS }]);
     repository.migration(THIRD, `${CONTRACT}${ADD_D}`);
-    expect(await inspect(repository, true)).toEqual([]);
-    const findings = await inspect(repository);
+    expect(await inspect(repository)).toEqual([]);
+    const bare = released();
+    bare.migration(SECOND, `${CONTRACT}${VOLATILE_DOMAIN}`, [{ name: "bookmarks", columns: BOOKMARKS }]);
+    bare.migration(THIRD, ADD_D);
+    const findings = await inspect(bare);
     expect(findings.length).toBeGreaterThan(0);
-    expect(findings.every(({ message }) => message.includes(MARKER_HINT))).toBe(true);
+    expect(findings.every(({ message }) => message.includes("has no contract header"))).toBe(true);
     expect(findings.some(({ message }) => message.includes(VOLATILE))).toBe(true);
   });
 
@@ -697,7 +692,7 @@ describe("a column of a domain with a default that is not provably constant or s
       { name: "notes", columns: ["id"] },
     ]);
     repository.migration(THIRD, 'ALTER TABLE "notes" ADD COLUMN "a" d;');
-    expect(await inspect(repository, true)).toEqual([]);
+    expect(await inspect(repository)).toEqual([]);
   });
 
   it("rejects a domain with a constant default after a migration this check cannot read", async () => {
@@ -706,7 +701,7 @@ describe("a column of a domain with a default that is not provably constant or s
     repository.migration(SECOND, `${CONTRACT}CREATE DOMAIN d AS float8 DEFAULT 1;`, [{ name: "bookmarks", columns: BOOKMARKS }]);
     repository.migration(THIRD, `${CONTRACT}DO $$ BEGIN ALTER DOMAIN d SET DEFAULT random(); END $$;`);
     repository.migration(FOURTH, ADD_D);
-    const findings = await inspect(repository, true);
+    const findings = await inspect(repository);
     expect(findings).toHaveLength(1);
     expect(findings[0]?.object).toBe(`migrations/${FOURTH}.sql`);
     expect(findings[0]?.message).toContain("adds column bookmarks.a of type d");
@@ -820,58 +815,39 @@ function pair(header: string, sql = 'ALTER TABLE "bookmarks" DROP COLUMN "legacy
 }
 const HEADER = `-- slugbase:contract expand=${SECOND} release=1.1.0\n`;
 
-describe("the marked contract half of an expand/contract pair", () => {
-  it("accepts the drop with the header and the marker", async () => {
-    expect(await inspect(pair(HEADER), true)).toEqual([]);
+describe("the contract half of an expand/contract pair", () => {
+  it("accepts the drop with the header", async () => {
+    expect(await inspect(pair(HEADER))).toEqual([]);
   });
 
-  it("accepts a table-rewriting ADD COLUMN with the header and the marker, and rejects it with the header alone", async () => {
+  it("accepts a table-rewriting ADD COLUMN with the header, and rejects it without one", async () => {
     const sql = 'ALTER TABLE "bookmarks" ADD COLUMN "n" bigserial NOT NULL;\n';
-    expect(await inspect(pair(HEADER, sql), true)).toEqual([]);
-    const findings = await inspect(pair(HEADER, sql));
+    expect(await inspect(pair(HEADER, sql))).toEqual([]);
+    const findings = await inspect(pair("", sql));
     expect(findings).toHaveLength(1);
     expect(findings[0]?.message).toContain(REWRITES);
-    expect(findings[0]?.message).toContain(MARKER_HINT);
+    expect(findings[0]?.message).toContain("has no contract header");
   });
 
-  it("accepts a revocation on a table of the release with the header and the marker, and rejects it with the header alone", async () => {
+  it("accepts a revocation on a table of the release with the header, and rejects it without one", async () => {
     const sql = "REVOKE SELECT ON bookmarks FROM slugbase_app;\n";
-    expect(await inspect(pair(HEADER, sql), true)).toEqual([]);
-    const findings = await inspect(pair(HEADER, sql));
+    expect(await inspect(pair(HEADER, sql))).toEqual([]);
+    const findings = await inspect(pair("", sql));
     expect(findings).toHaveLength(1);
     expect(findings[0]?.message).toContain("revokes privileges on table bookmarks, which exists at v1.1.0");
-    expect(findings[0]?.message).toContain(MARKER_HINT);
-  });
-
-  it("rejects a revocation on a table of the release without a header, whatever the marker says", async () => {
-    const findings = await inspect(pair("", "REVOKE SELECT ON bookmarks FROM slugbase_app;\n"), true);
-    expect(findings).toHaveLength(1);
     expect(findings[0]?.message).toContain("has no contract header");
   });
 
   it("accepts the release written with its v and a header after other comments", async () => {
     const header = `-- A note first.\n\n-- slugbase:contract expand=${SECOND} release=v1.1.0\n`;
-    expect(await inspect(pair(header), true)).toEqual([]);
+    expect(await inspect(pair(header))).toEqual([]);
   });
 
-  it("rejects the drop with the header alone", async () => {
-    const findings = await inspect(pair(HEADER));
-    expect(findings).toHaveLength(1);
-    expect(findings[0]?.message).toContain(MARKER_HINT);
-    expect(findings[0]?.message).toContain("SLUGBASE_DB_CHECK_CONTRACT=true");
-  });
-
-  it("rejects the drop with the marker alone", async () => {
-    const findings = await inspect(pair(""), true);
-    expect(findings).toHaveLength(1);
-    expect(findings[0]?.message).toContain("has no contract header");
-    expect(findings[0]?.message).not.toContain(MARKER_HINT);
-  });
-
-  it("rejects the drop with neither", async () => {
+  it("rejects the drop without a header, and names the header syntax", async () => {
     const findings = await inspect(pair(""));
+    expect(findings).toHaveLength(1);
     expect(findings[0]?.message).toContain("has no contract header");
-    expect(findings[0]?.message).toContain(MARKER_HINT);
+    expect(findings[0]?.message).toContain("-- slugbase:contract expand=<migration tag> release=<version>");
   });
 
   it.each([
@@ -882,27 +858,42 @@ describe("the marked contract half of an expand/contract pair", () => {
     ["an expand migration that is not part of the named release", `-- slugbase:contract expand=${SECOND} release=1.0.0\n`, `${SECOND} is not part of that release`],
     ["a header after the first statement", `COMMENT ON TABLE bookmarks IS 'x';\n${HEADER}`, "has no contract header"],
     ["a header after a statement behind a lone carriage return", `-- note\rCOMMENT ON TABLE bookmarks IS 'x';\n${HEADER}`, "has no contract header"],
-  ])("rejects %s even with the marker", async (_name, header, expected) => {
-    const findings = await inspect(pair(header), true);
+  ])("rejects %s", async (_name, header, expected) => {
+    const findings = await inspect(pair(header));
     expect(findings).toHaveLength(1);
     expect(findings[0]?.message).toContain(expected);
   });
 
   it("rejects a contract that is paired with itself", async () => {
-    const findings = await inspect(pair(`-- slugbase:contract expand=${THIRD} release=1.1.0\n`), true);
+    const findings = await inspect(pair(`-- slugbase:contract expand=${THIRD} release=1.1.0\n`));
     expect(findings[0]?.message).toContain(`${THIRD} is not part of that release`);
   });
 
-  it("does not accept a timeout set in the file, with the header and the marker", async () => {
-    const findings = await inspect(pair(HEADER, "SET lock_timeout = 0;\nALTER TABLE bookmarks DROP COLUMN legacy_title;\n"), true);
+  it("does not accept a timeout set in the file, with the header", async () => {
+    const findings = await inspect(pair(HEADER, "SET lock_timeout = 0;\nALTER TABLE bookmarks DROP COLUMN legacy_title;\n"));
     expect(findings).toHaveLength(1);
     expect(findings[0]?.message).toContain("sets lock_timeout");
   });
 
-  it("accepts a statement it cannot place only in the marked pair", async () => {
+  it("accepts a statement it cannot place only in a pair with a header", async () => {
     const sql = "DO $$ BEGIN PERFORM 1; END $$;\n";
-    expect(await inspect(pair(HEADER, sql))).toHaveLength(1);
-    expect(await inspect(pair(HEADER, sql), true)).toEqual([]);
+    expect(await inspect(pair("", sql))).toHaveLength(1);
+    expect(await inspect(pair(HEADER, sql))).toEqual([]);
+  });
+
+  it("reports every problem of a step without a header, not only the first", async () => {
+    const sql = 'ALTER TABLE "bookmarks" DROP COLUMN "legacy_title";\nALTER TABLE "bookmarks" ADD COLUMN "n" bigserial;\n';
+    expect(await inspect(pair("", sql))).toHaveLength(2);
+    expect(await inspect(pair(HEADER, sql))).toEqual([]);
+  });
+
+  it("does not let a valid header license a data change or a session timeout", async () => {
+    const data = await inspect(pair(HEADER, 'ALTER TABLE "bookmarks" DROP COLUMN "legacy_title";\nUPDATE bookmarks SET title = \'x\';\n'));
+    expect(data).toHaveLength(1);
+    expect(data[0]?.message).toContain("changes data with");
+    const timeout = await inspect(pair(HEADER, "SET lock_timeout = 0;\nALTER TABLE bookmarks DROP COLUMN legacy_title;\n"));
+    expect(timeout).toHaveLength(1);
+    expect(timeout[0]?.message).toContain("sets lock_timeout");
   });
 });
 
@@ -994,7 +985,7 @@ describe("data-changing statements", () => {
     }
   });
 
-  describe("in the marked contract half of an expand/contract pair", () => {
+  describe("in the contract half of an expand/contract pair", () => {
     function pair(sql: string): GitPackage {
       const repository = released("v1.0.0");
       repository.migration(SECOND, 'ALTER TABLE "bookmarks" ADD COLUMN "name" text;', [{ name: "bookmarks", columns: [...BOOKMARKS, "name"] }]);
@@ -1004,8 +995,8 @@ describe("data-changing statements", () => {
       return repository;
     }
 
-    it.each(STATEMENTS)("rejects %s with the header and the marker", async (_name, sql, statement) => {
-      const findings = await inspect(pair(sql), true);
+    it.each(STATEMENTS)("rejects %s with the header", async (_name, sql, statement) => {
+      const findings = await inspect(pair(sql));
       expect(findings).toHaveLength(1);
       expect(findings[0]?.object).toBe(`migrations/${THIRD}.sql`);
       expect(findings[0]?.message).toContain(`changes data with ${statement}`);
@@ -1014,7 +1005,7 @@ describe("data-changing statements", () => {
 
     it("still accepts the contract drop beside nothing else, and rejects the data statement next to it", async () => {
       const sql = 'ALTER TABLE "bookmarks" DROP COLUMN "legacy_title";\nUPDATE "bookmarks" SET "name" = "title";';
-      const findings = await inspect(pair(sql), true);
+      const findings = await inspect(pair(sql));
       expect(findings).toHaveLength(1);
       expect(findings[0]?.message).toContain("changes data with UPDATE");
     });
@@ -1037,81 +1028,6 @@ describe("the session timeouts", () => {
 
   it("does not take a comment for a setting", async () => {
     expect(await added("-- migrate sets lock_timeout\nCOMMENT ON TABLE bookmarks IS 'x';")).toEqual([]);
-  });
-});
-
-describe("the contract marker", () => {
-  it("reads true, false, pending and an absent variable, and nothing else", () => {
-    expect(contractMarkerFromEnv({ SLUGBASE_DB_CHECK_CONTRACT: "true" })).toBe("set");
-    expect(contractMarkerFromEnv({ SLUGBASE_DB_CHECK_CONTRACT: "false" })).toBe("unset");
-    expect(contractMarkerFromEnv({ SLUGBASE_DB_CHECK_CONTRACT: "pending" })).toBe("pending");
-    expect(contractMarkerFromEnv({})).toBe("unset");
-    expect(contractMarkerFromEnv({ SLUGBASE_DB_CHECK_CONTRACT: undefined })).toBe("unset");
-  });
-
-  it("refuses any other value instead of reading it as unset", () => {
-    for (const value of ["", "1", "TRUE", "True", "yes", " true", "true ", "Pending", "awaiting"]) {
-      expect(() => contractMarkerFromEnv({ SLUGBASE_DB_CHECK_CONTRACT: value }), JSON.stringify(value)).toThrow(
-        "must be true, false or pending",
-      );
-    }
-  });
-});
-
-describe("a push run, where the label cannot be read", () => {
-  const failing = (findings: readonly Finding[]): Finding[] => findings.filter((finding) => finding.awaiting !== true);
-
-  it("reports a step with a valid header as awaiting the label, not as a failure", async () => {
-    const findings = await inspect(pair(HEADER), "pending");
-    expect(findings).toHaveLength(1);
-    expect(findings[0]?.awaiting).toBe(true);
-    expect(findings[0]?.message).toContain("drops column bookmarks.legacy_title");
-    expect(findings[0]?.message).toContain("awaits the migration:contract label");
-    expect(failing(findings)).toEqual([]);
-  });
-
-  it("reports every problem of the step, not only the first", async () => {
-    const sql = 'ALTER TABLE "bookmarks" DROP COLUMN "legacy_title";\nALTER TABLE "bookmarks" ADD COLUMN "n" bigserial;\n';
-    const findings = await inspect(pair(HEADER, sql), "pending");
-    expect(findings).toHaveLength(2);
-    expect(findings.every((finding) => finding.awaiting === true)).toBe(true);
-  });
-
-  it("fails a destructive step with no header", async () => {
-    const findings = await inspect(pair(""), "pending");
-    expect(findings).toHaveLength(1);
-    expect(findings[0]?.awaiting).toBeUndefined();
-    expect(findings[0]?.message).toContain("has no contract header");
-  });
-
-  it.each([
-    ["a malformed header", `-- slugbase:contract expand=${SECOND}\n`, "malformed contract header"],
-    ["two headers", `-- slugbase:contract expand=${SECOND} release=1.1.0\n-- slugbase:contract expand=${SECOND} release=1.0.0\n`, "malformed contract header"],
-    ["an expand migration the journal does not list", "-- slugbase:contract expand=20260101000001_nothing release=1.1.0\n", "not a migration of the journal"],
-    ["a release that is not a tag", `-- slugbase:contract expand=${SECOND} release=9.9.9\n`, "which is not a release tag"],
-    ["an expand migration that is not part of the named release", `-- slugbase:contract expand=${SECOND} release=1.0.0\n`, `${SECOND} is not part of that release`],
-    ["a header after the first statement", `COMMENT ON TABLE bookmarks IS 'x';\n${HEADER}`, "has no contract header"],
-  ])("fails %s", async (_name, header, expected) => {
-    const findings = await inspect(pair(header), "pending");
-    expect(findings).toHaveLength(1);
-    expect(findings[0]?.awaiting).toBeUndefined();
-    expect(findings[0]?.message).toContain(expected);
-  });
-
-  it("does not let a valid header license a data change or a session timeout", async () => {
-    const data = await inspect(pair(HEADER, 'ALTER TABLE "bookmarks" DROP COLUMN "legacy_title";\nUPDATE bookmarks SET title = \'x\';\n'), "pending");
-    expect(failing(data)).toHaveLength(1);
-    expect(failing(data)[0]?.message).toContain("changes data with");
-    const timeout = await inspect(pair(HEADER, "SET lock_timeout = 0;\nALTER TABLE bookmarks DROP COLUMN legacy_title;\n"), "pending");
-    expect(failing(timeout)).toHaveLength(1);
-    expect(failing(timeout)[0]?.message).toContain("sets lock_timeout");
-  });
-
-  it("still names the marker as missing when the run carries none", async () => {
-    const findings = await inspect(pair(HEADER), false);
-    expect(findings).toHaveLength(1);
-    expect(findings[0]?.awaiting).toBeUndefined();
-    expect(findings[0]?.message).toContain(MARKER_HINT);
   });
 });
 
@@ -1230,19 +1146,14 @@ describe("a custom-SQL step that re-emits the REVOKE statements of the release",
   const CREATE = 'CREATE TABLE "bookmarks" ("id" uuid PRIMARY KEY, "title" text, "legacy_title" text);\n--> statement-breakpoint\nCREATE TABLE "notes" ("id" uuid PRIMARY KEY, "body" text);';
 
   /** The release's custom step holds REVOKE_BOOKMARKS; `reEmit` is the custom step of the migration added after it. */
-  async function reEmitted(reEmit: string, release = customStep(REVOKE_BOOKMARKS), marker?: boolean | "pending"): Promise<readonly Finding[]> {
+  async function reEmitted(reEmit: string, release = customStep(REVOKE_BOOKMARKS)): Promise<readonly Finding[]> {
     const repository = releasedWith(`${CREATE}${BREAKPOINT}${release}`);
     repository.migration(SECOND, reEmit, TABLES);
-    return inspect(repository, marker);
+    return inspect(repository);
   }
 
   it("accepts a re-emit of the same src/sql without a contract header", async () => {
     expect(await reEmitted(customStep(REVOKE_BOOKMARKS))).toEqual([]);
-  });
-
-  it("accepts it under every contract marker", async () => {
-    expect(await reEmitted(customStep(REVOKE_BOOKMARKS), customStep(REVOKE_BOOKMARKS), true)).toEqual([]);
-    expect(await reEmitted(customStep(REVOKE_BOOKMARKS), customStep(REVOKE_BOOKMARKS), "pending")).toEqual([]);
   });
 
   it("rejects a new REVOKE on a table of the release beside the re-emitted ones, naming only the new one", async () => {
@@ -1250,7 +1161,7 @@ describe("a custom-SQL step that re-emits the REVOKE statements of the release",
     expect(findings).toHaveLength(1);
     expect(findings[0]?.object).toBe(`migrations/${SECOND}.sql`);
     expect(findings[0]?.message).toContain("revokes privileges on table notes, which exists at v1.0.0");
-    expect(findings[0]?.message).toContain(MARKER_HINT);
+    expect(findings[0]?.message).toContain("has no contract header");
   });
 
   it("accepts a re-emit that moves the statement to another file or adds a GRANT on another table", async () => {
@@ -1291,7 +1202,7 @@ describe("a custom-SQL step that re-emits the REVOKE statements of the release",
       const findings = await reEmitted(customStep(REVOKE_BOOKMARKS), release);
       expect(findings).toHaveLength(1);
       expect(findings[0]?.message).toContain("revokes privileges on table bookmarks, which exists at v1.0.0");
-      expect(findings[0]?.message).toContain(MARKER_HINT);
+      expect(findings[0]?.message).toContain("has no contract header");
     });
 
     it("rejects a re-emit that puts the GRANT before the REVOKE", async () => {

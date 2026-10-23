@@ -129,6 +129,9 @@ importers:
       '@playwright/test':
         specifier: ^1.64.0
         version: 1.64.0
+      '@slugbase/testing':
+        specifier: workspace:*
+        version: link:../packages/testing
 
   packages/adapters:
     dependencies:
@@ -260,6 +263,9 @@ importers:
 
   packages/testing:
     dependencies:
+      '@node-rs/argon2':
+        specifier: 2.2.2
+        version: 2.2.2
       '@slugbase/core':
         specifier: workspace:*
         version: link:../core

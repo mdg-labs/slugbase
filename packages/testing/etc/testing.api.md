@@ -12,7 +12,71 @@ import { EntitlementVersions } from '@slugbase/core';
 import { WorkspaceEntitlementGrant } from '@slugbase/core';
 
 // @public
+export const BOOKMARK_SHAPE_NAMES: readonly ["longest-title", "unbreakable-title", "single-character-title", "rtl-arabic", "rtl-hebrew", "mixed-direction", "emoji", "emoji-only", "markup-title", "markup-description", "markup-entities", "pinned-opened", "pinned-unopened", "opened-often", "never-opened", "duplicate-canonical-a", "duplicate-canonical-b", "duplicate-canonical-c"];
+
+// @public (undocumented)
+export interface BookmarkContext {
+    // (undocumented)
+    readonly ids: () => string;
+    readonly now: Date;
+    readonly owners: readonly string[];
+    // (undocumented)
+    readonly random: Random;
+}
+
+// @public (undocumented)
+export type BookmarkShapeName = (typeof BOOKMARK_SHAPE_NAMES)[number];
+
+// @public
+export function bookmarkShapes(context: BookmarkContext): readonly {
+    readonly name: BookmarkShapeName;
+    readonly bookmark: SeedBookmark;
+}[];
+
+// @public
+export function buildBookmarks(count: number, context: BookmarkContext): SeedBookmark[];
+
+// @public
+export function buildDemoInstance(options?: DemoInstanceOptions): DemoInstance;
+
+// @public
+export function createIds(random: Random, startMs: number): () => string;
+
+// @public
+export function createRandom(seed: number): Random;
+
+// @public
+export const DEMO_BOOKMARK_COUNT = 300;
+
+// @public
+export const DEMO_NOW: Date;
+
+// @public
+export const DEMO_SEED = 20260115;
+
+// @public (undocumented)
+export interface DemoInstance {
+    // (undocumented)
+    readonly accounts: readonly SeedAccount[];
+    // (undocumented)
+    readonly workspaces: readonly SeedWorkspace[];
+}
+
+// @public (undocumented)
+export interface DemoInstanceOptions {
+    // (undocumented)
+    readonly demoBookmarks?: number;
+    // (undocumented)
+    readonly largeBookmarks?: number;
+    // (undocumented)
+    readonly seed?: number;
+}
+
+// @public
 export type GrantedValue = boolean | EntitlementLimit;
+
+// @public
+export const LARGE_BOOKMARK_COUNT = 5000;
 
 // @public
 export class LimitedEntitlementSource implements EntitlementSource, EntitlementVersions {
@@ -33,6 +97,72 @@ export class LimitedEntitlementSource implements EntitlementSource, EntitlementV
         readonly accounts: readonly string[];
     };
     get version(): number;
+}
+
+// @public
+export interface Random {
+    chance(probability: number): boolean;
+    int(maxExclusive: number): number;
+    next(): number;
+    pick<T>(items: readonly T[]): T;
+}
+
+// @public (undocumented)
+export interface SeedAccount {
+    // (undocumented)
+    readonly displayName: string;
+    // (undocumented)
+    readonly email: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly isInstanceAdmin: boolean;
+    // (undocumented)
+    readonly key: SeedAccountKey;
+}
+
+// @public (undocumented)
+export type SeedAccountKey = "admin" | "member";
+
+// @public
+export interface SeedBookmark {
+    // (undocumented)
+    readonly createdAt: Date;
+    // (undocumented)
+    readonly description: string | null;
+    // (undocumented)
+    readonly host: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly lastOpenedAt: Date | null;
+    // (undocumented)
+    readonly openCount: number;
+    // (undocumented)
+    readonly ownerId: string;
+    // (undocumented)
+    readonly pinnedAt: Date | null;
+    // (undocumented)
+    readonly title: string;
+    // (undocumented)
+    readonly url: string;
+    // (undocumented)
+    readonly urlCanonical: string;
+}
+
+// @public (undocumented)
+export interface SeedWorkspace {
+    // (undocumented)
+    readonly bookmarks: readonly SeedBookmark[];
+    // (undocumented)
+    readonly id: string;
+    readonly members: readonly {
+        readonly account: SeedAccountKey;
+        readonly role: "admin" | "member";
+    }[];
+    // (undocumented)
+    readonly name: string;
+    readonly owner: SeedAccountKey;
 }
 
 

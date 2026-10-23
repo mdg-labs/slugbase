@@ -21,6 +21,7 @@ export type {
 export {
   EntitlementSourceError,
   EntitlementVersionError,
+  createBookmarkEntitlements,
   createEntitlementCheck,
   createEntitlementUpgradeCheck,
   createEntitlementService,
@@ -32,6 +33,7 @@ export {
 } from "./engine.ts";
 export type {
   AccountEntitlementSet,
+  BookmarkEntitlements,
   EntitlementCheck,
   EntitlementService,
   EntitlementServiceOptions,

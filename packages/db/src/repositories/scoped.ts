@@ -5,9 +5,11 @@ import {
   getTableName,
   type InferInsertModel,
   type InferSelectModel,
+  type Name,
   type SQL,
   sql,
 } from "drizzle-orm";
+import { CasingCache } from "drizzle-orm/casing";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
 import {
@@ -54,11 +56,36 @@ export interface ScopedRepository<T extends WorkspaceTable> {
   delete(where?: SQL): Promise<InferSelectModel<T>[]>;
 }
 
-export interface ScopedRepositoryDefinition<T extends WorkspaceTable> {
+export interface ScopedRepositoryDefinition<T extends WorkspaceTable, M extends ScopedMethod = ScopedMethod> {
   readonly name: string;
   readonly table: T;
   /** The repository's methods on an open tenant transaction. */
-  bind(tx: TenantTx): ScopedRepository<T>;
+  bind(tx: TenantTx): Pick<ScopedRepository<T>, M>;
+}
+
+export interface ScopedRepositoryOptions<T extends WorkspaceTable, M extends ScopedMethod> {
+  /**
+   * The methods the repository has, for a table the application role may not write in every way (a table it can only
+   * read and insert into has `select` and `insert`). The matrix runs these and no others, so a method that the role's
+   * privileges refuse is neither defined nor exercised. All four when left out.
+   */
+  readonly methods?: readonly M[];
+  /**
+   * The columns an insert names, for a table whose privileges let the application role insert some of its columns and not
+   * the others (a column grant). The query builder names every column of a table in an insert, with `default` for the ones
+   * it was not given, which such a grant refuses; with this option the statement names the columns given and no other, and a
+   * value for a column outside the list is refused before the database is asked. The row is read back by its primary key.
+   * Every column when left out.
+   */
+  readonly insertColumns?: readonly (keyof InferInsertModel<T> & string)[];
+  /**
+   * The columns an update may set, for a table whose privileges let the application role update some of its columns and not the
+   * others (a column grant, which never includes `workspace_id`). A value for a column outside the list is refused before the
+   * database is asked, and `workspaceId` is never part of the statement, in the RLS-only build as well: the privilege that keeps the
+   * application role from moving a row to another workspace is what the matrix then relies on, next to the policy. Every column
+   * when left out.
+   */
+  readonly updateColumns?: readonly (keyof InferInsertModel<T> & string)[];
 }
 
 function requireWorkspace(tx: TenantTx): string {
@@ -83,13 +110,63 @@ function checkForeignWorkspace(supplied: unknown, workspaceId: string): void {
   }
 }
 
+// The tenant database names the columns the way the schema does (tenant.ts): a column declared without a name takes the snake case of its key.
+const casing = new CasingCache("snake_case");
+
 function assertWorkspaceColumn(name: string, table: PgTable): void {
   const column = getTableColumns(table)["workspaceId"];
-  if (column === undefined || column.name !== "workspace_id" || !column.notNull) {
+  if (column === undefined || casing.getColumnCasing(column) !== "workspace_id" || !column.notNull) {
     throw new Error(
       `the table ${getTableName(table)} of the scoped repository "${name}" has no NOT NULL workspace_id column exposed as workspaceId`,
     );
   }
+}
+
+type TenantHandle = ReturnType<typeof tenantHandle>;
+
+/**
+ * An insert that names the columns it is given and no other, inside the list `allowed` and the workspace; the row is read back by its primary
+ * key, with the workspace predicate of `scope`.
+ */
+async function insertNamed(
+  handle: TenantHandle,
+  table: PgTable,
+  written: Readonly<Record<string, unknown>>,
+  allowed: readonly string[],
+  scope: (where: SQL | undefined) => SQL | undefined,
+): Promise<unknown> {
+  const columns = getTableColumns(table);
+  const given = Object.keys(written).filter((key) => written[key] !== undefined);
+  const refused = given.find((key) => key !== "workspaceId" && !allowed.includes(key));
+  if (refused !== undefined) {
+    throw new Error(`the column ${refused} of ${getTableName(table)} is not one the repository inserts`);
+  }
+  const primary = Object.values(columns).filter((column) => column.primary);
+  const key = primary[0];
+  if (primary.length !== 1 || key === undefined) {
+    throw new Error(`the table ${getTableName(table)} has no single-column primary key to read an inserted row back by`);
+  }
+  const named = (column: PgColumn): Name => sql.identifier(casing.getColumnCasing(column));
+  const entries = given.map((name) => {
+    const column = columns[name];
+    if (column === undefined) {
+      throw new Error(`the table ${getTableName(table)} has no column ${name}`);
+    }
+    return column;
+  });
+  const inserted = await handle.execute(sql`
+    INSERT INTO ${table} (${sql.join(entries.map(named), sql`, `)})
+    VALUES (${sql.join(entries.map((column, index) => sql`${sql.param(written[given[index] ?? ""], column)}`), sql`, `)})
+    RETURNING ${named(key)} AS "primary_key"`);
+  const id = inserted[0]?.["primary_key"];
+  if (inserted.length !== 1 || id === undefined) {
+    throw new Error("an insert returned no row");
+  }
+  const [row] = await handle.select().from(table).where(scope(eq(key, id)));
+  if (row === undefined) {
+    throw new Error("an inserted row cannot be read back");
+  }
+  return row;
 }
 
 /**
@@ -98,7 +175,13 @@ function assertWorkspaceColumn(name: string, table: PgTable): void {
  * no stamp or `foreign_workspace` refusal on an insert or update, so that only
  * row-level security can refuse a statement naming another workspace.
  */
-function build<T extends WorkspaceTable>(table: T, tx: TenantTx, applicationLayer: boolean): ScopedRepository<T> {
+function build<T extends WorkspaceTable>(
+  table: T,
+  tx: TenantTx,
+  applicationLayer: boolean,
+  insertColumns?: readonly string[],
+  updateColumns?: readonly string[],
+): ScopedRepository<T> {
   type Row = InferSelectModel<T>;
   // The generic table type is erased for the query builder, whose own types do not follow it through.
   const pgTable: PgTable = table;
@@ -124,6 +207,9 @@ function build<T extends WorkspaceTable>(table: T, tx: TenantTx, applicationLaye
         written = { ...values, workspaceId };
       }
       const handle = tenantHandle(tx);
+      if (insertColumns !== undefined) {
+        return (await insertNamed(handle, pgTable, written, insertColumns, scope)) as Row;
+      }
       const rows = (await handle.insert(pgTable).values(written).returning()) as Row[];
       const row = rows[0];
       if (row === undefined) {
@@ -135,7 +221,15 @@ function build<T extends WorkspaceTable>(table: T, tx: TenantTx, applicationLaye
       let columns: Record<string, unknown> = { ...set };
       if (applicationLayer) {
         checkForeignWorkspace(set.workspaceId, requireWorkspace(tx));
+      }
+      if (applicationLayer || updateColumns !== undefined) {
         columns = Object.fromEntries(Object.entries(set).filter(([column]) => column !== "workspaceId"));
+      }
+      if (updateColumns !== undefined) {
+        const refused = Object.keys(columns).find((column) => columns[column] !== undefined && !updateColumns.includes(column));
+        if (refused !== undefined) {
+          throw new Error(`the column ${refused} of ${getTableName(pgTable)} is not one the repository updates`);
+        }
       }
       const predicate = scope(where);
       const handle = tenantHandle(tx);
@@ -162,8 +256,10 @@ async function run(
   tx: TenantTx,
   input: RepositoryInput,
   applicationLayer: boolean,
+  insertColumns: readonly string[] | undefined,
+  updateColumns: readonly string[] | undefined,
 ): Promise<readonly unknown[]> {
-  const repository = build(table, tx, applicationLayer);
+  const repository = build(table, tx, applicationLayer, insertColumns, updateColumns);
   switch (method) {
     case "select":
       return repository.select(input.where);
@@ -177,33 +273,57 @@ async function run(
 }
 
 /**
- * The four methods of a scoped repository over `table` in the shape the
- * registry holds, built by the code `defineScopedRepository` uses and not
+ * The methods of a scoped repository over `table` (all four unless `methods`
+ * names fewer) in the shape the registry holds, built by the code `defineScopedRepository` uses and not
  * entered in the registry. For `@slugbase/db/testing`, which hands a suite the
  * methods of a repository over a test table without adding them to the
  * process-wide registry.
  */
-export function scopedRepositoryMethods(name: string, table: WorkspaceTable): RepositoryMethodEntry[] {
+export function scopedRepositoryMethods(
+  name: string,
+  table: WorkspaceTable,
+  options: { readonly methods?: readonly ScopedMethod[]; readonly insertColumns?: readonly string[]; readonly updateColumns?: readonly string[] } = {},
+): RepositoryMethodEntry[] {
   assertWorkspaceColumn(name, table);
   const tableName = getTableName(table);
-  return (Object.keys(ACCESS) as ScopedMethod[]).map((method) => ({
+  const methods = options.methods ?? (Object.keys(ACCESS) as ScopedMethod[]);
+  return methods.map((method) => ({
     repository: name,
     table: tableName,
     method,
     access: ACCESS[method],
-    invoke: (tx, input = {}) => run(table, method, tx, input, true),
-    invokeRlsOnly: (tx, input = {}) => run(table, method, tx, input, false),
+    invoke: (tx, input = {}) => run(table, method, tx, input, true, options.insertColumns, options.updateColumns),
+    invokeRlsOnly: (tx, input = {}) => run(table, method, tx, input, false, options.insertColumns, options.updateColumns),
   }));
 }
 
 /**
  * Defines a scoped repository over a table with a `workspace_id` column and
- * enters its four methods in the registry the matrix runner iterates.
+ * enters its methods (all four, unless `options.methods` names fewer) in the
+ * registry the matrix runner iterates.
  */
-export function defineScopedRepository<T extends WorkspaceTable>(
+export function defineScopedRepository<T extends WorkspaceTable, const M extends ScopedMethod = ScopedMethod>(
   name: string,
   table: T,
-): ScopedRepositoryDefinition<T> {
-  registerRepositoryMethods(name, scopedRepositoryMethods(name, table));
-  return { name, table, bind: (tx) => build(table, tx, true) };
+  options: ScopedRepositoryOptions<T, M> = {},
+): ScopedRepositoryDefinition<T, M> {
+  const methods: readonly ScopedMethod[] = options.methods ?? (Object.keys(ACCESS) as ScopedMethod[]);
+  const insertColumns: readonly string[] | undefined = options.insertColumns;
+  const updateColumns: readonly string[] | undefined = options.updateColumns;
+  registerRepositoryMethods(
+    name,
+    scopedRepositoryMethods(name, table, {
+      methods,
+      ...(insertColumns === undefined ? {} : { insertColumns }),
+      ...(updateColumns === undefined ? {} : { updateColumns }),
+    }),
+  );
+  return {
+    name,
+    table,
+    bind(tx) {
+      const repository = build(table, tx, true, insertColumns, updateColumns);
+      return Object.fromEntries(methods.map((method) => [method, repository[method].bind(repository)])) as Pick<ScopedRepository<T>, M>;
+    },
+  };
 }

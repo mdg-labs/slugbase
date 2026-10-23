@@ -6,14 +6,15 @@
 // section 10. The catalog holds the actions that are recorded so far.
 
 /** The groups the audit log filters by. */
-export const AUDIT_CATEGORIES = ["workspace", "member", "invitation"] as const;
+export const AUDIT_CATEGORIES = ["workspace", "member", "invitation", "bookmark"] as const;
 
 export type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
 
-/** The kinds of field a metadata object holds: a text of bounded length, or an identifier. */
+/** The kinds of field a metadata object holds: a text of bounded length, an identifier, or a count (a whole number, as decimal text). */
 export type AuditMetadataField =
   | { readonly type: "text"; readonly minLength: number; readonly maxLength: number }
-  | { readonly type: "uuid" };
+  | { readonly type: "uuid" }
+  | { readonly type: "count" };
 
 export interface AuditActionDefinition {
   readonly category: AuditCategory;
@@ -36,6 +37,9 @@ const FLAG: AuditMetadataField = { type: "text", minLength: 4, maxLength: 5 };
 /** What happens to a departing member's content: `transfer` or `delete`. */
 const CONTENT_CHOICE: AuditMetadataField = { type: "text", minLength: 6, maxLength: 8 };
 
+/** How many rows a bulk change touched; the one thing such an event says about them, never a title or a URL. */
+const COUNT: AuditMetadataField = { type: "count" };
+
 // `transferTo` names an account: the deletion of that account removes the field from the stored row (doc 05 section
 // 7.1), so the parser below validates what is written and is not the check for a row that was read back.
 export const AUDIT_ACTIONS = {
@@ -56,6 +60,9 @@ export const AUDIT_ACTIONS = {
   "invitation.resent": { category: "invitation", metadata: { role: MEMBER_ROLE } },
   "invitation.link_created": { category: "invitation", metadata: { role: MEMBER_ROLE } },
   "invitation.revoked": { category: "invitation", metadata: { role: MEMBER_ROLE } },
+  // A composition archived, or restored, bookmarks of the workspace (doc 01 section 13.3): the number whose state changed, and nothing about them.
+  "bookmark.archived": { category: "bookmark", metadata: { count: COUNT } },
+  "bookmark.restored": { category: "bookmark", metadata: { count: COUNT } },
 } as const satisfies Record<string, AuditActionDefinition>;
 
 export type AuditAction = keyof typeof AUDIT_ACTIONS;
@@ -70,6 +77,8 @@ export type AuditMetadata<Name extends AuditAction = AuditAction> = {
 export function isAuditAction(value: unknown): value is AuditAction {
   return typeof value === "string" && Object.hasOwn(AUDIT_ACTIONS, value);
 }
+
+const COUNT_TEXT = /^(?:0|[1-9][0-9]{0,8})$/;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -92,6 +101,9 @@ function fits(field: AuditMetadataField, value: unknown): boolean {
   }
   if (field.type === "uuid") {
     return UUID.test(value);
+  }
+  if (field.type === "count") {
+    return COUNT_TEXT.test(value);
   }
   // PostgreSQL counts a character as one code point, as Array.from does.
   const length = Array.from(value).length;

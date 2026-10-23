@@ -50,12 +50,13 @@ describe("the enforcement-point inventory", () => {
     }
   });
 
-  it("holds the handler-decided points to operations that declare no entitlement to stage 9: an anonymous operation whose token names the workspace, or an account operation whose key is account-scoped", () => {
+  it("holds the handler-decided points to operations that declare no entitlement to stage 9: an anonymous operation whose token names the workspace, an account operation whose key is account-scoped, or a member operation whose limit is a count taken under the workspace's lock", () => {
     const document = readOperations(loadOpenApiDocument()).operations;
     for (const point of ENFORCEMENT_POINTS.filter((entry) => entry.decidedBy === "handler")) {
       const operation = document.find((candidate) => candidate.operationId === point.operationId);
       const accountScoped = isEntitlementKey(point.entitlement) && ENTITLEMENT_CATALOG[point.entitlement].scope === "account";
-      expect(operation?.auth, point.operationId).toBe(accountScoped ? "account" : "anonymous");
+      const counted = point.entitlement === "bookmarks.max";
+      expect(operation?.auth, point.operationId).toBe(accountScoped ? "account" : counted ? "member" : "anonymous");
       expect(operation?.entitlement, point.operationId).toBeUndefined();
     }
   });
