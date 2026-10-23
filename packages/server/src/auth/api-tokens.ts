@@ -29,7 +29,7 @@ export function createApiTokenAuthenticator({ store }: ApiTokenAuthenticatorOpti
       if (found === undefined) {
         return undefined;
       }
-      const principal: ApiTokenPrincipal = { kind: "api-token", accountId: found.accountId, workspaceId: found.workspaceId, scope: found.scope };
+      const principal: ApiTokenPrincipal = { kind: "api-token", tokenId: found.tokenId, accountId: found.accountId, workspaceId: found.workspaceId, scope: found.scope };
       return principal;
     },
   };

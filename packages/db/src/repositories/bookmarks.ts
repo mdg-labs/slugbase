@@ -25,7 +25,7 @@ import { defineScopedRepository } from "./scoped.ts";
 // bookmark that is plan-archived is not one the product shows or edits, so a lookup and an update leave it out; its owner may still
 // delete it. Changing and deleting a bookmark are its owner's: both name the owner in the statement, so another member's bookmark
 // is a row the statement does not find. A delete is the system operation `sys_bookmark_delete`, which removes the row and gives
-// its place under `bookmarks.max` back in the same statement of the transaction, so the counter and the rows cannot part. The place under
+// its place under `bookmarks.max` back in the same statement of the transaction, so the counter and the rows cannot part; a bulk delete is `sys_bookmark_delete_many`, which lowers the counter once for all the rows it deletes. A bulk pin or unpin locks the caller's rows in identifier order and writes the pin of those not in the wanted state. The place under
 // `bookmarks.max` is taken by the system operation `sys_bookmark_count_take`, which locks the workspace's row, compares the
 // workspace's `bookmark_count` with the ceiling and raises it, in the transaction that inserts the bookmark: a failed
 // insert takes the place back with it, and two creations at the limit minus one make one. Archiving and restoring are the system
@@ -50,6 +50,17 @@ type BookmarkRow = InferSelectModel<typeof bookmarks>;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+function requireIdentifiers(bookmarkIds: readonly string[], action: string): void {
+  if (!bookmarkIds.every((id) => UUID.test(id))) {
+    throw new Error(`${action} takes identifiers only`);
+  }
+}
+
+/** One parameter, whatever the number of identifiers: a PostgreSQL array literal of UUIDs, which hold no character it would need to quote. */
+function uuidArray(bookmarkIds: readonly string[]): string {
+  return `{${bookmarkIds.join(",")}}`;
+}
+
 interface TakenRow extends Record<string, unknown> {
   outcome: string;
   used: number | null;
@@ -61,6 +72,10 @@ interface DeletedRow extends Record<string, unknown> {
 
 interface ArchivedRow extends Record<string, unknown> {
   changed: number | null;
+}
+
+interface DeletedManyRow extends Record<string, unknown> {
+  deleted: number | null;
 }
 
 export interface BookmarkCreation {
@@ -103,6 +118,25 @@ export interface BookmarkRepository {
    * session; another account is a programming error. Needs a transaction opened with a workspace.
    */
   remove(request: { readonly bookmarkId: string; readonly ownerId: string }): Promise<boolean>;
+  /**
+   * Deletes the bookmarks of `bookmarkIds` that the account of the transaction owns in the workspace of the transaction, a plan-archived one
+   * included, through `sys_bookmark_delete_many`, and answers how many were deleted; the workspace's `bookmark_count` falls once, by those
+   * that were not plan-archived, in the same call. An identifier that names no such bookmark is skipped. Undefined, writing nothing, when
+   * the workspace cannot be reached. Needs a transaction opened with a workspace.
+   */
+  removeMany(request: { readonly bookmarkIds: readonly string[] }): Promise<number | undefined>;
+  /**
+   * Pins (`pinned`) or unpins the bookmarks of `bookmarkIds` that `ownerId` owns in the workspace of the transaction and that are not
+   * plan-archived, and answers how many such bookmarks there are. The rows are locked in the order of their identifiers first; only those
+   * not in the wanted state are written, so one that is keeps its pin time and its version. `ownerId` is the account of the transaction.
+   * Needs a transaction opened with a workspace.
+   */
+  setPinned(request: { readonly bookmarkIds: readonly string[]; readonly ownerId: string; readonly pinned: boolean }): Promise<number>;
+  /**
+   * The identifiers of the bookmarks that `filter.ownerId` owns in the workspace of the transaction and that match the filter, newest
+   * first and without the plan-archived ones, at most `limit`. Needs a transaction opened with a workspace.
+   */
+  ids(filter: BookmarkListFilter, limit: number): Promise<readonly string[]>;
   /**
    * Sets or clears `plan_archived_at` of the given bookmarks of the workspace of the transaction through
    * `sys_bookmark_archive_set`, whoever owns them, and answers how many rows changed; the workspace's `bookmark_count` moves by
@@ -351,6 +385,62 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
         throw new Error("sys_bookmark_delete did not return exactly one answer");
       }
       return row.deleted;
+    },
+
+    async removeMany({ bookmarkIds }) {
+      if (tx.workspaceId === undefined) {
+        throw new TenantContextError("workspace_required", "deleting bookmarks needs a tenant transaction opened with a workspace");
+      }
+      requireIdentifiers(bookmarkIds, "deleting bookmarks");
+      const deleted = await tenantHandle(tx).execute<DeletedManyRow>(sql`
+        SELECT public.sys_bookmark_delete_many(${tx.workspaceId}::uuid, ${uuidArray(bookmarkIds)}::uuid[]) AS deleted`);
+      const row = deleted[0];
+      if (deleted.length !== 1 || row === undefined) {
+        throw new Error("sys_bookmark_delete_many did not return exactly one answer");
+      }
+      return row.deleted ?? undefined;
+    },
+
+    async setPinned({ bookmarkIds, ownerId, pinned }) {
+      if (tx.workspaceId === undefined) {
+        throw new TenantContextError("workspace_required", "pinning bookmarks needs a tenant transaction opened with a workspace");
+      }
+      if (ownerId.toLowerCase() !== tx.accountId.toLowerCase()) {
+        throw new Error("only the account of the transaction pins its own bookmarks");
+      }
+      requireIdentifiers(bookmarkIds, "pinning bookmarks");
+      const owned = await tenantHandle(tx)
+        .select({ id: bookmarks.id, pinnedAt: bookmarks.pinnedAt })
+        .from(bookmarks)
+        .where(
+          and(
+            eq(bookmarks.workspaceId, tx.workspaceId),
+            eq(bookmarks.ownerId, ownerId),
+            isNull(bookmarks.planArchivedAt),
+            sql`${bookmarks.id} = ANY (${uuidArray(bookmarkIds)}::uuid[])`,
+          ),
+        )
+        .orderBy(bookmarks.id)
+        .for("update");
+      const toChange = owned.filter((row) => (row.pinnedAt !== null) !== pinned).map((row) => row.id);
+      if (toChange.length > 0) {
+        const changed = await rows.update({ pinnedAt: pinned ? new Date() : null }, sql`${bookmarks.id} = ANY (${uuidArray(toChange)}::uuid[])`);
+        if (changed.length !== toChange.length) {
+          throw new Error("pinning locked bookmarks did not update exactly the rows it locked");
+        }
+      }
+      return owned.length;
+    },
+
+    async ids(filter, limit) {
+      const workspaceId = requireListWorkspace(tx, "listing bookmark identifiers");
+      const found = await tenantHandle(tx)
+        .select({ id: bookmarks.id })
+        .from(bookmarks)
+        .where(listPredicate(workspaceId, filter))
+        .orderBy(SORT_ORDERS.recent.order)
+        .limit(limit);
+      return found.map((row) => row.id);
     },
 
     async setArchived({ bookmarkIds, archived }) {

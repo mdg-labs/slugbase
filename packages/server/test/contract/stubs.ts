@@ -86,7 +86,7 @@ export function createStubWorld(fixture: TenantFixture): StubWorld {
       if ((scope !== "read" && scope !== "read-write") || accountId === undefined || membership === undefined) {
         return Promise.resolve(undefined);
       }
-      return Promise.resolve({ kind: "api-token", accountId, workspaceId: membership.workspaceId, scope });
+      return Promise.resolve({ kind: "api-token", tokenId: `token-${accountId}`, accountId, workspaceId: membership.workspaceId, scope });
     },
   };
 

@@ -244,6 +244,9 @@ export const AUTH_POLICIES: readonly ["anonymous", "partial", "account", "member
 export type AuthPolicy = (typeof AUTH_POLICIES)[number];
 
 // @public
+export const BOOKMARK_BULK_IDS_MAX = 1000;
+
+// @public
 export const BOOKMARK_CURSOR_MAX_LENGTH = 4096;
 
 // @public
@@ -259,6 +262,9 @@ export const BOOKMARK_LIST_MAX_LIMIT = 100;
 export const BOOKMARK_LIST_TOTAL_CAP = 10000;
 
 // @public
+export const BOOKMARK_SELECT_ALL_CAP = 5000;
+
+// @public
 export const BOOKMARK_TITLE_MAX_LENGTH = 300;
 
 // @public
@@ -266,6 +272,45 @@ export const BOOKMARK_URL_MAX_LENGTH = 2048;
 
 // @public (undocumented)
 export const BOOKMARK_VIEWS: readonly ["grid", "table"];
+
+// @public (undocumented)
+export const BookmarkFilterSchema: z.ZodObject<{
+    scope: z.ZodOptional<z.ZodEnum<{
+        all: "all";
+        mine: "mine";
+    }>>;
+    pinned: z.ZodOptional<z.ZodBoolean>;
+    hasSlug: z.ZodOptional<z.ZodBoolean>;
+    forwarding: z.ZodOptional<z.ZodBoolean>;
+    url: z.ZodOptional<z.ZodString>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const BookmarkIdsQuerySchema: z.ZodObject<{
+    scope: z.ZodDefault<z.ZodEnum<{
+        all: "all";
+        mine: "mine";
+    }>>;
+    url: z.ZodOptional<z.ZodString>;
+    pinned: z.ZodOptional<z.ZodEnum<{
+        true: "true";
+        false: "false";
+    }>>;
+    forwarding: z.ZodOptional<z.ZodEnum<{
+        true: "true";
+        false: "false";
+    }>>;
+    hasSlug: z.ZodOptional<z.ZodEnum<{
+        true: "true";
+        false: "false";
+    }>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const BookmarkIdsSchema: z.ZodObject<{
+    ids: z.ZodArray<z.ZodUUID>;
+    truncated: z.ZodBoolean;
+}, z.core.$strict>;
 
 // @public
 export const BookmarkIfMatchHeaderSchema: z.ZodObject<{
@@ -332,6 +377,90 @@ export const BookmarkSortSchema: z.ZodEnum<{
     most_used: "most_used";
     recently_opened: "recently_opened";
 }>;
+
+// @public (undocumented)
+export const BULK_BOOKMARK_ACTIONS: readonly ["delete", "pin", "unpin"];
+
+// @public (undocumented)
+export const bulkBookmarks: {
+    readonly method: "post";
+    readonly path: "/api/v1/bookmarks/bulk";
+    readonly operationId: "bulkBookmarks";
+    readonly tag: "bookmarks";
+    readonly summary: "Delete, pin or unpin many bookmarks";
+    readonly auth: "member";
+    readonly rate: "bulk";
+    readonly scope: "write";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            action: z.ZodEnum<{
+                delete: "delete";
+                pin: "pin";
+                unpin: "unpin";
+            }>;
+            ids: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+            filter: z.ZodOptional<z.ZodObject<{
+                scope: z.ZodOptional<z.ZodEnum<{
+                    all: "all";
+                    mine: "mine";
+                }>>;
+                pinned: z.ZodOptional<z.ZodBoolean>;
+                hasSlug: z.ZodOptional<z.ZodBoolean>;
+                forwarding: z.ZodOptional<z.ZodBoolean>;
+                url: z.ZodOptional<z.ZodString>;
+            }, z.core.$strict>>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        requested: z.ZodNumber;
+        affected: z.ZodNumber;
+        skipped: z.ZodNumber;
+        skippedReasons: z.ZodObject<{
+        not_owner: z.ZodNumber;
+        not_found: z.ZodNumber;
+        }, z.core.$strict>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const BulkBookmarksRequestSchema: z.ZodObject<{
+    action: z.ZodEnum<{
+        delete: "delete";
+        pin: "pin";
+        unpin: "unpin";
+    }>;
+    ids: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+    filter: z.ZodOptional<z.ZodObject<{
+        scope: z.ZodOptional<z.ZodEnum<{
+            all: "all";
+            mine: "mine";
+        }>>;
+        pinned: z.ZodOptional<z.ZodBoolean>;
+        hasSlug: z.ZodOptional<z.ZodBoolean>;
+        forwarding: z.ZodOptional<z.ZodBoolean>;
+        url: z.ZodOptional<z.ZodString>;
+    }, z.core.$strict>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const BulkBookmarksResultSchema: z.ZodObject<{
+    requested: z.ZodNumber;
+    affected: z.ZodNumber;
+    skipped: z.ZodNumber;
+    skippedReasons: z.ZodObject<{
+        not_owner: z.ZodNumber;
+        not_found: z.ZodNumber;
+    }, z.core.$strict>;
+}, z.core.$strict>;
 
 // @public (undocumented)
 export const cancelEmailChange: {
@@ -579,6 +708,17 @@ export interface ComponentTypes {
             url: string;
             version: number;
         };
+        BookmarkFilter: {
+            forwarding?: boolean;
+            hasSlug?: boolean;
+            pinned?: boolean;
+            scope?: "all" | "mine";
+            url?: string;
+        };
+        BookmarkIds: {
+            ids: string[];
+            truncated: boolean;
+        };
         BookmarkList: {
             items: ComponentTypes["schemas"]["Bookmark"][];
             nextCursor: string | null;
@@ -587,6 +727,20 @@ export interface ComponentTypes {
         };
         BookmarkOpen: {
             url: string;
+        };
+        BulkBookmarksRequest: {
+            action: "delete" | "pin" | "unpin";
+            filter?: ComponentTypes["schemas"]["BookmarkFilter"];
+            ids?: string[];
+        };
+        BulkBookmarksResult: {
+            affected: number;
+            requested: number;
+            skipped: number;
+            skippedReasons: {
+                not_found: number;
+                not_owner: number;
+            };
         };
         CancelEmailChangeRequest: {
             token: string;
@@ -2699,6 +2853,51 @@ export const listApiTokens: {
 };
 
 // @public (undocumented)
+export const listBookmarkIds: {
+    readonly method: "get";
+    readonly path: "/api/v1/bookmarks/ids";
+    readonly operationId: "listBookmarkIds";
+    readonly tag: "bookmarks";
+    readonly summary: "List the identifiers of the bookmarks a filter matches";
+    readonly auth: "member";
+    readonly rate: "read";
+    readonly scope: "read";
+    readonly request: {
+        readonly query: z.ZodObject<{
+            scope: z.ZodDefault<z.ZodEnum<{
+                all: "all";
+                mine: "mine";
+            }>>;
+            url: z.ZodOptional<z.ZodString>;
+            pinned: z.ZodOptional<z.ZodEnum<{
+                true: "true";
+                false: "false";
+            }>>;
+            forwarding: z.ZodOptional<z.ZodEnum<{
+                true: "true";
+                false: "false";
+            }>>;
+            hasSlug: z.ZodOptional<z.ZodEnum<{
+                true: "true";
+                false: "false";
+            }>>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        ids: z.ZodArray<z.ZodUUID>;
+        truncated: z.ZodBoolean;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
 export const listBookmarks: {
     readonly method: "get";
     readonly path: "/api/v1/bookmarks";
@@ -3533,6 +3732,87 @@ export interface OperationTypes {
                 };
             };
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    bulkBookmarks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["BulkBookmarksRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["BulkBookmarksResult"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6052,6 +6332,81 @@ export interface OperationTypes {
                 };
             };
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    listBookmarkIds: {
+        parameters: {
+            query?: {
+                scope?: "all" | "mine";
+                pinned?: "true" | "false";
+                hasSlug?: "true" | "false";
+                forwarding?: "true" | "false";
+                url?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["BookmarkIds"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9265,6 +9620,40 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/bookmarks/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["bulkBookmarks"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/bookmarks/ids": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["listBookmarkIds"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/api/v1/bookmarks/{id}": {
         parameters: {
             query?: never;
@@ -10281,6 +10670,7 @@ export type ProblemCode = (typeof PROBLEM_CATALOG)[number]["code"];
 
 // @public (undocumented)
 export const ProblemCodeSchema: z.ZodEnum<{
+    not_found: "not_found";
     bad_request: "bad_request";
     unauthenticated: "unauthenticated";
     mfa_required: "mfa_required";
@@ -10293,7 +10683,6 @@ export const ProblemCodeSchema: z.ZodEnum<{
     email_unverified: "email_unverified";
     registration_closed: "registration_closed";
     setup_completed: "setup_completed";
-    not_found: "not_found";
     slug_not_found: "slug_not_found";
     slug_taken: "slug_taken";
     name_taken: "name_taken";
@@ -10351,6 +10740,7 @@ export const ProblemSchema: z.ZodObject<{
     title: z.ZodString;
     status: z.ZodNumber;
     code: z.ZodEnum<{
+        not_found: "not_found";
         bad_request: "bad_request";
         unauthenticated: "unauthenticated";
         mfa_required: "mfa_required";
@@ -10363,7 +10753,6 @@ export const ProblemSchema: z.ZodObject<{
         email_unverified: "email_unverified";
         registration_closed: "registration_closed";
         setup_completed: "setup_completed";
-        not_found: "not_found";
         slug_not_found: "slug_not_found";
         slug_taken: "slug_taken";
         name_taken: "name_taken";

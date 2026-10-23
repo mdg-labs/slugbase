@@ -520,6 +520,62 @@
         ],
         "type": "object"
       },
+      "BookmarkFilter": {
+        "additionalProperties": false,
+        "properties": {
+          "forwarding": {
+            "description": "true matches the bookmarks /go forwards to only and false those it does not; left out, forwarding is not filtered on",
+            "type": "boolean"
+          },
+          "hasSlug": {
+            "description": "true matches bookmarks with a slug only and false those without one; left out, slugs are not filtered on",
+            "type": "boolean"
+          },
+          "pinned": {
+            "description": "true matches pinned bookmarks only and false unpinned ones only; left out, pinning is not filtered on",
+            "type": "boolean"
+          },
+          "scope": {
+            "description": "Whose bookmarks are matched. Only the caller's own bookmarks exist until sharing arrives, so both name the same bookmarks today; mine when left out",
+            "enum": [
+              "all",
+              "mine"
+            ],
+            "type": "string"
+          },
+          "url": {
+            "description": "Matches the caller's bookmarks whose canonical URL equals the canonical form of this value; one that cannot be a bookmark's URL is refused with 422",
+            "maxLength": 2048,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "BookmarkIds": {
+        "additionalProperties": false,
+        "properties": {
+          "ids": {
+            "description": "The identifiers of the caller's bookmarks that match the filters, newest first, at most 5 000",
+            "items": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            },
+            "maxItems": 5000,
+            "type": "array"
+          },
+          "truncated": {
+            "description": "true when more than 5 000 bookmarks match, so ids holds the first 5 000 only and a bulk request by the same filter is refused",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ids",
+          "truncated"
+        ],
+        "type": "object"
+      },
       "BookmarkList": {
         "additionalProperties": false,
         "properties": {
@@ -573,6 +629,92 @@
         },
         "required": [
           "url"
+        ],
+        "type": "object"
+      },
+      "BulkBookmarksRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "description": "delete removes the bookmarks for good, pin pins them and unpin unpins them",
+            "enum": [
+              "delete",
+              "pin",
+              "unpin"
+            ],
+            "type": "string"
+          },
+          "filter": {
+            "$ref": "#/components/schemas/BookmarkFilter",
+            "description": "Acts on the caller's bookmarks that match this filter, which is the list's filters; a filter that matches more than 5 000 bookmarks is refused with 422. Give this or ids, and not both"
+          },
+          "ids": {
+            "description": "The bookmarks to act on, 1 to 1 000 identifiers; one named twice counts once. Give this or filter, and not both",
+            "items": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "type": "object"
+      },
+      "BulkBookmarksResult": {
+        "additionalProperties": false,
+        "properties": {
+          "affected": {
+            "description": "How many of them are now deleted, or are pinned or unpinned as asked (a bookmark that already was is counted)",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "requested": {
+            "description": "How many bookmarks the request named (the distinct identifiers) or the filter matched",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "skipped": {
+            "description": "How many were left alone: requested minus affected",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "skippedReasons": {
+            "additionalProperties": false,
+            "description": "The skipped bookmarks by reason, as counts only",
+            "properties": {
+              "not_found": {
+                "description": "Bookmarks the caller owns none of in this workspace: another member's, another workspace's, one that is gone, and, for pin and unpin, a plan-archived one. They are not told apart",
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "not_owner": {
+                "description": "Bookmarks the caller can read and does not own; none exist until sharing arrives",
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "not_owner",
+              "not_found"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "requested",
+          "affected",
+          "skipped",
+          "skippedReasons"
         ],
         "type": "object"
       },
@@ -4647,6 +4789,282 @@
         "x-slugbase-idempotency": true,
         "x-slugbase-rate": "write",
         "x-slugbase-scope": "write"
+      }
+    },
+    "/api/v1/bookmarks/bulk": {
+      "post": {
+        "operationId": "bulkBookmarks",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkBookmarksRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkBookmarksResult"
+                }
+              }
+            },
+            "description": "What the request did, as counts only. The whole request is one transaction: every bookmark it affects changes or none does. Only the caller's own bookmarks change; the others are skipped as not_found without saying whether they exist. A delete gives the workspace's bookmark count back once for the request, by the bookmarks that were not plan-archived, and records one bookmark.bulk_deleted audit event with the number deleted, never a title or a URL"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace: the account has none, or the workspace is being deleted"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body did not pass validation (an unknown action, neither or both of ids and filter, no identifier or more than 1 000, a malformed identifier, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks. Nothing is written"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Delete, pin or unpin many bookmarks",
+        "tags": [
+          "bookmarks"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-rate": "bulk",
+        "x-slugbase-scope": "write"
+      }
+    },
+    "/api/v1/bookmarks/ids": {
+      "get": {
+        "operationId": "listBookmarkIds",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "scope",
+            "required": false,
+            "schema": {
+              "default": "all",
+              "description": "Whose bookmarks are listed. Only the caller's own bookmarks exist until sharing arrives, so both name the same bookmarks today",
+              "enum": [
+                "all",
+                "mine"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pinned",
+            "required": false,
+            "schema": {
+              "description": "true lists pinned bookmarks only and false unpinned ones only; left out, pinning is not filtered on",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "hasSlug",
+            "required": false,
+            "schema": {
+              "description": "true lists bookmarks with a slug only and false those without one; left out, slugs are not filtered on",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "forwarding",
+            "required": false,
+            "schema": {
+              "description": "true lists the bookmarks /go forwards to only and false those it does not; left out, forwarding is not filtered on",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "url",
+            "required": false,
+            "schema": {
+              "description": "Lists the caller's bookmarks whose canonical URL equals the canonical form of this value, which the duplicate warning of a new bookmark uses. The value is normalised as a bookmark's URL is, and one that cannot be a bookmark's URL is refused with 422",
+              "maxLength": 2048,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BookmarkIds"
+                }
+              }
+            },
+            "description": "The identifiers of the caller's bookmarks that match the filters of the list, newest first, up to the select-all cap of 5 000, and whether more matched. Another member's bookmarks, those of another workspace and plan-archived ones are never returned"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace: the account has none, or the workspace is being deleted"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The query did not pass validation (an unknown parameter, a boolean other than true or false), or the url is not a URL a bookmark can have"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "List the identifiers of the bookmarks a filter matches",
+        "tags": [
+          "bookmarks"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-rate": "read",
+        "x-slugbase-scope": "read"
       }
     },
     "/api/v1/bookmarks/{id}": {

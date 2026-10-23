@@ -27,9 +27,10 @@ export { deleteBookmark } from "./delete.ts";
 export type { BookmarkDeletionAsk, BookmarkDeletionDependencies } from "./delete.ts";
 export { BookmarkArchiveError, archiveBookmarks, restoreBookmarks } from "./archive.ts";
 export type { BookmarkArchiveRequest, BookmarkArchiveTransaction } from "./archive.ts";
-export { BOOKMARK_LIST_TOTAL_CAP, BOOKMARK_SORTS, listBookmarks } from "./list.ts";
+export { BOOKMARK_LIST_TOTAL_CAP, BOOKMARK_SORTS, bookmarkListFilter, listBookmarks } from "./list.ts";
 export type {
   BookmarkCursors,
+  BookmarkFilterAsk,
   BookmarkListAsk,
   BookmarkListDependencies,
   BookmarkListFilter,
@@ -43,3 +44,15 @@ export type {
 } from "./list.ts";
 export { openBookmark } from "./open.ts";
 export type { BookmarkOpenAsk, BookmarkOpenDependencies, BookmarkOpenOutcome, BookmarkUsage } from "./open.ts";
+export { BOOKMARK_BULK_ACTIONS, BOOKMARK_BULK_IDS_MAX, BOOKMARK_SELECT_ALL_CAP, bulkBookmarks, listBookmarkIds } from "./bulk.ts";
+export type {
+  BookmarkBulkAction,
+  BookmarkBulkAsk,
+  BookmarkBulkDependencies,
+  BookmarkBulkOutcome,
+  BookmarkBulkStore,
+  BookmarkBulkTarget,
+  BookmarkIdsAsk,
+  BookmarkIdsDependencies,
+  BookmarkIdsOutcome,
+} from "./bulk.ts";

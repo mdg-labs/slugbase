@@ -40,6 +40,7 @@ export interface ApiTokenPrincipal extends Extract<TenantPrincipal, {
 }> {
     // (undocumented)
     readonly scope: "read" | "read-write";
+    readonly tokenId: string;
 }
 
 // @public

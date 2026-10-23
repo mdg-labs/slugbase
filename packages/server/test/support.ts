@@ -226,7 +226,7 @@ export function acceptAnyBearer(): { readonly module: ServerModule; readonly ten
         authenticators: [
           {
             credential: "bearer",
-            authenticate: () => Promise.resolve({ kind: "api-token", accountId: BEARER_ACCOUNT, workspaceId: BEARER_WORKSPACE, scope: "read-write" }),
+            authenticate: () => Promise.resolve({ kind: "api-token", tokenId: "stub-token", accountId: BEARER_ACCOUNT, workspaceId: BEARER_WORKSPACE, scope: "read-write" }),
           },
         ],
       }),

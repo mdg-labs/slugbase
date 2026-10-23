@@ -50,7 +50,7 @@ const bearer: Authenticator = {
   credential: "bearer",
   authenticate: (authorization) => {
     const [, accountId, workspaceId] = /^Bearer token:([^:]+):([^:]+)$/.exec(authorization) ?? [];
-    return Promise.resolve(accountId === undefined || workspaceId === undefined ? undefined : { kind: "api-token", accountId, workspaceId, scope: "read-write" });
+    return Promise.resolve(accountId === undefined || workspaceId === undefined ? undefined : { kind: "api-token", tokenId: "stub-token", accountId, workspaceId, scope: "read-write" });
   },
 };
 

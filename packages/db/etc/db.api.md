@@ -311,15 +311,24 @@ export interface BookmarkRepository {
     count(filter: BookmarkListFilter, limit: number): Promise<number>;
     create(creation: BookmarkCreation): Promise<BookmarkCreationResult>;
     find(bookmarkId: string): Promise<BookmarkRecord | undefined>;
+    ids(filter: BookmarkListFilter, limit: number): Promise<readonly string[]>;
     list(request: BookmarkListRequest): Promise<readonly BookmarkListRow[]>;
     remove(request: {
         readonly bookmarkId: string;
         readonly ownerId: string;
     }): Promise<boolean>;
+    removeMany(request: {
+        readonly bookmarkIds: readonly string[];
+    }): Promise<number | undefined>;
     setArchived(request: {
         readonly bookmarkIds: readonly string[];
         readonly archived: boolean;
     }): Promise<number | undefined>;
+    setPinned(request: {
+        readonly bookmarkIds: readonly string[];
+        readonly ownerId: string;
+        readonly pinned: boolean;
+    }): Promise<number>;
     update(request: BookmarkUpdateRequest): Promise<BookmarkUpdateResult>;
 }
 

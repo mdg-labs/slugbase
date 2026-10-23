@@ -228,6 +228,14 @@ export const FIXTURES: ContractFixtures = {
   // the input `hasSlug` as one that can carry an identifier, because its name ends in `Slug`; it is a boolean filter, so the identifier the matrix puts
   // in it is refused as a malformed query (422) and never reaches a bookmark, whichever workspace holds it.
   listBookmarks: { foreign: { query: { hasSlug: UNKNOWN_BOOKMARK_ID } } },
+  // The select-all takes the list's filters and names no identifier either; the matrix picks `hasSlug` by its name here as well, and the identifier it puts in
+  // that boolean is refused as a malformed query (422) before any bookmark is looked at.
+  listBookmarkIds: { foreign: { query: { hasSlug: UNKNOWN_BOOKMARK_ID } } },
+  // The bulk request names bookmarks by identifier, and acts on the caller's own only: one that no workspace holds, one of workspace B and one that never
+  // existed are skipped alike, which is a 200 with the identifier counted as not found and nothing written, never a 404 (doc 02 section 5.8). The valid
+  // request and the request naming a bookmark of workspace B are therefore the same 200. The matrix picks `ids[]` and, by its name, `filter.hasSlug`; the
+  // test that runs it sends the identifiers in `ids` only, since a request with both is refused as malformed.
+  bulkBookmarks: { body: { action: "pin", ids: [UNKNOWN_BOOKMARK_ID] }, status: 200, foreign: { body: { action: "pin", ids: [UNKNOWN_BOOKMARK_ID] } } },
   getBookmark: { path: { id: UNKNOWN_BOOKMARK_ID }, status: 404, foreign: { path: { id: UNKNOWN_BOOKMARK_ID } } },
   // The change and the deletion name a bookmark by identifier too, so their valid request is the declared 404 for the same reason: a bookmark no
   // workspace holds, and the matrix puts the bookmarks of workspace B in the path. The change takes a body, which is valid whoever would hold the bookmark.

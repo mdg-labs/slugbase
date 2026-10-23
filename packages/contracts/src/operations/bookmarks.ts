@@ -7,7 +7,8 @@ import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimi
 // doc 10 T1 and T2). The URL is stored normalised and only `http` and `https` are stored (doc 02 section 5.1, doc 10 T12 and
 // T13). The list pages through the caller's own bookmarks by a signed keyset cursor (doc 04 section 6.1). An open records that the
 // caller used a bookmark and answers the destination to go to (doc 02 section 5.5). The slug and the folders and tags of a bookmark
-// are other operations.
+// are other operations. A bulk request deletes, pins or unpins many of the caller's own bookmarks at once, named by identifier or by the
+// list's filters, in one transaction; the select-all operation returns the identifiers a filter matches so a client can name them.
 
 /** The longest bookmark URL, in characters (doc 02 section 5.1). */
 export const BOOKMARK_URL_MAX_LENGTH = 2048;
@@ -131,6 +132,75 @@ export const BookmarkListSchema = z
     totalAtLeast: z.literal(BOOKMARK_LIST_TOTAL_CAP).optional().describe("Present, and 10 000, when total is null: the filters match more than 10 000 bookmarks"),
   })
   .meta({ id: "BookmarkList" });
+
+/** The most identifiers a bulk request names (doc 04 section 6.2). */
+export const BOOKMARK_BULK_IDS_MAX = 1000;
+
+/**
+ * The most bookmarks a select-all returns and a bulk request by filter acts on (doc 02 section 16, which doc 04 section 6.2 repeats).
+ * It is a fixed value of this release: doc 07 declares no key for it.
+ */
+export const BOOKMARK_SELECT_ALL_CAP = 5000;
+
+export const BULK_BOOKMARK_ACTIONS = ["delete", "pin", "unpin"] as const;
+
+export const BookmarkFilterSchema = z
+  .strictObject({
+    scope: z.enum(["all", "mine"]).optional().describe("Whose bookmarks are matched. Only the caller's own bookmarks exist until sharing arrives, so both name the same bookmarks today; mine when left out"),
+    pinned: z.boolean().optional().describe("true matches pinned bookmarks only and false unpinned ones only; left out, pinning is not filtered on"),
+    hasSlug: z.boolean().optional().describe("true matches bookmarks with a slug only and false those without one; left out, slugs are not filtered on"),
+    forwarding: z.boolean().optional().describe("true matches the bookmarks /go forwards to only and false those it does not; left out, forwarding is not filtered on"),
+    url: z
+      .string()
+      .min(1)
+      .max(BOOKMARK_URL_MAX_LENGTH)
+      .optional()
+      .describe("Matches the caller's bookmarks whose canonical URL equals the canonical form of this value; one that cannot be a bookmark's URL is refused with 422"),
+  })
+  .meta({ id: "BookmarkFilter" });
+
+export const BulkBookmarksRequestSchema = z
+  .strictObject({
+    action: z.enum(BULK_BOOKMARK_ACTIONS).describe("delete removes the bookmarks for good, pin pins them and unpin unpins them"),
+    ids: z
+      .array(z.uuid())
+      .min(1)
+      .max(BOOKMARK_BULK_IDS_MAX)
+      .optional()
+      .describe("The bookmarks to act on, 1 to 1 000 identifiers; one named twice counts once. Give this or filter, and not both"),
+    filter: BookmarkFilterSchema.optional().describe(
+      "Acts on the caller's bookmarks that match this filter, which is the list's filters; a filter that matches more than 5 000 bookmarks is refused with 422. Give this or ids, and not both",
+    ),
+  })
+  .refine((request) => (request.ids === undefined) !== (request.filter === undefined), { message: "name either ids or filter" })
+  .meta({ id: "BulkBookmarksRequest" });
+
+export const BulkBookmarksResultSchema = z
+  .strictObject({
+    requested: z.number().int().min(0).describe("How many bookmarks the request named (the distinct identifiers) or the filter matched"),
+    affected: z.number().int().min(0).describe("How many of them are now deleted, or are pinned or unpinned as asked (a bookmark that already was is counted)"),
+    skipped: z.number().int().min(0).describe("How many were left alone: requested minus affected"),
+    skippedReasons: z
+      .strictObject({
+        not_owner: z.number().int().min(0).describe("Bookmarks the caller can read and does not own; none exist until sharing arrives"),
+        not_found: z
+          .number()
+          .int()
+          .min(0)
+          .describe("Bookmarks the caller owns none of in this workspace: another member's, another workspace's, one that is gone, and, for pin and unpin, a plan-archived one. They are not told apart"),
+      })
+      .describe("The skipped bookmarks by reason, as counts only"),
+  })
+  .meta({ id: "BulkBookmarksResult" });
+
+export const BookmarkIdsQuerySchema = ListBookmarksQuerySchema.omit({ sort: true, limit: true, cursor: true });
+
+export const BookmarkIdsSchema = z
+  .strictObject({
+    ids: z.array(z.uuid()).max(BOOKMARK_SELECT_ALL_CAP).describe("The identifiers of the caller's bookmarks that match the filters, newest first, at most 5 000"),
+    truncated: z.boolean().describe("true when more than 5 000 bookmarks match, so ids holds the first 5 000 only and a bulk request by the same filter is refused"),
+  })
+  .meta({ id: "BookmarkIds" });
 
 export const BookmarkOpenSchema = z
   .strictObject({
@@ -311,6 +381,57 @@ export const openBookmark = defineOperation({
       "The workspace the request acts in has no bookmark of the caller with this identifier: another member's bookmark, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike, and nothing is counted",
     ),
     422: problemResponse("The identifier did not pass validation, or the stored URL is not an http or https URL (url_not_allowed); nothing is counted"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const listBookmarkIds = defineOperation({
+  method: "get",
+  path: "/api/v1/bookmarks/ids",
+  operationId: "listBookmarkIds",
+  tag: "bookmarks",
+  summary: "List the identifiers of the bookmarks a filter matches",
+  auth: "member",
+  rate: "read",
+  scope: "read",
+  request: { query: BookmarkIdsQuerySchema },
+  responses: {
+    200: jsonResponse(
+      "The identifiers of the caller's bookmarks that match the filters of the list, newest first, up to the select-all cap of 5 000, and whether more matched. Another member's bookmarks, those of another workspace and plan-archived ones are never returned",
+      BookmarkIdsSchema,
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),
+    422: problemResponse("The query did not pass validation (an unknown parameter, a boolean other than true or false), or the url is not a URL a bookmark can have"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const bulkBookmarks = defineOperation({
+  method: "post",
+  path: "/api/v1/bookmarks/bulk",
+  operationId: "bulkBookmarks",
+  tag: "bookmarks",
+  summary: "Delete, pin or unpin many bookmarks",
+  auth: "member",
+  rate: "bulk",
+  scope: "write",
+  request: { body: BulkBookmarksRequestSchema },
+  responses: {
+    200: jsonResponse(
+      "What the request did, as counts only. The whole request is one transaction: every bookmark it affects changes or none does. Only the caller's own bookmarks change; the others are skipped as not_found without saying whether they exist. A delete gives the workspace's bookmark count back once for the request, by the bookmarks that were not plan-archived, and records one bookmark.bulk_deleted audit event with the number deleted, never a title or a URL",
+      BulkBookmarksResultSchema,
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    403: problemResponse("The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"),
+    404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),
+    422: problemResponse(
+      "The body did not pass validation (an unknown action, neither or both of ids and filter, no identifier or more than 1 000, a malformed identifier, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks. Nothing is written",
+    ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },

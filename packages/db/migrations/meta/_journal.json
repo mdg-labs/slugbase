@@ -540,6 +540,13 @@
       "when": 1792760161641,
       "tag": "20261023125601_add_bookmark_open_counts",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1792764539329,
+      "tag": "20261023140859_add_bookmark_bulk_delete",
+      "breakpoints": true
     }
   ]
 }

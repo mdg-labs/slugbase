@@ -31,7 +31,7 @@ describe("the API token authenticator", () => {
     expect(lookups).toHaveLength(1);
     expect(lookups[0]?.hash.equals(token.hash)).toBe(true);
     expect(lookups[0]?.ipPrefix).toBe("198.51.0.0/16");
-    expect(principal).toEqual({ kind: "api-token", accountId: RECORD.accountId, workspaceId: RECORD.workspaceId, scope: "read-write" });
+    expect(principal).toEqual({ kind: "api-token", tokenId: RECORD.tokenId, accountId: RECORD.accountId, workspaceId: RECORD.workspaceId, scope: "read-write" });
   });
 
   it("passes no prefix for a request without a client address, and carries the read scope", async () => {

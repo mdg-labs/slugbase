@@ -103,17 +103,37 @@ function cursorScope(ask: BookmarkListAsk, filter: BookmarkListFilter): string {
   return JSON.stringify([ask.workspaceId.toLowerCase(), ask.accountId.toLowerCase(), ask.scope, ask.sort, filter.pinned ?? null, filter.hasSlug ?? null, filter.forwarding ?? null, filter.urlCanonical ?? null]);
 }
 
-/** One page of `ask.accountId`'s bookmarks in the workspace of the transaction, with the cursor of the next and the capped total. */
-export async function listBookmarks({ store, cursors }: BookmarkListDependencies, ask: BookmarkListAsk): Promise<BookmarkListOutcome> {
+/** The filters a list, a select-all and a bulk request take, as the caller typed them. */
+export interface BookmarkFilterAsk {
+  /** The member whose bookmarks are matched. */
+  readonly accountId: string;
+  readonly pinned: boolean | undefined;
+  readonly hasSlug: boolean | undefined;
+  readonly forwarding: boolean | undefined;
+  /** A URL as typed: the match is narrowed to the bookmarks whose canonical URL is its canonical form. */
+  readonly url: string | undefined;
+}
+
+/** The store's filter for `ask`, or the reason its `url` cannot be a bookmark's URL. */
+export function bookmarkListFilter(ask: BookmarkFilterAsk): { readonly ok: true; readonly filter: BookmarkListFilter } | { readonly ok: false; readonly reason: BookmarkUrlRefusal } {
   let urlCanonical: string | undefined;
   if (ask.url !== undefined) {
     const normalized = normalizeBookmarkUrl(ask.url);
     if (!normalized.ok) {
-      return { kind: "url_refused", reason: normalized.reason };
+      return { ok: false, reason: normalized.reason };
     }
     urlCanonical = normalized.value.canonical;
   }
-  const filter: BookmarkListFilter = { ownerId: ask.accountId, pinned: ask.pinned, hasSlug: ask.hasSlug, forwarding: ask.forwarding, urlCanonical };
+  return { ok: true, filter: { ownerId: ask.accountId, pinned: ask.pinned, hasSlug: ask.hasSlug, forwarding: ask.forwarding, urlCanonical } };
+}
+
+/** One page of `ask.accountId`'s bookmarks in the workspace of the transaction, with the cursor of the next and the capped total. */
+export async function listBookmarks({ store, cursors }: BookmarkListDependencies, ask: BookmarkListAsk): Promise<BookmarkListOutcome> {
+  const parsed = bookmarkListFilter(ask);
+  if (!parsed.ok) {
+    return { kind: "url_refused", reason: parsed.reason };
+  }
+  const filter = parsed.filter;
   const scope = cursorScope(ask, filter);
   let after: BookmarkPosition | undefined;
   if (ask.cursor !== undefined) {

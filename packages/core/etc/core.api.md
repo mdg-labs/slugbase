@@ -423,6 +423,14 @@ export const AUDIT_ACTIONS: {
             };
         };
     };
+    readonly "bookmark.bulk_deleted": {
+        readonly category: "bookmark";
+        readonly metadata: {
+            readonly count: {
+                readonly type: "count";
+            };
+        };
+    };
 };
 
 // @public
@@ -935,11 +943,20 @@ export interface BillingWithdrawal {
 // @public
 export function bindOidcState(key: Uint8Array, state: string): string;
 
+// @public (undocumented)
+export const BOOKMARK_BULK_ACTIONS: readonly ["delete", "pin", "unpin"];
+
+// @public
+export const BOOKMARK_BULK_IDS_MAX = 1000;
+
 // @public
 export const BOOKMARK_DESCRIPTION_MAX_LENGTH = 1000;
 
 // @public
 export const BOOKMARK_LIST_TOTAL_CAP = 10000;
+
+// @public
+export const BOOKMARK_SELECT_ALL_CAP = 5000;
 
 // @public (undocumented)
 export const BOOKMARK_SORTS: readonly ["recent", "oldest", "title_asc", "title_desc", "most_used", "recently_opened"];
@@ -971,6 +988,79 @@ export interface BookmarkArchiveTransaction {
     }): Promise<number | undefined>;
     readonly workspaceId: string | undefined;
 }
+
+// @public (undocumented)
+export type BookmarkBulkAction = (typeof BOOKMARK_BULK_ACTIONS)[number];
+
+// @public (undocumented)
+export interface BookmarkBulkAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly action: BookmarkBulkAction;
+    // (undocumented)
+    readonly actor: AuditActor;
+    // (undocumented)
+    readonly ipPrefix: string | null;
+    // (undocumented)
+    readonly target: BookmarkBulkTarget;
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface BookmarkBulkDependencies {
+    readonly audit: AuditWriter;
+    // (undocumented)
+    readonly store: BookmarkBulkStore;
+}
+
+// @public (undocumented)
+export type BookmarkBulkOutcome = {
+    readonly kind: "done";
+    readonly requested: number;
+    readonly affected: number;
+    readonly skipped: {
+        readonly not_owner: number;
+        readonly not_found: number;
+    };
+}
+/** The request names more identifiers than `BOOKMARK_BULK_IDS_MAX` or its filter matches more than `BOOKMARK_SELECT_ALL_CAP`; nothing was written. */
+| {
+    readonly kind: "too_many";
+    readonly limit: number;
+}
+/** The `url` filter is not a URL a bookmark can have; nothing was written. */
+| {
+    readonly kind: "url_refused";
+    readonly reason: BookmarkUrlRefusal;
+}
+/** The workspace of the transaction cannot be reached (it is being deleted); nothing was written. */
+| {
+    readonly kind: "unavailable";
+};
+
+// @public (undocumented)
+export interface BookmarkBulkStore {
+    ids(filter: BookmarkListFilter, limit: number): Promise<readonly string[]>;
+    removeMany(bookmarkIds: readonly string[]): Promise<number | undefined>;
+    setPinned(request: {
+        readonly bookmarkIds: readonly string[];
+        readonly ownerId: string;
+        readonly pinned: boolean;
+    }): Promise<number>;
+}
+
+// @public (undocumented)
+export type BookmarkBulkTarget = {
+    readonly kind: "ids";
+    readonly ids: readonly string[];
+} | {
+    readonly kind: "filter";
+    readonly scope: BookmarkScope;
+    readonly pinned: boolean | undefined;
+    readonly hasSlug: boolean | undefined;
+    readonly forwarding: boolean | undefined;
+    readonly url: string | undefined;
+};
 
 // @public
 export interface BookmarkChanges {
@@ -1061,6 +1151,42 @@ export interface BookmarkEntitlements {
     limit(accountId: string, workspaceId: string, request: object): Promise<EntitlementLimit | undefined>;
 }
 
+// @public
+export interface BookmarkFilterAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly forwarding: boolean | undefined;
+    // (undocumented)
+    readonly hasSlug: boolean | undefined;
+    // (undocumented)
+    readonly pinned: boolean | undefined;
+    readonly url: string | undefined;
+}
+
+// @public (undocumented)
+export interface BookmarkIdsAsk extends BookmarkFilterAsk {
+    // (undocumented)
+    readonly scope: BookmarkScope;
+}
+
+// @public (undocumented)
+export interface BookmarkIdsDependencies {
+    // (undocumented)
+    readonly store: Pick<BookmarkBulkStore, "ids">;
+}
+
+// @public (undocumented)
+export type BookmarkIdsOutcome = {
+    readonly kind: "listed";
+    readonly ids: readonly string[]; /** True when more than `BOOKMARK_SELECT_ALL_CAP` bookmarks match, so `ids` is the first of them. */
+    readonly truncated: boolean;
+}
+/** The `url` filter is not a URL a bookmark can have; nothing was read. */
+| {
+    readonly kind: "url_refused";
+    readonly reason: BookmarkUrlRefusal;
+};
+
 // @public (undocumented)
 export interface BookmarkListAsk {
     readonly accountId: string;
@@ -1098,6 +1224,15 @@ export interface BookmarkListFilter {
     readonly pinned?: boolean | undefined;
     readonly urlCanonical?: string | undefined;
 }
+
+// @public
+export function bookmarkListFilter(ask: BookmarkFilterAsk): {
+    readonly ok: true;
+    readonly filter: BookmarkListFilter;
+} | {
+    readonly ok: false;
+    readonly reason: BookmarkUrlRefusal;
+};
 
 // @public (undocumented)
 export type BookmarkListOutcome = {
@@ -1364,6 +1499,9 @@ export interface BreachedPasswords {
     has(password: string): boolean;
     range(prefix: string): readonly string[];
 }
+
+// @public
+export function bulkBookmarks(input: BookmarkBulkDependencies, ask: BookmarkBulkAsk): Promise<BookmarkBulkOutcome>;
 
 // @public
 export function canCreateWorkspace(input: WorkspaceCreationCapacity): boolean;
@@ -2946,6 +3084,9 @@ export interface JoiningEntitlements {
     // (undocumented)
     readonly values: WorkspaceEntitlementValues;
 }
+
+// @public
+export function listBookmarkIds(input: BookmarkIdsDependencies, ask: BookmarkIdsAsk): Promise<BookmarkIdsOutcome>;
 
 // @public
 export function listBookmarks(input: BookmarkListDependencies, ask: BookmarkListAsk): Promise<BookmarkListOutcome>;
