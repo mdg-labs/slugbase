@@ -38,6 +38,101 @@
       "description": "Bookmarks with short, private slugs."
     }
   },
+  "bookmarks": {
+    "new": "New bookmark",
+    "page": {
+      "title": "Bookmarks",
+      "description": "Your bookmarks will be listed here. Paste a link anywhere on this page to save it, or create one yourself."
+    },
+    "modal": {
+      "close": "Close",
+      "cancel": "Cancel",
+      "save": "Save",
+      "more": "More",
+      "loading": "Loading the bookmark",
+      "retry": "Try again",
+      "saved": {
+        "created": "Bookmark saved.",
+        "updated": "Bookmark updated."
+      },
+      "deleted": "Bookmark deleted.",
+      "create": {
+        "title": "New bookmark"
+      },
+      "edit": {
+        "title": "Edit bookmark"
+      },
+      "url": {
+        "label": "URL",
+        "placeholder": "https://",
+        "checking": "Checking whether you saved this address already",
+        "error": {
+          "required": "Enter the address to save.",
+          "tooLong": "Use at most {max, number} characters.",
+          "notAllowed": "Enter an address that starts with http:// or https://.",
+          "invalid": "This is not a valid address."
+        }
+      },
+      "title": {
+        "label": "Title",
+        "error": {
+          "required": "Enter a title.",
+          "tooLong": "Use at most {max, number} characters."
+        }
+      },
+      "description": {
+        "label": "Description",
+        "counter": "{count, number} / {max, number}",
+        "error": {
+          "tooLong": "Use at most {max, number} characters."
+        }
+      },
+      "pinned": {
+        "label": "Pinned",
+        "description": "Pinned bookmarks are the first you see on Home."
+      },
+      "duplicate": {
+        "title": "You already saved this address",
+        "description": "“{title}” has the same address. You can still save this one.",
+        "edit": "Edit existing",
+        "unchecked": "We could not check whether you saved this address already."
+      },
+      "unsaved": {
+        "title": "Discard your changes?",
+        "description": "The changes you made to this bookmark are lost if you close it now.",
+        "discard": "Discard changes",
+        "keepEditing": "Keep editing"
+      },
+      "delete": {
+        "label": "Delete",
+        "title": "Delete this bookmark?",
+        "description": "“{title}” is deleted for good, along with its pin. This cannot be undone.",
+        "descriptionSlug": "“{title}” is deleted for good, and its slug stops forwarding immediately. This cannot be undone.",
+        "confirm": "Delete bookmark",
+        "error": {
+          "unavailable": "The bookmark could not be deleted right now. Try again in a moment."
+        }
+      },
+      "error": {
+        "invalid": "Check this entry and try again.",
+        "unavailable": "The bookmark could not be saved right now. Try again in a moment.",
+        "loadFailed": "The bookmark could not be loaded. Try again in a moment.",
+        "limitReached": {
+          "title": "Bookmark limit reached",
+          "description": "This workspace holds as many bookmarks as it may. Delete a bookmark to save a new one."
+        },
+        "changedElsewhere": {
+          "title": "This bookmark changed elsewhere",
+          "description": "Someone saved a newer version while you were editing. Load it to continue; your edits here are replaced.",
+          "reload": "Load the latest"
+        },
+        "notFound": {
+          "title": "Bookmark not found",
+          "description": "It may have been deleted, or it is not one of yours."
+        }
+      }
+    }
+  },
   "admin": {
     "navigation": "Administration",
     "nav": {

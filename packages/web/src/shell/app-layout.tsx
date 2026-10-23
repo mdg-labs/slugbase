@@ -14,6 +14,8 @@ import { useTranslation } from "react-i18next";
 import { AccountPreferences } from "../account/account-preferences.tsx";
 import { useCachedAccount } from "../account/use-cached-account.ts";
 import { useUpdatePreferences } from "../account/use-update-preferences.ts";
+import { BookmarkModal } from "../bookmarks/bookmark-modal.tsx";
+import { NewBookmarkButton } from "../bookmarks/new-bookmark-button.tsx";
 import { useSignOut } from "../auth/sign-out.ts";
 import { useConfig } from "../config/config-context.tsx";
 import { Slot, useExtensions } from "../extensions/index.ts";
@@ -58,6 +60,7 @@ function AppLayoutShell(): ReactElement {
     <AppShell
       actions={
         <>
+          <NewBookmarkButton />
           <ThemeToggle
             onToggle={(theme) => {
               updatePreferences.mutate({ theme });
@@ -136,6 +139,7 @@ function AppLayoutShell(): ReactElement {
       workspaceSwitcher={switcher}
     >
       {dialog}
+      <BookmarkModal />
       <OfflineBanner />
       <EmailUnverifiedBanner />
       <MailNotConfiguredBanner />

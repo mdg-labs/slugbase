@@ -5,12 +5,15 @@
 ```ts
 
 import { ChangeEventHandler } from 'react';
+import type { ClipboardEvent as ClipboardEvent_2 } from 'react';
 import { CompassIcon } from 'lucide-react';
+import type { FocusEvent as FocusEvent_2 } from 'react';
 import { HomeIcon } from 'lucide-react';
 import { InboxIcon } from 'lucide-react';
 import { LifeBuoyIcon } from 'lucide-react';
 import { LockIcon } from 'lucide-react';
 import { LogOutIcon } from 'lucide-react';
+import { PlusIcon } from 'lucide-react';
 import { ReactElement } from 'react';
 import { ReactNode } from 'react';
 import { Ref } from 'react';
@@ -287,6 +290,19 @@ export interface DataTableProps<Row extends object> {
 }
 
 // @public
+export function Disclosure(input: DisclosureProps): ReactElement;
+
+// @public (undocumented)
+export interface DisclosureProps {
+    // (undocumented)
+    children: ReactNode;
+    // (undocumented)
+    className?: string;
+    defaultOpen?: boolean;
+    label: ReactNode;
+}
+
+// @public
 export function EmptyState(input: EmptyStateProps): ReactElement;
 
 // @public (undocumented)
@@ -444,6 +460,8 @@ export interface PickerProps {
     placeholder?: string;
     value: string | undefined;
 }
+
+export { PlusIcon }
 
 // @public (undocumented)
 export type ResolvedTheme = "light" | "dark";
@@ -667,6 +685,28 @@ export interface StatusBadgeProps {
 export type StatusBadgeVariant = "info" | "neutral" | "success" | "warning" | "error";
 
 // @public
+export function TextareaField(input: TextareaFieldProps): ReactElement;
+
+// @public (undocumented)
+export interface TextareaFieldProps {
+    // (undocumented)
+    className?: string;
+    counter: ReactNode;
+    // (undocumented)
+    disabled?: boolean;
+    error?: ReactNode;
+    // (undocumented)
+    label: ReactNode;
+    maxLength: number;
+    // (undocumented)
+    name?: string;
+    // (undocumented)
+    onChange: (value: string) => void;
+    // (undocumented)
+    value: string;
+}
+
+// @public
 export function ThemeToggle(input: ThemeToggleProps): ReactElement;
 
 // @public (undocumented)
@@ -720,6 +760,43 @@ export interface TypedConfirmProps {
     open: boolean;
     // (undocumented)
     title: ReactNode;
+}
+
+// @public
+export function UnsavedGuard(input: UnsavedGuardProps): ReactElement;
+
+// @public (undocumented)
+export interface UnsavedGuardProps {
+    description: ReactNode;
+    // (undocumented)
+    discardLabel: ReactNode;
+    // (undocumented)
+    keepEditingLabel: ReactNode;
+    onDiscard: () => void;
+    onKeepEditing: () => void;
+    // (undocumented)
+    open: boolean;
+    // (undocumented)
+    title: ReactNode;
+}
+
+// @public
+export function UrlInput(input: UrlInputProps): ReactElement;
+
+// @public (undocumented)
+export interface UrlInputProps {
+    // (undocumented)
+    disabled?: boolean;
+    onBlur?: (event: FocusEvent_2<HTMLInputElement>) => void;
+    onPaste?: (event: ClipboardEvent_2<HTMLInputElement>) => void;
+    // (undocumented)
+    onValueChange: (value: string) => void;
+    pending?: boolean;
+    pendingLabel: string;
+    // (undocumented)
+    placeholder?: string;
+    // (undocumented)
+    value: string;
 }
 
 // @public

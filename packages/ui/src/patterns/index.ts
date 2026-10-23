@@ -10,6 +10,7 @@ export { Confirm, type ConfirmProps } from "./confirm.tsx";
 export { CopyValue, type CopyValueProps } from "./copy-value.tsx";
 export { DangerZone, type DangerZoneItem, type DangerZoneProps } from "./danger-zone.tsx";
 export { DataTable, type DataTableColumn, type DataTableProps } from "./data-table.tsx";
+export { Disclosure, type DisclosureProps } from "./disclosure.tsx";
 export { EmptyState, type EmptyStateProps } from "./empty-state.tsx";
 export { FeedbackToastProvider, feedbackToast, type FeedbackToastProviderProps } from "./feedback-toast.tsx";
 export { FormField, type FormFieldProps } from "./form-field.tsx";
@@ -28,11 +29,14 @@ export { SettingsNav, type SettingsNavGroup, type SettingsNavItem, type Settings
 export { SettingsSection, type SettingsSectionProps } from "./settings-section.tsx";
 export { ShownOnce, type ShownOnceProps } from "./shown-once.tsx";
 export { StatusBadge, type StatusBadgeProps, type StatusBadgeVariant } from "./status-badge.tsx";
+export { TextareaField, type TextareaFieldProps } from "./textarea-field.tsx";
 export { Totp, type TotpProps } from "./totp.tsx";
 export { TypedConfirm, matchesExpected, type TypedConfirmProps } from "./typed-confirm.tsx";
+export { UnsavedGuard, type UnsavedGuardProps } from "./unsaved-guard.tsx";
+export { UrlInput, type UrlInputProps } from "./url-input.tsx";
 export { Wizard, type WizardProps } from "./wizard.tsx";
 export type { WorkspaceSwitcherAction, WorkspaceSwitcherItem, WorkspaceSwitcherProps } from "./workspace-switcher.tsx";
 export type { Accent, ResolvedTheme } from "../theme/theme-provider.tsx";
 export { ThemeToggle, type ThemeToggleProps } from "./theme-toggle.tsx";
 // The icons the shell and the empty states of the app place; the app takes them from here so the icon library has one home.
-export { CompassIcon, HomeIcon, InboxIcon, LifeBuoyIcon, LockIcon, LogOutIcon, SettingsIcon, ShieldCheckIcon, TriangleAlertIcon } from "lucide-react";
+export { CompassIcon, HomeIcon, InboxIcon, LifeBuoyIcon, LockIcon, LogOutIcon, PlusIcon, SettingsIcon, ShieldCheckIcon, TriangleAlertIcon } from "lucide-react";
