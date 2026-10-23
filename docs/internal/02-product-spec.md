@@ -225,7 +225,7 @@ The bookmarks list supports, all reflected in the URL search params (doc 03):
 - **Sorts**: recently added (default), oldest first, alphabetical (A–Z or Z–A), most used, recently accessed (never-opened last).
 - **Pagination**: keyset-based with "load more" — there are no page numbers and no jumping to a page (Q42). Page sizes 24 / 48 / 96 (grid default 24, table default 48, at most 100 via the API). The count line reads "Showing 48 of 1,234"; the total is exact up to 10 000 and shown as "10,000+" above.
 - **Views**: card grid and table; the choice is remembered per account.
-- **Select all across pages**: a companion operation returns the IDs matching the current filters, capped at 5 000 (configurable), for bulk actions; when a filter matches more, the bar says so and selects the capped set.
+- **Select all across pages**: a companion operation returns the IDs matching the current filters, capped at 5 000, a fixed value that is not configurable (`BOOKMARK_SELECT_ALL_CAP` in `@slugbase/contracts`), for bulk actions; when a filter matches more, the bar says so and selects the capped set.
 
 ### 5.8 Bulk actions
 
@@ -461,7 +461,7 @@ Starting values. **Config** values are environment or instance settings (doc 07 
 | Bookmark title / description / URL max | 300 / 1 000 / 2 048 chars | fixed | §5.1 |
 | Folder name / tag name / team name max | 64 / 40 / 64 chars | fixed | §7, §4 |
 | Page sizes | 24 / 48 / 96; max 100 via API | config | §5.7 |
-| Select-all cap | 5 000 IDs | config | §5.7 |
+| Select-all cap | 5 000 IDs (`BOOKMARK_SELECT_ALL_CAP` in `@slugbase/contracts`) | fixed | §5.7 |
 | Import max bookmarks / HTML size | 5 000 / 5 MiB | config | §13.1 |
 | Metadata cache / AI cache | 7 days / 30 days | config | §5.4, §14 |
 | Metadata HTML read cap / sync budget | 512 KiB / 3 s | config | §5.4 |

@@ -282,7 +282,7 @@ GET /api/v1/bookmarks?sort=recent&limit=48&cursor=eyJr…
 
 Filters are query parameters named after fields, validated by Zod; repeated keys for multi-value (`?tag=a&tag=b` — AND semantics for tags, OR is not offered). Sorting is `sort=<key>` from a per-resource allowlist; direction is part of the key (`recent`, `oldest`, `title_asc`, `title_desc`, `most_used`, `recently_opened`). Free-text is always `q`.
 
-"Select all across pages" uses `GET /bookmarks/ids` with the same filters, returning up to 5 000 IDs (the select-all cap, config, doc 02 §16); bulk operations accept either an ID list (≤ 1 000) or the same filter object, and a filter matching more than the cap is `422 validation_failed`, so the server never needs the client to round-trip thousands of IDs (§10.6).
+"Select all across pages" uses `GET /bookmarks/ids` with the same filters, returning up to 5 000 IDs (the select-all cap, a fixed value, `BOOKMARK_SELECT_ALL_CAP` in `@slugbase/contracts`, doc 02 §16); bulk operations accept either an ID list (≤ 1 000) or the same filter object, and a filter matching more than the cap is `422 validation_failed`, so the server never needs the client to round-trip thousands of IDs (§10.6).
 
 ### 6.3 Idempotency keys
 
