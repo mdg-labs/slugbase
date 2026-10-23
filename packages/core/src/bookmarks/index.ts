@@ -13,5 +13,3 @@ export type {
 } from "./create.ts";
 export { readBookmark } from "./read.ts";
 export type { BookmarkReadAsk, BookmarkReadDependencies } from "./read.ts";
-export { createBookmarkEntitlements } from "./limit.ts";
-export type { BookmarkEntitlements } from "./limit.ts";

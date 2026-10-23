@@ -973,7 +973,7 @@ export interface BookmarkCreationRequest {
     readonly events: readonly DomainEvent<"bookmark.created">[];
 }
 
-// @public (undocumented)
+// @public
 export interface BookmarkEntitlements {
     limit(accountId: string, workspaceId: string, request: object): Promise<EntitlementLimit | undefined>;
 }
