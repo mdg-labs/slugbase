@@ -232,7 +232,7 @@ Partial unique `(workspace_id, email) WHERE status = 'pending'`. Expiry is evalu
 | `plan_archived_at` | timestamptz | Downgrade overflow (doc 06 §5); archived rows are excluded from every product query |
 | `open_count` | bigint NOT NULL DEFAULT 0 | Batched updates (doc 01 §8.1) |
 | `last_opened_at` | timestamptz | |
-| `search` | tsvector GENERATED ALWAYS AS (…) STORED | `setweight(to_tsvector('simple', slug), 'A') ‖ setweight(to_tsvector('simple', title), 'A') ‖ setweight(to_tsvector('simple', host), 'B') ‖ setweight(to_tsvector('simple', coalesce(description,'')), 'C')` — `simple` config so EN/DE content is matched without stemming surprises (Q49); the host is searchable, the URL path is not |
+| `search` | tsvector GENERATED ALWAYS AS (…) STORED | `setweight(to_tsvector('simple', coalesce(slug::text,'')), 'A') ‖ setweight(to_tsvector('simple', title), 'A') ‖ setweight(to_tsvector('simple', host), 'B') ‖ setweight(to_tsvector('simple', coalesce(description,'')), 'C')` — `simple` config so EN/DE content is matched without stemming surprises (Q49); `slug` is nullable and `to_tsvector` of NULL is NULL, so it is wrapped in `coalesce` like `description`: a NULL slug must not null the whole vector, which would leave every slug-less bookmark unsearchable; the host is searchable, the URL path is not |
 | `version` | integer | |
 | `created_at`, `updated_at` | timestamptz | |
 
