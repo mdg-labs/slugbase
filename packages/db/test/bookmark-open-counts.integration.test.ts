@@ -65,6 +65,7 @@ interface Stored {
   readonly open_count: string;
   readonly last_opened_at: Date | null;
   readonly version: number;
+  readonly updated_at: Date;
   readonly rest: string;
 }
 
@@ -73,7 +74,7 @@ async function stored(id: string): Promise<Stored> {
   const rows = await asSystem(
     db,
     (tx) => tx<Stored[]>`
-      SELECT open_count::text, last_opened_at, version,
+      SELECT open_count::text, last_opened_at, version, updated_at,
              md5(concat_ws('|', workspace_id, owner_id, url, url_canonical, host, title, description, slug, forwarding, pinned_at, plan_archived_at, created_at)) AS rest
       FROM bookmarks WHERE id = ${id}`,
   );
@@ -172,6 +173,39 @@ describe("sys_flush_open_counts", () => {
     const after = await stored(id);
     expect(after.version).toBe(before.version);
     expect(after.rest).toBe(before.rest);
+  });
+
+  it("leaves updated_at where it was, so an open does not make the bookmark look edited", async () => {
+    const workspace = await workspaceWithMember();
+    const id = await seedBookmark(workspace);
+    const before = await stored(id);
+
+    await store.flush([{ bookmarkId: id, count: 2, lastOpenedAt: at("2026-03-01T10:00:00Z") }]);
+    await store.flush([{ bookmarkId: id, count: 1, lastOpenedAt: at("2026-03-02T10:00:00Z") }]);
+
+    const after = await stored(id);
+    expect(after).toMatchObject({ open_count: "3", version: before.version });
+    expect(after.updated_at).toEqual(before.updated_at);
+  });
+
+  it("still moves updated_at with every edit, also one that comes with a usage change", async () => {
+    const workspace = await workspaceWithMember();
+    const id = await seedBookmark(workspace);
+    const edits = [
+      "title = 'Renamed'",
+      "description = 'Described'",
+      "pinned_at = now()",
+      "plan_archived_at = now()",
+      "slug = 'usage-test', forwarding = true",
+      "title = 'Renamed again', open_count = open_count + 1, last_opened_at = now()",
+    ];
+    for (const set of edits) {
+      const before = await stored(id);
+      await asSystem(db, (tx) => tx.unsafe(`UPDATE bookmarks SET ${set} WHERE id = '${id}'`));
+      const after = await stored(id);
+      expect(after.updated_at.getTime(), set).toBeGreaterThan(before.updated_at.getTime());
+      expect(after.version, set).toBe(before.version + 1);
+    }
   });
 
   it("accepts an empty call and a call at the largest size", async () => {

@@ -10,7 +10,7 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- the opens it buffered, which may name bookmarks of any workspace, from a connection that acts in none, so it takes no workspace and
 -- no account. Whether an open may be recorded is decided before it is buffered, by the read access of the caller; this function
 -- trusts none of its input beyond its shape and writes nothing else of a bookmark (the version stays, since a usage change is not
--- one the ETag covers; updated_at moves with every update of the row, as set_updated_at() makes it). It keeps a count and the
+-- one the ETag covers, and updated_at stays, since an open is not an edit: bookmarks_usage_keeps_updated_at, below, sees to it). It keeps a count and the
 -- latest timestamp and nothing else: no history, referrer or address (Q28). The arrays must be as long as each other, not NULL, hold no
 -- NULL element and no count below one, and hold at most 10 000 positions; anything else is refused with invalid_parameter_value and
 -- writes nothing. A position that names no bookmark (it was deleted since the open) is skipped, and a bookmark named more than once adds
@@ -68,3 +68,26 @@ REVOKE CREATE ON SCHEMA public FROM slugbase_system;
 
 REVOKE ALL ON FUNCTION public.sys_flush_open_counts(uuid[], bigint[], timestamptz[]) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.sys_flush_open_counts(uuid[], bigint[], timestamptz[]) TO slugbase_app;
+
+-- bookmarks_usage_keeps_updated_at(): updated_at, which the API describes as when the bookmark last changed, stays at the value the row
+-- had for an update that writes nothing but the usage counters (open_count, last_opened_at) of a flush. It is the one tell of
+-- "nothing a member sees or edits changed" that bookmarks_bump_version() already decides: that trigger has left the version where it was,
+-- and the counters differ, so the update is a flush. An update that changes anything else moves updated_at as set_updated_at() made
+-- it, also when it writes the counters too; an update that writes the values the row has is no flush and moves it as before. The trigger
+-- fires after bookmarks_bump_version and bookmarks_set_updated_at, which PostgreSQL runs in the order of their names, so its name sorts
+-- after theirs and it puts back the value set_updated_at() overwrote. It runs with the privileges of the session that writes the row.
+CREATE OR REPLACE FUNCTION public.bookmarks_usage_keeps_updated_at() RETURNS trigger
+  LANGUAGE plpgsql
+  AS $$
+BEGIN
+  IF NEW.version = OLD.version
+     AND (NEW.open_count, NEW.last_opened_at) IS DISTINCT FROM (OLD.open_count, OLD.last_opened_at) THEN
+    NEW.updated_at := OLD.updated_at;
+  END IF;
+  RETURN NEW;
+END
+$$;
+
+CREATE OR REPLACE TRIGGER bookmarks_usage_keeps_updated_at
+  BEFORE UPDATE ON public.bookmarks
+  FOR EACH ROW EXECUTE FUNCTION public.bookmarks_usage_keeps_updated_at();

@@ -97,7 +97,7 @@ async function setup(world: World) {
 
 describe("openBookmark", () => {
   it(
-    "answers the destination at once, counts the open in memory, and the flush adds it to the bookmark without moving its version",
+    "answers the destination at once, counts the open in memory, and the flush adds it to the bookmark without moving its version or updatedAt",
     async () => {
       const { usage, written, close } = observedBuffer();
       const world = harness.serve({ usage });
@@ -123,7 +123,7 @@ describe("openBookmark", () => {
       expect(flushed.lastOpenedAt).toEqual(written[0]?.[0]?.lastOpenedAt);
       expect(flushed.version).toBe(1);
       const after = (await (await read(world, owner, bookmark.id)).json()) as Bookmark;
-      expect(after).toMatchObject({ openCount: MANY, version: 1 });
+      expect(after).toMatchObject({ openCount: MANY, version: 1, updatedAt: bookmark.updatedAt });
       expect(after.lastOpenedAt).toBe(flushed.lastOpenedAt?.toISOString());
 
       await open(world, owner, bookmark.id);
