@@ -276,7 +276,7 @@ Entitlement keys are a closed, typed catalog in `@slugbase/core` (`entitlements/
 
 | Key | Scope | Type | CE value | Gates |
 |---|---|---|---|---|
-| `bookmarks.max` | workspace | number or `unlimited` | `unlimited` | Creating a bookmark, importing, restoring from the archive |
+| `bookmarks.max` | workspace | number or `unlimited` | `unlimited` | Creating a bookmark, importing (a composition that restores from the archive chooses what to restore, §13.3) |
 | `ai.suggestions` | workspace | boolean | `true` (still needs a configured `AiSuggestPort` and the workspace toggle) | The AI suggestion endpoint and UI |
 | `sharing.members` | workspace | boolean | `true` | Sharing a bookmark or folder with an individual member |
 | `sharing.teams` | workspace | boolean | `true` | Sharing with teams; teams as sharing targets |
@@ -294,7 +294,7 @@ These are not entitlements on any edition: personal API tokens, folders, tags, s
 
 | Operation | Check | Failure |
 |---|---|---|
-| Create bookmark, import, restore from archive | `bookmarks.used + n <= bookmarks.max`, using the row-locked `bookmark_count` of the workspace (doc 05 §2.2), never `count(*)` | `422 bookmark_limit_reached` with `limit` and `used`; an import adds up to the limit and reports how many were skipped |
+| Create bookmark, import | `bookmarks.used + n <= bookmarks.max`, using the row-locked `bookmark_count` of the workspace (doc 05 §2.2), never `count(*)` | `422 bookmark_limit_reached` with `limit` and `used`; an import adds up to the limit and reports how many were skipped |
 | Create workspace | `workspaces.owned < workspaces.ownMax` | `422 workspace_limit_reached` |
 | AI suggestion | `ai.suggestions`, a configured port, the workspace toggle and the member not opted out | `403 entitlement_required`, or `503 ai_unavailable` |
 | Share with a member or a team | `sharing.members` or `sharing.teams` | `403 entitlement_required` |
@@ -302,7 +302,7 @@ These are not entitlements on any edition: personal API tokens, folders, tags, s
 | Teams administration | `teams.manage` | `403 entitlement_required` |
 | Read the audit log | `audit.log` | `403 entitlement_required` |
 
-**The archive rule.** A composition may archive bookmarks above `bookmarks.max` through the archive operation of §13.3 and restore them later. Which bookmarks it archives is the composition's rule. Archived bookmarks do not count in `bookmarks.used`.
+**The archive rule.** A composition may archive bookmarks above `bookmarks.max` through the archive operation of §13.3 and restore them later. Which bookmarks it archives is the composition's rule. Archived bookmarks do not count in `bookmarks.used`. The restore service compares nothing with `bookmarks.max`; the composition that restores chooses how many bookmarks to restore (§13.3).
 
 ---
 
@@ -435,7 +435,7 @@ Doc 10 is the threat model; this is the shape that implements it.
 |---|---|---|---|---|
 | Seat check | Module hook | `seatCheck({ workspaceId, accountId, invitationId }) → { seatLimit: number \| null }` | When an invitation is accepted, before the transaction that accepts it | Limit is the workspace's `seats.max` entitlement, unlimited on CE |
 | Deletion veto | Module hook | `deletionGuard({ kind: 'workspace' \| 'account', workspaceId?, accountId, requestedBy }) → allow \| refuse(code)` | Before a workspace or an account is deleted | Allow |
-| Archive operation | Exported core service | `archiveBookmarks(tx, { workspaceId, bookmarkIds }) → { archived }` and `restoreBookmarks(...)` | When a composition calls it from its own job | Never called, so nothing is archived |
+| Archive operation | Exported core service | `archiveBookmarks(tx, { workspaceId, bookmarkIds }) → { archived }` and `restoreBookmarks(...) → { restored }`, with `tx` a `BookmarkArchiveTransaction` built by `bookmarkArchiveTransaction(tx, newId)` of `@slugbase/db` (§13.3) | When a composition calls it from its own job | Never called, so nothing is archived |
 | Client error-report source | Adapter | `clientErrorReport.dsn({ accountId, workspaceId }) → string \| null` | When the signed-in account's own profile is read | `null`: no field, no browser reporter |
 | Registration policy | Module hook | `registrationPolicy({ email, path }) → allow \| refuse(reason)` | Before an account is created | Allow |
 
@@ -449,7 +449,7 @@ Runs before anything changes: before `DELETE /workspace` marks the workspace `de
 
 ### 13.3 Archive operation
 
-CE exports two core services that set and clear `plan_archived_at` (doc 02 §5.6) for the given bookmarks of one workspace: `archiveBookmarks` and `restoreBookmarks`. They run in a tenant transaction the caller already holds, are idempotent, ignore ids that do not belong to the workspace, are registered as named, audited system operations, write one audit event with the count (never titles or URLs). In the same transaction they adjust the workspace's `bookmark_count` (doc 05 §2.2) by the number of rows whose state changed and increment its `entitlement_version` (§7.5). They change nothing else. They do not choose *which* bookmarks to archive: that rule belongs to the caller. Archived bookmarks leave lists, counts, search, the palette, the dashboard and slug resolution, stay exportable (flagged) and can be deleted by their owner. CE itself never calls either service.
+CE exports two core services that set and clear `plan_archived_at` (doc 02 §5.6) for the given bookmarks of one workspace: `archiveBookmarks(tx, { workspaceId, bookmarkIds }) → { archived }` and `restoreBookmarks(tx, { workspaceId, bookmarkIds }) → { restored }`, each answering the number of bookmarks whose state changed. `tx` is the core type `BookmarkArchiveTransaction`, which a composition builds inside the tenant transaction it already holds with `bookmarkArchiveTransaction(tx, newId)` of `@slugbase/db`, whose `tx` is that tenant transaction and `newId` a UUIDv7 generator. The services open no transaction and throw `BookmarkArchiveError`, which leaves the transaction to roll back, when the transaction does not act in `workspaceId` or the workspace cannot be reached (it is being deleted, or the account of the transaction is no member of it). They change the archive state only through the system operation `sys_bookmark_archive_set` (doc 05 §3.3), which adjusts the workspace's `bookmark_count` (doc 05 §2.2) by the rows whose state changed; ids that are not an identifier, do not belong to the workspace or are in the wanted state already change nothing, so a repeat changes no bookmark. Every call, a repeat included, increments the workspace's `entitlement_version` (§7.5, through `withEntitlementChange`, so a caller never wraps the services in it) and writes one audit event in the same transaction: `bookmark.archived` or `bookmark.restored` (doc 02 §10), actor the system, with the metadata `count` only, the number of rows that changed, so a repeat records `count` 0; never titles, URLs or identifiers. They change nothing else. They do not choose *which* bookmarks to archive or to restore, and `restoreBookmarks` does not compare the restore with `bookmarks.max`: both belong to the caller. Archived bookmarks leave lists, counts, search, the palette, the dashboard and slug resolution, stay exportable (flagged) and can be deleted by their owner. CE itself never calls either service.
 
 ### 13.4 Client error-report source
 
