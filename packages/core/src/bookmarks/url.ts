@@ -37,7 +37,7 @@ export type BookmarkUrlResult =
   | { readonly ok: true; readonly value: BookmarkUrl }
   | { readonly ok: false; readonly reason: BookmarkUrlRefusal };
 
-const EDGE_WHITESPACE = /^[\t\n\f\r ]+|[\t\n\f\r ]+$/g;
+const EDGE_WHITESPACE = new Set(["\t", "\n", "\f", "\r", " "]);
 const HTTP_PREFIX = /^https?:\/\//i;
 const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
 const TRACKING_PARAMETER = /^(?:utm_.*|fbclid|gclid)$/i;
@@ -53,6 +53,22 @@ function parameterName(pair: string): string {
   } catch {
     return raw;
   }
+}
+
+/**
+ * `value` without the tabs, line feeds, form feeds, carriage returns and spaces at its start and end, found in one
+ * scan from each end: a long run of whitespace inside the value costs time in proportion to its length, not its square.
+ */
+function trimEdgeWhitespace(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && EDGE_WHITESPACE.has(value.charAt(start))) {
+    start += 1;
+  }
+  while (end > start && EDGE_WHITESPACE.has(value.charAt(end - 1))) {
+    end -= 1;
+  }
+  return value.slice(start, end);
 }
 
 function compareCodeUnits(a: string, b: string): number {
@@ -79,7 +95,7 @@ function canonicalQuery(search: string): string {
  * `http://` or `https://` is not an `http` or `https` URL.
  */
 export function normalizeBookmarkUrl(input: string): BookmarkUrlResult {
-  const given = input.replace(EDGE_WHITESPACE, "");
+  const given = trimEdgeWhitespace(input);
   if (given === "") {
     return refuse("empty");
   }
