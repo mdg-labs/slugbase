@@ -24,7 +24,9 @@ export const PREFERENCES_LOCK = join(dirname(STORAGE_STATE), "account-preference
 
 const ME_PATH = "/api/v1/me";
 const LOCK_POLL_MS = 100;
-const LOCK_WAIT_MS = 150_000;
+// Every journey that reads the language or the theme waits in this queue, one at a time; the bookmarks journey, which
+// runs in each engine and holds the lock for the half minute it takes, is the longest in it.
+const LOCK_WAIT_MS = 300_000;
 
 /** The longest a journey may wait for the lock and for the restore at its end; it holds the fixture's timeout. */
 export const PREFERENCES_FIXTURE_TIMEOUT_MS = LOCK_WAIT_MS + 30_000;
