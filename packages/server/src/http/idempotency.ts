@@ -17,6 +17,9 @@ import { ProblemError, requestIdOf } from "./problem.ts";
 //     once the first request has committed, runs itself if the first rolled back, and answers
 //     `503 unavailable` if the first is still running after the repository's wait.
 // A request that ends in a problem or in a status other than 2xx rolls back, key included, so a retry runs.
+// The claim of a workspace operation locks the workspace's row (FOR KEY SHARE) before it inserts the key, whose
+// foreign key locks the account's row: account deletion locks the workspaces and then the account (doc 05 section
+// 7.1), so the two requests take the rows in one order and cannot deadlock.
 // A request without the header runs as usual. The handler of an operation that declares idempotency must
 // open its transaction through `tenant.withTenant` for a workspace operation, or `withTenant` with the
 // account alone for an account operation, which is what this stage opens.

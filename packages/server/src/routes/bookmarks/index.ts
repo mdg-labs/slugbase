@@ -20,7 +20,7 @@ import { acceptedVersions, entityTagOf } from "../workspaces/if-match.ts";
 // Creating validates and normalises the URL before anything is written: only http and https are stored, a scheme
 // of any other kind is `422 url_not_allowed`, and an empty, over-long or malformed URL is `422 validation_failed`. The
 // workspace's `bookmarks.max` is read from the entitlement source before the counter lock is taken: before the transaction opens, or, with an
-// `Idempotency-Key`, inside the transaction stage 9a opened, which has not yet locked the workspace's row (a source that fails
+// `Idempotency-Key`, inside the transaction stage 9a opened, which has not yet taken the counter lock (a source that fails
 // answers 503 and writes nothing, never a creation without a ceiling), and the transaction takes one place under it:
 // `sys_bookmark_count_take` locks the workspace's row, compares the workspace's `bookmark_count` with the ceiling and
 // raises it, and the bookmark, the `bookmark.created` job and that count are one transaction, so two creations at the limit
