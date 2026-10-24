@@ -38,6 +38,9 @@ export const UNKNOWN_BOOKMARK_ID = "0192f3a0-cccc-7000-8000-000000000008";
 /** A tag no workspace holds: the walker's request to rename or delete it is the declared 404. */
 export const UNKNOWN_TAG_ID = "0192f3a0-cccc-7000-8000-00000000000a";
 
+/** A folder no workspace holds: the walker's request to read, change or delete it is the declared 404. */
+export const UNKNOWN_FOLDER_ID = "0192f3a0-cccc-7000-8000-00000000000b";
+
 /** An invitation no workspace holds: the walker's request to resend, link or revoke it is the declared 404. */
 export const UNKNOWN_INVITATION_ID = "0192f3a0-cccc-7000-8000-000000000006";
 
@@ -257,6 +260,14 @@ export const FIXTURES: ContractFixtures = {
   listTags: {},
   renameTag: { path: { id: UNKNOWN_TAG_ID }, body: { name: "Walker tag" }, status: 404, foreign: { path: { id: UNKNOWN_TAG_ID }, body: { name: "Walker tag" } } },
   deleteTag: { path: { id: UNKNOWN_TAG_ID }, status: 404, foreign: { path: { id: UNKNOWN_TAG_ID } } },
+  // The folders of the member who makes them, like the tags: the creation and the list name no identifier of any workspace, so the walker's valid request
+  // to create is the declared 201, and the read, the change and the deletion name a folder no workspace holds, the declared 404, which the matrix replaces
+  // with the folder of workspace B.
+  createFolder: { body: { name: "Walker folder" } },
+  listFolders: {},
+  getFolder: { path: { id: UNKNOWN_FOLDER_ID }, status: 404, foreign: { path: { id: UNKNOWN_FOLDER_ID } } },
+  updateFolder: { path: { id: UNKNOWN_FOLDER_ID }, body: { name: "Walker folder" }, status: 404, foreign: { path: { id: UNKNOWN_FOLDER_ID }, body: { name: "Walker folder" } } },
+  deleteFolder: { path: { id: UNKNOWN_FOLDER_ID }, status: 404, foreign: { path: { id: UNKNOWN_FOLDER_ID } } },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

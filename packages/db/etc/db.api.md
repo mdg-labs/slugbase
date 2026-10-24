@@ -15,6 +15,7 @@ import { BookmarkUpdateRequest } from '@slugbase/core';
 import { BookmarkUpdateResult } from '@slugbase/core';
 import type { CredentialTokenPurpose } from '@slugbase/core';
 import type { EntitlementVersionWriter } from '@slugbase/core';
+import type { FolderStore } from '@slugbase/core';
 import { InferInsertModel } from 'drizzle-orm';
 import { InferSelectModel } from 'drizzle-orm';
 import { InstanceAccount } from '@slugbase/core';
@@ -510,6 +511,12 @@ export interface EntitlementUsage {
     readonly seatsUsed: number;
 }
 
+// @public (undocumented)
+export type FolderRepository = FolderStore;
+
+// @public (undocumented)
+export function folderRepository(tx: TenantTx): FolderRepository;
+
 // @public
 export class IdempotencyBusyError extends Error {
     constructor();
@@ -715,6 +722,9 @@ export interface InvitationRepository extends InvitationStore, InvitationManagem
 
 // @public (undocumented)
 export function invitationRepository(tx: TenantTx): InvitationRepository;
+
+// @public
+export function isFolderNameTaken(error: unknown): boolean;
 
 // @public
 export function isLastOwnerViolation(error: unknown): boolean;

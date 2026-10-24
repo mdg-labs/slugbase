@@ -293,6 +293,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List my folders */
+        get: operations["listFolders"];
+        put?: never;
+        /** Create a folder */
+        post: operations["createFolder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/folders/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a folder */
+        get: operations["getFolder"];
+        put?: never;
+        post?: never;
+        /** Delete a folder */
+        delete: operations["deleteFolder"];
+        options?: never;
+        head?: never;
+        /** Change a folder */
+        patch: operations["updateFolder"];
+        trace?: never;
+    };
     "/api/v1/instance/accounts": {
         parameters: {
             query?: never;
@@ -1482,6 +1519,17 @@ export interface components {
             /** @description The address to save: an http or https URL of at most 2 048 characters. It is stored with a lower-case scheme and host, an internationalised host name in punycode, the default port left out and the fragment kept. Any other scheme is refused with 422 url_not_allowed */
             url: string;
         };
+        CreateFolderRequest: {
+            /** @description The folder's colour, 1 to 8, the number of the --folder-N theme token; 1 when left out */
+            color?: number;
+            /**
+             * @description The folder's icon: a lucide icon name from the list this schema publishes; folder when left out
+             * @enum {string}
+             */
+            icon?: "folder" | "folder-open" | "folder-heart" | "folder-code" | "folder-archive" | "briefcase" | "building-2" | "book" | "book-open" | "bookmark" | "star" | "heart" | "house" | "newspaper" | "graduation-cap" | "flask-conical" | "code" | "terminal" | "cpu" | "database" | "server" | "cloud" | "globe" | "map" | "map-pin" | "plane" | "car" | "utensils" | "coffee" | "shopping-cart" | "gift" | "music" | "film" | "camera" | "image" | "video" | "gamepad-2" | "palette" | "lightbulb" | "rocket" | "target" | "trophy" | "flag" | "tag" | "wallet" | "credit-card" | "dumbbell" | "leaf" | "sun" | "moon" | "zap" | "shield" | "lock" | "users" | "mail" | "calendar" | "inbox" | "package" | "wrench" | "sparkles";
+            /** @description The folder's name, 1 to 64 characters after the whitespace around it is removed. It is stored as entered, in the case it is written in, and is unique among the caller's folders without regard to case */
+            name: string;
+        };
         CreateInstanceWorkspaceRequest: {
             /** @description The workspace's name, 1 to 64 characters; surrounding whitespace is removed and a name that is blank after that is refused */
             name: string;
@@ -1614,6 +1662,48 @@ export interface components {
             upgradeAvailable: boolean;
             /** @description What the limits are compared with */
             usage: components["schemas"]["EntitlementUsage"];
+        };
+        Folder: {
+            /** @description How many bookmarks are filed in the folder; plan-archived bookmarks are not counted */
+            bookmarkCount: number;
+            /** @description The folder's colour, 1 to 8: the number of the --folder-N theme token */
+            color: number;
+            /**
+             * Format: date-time
+             * @description When the folder was created, RFC 3339 UTC
+             */
+            createdAt: string;
+            /** @description The folder's icon, a lucide icon name */
+            icon: string;
+            /**
+             * Format: uuid
+             * @description The folder's identifier
+             */
+            id: string;
+            /** @description The folder's name, in the case it was entered in */
+            name: string;
+            /** @description The account of the member who owns the folder; null once that member has left the workspace */
+            ownerId: string | null;
+            /**
+             * Format: date-time
+             * @description When the folder last changed, RFC 3339 UTC
+             */
+            updatedAt: string;
+            /** @description Moves by one with every change; the ETag header carries it and If-Match takes it back */
+            version: number;
+        };
+        FolderList: {
+            /** @description One page of the caller's folders in the workspace, in the order asked for; another member's folders are never listed */
+            items: components["schemas"]["Folder"][];
+            /** @description Passed as `cursor` to get the next page; null on the last page */
+            nextCursor: string | null;
+            /** @description How many folders match the filters, across all pages: exact up to 10 000, and null above that, where totalAtLeast says so */
+            total: number | null;
+            /**
+             * @description Present, and 10 000, when total is null: the filters match more than 10 000 folders
+             * @constant
+             */
+            totalAtLeast?: 10000;
         };
         ForgotPasswordRequest: {
             /**
@@ -2304,6 +2394,17 @@ export interface components {
             title?: string;
             /** @description The new address: an http or https URL of at most 2 048 characters, stored as a creation stores it; the canonical form and the host are derived again. Any other scheme is refused with 422 url_not_allowed. Left out, the address is left as it is */
             url?: string;
+        };
+        UpdateFolderRequest: {
+            /** @description The new colour, 1 to 8. Left out, the colour is left as it is */
+            color?: number;
+            /**
+             * @description The new icon, a lucide icon name from the list this schema publishes. Left out, the icon is left as it is
+             * @enum {string}
+             */
+            icon?: "folder" | "folder-open" | "folder-heart" | "folder-code" | "folder-archive" | "briefcase" | "building-2" | "book" | "book-open" | "bookmark" | "star" | "heart" | "house" | "newspaper" | "graduation-cap" | "flask-conical" | "code" | "terminal" | "cpu" | "database" | "server" | "cloud" | "globe" | "map" | "map-pin" | "plane" | "car" | "utensils" | "coffee" | "shopping-cart" | "gift" | "music" | "film" | "camera" | "image" | "video" | "gamepad-2" | "palette" | "lightbulb" | "rocket" | "target" | "trophy" | "flag" | "tag" | "wallet" | "credit-card" | "dumbbell" | "leaf" | "sun" | "moon" | "zap" | "shield" | "lock" | "users" | "mail" | "calendar" | "inbox" | "package" | "wrench" | "sparkles";
+            /** @description The new name, 1 to 64 characters after the whitespace around it is removed; unique among the caller's folders without regard to case. Left out, the name is left as it is */
+            name?: string;
         };
         UpdateInstanceAccountRequest: {
             /** @description true disables the account, false enables it again; disabling deletes the target's sessions and refuses its API tokens */
@@ -3968,6 +4069,464 @@ export interface operations {
                 };
             };
             /** @description The service is temporarily unavailable, or no entitlement source is configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listFolders: {
+        parameters: {
+            query?: {
+                scope?: "all" | "mine";
+                q?: string;
+                sort?: "name" | "count" | "updated";
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of the caller's folders in the workspace in the order asked for, each with the number of bookmarks filed in it, the cursor of the next page and the total (exact up to 10 000, then null with totalAtLeast) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolderList"];
+                };
+            };
+            /** @description The request was malformed, or the cursor is not one this account was issued for this workspace, scope, search and sort (bad_request) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The query did not pass validation (an unknown parameter, scope or sort, a limit outside 1 to 100, a search text longer than 64 characters) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateFolderRequest"];
+            };
+        };
+        responses: {
+            /** @description The folder, owned by the caller and private to them, with no bookmarks, version 1 and the defaults for the icon and the colour that were left out */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Folder"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The caller already has a folder with this name, in any case (name_taken); nothing is written */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation (a name that is blank or longer than 64 characters, an icon outside the list, a colour outside 1 to 8, or a field the operation does not declare) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's folder with the number of bookmarks filed in it */
+            200: {
+                headers: {
+                    /** @description The folder's version as an entity tag, for example "3"; the If-Match of the next change */
+                    ETag: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Folder"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The workspace the request acts in has no folder of the caller with this identifier: another member's folder, a folder of another workspace and one that never existed are answered alike */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The identifier did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The folder is deleted for good together with the associations of its bookmarks; the bookmarks stay */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The workspace the request acts in has no folder of the caller with this identifier: another member's folder, a folder of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The identifier did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateFolder: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateFolderRequest"];
+            };
+        };
+        responses: {
+            /** @description The caller's folder after a JSON Merge Patch of its name, icon and colour. A change moves the version by one and the ETag is that of the new version; a patch that names the values the folder has, and an empty one, write nothing and answer with the unchanged version */
+            200: {
+                headers: {
+                    /** @description The folder's version as an entity tag, for example "3"; the If-Match of the next change */
+                    ETag: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Folder"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The workspace the request acts in has no folder of the caller with this identifier: another member's folder, a folder of another workspace and one that never existed are answered alike */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The caller has another folder with this name, in any case (name_taken); nothing is written */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description If-Match names a version other than the folder's current one (precondition_failed); the folder is unchanged */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The identifier or the body did not pass validation (a name that is blank or longer than 64 characters, an icon outside the list, a colour outside 1 to 8, or a field the operation does not declare). Nothing is written */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
             503: {
                 headers: {
                     [name: string]: unknown;

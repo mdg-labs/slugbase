@@ -1558,6 +1558,9 @@ export function createEntitlementService(input: EntitlementServiceOptions): Enti
 // @public (undocumented)
 export function createEntitlementUpgradeCheck(service: EntitlementService): EntitlementUpgradeCheck;
 
+// @public (undocumented)
+export function createFolder(input: FolderCreationDependencies, ask: FolderCreationAsk): Promise<FolderCreationOutcome>;
+
 // @public
 export function createInstanceWorkspace(input: InstanceWorkspaceDependencies, ask: InstanceWorkspaceCreationAsk): Promise<InstanceWorkspaceCreationOutcome>;
 
@@ -1607,6 +1610,9 @@ export function deleteAccount<Code extends string>(input: AccountDeletionDepende
 
 // @public
 export function deleteBookmark(input: BookmarkDeletionDependencies, ask: BookmarkDeletionAsk): Promise<boolean>;
+
+// @public
+export function deleteFolder(input: FolderDeletionDependencies, ask: FolderDeletionAsk): Promise<boolean>;
 
 // @public
 export function deleteInstanceAccount<Code extends string>(input: InstanceAccountDeletionDependencies<Code>, ask: InstanceAccountDeletionAsk): Promise<InstanceAccountDeletionOutcome<Code>>;
@@ -1912,6 +1918,265 @@ export const FLAG_ENTITLEMENTS: readonly FlagEntitlement[];
 
 // @public
 export type FlagEntitlement = "ai.suggestions" | "sharing.members" | "sharing.teams" | "members.invite" | "teams.manage" | "audit.log";
+
+// @public
+export const FOLDER_LIST_TOTAL_CAP = 10000;
+
+// @public
+export interface FolderChanges {
+    // (undocumented)
+    readonly color?: number;
+    // (undocumented)
+    readonly icon?: string;
+    // (undocumented)
+    readonly name?: string;
+}
+
+// @public (undocumented)
+export interface FolderCreationAsk {
+    readonly accountId: string;
+    readonly color: number | undefined;
+    readonly icon: string | undefined;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public (undocumented)
+export interface FolderCreationDependencies {
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: Pick<FolderStore, "create">;
+}
+
+// @public (undocumented)
+export type FolderCreationOutcome = {
+    readonly kind: "created";
+    readonly folder: FolderRecord;
+} | {
+    readonly kind: "invalid_name";
+    readonly reason: FolderNameRefusal;
+} | {
+    readonly kind: "name_taken";
+};
+
+// @public
+export interface FolderCursors {
+    open(cursor: string, scope: string): FolderPosition | undefined;
+    // (undocumented)
+    seal(position: FolderPosition, scope: string): string;
+}
+
+// @public (undocumented)
+export interface FolderDeletionAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly folderId: string;
+}
+
+// @public (undocumented)
+export interface FolderDeletionDependencies {
+    // (undocumented)
+    readonly store: Pick<FolderStore, "remove">;
+}
+
+// @public (undocumented)
+export interface FolderListAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly cursor: string | undefined;
+    readonly limit: number;
+    readonly scope: "all" | "mine";
+    // (undocumented)
+    readonly search: string | undefined;
+    // (undocumented)
+    readonly sort: FolderSort;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface FolderListDependencies {
+    // (undocumented)
+    readonly cursors: FolderCursors;
+    // (undocumented)
+    readonly store: Pick<FolderStore, "list" | "count">;
+}
+
+// @public (undocumented)
+export type FolderListOutcome = {
+    readonly kind: "listed";
+    readonly items: readonly FolderListRow[];
+    readonly nextCursor: string | null;
+    readonly total: number | null;
+}
+/** The cursor was not issued by this server for this account, workspace, scope, search and sort; nothing was read. */
+| {
+    readonly kind: "bad_cursor";
+};
+
+// @public (undocumented)
+export interface FolderListRequest {
+    readonly after: FolderPosition | undefined;
+    // (undocumented)
+    readonly limit: number;
+    // (undocumented)
+    readonly ownerId: string;
+    readonly search: string | undefined;
+    // (undocumented)
+    readonly sort: FolderSort;
+}
+
+// @public
+export interface FolderListRow extends FolderRecord {
+    // (undocumented)
+    readonly updatedKey: string;
+}
+
+// @public (undocumented)
+export type FolderNameRefusal = "empty" | "too_long";
+
+// @public
+export interface FolderPatch {
+    // (undocumented)
+    readonly color?: number;
+    // (undocumented)
+    readonly icon?: string;
+    // (undocumented)
+    readonly name?: string;
+}
+
+// @public
+export interface FolderPosition {
+    // (undocumented)
+    readonly count: number | undefined;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly updated: string | undefined;
+}
+
+// @public (undocumented)
+export interface FolderReadAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly folderId: string;
+}
+
+// @public (undocumented)
+export interface FolderReadDependencies {
+    // (undocumented)
+    readonly store: Pick<FolderStore, "find">;
+}
+
+// @public
+export interface FolderRecord {
+    readonly bookmarkCount: number;
+    readonly color: number;
+    // (undocumented)
+    readonly createdAt: Date;
+    // (undocumented)
+    readonly icon: string;
+    // (undocumented)
+    readonly id: string;
+    readonly name: string;
+    readonly ownerId: string | null;
+    // (undocumented)
+    readonly updatedAt: Date;
+    readonly version: number;
+}
+
+// @public (undocumented)
+export type FolderSort = "name" | "count" | "updated";
+
+// @public (undocumented)
+export interface FolderStore {
+    count(request: {
+        readonly ownerId: string;
+        readonly search: string | undefined;
+        readonly limit: number;
+    }): Promise<number>;
+    create(folder: NewFolder): Promise<FolderStoreCreationResult>;
+    find(request: {
+        readonly folderId: string;
+        readonly ownerId: string;
+    }): Promise<FolderRecord | undefined>;
+    list(request: FolderListRequest): Promise<readonly FolderListRow[]>;
+    remove(request: {
+        readonly folderId: string;
+        readonly ownerId: string;
+    }): Promise<boolean>;
+    update(request: FolderUpdateRequest): Promise<FolderUpdateResult>;
+}
+
+// @public (undocumented)
+export type FolderStoreCreationResult = {
+    readonly kind: "created";
+    readonly folder: FolderRecord;
+}
+/** The owner already has a folder of that name, spelled in any case. */
+| {
+    readonly kind: "name_taken";
+};
+
+// @public (undocumented)
+export interface FolderUpdateAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly expectedVersions: readonly number[] | undefined;
+    // (undocumented)
+    readonly folderId: string;
+    // (undocumented)
+    readonly patch: FolderPatch;
+}
+
+// @public (undocumented)
+export interface FolderUpdateDependencies {
+    // (undocumented)
+    readonly store: Pick<FolderStore, "update">;
+}
+
+// @public (undocumented)
+export type FolderUpdateOutcome = FolderUpdateResult | {
+    readonly kind: "invalid_name";
+    readonly reason: FolderNameRefusal;
+};
+
+// @public (undocumented)
+export interface FolderUpdateRequest {
+    // (undocumented)
+    readonly changes: FolderChanges;
+    readonly expectedVersions: readonly number[] | undefined;
+    // (undocumented)
+    readonly folderId: string;
+    readonly ownerId: string;
+}
+
+// @public (undocumented)
+export type FolderUpdateResult =
+/** The folder was changed; `folder` is the row after the change, its version moved by one. */
+    {
+    readonly kind: "updated";
+    readonly folder: FolderRecord;
+}
+/** The patch names the values the folder already has; nothing was written and the version stays. */
+| {
+    readonly kind: "unchanged";
+    readonly folder: FolderRecord;
+}
+/** The version of the folder, read under its lock, is none of the accepted ones; nothing was written. */
+| {
+    readonly kind: "stale";
+}
+/** The owner has another folder of that name; nothing was written. */
+| {
+    readonly kind: "name_taken";
+}
+/** The caller owns no such folder; nothing was written. */
+| {
+    readonly kind: "not_found";
+};
 
 // @public
 export function generateApiToken(): ApiToken;
@@ -3098,6 +3363,9 @@ export function listBookmarkIds(input: BookmarkIdsDependencies, ask: BookmarkIds
 export function listBookmarks(input: BookmarkListDependencies, ask: BookmarkListAsk): Promise<BookmarkListOutcome>;
 
 // @public
+export function listFolders(input: FolderListDependencies, ask: FolderListAsk): Promise<FolderListOutcome>;
+
+// @public
 export function listInstanceAccounts(input: InstanceAccountDependencies, ask: InstanceAccountAsk): Promise<readonly InstanceAccount[]>;
 
 // @public
@@ -3300,6 +3568,18 @@ export interface NewBookmark {
     readonly urlCanonical: string;
 }
 
+// @public
+export interface NewFolder {
+    // (undocumented)
+    readonly color: number;
+    // (undocumented)
+    readonly icon: string;
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+    readonly ownerId: string;
+}
+
 // @public (undocumented)
 export interface NewInvitation {
     // (undocumented)
@@ -3331,6 +3611,13 @@ export function normalizeBookmarkUrl(input: string): BookmarkUrlResult;
 
 // @public
 export function normalizeEmail(raw: string): string;
+
+// @public
+export function normalizeFolderName(name: string): {
+    readonly name: string;
+} | {
+    readonly refusal: FolderNameRefusal;
+};
 
 // @public
 export function normalizeTagName(name: string): {
@@ -3567,6 +3854,9 @@ export interface RateLimitRequest {
 
 // @public
 export function readBookmark(input: BookmarkReadDependencies, ask: BookmarkReadAsk): Promise<BookmarkRecord | undefined>;
+
+// @public
+export function readFolder(input: FolderReadDependencies, ask: FolderReadAsk): Promise<FolderRecord | undefined>;
 
 // @public
 export const REAUTH_WINDOW_MS: number;
@@ -3936,6 +4226,9 @@ export const UNSET_INSTANCE_SETTINGS: InstanceSettings;
 
 // @public
 export function updateBookmark(input: BookmarkUpdateDependencies, ask: BookmarkUpdateAsk): Promise<BookmarkUpdateOutcome>;
+
+// @public (undocumented)
+export function updateFolder(input: FolderUpdateDependencies, ask: FolderUpdateAsk): Promise<FolderUpdateOutcome>;
 
 // @public
 export function updateInstanceAccount(input: InstanceAccountDependencies, ask: InstanceAccountUpdateAsk): Promise<InstanceAccountUpdateOutcome>;

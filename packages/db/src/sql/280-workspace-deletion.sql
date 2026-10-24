@@ -69,7 +69,7 @@ BEGIN
     RAISE EXCEPTION 'sys_workspace_purge_batch needs a workspace, a table and a batch size from 1 to 10000'
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
-  IF p_table NOT IN ('api_tokens', 'audit_events', 'bookmark_tags', 'bookmarks', 'tags', 'workspace_invitations', 'workspace_settings', 'workspace_members') THEN
+  IF p_table NOT IN ('api_tokens', 'audit_events', 'bookmark_tags', 'bookmarks', 'folder_bookmarks', 'folders', 'tags', 'workspace_invitations', 'workspace_settings', 'workspace_members') THEN
     RAISE EXCEPTION 'sys_workspace_purge_batch does not know the table %', p_table
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
@@ -89,9 +89,15 @@ BEGIN
   ELSIF p_table = 'bookmark_tags' THEN
     DELETE FROM public.bookmark_tags
     WHERE (bookmark_id, tag_id) IN (SELECT l.bookmark_id, l.tag_id FROM public.bookmark_tags l WHERE l.workspace_id = p_workspace_id LIMIT p_batch_size);
+  ELSIF p_table = 'folder_bookmarks' THEN
+    DELETE FROM public.folder_bookmarks
+    WHERE (folder_id, bookmark_id) IN (SELECT l.folder_id, l.bookmark_id FROM public.folder_bookmarks l WHERE l.workspace_id = p_workspace_id LIMIT p_batch_size);
   ELSIF p_table = 'bookmarks' THEN
     DELETE FROM public.bookmarks
     WHERE id IN (SELECT b.id FROM public.bookmarks b WHERE b.workspace_id = p_workspace_id LIMIT p_batch_size);
+  ELSIF p_table = 'folders' THEN
+    DELETE FROM public.folders
+    WHERE id IN (SELECT f.id FROM public.folders f WHERE f.workspace_id = p_workspace_id LIMIT p_batch_size);
   ELSIF p_table = 'tags' THEN
     DELETE FROM public.tags
     WHERE id IN (SELECT t.id FROM public.tags t WHERE t.workspace_id = p_workspace_id LIMIT p_batch_size);

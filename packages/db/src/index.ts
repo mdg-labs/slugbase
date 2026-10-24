@@ -47,6 +47,8 @@ export { bookmarkArchiveTransaction, bookmarkRepository } from "./repositories/b
 export type { BookmarkCreation, BookmarkCreationResult, BookmarkRepository } from "./repositories/bookmarks.ts";
 export { isTagNameTaken, tagRepository } from "./repositories/tags.ts";
 export type { TagRepository } from "./repositories/tags.ts";
+export { folderRepository, isFolderNameTaken } from "./repositories/folders.ts";
+export type { FolderRepository } from "./repositories/folders.ts";
 export { workspaceRepository } from "./repositories/workspaces.ts";
 export type { NewWorkspace, WorkspaceDetail, WorkspaceRepository, WorkspaceSummary } from "./repositories/workspaces.ts";
 export { isLastOwnerViolation, memberRepository, OWNER_REQUIRED_CONSTRAINT } from "./repositories/members.ts";

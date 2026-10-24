@@ -40,6 +40,7 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  *   `hasSlug` of `listBookmarks` and `listBookmarkIds` and the body inputs `ids[]` and `filter.hasSlug` of `bulkBookmarks`. `hasSlug` is a flag, not
  *   an identifier, but the classifier selects every name ending in `Slug`, so it is mapped like the others.
  * - Tag identifier: the path parameter `id` of `renameTag` and `deleteTag`.
+ * - Folder identifier: the path parameter `id` of `getFolder`, `updateFolder` and `deleteFolder`.
  * - Member identifier (an account): `accountId` of `removeMember`, `updateMember` and `transferWorkspaceOwnership`, and `transferTo` of
  *   `removeMember` and `leaveWorkspace`.
  * - Team identifier: `teamIds[]` of `createInvitation`.
@@ -57,6 +58,9 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
   "openBookmark.id": "bookmark",
   "renameTag.id": "tag",
   "deleteTag.id": "tag",
+  "getFolder.id": "folder",
+  "updateFolder.id": "folder",
+  "deleteFolder.id": "folder",
   "listBookmarks.hasSlug": "bookmark",
   "listBookmarkIds.hasSlug": "bookmark",
   "bulkBookmarks.ids[]": "bookmark",
@@ -77,7 +81,9 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
  * only, so its update sample sets the title; the row of an insert has no owner, which keeps the sample independent of the membership rows of the
  * fixture. The bookmarks repository has no delete: a delete is the system operation `sys_bookmark_delete`, which the API mode exercises. A tag is
  * its owner's, so the tags sample names the owner of workspace A of the fixture, the account the RLS-only mode acts as; the fixture must hold a
- * tag of that owner in A for the update and the delete to touch a row.
+ * tag of that owner in A for the update and the delete to touch a row. The policies of `folders` name the workspace only, so the row of a folder's
+ * insert has no owner either, and the fixture must hold one folder in A: the update and the delete of the registry have no predicate, so they
+ * touch every folder of A that the policy shows, and the update gives them all one name.
  */
 export const REPOSITORY_SAMPLES: RepositorySamples = {
   bookmarks: {
@@ -89,6 +95,10 @@ export const REPOSITORY_SAMPLES: RepositorySamples = {
       title: "matrix-bookmark-inserted",
     },
     set: { title: "matrix-bookmark-updated" },
+  },
+  folders: {
+    values: { id: "0192f3a0-2222-7000-8000-00000000b00e", name: "matrix-folder-inserted" },
+    set: { name: "matrix-folder-updated" },
   },
   tags: {
     values: (fixture) => ({ id: "0192f3a0-2222-7000-8000-00000000b00d", ownerId: fixture.a.owner.accountId, name: "matrix-tag-inserted" }),

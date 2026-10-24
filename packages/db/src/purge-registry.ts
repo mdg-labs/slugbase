@@ -12,8 +12,12 @@ export const workspacePurgeOrder: readonly string[] = [
   "audit_events",
   // The links of bookmarks and tags reference both, so they go first.
   "bookmark_tags",
+  // The links of bookmarks and folders reference both, so they go first.
+  "folder_bookmarks",
   // bookmarks reference the membership of their owner, so they go before the members.
   "bookmarks",
+  // folders reference the membership of their owner, so they go before the members.
+  "folders",
   // tags reference the membership of their owner, so they go before the members.
   "tags",
   "workspace_invitations",
