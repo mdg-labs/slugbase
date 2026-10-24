@@ -284,7 +284,7 @@ describe("the address", () => {
     expect(screen.getByRole("button", { name: "Pinned" }).getAttribute("aria-pressed")).toBe("false");
   });
 
-  it("takes a filter, a sort and a size from the controls, keeps each one linkable and follows back and forward", async () => {
+  it("takes a filter from the Pinned toggle and keeps it linkable", async () => {
     use({ fixtures: { listBookmarks: page([bookmark(1)]) } });
     await openApp("/bookmarks");
     await card("Bookmark 1");
@@ -296,10 +296,24 @@ describe("the address", () => {
     await waitFor(() => {
       expect(lists().at(-1)?.params.get("pinned")).toBe("true");
     });
+  });
+
+  it("takes a sort from the control and keeps it linkable beside the filter", async () => {
+    use({ fixtures: { listBookmarks: page([bookmark(1)]) } });
+    await openApp("/bookmarks?pinned=true");
+    await card("Bookmark 1");
+
     await chooseOption("Sort by", "Most used");
     await waitFor(() => {
       expect(window.location.search).toBe("?pinned=true&sort=most_used");
     });
+  });
+
+  it("takes a size from the control, keeps it linkable and sends it with the filter and the sort", async () => {
+    use({ fixtures: { listBookmarks: page([bookmark(1)]) } });
+    await openApp("/bookmarks?pinned=true&sort=most_used");
+    await card("Bookmark 1");
+
     await chooseOption("Bookmarks per load", "96");
     await waitFor(() => {
       expect(window.location.search).toBe("?pinned=true&sort=most_used&size=96");
@@ -309,6 +323,17 @@ describe("the address", () => {
     });
     expect(lists().at(-1)?.params.get("sort")).toBe("most_used");
     expect(lists().at(-1)?.params.get("pinned")).toBe("true");
+  });
+
+  it("follows back and forward through the filter and the size", async () => {
+    use({ fixtures: { listBookmarks: page([bookmark(1)]) } });
+    await openApp("/bookmarks?pinned=true&sort=most_used");
+    await card("Bookmark 1");
+
+    await chooseOption("Bookmarks per load", "96");
+    await waitFor(() => {
+      expect(window.location.search).toBe("?pinned=true&sort=most_used&size=96");
+    });
 
     await act(async () => {
       window.history.back();
@@ -457,7 +482,7 @@ describe("editing and deleting", () => {
     expect((await screen.findAllByRole("menuitem")).map((entry) => entry.textContent)).toEqual(["Edit", "Pin", "Delete"]);
   });
 
-  it("asks before deleting, deletes nothing on Cancel, and reads the list again after a delete", async () => {
+  it("asks before deleting and deletes nothing on Cancel", async () => {
     use({ fixtures: { listBookmarks: page([bookmark(1, { slug: "mail" }), bookmark(2)]) } });
     await openApp("/bookmarks");
     await card("Bookmark 1");
@@ -471,6 +496,12 @@ describe("editing and deleting", () => {
       expect(screen.queryByRole("alertdialog")).toBeNull();
     });
     expect(to("DELETE", `${LIST}/${bookmark(1).id}`)).toHaveLength(0);
+  });
+
+  it("reads the list again after a delete", async () => {
+    use({ fixtures: { listBookmarks: page([bookmark(1, { slug: "mail" }), bookmark(2)]) } });
+    await openApp("/bookmarks");
+    await card("Bookmark 1");
 
     await chooseAction("Bookmark 1", "Delete");
     const reads = lists().length;
@@ -650,11 +681,13 @@ describe("the table view", () => {
     expect(within(table).getAllByText("Never")).toHaveLength(1);
   });
 
-  it("orders from a sortable header, keeps the loaded filters and the view, and says how the rows are ordered", async () => {
+  /** The header cell of a column by its name. */
+  const header = (name: string): HTMLElement => screen.getByRole("columnheader", { name });
+
+  it("orders from the Title header, ascending and then descending, keeps the loaded filters and the view, and says how the rows are ordered", async () => {
     use({ fixtures: { listBookmarks: page([bookmark(1)]) } });
     await openApp("/bookmarks?view=table&pinned=true");
     await row("Bookmark 1");
-    const header = (name: string): HTMLElement => screen.getByRole("columnheader", { name });
     expect(header("Added").getAttribute("aria-sort")).toBe("descending");
     expect(header("Title").getAttribute("aria-sort")).toBe("none");
     expect(within(header("Slug")).queryByRole("button")).toBeNull();
@@ -675,13 +708,39 @@ describe("the table view", () => {
       expect(lists().at(-1)?.params.get("sort")).toBe("title_desc");
     });
     expect(header("Title").getAttribute("aria-sort")).toBe("descending");
+  });
 
-    for (const [column, sort] of [["Opens", "most_used"], ["Last opened", "recently_opened"], ["Added", "recent"], ["Added", "oldest"]] as const) {
+  it("orders from the Opens and Last opened headers", async () => {
+    use({ fixtures: { listBookmarks: page([bookmark(1)]) } });
+    await openApp("/bookmarks?view=table&pinned=true&sort=title_desc");
+    await row("Bookmark 1");
+
+    for (const [column, sort] of [["Opens", "most_used"], ["Last opened", "recently_opened"]] as const) {
       await press(within(header(column)).getByRole("button"));
       await waitFor(() => {
         expect(lists().at(-1)?.params.get("sort")).toBe(sort);
       });
     }
+    expect(lists().at(-1)?.params.get("pinned")).toBe("true");
+  });
+
+  it("orders from the Added header, newest first from another order and then oldest first, and drops the default from the address", async () => {
+    use({ fixtures: { listBookmarks: page([bookmark(1)]) } });
+    await openApp("/bookmarks?view=table&pinned=true&sort=recently_opened");
+    await row("Bookmark 1");
+
+    await press(within(header("Added")).getByRole("button"));
+    await waitFor(() => {
+      expect(lists().at(-1)?.params.get("sort")).toBe("recent");
+    });
+    await waitFor(() => {
+      expect(window.location.search).toBe("?view=table&pinned=true");
+    });
+
+    await press(within(header("Added")).getByRole("button"));
+    await waitFor(() => {
+      expect(lists().at(-1)?.params.get("sort")).toBe("oldest");
+    });
     expect(header("Added").getAttribute("aria-sort")).toBe("ascending");
     await press(within(header("Added")).getByRole("button"));
     await waitFor(() => {
