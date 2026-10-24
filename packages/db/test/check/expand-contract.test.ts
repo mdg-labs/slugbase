@@ -350,6 +350,58 @@ async function afterContract(declaration: string, sql: string): Promise<readonly
   return inspect(repository);
 }
 
+describe("a foreign key action with a column list", () => {
+  const ADD = 'ALTER TABLE "notes" ADD CONSTRAINT "notes_owner_fk" FOREIGN KEY ("workspace_id", "owner_id") REFERENCES "public"."members"("workspace_id", "id")';
+  const TABLE = 'CREATE TABLE "notes" ("workspace_id" uuid NOT NULL, "owner_id" uuid, CONSTRAINT "notes_owner_fk" FOREIGN KEY ("workspace_id", "owner_id") REFERENCES "public"."members"("workspace_id", "id")';
+
+  it.each([
+    ["SET NULL in a CREATE TABLE", `${TABLE} ON DELETE set null (owner_id) ON UPDATE no action);`],
+    ["SET NULL in upper case in a CREATE TABLE", `${TABLE} ON DELETE SET NULL (owner_id));`],
+    ["SET NULL without a space before the column list in a CREATE TABLE", `${TABLE} ON DELETE SET NULL(owner_id));`],
+    ["SET DEFAULT in a CREATE TABLE", `${TABLE} ON DELETE set default (owner_id) ON UPDATE no action);`],
+    ["SET NULL in an ADD CONSTRAINT ... NOT VALID", `${ADD} ON DELETE set null (owner_id) ON UPDATE no action NOT VALID;`],
+    ["SET DEFAULT in an ADD CONSTRAINT ... NOT VALID", `${ADD} ON DELETE set default (owner_id) ON UPDATE no action NOT VALID;`],
+  ])("accepts ON DELETE %s", async (_name, sql) => {
+    const repository = released();
+    repository.migration(SECOND, `CREATE TABLE "members" ("workspace_id" uuid, "id" uuid);\n--> statement-breakpoint\n${sql.startsWith("CREATE") ? "" : 'CREATE TABLE "notes" ("workspace_id" uuid NOT NULL, "owner_id" uuid);\n--> statement-breakpoint\n'}${sql}`, [
+      { name: "bookmarks", columns: BOOKMARKS },
+      { name: "members", columns: ["workspace_id", "id"] },
+      { name: "notes", columns: ["workspace_id", "owner_id"] },
+    ]);
+    expect(await inspect(repository)).toEqual([]);
+  });
+
+  it("accepts the ON DELETE SET NULL column list on a table created in the same release, validated", async () => {
+    expect(
+      await added(
+        `CREATE TABLE "notes" ("workspace_id" uuid NOT NULL, "owner_id" uuid);\n--> statement-breakpoint\n${ADD} ON DELETE set null (owner_id) ON UPDATE no action;`,
+      ),
+    ).toEqual([]);
+  });
+
+  it("still rejects a validated ON DELETE SET NULL column list on a table of the release", async () => {
+    const findings = await added(
+      'ALTER TABLE "bookmarks" ADD CONSTRAINT "f" FOREIGN KEY ("id", "title") REFERENCES "public"."notes"("id", "title") ON DELETE set null (title) ON UPDATE no action;',
+    );
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("adds a CHECK or FOREIGN KEY constraint without NOT VALID to table bookmarks");
+    expect(findings[0]?.message).not.toContain("calls null()");
+  });
+
+  it.each([
+    ["a quoted \"null\" call after ON DELETE SET", 'ALTER TABLE "bookmarks" ADD CONSTRAINT "f" FOREIGN KEY ("id") REFERENCES "public"."notes"("id") ON DELETE SET "null" (id) NOT VALID;'],
+    ["a quoted \"null\" call in a policy", 'CREATE POLICY p ON bookmarks USING ("null"(id));'],
+    ["a null call in a policy", "CREATE POLICY p ON bookmarks USING (null (id));"],
+    ["a null call after SET without DELETE", "CREATE POLICY p ON bookmarks USING (set null (id));"],
+    ["a null call after ON UPDATE SET", 'ALTER TABLE "bookmarks" ADD CONSTRAINT "f" FOREIGN KEY ("id") REFERENCES "public"."notes"("id") ON UPDATE SET NULL (id) NOT VALID;'],
+    ["a schema-qualified null call", "CREATE POLICY p ON bookmarks USING (delete set pg_catalog.null (id));"],
+  ])("still reports %s as an unknown call", async (_name, sql) => {
+    const findings = await added(sql);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.message).toContain("null()");
+  });
+});
+
 describe("a column of a domain type on a table of the release", () => {
   it("rejects the failure scenario: a domain with a CHECK created by a contract migration, then added unmarked", async () => {
     const findings = await afterContract(POSITIVE, 'ALTER TABLE "bookmarks" ADD COLUMN "a" d;');

@@ -620,6 +620,11 @@ function firstUnknownCall(tokens: readonly Token[]): string | undefined {
     if (token.kind === "word" && !qualified && SYNTAX_BEFORE_PAREN.has(token.text)) {
       continue;
     }
+    // `ON DELETE SET NULL (<cols>)`: the column list of a foreign key action, which PostgreSQL accepts after
+    // ON DELETE only. A quoted "null" or a null elsewhere is a call.
+    if (token.kind === "word" && token.text === "null" && !qualified && isWord(tokens[index - 1], "set") && isWord(tokens[index - 2], "delete")) {
+      continue;
+    }
     if (token.kind === "word" && SAFE_CALLS.has(token.text)) {
       const schema = tokens[start];
       if (!qualified || (index - start === 2 && schema !== undefined && SAFE_SCHEMAS.has(schema.text))) {

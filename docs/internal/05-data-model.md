@@ -220,7 +220,7 @@ Partial unique `(workspace_id, email) WHERE status = 'pending'`. Expiry is evalu
 |---|---|---|
 | `id` | uuid PK | |
 | `workspace_id` | uuid NOT NULL → workspaces CASCADE | |
-| `owner_id` | uuid | FK `(workspace_id, owner_id)` → workspace_members `ON DELETE SET NULL (owner_id)` — a departed member's bookmarks stay with the workspace (doc 02 §3.5). The migration writes the action as `SET DEFAULT (owner_id)`, which clears the same column because `owner_id` has no default and must never get one: the expand/contract check of `pnpm db:check` reads `NULL (` after `SET` as a call of a function named `null` and cannot place the statement |
+| `owner_id` | uuid | FK `(workspace_id, owner_id)` → workspace_members `ON DELETE SET NULL (owner_id)` — a departed member's bookmarks stay with the workspace (doc 02 §3.5). The merged migration keeps the action as `SET DEFAULT (owner_id)`, which clears the same column because `owner_id` has no default and must never get one; `pnpm db:check` reads both forms |
 | `url` | text NOT NULL | ≤ 2 048 chars; CHECK scheme is `http` or `https` |
 | `url_canonical` | text NOT NULL | Lower-cased host, no default port, no fragment, sorted tracking params removed — the metadata/AI cache key |
 | `host` | text NOT NULL | Derived; favicon lookup and search facet |

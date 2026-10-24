@@ -11,9 +11,9 @@ import { workspaceMembers, workspaces } from "./workspaces.ts";
 // refuse to delete the membership. PostgreSQL 15 puts the columns to clear after the action. drizzle-orm's `onDelete` types a
 // closed list without them, but drizzle-kit copies the string into the migration as it is, which is the only way to get the
 // constraint into a generated migration (a statement in src/sql would be repeated by every migration that carries that
-// directory). The form is `SET DEFAULT (owner_id)`, not `SET NULL (owner_id)`: `owner_id` has no default, so the column is
-// cleared the same way, and the expand/contract check of `pnpm db:check` cannot read `NULL (` after `SET`, where it reads a call
-// of a function called null. The column must therefore never be given a default.
+// directory). The merged migration keeps the form `SET DEFAULT (owner_id)`, which clears the same column because `owner_id`
+// has no default; `SET NULL (owner_id)` is equivalent, and the expand/contract check of `pnpm db:check` reads both. The column
+// must therefore never be given a default.
 const CLEAR_OWNER = "set default (owner_id)" as UpdateDeleteAction;
 
 /**
