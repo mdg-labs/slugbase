@@ -63,9 +63,9 @@ export const PROBE_INSTANCE_ADMIN: FixtureInstanceAdmin = {
   credentials: "session:0192f3a0-0000-7000-8000-00000000d002",
 };
 
-const ROWS: Record<"a" | "b", { shared: string; unshared: string }> = {
-  a: { shared: "0192f3a0-2222-7000-8000-00000000a021", unshared: "0192f3a0-2222-7000-8000-00000000a022" },
-  b: { shared: "0192f3a0-2222-7000-8000-00000000b021", unshared: "0192f3a0-2222-7000-8000-00000000b022" },
+const ROWS: Record<"a" | "b", { shared: string; unshared: string; tag: string }> = {
+  a: { shared: "0192f3a0-2222-7000-8000-00000000a021", unshared: "0192f3a0-2222-7000-8000-00000000a022", tag: "0192f3a0-2222-7000-8000-00000000a023" },
+  b: { shared: "0192f3a0-2222-7000-8000-00000000b021", unshared: "0192f3a0-2222-7000-8000-00000000b022", tag: "0192f3a0-2222-7000-8000-00000000b023" },
 };
 
 export const PROBE_SAMPLE: RepositorySample = {
@@ -93,6 +93,7 @@ function workspaceFixture(side: "a" | "b", id: string): WorkspaceFixture {
     { kind: "member", id: ACCOUNTS[side].member },
     { kind: "bookmark", id: rows.shared, visibility: "shared" },
     { kind: "bookmark", id: rows.unshared, visibility: "unshared" },
+    { kind: "tag", id: rows.tag },
   ];
   return {
     id,

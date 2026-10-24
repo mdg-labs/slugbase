@@ -9,6 +9,7 @@ export { instanceSettings, instanceState } from "./instance.ts";
 export { memberRole, workspaceMembers, workspaceSettings, workspaces } from "./workspaces.ts";
 export type { MemberRole } from "./workspaces.ts";
 export { bookmarks } from "./bookmarks.ts";
+export { bookmarkTags, tags } from "./tags.ts";
 export { workspaceInvitations } from "./invitations.ts";
 export type { InvitationStatus } from "./invitations.ts";
 export { idempotencyKeys } from "./idempotency-keys.ts";

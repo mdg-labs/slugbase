@@ -50,8 +50,8 @@ beforeAll(async () => {
 
 function serve(modules: readonly ServerModule[], document?: TestDocument, options: { readonly memberships?: boolean; readonly entitlements?: EntitlementCheck } = {}): Server {
   // The walker signs in once for each operation that needs a session, and calls each of the mfa and reset buckets' operations several times,
-  // more often than the default limits of one address allow.
-  const config = serverConfig({ NODE_ENV: "test", DATABASE_URL: appUrl(database()), RATE_LIMIT_LOGIN_IP: "200/min", RATE_LIMIT_MFA_IP: "100/min", RATE_LIMIT_MFA_ACCOUNT: "1000/hour", RATE_LIMIT_RESET_IP: "1000/hour", RATE_LIMIT_BULK_IP: "1000/hour", RATE_LIMIT_BULK_ACCOUNT: "1000/hour" });
+  // more often than the default limits of one address allow; the matrix makes a write call for each of its principals on every operation that writes.
+  const config = serverConfig({ NODE_ENV: "test", DATABASE_URL: appUrl(database()), RATE_LIMIT_WRITE_IP: "1000/min", RATE_LIMIT_WRITE_ACCOUNT: "1000/min", RATE_LIMIT_LOGIN_IP: "200/min", RATE_LIMIT_MFA_IP: "100/min", RATE_LIMIT_MFA_ACCOUNT: "1000/hour", RATE_LIMIT_RESET_IP: "1000/hour", RATE_LIMIT_BULK_IP: "1000/hour", RATE_LIMIT_BULK_ACCOUNT: "1000/hour" });
   return createServer({
     config,
     // The stub resolver knows the workspaces of the fixture and no session of a real sign-in; the walk of the committed document resolves each
@@ -262,12 +262,12 @@ describe("the walker over the committed document", () => {
     expect(report.failures.filter((failure) => !teamRefusal(failure) && !skippedNotRefused(failure))).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each operation. Each of the sixty-three that need a session also answers 401 without one, each of the seventeen that declare
-    // re-authentication answers 401 reauth_required without it, and each of the thirty-nine whose policy has a role below it (the twelve of a member, the ten
+    // One valid request for each operation. Each of the sixty-seven that need a session also answers 401 without one, each of the seventeen that declare
+    // re-authentication answers 401 reauth_required without it, and each of the forty-three whose policy has a role below it (the sixteen of a member, the ten
     // of an admin, the two of an owner and the fifteen of the instance admin) answers the principal just below it (404 below member, 403 below the others).
-    // Each of the five that declare the write scope answers 403 token_scope to a token that may only read, each of the four that declare an entitlement answers
-    // 403 to an account without it, and each of the fifteen that name a member, a recipient, a team, an invitation or a bookmark, or an input that can carry one, answers for one of workspace B.
-    expect(report.calls).toBe(operations.length + 63 + 17 + 39 + 5 + 4 + 15);
+    // Each of the eight that declare the write scope answers 403 token_scope to a token that may only read, each of the four that declare an entitlement answers
+    // 403 to an account without it, and each of the seventeen that name a member, a recipient, a team, an invitation, a bookmark or a tag, or an input that can carry one, answers for one of workspace B.
+    expect(report.calls).toBe(operations.length + 67 + 17 + 43 + 8 + 4 + 17);
   }, WALK_TIMEOUT_MS);
 });
 
@@ -397,7 +397,9 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
           coalesce((SELECT string_agg(m::text, '|' ORDER BY m.account_id) FROM workspace_members m WHERE m.workspace_id = ${probe.fixture.b.id}), '') ||
           coalesce((SELECT string_agg(e::text, '|' ORDER BY e.id) FROM audit_events e WHERE e.workspace_id = ${probe.fixture.b.id}), '') ||
           coalesce((SELECT string_agg(i::text, '|' ORDER BY i.id) FROM workspace_invitations i WHERE i.workspace_id = ${probe.fixture.b.id}), '') ||
-          coalesce((SELECT string_agg(k::text, '|' ORDER BY k.id) FROM bookmarks k WHERE k.workspace_id = ${probe.fixture.b.id}), '')
+          coalesce((SELECT string_agg(k::text, '|' ORDER BY k.id) FROM bookmarks k WHERE k.workspace_id = ${probe.fixture.b.id}), '') ||
+          coalesce((SELECT string_agg(t::text, '|' ORDER BY t.id) FROM tags t WHERE t.workspace_id = ${probe.fixture.b.id}), '') ||
+          coalesce((SELECT string_agg(l::text, '|' ORDER BY l.bookmark_id, l.tag_id) FROM bookmark_tags l WHERE l.workspace_id = ${probe.fixture.b.id}), '')
         ) AS digest`;
     });
     return rows[0]?.digest ?? "";
@@ -439,9 +441,20 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
           VALUES (${id}, ${probe.fixture.b.id}, ${[probe.fixture.b.owner, probe.fixture.b.member][index % 2]?.accountId ?? null}, 'https://example.com/matrix-b', 'https://example.com/matrix-b', 'example.com', ${`matrix-bookmark-of-b-${String(index)}`})`;
       });
     }
+    // The tag of workspace B the fixture names, owned by its owner, linked to the first bookmark of B: the matrix puts its identifier in the path of the rename and of the deletion.
+    const firstBookmark = bookmarkIds[0]?.id;
+    for (const { id } of probe.fixture.b.identifiers.filter((identifier) => identifier.kind === "tag")) {
+      await database().owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        await tx`INSERT INTO tags (id, workspace_id, owner_id, name) VALUES (${id}, ${probe.fixture.b.id}, ${probe.fixture.b.owner.accountId}, 'matrix-tag-of-b')`;
+        if (firstBookmark !== undefined) {
+          await tx`INSERT INTO bookmark_tags (workspace_id, bookmark_id, tag_id) VALUES (${probe.fixture.b.id}, ${firstBookmark}, ${id})`;
+        }
+      });
+    }
   }
 
-  it("passes for the twenty-four tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations, its bookmarks and its audit log as they were", async () => {
+  it("passes for the twenty-eight tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations, its bookmarks, its tags and its audit log as they were", async () => {
     await seedFixtureWorkspaces();
     const before = await contentOfB();
     // The deletion of the workspace takes no identifier, so the matrix repeats it as every principal of A (the sessions of the matrix have just
@@ -469,7 +482,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     const matrix = await runApiMatrix({
       document: committed,
       fixture,
-      mapping: { rowId: "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark" },
+      mapping: { rowId: "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark" },
       request: async (call) => {
         // The bulk request takes the identifiers of B in `ids` or in the `hasSlug` of its filter, and a request with both is malformed; it is sent with `ids` only, so that the
         // handler is reached and what it does with them is looked at. The matrix sends the same identifiers in the filter's boolean as well, which no handler is asked.
@@ -496,7 +509,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // Each of the ten principals, the instance admin among them, naming the two bookmarks of B once in the `hasSlug` of the list and once in that of the select-all.
     expect(matrix.failures.filter(filterRefusal)).toHaveLength(10 * 2 * 2);
     expect(report.failures).toEqual([]);
-    expect(report.classified.byKind["tenant-scoped"]).toBe(24);
+    expect(report.classified.byKind["tenant-scoped"]).toBe(28);
     // The bulk request reaches its handler as the three sessions and the three read-write tokens of A, once for each pair of the two bookmarks of B and of the two inputs the matrix fills (the filter is dropped before it is sent).
     expect(matrix.failures.filter(skippedAs200)).toHaveLength(6 * 2 * 2);
     // the three sessions and the six tokens (a read and a read-write one of each role) of A, once on each of the nine operations that name no member
@@ -508,7 +521,8 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // it holds no membership, so there is no workspace for a handler to act in or a role to be refused for.
     // The bookmark read, change, deletion and open name each of the two bookmarks of B once each, and so do the bookmark list and the select-all in their `hasSlug` input;
     // the bulk request names each of the two in `ids` once for each of the two in `filter.hasSlug`.
-    const calls = 10 + (3 + 3 + 3 + 3 * 3 + 3) + 4 * 2 + 2 + 2 + 2 * 2;
+    // The creation and the list of tags name none, and the rename and the deletion of a tag name the one tag of B once each.
+    const calls = 12 + (3 + 3 + 3 + 3 * 3 + 3) + 4 * 2 + 2 + 2 + 2 * 2 + 2;
     expect(report.attempts).toBe(10 * calls);
     // The four exceptions are the identifiers of B in the `hasSlug` filter of the bookmark list and of the select-all, which the query validation refuses before the instance admin's missing membership is looked at.
     expect(instanceAdminStatuses.toSorted()).toEqual([...Array<number>(calls - 4).fill(404), 422, 422, 422, 422]);
@@ -538,6 +552,13 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     });
     const principalsOfA = [probe.fixture.a.owner, probe.fixture.a.admin, probe.fixture.a.member].map((principal) => principal.accountId).sort();
     expect(bookmarks.map((row) => [row.counter, row.owner_id, row.created])).toEqual(principalsOfA.map((accountId) => [6, accountId, "2"]));
+    // The creation of a tag reached its handler for the same sessions and tokens: every account of A made the tag, the second creation by an account (its session
+    // and its token send one name) was refused as a name that is taken, a read-only token was refused before the handler, and the one tag of B is untouched.
+    const tagsOfA = await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      return tx<{ owner_id: string; name: string }[]>`SELECT owner_id, name FROM tags WHERE workspace_id = ${probe.fixture.a.id} ORDER BY owner_id`;
+    });
+    expect(tagsOfA.map((row) => [row.owner_id, row.name])).toEqual(principalsOfA.map((accountId) => [accountId, "Walker tag"]));
   });
 });
 

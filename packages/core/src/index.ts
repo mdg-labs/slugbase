@@ -6,4 +6,5 @@ export * from "./entitlements/index.ts";
 export * from "./events/index.ts";
 export * from "./instance/index.ts";
 export * from "./ports/index.ts";
+export * from "./tags/index.ts";
 export * from "./workspaces/index.ts";

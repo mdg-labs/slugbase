@@ -10,8 +10,12 @@ export const workspacePurgeOrder: readonly string[] = [
   // api_tokens references the membership of its account, so the tokens go before the members.
   "api_tokens",
   "audit_events",
+  // The links of bookmarks and tags reference both, so they go first.
+  "bookmark_tags",
   // bookmarks reference the membership of their owner, so they go before the members.
   "bookmarks",
+  // tags reference the membership of their owner, so they go before the members.
+  "tags",
   "workspace_invitations",
   "workspace_settings",
   "workspace_members",

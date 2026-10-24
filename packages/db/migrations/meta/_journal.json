@@ -554,6 +554,13 @@
       "when": 1792770276945,
       "tag": "20261023154436_add_bookmark_usage_keeps_updated_at",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1792854841311,
+      "tag": "20261024151401_add_tags",
+      "breakpoints": true
     }
   ]
 }

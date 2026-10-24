@@ -1,4 +1,4 @@
-import type { IdentifierKind } from "./fixture.js";
+import type { IdentifierKind, TenantFixture } from "./fixture.js";
 
 // The mapping file of the cross-tenant matrix (doc 08 section 3.3). An
 // operation with a path parameter, or a query or body input that can carry an
@@ -15,10 +15,18 @@ export type PathParameterMapping = Readonly<Record<string, IdentifierKind>>;
 
 /** The columns the RLS-only mode writes to a repository's table. */
 export interface RepositorySample {
-  /** A row an insert writes, without `workspaceId`. */
-  readonly values: Readonly<Record<string, unknown>>;
+  /**
+   * A row an insert writes, without `workspaceId`. A function when the row names an account of the fixture (the owner of a tag): it is
+   * given the fixture the matrix runs against.
+   */
+  readonly values: Readonly<Record<string, unknown>> | ((fixture: TenantFixture) => Readonly<Record<string, unknown>>);
   /** The columns an update sets, without `workspaceId`. */
   readonly set: Readonly<Record<string, unknown>>;
+}
+
+/** The columns of a sample's insert for the fixture the matrix runs against. */
+export function sampleValues(sample: RepositorySample, fixture: TenantFixture): Readonly<Record<string, unknown>> {
+  return typeof sample.values === "function" ? sample.values(fixture) : sample.values;
 }
 
 /** A repository name (as registered in the scoped-repository registry) to the sample its writes use. */
@@ -31,6 +39,7 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  * - Bookmark identifier: the path parameter `id` of `getBookmark`, `updateBookmark`, `deleteBookmark` and `openBookmark`, the query parameter
  *   `hasSlug` of `listBookmarks` and `listBookmarkIds` and the body inputs `ids[]` and `filter.hasSlug` of `bulkBookmarks`. `hasSlug` is a flag, not
  *   an identifier, but the classifier selects every name ending in `Slug`, so it is mapped like the others.
+ * - Tag identifier: the path parameter `id` of `renameTag` and `deleteTag`.
  * - Member identifier (an account): `accountId` of `removeMember`, `updateMember` and `transferWorkspaceOwnership`, and `transferTo` of
  *   `removeMember` and `leaveWorkspace`.
  * - Team identifier: `teamIds[]` of `createInvitation`.
@@ -46,6 +55,8 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
   "updateBookmark.id": "bookmark",
   "deleteBookmark.id": "bookmark",
   "openBookmark.id": "bookmark",
+  "renameTag.id": "tag",
+  "deleteTag.id": "tag",
   "listBookmarks.hasSlug": "bookmark",
   "listBookmarkIds.hasSlug": "bookmark",
   "bulkBookmarks.ids[]": "bookmark",
@@ -64,7 +75,9 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
 /**
  * The columns the RLS-only mode writes to each scoped repository of `@slugbase/db`. The bookmarks repository updates the columns of a request
  * only, so its update sample sets the title; the row of an insert has no owner, which keeps the sample independent of the membership rows of the
- * fixture. The bookmarks repository has no delete: a delete is the system operation `sys_bookmark_delete`, which the API mode exercises.
+ * fixture. The bookmarks repository has no delete: a delete is the system operation `sys_bookmark_delete`, which the API mode exercises. A tag is
+ * its owner's, so the tags sample names the owner of workspace A of the fixture, the account the RLS-only mode acts as; the fixture must hold a
+ * tag of that owner in A for the update and the delete to touch a row.
  */
 export const REPOSITORY_SAMPLES: RepositorySamples = {
   bookmarks: {
@@ -76,6 +89,10 @@ export const REPOSITORY_SAMPLES: RepositorySamples = {
       title: "matrix-bookmark-inserted",
     },
     set: { title: "matrix-bookmark-updated" },
+  },
+  tags: {
+    values: (fixture) => ({ id: "0192f3a0-2222-7000-8000-00000000b00d", ownerId: fixture.a.owner.accountId, name: "matrix-tag-inserted" }),
+    set: { name: "matrix-tag-updated" },
   },
 };
 

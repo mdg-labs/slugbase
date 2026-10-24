@@ -78,6 +78,7 @@
     "20261023111900_index_bookmark_list_5": "ff16a9f1f42cd72fadac3e54969172240c1747f5ecc9c4cdcf2df02f0a160cbe",
     "20261023125601_add_bookmark_open_counts": "2035bf6d034d10822838614da40fcade07d6aa34bd041f5829ca817e17955f0b",
     "20261023140859_add_bookmark_bulk_delete": "a4ff5aefa25cc87b7c4425a43a4678ac9a63ae2257c025175ebba78b2161cc09",
-    "20261023154436_add_bookmark_usage_keeps_updated_at": "7a042403ab5bec9cbaabba93088578ad2bbb921431541fbce140785a430f7a6f"
+    "20261023154436_add_bookmark_usage_keeps_updated_at": "7a042403ab5bec9cbaabba93088578ad2bbb921431541fbce140785a430f7a6f",
+    "20261024151401_add_tags": "eed768791d1d74f7879c4cf6266bc3ef694d4736035b76da1e6787d9e5a338e0"
   }
 }

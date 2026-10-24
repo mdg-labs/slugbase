@@ -48,6 +48,7 @@ import { NewBookmark } from '@slugbase/core';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import { SQL } from 'drizzle-orm';
+import type { TagStore } from '@slugbase/core';
 import type { WorkspaceAdministrationStore } from '@slugbase/core';
 import type { WorkspaceRenameRequest } from '@slugbase/core';
 import type { WorkspaceRenameResult } from '@slugbase/core';
@@ -719,6 +720,9 @@ export function invitationRepository(tx: TenantTx): InvitationRepository;
 export function isLastOwnerViolation(error: unknown): boolean;
 
 // @public
+export function isTagNameTaken(error: unknown): boolean;
+
+// @public
 export interface JobHealth {
     readonly failed: number;
     readonly queueDepth: number;
@@ -1350,6 +1354,12 @@ export interface StoredResponse {
     // (undocumented)
     readonly status: number;
 }
+
+// @public (undocumented)
+export type TagRepository = TagStore;
+
+// @public (undocumented)
+export function tagRepository(tx: TenantTx): TagRepository;
 
 // @public
 export interface TenantContext {

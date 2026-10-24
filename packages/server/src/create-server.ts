@@ -45,6 +45,7 @@ import { isOpenApiDocument, openApiRoute } from "./routes/meta/openapi.ts";
 import { setupRoutes } from "./routes/setup/index.ts";
 import { invitationRoutes } from "./routes/invitations/index.ts";
 import { bookmarkRoutes } from "./routes/bookmarks/index.ts";
+import { tagRoutes } from "./routes/tags/index.ts";
 import { entitlementRoutes } from "./routes/entitlements.ts";
 import { instanceRoutes, type InstanceAdminGrantCheck } from "./routes/instance/index.ts";
 import { memberRoutes } from "./routes/members/index.ts";
@@ -570,6 +571,8 @@ export function createServer(options: CreateServerOptions): Server {
   builtInRoutes.push(...entitlementRoutes({ withTenant: context.withTenant, service: entitlementService }));
   // So are the bookmarks of the active workspace: created under the workspace's `bookmarks.max` (the ceiling is read from the engine, the count is taken in the database) and read back by their owner.
   builtInRoutes.push(...bookmarkRoutes({ entitlements: createBookmarkEntitlements(entitlementService), cursorSecret: config.SESSION_SECRET, usage }));
+  // And the tags of the member who makes them: created, listed with their counts, renamed and deleted by their owner alone.
+  builtInRoutes.push(...tagRoutes({ cursorSecret: config.SESSION_SECRET }));
   const ownedWorkspaceEntitlements = createOwnedWorkspaceEntitlements(entitlementService);
   // Stage 9 and the handlers that decide an entitlement themselves (accepting an invitation) ask the same check, so an operation is gated the same way wherever it is decided.
   const entitlementCheck: EntitlementCheck = options.entitlements ?? (adapters.entitlements.available ? createEntitlementCheck(entitlementService) : denyEntitlements);

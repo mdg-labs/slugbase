@@ -28,10 +28,12 @@ function unmapped(inputs: readonly string[], mapping: PathParameterMapping): str
 }
 
 describe("PATH_PARAMETER_MAPPING", () => {
-  it("finds the identifier-carrying inputs of the bookmark, member and invitation operations in the committed contract", () => {
+  it("finds the identifier-carrying inputs of the bookmark, tag, member and invitation operations in the committed contract", () => {
     expect(contractInputs()).toEqual(
       expect.arrayContaining([
         "openBookmark.id",
+        "renameTag.id",
+        "deleteTag.id",
         "listBookmarks.hasSlug",
         "listBookmarkIds.hasSlug",
         "bulkBookmarks.ids[]",
@@ -60,6 +62,8 @@ describe("PATH_PARAMETER_MAPPING", () => {
 
   it("maps each input to the kind of fixture identifier it takes", () => {
     const expected: Record<string, IdentifierKind> = {
+      "renameTag.id": "tag",
+      "deleteTag.id": "tag",
       "createInvitation.teamIds[]": "team",
       "revokeInvitation.id": "invitation",
       "createInvitationLink.id": "invitation",

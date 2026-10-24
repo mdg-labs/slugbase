@@ -1573,6 +1573,9 @@ export function createPasswordPolicy(input?: PasswordPolicyOptions): PasswordPol
 // @public (undocumented)
 export function createSeatEntitlements(service: EntitlementService): SeatEntitlements;
 
+// @public (undocumented)
+export function createTag(input: TagCreationDependencies, ask: TagCreationAsk): Promise<TagCreationOutcome>;
+
 // @public
 export function createWorkspace(input: WorkspaceCreationDependencies, ask: WorkspaceCreationAsk): Promise<WorkspaceCreationOutcome>;
 
@@ -1607,6 +1610,9 @@ export function deleteBookmark(input: BookmarkDeletionDependencies, ask: Bookmar
 
 // @public
 export function deleteInstanceAccount<Code extends string>(input: InstanceAccountDeletionDependencies<Code>, ask: InstanceAccountDeletionAsk): Promise<InstanceAccountDeletionOutcome<Code>>;
+
+// @public
+export function deleteTag(input: TagDeletionDependencies, ask: TagDeletionAsk): Promise<boolean>;
 
 // @public (undocumented)
 export const DOMAIN_EVENT_NAMES: readonly DomainEventName[];
@@ -3104,6 +3110,9 @@ export function listInvitations(input: Pick<InvitationActionDependencies, "store
 }): Promise<InvitationListOutcome>;
 
 // @public
+export function listTags(input: TagListDependencies, ask: TagListAsk): Promise<TagListOutcome>;
+
+// @public
 export function loadBreachedPasswords(): BreachedPasswords;
 
 // @public
@@ -3310,10 +3319,25 @@ export interface NewInvitation {
 export function newOidcHandshake(): OidcHandshake;
 
 // @public
+export interface NewTag {
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+    readonly ownerId: string;
+}
+
+// @public
 export function normalizeBookmarkUrl(input: string): BookmarkUrlResult;
 
 // @public
 export function normalizeEmail(raw: string): string;
+
+// @public
+export function normalizeTagName(name: string): {
+    readonly name: string;
+} | {
+    readonly refusal: TagNameRefusal;
+};
 
 // @public
 export interface NotificationRecipient {
@@ -3571,6 +3595,9 @@ export function registrationUnavailable(settings: RegistrationSettings, mailAvai
 // @public
 export function reissueInstanceWorkspaceOwnerInvitation(input: InstanceWorkspaceDependencies, ask: InstanceOwnerInvitationAsk): Promise<InstanceOwnerInvitationOutcome>;
 
+// @public (undocumented)
+export function renameTag(input: TagRenameDependencies, ask: TagRenameAsk): Promise<TagRenameOutcome>;
+
 // @public
 export function renameWorkspace(input: WorkspaceAdministrationDependencies, ask: WorkspaceRenameAsk): Promise<WorkspaceRenameOutcome>;
 
@@ -3652,6 +3679,195 @@ export interface SessionCookieSpec {
 
 // @public
 export function sessionCookieSpec(appOrigin: string): SessionCookieSpec;
+
+// @public
+export const TAG_LIST_TOTAL_CAP = 10000;
+
+// @public
+export const TAG_NAME_MAX_LENGTH = 40;
+
+// @public (undocumented)
+export const TAG_SORTS: readonly TagSort[];
+
+// @public (undocumented)
+export interface TagCreationAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public (undocumented)
+export interface TagCreationDependencies {
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: Pick<TagStore, "create">;
+}
+
+// @public (undocumented)
+export type TagCreationOutcome = {
+    readonly kind: "created";
+    readonly tag: TagRecord;
+} | {
+    readonly kind: "invalid_name";
+    readonly reason: TagNameRefusal;
+} | {
+    readonly kind: "name_taken";
+};
+
+// @public
+export interface TagCursors {
+    open(cursor: string, scope: string): TagPosition | undefined;
+    // (undocumented)
+    seal(position: TagPosition, scope: string): string;
+}
+
+// @public (undocumented)
+export interface TagDeletionAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly tagId: string;
+}
+
+// @public (undocumented)
+export interface TagDeletionDependencies {
+    // (undocumented)
+    readonly store: Pick<TagStore, "remove">;
+}
+
+// @public (undocumented)
+export interface TagListAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly cursor: string | undefined;
+    readonly limit: number;
+    // (undocumented)
+    readonly sort: TagSort;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface TagListDependencies {
+    // (undocumented)
+    readonly cursors: TagCursors;
+    // (undocumented)
+    readonly store: Pick<TagStore, "list" | "count">;
+}
+
+// @public (undocumented)
+export type TagListOutcome = {
+    readonly kind: "listed";
+    readonly items: readonly TagRecord[];
+    readonly nextCursor: string | null;
+    readonly total: number | null;
+}
+/** The cursor was not issued by this server for this account, workspace and sort; nothing was read. */
+| {
+    readonly kind: "bad_cursor";
+};
+
+// @public (undocumented)
+export interface TagListRequest {
+    readonly after: TagPosition | undefined;
+    // (undocumented)
+    readonly limit: number;
+    // (undocumented)
+    readonly ownerId: string;
+    // (undocumented)
+    readonly sort: TagSort;
+}
+
+// @public (undocumented)
+export type TagNameRefusal = "empty" | "too_long";
+
+// @public
+export interface TagPosition {
+    // (undocumented)
+    readonly count: number | undefined;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public
+export interface TagRecord {
+    readonly bookmarkCount: number;
+    // (undocumented)
+    readonly createdAt: Date;
+    // (undocumented)
+    readonly id: string;
+    readonly name: string;
+}
+
+// @public (undocumented)
+export interface TagRenameAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly tagId: string;
+}
+
+// @public (undocumented)
+export interface TagRenameDependencies {
+    // (undocumented)
+    readonly store: Pick<TagStore, "rename">;
+}
+
+// @public (undocumented)
+export type TagRenameOutcome = TagRenameResult | {
+    readonly kind: "invalid_name";
+    readonly reason: TagNameRefusal;
+};
+
+// @public (undocumented)
+export interface TagRenameRequest {
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly ownerId: string;
+    // (undocumented)
+    readonly tagId: string;
+}
+
+// @public (undocumented)
+export type TagRenameResult = {
+    readonly kind: "renamed";
+    readonly tag: TagRecord;
+} | {
+    readonly kind: "unchanged";
+    readonly tag: TagRecord;
+} | {
+    readonly kind: "name_taken";
+} | {
+    readonly kind: "not_found";
+};
+
+// @public (undocumented)
+export type TagSort = "name" | "count";
+
+// @public (undocumented)
+export interface TagStore {
+    count(ownerId: string, limit: number): Promise<number>;
+    create(tag: NewTag): Promise<TagStoreCreationResult>;
+    list(request: TagListRequest): Promise<readonly TagRecord[]>;
+    remove(request: {
+        readonly tagId: string;
+        readonly ownerId: string;
+    }): Promise<boolean>;
+    rename(request: TagRenameRequest): Promise<TagRenameResult>;
+}
+
+// @public (undocumented)
+export type TagStoreCreationResult = {
+    readonly kind: "created";
+    readonly tag: TagRecord;
+}
+/** The owner already has a tag of that name, spelled in any case. */
+| {
+    readonly kind: "name_taken";
+};
 
 // @public
 export type TenantPrincipal = {

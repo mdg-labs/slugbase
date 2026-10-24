@@ -256,7 +256,7 @@ export const REPOSITORY_SAMPLES: RepositorySamples;
 // @public
 export interface RepositorySample {
     readonly set: Readonly<Record<string, unknown>>;
-    readonly values: Readonly<Record<string, unknown>>;
+    readonly values: Readonly<Record<string, unknown>> | ((fixture: TenantFixture) => Readonly<Record<string, unknown>>);
 }
 
 // @public
