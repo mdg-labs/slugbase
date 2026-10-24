@@ -628,6 +628,7 @@ describe("in German", () => {
     expect(screen.getByText("1 von 1.234 angezeigt")).toBeDefined();
     expect(screen.getByRole("button", { name: "Mehr laden" })).toBeDefined();
     expect(screen.getByRole("button", { name: "Angeheftet" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Weiterleitung aktiv" })).toBeDefined();
   });
 });
 
