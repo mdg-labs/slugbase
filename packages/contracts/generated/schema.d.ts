@@ -195,10 +195,45 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List bookmarks */
+        get: operations["listBookmarks"];
         put?: never;
         /** Create a bookmark */
         post: operations["createBookmark"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bookmarks/bulk": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delete, pin or unpin many bookmarks */
+        post: operations["bulkBookmarks"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bookmarks/ids": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the identifiers of the bookmarks a filter matches */
+        get: operations["listBookmarkIds"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -222,6 +257,23 @@ export interface paths {
         head?: never;
         /** Change a bookmark */
         patch: operations["updateBookmark"];
+        trace?: never;
+    };
+    "/api/v1/bookmarks/{id}/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record an open of a bookmark */
+        post: operations["openBookmark"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/entitlements": {
@@ -1282,6 +1334,70 @@ export interface components {
             url: string;
             /** @description Moves by one with every change; the ETag header carries it and If-Match takes it back */
             version: number;
+        };
+        BookmarkFilter: {
+            /** @description true matches the bookmarks /go forwards to only and false those it does not; left out, forwarding is not filtered on */
+            forwarding?: boolean;
+            /** @description true matches bookmarks with a slug only and false those without one; left out, slugs are not filtered on */
+            hasSlug?: boolean;
+            /** @description true matches pinned bookmarks only and false unpinned ones only; left out, pinning is not filtered on */
+            pinned?: boolean;
+            /**
+             * @description Whose bookmarks are matched. Only the caller's own bookmarks exist until sharing arrives, so both name the same bookmarks today; mine when left out
+             * @enum {string}
+             */
+            scope?: "all" | "mine";
+            /** @description Matches the caller's bookmarks whose canonical URL equals the canonical form of this value; one that cannot be a bookmark's URL is refused with 422 */
+            url?: string;
+        };
+        BookmarkIds: {
+            /** @description The identifiers of the caller's bookmarks that match the filters, newest first, at most 5 000 */
+            ids: string[];
+            /** @description true when more than 5 000 bookmarks match, so ids holds the first 5 000 only and a bulk request by the same filter is refused */
+            truncated: boolean;
+        };
+        BookmarkList: {
+            /** @description One page of the caller's bookmarks, in the order asked for; plan-archived bookmarks are never listed */
+            items: components["schemas"]["Bookmark"][];
+            /** @description Passed as `cursor` to get the next page; null on the last page */
+            nextCursor: string | null;
+            /** @description How many bookmarks match the filters, across all pages: exact up to 10 000, and null above that, where totalAtLeast says so */
+            total: number | null;
+            /**
+             * @description Present, and 10 000, when total is null: the filters match more than 10 000 bookmarks
+             * @constant
+             */
+            totalAtLeast?: 10000;
+        };
+        BookmarkOpen: {
+            /** @description The destination to go to: the bookmark's URL as stored, checked again to be an http or https URL */
+            url: string;
+        };
+        BulkBookmarksRequest: {
+            /**
+             * @description delete removes the bookmarks for good, pin pins them and unpin unpins them
+             * @enum {string}
+             */
+            action: "delete" | "pin" | "unpin";
+            /** @description Acts on the caller's bookmarks that match this filter, which is the list's filters; a filter that matches more than 5 000 bookmarks is refused with 422. Give this or ids, and not both */
+            filter?: components["schemas"]["BookmarkFilter"];
+            /** @description The bookmarks to act on, 1 to 1 000 identifiers; one named twice counts once. Give this or filter, and not both */
+            ids?: string[];
+        };
+        BulkBookmarksResult: {
+            /** @description How many of them are now deleted, or are pinned or unpinned as asked (a bookmark that already was is counted) */
+            affected: number;
+            /** @description How many bookmarks the request named (the distinct identifiers) or the filter matched */
+            requested: number;
+            /** @description How many were left alone: requested minus affected */
+            skipped: number;
+            /** @description The skipped bookmarks by reason, as counts only */
+            skippedReasons: {
+                /** @description Bookmarks the caller owns none of in this workspace: another member's, another workspace's, one that is gone, and, for pin and unpin, a plan-archived one. They are not told apart */
+                not_found: number;
+                /** @description Bookmarks the caller can read and does not own; none exist until sharing arrives */
+                not_owner: number;
+            };
         };
         CancelEmailChangeRequest: {
             /** @description The token of the "this wasn't me" link mailed to the old address, from the fragment of /email-change/cancel#token=… */
@@ -3009,6 +3125,91 @@ export interface operations {
             };
         };
     };
+    listBookmarks: {
+        parameters: {
+            query?: {
+                scope?: "all" | "mine";
+                pinned?: "true" | "false";
+                hasSlug?: "true" | "false";
+                forwarding?: "true" | "false";
+                url?: string;
+                sort?: "recent" | "oldest" | "title_asc" | "title_desc" | "most_used" | "recently_opened";
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of the caller's bookmarks in the order asked for, with the cursor of the next page and the total the filters match (exact up to 10 000, then null with totalAtLeast). Another member's bookmarks, those of another workspace and plan-archived ones are never listed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookmarkList"];
+                };
+            };
+            /** @description The request was malformed, or the cursor is not one this account was issued for this workspace, these filters and this sort (bad_request) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The query did not pass validation (an unknown parameter or sort, a boolean other than true or false, a limit outside 1 to 100), or the url is not a URL a bookmark can have */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
     createBookmark: {
         parameters: {
             query?: never;
@@ -3100,6 +3301,177 @@ export interface operations {
                 };
             };
             /** @description The service is temporarily unavailable, the entitlement source could not say how many bookmarks the workspace may hold, or an earlier request with the same Idempotency-Key is still running */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    bulkBookmarks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkBookmarksRequest"];
+            };
+        };
+        responses: {
+            /** @description What the request did, as counts only. The whole request is one transaction: every bookmark it affects changes or none does. Only the caller's own bookmarks change; the others are skipped as not_found without saying whether they exist. A delete gives the workspace's bookmark count back once for the request, by the bookmarks that were not plan-archived, and records one bookmark.bulk_deleted audit event with the number deleted, never a title or a URL */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkBookmarksResult"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation (an unknown action, neither or both of ids and filter, no identifier or more than 1 000, a malformed identifier, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks. Nothing is written */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listBookmarkIds: {
+        parameters: {
+            query?: {
+                scope?: "all" | "mine";
+                pinned?: "true" | "false";
+                hasSlug?: "true" | "false";
+                forwarding?: "true" | "false";
+                url?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The identifiers of the caller's bookmarks that match the filters of the list, newest first, up to the select-all cap of 5 000, and whether more matched. Another member's bookmarks, those of another workspace and plan-archived ones are never returned */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookmarkIds"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The query did not pass validation (an unknown parameter, a boolean other than true or false), or the url is not a URL a bookmark can have */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
             503: {
                 headers: {
                     [name: string]: unknown;
@@ -3349,6 +3721,93 @@ export interface operations {
                 };
             };
             /** @description The identifier or the body did not pass validation (a malformed, empty or over-long URL, a title that is blank or over-long, a description over 1 000 characters, a null title or URL, or a field the operation does not declare), or the URL is not an http or https URL (url_not_allowed). Nothing is written */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    openBookmark: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The destination of the bookmark. The open is counted asynchronously: the bookmark's open count and last opened time follow within seconds, and only that count and the latest time are kept, with no history, referrer or address */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookmarkOpen"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The workspace the request acts in has no bookmark of the caller with this identifier: another member's bookmark, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike, and nothing is counted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The identifier did not pass validation, or the stored URL is not an http or https URL (url_not_allowed); nothing is counted */
             422: {
                 headers: {
                     [name: string]: unknown;

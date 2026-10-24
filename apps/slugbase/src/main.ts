@@ -21,7 +21,7 @@ import {
   type MailPort,
   type RegistrationSettings,
 } from "@slugbase/core";
-import { createRateLimitStore, type MigrationChain } from "@slugbase/db";
+import { createRateLimitStore, createUsageStore, type MigrationChain } from "@slugbase/db";
 import { createMailTemplates } from "@slugbase/email";
 import {
   ConfigError,
@@ -31,6 +31,7 @@ import {
   createLogger,
   createRateLimitRegistry,
   createServer,
+  createUsageBuffer,
   createWorker,
   isProcessType,
   loadBuildInfo,
@@ -154,6 +155,14 @@ const ALLOW_WORKSPACE_CREATION = false;
 
 const RATE_LIMIT_POOL_SIZE = 4;
 
+// Opens of bookmarks are counted in this process's memory and written to the database every ten seconds and once more on a graceful
+// shutdown, by one call of the system operation `sys_flush_open_counts` on a pool of its own as the role of `DATABASE_URL` (doc 01
+// section 8.1). The buffer belongs to the server process, so the timer is started and stopped by the server it is handed to, and the
+// pool connects on the first flush. The worker has none: nothing there counts an open.
+function composeUsage(config: ServerConfig, logger: Logger): ReturnType<typeof createUsageBuffer> {
+  return createUsageBuffer({ store: createUsageStore({ url: config.DATABASE_URL }), logger });
+}
+
 // The templates are the ones of `@slugbase/email`, with every link on the deployment's own origin. A
 // notification the core can name that has no template stops the process at start-up, not at the first send.
 function mailTemplates(config: ServerConfig | WorkerConfig): MailTemplates {
@@ -256,6 +265,7 @@ async function runServer(config: ServerConfig, trap: SignalTrap): Promise<void> 
     adapters: composeAdapters(config, logger),
     modules: [],
     migrations: MIGRATIONS,
+    usage: composeUsage(config, logger),
     registrationDefaults: REGISTRATION_DEFAULTS,
     allowWorkspaceCreation: ALLOW_WORKSPACE_CREATION,
     logger,

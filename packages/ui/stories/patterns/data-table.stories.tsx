@@ -1,4 +1,5 @@
 import type { StoryDefault } from "@ladle/react";
+import { useState } from "react";
 import { DataTable, StatusBadge, type DataTableColumn } from "../../src/patterns/index.ts";
 
 export default {
@@ -33,3 +34,18 @@ const COLUMNS: readonly DataTableColumn<Row>[] = [
 ];
 
 export const Default = (): React.ReactElement => <DataTable columns={COLUMNS} label="Sessions" rowKey={(row) => row.id} rows={ROWS} />;
+
+export const Sortable = (): React.ReactElement => {
+  const [direction, setDirection] = useState<"ascending" | "descending">("ascending");
+  const rows = direction === "ascending" ? ROWS : [...ROWS].reverse();
+  const columns: readonly DataTableColumn<Row>[] = [
+    {
+      id: "device",
+      header: "Device",
+      cell: (row) => row.device,
+      sort: { direction, onSort: () => { setDirection(direction === "ascending" ? "descending" : "ascending"); } },
+    },
+    { id: "network", header: "Network", cell: (row) => <span className="font-mono text-xs">{row.network}</span> },
+  ];
+  return <DataTable columns={columns} label="Sessions" rowKey={(row) => row.id} rows={rows} />;
+};

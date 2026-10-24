@@ -6,6 +6,7 @@ import { createServer, type Logger, type Server, type ServerModule } from "../..
 import type { InstanceAdminGrantCheck } from "../../src/routes/instance/index.ts";
 import type { EntitlementCheck } from "../../src/http/authorize.ts";
 import { runMigrations } from "../../src/migrate/index.ts";
+import type { UsageBuffer } from "../../src/usage/buffer.ts";
 import { seedAccount, seedMembership, seedWorkspace, sessionRows, setActiveWorkspace, storeFor, type SeededAccount } from "../auth/support.ts";
 import { appUrl, tenantDatabase } from "../contract/support.ts";
 import { urlOf } from "../migrate/support.ts";
@@ -84,6 +85,8 @@ export interface WorkspaceHarness {
     readonly instanceAdminGrant?: InstanceAdminGrantCheck;
     /** How long a hook may take to answer; by default the server's. */
     readonly hookTimeoutMs?: number;
+    /** Where opens of bookmarks are counted; by default a buffer over a pool on the test database. */
+    readonly usage?: UsageBuffer;
   }): World;
   /** A verified account with a session that re-authenticated just now. */
   person(world: World): Promise<Person>;
@@ -156,6 +159,7 @@ export function workspaceHarness(database: () => TestDatabase): WorkspaceHarness
         ...(options.entitlements === undefined ? {} : { entitlements: options.entitlements }),
         ...(options.instanceAdminGrant === undefined ? {} : { instanceAdminGrant: options.instanceAdminGrant }),
         ...(options.hookTimeoutMs === undefined ? {} : { hookTimeoutMs: options.hookTimeoutMs }),
+        ...(options.usage === undefined ? {} : { usage: options.usage }),
       });
       return { server, origin: config.APP_ORIGIN };
     },

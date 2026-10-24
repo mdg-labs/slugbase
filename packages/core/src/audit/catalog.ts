@@ -63,6 +63,8 @@ export const AUDIT_ACTIONS = {
   // A composition archived, or restored, bookmarks of the workspace (doc 01 section 13.3): the number whose state changed, and nothing about them.
   "bookmark.archived": { category: "bookmark", metadata: { count: COUNT } },
   "bookmark.restored": { category: "bookmark", metadata: { count: COUNT } },
+  // A member deleted several of their bookmarks in one request (doc 02 section 5.8): the number deleted, and nothing about them.
+  "bookmark.bulk_deleted": { category: "bookmark", metadata: { count: COUNT } },
 } as const satisfies Record<string, AuditActionDefinition>;
 
 export type AuditAction = keyof typeof AUDIT_ACTIONS;

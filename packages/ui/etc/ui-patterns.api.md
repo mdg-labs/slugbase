@@ -4,18 +4,29 @@
 
 ```ts
 
+import { BookmarkIcon } from 'lucide-react';
 import { ChangeEventHandler } from 'react';
+import type { ClipboardEvent as ClipboardEvent_2 } from 'react';
 import { CompassIcon } from 'lucide-react';
+import { FilterXIcon } from 'lucide-react';
+import type { FocusEvent as FocusEvent_2 } from 'react';
 import { HomeIcon } from 'lucide-react';
 import { InboxIcon } from 'lucide-react';
+import { LayoutGridIcon } from 'lucide-react';
 import { LifeBuoyIcon } from 'lucide-react';
 import { LockIcon } from 'lucide-react';
 import { LogOutIcon } from 'lucide-react';
+import { PencilIcon } from 'lucide-react';
+import { PinIcon } from 'lucide-react';
+import { PinOffIcon } from 'lucide-react';
+import { PlusIcon } from 'lucide-react';
 import { ReactElement } from 'react';
 import { ReactNode } from 'react';
 import { Ref } from 'react';
 import { SettingsIcon } from 'lucide-react';
 import { ShieldCheckIcon } from 'lucide-react';
+import { TableIcon } from 'lucide-react';
+import { Trash2Icon } from 'lucide-react';
 import { TriangleAlertIcon } from 'lucide-react';
 
 // @public
@@ -144,6 +155,82 @@ export interface BannerProps {
 // @public (undocumented)
 export type BannerVariant = "error" | "info" | "success" | "warning";
 
+export { BookmarkIcon }
+
+// @public
+export function BulkBar(input: BulkBarProps): ReactElement;
+
+// @public (undocumented)
+export interface BulkBarAction {
+    destructive?: boolean;
+    icon?: ReactNode;
+    id: string;
+    // (undocumented)
+    label: string;
+    loading?: boolean;
+    // (undocumented)
+    onSelect: () => void;
+}
+
+// @public
+export function BulkBarButton(input: BulkBarButtonProps): ReactElement;
+
+// @public (undocumented)
+export interface BulkBarButtonProps {
+    // (undocumented)
+    children: ReactNode;
+    // (undocumented)
+    disabled?: boolean;
+    loading?: boolean;
+    // (undocumented)
+    onClick: () => void;
+}
+
+// @public (undocumented)
+export interface BulkBarProps {
+    // (undocumented)
+    actions: readonly BulkBarAction[];
+    busy?: boolean;
+    children?: ReactNode;
+    clear: {
+        label: string;
+        onClear: () => void;
+    };
+    count: ReactNode;
+    label: string;
+}
+
+// @public
+export function CardGrid(input: CardGridProps): ReactElement;
+
+// @public
+export function CardGridItem(input: CardGridItemProps): ReactElement;
+
+// @public (undocumented)
+export interface CardGridItemProps {
+    actions: readonly RowAction[];
+    actionsLabel: string;
+    children?: ReactNode;
+    href?: string;
+    indicator?: ReactNode;
+    itemId?: string;
+    monogram: string;
+    onOpen?: () => void;
+    // (undocumented)
+    onSelectedChange?: (selected: boolean) => void;
+    selected?: boolean;
+    selectionActive?: boolean;
+    selectLabel: string;
+    subtitle?: string;
+    title: string;
+}
+
+// @public (undocumented)
+export interface CardGridProps {
+    children: ReactNode;
+    label: string;
+}
+
 // @public
 export function CheckboxField(input: CheckboxFieldProps): ReactElement;
 
@@ -219,6 +306,18 @@ export interface ConfirmProps {
 }
 
 // @public
+export function ContextActions(input: ContextActionsProps): ReactElement;
+
+// @public (undocumented)
+export interface ContextActionsProps {
+    actions: readonly RowAction[];
+    children: ReactNode;
+    // (undocumented)
+    className?: string;
+    label: string;
+}
+
+// @public
 export function CopyValue(input: CopyValueProps): ReactElement;
 
 // @public (undocumented)
@@ -262,8 +361,12 @@ export interface DangerZoneProps {
 // @public
 export function DataTable<Row extends object>(input: DataTableProps<Row>): ReactElement;
 
+// @public
+export type DataTableCardSlot = "leading" | "title" | "trailing";
+
 // @public (undocumented)
 export interface DataTableColumn<Row extends object> {
+    cardSlot?: DataTableCardSlot;
     // (undocumented)
     cell: (row: Row) => ReactNode;
     // (undocumented)
@@ -272,6 +375,10 @@ export interface DataTableColumn<Row extends object> {
     header: ReactNode;
     hideHeader?: boolean;
     id: string;
+    sort?: {
+        direction: DataTableSortDirection;
+        onSort: () => void;
+    };
 }
 
 // @public (undocumented)
@@ -284,6 +391,23 @@ export interface DataTableProps<Row extends object> {
     rowKey: (row: Row) => string;
     // (undocumented)
     rows: readonly Row[];
+    rowSelected?: (row: Row) => boolean;
+}
+
+// @public
+export type DataTableSortDirection = "ascending" | "descending" | "none";
+
+// @public
+export function Disclosure(input: DisclosureProps): ReactElement;
+
+// @public (undocumented)
+export interface DisclosureProps {
+    // (undocumented)
+    children: ReactNode;
+    // (undocumented)
+    className?: string;
+    defaultOpen?: boolean;
+    label: ReactNode;
 }
 
 // @public
@@ -316,6 +440,8 @@ export interface FeedbackToastProviderProps {
     children: ReactNode;
     regionLabel: string;
 }
+
+export { FilterXIcon }
 
 // @public
 export function FormField(input: FormFieldProps): ReactElement;
@@ -364,6 +490,8 @@ export interface InlineNoteProps {
     title?: ReactNode;
 }
 
+export { LayoutGridIcon }
+
 export { LifeBuoyIcon }
 
 // @public
@@ -375,6 +503,30 @@ export interface LoadingProps {
     // (undocumented)
     className?: string;
     label: string;
+}
+
+// @public
+export function LoadMore(input: LoadMoreProps): ReactElement;
+
+// @public (undocumented)
+export interface LoadMorePageSize {
+    label: string;
+    // (undocumented)
+    onValueChange: (value: string) => void;
+    // (undocumented)
+    options: readonly SelectOption[];
+    value: string;
+}
+
+// @public (undocumented)
+export interface LoadMoreProps {
+    count: ReactNode;
+    hasMore: boolean;
+    loading?: boolean;
+    loadMoreLabel: string;
+    // (undocumented)
+    onLoadMore: () => void;
+    pageSize?: LoadMorePageSize;
 }
 
 export { LockIcon }
@@ -414,6 +566,8 @@ export interface PasswordStrengthProps {
     scoreLabel: string;
 }
 
+export { PencilIcon }
+
 // @public
 export function Picker(input: PickerProps): ReactElement;
 
@@ -444,6 +598,12 @@ export interface PickerProps {
     placeholder?: string;
     value: string | undefined;
 }
+
+export { PinIcon }
+
+export { PinOffIcon }
+
+export { PlusIcon }
 
 // @public (undocumented)
 export type ResolvedTheme = "light" | "dark";
@@ -528,6 +688,20 @@ export interface SegmentedChoiceProps {
     options: readonly SegmentedChoiceOption[];
     // (undocumented)
     value: string;
+}
+
+// @public
+export function SelectCheckbox(input: SelectCheckboxProps): ReactElement;
+
+// @public (undocumented)
+export interface SelectCheckboxProps {
+    // (undocumented)
+    checked?: boolean;
+    // (undocumented)
+    className?: string;
+    label: string;
+    // (undocumented)
+    onCheckedChange?: (checked: boolean) => void;
 }
 
 // @public
@@ -666,6 +840,30 @@ export interface StatusBadgeProps {
 // @public (undocumented)
 export type StatusBadgeVariant = "info" | "neutral" | "success" | "warning" | "error";
 
+export { TableIcon }
+
+// @public
+export function TextareaField(input: TextareaFieldProps): ReactElement;
+
+// @public (undocumented)
+export interface TextareaFieldProps {
+    // (undocumented)
+    className?: string;
+    counter: ReactNode;
+    // (undocumented)
+    disabled?: boolean;
+    error?: ReactNode;
+    // (undocumented)
+    label: ReactNode;
+    maxLength: number;
+    // (undocumented)
+    name?: string;
+    // (undocumented)
+    onChange: (value: string) => void;
+    // (undocumented)
+    value: string;
+}
+
 // @public
 export function ThemeToggle(input: ThemeToggleProps): ReactElement;
 
@@ -695,6 +893,8 @@ export interface TotpProps {
     value: string;
 }
 
+export { Trash2Icon }
+
 export { TriangleAlertIcon }
 
 // @public
@@ -720,6 +920,43 @@ export interface TypedConfirmProps {
     open: boolean;
     // (undocumented)
     title: ReactNode;
+}
+
+// @public
+export function UnsavedGuard(input: UnsavedGuardProps): ReactElement;
+
+// @public (undocumented)
+export interface UnsavedGuardProps {
+    description: ReactNode;
+    // (undocumented)
+    discardLabel: ReactNode;
+    // (undocumented)
+    keepEditingLabel: ReactNode;
+    onDiscard: () => void;
+    onKeepEditing: () => void;
+    // (undocumented)
+    open: boolean;
+    // (undocumented)
+    title: ReactNode;
+}
+
+// @public
+export function UrlInput(input: UrlInputProps): ReactElement;
+
+// @public (undocumented)
+export interface UrlInputProps {
+    // (undocumented)
+    disabled?: boolean;
+    onBlur?: (event: FocusEvent_2<HTMLInputElement>) => void;
+    onPaste?: (event: ClipboardEvent_2<HTMLInputElement>) => void;
+    // (undocumented)
+    onValueChange: (value: string) => void;
+    pending?: boolean;
+    pendingLabel: string;
+    // (undocumented)
+    placeholder?: string;
+    // (undocumented)
+    value: string;
 }
 
 // @public

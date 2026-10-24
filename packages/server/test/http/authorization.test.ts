@@ -79,7 +79,7 @@ function sessionState(name: string | undefined): Pick<SessionPrincipal, "mfaPend
 }
 
 function token(who: Who, scope: ApiTokenPrincipal["scope"], workspaceId = WORKSPACE): ApiTokenPrincipal {
-  return { kind: "api-token", accountId: ACCOUNTS[who], workspaceId, scope };
+  return { kind: "api-token", tokenId: `token-${who}-${scope}`, accountId: ACCOUNTS[who], workspaceId, scope };
 }
 
 interface OperationOptions {

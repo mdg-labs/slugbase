@@ -220,6 +220,12 @@ function journalLength(folder: string): number {
 
 const CE_MIGRATIONS = journalLength(CE_CHAIN.folder);
 
+// The CE chain builds indexes concurrently too, so a test that holds a snapshot to make the build of a fixture wait applies the CE chain first:
+// the build it waits for is then the fixture's, the first one after the snapshot is taken.
+async function applyCoreChain(database: string): Promise<void> {
+  expect((await migrate({ url: migratorUrl(database), chains: [] })).applied).toHaveLength(CE_MIGRATIONS);
+}
+
 // A transaction that has run a query holds a snapshot, and a concurrent index
 // build waits for it. Returns the call that ends the transaction.
 async function holdSnapshot(database: string): Promise<() => Promise<void>> {
@@ -406,7 +412,7 @@ describe("the session of a run", () => {
     },
     {
       kind: "non-transactional",
-      statement: "INDEX CONCURRENTLY",
+      statement: "INDEX CONCURRENTLY session_probe_login_role_idx",
       terminated: false,
       tag: "20300101000002_index_session_probe",
       codes: ["CONNECTION_CLOSED"],
@@ -429,6 +435,7 @@ describe("the session of a run", () => {
 
   it("names the step when the server terminates the backend while a build waits", async () => {
     const { name } = await createDatabase();
+    await applyCoreChain(name);
     const release = await holdSnapshot(name);
     const run = rejection(migrate({ url: migratorUrl(name), chains: [fixture("snapshot")] }));
     run.catch(() => undefined);
@@ -551,6 +558,7 @@ describe("a non-transactional step (doc 05 section 5.2)", () => {
 
   it("builds its index while another connection holds an older snapshot for longer than lock_timeout", async () => {
     const { name, owner } = await createDatabase();
+    await applyCoreChain(name);
     const release = await holdSnapshot(name);
     const run = migrate({ url: migratorUrl(name), chains: [fixture("snapshot")] });
     run.catch(() => undefined);
@@ -561,7 +569,7 @@ describe("a non-transactional step (doc 05 section 5.2)", () => {
       await release();
     }
 
-    expect((await run).applied).toHaveLength(CE_MIGRATIONS + 2);
+    expect((await run).applied).toHaveLength(2);
 
     expect(await indexes(owner, ["snapshot_target_a_idx"])).toEqual([
       { name: "snapshot_target_a_idx", valid: true, unique: false },
@@ -572,6 +580,7 @@ describe("a non-transactional step (doc 05 section 5.2)", () => {
 
   it("cancels a build whose migrate client was killed, so the next run rebuilds the index instead of finding it", async () => {
     const { name, owner } = await createDatabase();
+    await applyCoreChain(name);
     const release = await holdSnapshot(name);
     const folder = join(FIXTURES, "snapshot");
     const child = spawn(
@@ -684,6 +693,7 @@ await migrate({
   it("lets several replicas wait for the lock while it builds, without a deadlock", async () => {
     const { name, owner } = await createDatabase();
     const chains = [fixture("snapshot")];
+    await applyCoreChain(name);
     const release = await holdSnapshot(name);
     const runs = Promise.all([1, 2, 3].map(() => migrate({ url: migratorUrl(name), chains })));
     runs.catch(() => undefined);
@@ -697,7 +707,7 @@ await migrate({
 
     const tags = (await runs).flatMap((run) => run.applied.map(({ chain, tag }) => `${chain}:${tag}`));
 
-    expect(tags).toHaveLength(CE_MIGRATIONS + 2);
+    expect(tags).toHaveLength(2);
     expect(new Set(tags).size).toBe(tags.length);
     expect(await recordedRows(owner, "migrations_snapshot")).toBe(2);
     expect(await indexes(owner, ["snapshot_target_a_idx"])).toEqual([

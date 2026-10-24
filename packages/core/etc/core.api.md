@@ -423,6 +423,14 @@ export const AUDIT_ACTIONS: {
             };
         };
     };
+    readonly "bookmark.bulk_deleted": {
+        readonly category: "bookmark";
+        readonly metadata: {
+            readonly count: {
+                readonly type: "count";
+            };
+        };
+    };
 };
 
 // @public
@@ -935,8 +943,23 @@ export interface BillingWithdrawal {
 // @public
 export function bindOidcState(key: Uint8Array, state: string): string;
 
+// @public (undocumented)
+export const BOOKMARK_BULK_ACTIONS: readonly ["delete", "pin", "unpin"];
+
+// @public
+export const BOOKMARK_BULK_IDS_MAX = 1000;
+
 // @public
 export const BOOKMARK_DESCRIPTION_MAX_LENGTH = 1000;
+
+// @public
+export const BOOKMARK_LIST_TOTAL_CAP = 10000;
+
+// @public
+export const BOOKMARK_SELECT_ALL_CAP = 5000;
+
+// @public (undocumented)
+export const BOOKMARK_SORTS: readonly ["recent", "oldest", "title_asc", "title_desc", "most_used", "recently_opened"];
 
 // @public
 export const BOOKMARK_TITLE_MAX_LENGTH = 300;
@@ -965,6 +988,79 @@ export interface BookmarkArchiveTransaction {
     }): Promise<number | undefined>;
     readonly workspaceId: string | undefined;
 }
+
+// @public (undocumented)
+export type BookmarkBulkAction = (typeof BOOKMARK_BULK_ACTIONS)[number];
+
+// @public (undocumented)
+export interface BookmarkBulkAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly action: BookmarkBulkAction;
+    // (undocumented)
+    readonly actor: AuditActor;
+    // (undocumented)
+    readonly ipPrefix: string | null;
+    // (undocumented)
+    readonly target: BookmarkBulkTarget;
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface BookmarkBulkDependencies {
+    readonly audit: AuditWriter;
+    // (undocumented)
+    readonly store: BookmarkBulkStore;
+}
+
+// @public (undocumented)
+export type BookmarkBulkOutcome = {
+    readonly kind: "done";
+    readonly requested: number;
+    readonly affected: number;
+    readonly skipped: {
+        readonly not_owner: number;
+        readonly not_found: number;
+    };
+}
+/** The request names more identifiers than `BOOKMARK_BULK_IDS_MAX` or its filter matches more than `BOOKMARK_SELECT_ALL_CAP`; nothing was written. */
+| {
+    readonly kind: "too_many";
+    readonly limit: number;
+}
+/** The `url` filter is not a URL a bookmark can have; nothing was written. */
+| {
+    readonly kind: "url_refused";
+    readonly reason: BookmarkUrlRefusal;
+}
+/** The workspace of the transaction cannot be reached (it is being deleted); nothing was written. */
+| {
+    readonly kind: "unavailable";
+};
+
+// @public (undocumented)
+export interface BookmarkBulkStore {
+    ids(filter: BookmarkListFilter, limit: number): Promise<readonly string[]>;
+    removeMany(bookmarkIds: readonly string[]): Promise<number | undefined>;
+    setPinned(request: {
+        readonly bookmarkIds: readonly string[];
+        readonly ownerId: string;
+        readonly pinned: boolean;
+    }): Promise<number>;
+}
+
+// @public (undocumented)
+export type BookmarkBulkTarget = {
+    readonly kind: "ids";
+    readonly ids: readonly string[];
+} | {
+    readonly kind: "filter";
+    readonly scope: BookmarkScope;
+    readonly pinned: boolean | undefined;
+    readonly hasSlug: boolean | undefined;
+    readonly forwarding: boolean | undefined;
+    readonly url: string | undefined;
+};
 
 // @public
 export interface BookmarkChanges {
@@ -1030,6 +1126,13 @@ export interface BookmarkCreationRequest {
     readonly events: readonly DomainEvent<"bookmark.created">[];
 }
 
+// @public
+export interface BookmarkCursors {
+    open(cursor: string, scope: string): BookmarkPosition | undefined;
+    // (undocumented)
+    seal(position: BookmarkPosition, scope: string): string;
+}
+
 // @public (undocumented)
 export interface BookmarkDeletionAsk {
     readonly accountId: string;
@@ -1049,6 +1152,161 @@ export interface BookmarkEntitlements {
 }
 
 // @public
+export interface BookmarkFilterAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly forwarding: boolean | undefined;
+    // (undocumented)
+    readonly hasSlug: boolean | undefined;
+    // (undocumented)
+    readonly pinned: boolean | undefined;
+    readonly url: string | undefined;
+}
+
+// @public (undocumented)
+export interface BookmarkIdsAsk extends BookmarkFilterAsk {
+    // (undocumented)
+    readonly scope: BookmarkScope;
+}
+
+// @public (undocumented)
+export interface BookmarkIdsDependencies {
+    // (undocumented)
+    readonly store: Pick<BookmarkBulkStore, "ids">;
+}
+
+// @public (undocumented)
+export type BookmarkIdsOutcome = {
+    readonly kind: "listed";
+    readonly ids: readonly string[]; /** True when more than `BOOKMARK_SELECT_ALL_CAP` bookmarks match, so `ids` is the first of them. */
+    readonly truncated: boolean;
+}
+/** The `url` filter is not a URL a bookmark can have; nothing was read. */
+| {
+    readonly kind: "url_refused";
+    readonly reason: BookmarkUrlRefusal;
+};
+
+// @public (undocumented)
+export interface BookmarkListAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly cursor: string | undefined;
+    // (undocumented)
+    readonly forwarding: boolean | undefined;
+    // (undocumented)
+    readonly hasSlug: boolean | undefined;
+    readonly limit: number;
+    // (undocumented)
+    readonly pinned: boolean | undefined;
+    // (undocumented)
+    readonly scope: BookmarkScope;
+    // (undocumented)
+    readonly sort: BookmarkSort;
+    readonly url: string | undefined;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface BookmarkListDependencies {
+    // (undocumented)
+    readonly cursors: BookmarkCursors;
+    // (undocumented)
+    readonly store: BookmarkListStore;
+}
+
+// @public (undocumented)
+export interface BookmarkListFilter {
+    readonly forwarding?: boolean | undefined;
+    readonly hasSlug?: boolean | undefined;
+    readonly ownerId: string;
+    readonly pinned?: boolean | undefined;
+    readonly urlCanonical?: string | undefined;
+}
+
+// @public
+export function bookmarkListFilter(ask: BookmarkFilterAsk): {
+    readonly ok: true;
+    readonly filter: BookmarkListFilter;
+} | {
+    readonly ok: false;
+    readonly reason: BookmarkUrlRefusal;
+};
+
+// @public (undocumented)
+export type BookmarkListOutcome = {
+    readonly kind: "listed";
+    readonly items: readonly BookmarkRecord[];
+    readonly nextCursor: string | null;
+    readonly total: number | null;
+}
+/** The cursor was not issued by this server for this account, workspace, filter and sort; nothing was read. */
+| {
+    readonly kind: "bad_cursor";
+}
+/** The `url` filter is not a URL a bookmark can have; nothing was read. */
+| {
+    readonly kind: "url_refused";
+    readonly reason: BookmarkUrlRefusal;
+};
+
+// @public (undocumented)
+export interface BookmarkListRequest {
+    readonly after: BookmarkPosition | undefined;
+    // (undocumented)
+    readonly filter: BookmarkListFilter;
+    // (undocumented)
+    readonly limit: number;
+    // (undocumented)
+    readonly sort: BookmarkSort;
+}
+
+// @public (undocumented)
+export interface BookmarkListRow {
+    // (undocumented)
+    readonly bookmark: BookmarkRecord;
+    readonly key: string | null;
+}
+
+// @public (undocumented)
+export interface BookmarkListStore {
+    count(filter: BookmarkListFilter, limit: number): Promise<number>;
+    list(request: BookmarkListRequest): Promise<readonly BookmarkListRow[]>;
+}
+
+// @public (undocumented)
+export interface BookmarkOpenAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly bookmarkId: string;
+}
+
+// @public (undocumented)
+export interface BookmarkOpenDependencies {
+    // (undocumented)
+    readonly store: Pick<BookmarkStore, "find">;
+    // (undocumented)
+    readonly usage: BookmarkUsage;
+}
+
+// @public (undocumented)
+export type BookmarkOpenOutcome =
+/** The destination, and the open is counted. */
+    {
+    readonly kind: "opened";
+    readonly url: string;
+}
+/** The account can read no such bookmark; which of the reasons it is stays unsaid. Nothing is counted. */
+| {
+    readonly kind: "not_found";
+}
+/** The stored URL is not an `http` or `https` URL. Nothing is counted. */
+| {
+    readonly kind: "url_refused";
+};
+
+// @public
 export interface BookmarkPatch {
     // (undocumented)
     readonly description?: string | null;
@@ -1058,6 +1316,14 @@ export interface BookmarkPatch {
     readonly title?: string;
     // (undocumented)
     readonly url?: string;
+}
+
+// @public
+export interface BookmarkPosition {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly key: string | null;
 }
 
 // @public (undocumented)
@@ -1102,6 +1368,12 @@ export interface BookmarkRecord {
     readonly url: string;
     readonly version: number;
 }
+
+// @public
+export type BookmarkScope = "all" | "mine";
+
+// @public (undocumented)
+export type BookmarkSort = (typeof BOOKMARK_SORTS)[number];
 
 // @public (undocumented)
 export interface BookmarkStore {
@@ -1213,6 +1485,11 @@ export type BookmarkUrlResult = {
 };
 
 // @public
+export interface BookmarkUsage {
+    record(bookmarkId: string): void;
+}
+
+// @public
 export class BreachedDatasetError extends Error {
     constructor(reason: string);
 }
@@ -1222,6 +1499,9 @@ export interface BreachedPasswords {
     has(password: string): boolean;
     range(prefix: string): readonly string[];
 }
+
+// @public
+export function bulkBookmarks(input: BookmarkBulkDependencies, ask: BookmarkBulkAsk): Promise<BookmarkBulkOutcome>;
 
 // @public
 export function canCreateWorkspace(input: WorkspaceCreationCapacity): boolean;
@@ -2806,6 +3086,12 @@ export interface JoiningEntitlements {
 }
 
 // @public
+export function listBookmarkIds(input: BookmarkIdsDependencies, ask: BookmarkIdsAsk): Promise<BookmarkIdsOutcome>;
+
+// @public
+export function listBookmarks(input: BookmarkListDependencies, ask: BookmarkListAsk): Promise<BookmarkListOutcome>;
+
+// @public
 export function listInstanceAccounts(input: InstanceAccountDependencies, ask: InstanceAccountAsk): Promise<readonly InstanceAccount[]>;
 
 // @public
@@ -3070,6 +3356,9 @@ export function oidcPreAuthCookieSpec(appOrigin: string): OidcPreAuthCookieSpec;
 
 // @public
 export function oidcStateIsBound(key: Uint8Array, state: string, binding: string): boolean;
+
+// @public (undocumented)
+export function openBookmark(input: BookmarkOpenDependencies, ask: BookmarkOpenAsk): Promise<BookmarkOpenOutcome>;
 
 // @public (undocumented)
 export interface OtpauthOptions {

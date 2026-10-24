@@ -62,6 +62,8 @@ export { createRateLimitStore } from "./system/rate-limit.ts";
 export type { RateLimitStore, RateLimitStoreOptions, RateLimitTake, RateLimitTaken } from "./system/rate-limit.ts";
 export { createRetentionStore } from "./system/retention.ts";
 export type { RetentionPurgeCount, RetentionStore, RetentionStoreOptions } from "./system/retention.ts";
+export { USAGE_FLUSH_BATCH_SIZE, createUsageStore } from "./system/usage.ts";
+export type { OpenCount, UsageStore, UsageStoreOptions } from "./system/usage.ts";
 export type { QueuedJob, QueuedJobData } from "./system/queue.ts";
 export { createWorkspaceDeletionStore } from "./system/workspace-deletion.ts";
 export type { WorkspaceDeletionStore, WorkspaceDeletionStoreOptions } from "./system/workspace-deletion.ts";

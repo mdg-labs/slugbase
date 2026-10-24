@@ -6,6 +6,7 @@
 
 import { Adapters } from '@slugbase/core';
 import { AuthStore } from '@slugbase/db';
+import type { BookmarkUsage } from '@slugbase/core';
 import type { ClientErrorReportRequest } from '@slugbase/core';
 import type { Context } from 'hono';
 import { Database } from '@slugbase/db';
@@ -28,6 +29,7 @@ import { RegistrationSettings } from '@slugbase/core';
 import type { TenantPrincipal } from '@slugbase/core';
 import type { TenantResolver } from '@slugbase/core';
 import type { TenantTx } from '@slugbase/db';
+import { UsageStore } from '@slugbase/db';
 import { VersionInfoSchema } from '@slugbase/contracts';
 import type { WorkspaceRole } from '@slugbase/core';
 import { z } from 'zod';
@@ -38,6 +40,7 @@ export interface ApiTokenPrincipal extends Extract<TenantPrincipal, {
 }> {
     // (undocumented)
     readonly scope: "read" | "read-write";
+    readonly tokenId: string;
 }
 
 // @public
@@ -184,8 +187,12 @@ export interface CreateServerOptions {
     readonly registrationDefaults?: RegistrationSettings;
     readonly secondFactor?: SecondFactorCheck;
     readonly shutdownTimeoutMs?: number;
+    readonly usage?: UsageBuffer;
     readonly webRoot?: string;
 }
+
+// @public (undocumented)
+export function createUsageBuffer(input: UsageBufferOptions): UsageBuffer;
 
 // @public
 export function createWorker(options: CreateWorkerOptions): Worker;
@@ -457,6 +464,9 @@ export function eventJobName(name: DomainEventName): string;
 export type EventSubscriber = {
     [Name in DomainEventName]: EventBinding<Name>;
 }[DomainEventName];
+
+// @public
+export const FLUSH_INTERVAL_MS = 10000;
 
 // @public (undocumented)
 export const HOOK_NAMES: readonly ["seatCheck", "deletionGuard", "registrationPolicy"];
@@ -1340,6 +1350,23 @@ export interface TakenLimit {
     readonly remaining: number;
     // (undocumented)
     readonly window: RateLimitWindow;
+}
+
+// @public (undocumented)
+export interface UsageBuffer extends BookmarkUsage {
+    flush(): Promise<void>;
+    start(): void;
+    stop(): Promise<void>;
+}
+
+// @public (undocumented)
+export interface UsageBufferOptions {
+    readonly intervalMs?: number;
+    // (undocumented)
+    readonly logger: Pick<Logger, "warn" | "error">;
+    readonly now?: () => Date;
+    // (undocumented)
+    readonly store: UsageStore;
 }
 
 // @public

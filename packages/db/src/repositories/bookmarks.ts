@@ -1,5 +1,16 @@
-import { createAuditWriter, type BookmarkArchiveTransaction, type BookmarkRecord, type BookmarkUpdateRequest, type BookmarkUpdateResult, type NewBookmark } from "@slugbase/core";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import {
+  createAuditWriter,
+  type BookmarkArchiveTransaction,
+  type BookmarkListFilter,
+  type BookmarkListRequest,
+  type BookmarkListRow,
+  type BookmarkRecord,
+  type BookmarkSort,
+  type BookmarkUpdateRequest,
+  type BookmarkUpdateResult,
+  type NewBookmark,
+} from "@slugbase/core";
+import { and, eq, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import { bookmarks } from "../schema/bookmarks.ts";
 import { auditEventRepository } from "./audit-events.ts";
@@ -14,13 +25,17 @@ import { defineScopedRepository } from "./scoped.ts";
 // bookmark that is plan-archived is not one the product shows or edits, so a lookup and an update leave it out; its owner may still
 // delete it. Changing and deleting a bookmark are its owner's: both name the owner in the statement, so another member's bookmark
 // is a row the statement does not find. A delete is the system operation `sys_bookmark_delete`, which removes the row and gives
-// its place under `bookmarks.max` back in the same statement of the transaction, so the counter and the rows cannot part. The place under
+// its place under `bookmarks.max` back in the same statement of the transaction, so the counter and the rows cannot part; a bulk delete is `sys_bookmark_delete_many`, which lowers the counter once for all the rows it deletes. A bulk pin or unpin locks the caller's rows in identifier order and writes the pin of those not in the wanted state. The place under
 // `bookmarks.max` is taken by the system operation `sys_bookmark_count_take`, which locks the workspace's row, compares the
 // workspace's `bookmark_count` with the ceiling and raises it, in the transaction that inserts the bookmark: a failed
 // insert takes the place back with it, and two creations at the limit minus one make one. Archiving and restoring are the system
 // operation `sys_bookmark_archive_set`, which sets or clears `plan_archived_at` for the given bookmarks, moves the counter by the rows
 // that changed, in one call, because `slugbase_app` may write neither column; the `entitlement_version` is raised separately, through
-// `sys_workspace_bump_entitlement_version` (`withEntitlementChange`, doc 01 section 7.5).
+// `sys_workspace_bump_entitlement_version` (`withEntitlementChange`, doc 01 section 7.5). A list is one owner's bookmarks of the
+// workspace in one of six orderings, resumed by a keyset: the sort key of the last row and its identifier, compared as a row, so
+// the statement is a range scan of the index that serves the sort (doc 05 section 2.4) and the page costs the same at any depth.
+// The sort keys are read back as text and passed back as text, because a timestamp the driver turns into a `Date` loses the
+// microseconds the database keeps, and a row that shares its key with the cursor's would then be skipped or repeated.
 
 // `slugbase_app` may insert only the columns a request gives a new bookmark and update only the columns a change of its own fields
 // writes (src/sql/470-bookmarks.sql): not the slug, forwarding, the archive state, the usage, the owner or the version, so a row
@@ -35,6 +50,17 @@ type BookmarkRow = InferSelectModel<typeof bookmarks>;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+function requireIdentifiers(bookmarkIds: readonly string[], action: string): void {
+  if (!bookmarkIds.every((id) => UUID.test(id))) {
+    throw new Error(`${action} takes identifiers only`);
+  }
+}
+
+/** One parameter, whatever the number of identifiers: a PostgreSQL array literal of UUIDs, which hold no character it would need to quote. */
+function uuidArray(bookmarkIds: readonly string[]): string {
+  return `{${bookmarkIds.join(",")}}`;
+}
+
 interface TakenRow extends Record<string, unknown> {
   outcome: string;
   used: number | null;
@@ -46,6 +72,10 @@ interface DeletedRow extends Record<string, unknown> {
 
 interface ArchivedRow extends Record<string, unknown> {
   changed: number | null;
+}
+
+interface DeletedManyRow extends Record<string, unknown> {
+  deleted: number | null;
 }
 
 export interface BookmarkCreation {
@@ -89,6 +119,25 @@ export interface BookmarkRepository {
    */
   remove(request: { readonly bookmarkId: string; readonly ownerId: string }): Promise<boolean>;
   /**
+   * Deletes the bookmarks of `bookmarkIds` that the account of the transaction owns in the workspace of the transaction, a plan-archived one
+   * included, through `sys_bookmark_delete_many`, and answers how many were deleted; the workspace's `bookmark_count` falls once, by those
+   * that were not plan-archived, in the same call. An identifier that names no such bookmark is skipped. Undefined, writing nothing, when
+   * the workspace cannot be reached. Needs a transaction opened with a workspace.
+   */
+  removeMany(request: { readonly bookmarkIds: readonly string[] }): Promise<number | undefined>;
+  /**
+   * Pins (`pinned`) or unpins the bookmarks of `bookmarkIds` that `ownerId` owns in the workspace of the transaction and that are not
+   * plan-archived, and answers how many such bookmarks there are. The rows are locked in the order of their identifiers first; only those
+   * not in the wanted state are written, so one that is keeps its pin time and its version. `ownerId` is the account of the transaction.
+   * Needs a transaction opened with a workspace.
+   */
+  setPinned(request: { readonly bookmarkIds: readonly string[]; readonly ownerId: string; readonly pinned: boolean }): Promise<number>;
+  /**
+   * The identifiers of the bookmarks that `filter.ownerId` owns in the workspace of the transaction and that match the filter, newest
+   * first and without the plan-archived ones, at most `limit`. Needs a transaction opened with a workspace.
+   */
+  ids(filter: BookmarkListFilter, limit: number): Promise<readonly string[]>;
+  /**
    * Sets or clears `plan_archived_at` of the given bookmarks of the workspace of the transaction through
    * `sys_bookmark_archive_set`, whoever owns them, and answers how many rows changed; the workspace's `bookmark_count` moves by
    * that number in the same call. The `entitlement_version` does not move here: that is `entitlementRepository(tx).bump()`. An
@@ -96,9 +145,99 @@ export interface BookmarkRepository {
    * reached. Needs a transaction opened with a workspace.
    */
   setArchived(request: { readonly bookmarkIds: readonly string[]; readonly archived: boolean }): Promise<number | undefined>;
+  /**
+   * The bookmarks that `request.filter.ownerId` owns in the workspace of the transaction and that are not plan-archived, in the order
+   * of `request.sort` with the identifier as the tiebreak, starting after `request.after` and at most `request.limit` of them; each
+   * comes with its sort key as text, which a later call passes back in `after`. A never-opened bookmark sorts last under
+   * `recently_opened`. Needs a transaction opened with a workspace.
+   */
+  list(request: BookmarkListRequest): Promise<readonly BookmarkListRow[]>;
+  /**
+   * How many bookmarks the same filter matches, counting no further than `limit`: the cost of the answer is bounded by `limit`, not by
+   * the size of the library. Needs a transaction opened with a workspace.
+   */
+  count(filter: BookmarkListFilter, limit: number): Promise<number>;
 }
 
-function recordOf(row: BookmarkRow): BookmarkRecord {
+/** The predicate of a list and of its count: the workspace, the owner, never a plan-archived bookmark, and the filters given. */
+function listPredicate(workspaceId: string, filter: BookmarkListFilter): SQL {
+  const predicate = and(
+    eq(bookmarks.workspaceId, workspaceId),
+    eq(bookmarks.ownerId, filter.ownerId),
+    isNull(bookmarks.planArchivedAt),
+    filter.pinned === undefined ? undefined : filter.pinned ? isNotNull(bookmarks.pinnedAt) : isNull(bookmarks.pinnedAt),
+    filter.hasSlug === undefined ? undefined : filter.hasSlug ? isNotNull(bookmarks.slug) : isNull(bookmarks.slug),
+    filter.forwarding === undefined ? undefined : eq(bookmarks.forwarding, filter.forwarding),
+    filter.urlCanonical === undefined ? undefined : eq(bookmarks.urlCanonical, filter.urlCanonical),
+  );
+  if (predicate === undefined) {
+    throw new Error("a list predicate is never empty");
+  }
+  return predicate;
+}
+
+/** The rows after the cursor's place, compared as a row so the index serves the range. A never-opened bookmark is last, after every opened one. */
+function afterPosition(sort: BookmarkSort, after: { readonly key: string | null; readonly id: string }): SQL {
+  const { column, cast, direction } = SORT_ORDERS[sort];
+  const op = sql.raw(direction);
+  if (sort === "recently_opened") {
+    if (after.key === null) {
+      return sql`(${column} IS NULL AND ${bookmarks.id} < ${after.id}::uuid)`;
+    }
+    return sql`((${column}, ${bookmarks.id}) < (${after.key}::timestamptz, ${after.id}::uuid) OR ${column} IS NULL)`;
+  }
+  if (after.key === null) {
+    throw new Error("a cursor of this sort carries a sort key");
+  }
+  return sql`((${column}, ${bookmarks.id}) ${op} (${after.key}::${sql.raw(cast)}, ${after.id}::uuid))`;
+}
+
+/** The columns a bookmark record is made of; `search` and `url_canonical` are read by the database only. */
+type BookmarkRecordRow = Pick<
+  BookmarkRow,
+  "id" | "ownerId" | "url" | "host" | "title" | "description" | "slug" | "forwarding" | "pinnedAt" | "openCount" | "lastOpenedAt" | "version" | "createdAt" | "updatedAt"
+>;
+
+const RECORD_COLUMNS = {
+  id: bookmarks.id,
+  ownerId: bookmarks.ownerId,
+  url: bookmarks.url,
+  host: bookmarks.host,
+  title: bookmarks.title,
+  description: bookmarks.description,
+  slug: bookmarks.slug,
+  forwarding: bookmarks.forwarding,
+  pinnedAt: bookmarks.pinnedAt,
+  openCount: bookmarks.openCount,
+  lastOpenedAt: bookmarks.lastOpenedAt,
+  version: bookmarks.version,
+  createdAt: bookmarks.createdAt,
+  updatedAt: bookmarks.updatedAt,
+} as const;
+
+// The ordering of each sort, written the way its index is declared (`DESC NULLS LAST` for the descending ones, which is what
+// drizzle-kit writes for `desc()`), so the planner reads the index in order instead of sorting; an ascending sort of a
+// descending index reads it backwards, which turns `NULLS LAST` into `NULLS FIRST`. `key` is the sort key as text, `cast` the type
+// it is read back as and `after` the comparison that selects the rows after the cursor's.
+interface SortOrder {
+  /** The expression the index orders by. */
+  readonly column: SQL;
+  readonly key: SQL;
+  readonly cast: "timestamptz" | "text" | "bigint";
+  readonly order: SQL;
+  readonly direction: "<" | ">";
+}
+
+const SORT_ORDERS: Readonly<Record<BookmarkSort, SortOrder>> = {
+  recent: { column: sql`${bookmarks.createdAt}`, key: sql`${bookmarks.createdAt}::text`, cast: "timestamptz", order: sql`${bookmarks.createdAt} DESC NULLS LAST, ${bookmarks.id} DESC NULLS LAST`, direction: "<" },
+  oldest: { column: sql`${bookmarks.createdAt}`, key: sql`${bookmarks.createdAt}::text`, cast: "timestamptz", order: sql`${bookmarks.createdAt} ASC NULLS FIRST, ${bookmarks.id} ASC NULLS FIRST`, direction: ">" },
+  title_asc: { column: sql`lower(${bookmarks.title})`, key: sql`lower(${bookmarks.title})`, cast: "text", order: sql`lower(${bookmarks.title}) ASC NULLS LAST, ${bookmarks.id} ASC NULLS LAST`, direction: ">" },
+  title_desc: { column: sql`lower(${bookmarks.title})`, key: sql`lower(${bookmarks.title})`, cast: "text", order: sql`lower(${bookmarks.title}) DESC NULLS FIRST, ${bookmarks.id} DESC NULLS FIRST`, direction: "<" },
+  most_used: { column: sql`${bookmarks.openCount}`, key: sql`${bookmarks.openCount}::text`, cast: "bigint", order: sql`${bookmarks.openCount} DESC NULLS LAST, ${bookmarks.id} DESC NULLS LAST`, direction: "<" },
+  recently_opened: { column: sql`${bookmarks.lastOpenedAt}`, key: sql`${bookmarks.lastOpenedAt}::text`, cast: "timestamptz", order: sql`${bookmarks.lastOpenedAt} DESC NULLS LAST, ${bookmarks.id} DESC NULLS LAST`, direction: "<" },
+};
+
+function recordOf(row: BookmarkRecordRow): BookmarkRecord {
   return {
     id: row.id,
     ownerId: row.ownerId,
@@ -115,6 +254,34 @@ function recordOf(row: BookmarkRow): BookmarkRecord {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+}
+
+/** The statement of `BookmarkRepository.list`, exported for the test that plans it. Needs a transaction opened with a workspace. */
+export function listQuery(tx: TenantTx, { filter, sort, after, limit }: BookmarkListRequest) {
+  const workspaceId = requireListWorkspace(tx, "listing bookmarks");
+  const { key, order } = SORT_ORDERS[sort];
+  const predicate = after === undefined ? listPredicate(workspaceId, filter) : and(listPredicate(workspaceId, filter), afterPosition(sort, after));
+  return tenantHandle(tx)
+    .select({ ...RECORD_COLUMNS, sortKey: sql<string | null>`${key}`.as("sort_key") })
+    .from(bookmarks)
+    .where(predicate)
+    .orderBy(order)
+    .limit(limit);
+}
+
+/** The statement of `BookmarkRepository.count`, exported for the test that plans it. Needs a transaction opened with a workspace. */
+export function countQuery(tx: TenantTx, filter: BookmarkListFilter, limit: number) {
+  const workspaceId = requireListWorkspace(tx, "counting bookmarks");
+  const handle = tenantHandle(tx);
+  const capped = handle.select({ one: sql<number>`1`.as("one") }).from(bookmarks).where(listPredicate(workspaceId, filter)).limit(limit).as("capped");
+  return handle.select({ total: sql<number>`count(*)::int` }).from(capped);
+}
+
+function requireListWorkspace(tx: TenantTx, action: string): string {
+  if (tx.workspaceId === undefined) {
+    throw new TenantContextError("workspace_required", `${action} needs a tenant transaction opened with a workspace`);
+  }
+  return tx.workspaceId;
 }
 
 export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
@@ -220,6 +387,62 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
       return row.deleted;
     },
 
+    async removeMany({ bookmarkIds }) {
+      if (tx.workspaceId === undefined) {
+        throw new TenantContextError("workspace_required", "deleting bookmarks needs a tenant transaction opened with a workspace");
+      }
+      requireIdentifiers(bookmarkIds, "deleting bookmarks");
+      const deleted = await tenantHandle(tx).execute<DeletedManyRow>(sql`
+        SELECT public.sys_bookmark_delete_many(${tx.workspaceId}::uuid, ${uuidArray(bookmarkIds)}::uuid[]) AS deleted`);
+      const row = deleted[0];
+      if (deleted.length !== 1 || row === undefined) {
+        throw new Error("sys_bookmark_delete_many did not return exactly one answer");
+      }
+      return row.deleted ?? undefined;
+    },
+
+    async setPinned({ bookmarkIds, ownerId, pinned }) {
+      if (tx.workspaceId === undefined) {
+        throw new TenantContextError("workspace_required", "pinning bookmarks needs a tenant transaction opened with a workspace");
+      }
+      if (ownerId.toLowerCase() !== tx.accountId.toLowerCase()) {
+        throw new Error("only the account of the transaction pins its own bookmarks");
+      }
+      requireIdentifiers(bookmarkIds, "pinning bookmarks");
+      const owned = await tenantHandle(tx)
+        .select({ id: bookmarks.id, pinnedAt: bookmarks.pinnedAt })
+        .from(bookmarks)
+        .where(
+          and(
+            eq(bookmarks.workspaceId, tx.workspaceId),
+            eq(bookmarks.ownerId, ownerId),
+            isNull(bookmarks.planArchivedAt),
+            sql`${bookmarks.id} = ANY (${uuidArray(bookmarkIds)}::uuid[])`,
+          ),
+        )
+        .orderBy(bookmarks.id)
+        .for("update");
+      const toChange = owned.filter((row) => (row.pinnedAt !== null) !== pinned).map((row) => row.id);
+      if (toChange.length > 0) {
+        const changed = await rows.update({ pinnedAt: pinned ? new Date() : null }, sql`${bookmarks.id} = ANY (${uuidArray(toChange)}::uuid[])`);
+        if (changed.length !== toChange.length) {
+          throw new Error("pinning locked bookmarks did not update exactly the rows it locked");
+        }
+      }
+      return owned.length;
+    },
+
+    async ids(filter, limit) {
+      const workspaceId = requireListWorkspace(tx, "listing bookmark identifiers");
+      const found = await tenantHandle(tx)
+        .select({ id: bookmarks.id })
+        .from(bookmarks)
+        .where(listPredicate(workspaceId, filter))
+        .orderBy(SORT_ORDERS.recent.order)
+        .limit(limit);
+      return found.map((row) => row.id);
+    },
+
     async setArchived({ bookmarkIds, archived }) {
       if (tx.workspaceId === undefined) {
         throw new TenantContextError("workspace_required", "archiving bookmarks needs a tenant transaction opened with a workspace");
@@ -235,6 +458,19 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
         throw new Error("sys_bookmark_archive_set did not return exactly one answer");
       }
       return row.changed ?? undefined;
+    },
+
+    async list(request) {
+      const found = await listQuery(tx, request);
+      return found.map(({ sortKey, ...row }) => ({ bookmark: recordOf(row), key: sortKey }));
+    },
+
+    async count(filter, limit) {
+      const [row] = await countQuery(tx, filter, limit);
+      if (row === undefined) {
+        throw new Error("counting bookmarks returned no row");
+      }
+      return row.total;
     },
   };
 }

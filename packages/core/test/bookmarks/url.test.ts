@@ -177,6 +177,11 @@ describe("normalizeBookmarkUrl, what it refuses (doc 10 T12 and T13)", () => {
     expect(accepted(`  ${prefix}${"a".repeat(BOOKMARK_URL_MAX_LENGTH - prefix.length)}\n`).url).toHaveLength(BOOKMARK_URL_MAX_LENGTH);
   });
 
+  it("trims a value with a long run of whitespace inside it in linear time", { timeout: 1_000 }, () => {
+    expect(refusal(`https://example.com/a${"\t".repeat(200_000)}a`)).toBe("too_long");
+    expect(refusal(`${" ".repeat(200_000)}x`)).toBe("not_http");
+  });
+
   it("refuses a URL that grows past 2 048 characters once it is normalised", () => {
     const prefix = "https://example.com/";
     const input = prefix + "a b".repeat(Math.floor((BOOKMARK_URL_MAX_LENGTH - prefix.length) / 3));

@@ -8,6 +8,7 @@
     "drawerClose": "Close navigation",
     "breadcrumb": "Breadcrumb",
     "home": "Home",
+    "bookmarks": "Bookmarks",
     "helpAndDocs": "Help & docs",
     "switchToDark": "Switch to dark theme",
     "switchToLight": "Switch to light theme",
@@ -36,6 +37,221 @@
     "empty": {
       "title": "Welcome to {name}",
       "description": "Bookmarks with short, private slugs."
+    }
+  },
+  "bookmarks": {
+    "new": "New bookmark",
+    "page": {
+      "title": "Bookmarks"
+    },
+    "list": {
+      "label": "Bookmarks",
+      "toolbar": "Filter and sort the bookmarks",
+      "loading": "Loading the bookmarks",
+      "loadFailed": "The bookmarks could not be loaded. Try again in a moment.",
+      "loadMoreFailed": "More bookmarks could not be loaded. Try again in a moment.",
+      "refreshFailed": "The list could not be refreshed, so it may be out of date. Try again in a moment.",
+      "retry": "Try again",
+      "empty": {
+        "title": "No bookmarks yet",
+        "description": "Give a bookmark a short, private slug and open it from anywhere through /go/. Paste a link anywhere on this page to save it, or create a bookmark yourself."
+      },
+      "noMatch": "No bookmarks match these filters",
+      "clearFilters": "Clear filters",
+      "count": "Showing {shown} of {total}",
+      "countAtLeast": "Showing {shown} of {total}+",
+      "loadMore": "Load more",
+      "pageSize": "Bookmarks per load",
+      "filter": {
+        "label": "Show only",
+        "pinned": "Pinned",
+        "hasSlug": "Has slug",
+        "forwarding": "Forwarding on"
+      },
+      "view": {
+        "label": "View",
+        "grid": "Grid",
+        "table": "Table"
+      },
+      "scope": {
+        "label": "Scope",
+        "all": "All",
+        "mine": "Mine"
+      },
+      "sort": {
+        "label": "Sort by",
+        "recent": "Recently added",
+        "oldest": "Oldest first",
+        "titleAsc": "Alphabetical A–Z",
+        "titleDesc": "Alphabetical Z–A",
+        "mostUsed": "Most used",
+        "recentlyOpened": "Recently opened"
+      },
+      "table": {
+        "select": "Select",
+        "title": "Title",
+        "slug": "Slug",
+        "host": "Host",
+        "folders": "Folders",
+        "tags": "Tags",
+        "opens": "Opens",
+        "lastOpened": "Last opened",
+        "added": "Added",
+        "actions": "Actions",
+        "never": "Never"
+      },
+      "actionsFor": "Actions for {title}",
+      "select": "Select {title}",
+      "noSlug": "No slug",
+      "pinned": "Pinned",
+      "neverOpened": "Not opened yet",
+      "opens": "{count, plural, one {# open} other {# opens}}",
+      "usage": "{count, plural, one {# open} other {# opens}} · {when}",
+      "edit": "Edit",
+      "unpin": "Unpin",
+      "pin": {
+        "action": "Pin",
+        "error": {
+          "pin": "The bookmark could not be pinned. Try again in a moment.",
+          "unpin": "The bookmark could not be unpinned. Try again in a moment.",
+          "changedElsewhere": "This bookmark changed elsewhere. The list is up to date now; try again.",
+          "notFound": "This bookmark no longer exists."
+        }
+      },
+      "delete": {
+        "action": "Delete",
+        "title": "Delete this bookmark?",
+        "description": "“{title}” is deleted for good, along with its pin. This cannot be undone.",
+        "descriptionSlug": "“{title}” is deleted for good, and its slug stops forwarding immediately. This cannot be undone.",
+        "confirm": "Delete bookmark",
+        "cancel": "Cancel",
+        "error": {
+          "unavailable": "The bookmark could not be deleted right now. Try again in a moment.",
+          "notFound": "This bookmark no longer exists."
+        }
+      },
+      "deleted": "Bookmark deleted."
+    },
+    "bulk": {
+      "label": "Selected bookmarks",
+      "count": "{count, plural, one {# selected} other {# selected}}",
+      "clear": "Clear selection",
+      "pin": "Pin",
+      "unpin": "Unpin",
+      "delete": {
+        "action": "Delete",
+        "title": "Delete {count, plural, one {# bookmark} other {# bookmarks}}?",
+        "description": "{count, plural, one {Its slug stops forwarding immediately. This cannot be undone.} other {Their slugs stop forwarding immediately. This cannot be undone.}}",
+        "confirm": "{count, plural, one {Delete bookmark} other {Delete bookmarks}}",
+        "cancel": "Cancel"
+      },
+      "selectAll": {
+        "all": "Select all {total} matching",
+        "cappedOf": "Select the first {cap} of {total} matching",
+        "capped": "Select the first {cap} matching",
+        "cappedNote": "More bookmarks match than the {cap} that can be selected at once.",
+        "error": "The matching bookmarks could not be selected. Try again in a moment."
+      },
+      "done": {
+        "delete": "{count, plural, one {# bookmark deleted.} other {# bookmarks deleted.}}",
+        "pin": "{count, plural, one {# bookmark pinned.} other {# bookmarks pinned.}}",
+        "unpin": "{count, plural, one {# bookmark unpinned.} other {# bookmarks unpinned.}}"
+      },
+      "skipped": "{count, plural, one {# bookmark was skipped because it no longer exists or can’t be changed.} other {# bookmarks were skipped because they no longer exist or can’t be changed.}}",
+      "error": {
+        "delete": "The bookmarks could not be deleted. Nothing was changed. Try again in a moment.",
+        "pin": "The bookmarks could not be pinned. Nothing was changed. Try again in a moment.",
+        "unpin": "The bookmarks could not be unpinned. Nothing was changed. Try again in a moment.",
+        "partial": "Only {done, number} of {total, number} bookmarks were changed before an error. The rest are still selected; try again in a moment."
+      }
+    },
+    "modal": {
+      "close": "Close",
+      "cancel": "Cancel",
+      "save": "Save",
+      "more": "More",
+      "loading": "Loading the bookmark",
+      "retry": "Try again",
+      "saved": {
+        "created": "Bookmark saved.",
+        "updated": "Bookmark updated."
+      },
+      "deleted": "Bookmark deleted.",
+      "create": {
+        "title": "New bookmark"
+      },
+      "edit": {
+        "title": "Edit bookmark"
+      },
+      "url": {
+        "label": "URL",
+        "placeholder": "https://",
+        "checking": "Checking whether you saved this address already",
+        "error": {
+          "required": "Enter the address to save.",
+          "tooLong": "Use at most {max, number} characters.",
+          "notAllowed": "Enter an address that starts with http:// or https://.",
+          "invalid": "This is not a valid address."
+        }
+      },
+      "title": {
+        "label": "Title",
+        "error": {
+          "required": "Enter a title.",
+          "tooLong": "Use at most {max, number} characters."
+        }
+      },
+      "description": {
+        "label": "Description",
+        "counter": "{count, number} / {max, number}",
+        "error": {
+          "tooLong": "Use at most {max, number} characters."
+        }
+      },
+      "pinned": {
+        "label": "Pinned",
+        "description": "Pinned bookmarks are the first you see on Home."
+      },
+      "duplicate": {
+        "title": "You already saved this address",
+        "description": "“{title}” has the same address. You can still save this one.",
+        "edit": "Edit existing",
+        "unchecked": "We could not check whether you saved this address already."
+      },
+      "unsaved": {
+        "title": "Discard your changes?",
+        "description": "The changes you made to this bookmark are lost if you close it now.",
+        "discard": "Discard changes",
+        "keepEditing": "Keep editing"
+      },
+      "delete": {
+        "label": "Delete",
+        "title": "Delete this bookmark?",
+        "description": "“{title}” is deleted for good, along with its pin. This cannot be undone.",
+        "descriptionSlug": "“{title}” is deleted for good, and its slug stops forwarding immediately. This cannot be undone.",
+        "confirm": "Delete bookmark",
+        "error": {
+          "unavailable": "The bookmark could not be deleted right now. Try again in a moment."
+        }
+      },
+      "error": {
+        "invalid": "Check this entry and try again.",
+        "unavailable": "The bookmark could not be saved right now. Try again in a moment.",
+        "loadFailed": "The bookmark could not be loaded. Try again in a moment.",
+        "limitReached": {
+          "title": "Bookmark limit reached",
+          "description": "This workspace holds as many bookmarks as it may. Delete a bookmark to save a new one."
+        },
+        "changedElsewhere": {
+          "title": "This bookmark changed elsewhere",
+          "description": "Someone saved a newer version while you were editing. Load it to continue; your edits here are replaced.",
+          "reload": "Load the latest"
+        },
+        "notFound": {
+          "title": "Bookmark not found",
+          "description": "It may have been deleted, or it is not one of yours."
+        }
+      }
     }
   },
   "admin": {

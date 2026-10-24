@@ -1,5 +1,5 @@
-import { render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DataTable, type DataTableColumn } from "../../src/patterns/index.ts";
 import { expectNoViolations, stubMatchMedia } from "../support.tsx";
 
@@ -58,5 +58,49 @@ describe("DataTable", () => {
     expect(within(cards[1] as HTMLElement).getByText("Size")).toBeTruthy();
     expect(within(cards[1] as HTMLElement).getByRole("button", { name: "Open Beta" })).toBeTruthy();
     await expectNoViolations(container);
+  });
+
+  it("orders from a sortable header, says how the rows are ordered and leaves other headers plain", () => {
+    stubMatchMedia(false);
+    const onSort = vi.fn();
+    const columns: readonly DataTableColumn<Row>[] = [
+      { id: "name", header: "Name", cell: (row) => row.name, sort: { direction: "ascending", onSort } },
+      { id: "size", header: "Size", cell: (row) => String(row.size), sort: { direction: "none", onSort: () => undefined } },
+      { id: "plain", header: "Plain", cell: () => "" },
+    ];
+    render(<DataTable columns={columns} label="Files" rowKey={(row) => row.id} rows={ROWS} />);
+
+    const headers = screen.getAllByRole("columnheader");
+    expect(headers.map((header) => header.getAttribute("aria-sort"))).toEqual(["ascending", "none", null]);
+    expect(within(headers[2] as HTMLElement).queryByRole("button")).toBeNull();
+    fireEvent.click(within(headers[0] as HTMLElement).getByRole("button", { name: "Name" }));
+    expect(onSort).toHaveBeenCalledTimes(1);
+  });
+
+  it("puts the leading and trailing columns of a card beside its title and the rest under it", () => {
+    stubMatchMedia(true);
+    const columns: readonly DataTableColumn<Row>[] = [
+      { id: "pick", header: "Pick", hideHeader: true, cardSlot: "leading", cell: (row) => <input aria-label={`Pick ${row.name}`} type="checkbox" /> },
+      { id: "name", header: "Name", cell: (row) => row.name },
+      { id: "size", header: "Size", cell: (row) => String(row.size) },
+      { id: "actions", header: "Actions", hideHeader: true, cardSlot: "trailing", cell: (row) => <button type="button">{`Open ${row.name}`}</button> },
+    ];
+    render(<DataTable columns={columns} label="Files" rowKey={(row) => row.id} rows={ROWS} />);
+
+    const card = within(screen.getByRole("list", { name: "Files" })).getAllByRole("listitem")[0] as HTMLElement;
+    const row = card.querySelector("div.flex") as HTMLElement;
+    expect(within(row).getByRole("checkbox", { name: "Pick Alpha" })).toBeTruthy();
+    expect(within(row).getByText("Alpha")).toBeTruthy();
+    expect(within(row).getByRole("button", { name: "Open Alpha" })).toBeTruthy();
+    expect(within(card.querySelector("dl") as HTMLElement).getAllByRole("term").map((term) => term.textContent)).toEqual(["Size"]);
+  });
+
+  it("marks the selected rows and names every row for the page", () => {
+    stubMatchMedia(false);
+    render(<DataTable columns={COLUMNS} label="Files" rowKey={(row) => row.id} rowSelected={(row) => row.id === "b"} rows={ROWS} />);
+
+    const rows = screen.getAllByRole("row").slice(1);
+    expect(rows.map((row) => row.getAttribute("data-state"))).toEqual([null, "selected"]);
+    expect(rows.map((row) => row.getAttribute("data-item-id"))).toEqual(["a", "b"]);
   });
 });

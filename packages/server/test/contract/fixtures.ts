@@ -224,11 +224,26 @@ export const FIXTURES: ContractFixtures = {
   // would own, so its valid request names a bookmark that no workspace holds, which is the declared 404 whoever would hold it, and so is a bookmark of
   // workspace B; the route tests read the walker's own bookmarks, and the matrix puts the bookmarks of workspace B in the path.
   createBookmark: { body: { url: "https://example.com/walker", title: "Walker bookmark" } },
+  // The list names no identifier and acts in the workspace of the request: the walker lists the bookmarks of the workspace it owns. The matrix picks
+  // the input `hasSlug` as one that can carry an identifier, because its name ends in `Slug`; it is a boolean filter, so the identifier the matrix puts
+  // in it is refused as a malformed query (422) and never reaches a bookmark, whichever workspace holds it.
+  listBookmarks: { foreign: { query: { hasSlug: UNKNOWN_BOOKMARK_ID } } },
+  // The select-all takes the list's filters and names no identifier either; the matrix picks `hasSlug` by its name here as well, and the identifier it puts in
+  // that boolean is refused as a malformed query (422) before any bookmark is looked at.
+  listBookmarkIds: { foreign: { query: { hasSlug: UNKNOWN_BOOKMARK_ID } } },
+  // The bulk request names bookmarks by identifier, and acts on the caller's own only: one that no workspace holds, one of workspace B and one that never
+  // existed are skipped alike, which is a 200 with the identifier counted as not found and nothing written, never a 404 (doc 02 section 5.8). The valid
+  // request and the request naming a bookmark of workspace B are therefore the same 200. The matrix picks `ids[]` and, by its name, `filter.hasSlug`; the
+  // test that runs it sends the identifiers in `ids` only, since a request with both is refused as malformed.
+  bulkBookmarks: { body: { action: "pin", ids: [UNKNOWN_BOOKMARK_ID] }, status: 200, foreign: { body: { action: "pin", ids: [UNKNOWN_BOOKMARK_ID] } } },
   getBookmark: { path: { id: UNKNOWN_BOOKMARK_ID }, status: 404, foreign: { path: { id: UNKNOWN_BOOKMARK_ID } } },
   // The change and the deletion name a bookmark by identifier too, so their valid request is the declared 404 for the same reason: a bookmark no
   // workspace holds, and the matrix puts the bookmarks of workspace B in the path. The change takes a body, which is valid whoever would hold the bookmark.
   updateBookmark: { path: { id: UNKNOWN_BOOKMARK_ID }, body: { title: "Walker bookmark" }, status: 404, foreign: { path: { id: UNKNOWN_BOOKMARK_ID }, body: { title: "Walker bookmark" } } },
   deleteBookmark: { path: { id: UNKNOWN_BOOKMARK_ID }, status: 404, foreign: { path: { id: UNKNOWN_BOOKMARK_ID } } },
+  // The open names a bookmark by identifier as well, and counts it only for a bookmark the caller owns: the valid request is the declared 404 for
+  // a bookmark no workspace holds, and the matrix puts the bookmarks of workspace B in the path.
+  openBookmark: { path: { id: UNKNOWN_BOOKMARK_ID }, status: 404, foreign: { path: { id: UNKNOWN_BOOKMARK_ID } } },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

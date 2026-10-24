@@ -8,6 +8,7 @@
     "drawerClose": "Navigation schließen",
     "breadcrumb": "Brotkrumennavigation",
     "home": "Start",
+    "bookmarks": "Lesezeichen",
     "helpAndDocs": "Hilfe & Doku",
     "switchToDark": "Zum dunklen Design wechseln",
     "switchToLight": "Zum hellen Design wechseln",
@@ -36,6 +37,221 @@
     "empty": {
       "title": "Willkommen bei {name}",
       "description": "Lesezeichen mit kurzen, privaten Slugs."
+    }
+  },
+  "bookmarks": {
+    "new": "Neues Lesezeichen",
+    "page": {
+      "title": "Lesezeichen"
+    },
+    "list": {
+      "label": "Lesezeichen",
+      "toolbar": "Lesezeichen filtern und sortieren",
+      "loading": "Lesezeichen werden geladen",
+      "loadFailed": "Die Lesezeichen konnten nicht geladen werden. Versuche es gleich noch einmal.",
+      "loadMoreFailed": "Weitere Lesezeichen konnten nicht geladen werden. Versuche es gleich noch einmal.",
+      "refreshFailed": "Die Liste konnte nicht aktualisiert werden und ist womöglich veraltet. Versuche es gleich noch einmal.",
+      "retry": "Erneut versuchen",
+      "empty": {
+        "title": "Noch keine Lesezeichen",
+        "description": "Gib einem Lesezeichen einen kurzen, privaten Slug und öffne es von überall über /go/. Füge irgendwo auf dieser Seite einen Link ein, um ihn zu speichern, oder lege selbst ein Lesezeichen an."
+      },
+      "noMatch": "Keine Lesezeichen passen zu diesen Filtern",
+      "clearFilters": "Filter zurücksetzen",
+      "count": "{shown} von {total} angezeigt",
+      "countAtLeast": "{shown} von {total}+ angezeigt",
+      "loadMore": "Mehr laden",
+      "pageSize": "Lesezeichen pro Ladevorgang",
+      "filter": {
+        "label": "Nur anzeigen",
+        "pinned": "Angeheftet",
+        "hasSlug": "Mit Slug",
+        "forwarding": "Weiterleitung aktiv"
+      },
+      "view": {
+        "label": "Ansicht",
+        "grid": "Raster",
+        "table": "Tabelle"
+      },
+      "scope": {
+        "label": "Bereich",
+        "all": "Alle",
+        "mine": "Meine"
+      },
+      "sort": {
+        "label": "Sortieren nach",
+        "recent": "Zuletzt hinzugefügt",
+        "oldest": "Älteste zuerst",
+        "titleAsc": "Alphabetisch A–Z",
+        "titleDesc": "Alphabetisch Z–A",
+        "mostUsed": "Am häufigsten genutzt",
+        "recentlyOpened": "Zuletzt geöffnet"
+      },
+      "table": {
+        "select": "Auswählen",
+        "title": "Titel",
+        "slug": "Slug",
+        "host": "Host",
+        "folders": "Ordner",
+        "tags": "Tags",
+        "opens": "Aufrufe",
+        "lastOpened": "Zuletzt geöffnet",
+        "added": "Hinzugefügt",
+        "actions": "Aktionen",
+        "never": "Nie"
+      },
+      "actionsFor": "Aktionen für {title}",
+      "select": "{title} auswählen",
+      "noSlug": "Kein Slug",
+      "pinned": "Angeheftet",
+      "neverOpened": "Noch nicht geöffnet",
+      "opens": "{count, plural, one {# Aufruf} other {# Aufrufe}}",
+      "usage": "{count, plural, one {# Aufruf} other {# Aufrufe}} · {when}",
+      "edit": "Bearbeiten",
+      "unpin": "Anheftung lösen",
+      "pin": {
+        "action": "Anheften",
+        "error": {
+          "pin": "Das Lesezeichen konnte nicht angeheftet werden. Versuche es gleich noch einmal.",
+          "unpin": "Die Anheftung des Lesezeichens konnte nicht gelöst werden. Versuche es gleich noch einmal.",
+          "changedElsewhere": "Dieses Lesezeichen wurde woanders geändert. Die Liste ist jetzt aktuell; versuche es noch einmal.",
+          "notFound": "Dieses Lesezeichen gibt es nicht mehr."
+        }
+      },
+      "delete": {
+        "action": "Löschen",
+        "title": "Dieses Lesezeichen löschen?",
+        "description": "„{title}“ wird endgültig gelöscht, samt Anheftung. Das lässt sich nicht rückgängig machen.",
+        "descriptionSlug": "„{title}“ wird endgültig gelöscht, und sein Slug leitet sofort nicht mehr weiter. Das lässt sich nicht rückgängig machen.",
+        "confirm": "Lesezeichen löschen",
+        "cancel": "Abbrechen",
+        "error": {
+          "unavailable": "Das Lesezeichen konnte gerade nicht gelöscht werden. Versuche es gleich noch einmal.",
+          "notFound": "Dieses Lesezeichen gibt es nicht mehr."
+        }
+      },
+      "deleted": "Lesezeichen gelöscht."
+    },
+    "bulk": {
+      "label": "Ausgewählte Lesezeichen",
+      "count": "{count, plural, one {# ausgewählt} other {# ausgewählt}}",
+      "clear": "Auswahl aufheben",
+      "pin": "Anheften",
+      "unpin": "Anheftung lösen",
+      "delete": {
+        "action": "Löschen",
+        "title": "{count, plural, one {# Lesezeichen} other {# Lesezeichen}} löschen?",
+        "description": "{count, plural, one {Sein Slug leitet sofort nicht mehr weiter. Das lässt sich nicht rückgängig machen.} other {Ihre Slugs leiten sofort nicht mehr weiter. Das lässt sich nicht rückgängig machen.}}",
+        "confirm": "{count, plural, one {Lesezeichen löschen} other {Lesezeichen löschen}}",
+        "cancel": "Abbrechen"
+      },
+      "selectAll": {
+        "all": "Alle {total} Treffer auswählen",
+        "cappedOf": "Die ersten {cap} von {total} Treffern auswählen",
+        "capped": "Die ersten {cap} Treffer auswählen",
+        "cappedNote": "Es gibt mehr Treffer, als sich auf einmal auswählen lassen ({cap}).",
+        "error": "Die passenden Lesezeichen konnten nicht ausgewählt werden. Versuche es gleich noch einmal."
+      },
+      "done": {
+        "delete": "{count, plural, one {# Lesezeichen gelöscht.} other {# Lesezeichen gelöscht.}}",
+        "pin": "{count, plural, one {# Lesezeichen angeheftet.} other {# Lesezeichen angeheftet.}}",
+        "unpin": "{count, plural, one {Anheftung von # Lesezeichen gelöst.} other {Anheftung von # Lesezeichen gelöst.}}"
+      },
+      "skipped": "{count, plural, one {# Lesezeichen wurde übersprungen, weil es nicht mehr existiert oder sich nicht ändern lässt.} other {# Lesezeichen wurden übersprungen, weil sie nicht mehr existieren oder sich nicht ändern lassen.}}",
+      "error": {
+        "delete": "Die Lesezeichen konnten nicht gelöscht werden. Es wurde nichts geändert. Versuche es gleich noch einmal.",
+        "pin": "Die Lesezeichen konnten nicht angeheftet werden. Es wurde nichts geändert. Versuche es gleich noch einmal.",
+        "unpin": "Die Anheftung der Lesezeichen konnte nicht gelöst werden. Es wurde nichts geändert. Versuche es gleich noch einmal.",
+        "partial": "Nur {done, number} von {total, number} Lesezeichen wurden vor einem Fehler geändert. Die übrigen bleiben ausgewählt; versuche es gleich noch einmal."
+      }
+    },
+    "modal": {
+      "close": "Schließen",
+      "cancel": "Abbrechen",
+      "save": "Speichern",
+      "more": "Mehr",
+      "loading": "Lesezeichen wird geladen",
+      "retry": "Erneut versuchen",
+      "saved": {
+        "created": "Lesezeichen gespeichert.",
+        "updated": "Lesezeichen aktualisiert."
+      },
+      "deleted": "Lesezeichen gelöscht.",
+      "create": {
+        "title": "Neues Lesezeichen"
+      },
+      "edit": {
+        "title": "Lesezeichen bearbeiten"
+      },
+      "url": {
+        "label": "URL",
+        "placeholder": "https://",
+        "checking": "Es wird geprüft, ob du diese Adresse schon gespeichert hast",
+        "error": {
+          "required": "Gib die Adresse ein, die du speichern möchtest.",
+          "tooLong": "Verwende höchstens {max, number} Zeichen.",
+          "notAllowed": "Gib eine Adresse ein, die mit http:// oder https:// beginnt.",
+          "invalid": "Das ist keine gültige Adresse."
+        }
+      },
+      "title": {
+        "label": "Titel",
+        "error": {
+          "required": "Gib einen Titel ein.",
+          "tooLong": "Verwende höchstens {max, number} Zeichen."
+        }
+      },
+      "description": {
+        "label": "Beschreibung",
+        "counter": "{count, number} / {max, number}",
+        "error": {
+          "tooLong": "Verwende höchstens {max, number} Zeichen."
+        }
+      },
+      "pinned": {
+        "label": "Angeheftet",
+        "description": "Angeheftete Lesezeichen siehst du zuerst auf der Startseite."
+      },
+      "duplicate": {
+        "title": "Diese Adresse hast du schon gespeichert",
+        "description": "„{title}“ hat dieselbe Adresse. Du kannst dieses trotzdem speichern.",
+        "edit": "Vorhandenes bearbeiten",
+        "unchecked": "Wir konnten nicht prüfen, ob du diese Adresse schon gespeichert hast."
+      },
+      "unsaved": {
+        "title": "Änderungen verwerfen?",
+        "description": "Die Änderungen an diesem Lesezeichen gehen verloren, wenn du es jetzt schließt.",
+        "discard": "Änderungen verwerfen",
+        "keepEditing": "Weiter bearbeiten"
+      },
+      "delete": {
+        "label": "Löschen",
+        "title": "Dieses Lesezeichen löschen?",
+        "description": "„{title}“ wird endgültig gelöscht, ebenso seine Anheftung. Das lässt sich nicht rückgängig machen.",
+        "descriptionSlug": "„{title}“ wird endgültig gelöscht, und sein Slug leitet sofort nicht mehr weiter. Das lässt sich nicht rückgängig machen.",
+        "confirm": "Lesezeichen löschen",
+        "error": {
+          "unavailable": "Das Lesezeichen kann gerade nicht gelöscht werden. Versuche es gleich noch einmal."
+        }
+      },
+      "error": {
+        "invalid": "Prüfe diese Eingabe und versuche es erneut.",
+        "unavailable": "Das Lesezeichen kann gerade nicht gespeichert werden. Versuche es gleich noch einmal.",
+        "loadFailed": "Das Lesezeichen konnte nicht geladen werden. Versuche es gleich noch einmal.",
+        "limitReached": {
+          "title": "Limit für Lesezeichen erreicht",
+          "description": "Dieser Workspace enthält so viele Lesezeichen, wie er darf. Lösche ein Lesezeichen, um ein neues zu speichern."
+        },
+        "changedElsewhere": {
+          "title": "Dieses Lesezeichen wurde anderswo geändert",
+          "description": "Jemand hat eine neuere Version gespeichert, während du bearbeitet hast. Lade sie, um fortzufahren; deine Änderungen hier werden ersetzt.",
+          "reload": "Neueste Version laden"
+        },
+        "notFound": {
+          "title": "Lesezeichen nicht gefunden",
+          "description": "Es wurde vielleicht gelöscht oder gehört nicht dir."
+        }
+      }
     }
   },
   "admin": {

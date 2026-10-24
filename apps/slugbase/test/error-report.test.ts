@@ -86,7 +86,7 @@ const acceptAnyBearer: ServerModule = {
     authenticators: [
       {
         credential: "bearer",
-        authenticate: () => Promise.resolve({ kind: "api-token", accountId: TOKEN_ACCOUNT, workspaceId: TOKEN_WORKSPACE, scope: "read-write" }),
+        authenticate: () => Promise.resolve({ kind: "api-token", tokenId: "stub-token", accountId: TOKEN_ACCOUNT, workspaceId: TOKEN_WORKSPACE, scope: "read-write" }),
       },
     ],
   }),

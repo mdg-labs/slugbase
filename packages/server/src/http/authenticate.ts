@@ -28,6 +28,8 @@ export interface SessionPrincipal extends Extract<TenantPrincipal, { readonly ki
 
 /** An API token, acting in the one workspace it is bound to (doc 04 section 4.2). */
 export interface ApiTokenPrincipal extends Extract<TenantPrincipal, { readonly kind: "api-token" }> {
+  /** The token row the bearer resolved to; the audit log names it as the actor of what the token changes. */
+  readonly tokenId: string;
   readonly scope: "read" | "read-write";
 }
 

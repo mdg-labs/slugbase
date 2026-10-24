@@ -1,4 +1,5 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
+import { validateBookmarkModalSearch } from "../bookmarks/modal-search.ts";
 import { requireAccount } from "../account/require-account.ts";
 import { AppLayout } from "../shell/app-layout.tsx";
 
@@ -11,6 +12,8 @@ function isWorkspaceFreePage(pathname: string): boolean {
 }
 
 export const Route = createFileRoute("/_app")({
+  // The bookmark modal opens over any page of the app from these parameters (`bookmarks/modal-search.ts`).
+  validateSearch: validateBookmarkModalSearch,
   // Every page of the app needs a session (see `requireAccount`). An account that acts in no workspace has
   // nothing to show on the pages of a workspace: it is sent to the page that says what to do about that.
   beforeLoad: async ({ context, location }) => {

@@ -1,10 +1,10 @@
 import { sql } from "drizzle-orm";
-import { bigint, boolean, check, foreignKey, integer, pgTable, text, timestamp, unique, uuid, type UpdateDeleteAction } from "drizzle-orm/pg-core";
+import { bigint, boolean, check, foreignKey, index, integer, pgTable, text, timestamp, unique, uuid, type UpdateDeleteAction } from "drizzle-orm/pg-core";
 import { citext, tsvector } from "./types.ts";
 import { workspaceMembers, workspaces } from "./workspaces.ts";
 
 // `bookmarks` of doc 05 section 2.4. Row-level security, the policies, the privileges of `slugbase_app` and the updated_at
-// trigger live in src/sql/470-bookmarks.sql. The list, slug and search indexes are added with the operations that need them.
+// trigger live in src/sql/470-bookmarks.sql. The list indexes are the ones below; the slug and search indexes are added with the operations that need them.
 
 // The action of the owner's foreign key. A member who leaves takes the ownership with them and not the bookmark, so only
 // `owner_id` is cleared: the key shares `workspace_id`, which is NOT NULL, and a plain `SET NULL` would clear that too and
@@ -65,5 +65,19 @@ export const bookmarks = pgTable(
     check("bookmarks_description_check", sql`length(${table.description}) <= 1000`),
     check("bookmarks_slug_check", sql`${table.slug}::text ~ '^[a-z0-9][a-z0-9-]{0,63}$'`),
     check("bookmarks_forwarding_check", sql`NOT ${table.forwarding} OR ${table.slug} IS NOT NULL`),
+    // The list indexes of doc 05 section 2.4: one per sort of `GET /bookmarks`, each ending in `id` as the tiebreak of its keyset.
+    index("bookmarks_owner_recent_idx")
+      .on(table.workspaceId, table.ownerId, table.createdAt.desc(), table.id.desc())
+      .where(sql`${table.planArchivedAt} IS NULL`),
+    index("bookmarks_owner_opened_idx")
+      .on(table.workspaceId, table.ownerId, table.lastOpenedAt.desc().nullsLast(), table.id.desc())
+      .where(sql`${table.planArchivedAt} IS NULL`),
+    index("bookmarks_owner_popular_idx")
+      .on(table.workspaceId, table.ownerId, table.openCount.desc(), table.id.desc())
+      .where(sql`${table.planArchivedAt} IS NULL`),
+    index("bookmarks_owner_title_idx").on(table.workspaceId, table.ownerId, sql`lower(${table.title})`, table.id),
+    index("bookmarks_pinned_idx")
+      .on(table.workspaceId, table.ownerId, table.pinnedAt.desc())
+      .where(sql`${table.pinnedAt} IS NOT NULL AND ${table.planArchivedAt} IS NULL`),
   ],
 );

@@ -99,7 +99,7 @@ describe("the matrix over the committed contract and the repository registry", (
         ],
       },
     };
-    const matrix = await runApiMatrix({ document, fixture, request: answersAsTheChainDoes, mapping: { accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark" } });
+    const matrix = await runApiMatrix({ document, fixture, request: answersAsTheChainDoes, mapping: { accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark" } });
     // The matrix expects 404 for an identifier of workspace B. The one exception is the 422 every team is refused with (see above), for the two sessions
     // of A that reach the handler of the invitation; it is named exactly, and every other failure stays one.
     const teamRefusal = (failure: MatrixFailure): boolean => failure.subject.startsWith("createInvitation ") && failure.kind === "unexpected_status" && /answered 422, expected 404/.test(failure.detail);
@@ -111,13 +111,14 @@ describe("the matrix over the committed contract and the repository registry", (
     expect(Object.values(report.classified.byKind).reduce((sum, count) => sum + count, 0)).toBe(report.classified.total);
     // The operations on /workspace (reading, renaming and deleting it), /workspace/settings, the entitlements, the members list and the creation of a bookmark act in the workspace of the request and take no identifier of B;
     // the role change, the ownership transfer and the removal name a member by account identifier, the removal and the leaving a recipient, the invitation a team,
-    // the resend, the link and the revocation of an invitation name an invitation, and the bookmark read, change and deletion name a bookmark; the invitation list takes no identifier.
-    expect(report.classified.byKind["tenant-scoped"]).toBe(20);
+    // the resend, the link and the revocation of an invitation name an invitation, and the bookmark read, change, deletion and open name a bookmark, as do the select-all and the bulk request in their inputs; the invitation list takes no identifier.
+    expect(report.classified.byKind["tenant-scoped"]).toBe(24);
     // Three sessions and six tokens of A, once on each of the nine operations that name no member, once for each of the three members of B on the role
     // change, on the ownership transfer and on the leaving, once for each pair of members of B (path and recipient) on the removal, once for the
     // team of B on the invitation, once for the invitation of B on each of the resend, the link and the revocation, and once for each of the two
-    // bookmarks of B on each of the bookmark read, change and deletion.
-    expect(report.attempts).toBe(9 * 10 + 9 * (3 + 3 + 3 + 3 * 3 + 3 + 3 * 2));
+    // bookmarks of B on each of the bookmark read, change, deletion and open, and in the `hasSlug` filter of the bookmark list and of the select-all (picked by
+    // its name), and once for each pair of a bookmark of B in `ids` and one in `filter.hasSlug` of the bulk request.
+    expect(report.attempts).toBe(9 * 10 + 9 * (3 + 3 + 3 + 3 * 3 + 3 + 4 * 2 + 2 + 2 + 2 * 2));
     assertMatrixPassed(report);
   });
 
@@ -642,6 +643,78 @@ describe("the archive operation across workspaces", () => {
     });
 
     expect(byRepository).toBe(0);
+    expect(namingB).toBeNull();
+    expect({ a: await storedOf(PROBE_WORKSPACE_A), b: await storedOf(PROBE_WORKSPACE_B) }).toEqual({ a: before.a, b: before.b });
+  });
+});
+
+// The bulk delete and the bulk pin of doc 02 section 5.8 act on the rows of the workspace of the transaction. The delete is the system operation
+// `sys_bookmark_delete_many`, whose guard is the workspace of the transaction and the owner; the pin is a repository method that runs
+// on the policies of `bookmarks`. This runs both inside withTenant(A) naming the bookmark of B, through the repository and, for the delete, by
+// calling the function by hand with the application layer left out.
+describe("the bulk operations across workspaces", () => {
+  const MEMBER_OF_A = "0192f3a0-3333-7000-8000-00000000a0a2";
+  const BOOKMARK_OF_A = "0192f3a0-2222-7000-8000-00000000a0b2";
+  const BOOKMARK_OF_B = "0192f3a0-2222-7000-8000-00000000b0b2";
+
+  interface Stored {
+    readonly rows: number;
+    readonly pinned: number;
+    readonly versions: number;
+    readonly counter: number;
+  }
+
+  async function storedOf(workspaceId: string): Promise<Stored> {
+    const rows = await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      return tx<Stored[]>`
+        SELECT (SELECT count(*) FROM bookmarks WHERE workspace_id = ${workspaceId})::int AS rows,
+               (SELECT count(*) FROM bookmarks WHERE workspace_id = ${workspaceId} AND pinned_at IS NOT NULL)::int AS pinned,
+               (SELECT coalesce(sum(version), 0) FROM bookmarks WHERE workspace_id = ${workspaceId})::int AS versions,
+               bookmark_count AS counter
+        FROM workspaces WHERE id = ${workspaceId}`;
+    });
+    return rows[0] ?? { rows: -1, pinned: -1, versions: -1, counter: -1 };
+  }
+
+  it("deletes, pins and unpins no bookmark of B, and changes no counter of B, from a transaction acting in A, through the repository or by naming B to the function", async () => {
+    await seedWorkspaceRows(database(), [
+      { id: PROBE_WORKSPACE_A, bookmarkId: BOOKMARK_OF_A },
+      { id: PROBE_WORKSPACE_B, bookmarkId: BOOKMARK_OF_B },
+    ]);
+    await database().owner.begin(async (tx) => {
+      await tx`SELECT set_config('app.account_id', ${MEMBER_OF_A}, true)`;
+      await tx`INSERT INTO accounts (id, email, display_name) VALUES (${MEMBER_OF_A}, 'bulk-matrix@example.test', 'Matrix member') ON CONFLICT DO NOTHING`;
+    });
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      // The same account owns a bookmark in each workspace, so that the guard under test is the workspace of the transaction and not the ownership.
+      await tx`INSERT INTO workspace_members (workspace_id, account_id, role) VALUES (${PROBE_WORKSPACE_A}, ${MEMBER_OF_A}, 'owner'), (${PROBE_WORKSPACE_B}, ${MEMBER_OF_A}, 'owner') ON CONFLICT DO NOTHING`;
+      await tx`UPDATE bookmarks SET owner_id = ${MEMBER_OF_A} WHERE id IN (${BOOKMARK_OF_A}, ${BOOKMARK_OF_B})`;
+      await tx`UPDATE workspaces SET bookmark_count = (SELECT count(*) FROM bookmarks WHERE workspace_id = workspaces.id AND plan_archived_at IS NULL) WHERE id IN (${PROBE_WORKSPACE_A}, ${PROBE_WORKSPACE_B})`;
+    });
+    const before = { a: await storedOf(PROBE_WORKSPACE_A), b: await storedOf(PROBE_WORKSPACE_B) };
+    expect(before.b.rows).toBeGreaterThanOrEqual(1);
+    expect(before.b.counter).toBe(before.b.rows);
+    const context = { accountId: MEMBER_OF_A, workspaceId: PROBE_WORKSPACE_A, requestId: "matrix-bulk" };
+
+    const results = await database().tenant.withTenant(context, async (tx) => {
+      const repository = bookmarkRepository(tx);
+      return {
+        deleted: await repository.removeMany({ bookmarkIds: [BOOKMARK_OF_B] }),
+        pinned: await repository.setPinned({ bookmarkIds: [BOOKMARK_OF_B], ownerId: MEMBER_OF_A, pinned: true }),
+        unpinned: await repository.setPinned({ bookmarkIds: [BOOKMARK_OF_B], ownerId: MEMBER_OF_A, pinned: false }),
+        ids: await repository.ids({ ownerId: MEMBER_OF_A }, 100),
+      };
+    });
+    const namingB = await database().app.begin(async (tx) => {
+      await tx`SELECT set_config('app.account_id', ${MEMBER_OF_A}, true), set_config('app.workspace_id', ${PROBE_WORKSPACE_A}, true)`;
+      const rows = await tx<{ deleted: number | null }[]>`
+        SELECT public.sys_bookmark_delete_many(${PROBE_WORKSPACE_B}::uuid, ${`{${BOOKMARK_OF_B}}`}::uuid[]) AS deleted`;
+      return rows[0]?.deleted;
+    });
+
+    expect(results).toEqual({ deleted: 0, pinned: 0, unpinned: 0, ids: [BOOKMARK_OF_A] });
     expect(namingB).toBeNull();
     expect({ a: await storedOf(PROBE_WORKSPACE_A), b: await storedOf(PROBE_WORKSPACE_B) }).toEqual({ a: before.a, b: before.b });
   });

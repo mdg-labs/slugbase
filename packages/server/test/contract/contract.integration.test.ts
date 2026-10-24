@@ -22,6 +22,11 @@ import { appUrl, tenantDatabase } from "./support.ts";
 import type { PolicyHooks } from "./walker.ts";
 import { walkContract } from "./walker.ts";
 
+/** The body of a bulk request without its `filter`, which the request is refused for when it names `ids` as well. */
+function withoutFilter(body: unknown): unknown {
+  return typeof body === "object" && body !== null ? Object.fromEntries(Object.entries(body).filter(([key]) => key !== "filter")) : body;
+}
+
 // The contract tests of doc 04 section 1.3 and the cross-tenant matrix of doc 08
 // section 3.3 in API mode, both over an in-process server (doc 10 T1, T3). The
 // first suite walks the committed document against the server as composed. The
@@ -46,7 +51,7 @@ beforeAll(async () => {
 function serve(modules: readonly ServerModule[], document?: TestDocument, options: { readonly memberships?: boolean; readonly entitlements?: EntitlementCheck } = {}): Server {
   // The walker signs in once for each operation that needs a session, and calls each of the mfa and reset buckets' operations several times,
   // more often than the default limits of one address allow.
-  const config = serverConfig({ NODE_ENV: "test", DATABASE_URL: appUrl(database()), RATE_LIMIT_LOGIN_IP: "200/min", RATE_LIMIT_MFA_IP: "100/min", RATE_LIMIT_MFA_ACCOUNT: "1000/hour", RATE_LIMIT_RESET_IP: "1000/hour" });
+  const config = serverConfig({ NODE_ENV: "test", DATABASE_URL: appUrl(database()), RATE_LIMIT_LOGIN_IP: "200/min", RATE_LIMIT_MFA_IP: "100/min", RATE_LIMIT_MFA_ACCOUNT: "1000/hour", RATE_LIMIT_RESET_IP: "1000/hour", RATE_LIMIT_BULK_IP: "1000/hour", RATE_LIMIT_BULK_ACCOUNT: "1000/hour" });
   return createServer({
     config,
     // The stub resolver knows the workspaces of the fixture and no session of a real sign-in; the walk of the committed document resolves each
@@ -240,19 +245,29 @@ describe("the walker over the committed document", () => {
     // The walker holds the team it names for workspace B to the 404 it expects for an identifier of another workspace. A team is refused with 422
     // whichever workspace holds it, because no team can be invited into yet and none can be told from another, which discloses nothing. That answer
     // is the one difference of the walk, and the exception names exactly it (the status and the code that come with it).
+    // The boolean filter `hasSlug` of the bookmark list is picked as an input that can carry an identifier by its name, and the identifier the walk
+    // puts in it is refused as a malformed value (422) before any bookmark is looked at, which is the other difference.
+    // The select-all takes the same filter and has the same difference. The bulk request is the third: it acts on the caller's own bookmarks and skips an identifier
+    // of workspace B as not found without saying so (doc 02 section 5.8), so it answers 200 with the identifier counted as skipped instead of the 404 the walker expects.
     const teamRefusal = (failure: ContractFailure): boolean =>
-      failure.subject === "createInvitation (POST /api/v1/invitations), resource of workspace B" &&
+      (failure.subject === "createInvitation (POST /api/v1/invitations), resource of workspace B" ||
+        failure.subject === "listBookmarks (GET /api/v1/bookmarks), resource of workspace B" ||
+        failure.subject === "listBookmarkIds (GET /api/v1/bookmarks/ids), resource of workspace B") &&
       (failure.detail === "answered 422, expected 404" || failure.detail === 'the problem code is "validation_failed", expected not_found');
-    expect(report.failures.filter(teamRefusal).map((failure) => failure.kind)).toEqual(["unexpected_status", "wrong_code"]);
-    expect(report.failures.filter((failure) => !teamRefusal(failure))).toEqual([]);
+    const skippedNotRefused = (failure: ContractFailure): boolean =>
+      failure.subject === "bulkBookmarks (POST /api/v1/bookmarks/bulk), resource of workspace B" &&
+      (failure.detail === "answered 200, expected 404" || failure.detail === "the problem code is undefined, expected not_found");
+    expect(report.failures.filter(teamRefusal).map((failure) => failure.kind)).toEqual(["unexpected_status", "wrong_code", "unexpected_status", "wrong_code", "unexpected_status", "wrong_code"]);
+    expect(report.failures.filter(skippedNotRefused).map((failure) => failure.kind)).toEqual(["unexpected_status", "wrong_code"]);
+    expect(report.failures.filter((failure) => !teamRefusal(failure) && !skippedNotRefused(failure))).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each operation. Each of the fifty-nine that need a session also answers 401 without one, each of the seventeen that declare
-    // re-authentication answers 401 reauth_required without it, and each of the thirty-five whose policy has a role below it (the eight of a member, the ten
+    // One valid request for each operation. Each of the sixty-three that need a session also answers 401 without one, each of the seventeen that declare
+    // re-authentication answers 401 reauth_required without it, and each of the thirty-nine whose policy has a role below it (the twelve of a member, the ten
     // of an admin, the two of an owner and the fifteen of the instance admin) answers the principal just below it (404 below member, 403 below the others).
-    // Each of the three that declare the write scope answers 403 token_scope to a token that may only read, each of the four that declare an entitlement answers
-    // 403 to an account without it, and each of the eleven that name a member, a recipient, a team, an invitation or a bookmark answers for one of workspace B.
-    expect(report.calls).toBe(operations.length + 59 + 17 + 35 + 3 + 4 + 11);
+    // Each of the five that declare the write scope answers 403 token_scope to a token that may only read, each of the four that declare an entitlement answers
+    // 403 to an account without it, and each of the fifteen that name a member, a recipient, a team, an invitation or a bookmark, or an input that can carry one, answers for one of workspace B.
+    expect(report.calls).toBe(operations.length + 63 + 17 + 39 + 5 + 4 + 15);
   }, WALK_TIMEOUT_MS);
 });
 
@@ -426,7 +441,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     }
   }
 
-  it("passes for the twenty tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations, its bookmarks and its audit log as they were", async () => {
+  it("passes for the twenty-four tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations, its bookmarks and its audit log as they were", async () => {
     await seedFixtureWorkspaces();
     const before = await contentOfB();
     // The deletion of the workspace takes no identifier, so the matrix repeats it as every principal of A (the sessions of the matrix have just
@@ -454,9 +469,11 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     const matrix = await runApiMatrix({
       document: committed,
       fixture,
-      mapping: { rowId: "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark" },
+      mapping: { rowId: "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark" },
       request: async (call) => {
-        const response = await send(call);
+        // The bulk request takes the identifiers of B in `ids` or in the `hasSlug` of its filter, and a request with both is malformed; it is sent with `ids` only, so that the
+        // handler is reached and what it does with them is looked at. The matrix sends the same identifiers in the filter's boolean as well, which no handler is asked.
+        const response = await send(call.operation.operationId === "bulkBookmarks" ? { ...call, body: withoutFilter(call.body) } : call);
         if ("instanceAdmin" in call.principal) {
           instanceAdminStatuses.push(response.status);
         }
@@ -467,11 +484,21 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // A team is refused with 422 whichever workspace holds it, because no team can be invited into yet and none can be told from another, which
     // discloses nothing; the matrix expects 404 for an identifier of workspace B. The exception names exactly that answer, for the two sessions of A
     // that reach the handler (the member and the tokens are refused with 403 before it, as the matrix expects).
-    const teamRefusal = (failure: MatrixFailure): boolean => failure.subject.startsWith("createInvitation ") && failure.kind === "unexpected_status" && /answered 422, expected 404/.test(failure.detail);
-    const report = { ...matrix, failures: matrix.failures.filter((failure) => !teamRefusal(failure)) };
+    const refusedAs422 = (failure: MatrixFailure): boolean => failure.kind === "unexpected_status" && /answered 422, expected 404/.test(failure.detail);
+    const teamRefusal = (failure: MatrixFailure): boolean => failure.subject.startsWith("createInvitation ") && refusedAs422(failure);
+    // The boolean filter `hasSlug` of the bookmark list is picked as an input that can carry an identifier by its name. The identifier of workspace B that
+    // the matrix puts in it is refused as a malformed query, 422, before any bookmark is looked at, for every principal that reaches the operation.
+    // The select-all has the same `hasSlug` filter, and the bulk request skips an identifier of B as not found with a 200 (nothing is written and B's content is as it was).
+    const filterRefusal = (failure: MatrixFailure): boolean => (failure.subject.startsWith("listBookmarks ") || failure.subject.startsWith("listBookmarkIds ")) && refusedAs422(failure);
+    const skippedAs200 = (failure: MatrixFailure): boolean => failure.subject.startsWith("bulkBookmarks ") && failure.kind === "unexpected_status" && /answered 200, expected 404/.test(failure.detail);
+    const report = { ...matrix, failures: matrix.failures.filter((failure) => !teamRefusal(failure) && !filterRefusal(failure) && !skippedAs200(failure)) };
     expect(matrix.failures.filter(teamRefusal).map((failure) => failure.detail.slice(0, "as owner of A".length))).toEqual(["as owner of A", "as admin of A"]);
+    // Each of the ten principals, the instance admin among them, naming the two bookmarks of B once in the `hasSlug` of the list and once in that of the select-all.
+    expect(matrix.failures.filter(filterRefusal)).toHaveLength(10 * 2 * 2);
     expect(report.failures).toEqual([]);
-    expect(report.classified.byKind["tenant-scoped"]).toBe(20);
+    expect(report.classified.byKind["tenant-scoped"]).toBe(24);
+    // The bulk request reaches its handler as the three sessions and the three read-write tokens of A, once for each pair of the two bookmarks of B and of the two inputs the matrix fills (the filter is dropped before it is sent).
+    expect(matrix.failures.filter(skippedAs200)).toHaveLength(6 * 2 * 2);
     // the three sessions and the six tokens (a read and a read-write one of each role) of A, once on each of the nine operations that name no member
     // (the entitlements, the invitation list and the creation of a bookmark among them) and on the invitation, which names the one team of B,
     // and on the operations that name members of B once for each of them: the role change, and the leaving, which names a recipient, once for each
@@ -479,10 +506,12 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // a member and a recipient, once for each pair; the resend, the link and the revocation of an invitation name the one invitation of B once each
     // The instance admin is a tenth principal making the same thirty calls, and each of them is answered 404 whatever the policy of the operation:
     // it holds no membership, so there is no workspace for a handler to act in or a role to be refused for.
-    // The bookmark read, change and deletion name each of the two bookmarks of B once each.
-    const calls = 10 + (3 + 3 + 3 + 3 * 3 + 3) + 3 * 2;
+    // The bookmark read, change, deletion and open name each of the two bookmarks of B once each, and so do the bookmark list and the select-all in their `hasSlug` input;
+    // the bulk request names each of the two in `ids` once for each of the two in `filter.hasSlug`.
+    const calls = 10 + (3 + 3 + 3 + 3 * 3 + 3) + 4 * 2 + 2 + 2 + 2 * 2;
     expect(report.attempts).toBe(10 * calls);
-    expect(instanceAdminStatuses).toEqual(Array<number>(calls).fill(404));
+    // The four exceptions are the identifiers of B in the `hasSlug` filter of the bookmark list and of the select-all, which the query validation refuses before the instance admin's missing membership is looked at.
+    expect(instanceAdminStatuses.toSorted()).toEqual([...Array<number>(calls - 4).fill(404), 422, 422, 422, 422]);
     expect(await contentOfB()).toBe(before);
     // Every invitation the matrix tried to make was refused before anything was written, in A as in B, and the one invitation of B is still its own,
     // pending, with the token hash the seed gave it.

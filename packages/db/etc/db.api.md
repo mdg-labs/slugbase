@@ -7,6 +7,9 @@
 import type { AccountDeletionScope } from '@slugbase/core';
 import type { AuditRecord } from '@slugbase/core';
 import { BookmarkArchiveTransaction } from '@slugbase/core';
+import { BookmarkListFilter } from '@slugbase/core';
+import { BookmarkListRequest } from '@slugbase/core';
+import { BookmarkListRow } from '@slugbase/core';
 import { BookmarkRecord } from '@slugbase/core';
 import { BookmarkUpdateRequest } from '@slugbase/core';
 import { BookmarkUpdateResult } from '@slugbase/core';
@@ -305,16 +308,27 @@ export type BookmarkCreationResult = {
 
 // @public (undocumented)
 export interface BookmarkRepository {
+    count(filter: BookmarkListFilter, limit: number): Promise<number>;
     create(creation: BookmarkCreation): Promise<BookmarkCreationResult>;
     find(bookmarkId: string): Promise<BookmarkRecord | undefined>;
+    ids(filter: BookmarkListFilter, limit: number): Promise<readonly string[]>;
+    list(request: BookmarkListRequest): Promise<readonly BookmarkListRow[]>;
     remove(request: {
         readonly bookmarkId: string;
         readonly ownerId: string;
     }): Promise<boolean>;
+    removeMany(request: {
+        readonly bookmarkIds: readonly string[];
+    }): Promise<number | undefined>;
     setArchived(request: {
         readonly bookmarkIds: readonly string[];
         readonly archived: boolean;
     }): Promise<number | undefined>;
+    setPinned(request: {
+        readonly bookmarkIds: readonly string[];
+        readonly ownerId: string;
+        readonly pinned: boolean;
+    }): Promise<number>;
     update(request: BookmarkUpdateRequest): Promise<BookmarkUpdateResult>;
 }
 
@@ -399,6 +413,9 @@ export function createRateLimitStore(options: RateLimitStoreOptions): RateLimitS
 
 // @public
 export function createRetentionStore(options: RetentionStoreOptions): RetentionStore;
+
+// @public
+export function createUsageStore(options: UsageStoreOptions): UsageStore;
 
 // @public
 export function createWorkspaceDeletionStore(options: WorkspaceDeletionStoreOptions): WorkspaceDeletionStore & {
@@ -1054,6 +1071,15 @@ export interface Onboarding {
 }
 
 // @public
+export interface OpenCount {
+    // (undocumented)
+    readonly bookmarkId: string;
+    readonly count: number;
+    // (undocumented)
+    readonly lastOpenedAt: Date;
+}
+
+// @public
 export const OWNER_REQUIRED_CONSTRAINT = "workspace_members_owner_required";
 
 // @public
@@ -1362,6 +1388,21 @@ export interface UnusedBackupCode {
 export type UpdateValues<T extends WorkspaceTable> = Partial<Omit<InferInsertModel<T>, "workspaceId">> & {
     workspaceId?: string;
 };
+
+// @public
+export const USAGE_FLUSH_BATCH_SIZE = 10000;
+
+// @public (undocumented)
+export interface UsageStore {
+    close(): Promise<void>;
+    flush(opens: readonly OpenCount[]): Promise<void>;
+}
+
+// @public (undocumented)
+export interface UsageStoreOptions {
+    poolSize?: number;
+    url: string;
+}
 
 // @public (undocumented)
 export type VerificationResend = AddressJobs;

@@ -36,7 +36,7 @@ const bearer: Authenticator = {
   authenticate: (authorization) => {
     const [, scope, accountId, workspaceId] = /^Bearer token:(read|read-write):([^:]+):([^:]+)$/.exec(authorization) ?? [];
     return Promise.resolve(
-      (scope !== "read" && scope !== "read-write") || accountId === undefined || workspaceId === undefined ? undefined : { kind: "api-token", accountId, workspaceId, scope },
+      (scope !== "read" && scope !== "read-write") || accountId === undefined || workspaceId === undefined ? undefined : { kind: "api-token", tokenId: "stub-token", accountId, workspaceId, scope },
     );
   },
 };
