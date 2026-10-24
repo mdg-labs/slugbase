@@ -42,7 +42,7 @@ export const Default = (): React.ReactElement => {
       </Button>
       <ShortcutSheet
         closeLabel="Close the shortcut list"
-        description="Single-key shortcuts work anywhere except in a text field."
+        description="Single-key shortcuts work anywhere except in a text field or inside an open dialog, menu or list box."
         groups={GROUPS}
         onOpenChange={setOpen}
         open={open}

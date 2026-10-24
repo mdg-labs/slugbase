@@ -462,6 +462,8 @@ describe("the shortcuts of the app", () => {
     expect(keys).toEqual(expect.arrayContaining(["C", "G", "H", "B", "?", "J", "K", "↑", "↓", "Ctrl", "⌘", "Enter", "E", "P", "X", "⇧", "A", "V", "Esc"]));
     expect(within(dialog).getByText("New bookmark")).toBeDefined();
     expect(within(dialog).getByText("Go to Home")).toBeDefined();
+    expect(within(dialog).getByText("Single-key shortcuts work anywhere except in a text field or inside an open dialog, menu or list box.")).toBeDefined();
+    expect(within(dialog).getByText("Close the overlay that has focus, then clear the selection, then clear the filters")).toBeDefined();
     await press(within(dialog).getByRole("button", { name: "Close the shortcut list" }));
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
@@ -476,6 +478,8 @@ describe("the shortcuts of the app", () => {
 
     const dialog = await screen.findByRole("dialog", { name: "Tastenkürzel" });
     expect(within(dialog).getByText("Neues Lesezeichen")).toBeDefined();
+    expect(within(dialog).getByText("Einzeltasten-Kürzel funktionieren überall außer in Textfeldern und in geöffneten Dialogen, Menüs oder Listenfeldern.")).toBeDefined();
+    expect(within(dialog).getByText("Das Overlay mit dem Fokus schließen, dann die Auswahl aufheben, dann die Filter zurücksetzen")).toBeDefined();
     const keys = Array.from(dialog.querySelectorAll("kbd[data-slot='kbd']")).map((element) => element.textContent);
     expect(keys).toEqual(expect.arrayContaining(["Strg", "Eingabe", "Esc"]));
     expect(keys).not.toContain("Ctrl");

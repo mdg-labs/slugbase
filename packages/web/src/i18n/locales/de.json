@@ -1984,7 +1984,7 @@
   },
   "shortcuts": {
     "title": "Tastenkürzel",
-    "description": "Einzeltasten-Kürzel funktionieren überall außer in Textfeldern.",
+    "description": "Einzeltasten-Kürzel funktionieren überall außer in Textfeldern und in geöffneten Dialogen, Menüs oder Listenfeldern.",
     "close": "Liste der Tastenkürzel schließen",
     "then": "dann",
     "key": {
@@ -2009,7 +2009,7 @@
       "select": "Das fokussierte Lesezeichen auswählen oder abwählen",
       "selectAll": "Alle geladenen Lesezeichen auswählen",
       "toggleView": "Zwischen Raster und Tabelle wechseln",
-      "escape": "Auswahl aufheben, ein Overlay schließen, Filter zurücksetzen"
+      "escape": "Das Overlay mit dem Fokus schließen, dann die Auswahl aufheben, dann die Filter zurücksetzen"
     }
   }
 }

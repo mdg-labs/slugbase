@@ -1984,7 +1984,7 @@
   },
   "shortcuts": {
     "title": "Keyboard shortcuts",
-    "description": "Single-key shortcuts work anywhere except in a text field.",
+    "description": "Single-key shortcuts work anywhere except in a text field or inside an open dialog, menu or list box.",
     "close": "Close the shortcut list",
     "then": "then",
     "key": {
@@ -2009,7 +2009,7 @@
       "select": "Select or deselect the focused bookmark",
       "selectAll": "Select every loaded bookmark",
       "toggleView": "Switch between grid and table",
-      "escape": "Clear the selection, close an overlay, clear the filters"
+      "escape": "Close the overlay that has focus, then clear the selection, then clear the filters"
     }
   }
 }
