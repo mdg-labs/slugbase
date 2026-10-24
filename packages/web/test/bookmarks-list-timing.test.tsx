@@ -103,7 +103,7 @@ async function press(element: HTMLElement): Promise<void> {
 
 async function card(): Promise<HTMLElement> {
   const link = await screen.findByRole("link", { name: "Example docs" });
-  return link.closest("li") as HTMLElement;
+  return link.closest("[data-item-id]") as HTMLElement;
 }
 
 async function chooseAction(action: string): Promise<void> {

@@ -118,6 +118,34 @@ describe("useShortcut", () => {
     expect(onPress).toHaveBeenCalledOnce();
   });
 
+  it("skips a single key pressed inside a dialog, a menu or a list box, and runs a modifier shortcut there", () => {
+    const single = vi.fn();
+    const modified = vi.fn();
+    render(
+      <ShortcutsProvider singleKey>
+        <Probe binding={{ key: "c" }} onPress={single} />
+        <Probe binding={{ key: "k", mod: true }} onPress={modified} />
+        <div role="dialog">
+          <button type="button">In the dialog</button>
+        </div>
+        <div role="menu">
+          <button type="button">In the menu</button>
+        </div>
+        <div role="listbox">
+          <button type="button">In the list box</button>
+        </div>
+      </ShortcutsProvider>,
+    );
+
+    for (const name of ["In the dialog", "In the menu", "In the list box"]) {
+      fireEvent.keyDown(screen.getByRole("button", { name }), { key: "c" });
+      fireEvent.keyDown(screen.getByRole("button", { name }), { key: "k", ctrlKey: true });
+    }
+
+    expect(single).not.toHaveBeenCalled();
+    expect(modified).toHaveBeenCalledTimes(3);
+  });
+
   it("stops listening when its component unmounts", () => {
     const onPress = vi.fn();
     const { unmount } = render(<Probe binding={{ key: "c" }} onPress={onPress} />);

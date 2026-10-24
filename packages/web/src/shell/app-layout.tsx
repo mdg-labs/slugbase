@@ -19,6 +19,7 @@ import { NewBookmarkButton } from "../bookmarks/new-bookmark-button.tsx";
 import { useSignOut } from "../auth/sign-out.ts";
 import { useConfig } from "../config/config-context.tsx";
 import { Slot, useExtensions } from "../extensions/index.ts";
+import { AppShortcuts } from "../shortcuts/app-shortcuts.tsx";
 import { docsUrl } from "./docs-url.ts";
 import { EmailUnverifiedBanner, MailNotConfiguredBanner } from "./banners.tsx";
 import { OfflineBanner } from "./offline-banner.tsx";
@@ -147,6 +148,7 @@ function AppLayoutShell(): ReactElement {
     >
       {dialog}
       <BookmarkModal />
+      <AppShortcuts />
       <OfflineBanner />
       <EmailUnverifiedBanner />
       <MailNotConfiguredBanner />

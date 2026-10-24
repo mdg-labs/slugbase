@@ -32,6 +32,12 @@ function typesText(target: EventTarget | null): boolean {
   return target.isContentEditable || target.closest("input, textarea, select, [contenteditable='true'], [role='textbox']") !== null;
 }
 
+const OVERLAYS = "[role='dialog'], [role='alertdialog'], [role='menu'], [role='listbox']";
+
+function inOverlay(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(OVERLAYS) !== null;
+}
+
 function matches(event: KeyboardEvent, { key, mod = false }: ShortcutBinding): boolean {
   const same = event.key === key || event.key.toLowerCase() === key.toLowerCase();
   if (mod) {
@@ -42,7 +48,8 @@ function matches(event: KeyboardEvent, { key, mod = false }: ShortcutBinding): b
 
 /**
  * Runs `handler` when the shortcut is pressed. A single-key shortcut is skipped while single-key shortcuts
- * are off and while focus is in a field that takes text; a modifier shortcut runs either way.
+ * are off, while focus is in a field that takes text and while focus is inside a dialog, menu or list box, whose
+ * keys belong to it; a modifier shortcut runs either way.
  */
 export function useShortcut(binding: ShortcutBinding, handler: (event: KeyboardEvent) => void): void {
   const singleKey = useContext(ShortcutsContext);
@@ -55,7 +62,7 @@ export function useShortcut(binding: ShortcutBinding, handler: (event: KeyboardE
       if (event.defaultPrevented || event.repeat || !matches(event, { key, mod })) {
         return;
       }
-      if (!mod && (!singleKey || typesText(event.target))) {
+      if (!mod && (!singleKey || typesText(event.target) || inOverlay(event.target))) {
         return;
       }
       latest.current(event);

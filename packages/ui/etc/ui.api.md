@@ -154,6 +154,12 @@ export type InputProps = Omit<InputPrimitive.Props & React_2.RefAttributes<HTMLI
 };
 
 // @public (undocumented)
+export function Kbd(input: React_2.ComponentProps<"kbd">): React_2.ReactElement;
+
+// @public (undocumented)
+export function KbdGroup(input: React_2.ComponentProps<"kbd">): React_2.ReactElement;
+
+// @public (undocumented)
 export type MediaQueryInput = {
     min?: Breakpoint | number;
     max?: Breakpoint | number;

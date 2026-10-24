@@ -65,22 +65,19 @@ export function useBookmarkSelection(scope: string): BookmarkSelection {
   };
 }
 
-const OVERLAYS = "[role='dialog'], [role='alertdialog'], [role='menu'], [role='listbox']";
-
-/** The identifier of the list item that holds focus, if one does. */
-function focusedItemId(): string | undefined {
+/** The list item that holds focus, if one does: the item itself or anything inside it. */
+export function focusedItem(): HTMLElement | null {
   const item = document.activeElement?.closest("[data-item-id]");
-  return item instanceof HTMLElement ? item.dataset.itemId : undefined;
+  return item instanceof HTMLElement ? item : null;
 }
 
 /**
- * The selection shortcuts of doc 03 section 14, which are single-key shortcuts: `X` toggles the item that holds focus,
- * Shift `A` selects every bookmark loaded, and Escape clears the selection. Escape pressed inside an overlay belongs to
- * the overlay, so the selection is kept.
+ * The selection shortcuts of doc 03 section 14, which are single-key shortcuts: `X` toggles the item that holds focus and
+ * Shift `A` selects every bookmark loaded. Escape, which clears the selection first, is `useListShortcuts`'.
  */
 export function useSelectionShortcuts(selection: BookmarkSelection, loaded: readonly string[]): void {
   useShortcut({ key: "x" }, () => {
-    const id = focusedItemId();
+    const id = focusedItem()?.dataset.itemId;
     if (id !== undefined) {
       selection.toggle(id);
     }
@@ -88,12 +85,5 @@ export function useSelectionShortcuts(selection: BookmarkSelection, loaded: read
   useShortcut({ key: "A" }, (event) => {
     event.preventDefault();
     selection.add(loaded);
-  });
-  useShortcut({ key: "Escape" }, (event) => {
-    if (selection.ids.size === 0 || (event.target instanceof Element && event.target.closest(OVERLAYS) !== null)) {
-      return;
-    }
-    event.preventDefault();
-    selection.clear();
   });
 }

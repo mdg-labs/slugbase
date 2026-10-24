@@ -32,6 +32,7 @@ export { SelectField, type SelectFieldProps, type SelectOption } from "./select-
 export { SettingSwitch, type SettingSwitchProps } from "./setting-switch.tsx";
 export { SettingsNav, type SettingsNavGroup, type SettingsNavItem, type SettingsNavProps } from "./settings-nav.tsx";
 export { SettingsSection, type SettingsSectionProps } from "./settings-section.tsx";
+export { ShortcutSheet, type ShortcutSheetGroup, type ShortcutSheetItem, type ShortcutSheetProps } from "./shortcut-sheet.tsx";
 export { ShownOnce, type ShownOnceProps } from "./shown-once.tsx";
 export { StatusBadge, type StatusBadgeProps, type StatusBadgeVariant } from "./status-badge.tsx";
 export { TextareaField, type TextareaFieldProps } from "./textarea-field.tsx";

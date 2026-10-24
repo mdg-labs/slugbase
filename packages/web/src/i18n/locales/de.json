@@ -1981,5 +1981,35 @@
         "unavailable": "Das Konto kann gerade nicht erstellt werden. Versuche es gleich noch einmal."
       }
     }
+  },
+  "shortcuts": {
+    "title": "Tastenkürzel",
+    "description": "Einzeltasten-Kürzel funktionieren überall außer in Textfeldern.",
+    "close": "Liste der Tastenkürzel schließen",
+    "then": "dann",
+    "key": {
+      "enter": "Eingabe",
+      "ctrl": "Strg",
+      "esc": "Esc"
+    },
+    "group": {
+      "app": "Überall in der App",
+      "list": "In der Lesezeichenliste"
+    },
+    "item": {
+      "newBookmark": "Neues Lesezeichen",
+      "goHome": "Zu Start gehen",
+      "goBookmarks": "Zu Lesezeichen gehen",
+      "help": "Diese Liste anzeigen",
+      "move": "Fokus zum nächsten oder vorherigen Lesezeichen bewegen",
+      "open": "Das fokussierte Lesezeichen öffnen",
+      "openNewTab": "Das fokussierte Lesezeichen in einem neuen Tab öffnen",
+      "edit": "Das fokussierte Lesezeichen bearbeiten",
+      "pin": "Das fokussierte Lesezeichen anheften oder die Anheftung lösen",
+      "select": "Das fokussierte Lesezeichen auswählen oder abwählen",
+      "selectAll": "Alle geladenen Lesezeichen auswählen",
+      "toggleView": "Zwischen Raster und Tabelle wechseln",
+      "escape": "Auswahl aufheben, ein Overlay schließen, Filter zurücksetzen"
+    }
   }
 }

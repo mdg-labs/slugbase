@@ -119,7 +119,7 @@ describe("CardGrid", () => {
     const checkbox = screen.getByRole("checkbox", { name: "Select Example" });
     expect(checkbox.getAttribute("aria-checked")).toBe("true");
     expect(checkbox.className).toContain("opacity-100");
-    expect(container.querySelector("li")?.getAttribute("data-item-id")).toBe("b1");
+    expect(container.querySelector("[role='listitem']")?.getAttribute("data-item-id")).toBe("b1");
     expect(container.querySelector("[data-selected='true']")).not.toBeNull();
     fireEvent.click(checkbox);
     expect(onSelectedChange).toHaveBeenCalledWith(false);
@@ -129,5 +129,38 @@ describe("CardGrid", () => {
     renderCard({ selected: false, selectionActive: false });
 
     expect(screen.getByRole("checkbox", { name: "Select Example" }).className).toContain("opacity-0");
+  });
+
+  it("is a list while nothing is selected and an ARIA grid of rows and cells while a selection is active", async () => {
+    const card = (selectionActive: boolean) => (
+      <CardGrid label="Bookmarks" selectionActive={selectionActive}>
+        <CardGridItem actions={actionsOf(() => undefined)} actionsLabel="Actions for Example" href="https://example.com/docs" monogram="e" selectLabel="Select Example" title="Example docs" />
+      </CardGrid>
+    );
+    const { container, rerender } = render(card(false));
+    expect(screen.queryByRole("grid")).toBeNull();
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    await expectNoViolations(container);
+
+    rerender(card(true));
+
+    const grid = screen.getByRole("grid", { name: "Bookmarks" });
+    expect(screen.queryByRole("list")).toBeNull();
+    expect(within(grid).getAllByRole("row")).toHaveLength(1);
+    expect(within(grid).getAllByRole("gridcell")).toHaveLength(1);
+    await expectNoViolations(container);
+  });
+
+  it("takes one card as the stop on the Tab key and leaves the others to the arrow keys", () => {
+    render(
+      <CardGrid label="Bookmarks">
+        <CardGridItem actions={actionsOf(() => undefined)} actionsLabel="Actions for One" itemId="one" monogram="o" selectLabel="Select One" tabStop title="One" />
+        <CardGridItem actions={actionsOf(() => undefined)} actionsLabel="Actions for Two" itemId="two" monogram="t" selectLabel="Select Two" tabStop={false} title="Two" />
+        <CardGridItem actions={actionsOf(() => undefined)} actionsLabel="Actions for Three" itemId="three" monogram="t" selectLabel="Select Three" title="Three" />
+      </CardGrid>,
+    );
+
+    const items = screen.getAllByRole("listitem");
+    expect(items.map((item) => item.getAttribute("tabindex"))).toEqual(["0", "-1", null]);
   });
 });

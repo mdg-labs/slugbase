@@ -14,6 +14,7 @@ import { bookmarkFailureOf, bookmarkListQuery, type Bookmark } from "./bookmarks
 import { BookmarksToolbar } from "./bookmarks-toolbar.tsx";
 import { BOOKMARK_PAGE_SIZES, DEFAULT_SORT, filterParamsOf, hasActiveFilters, listParamsOf, pageSizeOfSearch, useBookmarkListControls, useBookmarkListSearch, type BookmarkView } from "./list-search.ts";
 import { useBookmarkModal } from "./modal-search.ts";
+import { useListShortcuts } from "./use-list-shortcuts.ts";
 import { usePasteToCreate } from "./use-paste-to-create.ts";
 
 const SKELETON_CARDS = ["a", "b", "c", "d", "e", "f"] as const;
@@ -86,6 +87,7 @@ export function BookmarksPage(): ReactElement {
     items.map((bookmark) => bookmark.id),
   );
   const filtered = hasActiveFilters(search);
+  const navigation = useListShortcuts({ items, view: search.view, selection, filtered, controls, modal, pin: pin.pin, pendingPins });
   const newBookmark = (
     <Button
       onClick={() => {
@@ -171,37 +173,42 @@ export function BookmarksPage(): ReactElement {
             variant="error"
           />
         ) : null}
-        {search.view === "table" ? (
-          <BookmarksTable
-            bookmarks={items}
-            onDelete={startDelete}
-            onEdit={editBookmark}
-            onPin={pin.pin}
-            onSelectedChange={selectBookmark}
-            onSort={(sort) => {
-              controls.update({ sort: sort === DEFAULT_SORT ? undefined : sort });
-            }}
-            pendingPins={pendingPins}
-            selected={selection.ids}
-            sort={search.sort}
-          />
-        ) : (
-          <CardGrid label={t("bookmarks.list.label")}>
-            {items.map((bookmark) => (
-              <BookmarkCard
-                bookmark={bookmark}
-                key={bookmark.id}
-                onDelete={startDelete}
-                onEdit={editBookmark}
-                onPin={pin.pin}
-                onSelectedChange={selectBookmark}
-                pinPending={pendingPins.has(bookmark.id)}
-                selected={selection.has(bookmark.id)}
-                selectionActive={selection.ids.size > 0}
-              />
-            ))}
-          </CardGrid>
-        )}
+        <div onFocus={navigation.onFocus} ref={navigation.ref}>
+          {search.view === "table" ? (
+            <BookmarksTable
+              bookmarks={items}
+              onDelete={startDelete}
+              onEdit={editBookmark}
+              onPin={pin.pin}
+              onSelectedChange={selectBookmark}
+              onSort={(sort) => {
+                controls.update({ sort: sort === DEFAULT_SORT ? undefined : sort });
+              }}
+              pendingPins={pendingPins}
+              selected={selection.ids}
+              selectionActive={selection.ids.size > 0}
+              sort={search.sort}
+              tabStopId={navigation.tabStopId}
+            />
+          ) : (
+            <CardGrid label={t("bookmarks.list.label")} selectionActive={selection.ids.size > 0}>
+              {items.map((bookmark) => (
+                <BookmarkCard
+                  bookmark={bookmark}
+                  key={bookmark.id}
+                  onDelete={startDelete}
+                  onEdit={editBookmark}
+                  onPin={pin.pin}
+                  onSelectedChange={selectBookmark}
+                  pinPending={pendingPins.has(bookmark.id)}
+                  selected={selection.has(bookmark.id)}
+                  selectionActive={selection.ids.size > 0}
+                  tabStop={bookmark.id === navigation.tabStopId}
+                />
+              ))}
+            </CardGrid>
+          )}
+        </div>
         <LoadMore
           count={
             lastPage?.totalAtLeast !== undefined && total === null
