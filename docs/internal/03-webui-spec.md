@@ -497,7 +497,7 @@ Global (unless focus is in a text field). Single-key shortcuts can be disabled i
 | `P` | Pin/unpin focused bookmark |
 | `X` | Toggle selection of focused item |
 | `⇧ A` | Select all on page |
-| `Esc` | Clear selection / close overlay / clear filters (in that order) |
+| `Esc` | Close the overlay that holds focus / clear selection / clear filters (in that order, one step per press) |
 | `?` | Shortcut sheet |
 
 The shortcut sheet is a Dialog listing these with Kbd, in the current language.
