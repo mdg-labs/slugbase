@@ -1,4 +1,4 @@
-import { Button } from "@slugbase/ui";
+import { Button, ToggleGroup, ToggleGroupItem } from "@slugbase/ui";
 import { FilterXIcon, LayoutGridIcon, SegmentedChoice, SelectField, TableIcon } from "@slugbase/ui/patterns";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
@@ -61,11 +61,19 @@ export function BookmarksToolbar({ search, controls }: BookmarksToolbarProps): R
   function changeScope(value: string): void {
     controls.update({ scope: value === MINE_SCOPE ? MINE_SCOPE : undefined });
   }
-  const toggles = [
-    { key: "pinned", label: t("bookmarks.list.filter.pinned"), on: search.pinned === true, toggle: (on: boolean) => { controls.update({ pinned: on ? undefined : true }); } },
-    { key: "hasSlug", label: t("bookmarks.list.filter.hasSlug"), on: search.hasSlug === true, toggle: (on: boolean) => { controls.update({ hasSlug: on ? undefined : true }); } },
-    { key: "forwarding", label: t("bookmarks.list.filter.forwarding"), on: search.forwarding === true, toggle: (on: boolean) => { controls.update({ forwarding: on ? undefined : true }); } },
-  ];
+  const filters = [
+    { key: "pinned", label: t("bookmarks.list.filter.pinned") },
+    { key: "hasSlug", label: t("bookmarks.list.filter.hasSlug") },
+    { key: "forwarding", label: t("bookmarks.list.filter.forwarding") },
+  ] as const;
+  const activeFilters = filters.filter(({ key }) => search[key] === true).map(({ key }) => key);
+  function changeFilters(active: readonly string[]): void {
+    controls.update({
+      pinned: active.includes("pinned") ? true : undefined,
+      hasSlug: active.includes("hasSlug") ? true : undefined,
+      forwarding: active.includes("forwarding") ? true : undefined,
+    });
+  }
   return (
     <section aria-label={t("bookmarks.list.toolbar")} className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
       <SegmentedChoice label={t("bookmarks.list.view.label")} onValueChange={changeView} options={viewOptions} value={search.view} />
@@ -79,21 +87,13 @@ export function BookmarksToolbar({ search, controls }: BookmarksToolbarProps): R
         <span className="font-medium text-base/4.5 text-foreground sm:text-sm/4" id="bookmark-filters-label">
           {t("bookmarks.list.filter.label")}
         </span>
-        <div aria-labelledby="bookmark-filters-label" className="flex flex-wrap gap-2" role="group">
-          {toggles.map(({ key, label, on, toggle }) => (
-            <Button
-              aria-pressed={on}
-              key={key}
-              onClick={() => {
-                toggle(on);
-              }}
-              size="sm"
-              variant={on ? "secondary" : "outline"}
-            >
+        <ToggleGroup aria-labelledby="bookmark-filters-label" multiple onValueChange={changeFilters} size="sm" value={activeFilters} variant="outline">
+          {filters.map(({ key, label }) => (
+            <ToggleGroupItem key={key} value={key}>
               {label}
-            </Button>
+            </ToggleGroupItem>
           ))}
-        </div>
+        </ToggleGroup>
       </div>
       <SelectField
         className="sm:w-48"
