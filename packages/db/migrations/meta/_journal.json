@@ -568,6 +568,13 @@
       "when": 1792863493875,
       "tag": "20261024173813_add_folders",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1792865637516,
+      "tag": "20261024181357_add_folder_departure",
+      "breakpoints": true
     }
   ]
 }
