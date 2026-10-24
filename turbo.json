@@ -1,6 +1,7 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "agentGuidance": false,
+  "globalPassThroughEnv": ["VITEST_MAX_WORKERS"],
   "globalDependencies": ["eslint.config.js", "scripts/i18n-eslint.mjs", "tooling/boundaries/**", "tooling/vocabulary/**", "vitest.shared.ts", "tsconfig.base.json"],
   "tasks": {
     "lint": {

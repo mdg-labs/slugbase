@@ -69,7 +69,13 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           turbo-cache-key: unit
-      - run: pnpm test:unit
+      # The runner has 4 CPUs. Turbo runs up to 10 package tasks at once and each
+      # vitest starts up to CPUs - 1 workers (3 here), so uncapped the job could
+      # hold about 30 busy workers. Two package tasks of two workers each keep it at 4.
+      # turbo.json passes VITEST_MAX_WORKERS through to the tasks.
+      - run: pnpm test:unit --concurrency=2
+        env:
+          VITEST_MAX_WORKERS: 2
 
   # The breaking-change check compares /api/v1 with the document at the latest
   # release tag reachable from main (doc 04 §1.1), so the checkout fetches the
