@@ -25,12 +25,21 @@ export interface RepositorySample {
 export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
 
 /**
- * The inputs of the committed contract that carry the identifier of a bookmark: the path parameter `id` of `getBookmark`, `updateBookmark`,
- * `deleteBookmark` and `openBookmark`, the query parameter `hasSlug` of `listBookmarks` and `listBookmarkIds` and the body inputs `ids[]` and
- * `filter.hasSlug` of `bulkBookmarks`. `hasSlug` is a flag, not an identifier, but the classifier selects every name ending in `Slug`, so it is
- * mapped like the others. The other tenant-scoped operations that take an identifier (a member, a team, an invitation) are mapped by the
- * suites that hold a fixture with those rows. A test over the committed `openapi.json` fails when a bookmark operation has an input without an
- * entry here.
+ * The default mapping of the cross-tenant matrix: it covers every identifier-carrying input of every tenant-scoped operation of the committed
+ * contract, so a run of `runApiMatrix` over `openapi.json` with no `mapping` option reports no "no mapping" for one.
+ *
+ * - Bookmark identifier: the path parameter `id` of `getBookmark`, `updateBookmark`, `deleteBookmark` and `openBookmark`, the query parameter
+ *   `hasSlug` of `listBookmarks` and `listBookmarkIds` and the body inputs `ids[]` and `filter.hasSlug` of `bulkBookmarks`. `hasSlug` is a flag, not
+ *   an identifier, but the classifier selects every name ending in `Slug`, so it is mapped like the others.
+ * - Member identifier (an account): `accountId` of `removeMember`, `updateMember` and `transferWorkspaceOwnership`, and `transferTo` of
+ *   `removeMember` and `leaveWorkspace`.
+ * - Team identifier: `teamIds[]` of `createInvitation`.
+ * - Invitation identifier: the path parameter `id` of `revokeInvitation`, `createInvitationLink` and `resendInvitation`.
+ *
+ * Entries are keyed by operation, because the name `id` takes a bookmark in one operation and an invitation in another. The fixture the matrix
+ * runs against must hold identifiers of workspace B of every kind it is mapped to: the default fixture of `createProbe` holds `member` and
+ * `bookmark` rows, so a caller that runs these operations adds `team` and `invitation` identifiers to workspace B, or the matrix reports
+ * `no_target`. A test over the committed `openapi.json` fails when a tenant-scoped operation has an input without an entry here.
  */
 export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
   "getBookmark.id": "bookmark",
@@ -41,6 +50,15 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
   "listBookmarkIds.hasSlug": "bookmark",
   "bulkBookmarks.ids[]": "bookmark",
   "bulkBookmarks.filter.hasSlug": "bookmark",
+  "createInvitation.teamIds[]": "team",
+  "revokeInvitation.id": "invitation",
+  "createInvitationLink.id": "invitation",
+  "resendInvitation.id": "invitation",
+  "removeMember.accountId": "member",
+  "removeMember.transferTo": "member",
+  "updateMember.accountId": "member",
+  "leaveWorkspace.transferTo": "member",
+  "transferWorkspaceOwnership.accountId": "member",
 };
 
 /**
