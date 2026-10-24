@@ -11,7 +11,7 @@ import { expect, test } from "../support/test.ts";
 // against its version (If-Match), pins it, makes and handles a third from the keyboard alone, and then selects every
 // pinned bookmark with "select all matching" and deletes them in bulk. Each page and overlay it reaches is scanned
 // for WCAG 2.2 AA violations (tests/axe.spec.ts, support/axe.ts). The journey runs on a desktop screen in each engine and on a 390 px wide
-// phone in Chromium (Q39); on the phone the page has no horizontal scroll, and on both the dialogs fit the screen. Every text is read from the catalogs of packages/web.
+// phone in Chromium (Q39); on both the page has no horizontal scroll and the dialogs fit the screen, and on the desktop screen the list keeps its gutter in both views at 1280 and 1440 px. Every text is read from the catalogs of packages/web.
 //
 // The journey acts on the pinned bookmarks of the one workspace of the stack, so it takes the lock of the account's
 // preferences for as long as it runs (the `account` fixture), which keeps the other journeys, the other engines and
@@ -75,6 +75,20 @@ async function expectNoSidewaysScroll(page: Page): Promise<void> {
   expect(overflow, `the page is wider than the screen by this many pixels; elements beyond its edge: ${wide.join("; ")}`).toBeLessThanOrEqual(0);
 }
 
+/** The list keeps a gutter between its content and both edges of the main area. */
+async function expectGutter(page: Page): Promise<void> {
+  const main = await page.locator("main").boundingBox();
+  const heading = await listHeading(page).boundingBox();
+  const last = await page.locator("[data-slot='load-more']").boundingBox();
+  expect(main, "the main area has a box").not.toBeNull();
+  expect(heading, "the heading has a box").not.toBeNull();
+  expect(last, "the load-more row has a box").not.toBeNull();
+  if (main !== null && heading !== null && last !== null) {
+    expect(heading.x - main.x, "the gutter before the heading").toBeGreaterThanOrEqual(16);
+    expect(main.x + main.width - (last.x + last.width), "the gutter after the load-more row").toBeGreaterThanOrEqual(16);
+  }
+}
+
 /** A dialog lies within the screen, on a phone as on a desktop. */
 async function expectWithinScreen(page: Page, dialog: Locator): Promise<void> {
   const box = await dialog.boundingBox();
@@ -129,11 +143,8 @@ for (const { name, viewport } of [
       test.skip(({ browserName }) => browserName !== "chromium", "the phone-size run is Chromium's");
     }
 
-    // The page's own width is checked on the phone (Q39).
     const fits = async (page: Page): Promise<void> => {
-      if (viewport !== undefined) {
-        await expectNoSidewaysScroll(page);
-      }
+      await expectNoSidewaysScroll(page);
     };
 
     test("stores hostile text and shows it as text, then creates, edits, pins and deletes bookmarks", async ({ page, app, account }) => {
@@ -191,6 +202,36 @@ for (const { name, viewport } of [
           await fits(page);
           expect(dialogs, "scripts that ran while the list loaded").toEqual([]);
         });
+
+        if (viewport === undefined) {
+          // The list, down to the load-more row, ends within the page and keeps its gutter in both views, at the width of
+          // the project's desktop screen and at a wider one.
+          await test.step("keeps the list within the page in both views at desktop widths", async () => {
+            const size = page.viewportSize();
+            expect(size, "the page has a viewport").not.toBeNull();
+            const loadMore = page.locator("[data-slot='load-more']");
+            const fitsAtDesktopWidths = async (): Promise<void> => {
+              await expect(loadMore).toBeVisible();
+              for (const width of [size?.width ?? 1280, 1440]) {
+                await page.setViewportSize({ width, height: size?.height ?? 720 });
+                await fits(page);
+                await expectGutter(page);
+              }
+              if (size !== null) {
+                await page.setViewportSize(size);
+              }
+            };
+            await fitsAtDesktopWidths();
+            // The view comes from the address: choosing it in the toolbar would also change the account's default view.
+            await app.visit("/bookmarks?view=table", listHeading(page));
+            await expect(page.locator("[data-slot='data-table']")).toBeVisible();
+            await fitsAtDesktopWidths();
+            // The next steps start from the plain address, whose view is the account's default.
+            await page.goto("/bookmarks");
+            await expect(listHeading(page)).toBeVisible();
+            await expect(page.locator("[data-slot='card-grid']")).toBeVisible();
+          });
+        }
 
         const createdTitle = `Journey ${token}`;
         const createdUrl = `https://example.com/journey-${token}`;

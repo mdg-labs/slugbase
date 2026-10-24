@@ -17,6 +17,9 @@ import { useBookmarkModal } from "./modal-search.ts";
 import { useListShortcuts } from "./use-list-shortcuts.ts";
 import { usePasteToCreate } from "./use-paste-to-create.ts";
 
+// The shell's main area has no padding of its own: each page keeps its content off the edges, as the settings and admin layouts do.
+const PAGE_FRAME = "flex w-full min-w-0 flex-col gap-4 p-4 md:p-6";
+
 const SKELETON_CARDS = ["a", "b", "c", "d", "e", "f"] as const;
 
 function CardsLoading({ view }: { readonly view: BookmarkView }): ReactElement {
@@ -102,7 +105,7 @@ export function BookmarksPage(): ReactElement {
   const heading = <h1 className="font-semibold text-2xl leading-none">{t("bookmarks.page.title")}</h1>;
   if (query.data !== undefined && items.length === 0 && !query.hasNextPage && !filtered) {
     return (
-      <>
+      <div className={PAGE_FRAME}>
         {heading}
         <EmptyState
           actions={newBookmark}
@@ -111,7 +114,7 @@ export function BookmarksPage(): ReactElement {
           icon={<InboxIcon aria-hidden="true" />}
           title={t("bookmarks.list.empty.title")}
         />
-      </>
+      </div>
     );
   }
 
@@ -235,7 +238,7 @@ export function BookmarksPage(): ReactElement {
   }
 
   return (
-    <>
+    <div className={PAGE_FRAME}>
       {heading}
       <BookmarksToolbar controls={controls} search={search} />
       {body}
@@ -273,6 +276,6 @@ export function BookmarksPage(): ReactElement {
         open={deleting !== undefined}
         title={t("bookmarks.list.delete.title")}
       />
-    </>
+    </div>
   );
 }

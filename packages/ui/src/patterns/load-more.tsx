@@ -37,7 +37,7 @@ export function LoadMore({ count, hasMore, loadMoreLabel, onLoadMore, loading = 
       </p>
       <div className="flex flex-wrap items-end justify-center gap-3">
         {pageSize === undefined ? null : (
-          <SelectField className="w-28" label={pageSize.label} onValueChange={pageSize.onValueChange} options={pageSize.options} value={pageSize.value} />
+          <SelectField className="w-36" label={pageSize.label} onValueChange={pageSize.onValueChange} options={pageSize.options} value={pageSize.value} />
         )}
         {hasMore ? (
           <Button loading={loading} onClick={onLoadMore} variant="outline">
