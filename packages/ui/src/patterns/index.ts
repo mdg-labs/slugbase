@@ -36,12 +36,14 @@ export { SettingsNav, type SettingsNavGroup, type SettingsNavItem, type Settings
 export { SettingsSection, type SettingsSectionProps } from "./settings-section.tsx";
 export { ShortcutSheet, type ShortcutSheetGroup, type ShortcutSheetItem, type ShortcutSheetProps } from "./shortcut-sheet.tsx";
 export { ShownOnce, type ShownOnceProps } from "./shown-once.tsx";
+export { SidePanel, type SidePanelProps } from "./side-panel.tsx";
 export { StatusBadge, type StatusBadgeProps, type StatusBadgeVariant } from "./status-badge.tsx";
 export { TextareaField, type TextareaFieldProps } from "./textarea-field.tsx";
 export { Totp, type TotpProps } from "./totp.tsx";
 export { TypedConfirm, matchesExpected, type TypedConfirmProps } from "./typed-confirm.tsx";
 export { UnsavedGuard, type UnsavedGuardProps } from "./unsaved-guard.tsx";
 export { UrlInput, type UrlInputProps } from "./url-input.tsx";
+export { UsageMeter, type UsageMeterProps } from "./usage-meter.tsx";
 export { Wizard, type WizardProps } from "./wizard.tsx";
 export type { WorkspaceSwitcherAction, WorkspaceSwitcherItem, WorkspaceSwitcherProps } from "./workspace-switcher.tsx";
 export type { Accent, ResolvedTheme } from "../theme/theme-provider.tsx";
@@ -67,6 +69,7 @@ export {
   SettingsIcon,
   ShieldCheckIcon,
   TableIcon,
+  TagIcon,
   Trash2Icon,
   TriangleAlertIcon,
   XIcon,

@@ -30,6 +30,7 @@ import { Ref } from 'react';
 import { SettingsIcon } from 'lucide-react';
 import { ShieldCheckIcon } from 'lucide-react';
 import { TableIcon } from 'lucide-react';
+import { TagIcon } from 'lucide-react';
 import { Trash2Icon } from 'lucide-react';
 import { TriangleAlertIcon } from 'lucide-react';
 import { XIcon } from 'lucide-react';
@@ -916,6 +917,23 @@ export interface ShownOnceProps {
 }
 
 // @public
+export function SidePanel(input: SidePanelProps): ReactElement;
+
+// @public (undocumented)
+export interface SidePanelProps {
+    children: ReactNode;
+    closeLabel: string;
+    // (undocumented)
+    description?: ReactNode;
+    // (undocumented)
+    onOpenChange: (open: boolean) => void;
+    // (undocumented)
+    open: boolean;
+    // (undocumented)
+    title: ReactNode;
+}
+
+// @public
 export function StatusBadge(input: StatusBadgeProps): ReactElement;
 
 // @public (undocumented)
@@ -931,6 +949,8 @@ export interface StatusBadgeProps {
 export type StatusBadgeVariant = "info" | "neutral" | "success" | "warning" | "error";
 
 export { TableIcon }
+
+export { TagIcon }
 
 // @public
 export function TextareaField(input: TextareaFieldProps): ReactElement;
@@ -1047,6 +1067,19 @@ export interface UrlInputProps {
     placeholder?: string;
     // (undocumented)
     value: string;
+}
+
+// @public
+export function UsageMeter(input: UsageMeterProps): ReactElement;
+
+// @public (undocumented)
+export interface UsageMeterProps {
+    // (undocumented)
+    className?: string;
+    label: string;
+    max: number;
+    value: number;
+    valueLabel: string;
 }
 
 // @public

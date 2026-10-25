@@ -10,6 +10,7 @@
     "home": "Start",
     "bookmarks": "Lesezeichen",
     "folders": "Ordner",
+    "tags": "Tags",
     "helpAndDocs": "Hilfe & Doku",
     "switchToDark": "Zum dunklen Design wechseln",
     "switchToLight": "Zum hellen Design wechseln",
@@ -484,6 +485,103 @@
       "package": "Paket",
       "wrench": "Schraubenschlüssel",
       "sparkles": "Funken"
+    }
+  },
+  "tags": {
+    "page": {
+      "title": "Tags"
+    },
+    "note": "Tags sind nur für dich sichtbar. Andere Mitglieder des Arbeitsbereichs sehen sie nie.",
+    "deleted": "Tag gelöscht.",
+    "sort": {
+      "label": "Sortieren nach",
+      "name": "Name",
+      "count": "Anzahl"
+    },
+    "search": {
+      "label": "Tags durchsuchen",
+      "placeholder": "Tags durchsuchen",
+      "clear": "Suche zurücksetzen",
+      "none": {
+        "title": "Kein Tag passt",
+        "description": "Keiner deiner Tags enthält „{query}“."
+      }
+    },
+    "list": {
+      "label": "Tags",
+      "loading": "Tags werden geladen",
+      "loadFailed": "Die Tags konnten nicht geladen werden. Versuche es gleich noch einmal.",
+      "retry": "Erneut versuchen",
+      "actionsFor": "Aktionen für {name}",
+      "bookmarkCount": "{count, plural, one {# Lesezeichen} other {# Lesezeichen}}",
+      "empty": {
+        "title": "Noch keine Tags",
+        "description": "Tags kennzeichnen Lesezeichen über Ordner hinweg, etwa nach Thema oder Projekt, und ein Lesezeichen kann mehrere tragen. Füge einen Tag hinzu, wenn du ein Lesezeichen speicherst oder bearbeitest, dann erscheint er hier mit den Lesezeichen, die ihn verwenden.",
+        "action": "Zu den Lesezeichen"
+      },
+      "table": {
+        "name": "Name",
+        "bookmarks": "Lesezeichen",
+        "actions": "Aktionen"
+      }
+    },
+    "actions": {
+      "open": "Alle in Lesezeichen anzeigen",
+      "rename": "Umbenennen",
+      "delete": "Löschen"
+    },
+    "preview": {
+      "label": "Neueste Lesezeichen mit dem Tag {name}",
+      "loading": "Lesezeichen werden geladen",
+      "loadFailed": "Die Lesezeichen dieses Tags konnten nicht geladen werden. Versuche es gleich noch einmal.",
+      "retry": "Erneut versuchen",
+      "empty": "Kein Lesezeichen trägt diesen Tag.",
+      "viewAll": "Alle in Lesezeichen anzeigen",
+      "close": "Vorschau schließen",
+      "missing": "Diesen Tag gibt es nicht. Er wurde vielleicht umbenannt, zusammengeführt oder gelöscht.",
+      "placeholder": {
+        "title": "Tag auswählen",
+        "description": "Wähle einen Tag, um seine neuesten Lesezeichen zu sehen."
+      },
+      "table": {
+        "title": "Lesezeichen",
+        "added": "Hinzugefügt"
+      }
+    },
+    "form": {
+      "close": "Umbenennen-Formular schließen",
+      "title": "Tag umbenennen",
+      "description": "Ein Tag ist nur für dich sichtbar.",
+      "name": {
+        "label": "Name",
+        "error": {
+          "required": "Gib dem Tag einen Namen.",
+          "taken": "Du hast bereits einen Tag mit diesem Namen.",
+          "invalid": "Verwende einen Namen mit 1 bis {max} Zeichen."
+        }
+      },
+      "cancel": "Abbrechen",
+      "submit": "Speichern",
+      "saved": "Tag umbenannt.",
+      "error": {
+        "notFound": "Diesen Tag gibt es nicht mehr."
+      }
+    },
+    "merge": {
+      "title": "In „{into}“ zusammenführen?",
+      "description": "{count, plural, =0 {Du hast bereits einen Tag namens „{into}“. „{from}“ liegt auf keinem Lesezeichen und wird gelöscht.} one {Du hast bereits einen Tag namens „{into}“. Das # Lesezeichen mit dem Tag „{from}“ erhält stattdessen „{into}“, und „{from}“ wird gelöscht. Das Lesezeichen bleibt erhalten.} other {Du hast bereits einen Tag namens „{into}“. Die # Lesezeichen mit dem Tag „{from}“ erhalten stattdessen „{into}“, und „{from}“ wird gelöscht. Die Lesezeichen bleiben erhalten.}}",
+      "confirm": "Tags zusammenführen",
+      "cancel": "Zurück zum Umbenennen",
+      "merged": "In „{name}“ zusammengeführt."
+    },
+    "delete": {
+      "title": "„{name}“ löschen?",
+      "description": "{count, plural, =0 {Kein Lesezeichen trägt diesen Tag; nur der Tag wird gelöscht.} one {Der Tag wird von seinem # Lesezeichen entfernt. Das Lesezeichen bleibt erhalten; nur der Tag wird gelöscht.} other {Der Tag wird von seinen # Lesezeichen entfernt. Die Lesezeichen bleiben erhalten; nur der Tag wird gelöscht.}}",
+      "confirm": "Tag löschen",
+      "cancel": "Abbrechen",
+      "error": {
+        "notFound": "Diesen Tag gibt es nicht mehr."
+      }
     }
   },
   "admin": {
@@ -2233,6 +2331,7 @@
       "goHome": "Zu Start gehen",
       "goBookmarks": "Zu Lesezeichen gehen",
       "goFolders": "Zu Ordnern gehen",
+      "goTags": "Zu Tags gehen",
       "newFolder": "Neuer Ordner (auf der Seite Ordner)",
       "help": "Diese Liste anzeigen",
       "move": "Fokus zum nächsten oder vorherigen Lesezeichen bewegen",

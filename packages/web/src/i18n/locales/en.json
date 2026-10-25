@@ -10,6 +10,7 @@
     "home": "Home",
     "bookmarks": "Bookmarks",
     "folders": "Folders",
+    "tags": "Tags",
     "helpAndDocs": "Help & docs",
     "switchToDark": "Switch to dark theme",
     "switchToLight": "Switch to light theme",
@@ -484,6 +485,103 @@
       "package": "Package",
       "wrench": "Wrench",
       "sparkles": "Sparkles"
+    }
+  },
+  "tags": {
+    "page": {
+      "title": "Tags"
+    },
+    "note": "Tags are private to you. Other members of the workspace never see them.",
+    "deleted": "Tag deleted.",
+    "sort": {
+      "label": "Sort by",
+      "name": "Name",
+      "count": "Count"
+    },
+    "search": {
+      "label": "Search tags",
+      "placeholder": "Search tags",
+      "clear": "Clear search",
+      "none": {
+        "title": "No tag matches",
+        "description": "None of your tags contains “{query}”."
+      }
+    },
+    "list": {
+      "label": "Tags",
+      "loading": "Loading the tags",
+      "loadFailed": "The tags could not be loaded. Try again in a moment.",
+      "retry": "Try again",
+      "actionsFor": "Actions for {name}",
+      "bookmarkCount": "{count, plural, one {# bookmark} other {# bookmarks}}",
+      "empty": {
+        "title": "No tags yet",
+        "description": "Tags label bookmarks across folders, like a topic or a project, and a bookmark can carry several. Add a tag when you save or edit a bookmark, and it shows up here with the bookmarks that use it.",
+        "action": "Go to Bookmarks"
+      },
+      "table": {
+        "name": "Name",
+        "bookmarks": "Bookmarks",
+        "actions": "Actions"
+      }
+    },
+    "actions": {
+      "open": "View all in Bookmarks",
+      "rename": "Rename",
+      "delete": "Delete"
+    },
+    "preview": {
+      "label": "Newest bookmarks tagged {name}",
+      "loading": "Loading the bookmarks",
+      "loadFailed": "The bookmarks of this tag could not be loaded. Try again in a moment.",
+      "retry": "Try again",
+      "empty": "No bookmark carries this tag.",
+      "viewAll": "View all in Bookmarks",
+      "close": "Close the preview",
+      "missing": "This tag does not exist. It may have been renamed, merged or deleted.",
+      "placeholder": {
+        "title": "Pick a tag",
+        "description": "Select a tag to see its newest bookmarks."
+      },
+      "table": {
+        "title": "Bookmark",
+        "added": "Added"
+      }
+    },
+    "form": {
+      "close": "Close the rename form",
+      "title": "Rename tag",
+      "description": "A tag is private to you.",
+      "name": {
+        "label": "Name",
+        "error": {
+          "required": "Enter a name for the tag.",
+          "taken": "You already have a tag with this name.",
+          "invalid": "Use a name of 1 to {max} characters."
+        }
+      },
+      "cancel": "Cancel",
+      "submit": "Save",
+      "saved": "Tag renamed.",
+      "error": {
+        "notFound": "This tag no longer exists."
+      }
+    },
+    "merge": {
+      "title": "Merge into “{into}”?",
+      "description": "{count, plural, =0 {You already have a tag named “{into}”. “{from}” is on no bookmark; it is deleted.} one {You already have a tag named “{into}”. The # bookmark tagged “{from}” is tagged “{into}” instead, and “{from}” is deleted. The bookmark stays.} other {You already have a tag named “{into}”. The # bookmarks tagged “{from}” are tagged “{into}” instead, and “{from}” is deleted. The bookmarks stay.}}",
+      "confirm": "Merge tags",
+      "cancel": "Back to rename",
+      "merged": "Merged into “{name}”."
+    },
+    "delete": {
+      "title": "Delete “{name}”?",
+      "description": "{count, plural, =0 {No bookmark carries this tag; only the tag goes.} one {The tag is taken off its # bookmark. The bookmark stays; only the tag goes.} other {The tag is taken off its # bookmarks. The bookmarks stay; only the tag goes.}}",
+      "confirm": "Delete tag",
+      "cancel": "Cancel",
+      "error": {
+        "notFound": "This tag no longer exists."
+      }
     }
   },
   "admin": {
@@ -2233,6 +2331,7 @@
       "goHome": "Go to Home",
       "goBookmarks": "Go to Bookmarks",
       "goFolders": "Go to Folders",
+      "goTags": "Go to Tags",
       "newFolder": "New folder (on the Folders page)",
       "help": "Show this list",
       "move": "Move focus to the next or previous bookmark",
