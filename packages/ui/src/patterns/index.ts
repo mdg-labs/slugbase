@@ -16,6 +16,7 @@ export { DataTable, type DataTableCardSlot, type DataTableColumn, type DataTable
 export { Disclosure, type DisclosureProps } from "./disclosure.tsx";
 export { EmptyState, type EmptyStateProps } from "./empty-state.tsx";
 export { FeedbackToastProvider, feedbackToast, type FeedbackToastProviderProps } from "./feedback-toast.tsx";
+export { FOLDER_ICON_COMPONENTS } from "./folder-icons.ts";
 export { FormField, type FormFieldProps } from "./form-field.tsx";
 export { FormOverlay, type FormOverlayProps } from "./form-overlay.tsx";
 export { InlineNote, type InlineNoteProps } from "./inline-note.tsx";
@@ -48,13 +49,16 @@ export { ThemeToggle, type ThemeToggleProps } from "./theme-toggle.tsx";
 export {
   BookmarkIcon,
   CompassIcon,
+  ExternalLinkIcon,
   FilterXIcon,
+  FolderIcon,
   HomeIcon,
   InboxIcon,
   LayoutGridIcon,
   LifeBuoyIcon,
   LockIcon,
   LogOutIcon,
+  PaletteIcon,
   PencilIcon,
   PinIcon,
   PinOffIcon,

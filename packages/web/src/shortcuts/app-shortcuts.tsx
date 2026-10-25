@@ -7,8 +7,8 @@ import { useBookmarkModal } from "../bookmarks/modal-search.ts";
 import { GoShortcuts } from "./go-shortcuts.tsx";
 
 /**
- * The shortcuts of every page of the app (doc 03 section 14): `C` opens the New bookmark modal, `G` then `H` or `B` goes to
- * Home or Bookmarks, and `?` opens the sheet that lists the shortcuts, in the language of the page. They are single-key
+ * The shortcuts of every page of the app (doc 03 section 14): `C` opens the New bookmark modal, `G` then `H`, `B` or `F` goes to
+ * Home, Bookmarks or Folders, and `?` opens the sheet that lists the shortcuts, in the language of the page. They are single-key
  * shortcuts, which the account can switch off, and the sheet lists those the app has.
  */
 export function AppShortcuts(): ReactElement {
@@ -35,6 +35,8 @@ export function AppShortcuts(): ReactElement {
         { id: "new", label: t("shortcuts.item.newBookmark"), keys: [["C"]] },
         { id: "home", label: t("shortcuts.item.goHome"), keys: [["G", "H"]], sequence: true },
         { id: "bookmarks", label: t("shortcuts.item.goBookmarks"), keys: [["G", "B"]], sequence: true },
+        { id: "folders", label: t("shortcuts.item.goFolders"), keys: [["G", "F"]], sequence: true },
+        { id: "newFolder", label: t("shortcuts.item.newFolder"), keys: [["N"]] },
         { id: "help", label: t("shortcuts.item.help"), keys: [["?"]] },
       ],
     },

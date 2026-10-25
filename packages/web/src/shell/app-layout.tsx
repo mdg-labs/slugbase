@@ -7,7 +7,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@slugbase/ui";
-import { AccountMenu, AppShell, BookmarkIcon, HomeIcon, LifeBuoyIcon, LockIcon, LogOutIcon, SettingsIcon, ShieldCheckIcon, ThemeToggle } from "@slugbase/ui/patterns";
+import { AccountMenu, AppShell, BookmarkIcon, FolderIcon, HomeIcon, LifeBuoyIcon, LockIcon, LogOutIcon, SettingsIcon, ShieldCheckIcon, ThemeToggle } from "@slugbase/ui/patterns";
 import { Link, Outlet, useRouter, useRouterState } from "@tanstack/react-router";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
@@ -36,6 +36,7 @@ function AppLayoutShell(): ReactElement {
   const { switcher, dialog } = useWorkspaceSwitcher();
   const account = useCachedAccount();
   const inBookmarks = pathname === "/bookmarks" || pathname.startsWith("/bookmarks/");
+  const inFolders = pathname === "/folders" || pathname.startsWith("/folders/");
   const inSettings = pathname === "/settings" || pathname.startsWith("/settings/");
   const inAdmin = pathname === "/admin" || pathname.startsWith("/admin/");
   const accountItems = [
@@ -80,7 +81,7 @@ function AppLayoutShell(): ReactElement {
         <Breadcrumb aria-label={t("shell.breadcrumb")}>
           <BreadcrumbList>
             <BreadcrumbItem>
-              <BreadcrumbPage>{inAdmin ? t("shell.admin") : inSettings ? t("shell.settings") : inBookmarks ? t("shell.bookmarks") : t("shell.home")}</BreadcrumbPage>
+              <BreadcrumbPage>{inAdmin ? t("shell.admin") : inSettings ? t("shell.settings") : inBookmarks ? t("shell.bookmarks") : inFolders ? t("shell.folders") : t("shell.home")}</BreadcrumbPage>
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
@@ -121,6 +122,12 @@ function AppLayoutShell(): ReactElement {
             <SidebarMenuButton isActive={inBookmarks} render={<Link to="/bookmarks" />} tooltip={t("shell.bookmarks")}>
               <BookmarkIcon aria-hidden="true" />
               <span>{t("shell.bookmarks")}</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton isActive={inFolders} render={<Link to="/folders" />} tooltip={t("shell.folders")}>
+              <FolderIcon aria-hidden="true" />
+              <span>{t("shell.folders")}</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
           {account?.isInstanceAdmin === true ? (

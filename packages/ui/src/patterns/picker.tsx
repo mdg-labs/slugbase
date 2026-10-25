@@ -9,6 +9,8 @@ export interface PickerOption {
   label: string;
   /** A second line that tells options of one label apart, such as an email address; the search reads it too. */
   description?: string;
+  /** A decorative icon shown before the label in the list and in the field once the option is chosen. */
+  icon?: ReactNode;
 }
 
 export interface PickerProps {
@@ -57,8 +59,13 @@ export function Picker({ label, description, error, options, value, onValueChang
         value={selected}
       >
         <div className="relative">
+          {selected?.icon === undefined ? null : (
+            <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 start-3 flex items-center text-muted-foreground">
+              {selected.icon}
+            </span>
+          )}
           <Combobox.Input
-            className="h-9 w-full min-w-0 rounded-lg border border-input bg-background px-3 pe-9 text-base text-foreground shadow-xs/5 outline-none ring-ring/24 transition-shadow placeholder:text-muted-foreground/72 focus-visible:border-ring focus-visible:ring-[3px] aria-invalid:border-destructive/36 disabled:opacity-64 sm:h-8 sm:text-sm dark:bg-input/32"
+            className={cn("h-9 w-full min-w-0 rounded-lg border border-input bg-background px-3 pe-9 text-base text-foreground shadow-xs/5 outline-none ring-ring/24 transition-shadow placeholder:text-muted-foreground/72 focus-visible:border-ring focus-visible:ring-[3px] aria-invalid:border-destructive/36 disabled:opacity-64 sm:h-8 sm:text-sm dark:bg-input/32", selected?.icon !== undefined && "ps-9")}
             data-slot="picker-input"
             placeholder={placeholder}
           />
@@ -80,12 +87,19 @@ export function Picker({ label, description, error, options, value, onValueChang
               <Combobox.List className="max-h-60 overflow-y-auto p-1 empty:hidden" data-slot="picker-list">
                 {(option: PickerOption) => (
                   <Combobox.Item
-                    className="flex min-h-8 cursor-default flex-col justify-center rounded-sm px-2 py-1 text-base outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground sm:text-sm"
+                    className="flex min-h-8 cursor-default items-center gap-2 rounded-sm px-2 py-1 text-base outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground sm:text-sm"
                     key={option.value}
                     value={option}
                   >
-                    <span className="wrap-anywhere">{option.label}</span>
-                    {option.description === undefined ? null : <span className="wrap-anywhere text-muted-foreground text-xs">{option.description}</span>}
+                    {option.icon === undefined ? null : (
+                      <span aria-hidden="true" className="shrink-0 text-muted-foreground">
+                        {option.icon}
+                      </span>
+                    )}
+                    <span className="flex min-w-0 flex-col">
+                      <span className="wrap-anywhere">{option.label}</span>
+                      {option.description === undefined ? null : <span className="wrap-anywhere text-muted-foreground text-xs">{option.description}</span>}
+                    </span>
                   </Combobox.Item>
                 )}
               </Combobox.List>

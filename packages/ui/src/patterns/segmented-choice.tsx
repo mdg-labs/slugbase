@@ -22,13 +22,18 @@ export interface SegmentedChoiceProps {
   onValueChange: (value: string) => void;
   disabled?: boolean;
   className?: string;
+  /**
+   * Draws only the icons of the options and keeps their labels for assistive technology and as the hint of the pointer, for
+   * a set that is too wide for its labels, such as the eight folder colours. Every option needs an icon then.
+   */
+  iconOnly?: boolean;
 }
 
 /**
  * Exactly one of a few options, shown as joined segments: a labelled radio group, so the arrow keys move
  * between the options and a screen reader announces the position (doc 03 `segmented-choice`).
  */
-export function SegmentedChoice({ label, name, description, error, options, value, onValueChange, disabled, className }: SegmentedChoiceProps): ReactElement {
+export function SegmentedChoice({ label, name, description, error, options, value, onValueChange, disabled, className, iconOnly = false }: SegmentedChoiceProps): ReactElement {
   const id = useId();
   const labelId = `${id}-label`;
   const descriptionId = `${id}-description`;
@@ -44,7 +49,7 @@ export function SegmentedChoice({ label, name, description, error, options, valu
         aria-describedby={describedBy === "" ? undefined : describedBy}
         aria-invalid={invalid ? true : undefined}
         aria-labelledby={labelId}
-        className="inline-flex w-fit flex-row gap-0.5 rounded-lg border bg-muted p-0.5 data-disabled:opacity-64"
+        className={cn("inline-flex w-fit max-w-full flex-row gap-0.5 rounded-lg border bg-muted p-0.5 data-disabled:opacity-64", iconOnly && "flex-wrap")}
         data-slot="segmented-choice"
         disabled={disabled}
         name={name}
@@ -57,13 +62,17 @@ export function SegmentedChoice({ label, name, description, error, options, valu
       >
         {options.map((option) => (
           <RadioPrimitive.Root
-            className="inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 font-medium text-muted-foreground text-sm outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-checked:bg-background data-checked:text-foreground data-checked:shadow-sm data-disabled:cursor-not-allowed"
+            className={cn(
+              "inline-flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md font-medium text-muted-foreground text-sm outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-checked:bg-background data-checked:text-foreground data-checked:shadow-sm data-disabled:cursor-not-allowed",
+              iconOnly ? "w-8" : "px-3",
+            )}
             data-slot="segmented-choice-option"
             key={option.value}
+            title={iconOnly ? option.label : undefined}
             value={option.value}
           >
             {option.icon}
-            {option.label}
+            {iconOnly ? <span className="sr-only">{option.label}</span> : option.label}
           </RadioPrimitive.Root>
         ))}
       </RadioGroupPrimitive>

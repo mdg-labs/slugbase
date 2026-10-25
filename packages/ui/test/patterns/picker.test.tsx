@@ -74,4 +74,27 @@ describe("Picker", () => {
     expect(screen.getByText("Choose a recipient.")).toBeTruthy();
     await expectNoViolations(container);
   });
+
+  it("draws an option's icon in the list and in the field once the option is chosen, as decoration", async () => {
+    const options = [
+      { value: "star", label: "Star", icon: <svg data-testid="star-icon" /> },
+      { value: "moon", label: "Moon" },
+    ];
+    const { rerender } = render(<Picker emptyLabel="Nothing" label="Icon" onValueChange={() => undefined} options={options} value="moon" />);
+    expect(screen.queryByTestId("star-icon")).toBeNull();
+
+    rerender(<Picker emptyLabel="Nothing" label="Icon" onValueChange={() => undefined} options={options} value="star" />);
+
+    expect(screen.getByTestId("star-icon").closest("[aria-hidden='true']")).not.toBeNull();
+    expect(screen.getByRole<HTMLInputElement>("combobox", { name: "Icon" }).className).toContain("ps-9");
+    await act(async () => {
+      const input = screen.getByRole("combobox", { name: "Icon" });
+      fireEvent.pointerDown(input);
+      fireEvent.mouseDown(input);
+      fireEvent.click(input);
+      await Promise.resolve();
+    });
+    expect((await screen.findAllByRole("option")).map((option) => option.textContent)).toEqual(["Star", "Moon"]);
+    expect(screen.getAllByTestId("star-icon")).toHaveLength(2);
+  });
 });

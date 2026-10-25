@@ -9,6 +9,7 @@
     "breadcrumb": "Breadcrumb",
     "home": "Home",
     "bookmarks": "Bookmarks",
+    "folders": "Folders",
     "helpAndDocs": "Help & docs",
     "switchToDark": "Switch to dark theme",
     "switchToLight": "Switch to light theme",
@@ -252,6 +253,170 @@
           "description": "It may have been deleted, or it is not one of yours."
         }
       }
+    }
+  },
+  "folders": {
+    "page": {
+      "title": "Folders"
+    },
+    "new": "New folder",
+    "deleted": "Folder deleted.",
+    "sort": {
+      "label": "Sort by",
+      "name": "Name",
+      "count": "Bookmarks",
+      "updated": "Recently updated"
+    },
+    "list": {
+      "label": "Folders",
+      "loading": "Loading the folders",
+      "loadFailed": "The folders could not be loaded. Try again in a moment.",
+      "loadMoreFailed": "More folders could not be loaded. Try again in a moment.",
+      "refreshFailed": "The folders could not be refreshed. What is shown may be out of date.",
+      "retry": "Try again",
+      "loadMore": "Load more",
+      "count": "Showing {shown} of {total}",
+      "countAtLeast": "Showing {shown} of {total}+",
+      "actionsFor": "Actions for {name}",
+      "bookmarkCount": "{count, plural, one {# bookmark} other {# bookmarks}}",
+      "table": {
+        "name": "Name",
+        "bookmarks": "Bookmarks",
+        "updated": "Updated",
+        "actions": "Actions"
+      },
+      "empty": {
+        "title": "No folders yet",
+        "description": "Folders group related bookmarks, like everything for one project or one topic. A bookmark can be filed in several folders, and deleting a folder never deletes the bookmarks in it."
+      }
+    },
+    "actions": {
+      "open": "Open in Bookmarks",
+      "rename": "Rename",
+      "restyle": "Change icon and colour",
+      "delete": "Delete"
+    },
+    "delete": {
+      "title": "Delete “{name}”?",
+      "description": "{count, plural, =0 {No bookmarks are in this folder; only the folder goes.} one {The # bookmark stays; only the folder goes.} other {The # bookmarks stay; only the folder goes.}}",
+      "confirm": "Delete folder",
+      "cancel": "Cancel",
+      "error": {
+        "unavailable": "The folder could not be deleted right now. Try again in a moment.",
+        "notFound": "This folder no longer exists."
+      }
+    },
+    "form": {
+      "close": "Close the folder form",
+      "description": "A folder is private to you.",
+      "title": {
+        "create": "New folder",
+        "rename": "Rename folder",
+        "style": "Change icon and colour"
+      },
+      "name": {
+        "label": "Name",
+        "error": {
+          "required": "Enter a name for the folder.",
+          "taken": "You already have a folder with this name.",
+          "invalid": "Use a name of 1 to {max} characters."
+        }
+      },
+      "icon": {
+        "label": "Icon",
+        "placeholder": "Search icons",
+        "empty": "No icon matches."
+      },
+      "color": {
+        "label": "Colour"
+      },
+      "preview": "Folder name",
+      "cancel": "Cancel",
+      "submit": {
+        "create": "Create folder",
+        "update": "Save changes"
+      },
+      "saved": {
+        "created": "Folder created.",
+        "updated": "Folder saved."
+      },
+      "error": {
+        "changedElsewhere": "This folder was changed somewhere else. Close this form and open it again to see the latest version.",
+        "notFound": "This folder no longer exists.",
+        "unavailable": "The folder could not be saved right now. Try again in a moment."
+      }
+    },
+    "color": {
+      "1": "Periwinkle",
+      "2": "Green",
+      "3": "Amber",
+      "4": "Red",
+      "5": "Blue",
+      "6": "Purple",
+      "7": "Pink",
+      "8": "Mint"
+    },
+    "icon": {
+      "folder": "Folder",
+      "folder-open": "Open folder",
+      "folder-heart": "Folder with a heart",
+      "folder-code": "Folder with code",
+      "folder-archive": "Archive folder",
+      "briefcase": "Briefcase",
+      "building-2": "Building",
+      "book": "Book",
+      "book-open": "Open book",
+      "bookmark": "Bookmark",
+      "star": "Star",
+      "heart": "Heart",
+      "house": "House",
+      "newspaper": "Newspaper",
+      "graduation-cap": "Graduation cap",
+      "flask-conical": "Flask",
+      "code": "Code",
+      "terminal": "Terminal",
+      "cpu": "Processor",
+      "database": "Database",
+      "server": "Server",
+      "cloud": "Cloud",
+      "globe": "Globe",
+      "map": "Map",
+      "map-pin": "Map pin",
+      "plane": "Plane",
+      "car": "Car",
+      "utensils": "Cutlery",
+      "coffee": "Coffee",
+      "shopping-cart": "Shopping cart",
+      "gift": "Gift",
+      "music": "Music",
+      "film": "Film",
+      "camera": "Camera",
+      "image": "Image",
+      "video": "Video",
+      "gamepad-2": "Game controller",
+      "palette": "Palette",
+      "lightbulb": "Light bulb",
+      "rocket": "Rocket",
+      "target": "Target",
+      "trophy": "Trophy",
+      "flag": "Flag",
+      "tag": "Tag",
+      "wallet": "Wallet",
+      "credit-card": "Credit card",
+      "dumbbell": "Dumbbell",
+      "leaf": "Leaf",
+      "sun": "Sun",
+      "moon": "Moon",
+      "zap": "Lightning bolt",
+      "shield": "Shield",
+      "lock": "Lock",
+      "users": "People",
+      "mail": "Mail",
+      "calendar": "Calendar",
+      "inbox": "Inbox",
+      "package": "Package",
+      "wrench": "Wrench",
+      "sparkles": "Sparkles"
     }
   },
   "admin": {
@@ -2000,6 +2165,8 @@
       "newBookmark": "New bookmark",
       "goHome": "Go to Home",
       "goBookmarks": "Go to Bookmarks",
+      "goFolders": "Go to Folders",
+      "newFolder": "New folder (on the Folders page)",
       "help": "Show this list",
       "move": "Move focus to the next or previous bookmark",
       "open": "Open the focused bookmark",

@@ -8,14 +8,18 @@ import { BookmarkIcon } from 'lucide-react';
 import { ChangeEventHandler } from 'react';
 import type { ClipboardEvent as ClipboardEvent_2 } from 'react';
 import { CompassIcon } from 'lucide-react';
+import { ExternalLinkIcon } from 'lucide-react';
 import { FilterXIcon } from 'lucide-react';
 import type { FocusEvent as FocusEvent_2 } from 'react';
+import { FolderIcon } from 'lucide-react';
 import { HomeIcon } from 'lucide-react';
 import { InboxIcon } from 'lucide-react';
 import { LayoutGridIcon } from 'lucide-react';
 import { LifeBuoyIcon } from 'lucide-react';
 import { LockIcon } from 'lucide-react';
 import { LogOutIcon } from 'lucide-react';
+import { LucideIcon } from 'lucide-react';
+import { PaletteIcon } from 'lucide-react';
 import { PencilIcon } from 'lucide-react';
 import { PinIcon } from 'lucide-react';
 import { PinOffIcon } from 'lucide-react';
@@ -428,6 +432,8 @@ export interface EmptyStateProps {
     title: ReactNode;
 }
 
+export { ExternalLinkIcon }
+
 // @public
 export const feedbackToast: {
     info: (title: string, description?: ReactNode) => string;
@@ -446,6 +452,11 @@ export interface FeedbackToastProviderProps {
 }
 
 export { FilterXIcon }
+
+// @public
+export const FOLDER_ICON_COMPONENTS: Readonly<Record<string, LucideIcon>>;
+
+export { FolderIcon }
 
 // @public
 export function FormField(input: FormFieldProps): ReactElement;
@@ -554,6 +565,8 @@ export interface MetricTileProps {
     value: ReactNode;
 }
 
+export { PaletteIcon }
+
 // @public
 export type PasswordScore = 0 | 1 | 2 | 3 | 4;
 
@@ -578,6 +591,7 @@ export function Picker(input: PickerProps): ReactElement;
 // @public (undocumented)
 export interface PickerOption {
     description?: string;
+    icon?: ReactNode;
     // (undocumented)
     label: string;
     // (undocumented)
@@ -684,6 +698,7 @@ export interface SegmentedChoiceProps {
     // (undocumented)
     disabled?: boolean;
     error?: ReactNode;
+    iconOnly?: boolean;
     label: ReactNode;
     name?: string;
     // (undocumented)
