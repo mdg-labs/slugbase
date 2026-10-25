@@ -461,6 +461,33 @@ describe("creating a folder", () => {
     expect(within(dialog).queryByText("You already have a folder with this name.")).toBeNull();
   });
 
+  it("raises no error toast for a name shown as taken at the field", async () => {
+    stubServer([folder(1, { name: "Recipes" })]);
+    await openApp("/folders");
+    await screen.findByText("Recipes");
+    await press(screen.getByRole("button", { name: "New folder" }));
+    const dialog = await screen.findByRole("dialog", { name: "New folder" });
+
+    await type(dialog, "recipes");
+    await press(within(dialog).getByRole("button", { name: "Create folder" }));
+    await within(dialog).findByText("You already have a folder with this name.");
+    expect(screen.queryByText("The change was not saved")).toBeNull();
+  });
+
+  it("raises the error toast for a server failure of the same form", async () => {
+    stubServer([], { refuse: { method: "POST", status: 500, code: "internal" } });
+    await openApp("/folders");
+    await press(await openEmptyPage());
+    const dialog = await screen.findByRole("dialog", { name: "New folder" });
+
+    await type(dialog, "Inbox");
+    await press(within(dialog).getByRole("button", { name: "Create folder" }));
+
+    expect((await within(dialog).findByRole("alert")).textContent).toContain("The folder could not be saved right now. Try again in a moment.");
+    expect((await screen.findAllByText("The change was not saved")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/Request ID: req-refused/).length).toBeGreaterThan(0);
+  });
+
   it("says in the form when the API cannot be reached and keeps what was typed", async () => {
     stubServer([], { refuse: { method: "POST", status: 503, code: "service_unavailable" } });
     await openApp("/folders");
@@ -551,6 +578,7 @@ describe("renaming and restyling", () => {
     expect(await within(dialog).findByText("You already have a folder with this name.")).toBeDefined();
     expect(server.folders.map((candidate) => candidate.name)).toEqual(["Reading", "Recipes"]);
     expect(screen.queryByText("Folder saved.")).toBeNull();
+    expect(screen.queryByText("The change was not saved")).toBeNull();
   });
 
   it("says the folder changed elsewhere when its version moved, and reads the list again", async () => {
@@ -566,6 +594,7 @@ describe("renaming and restyling", () => {
 
     expect((await within(dialog).findByRole("alert")).textContent).toContain("This folder was changed somewhere else.");
     expect(screen.queryByText("Folder saved.")).toBeNull();
+    expect(screen.queryByText("The change was not saved")).toBeNull();
     await waitFor(() => {
       expect(server.lists().length).toBeGreaterThan(reads);
     });

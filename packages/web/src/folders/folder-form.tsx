@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useState, type ReactElement, type SyntheticEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { inPlaceRefusals } from "../shell/mutation-error-toasts.tsx";
 import { useFolderIconLabels } from "./folder-icon-labels.ts";
 import { FolderGlyph, folderBackgroundClass, folderIconOf } from "./folder-glyph.tsx";
 import {
@@ -23,6 +24,15 @@ import {
 } from "./folders.ts";
 
 const SECONDS_PER_MINUTE = 60;
+
+// The refusals `folderFailureOf` tells in the form, for which the shared error toast stays quiet; any other failure still raises it.
+const SHOWN_IN_THE_FORM = inPlaceRefusals([
+  { status: 409, code: "name_taken" },
+  { status: 422 },
+  { status: 412, code: "precondition_failed" },
+  { status: 404, code: "not_found" },
+  { status: 429, code: "rate_limited" },
+]);
 
 const COLORS = Array.from({ length: FOLDER_COLOR_MAX - FOLDER_COLOR_MIN + 1 }, (_, index) => FOLDER_COLOR_MIN + index);
 
@@ -82,6 +92,7 @@ export function FolderForm({ intent, folder, onClose }: FolderFormProps): ReactE
 
   const save = useMutation({
     mutationKey: ["folders", "save"],
+    meta: SHOWN_IN_THE_FORM,
     mutationFn: ({ folder: target, name: nextName, icon: nextIcon, color: nextColor }: Request): Promise<Folder> => {
       if (target === undefined) {
         return createFolder(api, { name: nextName, icon: isIcon(nextIcon) ? nextIcon : FOLDER_DEFAULT_ICON, color: nextColor });
