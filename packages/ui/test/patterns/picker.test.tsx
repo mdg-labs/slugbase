@@ -97,4 +97,17 @@ describe("Picker", () => {
     expect((await screen.findAllByRole("option")).map((option) => option.textContent)).toEqual(["Star", "Moon"]);
     expect(screen.getAllByTestId("star-icon")).toHaveLength(2);
   });
+
+  it("says the options are loading, or could not be read, and not that there are none", async () => {
+    const { rerender } = render(<Picker emptyLabel="Nobody" label="Recipient" loadingLabel="Loading members" onValueChange={() => undefined} options={[]} value={undefined} />);
+    await open();
+    expect((await screen.findByText("Loading members")).getAttribute("data-slot")).toBe("picker-loading");
+    expect(screen.queryByText("Nobody")).toBeNull();
+
+    rerender(<Picker emptyLabel="Nobody" label="Recipient" onValueChange={() => undefined} options={[]} unavailableLabel="The members could not be loaded" value={undefined} />);
+    const failed = await screen.findByText("The members could not be loaded");
+    expect(failed.getAttribute("data-slot")).toBe("picker-unavailable");
+    expect(failed.getAttribute("role")).toBe("alert");
+    expect(screen.queryByText("Nobody")).toBeNull();
+  });
 });

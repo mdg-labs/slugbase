@@ -195,6 +195,12 @@ async function key(init: KeyboardEventInit, target: Element | Window = window): 
   });
 }
 
+/** Queries for the text of the page itself: the sidebar lists the same folders by name, and a name found twice is not found. */
+const inPage = {
+  findByText: async (text: string | RegExp): Promise<HTMLElement> => within(await screen.findByRole("main")).findByText(text),
+  getByText: (text: string | RegExp): HTMLElement => within(screen.getByRole("main")).getByText(text),
+};
+
 function namesShown(): string[] {
   // An open overlay hides the page behind it from assistive technology, which the queries respect unless told otherwise.
   const table = screen.getByRole("table", { name: "Folders", hidden: true });
@@ -205,7 +211,7 @@ function namesShown(): string[] {
 }
 
 function rowOf(name: string): HTMLElement {
-  const row = screen.getByText(name).closest("tr");
+  const row = inPage.getByText(name).closest("tr");
   expect(row).not.toBeNull();
   return row as HTMLElement;
 }
@@ -273,9 +279,12 @@ describe("reaching the page", () => {
     const glyph = rowOf("Reading").querySelector("svg");
     expect(glyph?.getAttribute("class")).toContain("text-folder-3");
     expect(glyph?.closest("[aria-hidden='true']")).not.toBeNull();
-    expect(server.lists()).toHaveLength(1);
-    expect(server.lists()[0]?.params.get("sort")).toBe("name");
-    expect(server.lists()[0]?.params.get("limit")).toBe("50");
+    // The sidebar's read, to the end of the list, and the page's own.
+    expect(server.lists()).toHaveLength(2);
+    for (const list of server.lists()) {
+      expect(list.params.get("sort")).toBe("name");
+      expect(list.params.get("limit")).toBe("50");
+    }
   });
 
   it("goes there with G then F from another page, and says so in the shortcut sheet", async () => {
@@ -298,7 +307,7 @@ describe("reaching the page", () => {
   it("offers no Mine and Shared with me scopes while there is no sharing", async () => {
     stubServer([folder(1)]);
     await openApp("/folders");
-    await screen.findByText("Folder 1");
+    await inPage.findByText("Folder 1");
 
     expect(screen.queryByRole("tablist")).toBeNull();
     expect(screen.queryByText("Shared with me")).toBeNull();
@@ -312,7 +321,7 @@ describe("reaching the page", () => {
 
     await screen.findByRole("heading", { level: 1, name: "Ordner" });
     expect(screen.getByRole("button", { name: "Neuer Ordner" })).toBeDefined();
-    expect(screen.getByText("9 Lesezeichen")).toBeDefined();
+    expect(inPage.getByText("9 Lesezeichen")).toBeDefined();
     await press(screen.getByRole("button", { name: "Aktionen für Lesen" }));
     await press(await screen.findByRole("menuitem", { name: "Löschen" }));
     expect((await screen.findByRole("alertdialog")).textContent).toContain("Die 9 Lesezeichen bleiben erhalten; nur der Ordner wird gelöscht.");
@@ -324,7 +333,7 @@ describe("the sort", () => {
     const server = stubServer([folder(1, { name: "Few", bookmarkCount: 1 }), folder(2, { name: "Many", bookmarkCount: 40 })]);
     await openApp("/folders?sort=count");
 
-    await screen.findByText("Many");
+    await inPage.findByText("Many");
 
     expect(server.lists()[0]?.params.get("sort")).toBe("count");
     expect(namesShown()).toEqual(["Many", "Few"]);
@@ -335,7 +344,7 @@ describe("the sort", () => {
     const server = stubServer([folder(1)]);
     await openApp("/folders?sort=bogus");
 
-    await screen.findByText("Folder 1");
+    await inPage.findByText("Folder 1");
 
     expect(server.lists()[0]?.params.get("sort")).toBe("name");
   });
@@ -343,7 +352,7 @@ describe("the sort", () => {
   it("takes the order from the control, keeps it linkable and orders by the last change", async () => {
     const server = stubServer([folder(1, { name: "Old", updatedAt: "2026-09-01T08:00:00.000Z" }), folder(2, { name: "Newer", updatedAt: "2026-10-05T08:00:00.000Z" })]);
     await openApp("/folders");
-    await screen.findByText("Old");
+    await inPage.findByText("Old");
     expect(namesShown()).toEqual(["Newer", "Old"]);
 
     await chooseOption("Sort by", "Recently updated");
@@ -369,14 +378,15 @@ describe("a long list", () => {
     const many = Array.from({ length: 55 }, (_, index) => folder(index + 1, { name: `Folder ${String(index + 1).padStart(2, "0")}` }));
     const server = stubServer(many);
     await openApp("/folders");
-    await screen.findByText("Folder 01");
+    await inPage.findByText("Folder 01");
     expect(screen.getByText("Showing 50 of 55")).toBeDefined();
     expect(server.lists()[0]?.params.get("cursor")).toBeNull();
 
     await press(screen.getByRole("button", { name: "Load more" }));
 
-    await screen.findByText("Folder 55");
-    expect(server.lists()[1]?.params.get("cursor")).toBe("50");
+    await inPage.findByText("Folder 55");
+    // The sidebar reads the whole list too, so the second page is asked for twice: by the sidebar and by the button.
+    expect(server.lists().map((list) => list.params.get("cursor"))).toEqual([null, null, "50", "50"]);
     expect(screen.getByText("Showing 55 of 55")).toBeDefined();
     expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
     expect(namesShown()).toHaveLength(55);
@@ -387,7 +397,7 @@ describe("creating a folder", () => {
   it("opens from the button and from N with the name, icon and colour, and sends what was chosen", async () => {
     const server = stubServer([folder(1, { name: "Archive" })]);
     await openApp("/folders");
-    await screen.findByText("Archive");
+    await inPage.findByText("Archive");
 
     await key({ key: "n" });
     const dialog = await screen.findByRole("dialog", { name: "New folder" });
@@ -445,7 +455,7 @@ describe("creating a folder", () => {
   it("shows a name the API refused as taken at the name field, keeps the form and adds no folder", async () => {
     const server = stubServer([folder(1, { name: "Recipes" })]);
     await openApp("/folders");
-    await screen.findByText("Recipes");
+    await inPage.findByText("Recipes");
     await press(screen.getByRole("button", { name: "New folder" }));
     const dialog = await screen.findByRole("dialog", { name: "New folder" });
 
@@ -464,7 +474,7 @@ describe("creating a folder", () => {
   it("raises no error toast for a name shown as taken at the field", async () => {
     stubServer([folder(1, { name: "Recipes" })]);
     await openApp("/folders");
-    await screen.findByText("Recipes");
+    await inPage.findByText("Recipes");
     await press(screen.getByRole("button", { name: "New folder" }));
     const dialog = await screen.findByRole("dialog", { name: "New folder" });
 
@@ -505,7 +515,7 @@ describe("creating a folder", () => {
   it("does not open a second form on N while the form is open", async () => {
     stubServer([folder(1)]);
     await openApp("/folders");
-    await screen.findByText("Folder 1");
+    await inPage.findByText("Folder 1");
     await press(screen.getByRole("button", { name: "New folder" }));
     const dialog = await screen.findByRole("dialog", { name: "New folder" });
 
@@ -523,7 +533,7 @@ describe("renaming and restyling", () => {
   it("renames with the same form, prefilled, against the version the list holds, sending the name alone", async () => {
     const server = stubServer([folder(1, { name: "Reading", icon: "book", color: 5 })]);
     await openApp("/folders");
-    await screen.findByText("Reading");
+    await inPage.findByText("Reading");
 
     await chooseAction("Reading", "Rename");
     const dialog = await screen.findByRole("dialog", { name: "Rename folder" });
@@ -548,7 +558,7 @@ describe("renaming and restyling", () => {
   it("changes the icon and the colour with the same form, sending those two alone", async () => {
     const server = stubServer([folder(1, { name: "Reading" })]);
     await openApp("/folders");
-    await screen.findByText("Reading");
+    await inPage.findByText("Reading");
 
     await chooseAction("Reading", "Change icon and colour");
     const dialog = await screen.findByRole("dialog", { name: "Change icon and colour" });
@@ -568,7 +578,7 @@ describe("renaming and restyling", () => {
   it("shows a name another folder has as taken and leaves the folder as it was", async () => {
     const server = stubServer([folder(1, { name: "Reading" }), folder(2, { name: "Recipes" })]);
     await openApp("/folders");
-    await screen.findByText("Reading");
+    await inPage.findByText("Reading");
     await chooseAction("Reading", "Rename");
     const dialog = await screen.findByRole("dialog", { name: "Rename folder" });
 
@@ -584,7 +594,7 @@ describe("renaming and restyling", () => {
   it("says the folder changed elsewhere when its version moved, and reads the list again", async () => {
     const server = stubServer([folder(1, { name: "Reading" })], { refuse: { method: "PATCH", status: 412, code: "precondition_failed" } });
     await openApp("/folders");
-    await screen.findByText("Reading");
+    await inPage.findByText("Reading");
     await chooseAction("Reading", "Rename");
     const dialog = await screen.findByRole("dialog", { name: "Rename folder" });
     const reads = server.lists().length;
@@ -605,7 +615,7 @@ describe("deleting a folder", () => {
   it("asks first, naming how many bookmarks stay, and deletes only on confirmation", async () => {
     const server = stubServer([folder(1, { name: "Reading", bookmarkCount: 9 }), folder(2, { name: "Zeta" })]);
     await openApp("/folders");
-    await screen.findByText("Reading");
+    await inPage.findByText("Reading");
 
     await chooseAction("Reading", "Delete");
 
@@ -629,7 +639,7 @@ describe("deleting a folder", () => {
   it("states the singular and the empty folder in their own words", async () => {
     stubServer([folder(1, { name: "One", bookmarkCount: 1 }), folder(2, { name: "Empty", bookmarkCount: 0 })]);
     await openApp("/folders");
-    await screen.findByText("One");
+    await inPage.findByText("One");
 
     await chooseAction("One", "Delete");
     expect((await screen.findByRole("alertdialog")).textContent).toContain("The 1 bookmark stays; only the folder goes.");
@@ -645,7 +655,7 @@ describe("deleting a folder", () => {
   it("deletes nothing when the dialog is cancelled", async () => {
     const server = stubServer([folder(1, { name: "Reading", bookmarkCount: 9 })]);
     await openApp("/folders");
-    await screen.findByText("Reading");
+    await inPage.findByText("Reading");
     await chooseAction("Reading", "Delete");
 
     await press(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Cancel" }));
@@ -660,7 +670,7 @@ describe("deleting a folder", () => {
   it("keeps the row and says so in the dialog when the delete fails", async () => {
     const server = stubServer([folder(1, { name: "Reading" })], { refuse: { method: "DELETE", status: 503, code: "service_unavailable" } });
     await openApp("/folders");
-    await screen.findByText("Reading");
+    await inPage.findByText("Reading");
     await chooseAction("Reading", "Delete");
 
     await press(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Delete folder" }));
@@ -669,7 +679,7 @@ describe("deleting a folder", () => {
     expect(server.to("DELETE")).toHaveLength(1);
     expect(screen.queryByText("Folder deleted.")).toBeNull();
     expect(server.folders).toHaveLength(1);
-    expect(screen.getByText("Reading")).toBeDefined();
+    expect(inPage.getByText("Reading")).toBeDefined();
   });
 });
 
@@ -677,7 +687,7 @@ describe("opening a folder in Bookmarks", () => {
   it("goes to the bookmark list with the folder in the address", async () => {
     stubServer([folder(1, { name: "Reading" })]);
     await openApp("/folders");
-    await screen.findByText("Reading");
+    await inPage.findByText("Reading");
 
     await chooseAction("Reading", "Open in Bookmarks");
 
@@ -710,7 +720,7 @@ describe("states", () => {
       await Promise.resolve();
     });
 
-    await screen.findByText("Folder 1");
+    await inPage.findByText("Folder 1");
     expect(screen.queryByRole("status", { name: "Loading the folders" })).toBeNull();
   });
 
@@ -742,7 +752,7 @@ describe("states", () => {
     healthy = true;
     await press(within(banner).getByRole("button", { name: "Try again" }));
 
-    await screen.findByText("Folder 1");
+    await inPage.findByText("Folder 1");
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
@@ -750,7 +760,7 @@ describe("states", () => {
     stubServer([folder(1, { name: "<img src=x onerror=alert(1)>" })]);
     await openApp("/folders");
 
-    const cell = await screen.findByText("<img src=x onerror=alert(1)>");
+    const cell = await inPage.findByText("<img src=x onerror=alert(1)>");
 
     expect(cell.querySelector("img")).toBeNull();
     expect(screen.getByRole("main").querySelector("img")).toBeNull();

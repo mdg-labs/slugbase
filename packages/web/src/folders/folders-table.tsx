@@ -24,8 +24,7 @@ function ActionsCell({ folder, onRename, onRestyle, onDelete }: FolderActionHand
       label: t("folders.actions.open"),
       icon: <ExternalLinkIcon aria-hidden="true" />,
       onSelect: () => {
-        // The bookmarks list reads the folder filter from the address; the address is built here, not typed by the route.
-        void router.navigate({ href: `/bookmarks?folderId=${encodeURIComponent(folder.id)}` });
+        void router.navigate({ to: "/bookmarks", search: { folderId: folder.id } });
       },
     },
     {

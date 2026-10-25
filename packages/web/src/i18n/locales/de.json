@@ -32,6 +32,13 @@
       "title": "E-Mail ist nicht eingerichtet",
       "description": "Dieser Server sendet keine E-Mails, deshalb werden Einladungen, die Bestätigung von Adressen und E-Mails zum Zurücksetzen des Passworts nicht zugestellt. Einladungs- und Zurücksetzen-Links werden dir stattdessen angezeigt, damit du sie selbst weitergibst.",
       "action": "Einstellungen & Status öffnen"
+    },
+    "foldersSection": {
+      "label": "Ordner",
+      "loading": "Die Ordnerliste wird geladen",
+      "loadFailed": "Die Ordnerliste konnte nicht geladen werden.",
+      "retry": "Ordner neu laden",
+      "empty": "Du hast noch keine Ordner"
     }
   },
   "home": {
@@ -69,6 +76,35 @@
         "hasSlug": "Mit Slug",
         "forwarding": "Weiterleitung aktiv"
       },
+      "filters": {
+        "active": "Aktive Filter",
+        "remove": "Filter entfernen: {label}",
+        "folderChip": "Ordner: {name}",
+        "folderChipUnknown": "Ordner",
+        "folder": {
+          "label": "Ordner",
+          "placeholder": "Beliebiger Ordner",
+          "loading": "Ordner werden geladen",
+          "loadFailed": "Die Ordner konnten nicht geladen werden.",
+          "empty": "Du hast noch keine Ordner"
+        },
+        "tags": {
+          "label": "Tags",
+          "placeholder": "Beliebige Tags",
+          "loading": "Tags werden geladen",
+          "loadFailed": "Die Tags konnten nicht geladen werden.",
+          "empty": "Du hast noch keine Tags",
+          "remove": "Tag {name} entfernen",
+          "unknown": "Unbekannter Tag",
+          "pending": "Tag",
+          "limit": "Ein Lesezeichen muss jeden gewählten Tag tragen, höchstens {max}."
+        },
+        "staleFolder": {
+          "title": "Dieser Ordner existiert nicht mehr",
+          "description": "Der Ordnerfilter wurde entfernt, die Liste ist nicht mehr darauf eingeschränkt.",
+          "dismiss": "Schließen"
+        }
+      },
       "view": {
         "label": "Ansicht",
         "grid": "Raster",
@@ -105,6 +141,8 @@
       "select": "{title} auswählen",
       "noSlug": "Kein Slug",
       "pinned": "Angeheftet",
+      "moreTags": "{count, plural, one {# weiterer Tag} other {# weitere Tags}}",
+      "moreTagsShort": "+{count}",
       "neverOpened": "Noch nicht geöffnet",
       "opens": "{count, plural, one {# Aufruf} other {# Aufrufe}}",
       "usage": "{count, plural, one {# Aufruf} other {# Aufrufe}} · {when}",

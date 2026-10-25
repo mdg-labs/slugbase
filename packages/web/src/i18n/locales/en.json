@@ -32,6 +32,13 @@
       "title": "Email is not set up",
       "description": "This server sends no email, so invitation emails, address verification and password-reset emails are not delivered. Invitation and reset links are shown to you instead, to pass on by hand.",
       "action": "Open settings & status"
+    },
+    "foldersSection": {
+      "label": "Folders",
+      "loading": "Loading the folder list",
+      "loadFailed": "The folder list could not be loaded.",
+      "retry": "Reload folders",
+      "empty": "You have no folders yet"
     }
   },
   "home": {
@@ -69,6 +76,35 @@
         "hasSlug": "Has slug",
         "forwarding": "Forwarding on"
       },
+      "filters": {
+        "active": "Active filters",
+        "remove": "Remove filter: {label}",
+        "folderChip": "Folder: {name}",
+        "folderChipUnknown": "Folder",
+        "folder": {
+          "label": "Folder",
+          "placeholder": "Any folder",
+          "loading": "Loading the folders",
+          "loadFailed": "The folders could not be loaded.",
+          "empty": "You have no folders yet"
+        },
+        "tags": {
+          "label": "Tags",
+          "placeholder": "Any tags",
+          "loading": "Loading the tags",
+          "loadFailed": "The tags could not be loaded.",
+          "empty": "You have no tags yet",
+          "remove": "Remove tag {name}",
+          "unknown": "Unknown tag",
+          "pending": "Tag",
+          "limit": "A bookmark must carry every tag chosen, up to {max}."
+        },
+        "staleFolder": {
+          "title": "That folder no longer exists",
+          "description": "The folder filter was removed, so the list is no longer narrowed to it.",
+          "dismiss": "Dismiss"
+        }
+      },
       "view": {
         "label": "View",
         "grid": "Grid",
@@ -105,6 +141,8 @@
       "select": "Select {title}",
       "noSlug": "No slug",
       "pinned": "Pinned",
+      "moreTags": "{count, plural, one {# more tag} other {# more tags}}",
+      "moreTagsShort": "+{count}",
       "neverOpened": "Not opened yet",
       "opens": "{count, plural, one {# open} other {# opens}}",
       "usage": "{count, plural, one {# open} other {# opens}} · {when}",

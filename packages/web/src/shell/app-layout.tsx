@@ -1,8 +1,10 @@
 import {
   Breadcrumb,
   BreadcrumbItem,
+  BreadcrumbLink,
   BreadcrumbList,
   BreadcrumbPage,
+  BreadcrumbSeparator,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -15,20 +17,24 @@ import { AccountPreferences } from "../account/account-preferences.tsx";
 import { useCachedAccount } from "../account/use-cached-account.ts";
 import { useUpdatePreferences } from "../account/use-update-preferences.ts";
 import { BookmarkModal } from "../bookmarks/bookmark-modal.tsx";
+import { validateBookmarkListSearch } from "../bookmarks/list-search.ts";
 import { NewBookmarkButton } from "../bookmarks/new-bookmark-button.tsx";
 import { useSignOut } from "../auth/sign-out.ts";
 import { useConfig } from "../config/config-context.tsx";
 import { Slot, useExtensions } from "../extensions/index.ts";
+import { useAllFolders } from "../folders/use-all-folders.ts";
 import { AppShortcuts } from "../shortcuts/app-shortcuts.tsx";
 import { docsUrl } from "./docs-url.ts";
 import { EmailUnverifiedBanner, MailNotConfiguredBanner } from "./banners.tsx";
 import { OfflineBanner } from "./offline-banner.tsx";
+import { SidebarFolders } from "./sidebar-folders.tsx";
 import { useWorkspaceSwitcher } from "./workspace-switcher.tsx";
 
 function AppLayoutShell(): ReactElement {
   const { t } = useTranslation();
   const { product, docsBaseUrl } = useConfig();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const search = useRouterState({ select: (state) => state.location.search });
   const extensions = useExtensions();
   const signOut = useSignOut();
   const router = useRouter();
@@ -36,6 +42,10 @@ function AppLayoutShell(): ReactElement {
   const { switcher, dialog } = useWorkspaceSwitcher();
   const account = useCachedAccount();
   const inBookmarks = pathname === "/bookmarks" || pathname.startsWith("/bookmarks/");
+  const folders = useAllFolders();
+  // The folder the bookmarks list is filtered by, when it is one of the member's: it is the current item of the sidebar and the last crumb.
+  const filterFolderId = pathname === "/bookmarks" ? validateBookmarkListSearch(search).folderId : undefined;
+  const filterFolder = folders.folders.find((folder) => folder.id === filterFolderId);
   const inFolders = pathname === "/folders" || pathname.startsWith("/folders/");
   const inSettings = pathname === "/settings" || pathname.startsWith("/settings/");
   const inAdmin = pathname === "/admin" || pathname.startsWith("/admin/");
@@ -80,9 +90,21 @@ function AppLayoutShell(): ReactElement {
       breadcrumb={
         <Breadcrumb aria-label={t("shell.breadcrumb")}>
           <BreadcrumbList>
-            <BreadcrumbItem>
-              <BreadcrumbPage>{inAdmin ? t("shell.admin") : inSettings ? t("shell.settings") : inBookmarks ? t("shell.bookmarks") : inFolders ? t("shell.folders") : t("shell.home")}</BreadcrumbPage>
-            </BreadcrumbItem>
+            {inBookmarks && filterFolder !== undefined ? (
+              <>
+                <BreadcrumbItem>
+                  <BreadcrumbLink render={<Link to="/bookmarks" />}>{t("shell.bookmarks")}</BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator />
+                <BreadcrumbItem>
+                  <BreadcrumbPage>{filterFolder.name}</BreadcrumbPage>
+                </BreadcrumbItem>
+              </>
+            ) : (
+              <BreadcrumbItem>
+                <BreadcrumbPage>{inAdmin ? t("shell.admin") : inSettings ? t("shell.settings") : inBookmarks ? t("shell.bookmarks") : inFolders ? t("shell.folders") : t("shell.home")}</BreadcrumbPage>
+              </BreadcrumbItem>
+            )}
           </BreadcrumbList>
         </Breadcrumb>
       }
@@ -111,44 +133,47 @@ function AppLayoutShell(): ReactElement {
         drawerClose: t("shell.drawerClose"),
       }}
       navigation={
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton isActive={pathname === "/"} render={<Link to="/" />} tooltip={t("shell.home")}>
-              <HomeIcon aria-hidden="true" />
-              <span>{t("shell.home")}</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton isActive={inBookmarks} render={<Link to="/bookmarks" />} tooltip={t("shell.bookmarks")}>
-              <BookmarkIcon aria-hidden="true" />
-              <span>{t("shell.bookmarks")}</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton isActive={inFolders} render={<Link to="/folders" />} tooltip={t("shell.folders")}>
-              <FolderIcon aria-hidden="true" />
-              <span>{t("shell.folders")}</span>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-          {account?.isInstanceAdmin === true ? (
+        <>
+          <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton isActive={inAdmin} render={<Link to="/admin" />} tooltip={t("shell.admin")}>
-                <ShieldCheckIcon aria-hidden="true" />
-                <span>{t("shell.admin")}</span>
+              <SidebarMenuButton isActive={pathname === "/"} render={<Link to="/" />} tooltip={t("shell.home")}>
+                <HomeIcon aria-hidden="true" />
+                <span>{t("shell.home")}</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
-          ) : null}
-          {extensions.flatMap(({ id, navigation = [] }) =>
-            navigation.map(({ to, label, icon }) => (
-              <SidebarMenuItem key={`${id}:${to}`}>
-                <SidebarMenuButton isActive={pathname === to || pathname.startsWith(`${to}/`)} render={<Link to={to} />} tooltip={label}>
-                  {icon}
-                  <span>{label}</span>
+            <SidebarMenuItem>
+              <SidebarMenuButton isActive={inBookmarks && filterFolder === undefined} render={<Link to="/bookmarks" />} tooltip={t("shell.bookmarks")}>
+                <BookmarkIcon aria-hidden="true" />
+                <span>{t("shell.bookmarks")}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton isActive={inFolders} render={<Link to="/folders" />} tooltip={t("shell.folders")}>
+                <FolderIcon aria-hidden="true" />
+                <span>{t("shell.folders")}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            {account?.isInstanceAdmin === true ? (
+              <SidebarMenuItem>
+                <SidebarMenuButton isActive={inAdmin} render={<Link to="/admin" />} tooltip={t("shell.admin")}>
+                  <ShieldCheckIcon aria-hidden="true" />
+                  <span>{t("shell.admin")}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
-            )),
-          )}
-        </SidebarMenu>
+            ) : null}
+            {extensions.flatMap(({ id, navigation = [] }) =>
+              navigation.map(({ to, label, icon }) => (
+                <SidebarMenuItem key={`${id}:${to}`}>
+                  <SidebarMenuButton isActive={pathname === to || pathname.startsWith(`${to}/`)} render={<Link to={to} />} tooltip={label}>
+                    {icon}
+                    <span>{label}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )),
+            )}
+          </SidebarMenu>
+          <SidebarFolders activeId={filterFolder?.id} folders={folders} />
+        </>
       }
       productName={product.name}
       workspaceSwitcher={switcher}

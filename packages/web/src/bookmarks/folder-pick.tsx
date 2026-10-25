@@ -1,23 +1,22 @@
 import { Button } from "@slugbase/ui";
 import { MultiPick } from "@slugbase/ui/patterns";
-import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { useEffect, useState, type ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { folderIconOf, folderTextClass } from "../folders/folder-glyph.tsx";
 import {
-  DEFAULT_FOLDER_SORT,
   FOLDERS_QUERY_KEY,
   FOLDER_DEFAULT_COLOR,
   FOLDER_DEFAULT_ICON,
   FOLDER_NAME_MAX_LENGTH,
   createFolder,
   folderFailureOf,
-  folderListQuery,
   type Folder,
   type FolderFailure,
 } from "../folders/folders.ts";
+import { useAllFolders } from "../folders/use-all-folders.ts";
 import { inPlaceRefusals } from "../shell/mutation-error-toasts.tsx";
 import { rateLimitMessage } from "./rate-limit-message.ts";
 
@@ -73,17 +72,9 @@ export function FolderPick({ value, known, onChange, onCreated, disabled }: Fold
   const router = useRouter();
   const queryClient = useQueryClient();
   const api = router.options.context.api;
-  const list = useInfiniteQuery(folderListQuery(api, DEFAULT_FOLDER_SORT));
+  const list = useAllFolders();
   const [made, setMade] = useState<readonly FolderChoice[]>([]);
   const [failure, setFailure] = useState<FolderFailure | undefined>(undefined);
-
-  // The field searches the whole list, so a list of more than one page is read to its end.
-  const { hasNextPage, isFetchingNextPage, isError, fetchNextPage } = list;
-  useEffect(() => {
-    if (hasNextPage && !isFetchingNextPage && !isError) {
-      void fetchNextPage();
-    }
-  }, [hasNextPage, isFetchingNextPage, isError, fetchNextPage]);
 
   const create = useMutation({
     mutationKey: CREATE_FOLDER_MUTATION_KEY,
@@ -105,15 +96,14 @@ export function FolderPick({ value, known, onChange, onCreated, disabled }: Fold
     },
   });
 
-  const listed = list.data?.pages.flatMap((page) => page.items) ?? [];
-  const byId = new Map<string, FolderChoice>([...known, ...made, ...listed].map((folder) => [folder.id, folder]));
+  const byId = new Map<string, FolderChoice>([...known, ...made, ...list.folders].map((folder) => [folder.id, folder]));
   const options = [...byId.values()]
     .sort((a, b) => a.name.localeCompare(b.name))
     .map((folder) => {
       const Icon = folderIconOf(folder.icon);
       return { value: folder.id, label: folder.name, icon: <Icon className={`size-4 ${folderTextClass(folder.color)}`} /> };
     });
-  const loading = !list.isError && (list.isPending || list.hasNextPage);
+  const loading = list.status === "loading";
   const problem = failure === undefined ? undefined : failureMessage(t, failure);
 
   return (
@@ -133,14 +123,12 @@ export function FolderPick({ value, known, onChange, onCreated, disabled }: Fold
         },
       }}
       description={
-        list.isError ? (
+        list.status === "failed" ? (
           <span className="flex flex-wrap items-center gap-x-2">
             {t("bookmarks.modal.folders.loadFailed")}
             <Button
-              loading={list.isFetching}
-              onClick={() => {
-                void list.refetch();
-              }}
+              loading={list.retrying}
+              onClick={list.retry}
               size="xs"
               type="button"
               variant="outline"
@@ -162,7 +150,7 @@ export function FolderPick({ value, known, onChange, onCreated, disabled }: Fold
       options={options}
       placeholder={t("bookmarks.modal.folders.placeholder")}
       removeLabel={(name) => t("bookmarks.modal.folders.remove", { name })}
-      unavailableLabel={list.isError ? t("bookmarks.modal.folders.loadFailed") : undefined}
+      unavailableLabel={list.status === "failed" ? t("bookmarks.modal.folders.loadFailed") : undefined}
       value={value}
     />
   );

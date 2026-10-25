@@ -2,9 +2,11 @@ import { Button, Skeleton } from "@slugbase/ui";
 import { Banner, CardGrid, Confirm, EmptyState, FilterXIcon, InboxIcon, Loading, LoadMore, PlusIcon } from "@slugbase/ui/patterns";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { useState, type ReactElement } from "react";
+import { useEffect, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
+import { useAllFolders } from "../folders/use-all-folders.ts";
 import { useFormat } from "../i18n/use-format.ts";
+import { useAllTags } from "../tags/use-all-tags.ts";
 import { BookmarkCard } from "./bookmark-card.tsx";
 import { BookmarksBulkBar } from "./bookmarks-bulk-bar.tsx";
 import { BookmarksTable } from "./bookmarks-table.tsx";
@@ -12,7 +14,7 @@ import { useBulkBookmarks, usePendingPins, useDeleteBookmark, usePinBookmark } f
 import { useBookmarkSelection, useSelectionShortcuts } from "./bookmark-selection.ts";
 import { bookmarkFailureOf, bookmarkListQuery, type Bookmark } from "./bookmarks.ts";
 import { BookmarksToolbar } from "./bookmarks-toolbar.tsx";
-import { BOOKMARK_PAGE_SIZES, DEFAULT_SORT, filterParamsOf, hasActiveFilters, listParamsOf, pageSizeOfSearch, useBookmarkListControls, useBookmarkListSearch, type BookmarkView } from "./list-search.ts";
+import { BOOKMARK_PAGE_SIZES, DEFAULT_SORT, filterParamsOf, hasActiveFilters, listFilterParamsOf, listParamsOf, pageSizeOfSearch, useBookmarkListControls, useBookmarkListSearch, withoutFolder, type BookmarkView } from "./list-search.ts";
 import { useBookmarkModal } from "./modal-search.ts";
 import { useListShortcuts } from "./use-list-shortcuts.ts";
 import { usePasteToCreate } from "./use-paste-to-create.ts";
@@ -52,18 +54,33 @@ export function BookmarksPage(): ReactElement {
   const { t } = useTranslation();
   const format = useFormat();
   const router = useRouter();
-  const search = useBookmarkListSearch();
+  const addressed = useBookmarkListSearch();
   const controls = useBookmarkListControls();
   const modal = useBookmarkModal();
   usePasteToCreate(modal.openNew);
+  const folders = useAllFolders();
+  const tags = useAllTags();
+  // The list is read only once, and only when it is whole, that a folder of the address is not the member's; a list that
+  // failed or is still loading says nothing about it.
+  const staleFolder = addressed.folderId !== undefined && folders.status === "ready" && !folders.folders.some((folder) => folder.id === addressed.folderId);
+  // A folder the member does not have is not applied: the list is not narrowed by what they cannot see or remove.
+  const search = staleFolder ? { ...withoutFolder(addressed), view: addressed.view } : addressed;
+  const [staleNotice, setStaleNotice] = useState(false);
+  useEffect(() => {
+    if (staleFolder) {
+      setStaleNotice(true);
+      // Replacing the entry keeps back from returning to an address that is cleared again at once.
+      controls.update({ folderId: undefined }, { replace: true });
+    }
+  }, [staleFolder, controls]);
 
   const query = useInfiniteQuery(bookmarkListQuery(router.options.context.api, listParamsOf(search)));
   const pin = usePinBookmark();
   const pendingPins = usePendingPins();
   const [deleting, setDeleting] = useState<Bookmark | undefined>(undefined);
   const filters = filterParamsOf(search);
-  // The selection belongs to the filters it was made under; the sort, the view and the size do not change which bookmarks match.
-  const selection = useBookmarkSelection(JSON.stringify(filters));
+  // The selection belongs to the filters it was made under, the folder and the tags included; the sort, the view and the size do not change which bookmarks match.
+  const selection = useBookmarkSelection(JSON.stringify(listFilterParamsOf(search)));
   const bulk = useBulkBookmarks(selection);
   const remove = useDeleteBookmark(() => {
     if (deleting !== undefined) {
@@ -240,9 +257,27 @@ export function BookmarksPage(): ReactElement {
   return (
     <div className={PAGE_FRAME}>
       {heading}
-      <BookmarksToolbar controls={controls} search={search} />
+      {staleNotice ? (
+        <Banner
+          action={
+            <Button
+              onClick={() => {
+                setStaleNotice(false);
+              }}
+              size="sm"
+              variant="outline"
+            >
+              {t("bookmarks.list.filters.staleFolder.dismiss")}
+            </Button>
+          }
+          description={t("bookmarks.list.filters.staleFolder.description")}
+          title={t("bookmarks.list.filters.staleFolder.title")}
+          variant="warning"
+        />
+      ) : null}
+      <BookmarksToolbar controls={controls} folders={folders} search={search} tags={tags} />
       {body}
-      <BookmarksBulkBar bulk={bulk} filters={filters} selection={selection} total={lastPage?.total ?? null} />
+      <BookmarksBulkBar bulk={bulk} filters={filters} matchingSelectable={search.folderId === undefined && search.tag === undefined} selection={selection} total={lastPage?.total ?? null} />
       <p aria-live="polite" className="sr-only" role="status">
         {bulk.announcement}
       </p>

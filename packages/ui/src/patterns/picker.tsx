@@ -25,8 +25,12 @@ export interface PickerProps {
   onValueChange: (value: string) => void;
   /** Shown in the input while nothing is chosen. */
   placeholder?: string;
-  /** Shown in the list when no option matches the search, or when there are none. */
+  /** Shown in the list when no option matches the search, or when there are none. Not shown while the options are loading or could not be loaded. */
   emptyLabel: ReactNode;
+  /** Set while the options are still being read; the list says so instead of saying there are none. */
+  loadingLabel?: ReactNode;
+  /** Set when the options could not be read; the list says so instead of saying there are none. */
+  unavailableLabel?: ReactNode;
   disabled?: boolean;
   className?: string;
 }
@@ -38,11 +42,13 @@ function matches(option: PickerOption, query: string): boolean {
 
 /**
  * One option out of many, chosen by searching (doc 03 `picker`): a Base UI combobox whose input filters the list by
- * label and description, with a message in the list when nothing matches.
+ * label and description, with a message in the list when nothing matches. The list says it is loading, or that it
+ * could not be read, instead of saying there is nothing to choose.
  */
-export function Picker({ label, description, error, options, value, onValueChange, placeholder, emptyLabel, disabled, className }: PickerProps): ReactElement {
+export function Picker({ label, description, error, options, value, onValueChange, placeholder, emptyLabel, loadingLabel, unavailableLabel, disabled, className }: PickerProps): ReactElement {
   const invalid = error !== undefined && error !== null && error !== false;
   const selected = options.find((option) => option.value === value) ?? null;
+  const listed = loadingLabel !== undefined || unavailableLabel !== undefined;
   return (
     <Field className={cn("items-stretch gap-1.5", className)} disabled={disabled} invalid={invalid}>
       <FieldLabel>{label}</FieldLabel>
@@ -83,7 +89,17 @@ export function Picker({ label, description, error, options, value, onValueChang
               className="w-(--anchor-width) origin-(--transform-origin) rounded-lg border bg-popover text-foreground shadow-lg/5 outline-none"
               data-slot="picker-popup"
             >
-              <Combobox.Empty className="px-3 py-2 text-muted-foreground text-sm empty:hidden">{emptyLabel}</Combobox.Empty>
+              {loadingLabel === undefined ? null : (
+                <div className="px-3 py-2 text-muted-foreground text-sm" data-slot="picker-loading" role="status">
+                  {loadingLabel}
+                </div>
+              )}
+              {unavailableLabel === undefined ? null : (
+                <div className="px-3 py-2 text-destructive-text text-sm" data-slot="picker-unavailable" role="alert">
+                  {unavailableLabel}
+                </div>
+              )}
+              <Combobox.Empty className="px-3 py-2 text-muted-foreground text-sm empty:hidden">{listed ? null : emptyLabel}</Combobox.Empty>
               <Combobox.List className="max-h-60 overflow-y-auto p-1 empty:hidden" data-slot="picker-list">
                 {(option: PickerOption) => (
                   <Combobox.Item

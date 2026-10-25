@@ -1,10 +1,9 @@
 import { Button } from "@slugbase/ui";
 import { MultiPick } from "@slugbase/ui/patterns";
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { useRouter } from "@tanstack/react-router";
-import { useEffect, type ReactElement } from "react";
+import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { TAG_NAME_MAX_LENGTH, tagListQuery } from "../tags/tags.ts";
+import { TAG_NAME_MAX_LENGTH } from "../tags/tags.ts";
+import { useAllTags } from "../tags/use-all-tags.ts";
 import { splitTagValues, tagValuesOf } from "./bookmark-choices.ts";
 
 /** A tag as the modal knows it: what the bookmark carries and what the list answers. */
@@ -35,24 +34,13 @@ export interface TagPickProps {
  */
 export function TagPick({ ids, names, known, onChange, onTooLong, error, disabled }: TagPickProps): ReactElement {
   const { t } = useTranslation();
-  const router = useRouter();
-  const list = useInfiniteQuery(tagListQuery(router.options.context.api));
-
-  // The field searches the whole list, so a list of more than one page is read to its end.
-  const { hasNextPage, isFetchingNextPage, isError, fetchNextPage } = list;
-  useEffect(() => {
-    if (hasNextPage && !isFetchingNextPage && !isError) {
-      void fetchNextPage();
-    }
-  }, [hasNextPage, isFetchingNextPage, isError, fetchNextPage]);
-
-  const listed = list.data?.pages.flatMap((page) => page.items) ?? [];
-  const byId = new Map<string, TagChoice>([...known, ...listed].map((tag) => [tag.id, tag]));
+  const list = useAllTags();
+  const byId = new Map<string, TagChoice>([...known, ...list.tags].map((tag) => [tag.id, tag]));
   const options = [
     ...[...byId.values()].sort((a, b) => a.name.localeCompare(b.name)).map((tag) => ({ value: tag.id, label: tag.name })),
     ...tagValuesOf([], names).map((value, index) => ({ value, label: names[index] ?? value })),
   ];
-  const loading = !list.isError && (list.isPending || list.hasNextPage);
+  const loading = list.status === "loading";
 
   return (
     <MultiPick
@@ -67,14 +55,12 @@ export function TagPick({ ids, names, known, onChange, onTooLong, error, disable
         },
       }}
       description={
-        list.isError ? (
+        list.status === "failed" ? (
           <span className="flex flex-wrap items-center gap-x-2">
             {t("bookmarks.modal.tags.loadFailed")}
             <Button
-              loading={list.isFetching}
-              onClick={() => {
-                void list.refetch();
-              }}
+              loading={list.retrying}
+              onClick={list.retry}
               size="xs"
               type="button"
               variant="outline"
@@ -96,7 +82,7 @@ export function TagPick({ ids, names, known, onChange, onTooLong, error, disable
       options={options}
       placeholder={t("bookmarks.modal.tags.placeholder")}
       removeLabel={(name) => t("bookmarks.modal.tags.remove", { name })}
-      unavailableLabel={list.isError ? t("bookmarks.modal.tags.loadFailed") : undefined}
+      unavailableLabel={list.status === "failed" ? t("bookmarks.modal.tags.loadFailed") : undefined}
       value={tagValuesOf(ids, names)}
     />
   );

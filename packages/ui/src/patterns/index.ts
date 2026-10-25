@@ -69,4 +69,5 @@ export {
   TableIcon,
   Trash2Icon,
   TriangleAlertIcon,
+  XIcon,
 } from "lucide-react";

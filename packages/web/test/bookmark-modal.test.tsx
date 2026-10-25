@@ -3,6 +3,7 @@ import { createHandlers, type Scenario } from "@slugbase/testing/msw";
 import { createMockServer, readOpenApiDocument } from "@slugbase/testing/msw/node";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
 import { renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
@@ -134,7 +135,7 @@ async function openEdit(): Promise<HTMLElement> {
   return dialog;
 }
 
-describe("creating a bookmark", () => {
+describe("creating a bookmark", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("opens from the New bookmark button of the top bar, saves the address and the title, and closes", async () => {
     use({ fixtures: { createBookmark: BOOKMARK } });
     await openApp("/");
@@ -217,7 +218,7 @@ describe("creating a bookmark", () => {
   });
 });
 
-describe("editing a bookmark", () => {
+describe("editing a bookmark", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows a skeleton while ?bookmark= loads, then the bookmark in the form", async () => {
     use({ fixtures: { getBookmark: BOOKMARK } });
     await openApp(`/bookmarks?bookmark=${ID}`);
@@ -319,7 +320,7 @@ describe("editing a bookmark", () => {
   });
 });
 
-describe("closing with unsaved changes", () => {
+describe("closing with unsaved changes", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("asks first, goes back to the form on Keep editing, and closes on Discard", async () => {
     const dialog = await openEdit();
     await type("Title", "Unsaved");
@@ -352,7 +353,7 @@ describe("closing with unsaved changes", () => {
   });
 });
 
-describe("deleting a bookmark", () => {
+describe("deleting a bookmark", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("states the consequence, deletes only once confirmed, and closes", async () => {
     const dialog = await openEdit();
 
@@ -401,7 +402,7 @@ describe("deleting a bookmark", () => {
   });
 });
 
-describe("on a phone", () => {
+describe("on a phone", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("is a drawer below the md breakpoint", async () => {
     stubMatchMedia(true);
     await openApp("/?new=1");

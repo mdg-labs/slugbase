@@ -32,6 +32,7 @@ import { ShieldCheckIcon } from 'lucide-react';
 import { TableIcon } from 'lucide-react';
 import { Trash2Icon } from 'lucide-react';
 import { TriangleAlertIcon } from 'lucide-react';
+import { XIcon } from 'lucide-react';
 
 // @public
 export type Accent = "periwinkle" | "violet" | "rose" | "amber" | "green" | "teal";
@@ -640,11 +641,13 @@ export interface PickerProps {
     error?: ReactNode;
     // (undocumented)
     label: ReactNode;
+    loadingLabel?: ReactNode;
     // (undocumented)
     onValueChange: (value: string) => void;
     // (undocumented)
     options: readonly PickerOption[];
     placeholder?: string;
+    unavailableLabel?: ReactNode;
     value: string | undefined;
 }
 
@@ -1116,6 +1119,8 @@ export interface WorkspaceSwitcherProps {
     retryLabel: string;
     workspaces: readonly WorkspaceSwitcherItem[];
 }
+
+export { XIcon }
 
 // (No @packageDocumentation comment for this package)
 

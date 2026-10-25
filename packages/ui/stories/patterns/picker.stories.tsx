@@ -25,3 +25,11 @@ export const NoOptions = (): React.ReactElement => (
 export const WithError = (): React.ReactElement => (
   <Picker emptyLabel="Nobody matches" error="Choose a recipient." label="Recipient" onValueChange={() => undefined} options={OPTIONS} value={undefined} />
 );
+
+export const Loading = (): React.ReactElement => (
+  <Picker emptyLabel="There is nobody else in the workspace" label="Recipient" loadingLabel="Loading members" onValueChange={() => undefined} options={[]} value={undefined} />
+);
+
+export const Unavailable = (): React.ReactElement => (
+  <Picker emptyLabel="There is nobody else in the workspace" label="Recipient" onValueChange={() => undefined} options={[]} unavailableLabel="The members could not be loaded" value={undefined} />
+);
