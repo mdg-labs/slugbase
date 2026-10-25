@@ -1,5 +1,6 @@
 import type { EntitlementLimit } from "../entitlements/catalog.ts";
 import type { DomainEvent } from "../events/catalog.ts";
+import { bookmarkTagSelection, type BookmarkTagRef, type BookmarkTagSelection } from "./tagging.ts";
 import type { BookmarkUpdateRequest, BookmarkUpdateResult } from "./update.ts";
 import { normalizeBookmarkUrl, type BookmarkUrlRefusal } from "./url.ts";
 
@@ -42,6 +43,8 @@ export interface BookmarkRecord {
   readonly lastOpenedAt: Date | null;
   /** The owner's folders the bookmark is filed in, in the order of their names. Filing does not move `version`. */
   readonly folders: readonly BookmarkFolderRef[];
+  /** The caller's own tags on the bookmark, in the order of their names; another member's tags are never in it. Tagging does not move `version`. */
+  readonly tags: readonly BookmarkTagRef[];
   /** The `ETag` of the bookmark. */
   readonly version: number;
   readonly createdAt: Date;
@@ -70,6 +73,8 @@ export interface BookmarkCreationRequest {
   readonly events: readonly DomainEvent<"bookmark.created">[];
   /** The owner's folders the new bookmark is filed in, without repeats; empty for none. */
   readonly folderIds: readonly string[];
+  /** The owner's tags the new bookmark carries; none for an empty selection. */
+  readonly tags: BookmarkTagSelection;
 }
 
 export type BookmarkStoreResult =
@@ -79,14 +84,17 @@ export type BookmarkStoreResult =
   /** The workspace of the transaction cannot be reached: it does not exist, is being deleted, or the account is no member. */
   | { readonly kind: "unavailable" }
   /** One of the folders is not one the owner has in this workspace; nothing is written. */
-  | { readonly kind: "folder_not_found" };
+  | { readonly kind: "folder_not_found" }
+  /** One of the tags is not one the owner has in this workspace; nothing is written. */
+  | { readonly kind: "tag_not_found" };
 
 export interface BookmarkStore {
   /**
    * Takes one place under `ceiling` from the workspace's bookmark count, inserts the bookmark and queues the events, in
    * the transaction the store is bound to. The count is read under the workspace's row lock and raised in the same
-   * transaction as the insert; nothing is written for `limit_reached`, `unavailable` and `folder_not_found`. The bookmark is filed in the
-   * folders of `request.folderIds` in the same transaction, and only in folders its owner owns.
+   * transaction as the insert; nothing is written for `limit_reached`, `unavailable`, `folder_not_found` and `tag_not_found`. The bookmark is filed in the
+   * folders of `request.folderIds` and tagged in the same transaction, and only with folders and tags its owner owns; a name of `request.tags` the
+   * owner has no tag of creates one in that transaction.
    */
   create(request: BookmarkCreationRequest): Promise<BookmarkStoreResult>;
   /** The bookmark of the workspace of the transaction with that identifier, whoever owns it; undefined when there is none. */
@@ -120,6 +128,9 @@ export interface BookmarkCreationAsk {
   readonly pinned: boolean | undefined;
   /** The folders to file the bookmark in; none when left out. */
   readonly folderIds: readonly string[] | undefined;
+  /** The owner's tags to put on the bookmark by identifier, and by name (a name the owner has no tag of creates one); none when left out. Both together name the union. */
+  readonly tagIds?: readonly string[] | undefined;
+  readonly tagNames?: readonly string[] | undefined;
   /** The workspace's `bookmarks.max`. */
   readonly ceiling: EntitlementLimit;
 }
@@ -133,7 +144,9 @@ export type BookmarkCreationOutcome =
   /** The workspace cannot be reached; nothing was written. */
   | { readonly kind: "unavailable" }
   /** A folder is not one the account has in this workspace (another member's, another workspace's, or none); nothing was written. */
-  | { readonly kind: "folder_not_found" };
+  | { readonly kind: "folder_not_found" }
+  /** A tag is not one the account has in this workspace (another member's, another workspace's, or none); nothing was written. */
+  | { readonly kind: "tag_not_found" };
 
 function checkLength(field: string, value: string, min: number, max: number): void {
   const length = Array.from(value).length;
@@ -171,6 +184,7 @@ export async function createBookmark({ store, newId }: BookmarkCreationDependenc
     },
     ceiling: ask.ceiling,
     folderIds: [...new Set((ask.folderIds ?? []).map((id) => id.toLowerCase()))],
+    tags: bookmarkTagSelection(ask.tagIds, ask.tagNames, newId) ?? { ids: [], names: [] },
     events: [{ eventId: newId(), name: "bookmark.created", payload: { workspaceId: ask.workspaceId, bookmarkId: id, accountId: ask.accountId } }],
   });
   if (result.kind === "limit_reached") {

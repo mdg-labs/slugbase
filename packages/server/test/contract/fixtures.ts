@@ -229,11 +229,11 @@ export const FIXTURES: ContractFixtures = {
   // nothing, so the valid request is the declared 201. The reading names a bookmark by identifier, and the walker cannot know the identifier of one it
   // would own, so its valid request names a bookmark that no workspace holds, which is the declared 404 whoever would hold it, and so is a bookmark of
   // workspace B; the route tests read the walker's own bookmarks, and the matrix puts the bookmarks of workspace B in the path.
-  // The creation also takes `folderIds`, which the matrix picks as an input that can carry an identifier: a folder of workspace B is refused with the
-  // declared 404, and nothing is created, whoever would hold the folder.
+  // The creation also takes `folderIds` and `tagIds`, which the matrix picks as inputs that can carry an identifier: a folder or a tag of workspace B is
+  // refused with the declared 404, and nothing is created, whoever would hold them.
   createBookmark: {
     body: { url: "https://example.com/walker", title: "Walker bookmark" },
-    foreign: { body: { url: "https://example.com/walker", title: "Walker bookmark", folderIds: [UNKNOWN_FOLDER_ID] } },
+    foreign: { body: { url: "https://example.com/walker", title: "Walker bookmark", folderIds: [UNKNOWN_FOLDER_ID], tagIds: [UNKNOWN_TAG_ID] } },
   },
   // The list names no identifier and acts in the workspace of the request: the walker lists the bookmarks of the workspace it owns. The matrix picks
   // the input `hasSlug` as one that can carry an identifier, because its name ends in `Slug`; it is a boolean filter, so the identifier the matrix puts

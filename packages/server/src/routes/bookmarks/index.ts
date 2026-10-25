@@ -47,7 +47,13 @@ import { acceptedVersions, entityTagOf } from "../workspaces/if-match.ts";
 // filing moves no version. `folderId` on the list narrows it to the bookmarks filed in one of the caller's folders (another member's or
 // unknown is an empty page). Every bookmark body carries the `folders` it is filed in (doc 04 section 10.6, doc 02 sections 7.1 and 8.2).
 //
-// PATCH /api/v1/bookmarks/{id} is a JSON Merge Patch of the url, title, description, pinned and folderIds fields. The URL goes through the
+// `tagIds` and `tagNames` on a creation and on a change put the caller's own tags on the bookmark in the same transaction (a change replaces the tags
+// it has by the union of the two, and a name the caller has no tag of creates one); a tag named by identifier that is another member's, another
+// workspace's or unknown is `404 not_found` and nothing is created, changed or tagged, and tagging moves no version. `tag` on the list, repeated,
+// narrows it to the bookmarks that carry every one of the caller's tags named (AND; a tag that is not the caller's is an empty page). Every body
+// carries the caller's own `tags` and no other member's (doc 04 section 10.6, doc 02 sections 7.2 and 8.2, doc 13 Q22).
+//
+// PATCH /api/v1/bookmarks/{id} is a JSON Merge Patch of the url, title, description, pinned, folderIds, tagIds and tagNames fields. The URL goes through the
 // normalisation of a creation, so its canonical form and host are derived again. `If-Match` is compared with the version under
 // the bookmark's row lock and a mismatch is `412 precondition_failed` with nothing written; without the header the patch applies
 // (an API token may leave it out). A patch that changes nothing answers 200 with the unchanged `ETag`. A plan-archived bookmark is
@@ -74,6 +80,7 @@ import { acceptedVersions, entityTagOf } from "../workspaces/if-match.ts";
 const NO_WORKSPACE = "No such resource.";
 const NO_SUCH_BOOKMARK = "No such resource.";
 const NO_SUCH_FOLDER = "No such resource.";
+const NO_SUCH_TAG = "No such resource.";
 const URL_NOT_ALLOWED = "Only http and https URLs can be saved as a bookmark.";
 const DESTINATION_NOT_ALLOWED = "The bookmark's address is not an http or https URL, so it is not opened.";
 const URL_INVALID = "The URL is not valid.";
@@ -109,10 +116,11 @@ function auditActorOf(principal: Principal | undefined, accountId: string, label
 function storeOf(tx: TenantTx): BookmarkStore {
   const repository = bookmarkRepository(tx);
   return {
-    create({ bookmark, ceiling, events, folderIds }) {
+    create({ bookmark, ceiling, events, folderIds, tags }) {
       return repository.create({
         bookmark,
         folderIds,
+        tags,
         ceiling: ceiling === "unlimited" ? null : ceiling,
         jobs: events.map((event) => queueDomainEvent(event.eventId, event.name, event.payload)),
       });
@@ -165,6 +173,7 @@ function bookmarkBody(bookmark: BookmarkRecord): z.input<typeof BookmarkSchema> 
     openCount: bookmark.openCount,
     lastOpenedAt: bookmark.lastOpenedAt === null ? null : bookmark.lastOpenedAt.toISOString(),
     folders: bookmark.folders.map((folder) => ({ id: folder.id, name: folder.name, icon: folder.icon, color: folder.color })),
+    tags: bookmark.tags.map((tag) => ({ id: tag.id, name: tag.name })),
     version: bookmark.version,
     createdAt: bookmark.createdAt.toISOString(),
     updatedAt: bookmark.updatedAt.toISOString(),
@@ -191,6 +200,8 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage }: BookmarkRo
             description: body.description,
             pinned: body.pinned,
             folderIds: body.folderIds,
+            tagIds: body.tagIds,
+            tagNames: body.tagNames,
             ceiling,
           },
         ),
@@ -209,6 +220,8 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage }: BookmarkRo
           throw new ProblemError("not_found", NO_WORKSPACE);
         case "folder_not_found":
           throw new ProblemError("not_found", NO_SUCH_FOLDER);
+        case "tag_not_found":
+          throw new ProblemError("not_found", NO_SUCH_TAG);
       }
     }),
 
@@ -226,6 +239,7 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage }: BookmarkRo
             forwarding: query.forwarding === undefined ? undefined : query.forwarding === "true",
             url: query.url,
             folderId: query.folderId,
+            tagIds: query.tag === undefined ? undefined : typeof query.tag === "string" ? [query.tag] : query.tag,
             sort: query.sort,
             limit: query.limit,
             cursor: query.cursor,
@@ -314,7 +328,7 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage }: BookmarkRo
       const tenant = tenantOf(context);
       const expectedVersions = acceptedVersions(context.req.header("if-match"));
       const outcome = await tenant.withTenant((tx) =>
-        updateBookmark({ store: storeOf(tx) }, { bookmarkId: params.id, accountId: tenant.accountId, patch: body, expectedVersions }),
+        updateBookmark({ store: storeOf(tx), newId: uuidv7 }, { bookmarkId: params.id, accountId: tenant.accountId, patch: body, expectedVersions }),
       );
       switch (outcome.kind) {
         case "updated":
@@ -331,6 +345,8 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage }: BookmarkRo
           throw new ProblemError("not_found", NO_SUCH_BOOKMARK);
         case "folder_not_found":
           throw new ProblemError("not_found", NO_SUCH_FOLDER);
+        case "tag_not_found":
+          throw new ProblemError("not_found", NO_SUCH_TAG);
       }
     }),
 

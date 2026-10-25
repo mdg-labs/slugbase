@@ -313,6 +313,12 @@ export const BOOKMARK_LIST_TOTAL_CAP = 10000;
 export const BOOKMARK_SELECT_ALL_CAP = 5000;
 
 // @public
+export const BOOKMARK_TAG_FILTER_MAX = 10;
+
+// @public
+export const BOOKMARK_TAGS_MAX = 100;
+
+// @public
 export const BOOKMARK_TITLE_MAX_LENGTH = 300;
 
 // @public
@@ -393,6 +399,10 @@ export const BookmarkListSchema: z.ZodObject<{
             icon: z.ZodString;
             color: z.ZodNumber;
         }, z.core.$strict>>;
+        tags: z.ZodArray<z.ZodObject<{
+            id: z.ZodUUID;
+            name: z.ZodString;
+        }, z.core.$strict>>;
         version: z.ZodNumber;
         createdAt: z.ZodISODateTime;
         updatedAt: z.ZodISODateTime;
@@ -431,6 +441,10 @@ export const BookmarkSchema: z.ZodObject<{
         icon: z.ZodString;
         color: z.ZodNumber;
     }, z.core.$strict>>;
+    tags: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+    }, z.core.$strict>>;
     version: z.ZodNumber;
     createdAt: z.ZodISODateTime;
     updatedAt: z.ZodISODateTime;
@@ -445,6 +459,12 @@ export const BookmarkSortSchema: z.ZodEnum<{
     most_used: "most_used";
     recently_opened: "recently_opened";
 }>;
+
+// @public (undocumented)
+export const BookmarkTagSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    name: z.ZodString;
+}, z.core.$strict>;
 
 // @public (undocumented)
 export const BULK_BOOKMARK_ACTIONS: readonly ["delete", "pin", "unpin"];
@@ -772,6 +792,7 @@ export interface ComponentTypes {
             ownerId: string | null;
             pinned: boolean;
             slug: string | null;
+            tags: ComponentTypes["schemas"]["BookmarkTag"][];
             title: string;
             updatedAt: string;
             url: string;
@@ -802,6 +823,10 @@ export interface ComponentTypes {
         };
         BookmarkOpen: {
             url: string;
+        };
+        BookmarkTag: {
+            id: string;
+            name: string;
         };
         BulkBookmarksRequest: {
             action: "delete" | "pin" | "unpin";
@@ -840,6 +865,8 @@ export interface ComponentTypes {
             description?: string;
             folderIds?: string[];
             pinned?: boolean;
+            tagIds?: string[];
+            tagNames?: string[];
             title: string;
             url: string;
         };
@@ -1255,6 +1282,8 @@ export interface ComponentTypes {
             description?: string | null;
             folderIds?: string[];
             pinned?: boolean;
+            tagIds?: string[];
+            tagNames?: string[];
             title?: string;
             url?: string;
         };
@@ -1468,6 +1497,8 @@ export const createBookmark: {
             description: z.ZodOptional<z.ZodString>;
             pinned: z.ZodOptional<z.ZodBoolean>;
             folderIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+            tagIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+            tagNames: z.ZodOptional<z.ZodArray<z.ZodString>>;
         }, z.core.$strict>;
     };
     readonly responses: {
@@ -1488,6 +1519,10 @@ export const createBookmark: {
         name: z.ZodString;
         icon: z.ZodString;
         color: z.ZodNumber;
+        }, z.core.$strict>>;
+        tags: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
         }, z.core.$strict>>;
         version: z.ZodNumber;
         createdAt: z.ZodISODateTime;
@@ -1511,6 +1546,8 @@ export const CreateBookmarkRequestSchema: z.ZodObject<{
     description: z.ZodOptional<z.ZodString>;
     pinned: z.ZodOptional<z.ZodBoolean>;
     folderIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+    tagIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+    tagNames: z.ZodOptional<z.ZodArray<z.ZodString>>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -1547,6 +1584,7 @@ export const createFolder: {
                 map: "map";
                 target: "target";
                 code: "code";
+                tag: "tag";
                 folder: "folder";
                 "folder-open": "folder-open";
                 "folder-heart": "folder-heart";
@@ -1587,7 +1625,6 @@ export const createFolder: {
                 rocket: "rocket";
                 trophy: "trophy";
                 flag: "flag";
-                tag: "tag";
                 wallet: "wallet";
                 "credit-card": "credit-card";
                 dumbbell: "dumbbell";
@@ -1638,6 +1675,7 @@ export const CreateFolderRequestSchema: z.ZodObject<{
         map: "map";
         target: "target";
         code: "code";
+        tag: "tag";
         folder: "folder";
         "folder-open": "folder-open";
         "folder-heart": "folder-heart";
@@ -1678,7 +1716,6 @@ export const CreateFolderRequestSchema: z.ZodObject<{
         rocket: "rocket";
         trophy: "trophy";
         flag: "flag";
-        tag: "tag";
         wallet: "wallet";
         "credit-card": "credit-card";
         dumbbell: "dumbbell";
@@ -2419,6 +2456,10 @@ export const getBookmark: {
         name: z.ZodString;
         icon: z.ZodString;
         color: z.ZodNumber;
+        }, z.core.$strict>>;
+        tags: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
         }, z.core.$strict>>;
         version: z.ZodNumber;
         createdAt: z.ZodISODateTime;
@@ -3453,6 +3494,7 @@ export const listBookmarks: {
             }>>;
             url: z.ZodOptional<z.ZodString>;
             folderId: z.ZodOptional<z.ZodUUID>;
+            tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
             sort: z.ZodDefault<z.ZodEnum<{
                 recent: "recent";
                 oldest: "oldest";
@@ -3484,6 +3526,10 @@ export const listBookmarks: {
         name: z.ZodString;
         icon: z.ZodString;
         color: z.ZodNumber;
+        }, z.core.$strict>>;
+        tags: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
         }, z.core.$strict>>;
         version: z.ZodNumber;
         createdAt: z.ZodISODateTime;
@@ -3522,6 +3568,7 @@ export const ListBookmarksQuerySchema: z.ZodObject<{
     }>>;
     url: z.ZodOptional<z.ZodString>;
     folderId: z.ZodOptional<z.ZodUUID>;
+    tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
     sort: z.ZodDefault<z.ZodEnum<{
         recent: "recent";
         oldest: "oldest";
@@ -7592,6 +7639,7 @@ export interface OperationTypes {
                 forwarding?: "true" | "false";
                 url?: string;
                 folderId?: string;
+                tag?: string | string[];
                 sort?: "recent" | "oldest" | "title_asc" | "title_desc" | "most_used" | "recently_opened";
                 limit?: number;
                 cursor?: string;
@@ -13451,6 +13499,8 @@ export const updateBookmark: {
             description: z.ZodOptional<z.ZodNullable<z.ZodString>>;
             pinned: z.ZodOptional<z.ZodBoolean>;
             folderIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+            tagIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+            tagNames: z.ZodOptional<z.ZodArray<z.ZodString>>;
         }, z.core.$strict>;
     };
     readonly responses: {
@@ -13471,6 +13521,10 @@ export const updateBookmark: {
         name: z.ZodString;
         icon: z.ZodString;
         color: z.ZodNumber;
+        }, z.core.$strict>>;
+        tags: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
         }, z.core.$strict>>;
         version: z.ZodNumber;
         createdAt: z.ZodISODateTime;
@@ -13499,6 +13553,8 @@ export const UpdateBookmarkRequestSchema: z.ZodObject<{
     description: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     pinned: z.ZodOptional<z.ZodBoolean>;
     folderIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+    tagIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+    tagNames: z.ZodOptional<z.ZodArray<z.ZodString>>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -13524,6 +13580,7 @@ export const updateFolder: {
                 map: "map";
                 target: "target";
                 code: "code";
+                tag: "tag";
                 folder: "folder";
                 "folder-open": "folder-open";
                 "folder-heart": "folder-heart";
@@ -13564,7 +13621,6 @@ export const updateFolder: {
                 rocket: "rocket";
                 trophy: "trophy";
                 flag: "flag";
-                tag: "tag";
                 wallet: "wallet";
                 "credit-card": "credit-card";
                 dumbbell: "dumbbell";
@@ -13621,6 +13677,7 @@ export const UpdateFolderRequestSchema: z.ZodObject<{
         map: "map";
         target: "target";
         code: "code";
+        tag: "tag";
         folder: "folder";
         "folder-open": "folder-open";
         "folder-heart": "folder-heart";
@@ -13661,7 +13718,6 @@ export const UpdateFolderRequestSchema: z.ZodObject<{
         rocket: "rocket";
         trophy: "trophy";
         flag: "flag";
-        tag: "tag";
         wallet: "wallet";
         "credit-card": "credit-card";
         dumbbell: "dumbbell";

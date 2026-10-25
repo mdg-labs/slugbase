@@ -11,6 +11,7 @@ import { BookmarkListFilter } from '@slugbase/core';
 import { BookmarkListRequest } from '@slugbase/core';
 import { BookmarkListRow } from '@slugbase/core';
 import { BookmarkRecord } from '@slugbase/core';
+import { BookmarkTagSelection } from '@slugbase/core';
 import { BookmarkUpdateRequest } from '@slugbase/core';
 import { BookmarkUpdateResult } from '@slugbase/core';
 import type { CredentialTokenPurpose } from '@slugbase/core';
@@ -293,6 +294,7 @@ export interface BookmarkCreation {
     readonly ceiling: number | null;
     readonly folderIds?: readonly string[];
     readonly jobs: readonly QueuedJob[];
+    readonly tags?: BookmarkTagSelection;
 }
 
 // @public (undocumented)
@@ -312,6 +314,10 @@ export type BookmarkCreationResult = {
 /** A folder is not one the owner has in the workspace; nothing is written. */
 | {
     readonly kind: "folder_not_found";
+}
+/** A tag named by identifier is not one the owner has in the workspace; nothing is written. */
+| {
+    readonly kind: "tag_not_found";
 };
 
 // @public (undocumented)

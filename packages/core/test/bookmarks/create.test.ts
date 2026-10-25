@@ -25,7 +25,7 @@ function ids(): () => string {
 function recordOf(request: BookmarkCreationRequest): BookmarkRecord {
   const { id, ownerId, url, host, title, description, pinned } = request.bookmark;
   const now = new Date("2026-10-23T05:00:00.000Z");
-  return { id, ownerId, url, host, title, description, slug: null, forwarding: false, pinned, openCount: 0, lastOpenedAt: null, folders: [], version: 1, createdAt: now, updatedAt: now };
+  return { id, ownerId, url, host, title, description, slug: null, forwarding: false, pinned, openCount: 0, lastOpenedAt: null, folders: [], tags: [], version: 1, createdAt: now, updatedAt: now };
 }
 
 function world(answer: (request: BookmarkCreationRequest) => BookmarkStoreResult = (request) => ({ kind: "created", bookmark: recordOf(request) })) {
@@ -153,6 +153,39 @@ describe("createBookmark", () => {
     expect(requests.map((request) => request.folderIds)).toEqual([["0192f3a0-dddd-7000-8000-00000000000a", "0192f3a0-dddd-7000-8000-00000000000b"], []]);
   });
 
+  it("hands the store the tags to put on the bookmark: the identifiers in lower case, the names trimmed once for each name whatever its case, each with a fresh identifier, and none when the caller names none", async () => {
+    const { requests, dependencies } = world();
+    const tag = "0192f3a0-ffff-7000-8000-00000000000A";
+
+    await createBookmark(dependencies, { ...ASKING, tagIds: [tag, tag.toLowerCase()], tagNames: [" Reading ", "READING", "Later"] });
+    await createBookmark(dependencies, ASKING);
+
+    expect(requests.map((request) => request.tags)).toEqual([
+      {
+        ids: ["0192f3a0-ffff-7000-8000-00000000000a"],
+        names: [
+          { name: "Reading", newId: "0192f3a0-aaaa-7000-8000-000000000002" },
+          { name: "Later", newId: "0192f3a0-aaaa-7000-8000-000000000003" },
+        ],
+      },
+      { ids: [], names: [] },
+    ]);
+  });
+
+  it("rejects a tag name that is empty or over 40 characters, which the contract has already refused, before the store is asked", async () => {
+    const { requests, dependencies } = world();
+
+    await expect(createBookmark(dependencies, { ...ASKING, tagNames: ["   "] })).rejects.toThrow(RangeError);
+    await expect(createBookmark(dependencies, { ...ASKING, tagNames: ["t".repeat(41)] })).rejects.toThrow(RangeError);
+    expect(requests).toEqual([]);
+  });
+
+  it("reports a tag that is not the owner's", async () => {
+    const { dependencies } = world(() => ({ kind: "tag_not_found" }));
+
+    expect(await createBookmark(dependencies, { ...ASKING, tagIds: ["0192f3a0-ffff-7000-8000-00000000000a"] })).toEqual({ kind: "tag_not_found" });
+  });
+
   it("reports a folder that is not the owner's, and announces nothing the store did not create", async () => {
     const { dependencies } = world(() => ({ kind: "folder_not_found" }));
 
@@ -169,7 +202,7 @@ describe("createBookmark", () => {
 });
 
 describe("readBookmark", () => {
-  const record = (ownerId: string | null): BookmarkRecord => ({ ...recordOf({ bookmark: { id: "0192f3a0-aaaa-7000-8000-000000000009", ownerId: ACCOUNT, url: "https://example.com/", urlCanonical: "https://example.com", host: "example.com", title: "Docs", description: null, pinned: false }, ceiling: "unlimited", events: [], folderIds: [] }), ownerId });
+  const record = (ownerId: string | null): BookmarkRecord => ({ ...recordOf({ bookmark: { id: "0192f3a0-aaaa-7000-8000-000000000009", ownerId: ACCOUNT, url: "https://example.com/", urlCanonical: "https://example.com", host: "example.com", title: "Docs", description: null, pinned: false }, ceiling: "unlimited", events: [], folderIds: [], tags: { ids: [], names: [] } }), ownerId });
 
   it("returns the bookmark to its owner", async () => {
     const stored = record(ACCOUNT);

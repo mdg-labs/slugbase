@@ -24,6 +24,7 @@ const STORED: BookmarkRecord = {
   openCount: 0,
   lastOpenedAt: null,
   folders: [],
+  tags: [],
   version: 1,
   createdAt: new Date("2026-10-23T05:00:00.000Z"),
   updatedAt: new Date("2026-10-23T05:00:00.000Z"),
@@ -31,9 +32,11 @@ const STORED: BookmarkRecord = {
 
 function updating(answer: BookmarkUpdateResult = { kind: "updated", bookmark: STORED }) {
   const requests: BookmarkUpdateRequest[] = [];
+  let issued = 0;
   return {
     requests,
     dependencies: {
+      newId: () => `0192f3a0-eeee-7000-8000-${String((issued += 1)).padStart(12, "0")}`,
       store: {
         update(request: BookmarkUpdateRequest) {
           requests.push(request);
@@ -93,6 +96,38 @@ describe("updateBookmark", () => {
     expect(requests.map((request) => request.changes.folderIds)).toEqual([["0192f3a0-dddd-7000-8000-00000000000a"], [], undefined]);
   });
 
+  it("hands the store the tags the bookmark is to carry: the identifiers in lower case without repeats, and the names trimmed, once for each name whatever its case, each with a fresh identifier", async () => {
+    const { requests, dependencies } = updating();
+    const tag = "0192f3a0-ffff-7000-8000-00000000000A";
+
+    await updateBookmark(dependencies, { ...ASKING, patch: { tagIds: [tag, tag.toLowerCase()], tagNames: ["  Reading ", "reading", "Later"] } });
+    await updateBookmark(dependencies, { ...ASKING, patch: { tagIds: [] } });
+    await updateBookmark(dependencies, { ...ASKING, patch: { tagNames: [] } });
+    await updateBookmark(dependencies, { ...ASKING, patch: { title: "Only the title" } });
+
+    expect(requests.map((request) => request.changes.tags)).toEqual([
+      {
+        ids: ["0192f3a0-ffff-7000-8000-00000000000a"],
+        names: [
+          { name: "Reading", newId: "0192f3a0-eeee-7000-8000-000000000001" },
+          { name: "Later", newId: "0192f3a0-eeee-7000-8000-000000000002" },
+        ],
+      },
+      { ids: [], names: [] },
+      { ids: [], names: [] },
+      undefined,
+    ]);
+  });
+
+  it("rejects a tag name that is empty or over 40 characters, which the contract has already refused, before the store is asked", async () => {
+    const { requests, dependencies } = updating();
+
+    await expect(updateBookmark(dependencies, { ...ASKING, patch: { tagNames: ["  "] } })).rejects.toThrow(RangeError);
+    await expect(updateBookmark(dependencies, { ...ASKING, patch: { tagNames: ["t".repeat(41)] } })).rejects.toThrow(RangeError);
+    await expect(updateBookmark(dependencies, { ...ASKING, patch: { tagNames: ["😀".repeat(40)] } })).resolves.toMatchObject({ kind: "updated" });
+    expect(requests).toHaveLength(1);
+  });
+
   it("clears the description for null and for an empty one, and keeps a description that has text", async () => {
     const { requests, dependencies } = updating();
 
@@ -131,7 +166,7 @@ describe("updateBookmark", () => {
     expect(requests).toHaveLength(1);
   });
 
-  it.each([[{ kind: "stale" }], [{ kind: "not_found" }], [{ kind: "folder_not_found" }], [{ kind: "unchanged", bookmark: STORED }]] as const)("answers what the store answers: %j", async (answer) => {
+  it.each([[{ kind: "stale" }], [{ kind: "not_found" }], [{ kind: "folder_not_found" }], [{ kind: "tag_not_found" }], [{ kind: "unchanged", bookmark: STORED }]] as const)("answers what the store answers: %j", async (answer) => {
     const { dependencies } = updating(answer);
 
     expect(await updateBookmark(dependencies, { ...ASKING, patch: { title: "X" } })).toEqual(answer);

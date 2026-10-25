@@ -46,6 +46,7 @@ interface Bookmark {
   readonly openCount: number;
   readonly lastOpenedAt: string | null;
   readonly folders: readonly { readonly id: string; readonly name: string; readonly icon: string; readonly color: number }[];
+  readonly tags: readonly { readonly id: string; readonly name: string }[];
   readonly version: number;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -117,6 +118,7 @@ describe("createBookmark", () => {
         openCount: 0,
         lastOpenedAt: null,
         folders: [],
+        tags: [],
         version: 1,
         createdAt: bookmark.createdAt,
         updatedAt: bookmark.updatedAt,

@@ -1069,6 +1069,7 @@ export interface BookmarkChanges {
     readonly folderIds?: readonly string[];
     // (undocumented)
     readonly pinned?: boolean;
+    readonly tags?: BookmarkTagSelection;
     // (undocumented)
     readonly title?: string;
     // (undocumented)
@@ -1084,6 +1085,9 @@ export interface BookmarkCreationAsk {
     readonly folderIds: readonly string[] | undefined;
     // (undocumented)
     readonly pinned: boolean | undefined;
+    readonly tagIds?: readonly string[] | undefined;
+    // (undocumented)
+    readonly tagNames?: readonly string[] | undefined;
     // (undocumented)
     readonly title: string;
     // (undocumented)
@@ -1122,6 +1126,10 @@ export type BookmarkCreationOutcome = {
 /** A folder is not one the account has in this workspace (another member's, another workspace's, or none); nothing was written. */
 | {
     readonly kind: "folder_not_found";
+}
+/** A tag is not one the account has in this workspace (another member's, another workspace's, or none); nothing was written. */
+| {
+    readonly kind: "tag_not_found";
 };
 
 // @public (undocumented)
@@ -1131,6 +1139,7 @@ export interface BookmarkCreationRequest {
     readonly ceiling: EntitlementLimit;
     readonly events: readonly DomainEvent<"bookmark.created">[];
     readonly folderIds: readonly string[];
+    readonly tags: BookmarkTagSelection;
 }
 
 // @public
@@ -1168,6 +1177,7 @@ export interface BookmarkFilterAsk {
     readonly hasSlug: boolean | undefined;
     // (undocumented)
     readonly pinned: boolean | undefined;
+    readonly tagIds?: readonly string[] | undefined;
     readonly url: string | undefined;
 }
 
@@ -1223,6 +1233,7 @@ export interface BookmarkListAsk {
     readonly scope: BookmarkScope;
     // (undocumented)
     readonly sort: BookmarkSort;
+    readonly tagIds?: readonly string[] | undefined;
     readonly url: string | undefined;
     // (undocumented)
     readonly workspaceId: string;
@@ -1243,6 +1254,7 @@ export interface BookmarkListFilter {
     readonly hasSlug?: boolean | undefined;
     readonly ownerId: string;
     readonly pinned?: boolean | undefined;
+    readonly tagIds?: readonly string[] | undefined;
     readonly urlCanonical?: string | undefined;
 }
 
@@ -1334,6 +1346,9 @@ export interface BookmarkPatch {
     readonly folderIds?: readonly string[];
     // (undocumented)
     readonly pinned?: boolean;
+    readonly tagIds?: readonly string[];
+    // (undocumented)
+    readonly tagNames?: readonly string[];
     // (undocumented)
     readonly title?: string;
     // (undocumented)
@@ -1383,6 +1398,7 @@ export interface BookmarkRecord {
     readonly pinned: boolean;
     // (undocumented)
     readonly slug: string | null;
+    readonly tags: readonly BookmarkTagRef[];
     // (undocumented)
     readonly title: string;
     // (undocumented)
@@ -1426,7 +1442,34 @@ export type BookmarkStoreResult = {
 /** One of the folders is not one the owner has in this workspace; nothing is written. */
 | {
     readonly kind: "folder_not_found";
+}
+/** One of the tags is not one the owner has in this workspace; nothing is written. */
+| {
+    readonly kind: "tag_not_found";
 };
+
+// @public
+export interface BookmarkTagName {
+    readonly name: string;
+    readonly newId: string;
+}
+
+// @public
+export interface BookmarkTagRef {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public
+export interface BookmarkTagSelection {
+    readonly ids: readonly string[];
+    readonly names: readonly BookmarkTagName[];
+}
+
+// @public
+export function bookmarkTagSelection(tagIds: readonly string[] | undefined, tagNames: readonly string[] | undefined, newId: () => string): BookmarkTagSelection | undefined;
 
 // @public (undocumented)
 export interface BookmarkUpdateAsk {
@@ -1441,6 +1484,7 @@ export interface BookmarkUpdateAsk {
 
 // @public (undocumented)
 export interface BookmarkUpdateDependencies {
+    readonly newId: () => string;
     // (undocumented)
     readonly store: Pick<BookmarkStore, "update">;
 }
@@ -1465,12 +1509,12 @@ export interface BookmarkUpdateRequest {
 
 // @public (undocumented)
 export type BookmarkUpdateResult =
-/** The bookmark was changed; `bookmark` is the row after the change, its version moved by one unless only its folders changed. */
+/** The bookmark was changed; `bookmark` is the row after the change, its version moved by one unless only its folders or tags changed. */
     {
     readonly kind: "updated";
     readonly bookmark: BookmarkRecord;
 }
-/** The patch names the values the bookmark already has, in the folders it is already in; nothing was written and the version stays. */
+/** The patch names the values the bookmark already has, in the folders it is already in and with the tags it already has; nothing was written and the version stays. */
 | {
     readonly kind: "unchanged";
     readonly bookmark: BookmarkRecord;
@@ -1478,6 +1522,10 @@ export type BookmarkUpdateResult =
 /** A folder of `folderIds` is not one the owner has in this workspace; nothing was written. */
 | {
     readonly kind: "folder_not_found";
+}
+/** A tag of the selection is not one the owner has in this workspace; nothing was written. */
+| {
+    readonly kind: "tag_not_found";
 }
 /** The version of the bookmark, read under its lock, is none of the accepted ones; nothing was written. */
 | {

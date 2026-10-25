@@ -17,6 +17,7 @@ const STORED: BookmarkRecord = {
   openCount: 0,
   lastOpenedAt: null,
   folders: [],
+  tags: [],
   version: 1,
   createdAt: new Date("2026-10-23T05:00:00.000Z"),
   updatedAt: new Date("2026-10-23T05:00:00.000Z"),

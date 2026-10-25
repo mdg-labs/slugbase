@@ -1,12 +1,13 @@
 import type { BookmarkRecord, BookmarkStore } from "./create.ts";
 import { BOOKMARK_DESCRIPTION_MAX_LENGTH, BOOKMARK_TITLE_MAX_LENGTH } from "./create.ts";
+import { bookmarkTagSelection, type BookmarkTagSelection } from "./tagging.ts";
 import { normalizeBookmarkUrl, type BookmarkUrl, type BookmarkUrlRefusal } from "./url.ts";
 
 // Changing a bookmark (doc 02 section 5.2, doc 04 section 2.4, doc 10 T1 and T2). The service validates and normalises
 // everything the caller sent before anything is written, then asks the store to apply it to the caller's own bookmark: the
 // store finds the bookmark by identifier and owner, locks it, compares its version with the `If-Match` the caller sent and
 // writes what differs. Filing moves no version: the folders of a bookmark are rows of their own, so a patch that changes only `folderIds` keeps
-// the `ETag`. Only the owner changes a bookmark, so another member's bookmark of the workspace, another workspace's
+// the `ETag`; the same holds for its tags. Only the owner changes a bookmark, so another member's bookmark of the workspace, another workspace's
 // and a plan-archived one (which nobody edits, doc 02 section 5.6) are the same `not_found`.
 
 /** The fields of a JSON Merge Patch of a bookmark (doc 04 section 2.4): a field left out is left as it is, and a description of `null` clears it. */
@@ -17,6 +18,9 @@ export interface BookmarkPatch {
   readonly pinned?: boolean;
   /** The folders the bookmark is filed in afterwards: they replace the ones it is in, and an empty list takes it out of all of them. */
   readonly folderIds?: readonly string[];
+  /** The tags the bookmark carries afterwards, by identifier and by name together: they replace the ones it has, and an empty list takes all of them off. */
+  readonly tagIds?: readonly string[];
+  readonly tagNames?: readonly string[];
 }
 
 /** What the store writes: the normalised destination with the columns derived from it, and the values that are to change. */
@@ -27,6 +31,8 @@ export interface BookmarkChanges {
   readonly pinned?: boolean;
   /** The owner's folders the bookmark is filed in afterwards, without repeats. */
   readonly folderIds?: readonly string[];
+  /** The owner's tags the bookmark carries afterwards: they replace the ones it has. */
+  readonly tags?: BookmarkTagSelection;
 }
 
 export interface BookmarkUpdateRequest {
@@ -39,12 +45,14 @@ export interface BookmarkUpdateRequest {
 }
 
 export type BookmarkUpdateResult =
-  /** The bookmark was changed; `bookmark` is the row after the change, its version moved by one unless only its folders changed. */
+  /** The bookmark was changed; `bookmark` is the row after the change, its version moved by one unless only its folders or tags changed. */
   | { readonly kind: "updated"; readonly bookmark: BookmarkRecord }
-  /** The patch names the values the bookmark already has, in the folders it is already in; nothing was written and the version stays. */
+  /** The patch names the values the bookmark already has, in the folders it is already in and with the tags it already has; nothing was written and the version stays. */
   | { readonly kind: "unchanged"; readonly bookmark: BookmarkRecord }
   /** A folder of `folderIds` is not one the owner has in this workspace; nothing was written. */
   | { readonly kind: "folder_not_found" }
+  /** A tag of the selection is not one the owner has in this workspace; nothing was written. */
+  | { readonly kind: "tag_not_found" }
   /** The version of the bookmark, read under its lock, is none of the accepted ones; nothing was written. */
   | { readonly kind: "stale" }
   /** The caller owns no such bookmark; nothing was written. */
@@ -52,6 +60,8 @@ export type BookmarkUpdateResult =
 
 export interface BookmarkUpdateDependencies {
   readonly store: Pick<BookmarkStore, "update">;
+  /** A fresh UUIDv7, for a tag a name of the patch creates. */
+  readonly newId: () => string;
 }
 
 export interface BookmarkUpdateAsk {
@@ -79,7 +89,7 @@ function checkLength(field: string, value: string, min: number, max: number): vo
  * its canonical form and host are derived again; the title and the description are the trimmed values the contract passes on, and
  * an empty description is stored as none.
  */
-export async function updateBookmark({ store }: BookmarkUpdateDependencies, ask: BookmarkUpdateAsk): Promise<BookmarkUpdateOutcome> {
+export async function updateBookmark({ store, newId }: BookmarkUpdateDependencies, ask: BookmarkUpdateAsk): Promise<BookmarkUpdateOutcome> {
   const { patch } = ask;
   let url: BookmarkUrl | undefined;
   if (patch.url !== undefined) {
@@ -99,6 +109,7 @@ export async function updateBookmark({ store }: BookmarkUpdateDependencies, ask:
       checkLength("description", description, 1, BOOKMARK_DESCRIPTION_MAX_LENGTH);
     }
   }
+  const tags = bookmarkTagSelection(patch.tagIds, patch.tagNames, newId);
   return store.update({
     bookmarkId: ask.bookmarkId,
     ownerId: ask.accountId.toLowerCase(),
@@ -108,6 +119,7 @@ export async function updateBookmark({ store }: BookmarkUpdateDependencies, ask:
       ...(description === undefined ? {} : { description }),
       ...(patch.pinned === undefined ? {} : { pinned: patch.pinned }),
       ...(patch.folderIds === undefined ? {} : { folderIds: [...new Set(patch.folderIds.map((id) => id.toLowerCase()))] }),
+      ...(tags === undefined ? {} : { tags }),
     },
     expectedVersions: ask.expectedVersions,
   });

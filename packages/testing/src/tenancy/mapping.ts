@@ -39,7 +39,8 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  * - Bookmark identifier: the path parameter `id` of `getBookmark`, `updateBookmark`, `deleteBookmark` and `openBookmark`, the query parameter
  *   `hasSlug` of `listBookmarks` and `listBookmarkIds` and the body inputs `ids[]` and `filter.hasSlug` of `bulkBookmarks`. `hasSlug` is a flag, not
  *   an identifier, but the classifier selects every name ending in `Slug`, so it is mapped like the others.
- * - Tag identifier: the path parameter `id` of `renameTag` and `deleteTag`.
+ * - Tag identifier: the path parameter `id` of `renameTag` and `deleteTag`, the query parameter `tag` of `listBookmarks` (as a single value and as a repeated one) and the body input `tagIds[]` of
+ *   `createBookmark` and `updateBookmark`. The body input `tagNames[]` of the two is a name, not an identifier, and takes no entry.
  * - Folder identifier: the path parameter `id` of `getFolder`, `updateFolder`, `deleteFolder`, `addFolderBookmarks` and `removeFolderBookmarks`, the query
  *   parameter `folderId` of `listBookmarks` and the body input `folderIds[]` of `createBookmark` and `updateBookmark`. The body input `bookmarkIds[]` of
  *   `addFolderBookmarks` and `removeFolderBookmarks` takes a bookmark identifier.
@@ -68,6 +69,10 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
   "addFolderBookmarks.bookmarkIds[]": "bookmark",
   "removeFolderBookmarks.bookmarkIds[]": "bookmark",
   "listBookmarks.folderId": "folder",
+  "listBookmarks.tag": "tag",
+  "listBookmarks.tag[]": "tag",
+  "createBookmark.tagIds[]": "tag",
+  "updateBookmark.tagIds[]": "tag",
   "createBookmark.folderIds[]": "folder",
   "updateBookmark.folderIds[]": "folder",
   "listBookmarks.hasSlug": "bookmark",
@@ -96,7 +101,9 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
  * `folder_bookmarks` admit a link whose folder and bookmark are the account's own, so the links sample names a folder (`...a0d2`) and a bookmark
  * (`...a0b2`) that the owner of A owns in A, with no link between them yet; the repository has no update, so its `set` is empty. The fixture must
  * hold that folder and bookmark, and another bookmark of the same owner linked to the folder, which the delete of the registry removes; B holds a
- * folder, a bookmark and a link of its own that the methods must not reach.
+ * folder, a bookmark and a link of its own that the methods must not reach. The links of the tags follow the same rule, with the tag in place of the
+ * folder: the `bookmark_tags` sample names the tag of the owner of A (`...a0c1`) and a bookmark (`...a0b4`) that the owner owns in A, with no link between them yet, and
+ * the fixture must hold the tag and the bookmark and another bookmark of that owner linked to the tag, which the delete of the registry removes; B holds the same of its own.
  */
 export const REPOSITORY_SAMPLES: RepositorySamples = {
   bookmarks: {
@@ -115,6 +122,10 @@ export const REPOSITORY_SAMPLES: RepositorySamples = {
   },
   folder_bookmarks: {
     values: { folderId: "0192f3a0-2222-7000-8000-00000000a0d2", bookmarkId: "0192f3a0-2222-7000-8000-00000000a0b2" },
+    set: {},
+  },
+  bookmark_tags: {
+    values: { bookmarkId: "0192f3a0-2222-7000-8000-00000000a0b4", tagId: "0192f3a0-2222-7000-8000-00000000a0c1" },
     set: {},
   },
   tags: {

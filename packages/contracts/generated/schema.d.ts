@@ -1416,6 +1416,8 @@ export interface components {
             pinned: boolean;
             /** @description The bookmark's slug, null when it has none */
             slug: string | null;
+            /** @description The caller's own tags on the bookmark, in the order of their names; another member's tags are never in it, and empty when the caller put none on it */
+            tags: components["schemas"]["BookmarkTag"][];
             /** @description The bookmark's title */
             title: string;
             /**
@@ -1478,6 +1480,15 @@ export interface components {
         BookmarkOpen: {
             /** @description The destination to go to: the bookmark's URL as stored, checked again to be an http or https URL */
             url: string;
+        };
+        BookmarkTag: {
+            /**
+             * Format: uuid
+             * @description The tag's identifier
+             */
+            id: string;
+            /** @description The tag's name, in the case it was entered in */
+            name: string;
         };
         BulkBookmarksRequest: {
             /**
@@ -1549,6 +1560,10 @@ export interface components {
             folderIds?: string[];
             /** @description Whether the bookmark is pinned; not pinned when left out */
             pinned?: boolean;
+            /** @description The caller's tags to put on the bookmark, at most 100 identifiers; one named twice counts once. A tag that is another member's, another workspace's or unknown is refused with 404 and nothing is created. Together with tagNames they name the union. No tags when both are left out */
+            tagIds?: string[];
+            /** @description The names of the tags to put on the bookmark, at most 100, each 1 to 40 characters after the whitespace around it is removed. The caller's tag of that name is used, whatever the case it is written in, and a name the caller has no tag of creates one in the same transaction; two spellings of one name count once */
+            tagNames?: string[];
             /** @description The bookmark's title, 1 to 300 characters; surrounding whitespace is removed and a title that is blank after that is refused */
             title: string;
             /** @description The address to save: an http or https URL of at most 2 048 characters. It is stored with a lower-case scheme and host, an internationalised host name in punycode, the default port left out and the fragment kept. Any other scheme is refused with 422 url_not_allowed */
@@ -2431,6 +2446,10 @@ export interface components {
             folderIds?: string[];
             /** @description Pins or unpins the bookmark; left out, the pin is left as it is */
             pinned?: boolean;
+            /** @description The caller's tags the bookmark carries afterwards, at most 100 identifiers. With tagNames they name the union, which replaces the tags the bookmark has; an empty list takes all of them off. Tagging moves no version. A tag that is another member's, another workspace's or unknown is refused with 404 and nothing is changed. Left out together with tagNames, the tags are left as they are */
+            tagIds?: string[];
+            /** @description The names of the tags the bookmark carries afterwards, at most 100, each 1 to 40 characters after the whitespace around it is removed. The caller's tag of that name is used, whatever the case it is written in, and a name the caller has no tag of creates one in the same transaction. With tagIds they name the union, which replaces the tags the bookmark has */
+            tagNames?: string[];
             /** @description The new title, 1 to 300 characters; surrounding whitespace is removed and a title that is blank after that is refused. It cannot be cleared. Left out, the title is left as it is */
             title?: string;
             /** @description The new address: an http or https URL of at most 2 048 characters, stored as a creation stores it; the canonical form and the host are derived again. Any other scheme is refused with 422 url_not_allowed. Left out, the address is left as it is */
@@ -3349,6 +3368,7 @@ export interface operations {
                 forwarding?: "true" | "false";
                 url?: string;
                 folderId?: string;
+                tag?: string | string[];
                 sort?: "recent" | "oldest" | "title_asc" | "title_desc" | "most_used" | "recently_opened";
                 limit?: number;
                 cursor?: string;
@@ -3395,7 +3415,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The query did not pass validation (an unknown parameter or sort, a boolean other than true or false, a folderId that is not an identifier, a limit outside 1 to 100), or the url is not a URL a bookmark can have */
+            /** @description The query did not pass validation (an unknown parameter or sort, a boolean other than true or false, a folderId or a tag that is not an identifier, more than 10 tags, a limit outside 1 to 100), or the url is not a URL a bookmark can have */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3442,7 +3462,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The bookmark, owned by the caller and private to them, filed in the folders folderIds named, with its id and its version in the body (the ETag of a later read repeats the version). The workspace's bookmark count is raised by one in the same transaction, and bookmark.created is announced once it is committed. A retry with the same Idempotency-Key and the same request answers this response again with Idempotency-Replayed: true and stores nothing; a replay restores the status and the body and no header, so the response carries none */
+            /** @description The bookmark, owned by the caller and private to them, filed in the folders folderIds named and tagged with the tags tagIds and tagNames named, with its id and its version in the body (the ETag of a later read repeats the version). The workspace's bookmark count is raised by one in the same transaction, and bookmark.created is announced once it is committed. A retry with the same Idempotency-Key and the same request answers this response again with Idempotency-Replayed: true and stores nothing; a replay restores the status and the body and no header, so the response carries none */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -3478,7 +3498,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted; or a folder of folderIds is not one the caller has in it (another member's, another workspace's or unknown), and nothing is created */
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted; or a folder of folderIds or a tag of tagIds is not one the caller has in it (another member's, another workspace's or unknown), and nothing is created */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3496,7 +3516,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation (a missing, empty or over-long URL, title or description, a malformed URL, a folderIds list of more than 100 or with a malformed identifier, or a field the operation does not declare), the URL is not an http or https URL (url_not_allowed), or the workspace already holds as many bookmarks as its bookmarks.max entitlement allows (bookmark_limit_reached; the problem carries limit and used). Nothing is written, and a refused request keeps no key, so a retry with it runs */
+            /** @description The body did not pass validation (a missing, empty or over-long URL, title or description, a malformed URL, a folderIds, tagIds or tagNames list of more than 100 or with a malformed identifier, or a tag name that is empty or over 40 characters, or a field the operation does not declare), the URL is not an http or https URL (url_not_allowed), or the workspace already holds as many bookmarks as its bookmarks.max entitlement allows (bookmark_limit_reached; the problem carries limit and used). Nothing is written, and a refused request keeps no key, so a retry with it runs */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3880,7 +3900,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The caller's bookmark after a JSON Merge Patch of its url, title, description, pinned and folderIds fields. A change moves the version by one and the ETag is that of the new version; a patch that names the values the bookmark has, in the folders it is already in, and an empty one, write nothing and answer with the unchanged version; a patch of folderIds alone changes the folders and keeps the version */
+            /** @description The caller's bookmark after a JSON Merge Patch of its url, title, description, pinned, folderIds, tagIds and tagNames fields. A change moves the version by one and the ETag is that of the new version; a patch that names the values the bookmark has, in the folders it is already in and with the tags it already has, and an empty one, write nothing and answer with the unchanged version; a patch of folderIds, tagIds or tagNames alone changes the folders or the tags and keeps the version */
             200: {
                 headers: {
                     /** @description The bookmark's version as an entity tag, for example "3"; the If-Match of the next change */
@@ -3918,7 +3938,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The workspace the request acts in has no bookmark of the caller with this identifier that can be changed: another member's bookmark, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike. A folder of folderIds that is not the caller's (another member's, another workspace's or unknown) is answered alike, and nothing is changed */
+            /** @description The workspace the request acts in has no bookmark of the caller with this identifier that can be changed: another member's bookmark, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike. A folder of folderIds or a tag of tagIds that is not the caller's (another member's, another workspace's or unknown) is answered alike, and nothing is changed */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3936,7 +3956,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The identifier or the body did not pass validation (a malformed, empty or over-long URL, a title that is blank or over-long, a description over 1 000 characters, a null title or URL, a folderIds list of more than 100 or with a malformed identifier, or a field the operation does not declare), or the URL is not an http or https URL (url_not_allowed). Nothing is written */
+            /** @description The identifier or the body did not pass validation (a malformed, empty or over-long URL, a title that is blank or over-long, a description over 1 000 characters, a null title or URL, a folderIds, tagIds or tagNames list of more than 100 or with a malformed identifier, or a tag name that is empty or over 40 characters, or a field the operation does not declare), or the URL is not an http or https URL (url_not_allowed). Nothing is written */
             422: {
                 headers: {
                     [name: string]: unknown;

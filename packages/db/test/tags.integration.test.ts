@@ -178,6 +178,8 @@ describe("the tables", () => {
       SELECT tablename, policyname, cmd, qual, with_check FROM pg_policies WHERE schemaname = 'public' AND tablename IN ('tags', 'bookmark_tags') ORDER BY tablename, cmd = 'SELECT' DESC, policyname`;
     expect(policies.map((policy) => [policy.tablename, policy.cmd])).toEqual([
       ["bookmark_tags", "SELECT"],
+      ["bookmark_tags", "DELETE"],
+      ["bookmark_tags", "INSERT"],
       ["tags", "SELECT"],
       ["tags", "DELETE"],
       ["tags", "INSERT"],
@@ -193,7 +195,7 @@ describe("the tables", () => {
     }
   });
 
-  it("lets slugbase_app insert the columns of a creation, rename and delete, and read the links, and nothing more", async () => {
+  it("lets slugbase_app insert the columns of a creation, rename and delete, and read, insert and delete the links, and nothing more", async () => {
     const workspace = await workspaceOf(1);
     const owner = memberOf(workspace, 0);
     const tag = await seedTag(workspace.id, owner, "Existing");
@@ -204,10 +206,12 @@ describe("the tables", () => {
     await expect(
       appAs({ accountId: owner, workspaceId: workspace.id }, (tx) => tx`UPDATE tags SET owner_id = owner_id WHERE id = ${tag}`),
     ).rejects.toMatchObject({ code: INSUFFICIENT_PRIVILEGE });
+    // A link names a bookmark the owner owns (the policy of the insert says so, src/sql/550-bookmark-tagging.sql), and a link has nothing to update.
     await expect(
       appAs({ accountId: owner, workspaceId: workspace.id }, (tx) => tx`INSERT INTO bookmark_tags (workspace_id, bookmark_id, tag_id) VALUES (${workspace.id}, ${freshId()}, ${tag})`),
     ).rejects.toMatchObject({ code: INSUFFICIENT_PRIVILEGE });
-    await expect(appAs({ accountId: owner, workspaceId: workspace.id }, (tx) => tx`DELETE FROM bookmark_tags`)).rejects.toMatchObject({ code: INSUFFICIENT_PRIVILEGE });
+    await expect(appAs({ accountId: owner, workspaceId: workspace.id }, (tx) => tx`UPDATE bookmark_tags SET tag_id = tag_id`)).rejects.toMatchObject({ code: INSUFFICIENT_PRIVILEGE });
+    await expect(appAs({ accountId: owner, workspaceId: workspace.id }, (tx) => tx`DELETE FROM bookmark_tags`)).resolves.toHaveLength(0);
   });
 });
 

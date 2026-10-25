@@ -494,7 +494,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     const matrix = await runApiMatrix({
       document: committed,
       fixture,
-      mapping: { rowId: "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark" },
+      mapping: { rowId: "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark" },
       request: async (call) => {
         // The bulk request takes the identifiers of B in `ids` or in the `hasSlug` of its filter, and a request with both is malformed; it is sent with `ids` only, so that the
         // handler is reached and what it does with them is looked at. The matrix sends the same identifiers in the filter's boolean as well, which no handler is asked.
@@ -531,7 +531,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // a member and a recipient, once for each pair; the resend, the link and the revocation of an invitation name the one invitation of B once each
     // The instance admin is a tenth principal making the same thirty calls, and each of them is answered 404 whatever the policy of the operation:
     // it holds no membership, so there is no workspace for a handler to act in or a role to be refused for.
-    // The bookmark read, change, deletion and open name each of the two bookmarks of B once each, and so do the bookmark list and the select-all in their `hasSlug` input;
+    // The bookmark read, change, deletion and open name each of the two bookmarks of B once each, and so do the bookmark list and the select-all in their `hasSlug` input (the list also names the one tag of B in `tag`, and that query is refused as a whole);
     // the bulk request names each of the two in `ids` once for each of the two in `filter.hasSlug`.
     // The creation and the list of tags and of folders name none, and the rename and the deletion of a tag and the read, the change and the deletion of a folder name the one tag or folder of B once each.
     // The filing and the unfiling of bookmarks name the one folder of B in the path and each of the two bookmarks of B in the body, once for each of the two.
@@ -555,7 +555,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
         FROM workspaces w JOIN workspace_settings s ON s.workspace_id = w.id WHERE w.id = ${probe.fixture.a.id}`;
     });
     expect(changed).toEqual({ name: "Walker's renamed workspace", ai_enabled: false, actions: ["workspace.renamed", "workspace.settings_changed"] });
-    // The creation of a bookmark reached its handler for the three sessions and the three tokens that may write, and each of them named the folder of B in `folderIds`:
+    // The creation of a bookmark reached its handler for the three sessions and the three tokens that may write, and each of them named the folder of B in `folderIds` and the tag of B in `tagIds`:
     // the creation was refused with 404 before anything was written, so the counter of A was never taken, no bookmark of A exists and the two of B are untouched. (A token that
     // may only read was refused before the handler.)
     const bookmarks = await database().owner.begin(async (tx) => {
