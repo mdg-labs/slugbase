@@ -60,9 +60,28 @@ export function BookmarksPage(): ReactElement {
   usePasteToCreate(modal.openNew);
   const folders = useAllFolders();
   const tags = useAllTags();
-  // The list is read only once, and only when it is whole, that a folder of the address is not the member's; a list that
-  // failed or is still loading says nothing about it.
-  const staleFolder = addressed.folderId !== undefined && folders.status === "ready" && !folders.folders.some((folder) => folder.id === addressed.folderId);
+  // A folder of the address is concluded not to be the member's only from a whole list; a list that failed or is still
+  // loading says nothing about it. The list held may predate the folder (made on another device, say), so a folder missing
+  // from it is looked for once more in a fresh read, and only a folder still missing then is taken for one that is gone.
+  const missingFolder = addressed.folderId !== undefined && folders.status === "ready" && !folders.folders.some((folder) => folder.id === addressed.folderId);
+  const [rereadFor, setRereadFor] = useState<string | undefined>(undefined);
+  const { reread } = folders;
+  useEffect(() => {
+    const folderId = addressed.folderId;
+    if (!missingFolder || folderId === undefined || rereadFor === folderId) {
+      return undefined;
+    }
+    let current = true;
+    void reread().then(() => {
+      if (current) {
+        setRereadFor(folderId);
+      }
+    });
+    return () => {
+      current = false;
+    };
+  }, [missingFolder, rereadFor, addressed.folderId, reread]);
+  const staleFolder = missingFolder && rereadFor === addressed.folderId;
   // A folder the member does not have is not applied: the list is not narrowed by what they cannot see or remove.
   const search = staleFolder ? { ...withoutFolder(addressed), view: addressed.view } : addressed;
   const [staleNotice, setStaleNotice] = useState(false);

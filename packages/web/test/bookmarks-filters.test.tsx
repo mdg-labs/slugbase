@@ -26,6 +26,7 @@ const LIST = "/api/v1/bookmarks";
 const WORK = "0192f3a0-dddd-7000-8000-000000000001";
 const READING = "0192f3a0-dddd-7000-8000-000000000002";
 const GONE = "0192f3a0-dddd-7000-8000-000000000099";
+const MADE = "0192f3a0-dddd-7000-8000-000000000003";
 const TAG_GO = "0192f3a0-eeee-7000-8000-000000000001";
 const TAG_RUST = "0192f3a0-eeee-7000-8000-000000000002";
 const TAG_ZIG = "0192f3a0-eeee-7000-8000-000000000003";
@@ -342,6 +343,26 @@ describe("the folder filter", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await press(screen.getByRole("button", { name: "Dismiss" }));
 
     expect(screen.queryByText("That folder no longer exists")).toBeNull();
+  });
+
+  it("keeps a folder made since the folder list was read, by reading the list again before calling it gone", async () => {
+    serve();
+    await openApp("/bookmarks");
+    await card("Bookmark 1");
+
+    serve({ folders: [...FOLDERS, folder(MADE, "Made")] });
+    await act(async () => {
+      window.history.pushState(null, "", `/bookmarks?folderId=${MADE}`);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByText("Folder: Made")).toBeDefined();
+    expect(screen.queryByText("That folder no longer exists")).toBeNull();
+    expect(window.location.search).toBe(`?folderId=${MADE}`);
+    await waitFor(() => {
+      expect(lists().at(-1)?.params.get("folderId")).toBe(MADE);
+    });
   });
 
   it("takes the stale folder off with a replacing navigation, so back does not return to it", async () => {

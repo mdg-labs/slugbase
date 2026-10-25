@@ -1,6 +1,6 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { DEFAULT_FOLDER_SORT, FOLDERS_QUERY_KEY, folderListQuery, type Folder } from "./folders.ts";
 
 export interface AllFolders {
@@ -10,6 +10,8 @@ export interface AllFolders {
   readonly status: "loading" | "ready" | "failed";
   readonly retrying: boolean;
   readonly retry: () => void;
+  /** Reads the whole list again; settles once the read has ended, whether it was answered or failed. */
+  readonly reread: () => Promise<unknown>;
 }
 
 /**
@@ -21,7 +23,8 @@ export function useAllFolders(): AllFolders {
   const router = useRouter();
   // Its own entry in the cache: the Folders page loads its list a page at a time, and this one is read to the end.
   const list = useInfiniteQuery({ ...folderListQuery(router.options.context.api, DEFAULT_FOLDER_SORT), queryKey: [...FOLDERS_QUERY_KEY, "all"] });
-  const { hasNextPage, isFetchingNextPage, isError, fetchNextPage } = list;
+  const { hasNextPage, isFetchingNextPage, isError, fetchNextPage, refetch } = list;
+  const reread = useCallback(() => refetch(), [refetch]);
   useEffect(() => {
     if (hasNextPage && !isFetchingNextPage && !isError) {
       // Another reader of the same list may be fetching this page already; asking again must not cancel and repeat it.
@@ -44,5 +47,6 @@ export function useAllFolders(): AllFolders {
     retry: () => {
       void list.refetch();
     },
+    reread,
   };
 }
