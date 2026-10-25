@@ -133,6 +133,9 @@ async function settle(): Promise<void> {
 
 const EXECUTABLE = "img, script, iframe, object, embed, link, meta, base, form[action]";
 
+// The address schemes a browser runs or renders as a document of their own.
+const SCRIPT_SCHEMES = ["javascript:", "vbscript:", "data:"];
+
 /** What no text may leave in the page: an element that loads or runs something, a handler attribute, a script address. */
 function expectNothingInjected(): void {
   expect(Array.from(document.body.querySelectorAll(EXECUTABLE)).map((element) => element.outerHTML)).toEqual([]);
@@ -141,7 +144,8 @@ function expectNothingInjected(): void {
     for (const name of element.getAttributeNames()) {
       const value = (element.getAttribute(name) ?? "").trim().toLowerCase();
       // The value of a field is the text typed into it, which is why it is not an address.
-      if (name.startsWith("on") || (name !== "value" && value.startsWith("javascript:")) || name === "srcdoc") {
+      const scripted = SCRIPT_SCHEMES.some((scheme) => value.startsWith(scheme));
+      if (name.startsWith("on") || (name !== "value" && scripted) || name === "srcdoc") {
         offending.push(`${element.tagName.toLowerCase()}[${name}]`);
       }
     }
