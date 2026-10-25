@@ -1,8 +1,9 @@
-import type { NewTag, TagPosition, TagRecord, TagRenameRequest, TagRenameResult, TagSort, TagStore, TagStoreCreationResult } from "@slugbase/core";
+import type { NewTag, TagMergeRequest, TagMergeResult, TagPosition, TagRecord, TagRenameRequest, TagRenameResult, TagSort, TagStore, TagStoreCreationResult } from "@slugbase/core";
 import { and, asc, desc, eq, isNull, not, sql, type SQL } from "drizzle-orm";
 import { bookmarks } from "../schema/bookmarks.ts";
 import { bookmarkTags, tags } from "../schema/tags.ts";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
+import { copyTagLinks, lockTagsForMerge } from "./tag-links.ts";
 import { defineScopedRepository } from "./scoped.ts";
 
 // The tags of the active workspace (doc 05 section 2.4, doc 02 section 7.2, doc 10 T2). A tag is its owner's alone: the policies of
@@ -16,6 +17,12 @@ import { defineScopedRepository } from "./scoped.ts";
 // two creations of one name at the same time make one tag. Two renames to one name that overlap can still both pass their check and meet
 // at the key; the loser's statement fails, which ends the transaction it ran in with nothing written, and `isTagNameTaken` tells that
 // failure from any other so the caller answers it as a name that is taken.
+// A merge locks the bookmarks of the source's links `FOR KEY SHARE` and then both tags `FOR UPDATE`, in the order of their identifiers (`lockTagsForMerge`,
+// src/repositories/tag-links.ts, which has the order of the locks of everything that touches tags and bookmarks). A tagging holds its bookmark before it
+// locks its tags `FOR KEY SHARE`, so a tagging and a merge queue on the first bookmark or tag they share; the one that comes second finds the tags as the first
+// left them, or the source gone (`not_found`), and two merges that name a tag in common queue on the tags the same way. The merge copies the source's links to
+// the target (which leaves the links the target has) and deletes the source, whose links go with it by foreign key, all in the transaction of the caller, so a
+// merge that fails or is refused leaves every tag and link as it was. A deletion of a tag takes the tag and its links and no bookmark.
 // A page is at most `limit` tags after the place the previous page ended at; `count` is the capped total of the owner's tags.
 // The count of a tag is the number of bookmarks it is linked to that are not plan-archived, which is what a list of bookmarks shows.
 
@@ -157,6 +164,27 @@ export function tagRepository(tx: TenantTx): TagRepository {
         return { kind: "not_found" };
       }
       return current.name === name ? { kind: "unchanged", tag: recordOf(read) } : { kind: "renamed", tag: recordOf(read) };
+    },
+
+    async merge({ sourceId, targetId, ownerId }: TagMergeRequest): Promise<TagMergeResult> {
+      const owner = requireOwner(tx, ownerId);
+      if (!(await lockTagsForMerge(tx, owner, sourceId, targetId))) {
+        return { kind: "not_found" };
+      }
+      if (sourceId === targetId) {
+        return { kind: "same_tag" };
+      }
+      await copyTagLinks(tx, sourceId, targetId);
+      const deleted = await rows.delete(and(eq(tags.id, sourceId), eq(tags.ownerId, owner)));
+      if (deleted.length !== 1) {
+        // The tag was locked in this transaction, so it cannot be gone: ending with an error rolls the copied links back.
+        throw new Error("a merged tag cannot be deleted");
+      }
+      const [read] = await tagsOf(tx, { ownerId: owner, sort: "name", after: undefined, limit: undefined, tagId: targetId });
+      if (read === undefined) {
+        throw new Error("a merged tag cannot be read back");
+      }
+      return { kind: "merged", tag: recordOf(read) };
     },
 
     async remove({ tagId, ownerId }) {

@@ -3655,6 +3655,9 @@ export interface MembershipEndStore extends MemberRoleStore {
 }
 
 // @public (undocumented)
+export function mergeTag(input: TagMergeDependencies, ask: TagMergeAsk): Promise<TagMergeResult>;
+
+// @public (undocumented)
 export interface NewAccountAcceptance {
     readonly accountId: string;
     // (undocumented)
@@ -4192,6 +4195,43 @@ export interface TagListRequest {
 }
 
 // @public (undocumented)
+export interface TagMergeAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly intoTagId: string;
+    // (undocumented)
+    readonly tagId: string;
+}
+
+// @public (undocumented)
+export interface TagMergeDependencies {
+    // (undocumented)
+    readonly store: Pick<TagStore, "merge">;
+}
+
+// @public (undocumented)
+export interface TagMergeRequest {
+    // (undocumented)
+    readonly ownerId: string;
+    readonly sourceId: string;
+    readonly targetId: string;
+}
+
+// @public (undocumented)
+export type TagMergeResult =
+/** The target as it now is, with the number of bookmarks it carries. */
+    {
+    readonly kind: "merged";
+    readonly tag: TagRecord;
+} | {
+    readonly kind: "not_found";
+}
+/** The source and the target are one tag of the owner. */
+| {
+    readonly kind: "same_tag";
+};
+
+// @public (undocumented)
 export type TagNameRefusal = "empty" | "too_long";
 
 // @public
@@ -4262,10 +4302,32 @@ export type TagRenameResult = {
 export type TagSort = "name" | "count";
 
 // @public (undocumented)
+export function tagStats(input: TagStatsDependencies, ask: TagStatsAsk): Promise<TagStatsOutcome>;
+
+// @public (undocumented)
+export interface TagStatsAsk {
+    readonly accountId: string;
+    readonly limit: number;
+}
+
+// @public (undocumented)
+export interface TagStatsDependencies {
+    // (undocumented)
+    readonly store: Pick<TagStore, "list" | "count">;
+}
+
+// @public (undocumented)
+export interface TagStatsOutcome {
+    readonly items: readonly TagRecord[];
+    readonly total: number | null;
+}
+
+// @public (undocumented)
 export interface TagStore {
     count(ownerId: string, limit: number): Promise<number>;
     create(tag: NewTag): Promise<TagStoreCreationResult>;
     list(request: TagListRequest): Promise<readonly TagRecord[]>;
+    merge(request: TagMergeRequest): Promise<TagMergeResult>;
     remove(request: {
         readonly tagId: string;
         readonly ownerId: string;

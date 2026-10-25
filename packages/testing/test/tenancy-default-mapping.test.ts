@@ -34,6 +34,8 @@ describe("PATH_PARAMETER_MAPPING", () => {
         "openBookmark.id",
         "renameTag.id",
         "deleteTag.id",
+        "mergeTag.id",
+        "mergeTag.intoTagId",
         "getFolder.id",
         "updateFolder.id",
         "deleteFolder.id",
@@ -78,6 +80,8 @@ describe("PATH_PARAMETER_MAPPING", () => {
     const expected: Record<string, IdentifierKind> = {
       "renameTag.id": "tag",
       "deleteTag.id": "tag",
+      "mergeTag.id": "tag",
+      "mergeTag.intoTagId": "tag",
       "getFolder.id": "folder",
       "updateFolder.id": "folder",
       "deleteFolder.id": "folder",

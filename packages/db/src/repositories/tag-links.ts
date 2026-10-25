@@ -1,5 +1,6 @@
 import type { BookmarkTagName, BookmarkTagRef } from "@slugbase/core";
 import { and, asc, eq, sql } from "drizzle-orm";
+import { bookmarks } from "../schema/bookmarks.ts";
 import { bookmarkTags, tags } from "../schema/tags.ts";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
 import { distinctIdentifiers, requireIdentifiers, uuidArray } from "./folder-links.ts";
@@ -8,11 +9,26 @@ import { defineScopedRepository } from "./scoped.ts";
 // The links between a member's bookmarks and the member's tags (doc 05 section 2.4, doc 02 sections 7.2 and 8.2, doc 10 T1 and T2), used by the
 // bookmark repository. A link is the owner's alone: every statement names the workspace of the transaction and the owner of the tags, and the
 // policies of `bookmark_tags` (src/sql/510-tags.sql, src/sql/550-bookmark-tagging.sql) refuse a link whose tag or bookmark is not the account's own in
-// that workspace, so a statement that forgot a predicate still writes nothing of anyone else's. Tags named by identifier are checked before the first
-// write (`lockOwnedTags` without the lock). The tags named by name are resolved next (`resolveTagNames`: the owner's existing tags of those names are
-// locked with `FOR KEY SHARE`, the missing ones created), and the tags named by identifier are locked with `FOR KEY SHARE` last, in the order of their
-// identifiers: a tag that a concurrent transaction deletes is then either found gone or waited for, and never met half-way by the foreign key of the
-// link. Tags named by name are the owner's tag of that name, whatever its case, or a new one, created in the transaction that links it.
+// that workspace, so a statement that forgot a predicate still writes nothing of anyone else's.
+//
+// Lock order. What takes row locks on the bookmarks and the tags of a member below takes them in the one order the workspace row, then the bookmarks (in the
+// order of their identifiers), then the tags (in the order of their identifiers):
+//  - a creation locks the workspace row (`sys_bookmark_count_take`), inserts its bookmark (a row that is not committed is nobody else's to hold) and then locks
+//    its tags; a change locks its bookmark (`FOR UPDATE`) and then its tags. Both lock every tag they name that exists, the ones named by identifier and the
+//    existing ones named by name, in one statement (`lockTaggingTags`, `FOR KEY SHARE`);
+//  - a merge of two tags locks the bookmarks of the source's links (`FOR KEY SHARE`) and then both tags (`FOR UPDATE`) (`lockTagsForMerge`);
+//  - the departure of a member (the foreign keys of `bookmarks` and `tags` to `workspace_members`) clears the owner of the member's bookmarks and then deletes
+//    the member's tags, and the deletion of an account locks the account's workspaces before anything else (src/sql/290-account-deletion.sql);
+//  - the deletion of a bookmark takes the bookmark and its links, and the deletion of a tag takes the tag and its links.
+// So none of these waits for a bookmark while it holds a tag that the holder of that bookmark waits for. test/tag-merge-lock-order.integration.test.ts holds
+// an interleaving of a merge with a change, with the deletion of a bookmark and with a tagging that commits, of a creation with the deletion of an
+// account, and of a change with the removal of a member, and each ends in its own answer. Two cases are outside that order. A tag a tagging names by name
+// that the owner has none of is created, and a tag of such a name that another transaction creates after the tagging locked its tags is locked when the read that follows the insert finds
+// it, after the tags that were locked in order; and the insert of a new tag takes the owner's membership row through its foreign key, which a departing
+// member holds before the member's tags (that cycle is issue 582's).
+// A tag named by identifier that is deleted or merged away before the tagging locks it is found gone and answered `tag_not_found` (a name it carried is created
+// anew); one that the tagging has locked cannot be deleted under it. Tags named by name are the owner's tag of that name, whatever its case, or a new one,
+// created in the transaction that links it.
 
 // The registry entry of `bookmark_tags` for the cross-tenant matrix (doc 08 section 3.3): the application role may read, insert (the columns of a link
 // but `workspace_id`, which the helper stamps) and delete links, and the policies keep each to the account's own tag and bookmark. Links are written in
@@ -29,26 +45,47 @@ function requireWorkspace(tx: TenantTx, action: string): string {
   return tx.workspaceId;
 }
 
-/**
- * Checks that every tag of `tagIds` is one `ownerId` owns in the workspace of the transaction, and locks them (`FOR KEY SHARE`, unless `lock` is false,
- * which only reads them). Answers whether every one of them exists.
- */
-export async function lockOwnedTags(tx: TenantTx, ownerId: string, tagIds: readonly string[], lock = true): Promise<boolean> {
+/** Whether every tag of `tagIds` is one `ownerId` owns in the workspace of the transaction, read without a lock: the check of a creation, which answers before it takes its place under the ceiling. */
+export async function ownedTagsExist(tx: TenantTx, ownerId: string, tagIds: readonly string[]): Promise<boolean> {
   const workspaceId = requireWorkspace(tx, "tagging bookmarks");
   const wanted = distinctIdentifiers(tagIds);
   requireIdentifiers(wanted, "tagging bookmarks");
   if (wanted.length === 0) {
     return true;
   }
-  const query = tenantHandle(tx)
+  const found = await tenantHandle(tx)
     .select({ id: tags.id })
     .from(tags)
-    .where(and(eq(tags.workspaceId, workspaceId), eq(tags.ownerId, ownerId), sql`${tags.id} = ANY (${uuidArray(wanted)}::uuid[])`))
-    .orderBy(tags.id);
-  return (lock ? await query.for("key share") : await query).length === wanted.length;
+    .where(and(eq(tags.workspaceId, workspaceId), eq(tags.ownerId, ownerId), sql`${tags.id} = ANY (${uuidArray(wanted)}::uuid[])`));
+  return found.length === wanted.length;
 }
 
-/** The numbers (positions in `names`) of the names that `ownerId` has a tag of, with the tag, locking the tags (`FOR KEY SHARE`). The name is matched as the column is, without regard to case. */
+/**
+ * Locks (`FOR KEY SHARE`) the tags `ownerId` owns in the workspace of the transaction that `tagging` names: the ones named by identifier and the
+ * existing ones named by name (matched as the column is, without regard to case), all in one statement in the order of their identifiers. The
+ * caller holds its bookmark already. Answers whether every tag named by identifier exists. A tag named by name that the owner has none of is not locked and not created here (`resolveTagNames`).
+ */
+export async function lockTaggingTags(tx: TenantTx, ownerId: string, tagging: { readonly ids: readonly string[]; readonly names: readonly BookmarkTagName[] }): Promise<boolean> {
+  const workspaceId = requireWorkspace(tx, "tagging bookmarks");
+  const wanted = distinctIdentifiers(tagging.ids);
+  requireIdentifiers(wanted, "tagging bookmarks");
+  if (wanted.length === 0 && tagging.names.length === 0) {
+    return true;
+  }
+  const names = sql`ARRAY[${sql.join(
+    tagging.names.map((tag) => sql`${tag.name}::citext`),
+    sql`, `,
+  )}]::citext[]`;
+  const locked = await tenantHandle(tx).execute<{ id: string }>(sql`
+    SELECT t.id FROM ${tags} AS t
+    WHERE t.workspace_id = ${workspaceId}::uuid AND t.owner_id = ${ownerId}::uuid AND (t.id = ANY (${uuidArray(wanted)}::uuid[]) OR t.name = ANY (${names}))
+    ORDER BY t.id
+    FOR KEY SHARE OF t`);
+  const found = new Set(locked.map((row) => row.id));
+  return wanted.every((id) => found.has(id.toLowerCase()));
+}
+
+/** The numbers (positions in `names`) of the names that `ownerId` has a tag of, with the tag, locking the tags (`FOR KEY SHARE`; the ones `lockTaggingTags` locked are held already). The name is matched as the column is, without regard to case. */
 async function tagsByName(tx: TenantTx, workspaceId: string, ownerId: string, names: readonly BookmarkTagName[]): Promise<Map<number, string>> {
   const wanted = sql.join(
     names.map((tag, index) => sql`(${index}::int, ${tag.name}::citext)`),
@@ -65,8 +102,9 @@ async function tagsByName(tx: TenantTx, workspaceId: string, ownerId: string, na
 
 /**
  * The identifiers of the tags `ownerId` owns that carry the names of `names` (matched without regard to case), creating a tag with `newId` for each
- * name the owner has none of, in the open transaction. Every tag it answers is locked (`FOR KEY SHARE`). A name a concurrent transaction creates at the
- * same time is the tag that transaction made: the insert leaves it and the read that follows finds it.
+ * name the owner has none of, in the open transaction. The existing tags were locked by `lockTaggingTags` already; a tag it answers that is new is the
+ * transaction's own, and a name a concurrent transaction creates at the same time is the tag that transaction made: the insert leaves it and the read that
+ * follows finds and locks it.
  */
 export async function resolveTagNames(tx: TenantTx, ownerId: string, names: readonly BookmarkTagName[]): Promise<string[]> {
   const workspaceId = requireWorkspace(tx, "tagging bookmarks");
@@ -106,6 +144,81 @@ export async function insertTagLinks(tx: TenantTx, bookmarkId: string, tagIds: r
     SELECT ${workspaceId}::uuid, ${bookmarkId}::uuid, t.id FROM unnest(${uuidArray(tagList)}::uuid[]) AS t(id)
     ON CONFLICT (bookmark_id, tag_id) DO NOTHING
     RETURNING tag_id`);
+  return inserted.length;
+}
+
+const MERGE_LOCK_ROUNDS = 5;
+const MERGE_LOCK_SAVEPOINT = sql.raw("tag_merge_locks");
+
+/**
+ * Locks what a merge of the tag `sourceId` into the tag `targetId` works on, in the order of this module: the bookmarks of the source's links (`FOR KEY SHARE`,
+ * in the order of their identifiers), then both tags of `ownerId` (`FOR UPDATE`, in the order of their identifiers, in one statement). Answers whether both
+ * tags exist and are the owner's. A bookmark that a concurrent transaction deletes is waited for and left out (its links went with it).
+ *
+ * A tagging adds a link to the source only while it holds the source `FOR KEY SHARE`, which the lock on the tags waits for, so the links of the source are final
+ * once the tags are locked. But a tagging that committed after the bookmarks were read and before the tags were locked has added a link whose bookmark is not
+ * locked. The links are read again under the tag locks: when one names a bookmark that is not locked, the round is undone (`ROLLBACK TO SAVEPOINT` releases its
+ * bookmark and tag locks, so nothing waits on them) and the next round locks that bookmark with the others, before the tags. After `MERGE_LOCK_ROUNDS` rounds
+ * that each found a new bookmark the call ends with an error, which rolls everything back.
+ */
+export async function lockTagsForMerge(tx: TenantTx, ownerId: string, sourceId: string, targetId: string): Promise<boolean> {
+  const workspaceId = requireWorkspace(tx, "merging tags");
+  requireIdentifiers([sourceId, targetId], "merging tags");
+  const handle = tenantHandle(tx);
+  const wanted = [...new Set([sourceId, targetId])].sort();
+  const distinct = wanted.length === 2;
+  for (let round = 0; round < MERGE_LOCK_ROUNDS; round += 1) {
+    await handle.execute(sql`SAVEPOINT ${MERGE_LOCK_SAVEPOINT}`);
+    const held = new Set<string>();
+    if (distinct) {
+      const locked = await handle.execute<{ id: string }>(sql`
+        SELECT b.id FROM ${bookmarks} AS b
+        WHERE b.workspace_id = ${workspaceId}::uuid
+          AND b.id IN (SELECT l.bookmark_id FROM ${bookmarkTags} AS l WHERE l.workspace_id = ${workspaceId}::uuid AND l.tag_id = ${sourceId}::uuid)
+        ORDER BY b.id
+        FOR KEY SHARE OF b`);
+      for (const row of locked) {
+        held.add(row.id);
+      }
+    }
+    const lockedTags = await handle.execute<{ id: string }>(sql`
+      SELECT t.id FROM ${tags} AS t
+      WHERE t.workspace_id = ${workspaceId}::uuid AND t.owner_id = ${ownerId}::uuid AND t.id = ANY (${uuidArray(wanted)}::uuid[])
+      ORDER BY t.id
+      FOR UPDATE OF t`);
+    const complete =
+      lockedTags.length === wanted.length &&
+      (!distinct ||
+        (
+          await handle.execute<{ bookmark_id: string }>(sql`
+            SELECT l.bookmark_id FROM ${bookmarkTags} AS l WHERE l.workspace_id = ${workspaceId}::uuid AND l.tag_id = ${sourceId}::uuid`)
+        ).every((row) => held.has(row.bookmark_id)));
+    if (lockedTags.length !== wanted.length || complete) {
+      await handle.execute(sql`RELEASE SAVEPOINT ${MERGE_LOCK_SAVEPOINT}`);
+      return complete;
+    }
+    await handle.execute(sql`ROLLBACK TO SAVEPOINT ${MERGE_LOCK_SAVEPOINT}`);
+    await handle.execute(sql`RELEASE SAVEPOINT ${MERGE_LOCK_SAVEPOINT}`);
+  }
+  throw new Error("the links of a tag kept changing while it was locked for a merge");
+}
+
+/**
+ * Links every bookmark that is linked to the tag `sourceId` to the tag `targetId` as well, leaving the links the target has, and answers how many were
+ * new. The source stays, with its links: the caller deletes it. The caller holds the locks of `lockTagsForMerge`: both tags are the owner's, locked and
+ * distinct, so every bookmark of the source's links is the owner's too (which the insert policy checks again), is locked, and gets no link to either tag
+ * from any other transaction until the caller ends.
+ */
+export async function copyTagLinks(tx: TenantTx, sourceId: string, targetId: string): Promise<number> {
+  const workspaceId = requireWorkspace(tx, "merging tags");
+  requireIdentifiers([sourceId, targetId], "merging tags");
+  // The statement names the columns the application role may insert (a column grant).
+  const inserted = await tenantHandle(tx).execute<{ bookmark_id: string }>(sql`
+    INSERT INTO ${bookmarkTags} (workspace_id, bookmark_id, tag_id)
+    SELECT l.workspace_id, l.bookmark_id, ${targetId}::uuid FROM ${bookmarkTags} AS l
+    WHERE l.workspace_id = ${workspaceId}::uuid AND l.tag_id = ${sourceId}::uuid
+    ON CONFLICT (bookmark_id, tag_id) DO NOTHING
+    RETURNING bookmark_id`);
   return inserted.length;
 }
 

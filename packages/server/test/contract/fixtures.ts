@@ -38,6 +38,9 @@ export const UNKNOWN_BOOKMARK_ID = "0192f3a0-cccc-7000-8000-000000000008";
 /** A tag no workspace holds: the walker's request to rename or delete it is the declared 404. */
 export const UNKNOWN_TAG_ID = "0192f3a0-cccc-7000-8000-00000000000a";
 
+/** A second tag no workspace holds: the target of the walker's request to merge a tag, which must not be the tag it merges. */
+export const UNKNOWN_TARGET_TAG_ID = "0192f3a0-cccc-7000-8000-00000000000c";
+
 /** A folder no workspace holds: the walker's request to read, change or delete it is the declared 404. */
 export const UNKNOWN_FOLDER_ID = "0192f3a0-cccc-7000-8000-00000000000b";
 
@@ -265,6 +268,16 @@ export const FIXTURES: ContractFixtures = {
   listTags: {},
   renameTag: { path: { id: UNKNOWN_TAG_ID }, body: { name: "Walker tag" }, status: 404, foreign: { path: { id: UNKNOWN_TAG_ID }, body: { name: "Walker tag" } } },
   deleteTag: { path: { id: UNKNOWN_TAG_ID }, status: 404, foreign: { path: { id: UNKNOWN_TAG_ID } } },
+  // The merge names two tags, the one in the path and the target in the body, and acts on the caller's own only: the valid request names two that no workspace holds,
+  // the declared 404, and the matrix puts the tags of workspace B in both places, where it is the same 404 whichever of them it is (even the same tag twice, which is
+  // judged only after the tags are found). The statistics name no identifier and act in the workspace of the request.
+  mergeTag: {
+    path: { id: UNKNOWN_TAG_ID },
+    body: { intoTagId: UNKNOWN_TARGET_TAG_ID },
+    status: 404,
+    foreign: { path: { id: UNKNOWN_TAG_ID }, body: { intoTagId: UNKNOWN_TARGET_TAG_ID } },
+  },
+  getTagStats: {},
   // The folders of the member who makes them, like the tags: the creation and the list name no identifier of any workspace, so the walker's valid request
   // to create is the declared 201, and the read, the change and the deletion name a folder no workspace holds, the declared 404, which the matrix replaces
   // with the folder of workspace B.

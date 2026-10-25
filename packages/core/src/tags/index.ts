@@ -18,3 +18,7 @@ export { renameTag } from "./rename.ts";
 export type { TagRenameAsk, TagRenameDependencies, TagRenameOutcome, TagRenameRequest, TagRenameResult } from "./rename.ts";
 export { deleteTag } from "./delete.ts";
 export type { TagDeletionAsk, TagDeletionDependencies } from "./delete.ts";
+export { mergeTag } from "./merge.ts";
+export type { TagMergeAsk, TagMergeDependencies, TagMergeRequest, TagMergeResult } from "./merge.ts";
+export { tagStats } from "./stats.ts";
+export type { TagStatsAsk, TagStatsDependencies, TagStatsOutcome } from "./stats.ts";

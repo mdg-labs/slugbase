@@ -24,7 +24,7 @@ import { enqueueInTenantTransaction, type QueuedJob } from "../system/queue.ts";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
 import { deleteLinks, distinctIdentifiers, foldersOfBookmarks, insertLinks, lockOwnedFolders, requireIdentifiers, uuidArray } from "./folder-links.ts";
 import { defineScopedRepository } from "./scoped.ts";
-import { deleteTagLinks, insertTagLinks, lockOwnedTags, resolveTagNames, tagsOfBookmarks } from "./tag-links.ts";
+import { deleteTagLinks, insertTagLinks, lockTaggingTags, ownedTagsExist, resolveTagNames, tagsOfBookmarks } from "./tag-links.ts";
 
 // The bookmarks of the active workspace (doc 05 section 2.4, doc 02 section 5, doc 10 T1, T2 and T11). Reads, the insert and the
 // update go through the scoped repository below, so every statement carries the workspace of the transaction and runs on the
@@ -322,15 +322,11 @@ function requireListWorkspace(tx: TenantTx, action: string): string {
 }
 
 /**
- * The tags of a selection as identifiers: the ones named by identifier, locked, and the owner's tags of the names, created where there is none,
- * without repeats. The names are resolved first (the owner's existing tags of those names are locked, the missing ones created), and the tags named
- * by identifier are locked after them. A tag named by identifier that is gone by now ends the call with an error, which rolls everything back.
+ * The tags of a selection as identifiers: the ones named by identifier, and the owner's tags of the names, created where there is none, without repeats.
+ * The existing tags were locked by `lockTaggingTags` after the bookmark was, so none of them is gone by now; a name the owner has no tag of creates one here.
  */
 async function tagIdsOf(tx: TenantTx, ownerId: string, tagging: BookmarkTagSelection): Promise<string[]> {
   const named = await resolveTagNames(tx, ownerId, tagging.names);
-  if (!(await lockOwnedTags(tx, ownerId, tagging.ids))) {
-    throw new Error("a tag of the bookmark was deleted while the bookmark was tagged");
-  }
   return distinctIdentifiers([...tagging.ids, ...named]);
 }
 
@@ -342,11 +338,12 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
         throw new TenantContextError("workspace_required", "creating a bookmark needs a tenant transaction opened with a workspace");
       }
       // Before the first write: a folder that is not the owner's ends the call without taking a place under the ceiling. The folders are only read
-      // here and locked after the workspace's row is (below), the order every other transaction takes the two in.
+      // here and locked after the workspace's row is (below), the order every other transaction takes the two in. The tags are only read here as
+      // well and locked after the workspace's row and the new bookmark (below): src/repositories/tag-links.ts has the order of the locks.
       if (!(await lockOwnedFolders(tx, bookmark.ownerId, folderIds, false))) {
         return { kind: "folder_not_found" };
       }
-      if (!(await lockOwnedTags(tx, bookmark.ownerId, tagging.ids, false))) {
+      if (!(await ownedTagsExist(tx, bookmark.ownerId, tagging.ids))) {
         return { kind: "tag_not_found" };
       }
       const taken = await tenantHandle(tx).execute<TakenRow>(sql`
@@ -383,6 +380,10 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
         throw new Error("a folder of the new bookmark was deleted while the bookmark was created");
       }
       await insertLinks(tx, folderIds, [stored.id]);
+      if (!(await lockTaggingTags(tx, bookmark.ownerId, tagging))) {
+        // A tag that was there a moment ago is gone: the call ends with an error, which rolls the place and the bookmark back with it.
+        throw new Error("a tag of the new bookmark was deleted while the bookmark was created");
+      }
       const tagIds = await tagIdsOf(tx, bookmark.ownerId, tagging);
       await insertTagLinks(tx, stored.id, tagIds);
       for (const job of jobs) {
@@ -422,8 +423,9 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
       if (changes.folderIds !== undefined && !(await lockOwnedFolders(tx, ownerId, changes.folderIds))) {
         return { kind: "folder_not_found" };
       }
-      // Checked before the first write as well: a tag that is not the owner's ends the call before a name of the change creates a tag.
-      if (changes.tags !== undefined && !(await lockOwnedTags(tx, ownerId, changes.tags.ids, false))) {
+      // Locked, in the order of their identifiers, after the bookmark and before the first write (src/repositories/tag-links.ts has the order of the locks): a
+      // tag that is not the owner's, or that a merge or a deletion has taken away, ends the call before a name of the change creates a tag.
+      if (changes.tags !== undefined && !(await lockTaggingTags(tx, ownerId, changes.tags))) {
         return { kind: "tag_not_found" };
       }
       const set: Parameters<typeof rows.update>[0] = {};

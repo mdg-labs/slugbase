@@ -3,6 +3,7 @@ import { setTimeout as sleep } from "node:timers/promises";
 import type postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { accountDeletionRepository, isTagNameTaken, listRepositoryMethods, memberRepository, tagRepository, workspacePurgeOrder } from "../src/index.ts";
+import { insertTagLinks, lockTaggingTags } from "../src/repositories/tag-links.ts";
 import { tags } from "../src/schema/tags.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
@@ -12,7 +13,8 @@ import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 // renames and deletes member A's tag by identifier, and with the application's predicates left out reads, changes and deletes no tag
 // row of A, because the policy of the table names the owner. Besides that: a tag of one workspace is no tag of the same account's
 // other workspace; a name is unique per owner without regard to case and a collision ends neither the transaction nor another
-// owner's use of the name; the length of a name is the table's own rule; the links of a tag are as private as the tag and go with
+// owner's use of the name; a merge moves the links of a tag to another of the same owner in one transaction, and a merge that is refused or
+// fails changes nothing; the length of a name is the table's own rule; the links of a tag are as private as the tag and go with
 // it, with the membership that owns it and with the workspace; and the count of a tag leaves plan-archived bookmarks out.
 
 const HOOK_TIMEOUT_MS = 300_000;
@@ -575,6 +577,139 @@ describe("the count and the links of a tag", () => {
     expect(removed).toBe(true);
     expect((await storedTags(workspace.id)).map((tag) => tag.name)).toEqual(["Stays"]);
     expect(await storedLinks(workspace.id)).toBe(0);
+  });
+});
+
+describe("merging tags", () => {
+  async function linksByTag(workspaceId: string): Promise<Record<string, number>> {
+    const rows = await asSystem(
+      db,
+      (tx) => tx<{ name: string; n: string }[]>`
+        SELECT t.name, count(l.bookmark_id)::text AS n FROM tags t LEFT JOIN bookmark_tags l ON l.tag_id = t.id WHERE t.workspace_id = ${workspaceId} GROUP BY t.name ORDER BY t.name`,
+    );
+    return Object.fromEntries(rows.map((row) => [row.name, Number(row.n)]));
+  }
+
+  it("copies the links of the source to the target once, deletes the source with its links, counts the target without the archived bookmarks and leaves other tags alone", async () => {
+    const workspace = await workspaceOf(2);
+    const [owner, other] = [memberOf(workspace, 0), memberOf(workspace, 1)];
+    const [source, target, bystander, theirs] = [
+      await seedTag(workspace.id, owner, "Source"),
+      await seedTag(workspace.id, owner, "Target"),
+      await seedTag(workspace.id, owner, "Bystander"),
+      await seedTag(workspace.id, other, "Source"),
+    ];
+    const both = await seedBookmark(workspace.id, owner);
+    await link(workspace.id, both, source);
+    await link(workspace.id, both, target);
+    await link(workspace.id, both, bystander);
+    await link(workspace.id, await seedBookmark(workspace.id, owner), source);
+    await link(workspace.id, await seedBookmark(workspace.id, owner, true), source);
+    await link(workspace.id, await seedBookmark(workspace.id, owner), target);
+    await link(workspace.id, await seedBookmark(workspace.id, other), theirs);
+
+    const outcome = await inTenant({ accountId: owner, workspaceId: workspace.id }, (tx) => tagRepository(tx).merge({ sourceId: source, targetId: target, ownerId: owner }));
+
+    expect(outcome).toEqual({ kind: "merged", tag: { id: target, name: "Target", bookmarkCount: 3, createdAt: expect.any(Date) as Date } });
+    expect((await storedTags(workspace.id)).map((tag) => [tag.name, tag.owner_id])).toEqual([["Bystander", owner], ["Source", other], ["Target", owner]]);
+    expect(await linksByTag(workspace.id)).toEqual({ Bystander: 1, Source: 1, Target: 4 });
+  });
+
+  it("answers not_found for a tag that is another member's, another workspace's or unknown, as the source and as the target, and same_tag for one tag named twice, writing nothing", async () => {
+    const workspace = await workspaceOf(2);
+    const elsewhere = await workspaceOf(1);
+    const [owner, other] = [memberOf(workspace, 0), memberOf(workspace, 1)];
+    const mine = await seedTag(workspace.id, owner, "Mine");
+    const theirs = await seedTag(workspace.id, other, "Theirs");
+    const foreign = await seedTag(elsewhere.id, memberOf(elsewhere, 0), "Foreign");
+    await link(workspace.id, await seedBookmark(workspace.id, owner), mine);
+    await link(workspace.id, await seedBookmark(workspace.id, other), theirs);
+    await link(elsewhere.id, await seedBookmark(elsewhere.id, memberOf(elsewhere, 0)), foreign);
+    const merge = (sourceId: string, targetId: string) => inTenant({ accountId: owner, workspaceId: workspace.id }, (tx) => tagRepository(tx).merge({ sourceId, targetId, ownerId: owner }));
+    const unknown = freshId();
+
+    const outcomes = [await merge(mine, theirs), await merge(mine, foreign), await merge(mine, unknown), await merge(theirs, mine), await merge(foreign, mine), await merge(unknown, mine), await merge(theirs, theirs), await merge(unknown, unknown)];
+    const same = await merge(mine, mine);
+
+    expect(outcomes.map((outcome) => outcome.kind)).toEqual(Array<string>(8).fill("not_found"));
+    expect(same.kind).toBe("same_tag");
+    expect(await linksByTag(workspace.id)).toEqual({ Mine: 1, Theirs: 1 });
+    expect(await linksByTag(elsewhere.id)).toEqual({ Foreign: 1 });
+  });
+
+  it("refuses to act for an account other than the one of the transaction", async () => {
+    const workspace = await workspaceOf(2);
+    const [owner, other] = [memberOf(workspace, 0), memberOf(workspace, 1)];
+    const [source, target] = [await seedTag(workspace.id, owner, "Source"), await seedTag(workspace.id, owner, "Target")];
+
+    await expect(inTenant({ accountId: other, workspaceId: workspace.id }, (tx) => tagRepository(tx).merge({ sourceId: source, targetId: target, ownerId: owner }))).rejects.toThrow(
+      "for the account of the transaction only",
+    );
+    expect((await storedTags(workspace.id)).map((tag) => tag.name)).toEqual(["Source", "Target"]);
+  });
+
+  it("changes nothing when the copy of a link is refused part-way: the source and its links stay and the target gains none", async () => {
+    const workspace = await workspaceOf(2);
+    const [owner, other] = [memberOf(workspace, 0), memberOf(workspace, 1)];
+    const [source, target] = [await seedTag(workspace.id, owner, "Source"), await seedTag(workspace.id, owner, "Target")];
+    await link(workspace.id, await seedBookmark(workspace.id, owner), source);
+    // A link of the owner's tag to a bookmark another member owns, which no request can make: the policy of the links admits no copy of it.
+    await link(workspace.id, await seedBookmark(workspace.id, other), source);
+
+    const code = await refusedWith(inTenant({ accountId: owner, workspaceId: workspace.id }, (tx) => tagRepository(tx).merge({ sourceId: source, targetId: target, ownerId: owner })));
+
+    expect(code).toBe(INSUFFICIENT_PRIVILEGE);
+    expect((await storedTags(workspace.id)).map((tag) => tag.name)).toEqual(["Source", "Target"]);
+    expect(await linksByTag(workspace.id)).toEqual({ Source: 2, Target: 0 });
+  });
+
+  it("waits for a transaction that is tagging with the source and carries the link it adds, instead of deleting the tag under it", async () => {
+    const workspace = await workspaceOf(1);
+    const owner = memberOf(workspace, 0);
+    const [source, target] = [await seedTag(workspace.id, owner, "Source"), await seedTag(workspace.id, owner, "Target")];
+    const bookmark = await seedBookmark(workspace.id, owner);
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let locked: () => void = () => undefined;
+    const tagging = new Promise<void>((resolve) => {
+      locked = resolve;
+    });
+
+    const tagger = inTenant({ accountId: owner, workspaceId: workspace.id }, async (tx) => {
+      expect(await lockTaggingTags(tx, owner, { ids: [source], names: [] })).toBe(true);
+      locked();
+      await held;
+      return insertTagLinks(tx, bookmark, [source]);
+    });
+    await tagging;
+    let merged = false;
+    const merger = inTenant({ accountId: owner, workspaceId: workspace.id }, (tx) => tagRepository(tx).merge({ sourceId: source, targetId: target, ownerId: owner })).then((outcome) => {
+      merged = true;
+      return outcome;
+    });
+    await sleep(300);
+    expect(merged).toBe(false);
+    release();
+
+    expect(await tagger).toBe(1);
+    expect(await merger).toMatchObject({ kind: "merged", tag: { id: target, bookmarkCount: 1 } });
+    expect(await linksByTag(workspace.id)).toEqual({ Target: 1 });
+  });
+
+  it("lets one of two merges of a pair in opposite directions through and finds the other's tag gone", async () => {
+    const workspace = await workspaceOf(1);
+    const owner = memberOf(workspace, 0);
+    const [left, right] = [await seedTag(workspace.id, owner, "Left"), await seedTag(workspace.id, owner, "Right")];
+    await link(workspace.id, await seedBookmark(workspace.id, owner), left);
+    await link(workspace.id, await seedBookmark(workspace.id, owner), right);
+    const merge = (sourceId: string, targetId: string) => inTenant({ accountId: owner, workspaceId: workspace.id }, (tx) => tagRepository(tx).merge({ sourceId, targetId, ownerId: owner }));
+
+    const outcomes = await Promise.all([merge(left, right), merge(right, left)]);
+
+    expect(outcomes.map((outcome) => outcome.kind).sort()).toEqual(["merged", "not_found"]);
+    expect(Object.values(await linksByTag(workspace.id))).toEqual([2]);
   });
 });
 

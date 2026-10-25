@@ -5,10 +5,13 @@ import {
   createTag,
   deleteTag,
   listTags,
+  mergeTag,
   normalizeTagName,
   renameTag,
+  tagStats,
   type NewTag,
   type TagCursors,
+  type TagMergeRequest,
   type TagPosition,
   type TagRecord,
   type TagRenameRequest,
@@ -35,6 +38,7 @@ function store(answers: Partial<TagStore> = {}) {
     list: answers.list ?? ((request) => record("list", request, [] as readonly TagRecord[])),
     count: answers.count ?? ((ownerId, limit) => record("count", { ownerId, limit }, 0)),
     rename: answers.rename ?? ((request: TagRenameRequest) => record("rename", request, { kind: "renamed", tag: recordOf(request.name) } as const)),
+    merge: answers.merge ?? ((request: TagMergeRequest) => record("merge", request, { kind: "merged", tag: recordOf("Target", request.targetId) } as const)),
     remove: answers.remove ?? ((request) => record("remove", request, true)),
   };
   return { calls, store: dependencies };
@@ -193,5 +197,49 @@ describe("deleteTag", () => {
 
     const { store: empty } = store({ remove: () => Promise.resolve(false) });
     expect(await deleteTag({ store: empty }, { tagId: TAG, accountId: ACCOUNT })).toBe(false);
+  });
+});
+
+describe("mergeTag", () => {
+  const TARGET = "0192f3a0-aaaa-7000-8000-000000000002";
+
+  it("names the source, the target and the owner to the store, in lower case, and passes its answer on", async () => {
+    const { calls, store: tagStore } = store();
+
+    const outcome = await mergeTag({ store: tagStore }, { tagId: TAG.toUpperCase(), intoTagId: TARGET.toUpperCase(), accountId: ACCOUNT });
+
+    expect(outcome).toEqual({ kind: "merged", tag: recordOf("Target", TARGET) });
+    expect(calls).toEqual([{ method: "merge", request: { sourceId: TAG, targetId: TARGET, ownerId: ACCOUNT.toLowerCase() } }]);
+  });
+
+  it("passes not_found and same_tag on, whatever the store judged", async () => {
+    for (const answer of [{ kind: "not_found" }, { kind: "same_tag" }] as const) {
+      const { store: tagStore } = store({ merge: () => Promise.resolve(answer) });
+      expect(await mergeTag({ store: tagStore }, { tagId: TAG, intoTagId: TAG, accountId: ACCOUNT })).toEqual(answer);
+    }
+  });
+});
+
+describe("tagStats", () => {
+  it("asks the store for the owner's tags by count, up to the limit, and for the capped total", async () => {
+    const tags = [{ ...recordOf("Popular"), bookmarkCount: 3 }, recordOf("Unused", "0192f3a0-aaaa-7000-8000-000000000002")];
+    const asked: unknown[] = [];
+    const { store: tagStore } = store({
+      list: (request) => {
+        asked.push(request);
+        return Promise.resolve(tags);
+      },
+      count: () => Promise.resolve(7),
+    });
+
+    expect(await tagStats({ store: tagStore }, { accountId: ACCOUNT, limit: 2 })).toEqual({ items: tags, total: 7 });
+    expect(asked).toEqual([{ ownerId: ACCOUNT.toLowerCase(), sort: "count", after: undefined, limit: 2 }]);
+  });
+
+  it("gives no total above the cap and the total at it", async () => {
+    const asking = (counted: number) => tagStats({ store: store({ count: () => Promise.resolve(counted) }).store }, { accountId: ACCOUNT, limit: 50 });
+
+    expect((await asking(TAG_LIST_TOTAL_CAP)).total).toBe(TAG_LIST_TOTAL_CAP);
+    expect((await asking(TAG_LIST_TOTAL_CAP + 1)).total).toBeNull();
   });
 });

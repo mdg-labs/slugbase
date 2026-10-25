@@ -1138,6 +1138,9 @@ export interface ComponentTypes {
             content: "transfer" | "delete";
             transferTo: string;
         };
+        MergeTagRequest: {
+            intoTagId: string;
+        };
         MfaBackupCodes: {
             backupCodes: string[];
         };
@@ -1259,6 +1262,11 @@ export interface ComponentTypes {
         TagList: {
             items: ComponentTypes["schemas"]["Tag"][];
             nextCursor: string | null;
+            total: number | null;
+            totalAtLeast?: 10000;
+        };
+        TagStats: {
+            items: ComponentTypes["schemas"]["Tag"][];
             total: number | null;
             totalAtLeast?: 10000;
         };
@@ -2794,6 +2802,40 @@ export const getSetupStatus: {
 };
 
 // @public (undocumented)
+export const getTagStats: {
+    readonly method: "get";
+    readonly path: "/api/v1/tags/stats";
+    readonly operationId: "getTagStats";
+    readonly tag: "tags";
+    readonly summary: "Get the distribution of my tags";
+    readonly auth: "member";
+    readonly rate: "read";
+    readonly scope: "read";
+    readonly request: {
+        readonly query: z.ZodObject<{
+            limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        bookmarkCount: z.ZodNumber;
+        createdAt: z.ZodISODateTime;
+        }, z.core.$strict>>;
+        total: z.ZodNullable<z.ZodNumber>;
+        totalAtLeast: z.ZodOptional<z.ZodLiteral<10000>>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 401: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
 export const getVersion: {
     readonly method: "get";
     readonly path: "/version";
@@ -4086,6 +4128,46 @@ export const MembershipSchema: z.ZodObject<{
         admin: "admin";
         owner: "owner";
     }>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const mergeTag: {
+    readonly method: "post";
+    readonly path: "/api/v1/tags/{id}/merge";
+    readonly operationId: "mergeTag";
+    readonly tag: "tags";
+    readonly summary: "Merge a tag into another";
+    readonly auth: "member";
+    readonly rate: "write";
+    readonly scope: "write";
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+        readonly body: z.ZodObject<{
+            intoTagId: z.ZodUUID;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        bookmarkCount: z.ZodNumber;
+        createdAt: z.ZodISODateTime;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const MergeTagRequestSchema: z.ZodObject<{
+    intoTagId: z.ZodUUID;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -6992,6 +7074,69 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    getTagStats: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["TagStats"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     getVersion: {
         parameters: {
             query?: never;
@@ -8427,6 +8572,89 @@ export interface OperationTypes {
                 };
             };
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    mergeTag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["MergeTagRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["Tag"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12085,6 +12313,23 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/tags/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["getTagStats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/api/v1/tags/{id}": {
         parameters: {
             query?: never;
@@ -12099,6 +12344,23 @@ export interface paths {
         options?: never;
         head?: never;
         patch: OperationTypes["renameTag"];
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/tags/{id}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["mergeTag"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     // (undocumented)
@@ -13329,6 +13591,12 @@ export const TAG_NAME_MAX_LENGTH = 40;
 // @public (undocumented)
 export const TAG_SORTS: readonly ["name", "count"];
 
+// @public
+export const TAG_STATS_DEFAULT_LIMIT = 50;
+
+// @public
+export const TAG_STATS_MAX_LIMIT = 100;
+
 // @public (undocumented)
 export const TagListSchema: z.ZodObject<{
     items: z.ZodArray<z.ZodObject<{
@@ -13353,6 +13621,23 @@ export const TagSchema: z.ZodObject<{
     name: z.ZodString;
     bookmarkCount: z.ZodNumber;
     createdAt: z.ZodISODateTime;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const TagStatsQuerySchema: z.ZodObject<{
+    limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const TagStatsSchema: z.ZodObject<{
+    items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        bookmarkCount: z.ZodNumber;
+        createdAt: z.ZodISODateTime;
+    }, z.core.$strict>>;
+    total: z.ZodNullable<z.ZodNumber>;
+    totalAtLeast: z.ZodOptional<z.ZodLiteral<10000>>;
 }, z.core.$strict>;
 
 // @public (undocumented)

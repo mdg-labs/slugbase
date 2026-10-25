@@ -39,7 +39,7 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  * - Bookmark identifier: the path parameter `id` of `getBookmark`, `updateBookmark`, `deleteBookmark` and `openBookmark`, the query parameter
  *   `hasSlug` of `listBookmarks` and `listBookmarkIds` and the body inputs `ids[]` and `filter.hasSlug` of `bulkBookmarks`. `hasSlug` is a flag, not
  *   an identifier, but the classifier selects every name ending in `Slug`, so it is mapped like the others.
- * - Tag identifier: the path parameter `id` of `renameTag` and `deleteTag`, the query parameter `tag` of `listBookmarks` (as a single value and as a repeated one) and the body input `tagIds[]` of
+ * - Tag identifier: the path parameter `id` of `renameTag`, `mergeTag` and `deleteTag`, the body input `intoTagId` of `mergeTag`, the query parameter `tag` of `listBookmarks` (as a single value and as a repeated one) and the body input `tagIds[]` of
  *   `createBookmark` and `updateBookmark`. The body input `tagNames[]` of the two is a name, not an identifier, and takes no entry.
  * - Folder identifier: the path parameter `id` of `getFolder`, `updateFolder`, `deleteFolder`, `addFolderBookmarks` and `removeFolderBookmarks`, the query
  *   parameter `folderId` of `listBookmarks` and the body input `folderIds[]` of `createBookmark` and `updateBookmark`. The body input `bookmarkIds[]` of
@@ -61,6 +61,8 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
   "openBookmark.id": "bookmark",
   "renameTag.id": "tag",
   "deleteTag.id": "tag",
+  "mergeTag.id": "tag",
+  "mergeTag.intoTagId": "tag",
   "getFolder.id": "folder",
   "updateFolder.id": "folder",
   "deleteFolder.id": "folder",
