@@ -739,24 +739,29 @@ describe("sys_instance_reissue_owner_invitation", () => {
     expect(await instanceEvents()).toEqual(events);
   });
 
+  // The admin who creates the workspace for the refused cases below. It is only read by them (it names the workspace's first invitation), so the four cases share it instead of each seeding one.
+  let creator: string;
+  beforeAll(async () => {
+    creator = await admin();
+  }, HOOK_TIMEOUT_MS);
+
   it.each([
     ["a member who holds no flag", { mfa: true }],
     ["an admin who has no second factor enrolled", { admin: true }],
     ["a disabled admin", { admin: true, mfa: true, disabled: true }],
     ["an account with neither", {}],
   ] satisfies [string, Options][])("is refused to %s, which revokes, writes and queues nothing", async (_name, options) => {
-    const adminId = await admin();
-    const caller = await account(options);
-    const { workspaceId } = await waiting(adminId, "refused@example.test");
-    const events = await instanceEvents();
-    const rows = await invitationsOf(workspaceId);
+    // The caller and the waiting workspace do not depend on each other, nor do the reads before and after the refused call: each runs at once instead of one round trip after another.
+    const [caller, { workspaceId }] = await Promise.all([account(options), waiting(creator, "refused@example.test")]);
+    const [events, rows] = await Promise.all([instanceEvents(), invitationsOf(workspaceId)]);
     const invitationId = freshId();
 
     expect(await refusedWith(reissue(caller.id, workspaceId, { invitationId, jobs: [mailJob(invitationId, workspaceId, caller.id)] }))).toBe(INSUFFICIENT_PRIVILEGE);
 
-    expect(await invitationsOf(workspaceId)).toEqual(rows);
-    expect(await instanceEvents()).toEqual(events);
-    expect(await jobsOf(MAIL_QUEUE)).toEqual([]);
+    const [rowsAfter, eventsAfter, mailJobs] = await Promise.all([invitationsOf(workspaceId), instanceEvents(), jobsOf(MAIL_QUEUE)]);
+    expect(rowsAfter).toEqual(rows);
+    expect(eventsAfter).toEqual(events);
+    expect(mailJobs).toEqual([]);
   });
 
   it("is not reachable by the owner of another workspace, or by a direct call without an account, and refuses a call without its identifiers", async () => {

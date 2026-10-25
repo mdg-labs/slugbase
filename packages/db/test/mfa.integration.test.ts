@@ -819,15 +819,20 @@ describe("recordMfaFailure", () => {
   });
 
   it("changes nothing for a full session, the session of another account and one that does not exist, and answers that it is over", async () => {
-    const { accountId } = await enrolled();
-    const other = await account();
-    const full = await signIn(other);
-    expect(await store.recordMfaFailure(full.id, other)).toBe(true);
-    expect((await sessionById(other, full.id))?.failures).toBe(0);
-    const partial = await partialSignIn(accountId);
-    expect(await store.recordMfaFailure(partial.id, other)).toBe(true);
-    expect((await sessionById(accountId, partial.id))?.failures).toBe(0);
-    expect(await store.recordMfaFailure(freshId(), accountId)).toBe(true);
+    // Only the state matters here, not the enrolment that leads to it, so the second factor is switched on in place of running `activateMfa` with its ten backup codes. The partial session
+    // of the first account, the full session of the second and then the three refused calls do not depend on one another, so each group runs at once instead of one round trip after another.
+    const [{ accountId, partial }, { other, full }] = await Promise.all([
+      account().then(async (id) => {
+        await db.owner.begin(async (tx) => {
+          await tx`SELECT set_config('app.account_id', ${id}, true)`;
+          await tx`UPDATE accounts SET mfa_enabled_at = now(), mfa_secret = ${sealed().ciphertext}, mfa_secret_key_id = 'key-1' WHERE id = ${id}`;
+        });
+        return { accountId: id, partial: await partialSignIn(id) };
+      }),
+      account().then(async (id) => ({ other: id, full: await signIn(id) })),
+    ]);
+    expect(await Promise.all([store.recordMfaFailure(full.id, other), store.recordMfaFailure(partial.id, other), store.recordMfaFailure(freshId(), accountId)])).toEqual([true, true, true]);
+    expect(await Promise.all([sessionById(other, full.id), sessionById(accountId, partial.id)])).toMatchObject([{ failures: 0 }, { failures: 0 }]);
   });
 });
 
