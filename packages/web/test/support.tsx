@@ -1,4 +1,4 @@
-import { act, cleanup, render, type RenderResult } from "@testing-library/react";
+import { act, cleanup, configure, getConfig, render, type RenderResult } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, vi } from "vitest";
 
@@ -151,4 +151,20 @@ export async function renderApp(ui: ReactElement): Promise<RenderResult> {
     throw new Error("render did not run");
   }
   return result;
+}
+
+/** How long a `findBy*` or `waitFor` waits for the whole app to render: the first paint takes seconds on a loaded runner. */
+export const SLOW_RENDER_WAIT_MS = 10_000;
+
+/**
+ * Lets the async queries of the file wait `SLOW_RENDER_WAIT_MS` instead of Testing Library's 1 s, which a whole-app render
+ * outlasts while every package's unit tests run at once. A query that finds its element returns at once; only a failing one
+ * waits the longer. Returns the function that puts the previous wait back.
+ */
+export function allowSlowRender(): () => void {
+  const previous = getConfig().asyncUtilTimeout;
+  configure({ asyncUtilTimeout: SLOW_RENDER_WAIT_MS });
+  return () => {
+    configure({ asyncUtilTimeout: previous });
+  };
 }
