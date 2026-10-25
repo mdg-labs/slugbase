@@ -6,6 +6,7 @@ import { useRef, useState, type KeyboardEvent, type ReactElement, type Synthetic
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { Slot } from "../extensions/index.ts";
+import { inPlaceRefusals } from "../shell/mutation-error-toasts.tsx";
 import { FOLDERS_QUERY_KEY } from "../folders/folders.ts";
 import { TAGS_QUERY_KEY, TAG_NAME_MAX_LENGTH } from "../tags/tags.ts";
 import { sameIds } from "./bookmark-choices.ts";
@@ -154,6 +155,17 @@ function deleteFailureMessage(t: TFunction, failure: BookmarkFailure): string {
   }
 }
 
+// The refusals of a save that `bookmarkFailureOf` and the editor tell in the modal, for which the shared error toast stays quiet; any
+// other failure still raises it. A `404` is the bookmark, or a folder or tag, that is gone.
+const SHOWN_IN_THE_MODAL = inPlaceRefusals([
+  { status: 422, code: "validation_failed" },
+  { status: 422, code: "url_not_allowed" },
+  { status: 422, code: "bookmark_limit_reached" },
+  { status: 412, code: "precondition_failed" },
+  { status: 404, code: "not_found" },
+  { status: 429, code: "rate_limited" },
+]);
+
 type Request =
   | { readonly kind: "create"; readonly body: CreateBookmarkRequest }
   | { readonly kind: "update"; readonly id: string; readonly version: number; readonly body: UpdateBookmarkRequest };
@@ -204,6 +216,7 @@ export function BookmarkEditor({ bookmark, initialUrl, onClose, onEditExisting, 
 
   const save = useMutation({
     mutationKey: ["bookmarks", "save"],
+    meta: SHOWN_IN_THE_MODAL,
     mutationFn: (request: Request): Promise<Bookmark> =>
       request.kind === "create" ? createBookmark(api, request.body) : updateBookmark(api, request.id, request.version, request.body),
     onSuccess: () => {
