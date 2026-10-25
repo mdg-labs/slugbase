@@ -565,6 +565,37 @@ export interface MetricTileProps {
     value: ReactNode;
 }
 
+// @public
+export function MultiPick(input: MultiPickProps): ReactElement;
+
+// @public
+export interface MultiPickCreate {
+    label: (name: string) => string;
+    onCreate: (name: string) => void;
+}
+
+// @public (undocumented)
+export interface MultiPickProps {
+    // (undocumented)
+    className?: string;
+    creatable?: MultiPickCreate;
+    description?: ReactNode;
+    // (undocumented)
+    disabled?: boolean;
+    emptyLabel: ReactNode;
+    error?: ReactNode;
+    // (undocumented)
+    label: ReactNode;
+    loadingLabel?: ReactNode;
+    // (undocumented)
+    onValueChange: (value: string[]) => void;
+    options: readonly PickerOption[];
+    placeholder?: string;
+    removeLabel: (label: string) => string;
+    unavailableLabel?: ReactNode;
+    value: readonly string[];
+}
+
 export { PaletteIcon }
 
 // @public

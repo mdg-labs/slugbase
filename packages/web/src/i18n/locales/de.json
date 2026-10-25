@@ -202,6 +202,31 @@
           "tooLong": "Verwende höchstens {max, number} Zeichen."
         }
       },
+      "folders": {
+        "label": "Ordner",
+        "placeholder": "Ordner suchen oder erstellen",
+        "empty": "Du hast noch keine Ordner. Gib einen Namen ein, um einen zu erstellen.",
+        "loading": "Deine Ordner werden geladen",
+        "loadFailed": "Deine Ordner konnten nicht geladen werden.",
+        "create": "Ordner „{name}“ erstellen",
+        "remove": "{name} entfernen",
+        "error": {
+          "taken": "Du hast bereits einen Ordner mit diesem Namen. Wähle ihn aus der Liste.",
+          "invalid": "Verwende einen Namen mit 1 bis {max, number} Zeichen."
+        }
+      },
+      "tags": {
+        "label": "Tags",
+        "placeholder": "Tag suchen oder hinzufügen",
+        "empty": "Du hast noch keine Tags. Gib einen Namen ein, um einen zu erstellen.",
+        "loading": "Deine Tags werden geladen",
+        "loadFailed": "Deine Tags konnten nicht geladen werden.",
+        "create": "Tag „{name}“ erstellen",
+        "remove": "{name} entfernen",
+        "error": {
+          "tooLong": "Verwende einen Tag-Namen mit höchstens {max, number} Zeichen."
+        }
+      },
       "description": {
         "label": "Beschreibung",
         "counter": "{count, number} / {max, number}",
@@ -251,6 +276,10 @@
         "notFound": {
           "title": "Lesezeichen nicht gefunden",
           "description": "Es wurde vielleicht gelöscht oder gehört nicht dir."
+        },
+        "choiceNotFound": {
+          "title": "Ein Ordner oder Tag wurde nicht gefunden",
+          "description": "Das Lesezeichen, ein Ordner oder ein Tag, den du gewählt hast, wurde vielleicht gelöscht. Deine Auswahl bleibt erhalten; prüfe sie und speichere erneut."
         }
       }
     }

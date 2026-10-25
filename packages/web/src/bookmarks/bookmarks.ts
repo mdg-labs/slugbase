@@ -170,7 +170,7 @@ export async function bulkBookmarks(api: ApiClient, action: BulkAction, ids: rea
   return totals;
 }
 
-export type FieldName = "url" | "title" | "description";
+export type FieldName = "url" | "title" | "description" | "tagNames";
 
 /** Why a field's value is refused. */
 export type FieldProblem = "required" | "tooLong" | "notAllowed" | "invalid";
@@ -187,7 +187,7 @@ export type BookmarkFailure =
   | { readonly kind: "unavailable" }
   | { readonly kind: "loadFailed" };
 
-const FIELDS: readonly FieldName[] = ["url", "title", "description"];
+const FIELDS: readonly FieldName[] = ["url", "title", "description", "tagNames"];
 
 function isFieldName(path: string): path is FieldName {
   return (FIELDS as readonly string[]).includes(path);
@@ -210,8 +210,10 @@ function problemOfCode(code: string): FieldProblem {
 export function fieldProblemsOf(errors: readonly { readonly path: string; readonly code: string }[]): FieldProblems {
   const problems: Partial<Record<FieldName, FieldProblem>> = {};
   for (const { path, code } of errors) {
-    if (isFieldName(path) && problems[path] === undefined) {
-      problems[path] = problemOfCode(code);
+    // A problem with one entry of a list names the entry after the field (`tagNames.0`).
+    const field = path.split(".")[0] ?? path;
+    if (isFieldName(field) && problems[field] === undefined) {
+      problems[field] = problemOfCode(code);
     }
   }
   return problems;

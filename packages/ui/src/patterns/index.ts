@@ -23,6 +23,7 @@ export { InlineNote, type InlineNoteProps } from "./inline-note.tsx";
 export { LoadMore, type LoadMorePageSize, type LoadMoreProps } from "./load-more.tsx";
 export { Loading, type LoadingProps } from "./loading.tsx";
 export { MetricTile, type MetricTileProps } from "./metric-tile.tsx";
+export { MultiPick, type MultiPickCreate, type MultiPickProps } from "./multi-pick.tsx";
 export { PasswordStrength, type PasswordScore, type PasswordStrengthProps } from "./password-strength.tsx";
 export { Picker, type PickerOption, type PickerProps } from "./picker.tsx";
 export { RowActions, type RowAction, type RowActionsProps } from "./row-actions.tsx";

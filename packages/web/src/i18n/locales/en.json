@@ -202,6 +202,31 @@
           "tooLong": "Use at most {max, number} characters."
         }
       },
+      "folders": {
+        "label": "Folders",
+        "placeholder": "Search or create a folder",
+        "empty": "You have no folders yet. Type a name to create one.",
+        "loading": "Loading your folders",
+        "loadFailed": "Your folders could not be loaded.",
+        "create": "Create folder “{name}”",
+        "remove": "Remove {name}",
+        "error": {
+          "taken": "You already have a folder with this name. Choose it from the list.",
+          "invalid": "Use a name of 1 to {max, number} characters."
+        }
+      },
+      "tags": {
+        "label": "Tags",
+        "placeholder": "Search or add a tag",
+        "empty": "You have no tags yet. Type a name to create one.",
+        "loading": "Loading your tags",
+        "loadFailed": "Your tags could not be loaded.",
+        "create": "Create tag “{name}”",
+        "remove": "Remove {name}",
+        "error": {
+          "tooLong": "Use a tag name of at most {max, number} characters."
+        }
+      },
       "description": {
         "label": "Description",
         "counter": "{count, number} / {max, number}",
@@ -251,6 +276,10 @@
         "notFound": {
           "title": "Bookmark not found",
           "description": "It may have been deleted, or it is not one of yours."
+        },
+        "choiceNotFound": {
+          "title": "A folder or tag was not found",
+          "description": "The bookmark, a folder or a tag you chose may have been deleted. Your choices are kept; check them and save again."
         }
       }
     }
