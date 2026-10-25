@@ -23,6 +23,7 @@ const STORED: BookmarkRecord = {
   pinned: false,
   openCount: 0,
   lastOpenedAt: null,
+  folders: [],
   version: 1,
   createdAt: new Date("2026-10-23T05:00:00.000Z"),
   updatedAt: new Date("2026-10-23T05:00:00.000Z"),
@@ -81,6 +82,17 @@ describe("updateBookmark", () => {
     expect(requests[1]?.changes).toEqual({});
   });
 
+  it("hands the store the folders the bookmark is to be in, in lower case and without repeats, and an empty list as the wish to be in none", async () => {
+    const { requests, dependencies } = updating();
+    const folder = "0192f3a0-dddd-7000-8000-00000000000A";
+
+    await updateBookmark(dependencies, { ...ASKING, patch: { folderIds: [folder, folder.toLowerCase()] } });
+    await updateBookmark(dependencies, { ...ASKING, patch: { folderIds: [] } });
+    await updateBookmark(dependencies, { ...ASKING, patch: { title: "Only the title" } });
+
+    expect(requests.map((request) => request.changes.folderIds)).toEqual([["0192f3a0-dddd-7000-8000-00000000000a"], [], undefined]);
+  });
+
   it("clears the description for null and for an empty one, and keeps a description that has text", async () => {
     const { requests, dependencies } = updating();
 
@@ -119,7 +131,7 @@ describe("updateBookmark", () => {
     expect(requests).toHaveLength(1);
   });
 
-  it.each([[{ kind: "stale" }], [{ kind: "not_found" }], [{ kind: "unchanged", bookmark: STORED }]] as const)("answers what the store answers: %j", async (answer) => {
+  it.each([[{ kind: "stale" }], [{ kind: "not_found" }], [{ kind: "folder_not_found" }], [{ kind: "unchanged", bookmark: STORED }]] as const)("answers what the store answers: %j", async (answer) => {
     const { dependencies } = updating(answer);
 
     expect(await updateBookmark(dependencies, { ...ASKING, patch: { title: "X" } })).toEqual(answer);

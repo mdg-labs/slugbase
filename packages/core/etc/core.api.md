@@ -1066,6 +1066,7 @@ export type BookmarkBulkTarget = {
 export interface BookmarkChanges {
     // (undocumented)
     readonly description?: string | null;
+    readonly folderIds?: readonly string[];
     // (undocumented)
     readonly pinned?: boolean;
     // (undocumented)
@@ -1080,6 +1081,7 @@ export interface BookmarkCreationAsk {
     readonly ceiling: EntitlementLimit;
     // (undocumented)
     readonly description: string | undefined;
+    readonly folderIds: readonly string[] | undefined;
     // (undocumented)
     readonly pinned: boolean | undefined;
     // (undocumented)
@@ -1116,6 +1118,10 @@ export type BookmarkCreationOutcome = {
 /** The workspace cannot be reached; nothing was written. */
 | {
     readonly kind: "unavailable";
+}
+/** A folder is not one the account has in this workspace (another member's, another workspace's, or none); nothing was written. */
+| {
+    readonly kind: "folder_not_found";
 };
 
 // @public (undocumented)
@@ -1124,6 +1130,7 @@ export interface BookmarkCreationRequest {
     readonly bookmark: NewBookmark;
     readonly ceiling: EntitlementLimit;
     readonly events: readonly DomainEvent<"bookmark.created">[];
+    readonly folderIds: readonly string[];
 }
 
 // @public
@@ -1154,6 +1161,7 @@ export interface BookmarkEntitlements {
 // @public
 export interface BookmarkFilterAsk {
     readonly accountId: string;
+    readonly folderId?: string | undefined;
     // (undocumented)
     readonly forwarding: boolean | undefined;
     // (undocumented)
@@ -1161,6 +1169,17 @@ export interface BookmarkFilterAsk {
     // (undocumented)
     readonly pinned: boolean | undefined;
     readonly url: string | undefined;
+}
+
+// @public
+export interface BookmarkFolderRef {
+    readonly color: number;
+    // (undocumented)
+    readonly icon: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
 }
 
 // @public (undocumented)
@@ -1192,6 +1211,7 @@ export interface BookmarkListAsk {
     readonly accountId: string;
     // (undocumented)
     readonly cursor: string | undefined;
+    readonly folderId?: string | undefined;
     // (undocumented)
     readonly forwarding: boolean | undefined;
     // (undocumented)
@@ -1218,6 +1238,7 @@ export interface BookmarkListDependencies {
 
 // @public (undocumented)
 export interface BookmarkListFilter {
+    readonly folderId?: string | undefined;
     readonly forwarding?: boolean | undefined;
     readonly hasSlug?: boolean | undefined;
     readonly ownerId: string;
@@ -1310,6 +1331,7 @@ export type BookmarkOpenOutcome =
 export interface BookmarkPatch {
     // (undocumented)
     readonly description?: string | null;
+    readonly folderIds?: readonly string[];
     // (undocumented)
     readonly pinned?: boolean;
     // (undocumented)
@@ -1345,6 +1367,7 @@ export interface BookmarkRecord {
     readonly createdAt: Date;
     // (undocumented)
     readonly description: string | null;
+    readonly folders: readonly BookmarkFolderRef[];
     // (undocumented)
     readonly forwarding: boolean;
     // (undocumented)
@@ -1399,6 +1422,10 @@ export type BookmarkStoreResult = {
 /** The workspace of the transaction cannot be reached: it does not exist, is being deleted, or the account is no member. */
 | {
     readonly kind: "unavailable";
+}
+/** One of the folders is not one the owner has in this workspace; nothing is written. */
+| {
+    readonly kind: "folder_not_found";
 };
 
 // @public (undocumented)
@@ -1438,15 +1465,19 @@ export interface BookmarkUpdateRequest {
 
 // @public (undocumented)
 export type BookmarkUpdateResult =
-/** The bookmark was changed; `bookmark` is the row after the change, its version moved by one. */
+/** The bookmark was changed; `bookmark` is the row after the change, its version moved by one unless only its folders changed. */
     {
     readonly kind: "updated";
     readonly bookmark: BookmarkRecord;
 }
-/** The patch names the values the bookmark already has; nothing was written and the version stays. */
+/** The patch names the values the bookmark already has, in the folders it is already in; nothing was written and the version stays. */
 | {
     readonly kind: "unchanged";
     readonly bookmark: BookmarkRecord;
+}
+/** A folder of `folderIds` is not one the owner has in this workspace; nothing was written. */
+| {
+    readonly kind: "folder_not_found";
 }
 /** The version of the bookmark, read under its lock, is none of the accepted ones; nothing was written. */
 | {
@@ -1914,6 +1945,9 @@ export interface ErrorReportPort extends Port {
 export function federatedDisplayName(name: string | undefined, email: string): string;
 
 // @public
+export function fileBookmarks(input: FolderFilingDependencies, ask: FolderFilingAsk): Promise<FolderFilingResult>;
+
+// @public
 export const FLAG_ENTITLEMENTS: readonly FlagEntitlement[];
 
 // @public
@@ -1977,6 +2011,48 @@ export interface FolderDeletionAsk {
 export interface FolderDeletionDependencies {
     // (undocumented)
     readonly store: Pick<FolderStore, "remove">;
+}
+
+// @public (undocumented)
+export interface FolderFilingAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly bookmarkIds: readonly string[];
+    // (undocumented)
+    readonly folderId: string;
+}
+
+// @public (undocumented)
+export interface FolderFilingDependencies {
+    // (undocumented)
+    readonly store: FolderFilingStore;
+}
+
+// @public (undocumented)
+export interface FolderFilingRequest {
+    readonly bookmarkIds: readonly string[];
+    // (undocumented)
+    readonly folderId: string;
+    readonly ownerId: string;
+}
+
+// @public (undocumented)
+export type FolderFilingResult =
+/** Every bookmark was found and is now filed (or unfiled); `changed` of them were not before. `folder` is the folder after the change, with its count. */
+    {
+    readonly kind: "done";
+    readonly folder: FolderRecord;
+    readonly changed: number;
+}
+/** The owner has no such folder, or owns no such bookmark among those named; nothing was written. */
+| {
+    readonly kind: "not_found";
+};
+
+// @public (undocumented)
+export interface FolderFilingStore {
+    file(request: FolderFilingRequest): Promise<FolderFilingResult>;
+    unfile(request: FolderFilingRequest): Promise<FolderFilingResult>;
 }
 
 // @public (undocumented)
@@ -4220,6 +4296,9 @@ export function truncateUserAgent(userAgent: string | null | undefined): string 
 
 // @public
 export function unconfigured(): Adapters;
+
+// @public
+export function unfileBookmarks(input: FolderFilingDependencies, ask: FolderFilingAsk): Promise<FolderFilingResult>;
 
 // @public
 export const UNSET_INSTANCE_SETTINGS: InstanceSettings;

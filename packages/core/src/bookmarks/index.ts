@@ -6,6 +6,7 @@ export type {
   BookmarkCreationDependencies,
   BookmarkCreationOutcome,
   BookmarkCreationRequest,
+  BookmarkFolderRef,
   BookmarkRecord,
   BookmarkStore,
   BookmarkStoreResult,

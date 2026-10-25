@@ -91,7 +91,7 @@ async function storedFolders(): Promise<StoredFolder[]> {
   });
 }
 
-/** Files a new bookmark of the owner in the folder, the way the operation that files bookmarks will: as the system, since a request may not yet. */
+/** Files a new bookmark of the owner in the folder, as the system: a test that has no bookmark to file through a request. */
 async function fileBookmark(workspaceId: string, ownerId: string, folderId: string, archived = false): Promise<string> {
   const bookmarkId = crypto.randomUUID();
   await database().owner.begin(async (tx) => {

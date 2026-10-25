@@ -1,10 +1,14 @@
 import { z } from "zod";
+import { BOOKMARK_BULK_IDS_MAX } from "./bookmarks.ts";
 import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
 
 // The folders tag of doc 04 section 10.7: the operations that create, list, read, change and delete a member's folders. They act in
 // the workspace the request is bound to and name none (D11). A folder is its owner's (doc 02 section 7.1): another member's folder of
 // the same workspace and any folder of another workspace are answered 404, like one that does not exist (doc 04 section 2.4, doc 10 T1
-// and T2). Filing bookmarks, sharing a folder and the share summary are other operations.
+// and T2). Only the owner of a bookmark files it, and only into a folder of their own (doc 02 sections 7.1 and 8.2, Q22; doc 04 section 10.7
+// says "visible to the caller" for the read operations, which the ownership rule narrows): a folder or a bookmark that is another member's,
+// another workspace's or unknown is answered 404 and none of the bookmarks named is filed or unfiled. Sharing a folder and the share
+// summary are other operations.
 
 /** The longest folder name, in characters (doc 05 section 2.4). */
 export const FOLDER_NAME_MAX_LENGTH = 64;
@@ -134,6 +138,16 @@ export const FolderSchema = z
     updatedAt: z.iso.datetime().describe("When the folder last changed, RFC 3339 UTC"),
   })
   .meta({ id: "Folder" });
+
+export const FolderBookmarksRequestSchema = z
+  .strictObject({
+    bookmarkIds: z
+      .array(z.uuid())
+      .min(1)
+      .max(BOOKMARK_BULK_IDS_MAX)
+      .describe("The bookmarks to file in the folder or to take out of it, 1 to 1 000 identifiers; one named twice counts once. The caller must own every one of them"),
+  })
+  .meta({ id: "FolderBookmarksRequest" });
 
 export const FOLDER_SORTS = ["name", "count", "updated"] as const;
 
@@ -309,6 +323,62 @@ export const deleteFolder = defineOperation({
       "The workspace the request acts in has no folder of the caller with this identifier: another member's folder, a folder of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204",
     ),
     422: problemResponse("The identifier did not pass validation"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const addFolderBookmarks = defineOperation({
+  method: "post",
+  path: "/api/v1/folders/{id}/bookmarks",
+  operationId: "addFolderBookmarks",
+  tag: "folders",
+  summary: "File bookmarks in a folder",
+  auth: "member",
+  rate: "write",
+  scope: "write",
+  request: { params: FolderParamsSchema, body: FolderBookmarksRequestSchema },
+  responses: {
+    200: jsonResponse(
+      "The caller's folder after every bookmark named is filed in it, with its count. The request is all or nothing; a bookmark that is filed in the folder already stays as it is, so repeating a request changes nothing. Filing moves no version of the folder or of the bookmarks",
+      FolderSchema,
+      { headers: FolderEntityTag },
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    403: problemResponse("The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"),
+    404: problemResponse(
+      "The caller has no folder with this identifier in the workspace, or owns none of a bookmark named among those it can file: another member's folder or bookmark, one of another workspace, a plan-archived bookmark and one that never existed are answered alike, and none of the bookmarks is filed",
+    ),
+    422: problemResponse("The identifier or the body did not pass validation (no bookmark identifier, more than 1 000, a malformed identifier, or a field the operation does not declare). Nothing is written"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const removeFolderBookmarks = defineOperation({
+  method: "delete",
+  path: "/api/v1/folders/{id}/bookmarks",
+  operationId: "removeFolderBookmarks",
+  tag: "folders",
+  summary: "Take bookmarks out of a folder",
+  auth: "member",
+  rate: "write",
+  scope: "write",
+  request: { params: FolderParamsSchema, body: FolderBookmarksRequestSchema },
+  responses: {
+    200: jsonResponse(
+      "The caller's folder after every bookmark named is taken out of it, with its count. The bookmarks stay. The request is all or nothing; a bookmark that is not in the folder is left as it is, so repeating a request changes nothing",
+      FolderSchema,
+      { headers: FolderEntityTag },
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    403: problemResponse("The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"),
+    404: problemResponse(
+      "The caller has no folder with this identifier in the workspace, or owns none of a bookmark named: another member's folder or bookmark, one of another workspace and one that never existed are answered alike, and none of the bookmarks is unfiled",
+    ),
+    422: problemResponse("The identifier or the body did not pass validation (no bookmark identifier, more than 1 000, a malformed identifier, or a field the operation does not declare). Nothing is written"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },

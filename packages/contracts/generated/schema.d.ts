@@ -330,6 +330,24 @@ export interface paths {
         patch: operations["updateFolder"];
         trace?: never;
     };
+    "/api/v1/folders/{id}/bookmarks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** File bookmarks in a folder */
+        post: operations["addFolderBookmarks"];
+        /** Take bookmarks out of a folder */
+        delete: operations["removeFolderBookmarks"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/instance/accounts": {
         parameters: {
             query?: never;
@@ -1377,6 +1395,8 @@ export interface components {
             createdAt: string;
             /** @description The bookmark's description, null when it has none */
             description: string | null;
+            /** @description The owner's folders the bookmark is filed in, in the order of their names; empty when it is filed in none */
+            folders: components["schemas"]["BookmarkFolder"][];
             /** @description Whether /go forwards to the bookmark by its slug */
             forwarding: boolean;
             /** @description The host name of the URL, lower case and in punycode */
@@ -1422,6 +1442,19 @@ export interface components {
             scope?: "all" | "mine";
             /** @description Matches the caller's bookmarks whose canonical URL equals the canonical form of this value; one that cannot be a bookmark's URL is refused with 422 */
             url?: string;
+        };
+        BookmarkFolder: {
+            /** @description The folder's colour, 1 to 8: the number of the --folder-N theme token */
+            color: number;
+            /** @description The folder's icon, a lucide icon name */
+            icon: string;
+            /**
+             * Format: uuid
+             * @description The folder's identifier
+             */
+            id: string;
+            /** @description The folder's name, in the case it was entered in */
+            name: string;
         };
         BookmarkIds: {
             /** @description The identifiers of the caller's bookmarks that match the filters, newest first, at most 5 000 */
@@ -1512,6 +1545,8 @@ export interface components {
         CreateBookmarkRequest: {
             /** @description The bookmark's description, 0 to 1 000 characters; surrounding whitespace is removed and an empty one is stored as none */
             description?: string;
+            /** @description The caller's folders to file the bookmark in, at most 100 identifiers; one named twice counts once. A folder that is another member's, another workspace's or unknown is refused with 404 and nothing is created. Filed in none when left out */
+            folderIds?: string[];
             /** @description Whether the bookmark is pinned; not pinned when left out */
             pinned?: boolean;
             /** @description The bookmark's title, 1 to 300 characters; surrounding whitespace is removed and a title that is blank after that is refused */
@@ -1691,6 +1726,10 @@ export interface components {
             updatedAt: string;
             /** @description Moves by one with every change; the ETag header carries it and If-Match takes it back */
             version: number;
+        };
+        FolderBookmarksRequest: {
+            /** @description The bookmarks to file in the folder or to take out of it, 1 to 1 000 identifiers; one named twice counts once. The caller must own every one of them */
+            bookmarkIds: string[];
         };
         FolderList: {
             /** @description One page of the caller's folders in the workspace, in the order asked for; another member's folders are never listed */
@@ -2388,6 +2427,8 @@ export interface components {
         UpdateBookmarkRequest: {
             /** @description The new description, 0 to 1 000 characters; surrounding whitespace is removed, and an empty one and null clear it. Left out, the description is left as it is */
             description?: string | null;
+            /** @description The caller's folders the bookmark is filed in afterwards, at most 100 identifiers: the list replaces the folders it is in, and an empty list takes it out of all of them. Filing moves no version. A folder that is another member's, another workspace's or unknown is refused with 404 and nothing is changed. Left out, the folders are left as they are */
+            folderIds?: string[];
             /** @description Pins or unpins the bookmark; left out, the pin is left as it is */
             pinned?: boolean;
             /** @description The new title, 1 to 300 characters; surrounding whitespace is removed and a title that is blank after that is refused. It cannot be cleared. Left out, the title is left as it is */
@@ -3307,6 +3348,7 @@ export interface operations {
                 hasSlug?: "true" | "false";
                 forwarding?: "true" | "false";
                 url?: string;
+                folderId?: string;
                 sort?: "recent" | "oldest" | "title_asc" | "title_desc" | "most_used" | "recently_opened";
                 limit?: number;
                 cursor?: string;
@@ -3353,7 +3395,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The query did not pass validation (an unknown parameter or sort, a boolean other than true or false, a limit outside 1 to 100), or the url is not a URL a bookmark can have */
+            /** @description The query did not pass validation (an unknown parameter or sort, a boolean other than true or false, a folderId that is not an identifier, a limit outside 1 to 100), or the url is not a URL a bookmark can have */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3400,7 +3442,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The bookmark, owned by the caller and private to them, with its id and its version in the body (the ETag of a later read repeats the version). The workspace's bookmark count is raised by one in the same transaction, and bookmark.created is announced once it is committed. A retry with the same Idempotency-Key and the same request answers this response again with Idempotency-Replayed: true and stores nothing; a replay restores the status and the body and no header, so the response carries none */
+            /** @description The bookmark, owned by the caller and private to them, filed in the folders folderIds named, with its id and its version in the body (the ETag of a later read repeats the version). The workspace's bookmark count is raised by one in the same transaction, and bookmark.created is announced once it is committed. A retry with the same Idempotency-Key and the same request answers this response again with Idempotency-Replayed: true and stores nothing; a replay restores the status and the body and no header, so the response carries none */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -3436,7 +3478,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted; or a folder of folderIds is not one the caller has in it (another member's, another workspace's or unknown), and nothing is created */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3454,7 +3496,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation (a missing, empty or over-long URL, title or description, a malformed URL, or a field the operation does not declare), the URL is not an http or https URL (url_not_allowed), or the workspace already holds as many bookmarks as its bookmarks.max entitlement allows (bookmark_limit_reached; the problem carries limit and used). Nothing is written, and a refused request keeps no key, so a retry with it runs */
+            /** @description The body did not pass validation (a missing, empty or over-long URL, title or description, a malformed URL, a folderIds list of more than 100 or with a malformed identifier, or a field the operation does not declare), the URL is not an http or https URL (url_not_allowed), or the workspace already holds as many bookmarks as its bookmarks.max entitlement allows (bookmark_limit_reached; the problem carries limit and used). Nothing is written, and a refused request keeps no key, so a retry with it runs */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3838,7 +3880,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The caller's bookmark after a JSON Merge Patch of its url, title, description and pinned fields. A change moves the version by one and the ETag is that of the new version; a patch that names the values the bookmark has, and an empty one, write nothing and answer with the unchanged version */
+            /** @description The caller's bookmark after a JSON Merge Patch of its url, title, description, pinned and folderIds fields. A change moves the version by one and the ETag is that of the new version; a patch that names the values the bookmark has, in the folders it is already in, and an empty one, write nothing and answer with the unchanged version; a patch of folderIds alone changes the folders and keeps the version */
             200: {
                 headers: {
                     /** @description The bookmark's version as an entity tag, for example "3"; the If-Match of the next change */
@@ -3876,7 +3918,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The workspace the request acts in has no bookmark of the caller with this identifier that can be changed: another member's bookmark, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike */
+            /** @description The workspace the request acts in has no bookmark of the caller with this identifier that can be changed: another member's bookmark, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike. A folder of folderIds that is not the caller's (another member's, another workspace's or unknown) is answered alike, and nothing is changed */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3894,7 +3936,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The identifier or the body did not pass validation (a malformed, empty or over-long URL, a title that is blank or over-long, a description over 1 000 characters, a null title or URL, or a field the operation does not declare), or the URL is not an http or https URL (url_not_allowed). Nothing is written */
+            /** @description The identifier or the body did not pass validation (a malformed, empty or over-long URL, a title that is blank or over-long, a description over 1 000 characters, a null title or URL, a folderIds list of more than 100 or with a malformed identifier, or a field the operation does not declare), or the URL is not an http or https URL (url_not_allowed). Nothing is written */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4507,6 +4549,192 @@ export interface operations {
                 };
             };
             /** @description The identifier or the body did not pass validation (a name that is blank or longer than 64 characters, an icon outside the list, a colour outside 1 to 8, or a field the operation does not declare). Nothing is written */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    addFolderBookmarks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FolderBookmarksRequest"];
+            };
+        };
+        responses: {
+            /** @description The caller's folder after every bookmark named is filed in it, with its count. The request is all or nothing; a bookmark that is filed in the folder already stays as it is, so repeating a request changes nothing. Filing moves no version of the folder or of the bookmarks */
+            200: {
+                headers: {
+                    /** @description The folder's version as an entity tag, for example "3"; the If-Match of the next change */
+                    ETag: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Folder"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The caller has no folder with this identifier in the workspace, or owns none of a bookmark named among those it can file: another member's folder or bookmark, one of another workspace, a plan-archived bookmark and one that never existed are answered alike, and none of the bookmarks is filed */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The identifier or the body did not pass validation (no bookmark identifier, more than 1 000, a malformed identifier, or a field the operation does not declare). Nothing is written */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    removeFolderBookmarks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FolderBookmarksRequest"];
+            };
+        };
+        responses: {
+            /** @description The caller's folder after every bookmark named is taken out of it, with its count. The bookmarks stay. The request is all or nothing; a bookmark that is not in the folder is left as it is, so repeating a request changes nothing */
+            200: {
+                headers: {
+                    /** @description The folder's version as an entity tag, for example "3"; the If-Match of the next change */
+                    ETag: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Folder"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The caller has no folder with this identifier in the workspace, or owns none of a bookmark named: another member's folder or bookmark, one of another workspace and one that never existed are answered alike, and none of the bookmarks is unfiled */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The identifier or the body did not pass validation (no bookmark identifier, more than 1 000, a malformed identifier, or a field the operation does not declare). Nothing is written */
             422: {
                 headers: {
                     [name: string]: unknown;

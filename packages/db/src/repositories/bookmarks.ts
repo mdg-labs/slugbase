@@ -1,6 +1,7 @@
 import {
   createAuditWriter,
   type BookmarkArchiveTransaction,
+  type BookmarkFolderRef,
   type BookmarkListFilter,
   type BookmarkListRequest,
   type BookmarkListRow,
@@ -13,10 +14,12 @@ import {
 import { and, eq, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import { bookmarks } from "../schema/bookmarks.ts";
+import { folderBookmarks, folders } from "../schema/folders.ts";
 import { auditEventRepository } from "./audit-events.ts";
 import { entitlementRepository } from "./entitlements.ts";
 import { enqueueInTenantTransaction, type QueuedJob } from "../system/queue.ts";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
+import { deleteLinks, distinctIdentifiers, foldersOfBookmarks, insertLinks, lockOwnedFolders, requireIdentifiers, uuidArray } from "./folder-links.ts";
 import { defineScopedRepository } from "./scoped.ts";
 
 // The bookmarks of the active workspace (doc 05 section 2.4, doc 02 section 5, doc 10 T1, T2 and T11). Reads, the insert and the
@@ -35,7 +38,12 @@ import { defineScopedRepository } from "./scoped.ts";
 // workspace in one of six orderings, resumed by a keyset: the sort key of the last row and its identifier, compared as a row, so
 // the statement is a range scan of the index that serves the sort (doc 05 section 2.4) and the page costs the same at any depth.
 // The sort keys are read back as text and passed back as text, because a timestamp the driver turns into a `Date` loses the
-// microseconds the database keeps, and a row that shares its key with the cursor's would then be skipped or repeated.
+// microseconds the database keeps, and a row that shares its key with the cursor's would then be skipped or repeated. A bookmark is filed in
+// the folders of its owner in the same transaction that creates or changes it (`folderIds`), through the links of src/repositories/folder-links.ts;
+// the folders are locked and checked before the first write, so a folder that is not the owner's ends the call with nothing written, and every
+// record carries the folders it is filed in. A list may be narrowed to one folder of the caller's, which an EXISTS over the links of the
+// bookmark answers by the primary key of `folder_bookmarks`, `(folder_id, bookmark_id)`; the index on `(workspace_id, bookmark_id)`
+// serves the read of the folders of the bookmarks of a page.
 
 // `slugbase_app` may insert only the columns a request gives a new bookmark and update only the columns a change of its own fields
 // writes (src/sql/470-bookmarks.sql): not the slug, forwarding, the archive state, the usage, the owner or the version, so a row
@@ -49,17 +57,6 @@ const scoped = defineScopedRepository("bookmarks", bookmarks, {
 type BookmarkRow = InferSelectModel<typeof bookmarks>;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function requireIdentifiers(bookmarkIds: readonly string[], action: string): void {
-  if (!bookmarkIds.every((id) => UUID.test(id))) {
-    throw new Error(`${action} takes identifiers only`);
-  }
-}
-
-/** One parameter, whatever the number of identifiers: a PostgreSQL array literal of UUIDs, which hold no character it would need to quote. */
-function uuidArray(bookmarkIds: readonly string[]): string {
-  return `{${bookmarkIds.join(",")}}`;
-}
 
 interface TakenRow extends Record<string, unknown> {
   outcome: string;
@@ -84,6 +81,8 @@ export interface BookmarkCreation {
   readonly ceiling: number | null;
   /** Jobs queued in the same transaction, only when the bookmark is created. */
   readonly jobs: readonly QueuedJob[];
+  /** The owner's folders the bookmark is filed in; none when left out. */
+  readonly folderIds?: readonly string[];
 }
 
 export type BookmarkCreationResult =
@@ -91,12 +90,14 @@ export type BookmarkCreationResult =
   /** The workspace holds `used` bookmarks, which is as many as the ceiling allows. */
   | { readonly kind: "limit_reached"; readonly used: number }
   /** The workspace of the transaction cannot be reached: it is being deleted, or the account is no member of it. */
-  | { readonly kind: "unavailable" };
+  | { readonly kind: "unavailable" }
+  /** A folder is not one the owner has in the workspace; nothing is written. */
+  | { readonly kind: "folder_not_found" };
 
 export interface BookmarkRepository {
   /**
-   * Takes one place under the ceiling, inserts the bookmark and queues the jobs, in the open transaction. Nothing is written
-   * for `limit_reached` and `unavailable`. Needs a transaction opened with a workspace.
+   * Takes one place under the ceiling, inserts the bookmark, files it in the folders and queues the jobs, in the open transaction. Nothing
+   * is written for `limit_reached`, `unavailable` and `folder_not_found`. Needs a transaction opened with a workspace.
    */
   create(creation: BookmarkCreation): Promise<BookmarkCreationResult>;
   /**
@@ -107,7 +108,8 @@ export interface BookmarkRepository {
   /**
    * Changes the bookmark that `ownerId` owns in the workspace of the transaction, unless it is plan-archived. The row is locked
    * first; when `expectedVersions` is given and the version under the lock is none of them the answer is `stale` and nothing is
-   * written, and a patch that names the values the row has is `unchanged`. A change moves the version by one (the trigger
+   * written, and a patch that names the values the row has, in the folders it is in, is `unchanged`. `changes.folderIds` replaces the
+   * owner's folders the bookmark is filed in; a folder that is not the owner's is `folder_not_found` with nothing written. A change moves the version by one (the trigger
    * `bookmarks_bump_version`). Needs a transaction opened with a workspace.
    */
   update(request: BookmarkUpdateRequest): Promise<BookmarkUpdateResult>;
@@ -159,6 +161,14 @@ export interface BookmarkRepository {
   count(filter: BookmarkListFilter, limit: number): Promise<number>;
 }
 
+/** The bookmark is filed in the folder `folderId`, and the folder is its owner's: a folder of another member matches nothing. */
+function filedIn(folderId: string): SQL {
+  requireIdentifiers([folderId], "listing the bookmarks of a folder");
+  return sql`EXISTS (
+    SELECT 1 FROM ${folderBookmarks} INNER JOIN ${folders} ON ${folders.workspaceId} = ${folderBookmarks.workspaceId} AND ${folders.id} = ${folderBookmarks.folderId}
+    WHERE ${folderBookmarks.workspaceId} = ${bookmarks.workspaceId} AND ${folderBookmarks.bookmarkId} = ${bookmarks.id} AND ${folderBookmarks.folderId} = ${folderId}::uuid AND ${folders.ownerId} = ${bookmarks.ownerId})`;
+}
+
 /** The predicate of a list and of its count: the workspace, the owner, never a plan-archived bookmark, and the filters given. */
 function listPredicate(workspaceId: string, filter: BookmarkListFilter): SQL {
   const predicate = and(
@@ -169,6 +179,7 @@ function listPredicate(workspaceId: string, filter: BookmarkListFilter): SQL {
     filter.hasSlug === undefined ? undefined : filter.hasSlug ? isNotNull(bookmarks.slug) : isNull(bookmarks.slug),
     filter.forwarding === undefined ? undefined : eq(bookmarks.forwarding, filter.forwarding),
     filter.urlCanonical === undefined ? undefined : eq(bookmarks.urlCanonical, filter.urlCanonical),
+    filter.folderId === undefined ? undefined : filedIn(filter.folderId),
   );
   if (predicate === undefined) {
     throw new Error("a list predicate is never empty");
@@ -237,7 +248,7 @@ const SORT_ORDERS: Readonly<Record<BookmarkSort, SortOrder>> = {
   recently_opened: { column: sql`${bookmarks.lastOpenedAt}`, key: sql`${bookmarks.lastOpenedAt}::text`, cast: "timestamptz", order: sql`${bookmarks.lastOpenedAt} DESC NULLS LAST, ${bookmarks.id} DESC NULLS LAST`, direction: "<" },
 };
 
-function recordOf(row: BookmarkRecordRow): BookmarkRecord {
+function recordOf(row: BookmarkRecordRow, filed: readonly BookmarkFolderRef[]): BookmarkRecord {
   return {
     id: row.id,
     ownerId: row.ownerId,
@@ -250,6 +261,7 @@ function recordOf(row: BookmarkRecordRow): BookmarkRecord {
     pinned: row.pinnedAt !== null,
     openCount: row.openCount,
     lastOpenedAt: row.lastOpenedAt,
+    folders: filed,
     version: row.version,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -287,9 +299,14 @@ function requireListWorkspace(tx: TenantTx, action: string): string {
 export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
   const rows = scoped.bind(tx);
   return {
-    async create({ bookmark, ceiling, jobs }) {
+    async create({ bookmark, ceiling, jobs, folderIds = [] }) {
       if (tx.workspaceId === undefined) {
         throw new TenantContextError("workspace_required", "creating a bookmark needs a tenant transaction opened with a workspace");
+      }
+      // Before the first write: a folder that is not the owner's ends the call without taking a place under the ceiling. The folders are only read
+      // here and locked after the workspace's row is (below), the order every other transaction takes the two in.
+      if (!(await lockOwnedFolders(tx, bookmark.ownerId, folderIds, false))) {
+        return { kind: "folder_not_found" };
       }
       const taken = await tenantHandle(tx).execute<TakenRow>(sql`
         SELECT outcome, used FROM public.sys_bookmark_count_take(${tx.workspaceId}::uuid, ${ceiling}::integer)`);
@@ -320,15 +337,25 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
         description: bookmark.description,
         pinnedAt: bookmark.pinned ? new Date() : null,
       });
+      if (!(await lockOwnedFolders(tx, bookmark.ownerId, folderIds))) {
+        // A folder that was there a moment ago is gone: the call ends with an error, which rolls the place and the bookmark back with it.
+        throw new Error("a folder of the new bookmark was deleted while the bookmark was created");
+      }
+      await insertLinks(tx, folderIds, [stored.id]);
       for (const job of jobs) {
         await enqueueInTenantTransaction(tx, job);
       }
-      return { kind: "created", bookmark: recordOf(stored) };
+      const filed = await foldersOfBookmarks(tx, bookmark.ownerId, [stored.id]);
+      return { kind: "created", bookmark: recordOf(stored, filed.get(stored.id) ?? []) };
     },
 
     async find(bookmarkId) {
       const [row] = await rows.select(and(eq(bookmarks.id, bookmarkId), isNull(bookmarks.planArchivedAt)));
-      return row === undefined ? undefined : recordOf(row);
+      if (row === undefined) {
+        return undefined;
+      }
+      const filed = await foldersOfBookmarks(tx, tx.accountId, [row.id]);
+      return recordOf(row, filed.get(row.id) ?? []);
     },
 
     async update({ bookmarkId, ownerId, changes, expectedVersions }) {
@@ -346,6 +373,10 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
       if (expectedVersions !== undefined && !expectedVersions.includes(current.version)) {
         return { kind: "stale" };
       }
+      // Before the first write: a folder that is not the owner's ends the call with the bookmark as it was.
+      if (changes.folderIds !== undefined && !(await lockOwnedFolders(tx, ownerId, changes.folderIds))) {
+        return { kind: "folder_not_found" };
+      }
       const set: Parameters<typeof rows.update>[0] = {};
       if (changes.url !== undefined && (changes.url.url !== current.url || changes.url.canonical !== current.urlCanonical || changes.url.host !== current.host)) {
         set.url = changes.url.url;
@@ -361,14 +392,29 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
       if (changes.pinned !== undefined && changes.pinned !== (current.pinnedAt !== null)) {
         set.pinnedAt = changes.pinned ? new Date() : null;
       }
-      if (Object.keys(set).length === 0) {
-        return { kind: "unchanged", bookmark: recordOf(current) };
+      const filedBefore = (await foldersOfBookmarks(tx, ownerId, [bookmarkId])).get(bookmarkId) ?? [];
+      const wantedFolders = changes.folderIds === undefined ? undefined : distinctIdentifiers(changes.folderIds);
+      const leaving = wantedFolders === undefined ? [] : filedBefore.filter((folder) => !wantedFolders.includes(folder.id)).map((folder) => folder.id);
+      const joining = wantedFolders === undefined ? [] : wantedFolders.filter((id) => !filedBefore.some((folder) => folder.id === id));
+      if (Object.keys(set).length === 0 && leaving.length === 0 && joining.length === 0) {
+        return { kind: "unchanged", bookmark: recordOf(current, filedBefore) };
       }
-      const [updated] = await rows.update(set, eq(bookmarks.id, bookmarkId));
-      if (updated === undefined) {
-        throw new Error("changing a locked bookmark did not update exactly one row");
+      let row = current;
+      if (Object.keys(set).length > 0) {
+        const [updated] = await rows.update(set, eq(bookmarks.id, bookmarkId));
+        if (updated === undefined) {
+          throw new Error("changing a locked bookmark did not update exactly one row");
+        }
+        row = updated;
       }
-      return { kind: "updated", bookmark: recordOf(updated) };
+      if (leaving.length > 0) {
+        await deleteLinks(tx, leaving, [bookmarkId]);
+      }
+      if (joining.length > 0) {
+        await insertLinks(tx, joining, [bookmarkId]);
+      }
+      const filed = leaving.length === 0 && joining.length === 0 ? filedBefore : ((await foldersOfBookmarks(tx, ownerId, [bookmarkId])).get(bookmarkId) ?? []);
+      return { kind: "updated", bookmark: recordOf(row, filed) };
     },
 
     async remove({ bookmarkId, ownerId }) {
@@ -462,7 +508,8 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
 
     async list(request) {
       const found = await listQuery(tx, request);
-      return found.map(({ sortKey, ...row }) => ({ bookmark: recordOf(row), key: sortKey }));
+      const filed = await foldersOfBookmarks(tx, request.filter.ownerId, found.map((row) => row.id));
+      return found.map(({ sortKey, ...row }) => ({ bookmark: recordOf(row, filed.get(row.id) ?? []), key: sortKey }));
     },
 
     async count(filter, limit) {

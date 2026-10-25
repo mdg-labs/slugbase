@@ -185,7 +185,7 @@ describe("the tables", () => {
     expect(indexes[0]?.indexdef).toContain("(workspace_id, bookmark_id)");
   });
 
-  it("has row-level security enabled and forced on both, with the policy <table>_tenant naming the workspace", async () => {
+  it("has row-level security enabled and forced on both, with every policy naming the workspace", async () => {
     const tables = await db.owner<{ relname: string; relrowsecurity: boolean; relforcerowsecurity: boolean }[]>`
       SELECT relname, relrowsecurity, relforcerowsecurity FROM pg_class WHERE relnamespace = 'public'::regnamespace AND relname IN ('folders', 'folder_bookmarks') ORDER BY relname`;
     expect(tables).toEqual([
@@ -197,6 +197,8 @@ describe("the tables", () => {
       SELECT tablename, policyname, cmd, qual, with_check FROM pg_policies WHERE schemaname = 'public' AND tablename IN ('folders', 'folder_bookmarks') ORDER BY tablename, policyname`;
     expect(policies.map((policy) => [policy.tablename, policy.policyname, policy.cmd])).toEqual([
       ["folder_bookmarks", "folder_bookmarks_tenant", "SELECT"],
+      ["folder_bookmarks", "folder_bookmarks_tenant_delete", "DELETE"],
+      ["folder_bookmarks", "folder_bookmarks_tenant_insert", "INSERT"],
       ["folders", "folders_tenant", "SELECT"],
       ["folders", "folders_tenant_delete", "DELETE"],
       ["folders", "folders_tenant_insert", "INSERT"],
@@ -211,7 +213,7 @@ describe("the tables", () => {
     }
   });
 
-  it("lets slugbase_app insert the columns of a creation, update the name, the icon and the colour, delete a folder and read the associations, and nothing more", async () => {
+  it("lets slugbase_app insert the columns of a creation, update the name, the icon and the colour, delete a folder, read the associations and write them only as folder-filing.integration.test.ts shows, and nothing more", async () => {
     const workspace = await workspaceOf(1);
     const owner = memberOf(workspace, 0);
     const folder = await seedFolder(workspace.id, owner, "Existing");
@@ -227,8 +229,8 @@ describe("the tables", () => {
       (tx: postgres.TransactionSql) => tx`UPDATE folders SET owner_id = NULL WHERE id = ${folder}`,
       (tx: postgres.TransactionSql) => tx`UPDATE folders SET version = 9 WHERE id = ${folder}`,
       (tx: postgres.TransactionSql) => tx`UPDATE folders SET updated_at = now() WHERE id = ${folder}`,
+      (tx: postgres.TransactionSql) => tx`UPDATE folder_bookmarks SET added_at = now()`,
       (tx: postgres.TransactionSql) => tx`INSERT INTO folder_bookmarks (workspace_id, folder_id, bookmark_id) VALUES (${workspace.id}, ${folder}, ${freshId()})`,
-      (tx: postgres.TransactionSql) => tx`DELETE FROM folder_bookmarks`,
     ]) {
       expect(await refusedWith(appAs(as, attempt))).toBe(INSUFFICIENT_PRIVILEGE);
     }

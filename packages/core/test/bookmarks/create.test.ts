@@ -25,7 +25,7 @@ function ids(): () => string {
 function recordOf(request: BookmarkCreationRequest): BookmarkRecord {
   const { id, ownerId, url, host, title, description, pinned } = request.bookmark;
   const now = new Date("2026-10-23T05:00:00.000Z");
-  return { id, ownerId, url, host, title, description, slug: null, forwarding: false, pinned, openCount: 0, lastOpenedAt: null, version: 1, createdAt: now, updatedAt: now };
+  return { id, ownerId, url, host, title, description, slug: null, forwarding: false, pinned, openCount: 0, lastOpenedAt: null, folders: [], version: 1, createdAt: now, updatedAt: now };
 }
 
 function world(answer: (request: BookmarkCreationRequest) => BookmarkStoreResult = (request) => ({ kind: "created", bookmark: recordOf(request) })) {
@@ -51,6 +51,7 @@ const ASKING: BookmarkCreationAsk = {
   title: "Docs",
   description: undefined,
   pinned: undefined,
+  folderIds: undefined,
   ceiling: "unlimited",
 };
 
@@ -142,6 +143,22 @@ describe("createBookmark", () => {
     await expect(createBookmark(dependencies, ASKING)).rejects.toThrow("unlimited");
   });
 
+  it("hands the store the folders to file the bookmark in, in lower case and without repeats, and none when the caller names none", async () => {
+    const { requests, dependencies } = world();
+    const folder = "0192f3a0-dddd-7000-8000-00000000000A";
+
+    await createBookmark(dependencies, { ...ASKING, folderIds: [folder, folder.toLowerCase(), "0192f3a0-dddd-7000-8000-00000000000b"] });
+    await createBookmark(dependencies, ASKING);
+
+    expect(requests.map((request) => request.folderIds)).toEqual([["0192f3a0-dddd-7000-8000-00000000000a", "0192f3a0-dddd-7000-8000-00000000000b"], []]);
+  });
+
+  it("reports a folder that is not the owner's, and announces nothing the store did not create", async () => {
+    const { dependencies } = world(() => ({ kind: "folder_not_found" }));
+
+    expect(await createBookmark(dependencies, { ...ASKING, folderIds: ["0192f3a0-dddd-7000-8000-00000000000a"] })).toEqual({ kind: "folder_not_found" });
+  });
+
   it("lets the failure of the store reject, so the caller's transaction does not commit", async () => {
     const { dependencies } = world(() => {
       throw new Error("the database refused");
@@ -152,7 +169,7 @@ describe("createBookmark", () => {
 });
 
 describe("readBookmark", () => {
-  const record = (ownerId: string | null): BookmarkRecord => ({ ...recordOf({ bookmark: { id: "0192f3a0-aaaa-7000-8000-000000000009", ownerId: ACCOUNT, url: "https://example.com/", urlCanonical: "https://example.com", host: "example.com", title: "Docs", description: null, pinned: false }, ceiling: "unlimited", events: [] }), ownerId });
+  const record = (ownerId: string | null): BookmarkRecord => ({ ...recordOf({ bookmark: { id: "0192f3a0-aaaa-7000-8000-000000000009", ownerId: ACCOUNT, url: "https://example.com/", urlCanonical: "https://example.com", host: "example.com", title: "Docs", description: null, pinned: false }, ceiling: "unlimited", events: [], folderIds: [] }), ownerId });
 
   it("returns the bookmark to its owner", async () => {
     const stored = record(ACCOUNT);

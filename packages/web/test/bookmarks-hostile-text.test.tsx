@@ -49,6 +49,7 @@ function bookmark(n: number, title: string, description: string | null, override
     pinned: false,
     openCount: 0,
     lastOpenedAt: null,
+    folders: [],
     version: 3,
     createdAt: "2026-10-01T08:00:00.000Z",
     updatedAt: "2026-10-01T08:00:00.000Z",

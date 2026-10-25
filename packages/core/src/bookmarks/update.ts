@@ -5,7 +5,8 @@ import { normalizeBookmarkUrl, type BookmarkUrl, type BookmarkUrlRefusal } from 
 // Changing a bookmark (doc 02 section 5.2, doc 04 section 2.4, doc 10 T1 and T2). The service validates and normalises
 // everything the caller sent before anything is written, then asks the store to apply it to the caller's own bookmark: the
 // store finds the bookmark by identifier and owner, locks it, compares its version with the `If-Match` the caller sent and
-// writes what differs. Only the owner changes a bookmark, so another member's bookmark of the workspace, another workspace's
+// writes what differs. Filing moves no version: the folders of a bookmark are rows of their own, so a patch that changes only `folderIds` keeps
+// the `ETag`. Only the owner changes a bookmark, so another member's bookmark of the workspace, another workspace's
 // and a plan-archived one (which nobody edits, doc 02 section 5.6) are the same `not_found`.
 
 /** The fields of a JSON Merge Patch of a bookmark (doc 04 section 2.4): a field left out is left as it is, and a description of `null` clears it. */
@@ -14,6 +15,8 @@ export interface BookmarkPatch {
   readonly title?: string;
   readonly description?: string | null;
   readonly pinned?: boolean;
+  /** The folders the bookmark is filed in afterwards: they replace the ones it is in, and an empty list takes it out of all of them. */
+  readonly folderIds?: readonly string[];
 }
 
 /** What the store writes: the normalised destination with the columns derived from it, and the values that are to change. */
@@ -22,6 +25,8 @@ export interface BookmarkChanges {
   readonly title?: string;
   readonly description?: string | null;
   readonly pinned?: boolean;
+  /** The owner's folders the bookmark is filed in afterwards, without repeats. */
+  readonly folderIds?: readonly string[];
 }
 
 export interface BookmarkUpdateRequest {
@@ -34,10 +39,12 @@ export interface BookmarkUpdateRequest {
 }
 
 export type BookmarkUpdateResult =
-  /** The bookmark was changed; `bookmark` is the row after the change, its version moved by one. */
+  /** The bookmark was changed; `bookmark` is the row after the change, its version moved by one unless only its folders changed. */
   | { readonly kind: "updated"; readonly bookmark: BookmarkRecord }
-  /** The patch names the values the bookmark already has; nothing was written and the version stays. */
+  /** The patch names the values the bookmark already has, in the folders it is already in; nothing was written and the version stays. */
   | { readonly kind: "unchanged"; readonly bookmark: BookmarkRecord }
+  /** A folder of `folderIds` is not one the owner has in this workspace; nothing was written. */
+  | { readonly kind: "folder_not_found" }
   /** The version of the bookmark, read under its lock, is none of the accepted ones; nothing was written. */
   | { readonly kind: "stale" }
   /** The caller owns no such bookmark; nothing was written. */
@@ -100,6 +107,7 @@ export async function updateBookmark({ store }: BookmarkUpdateDependencies, ask:
       ...(patch.title === undefined ? {} : { title: patch.title }),
       ...(description === undefined ? {} : { description }),
       ...(patch.pinned === undefined ? {} : { pinned: patch.pinned }),
+      ...(patch.folderIds === undefined ? {} : { folderIds: [...new Set(patch.folderIds.map((id) => id.toLowerCase()))] }),
     },
     expectedVersions: ask.expectedVersions,
   });

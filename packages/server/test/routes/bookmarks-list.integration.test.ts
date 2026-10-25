@@ -271,7 +271,7 @@ describe("listBookmarks", () => {
     const world = harness.serve();
     const { owner } = await setup(world);
 
-    for (const query of ["pinned=yes", "pinned=1", "hasSlug=TRUE", "forwarding=", "sort=newest", "scope=shared_with_me", "folderId=0192f3a0-aaaa-7000-8000-00000000dead", "q=docs"]) {
+    for (const query of ["pinned=yes", "pinned=1", "hasSlug=TRUE", "forwarding=", "sort=newest", "scope=shared_with_me", "folderId=not-an-identifier", "q=docs"]) {
       const response = await list(world, owner, query);
       expect(response.status, query).toBe(422);
       expect((await problemOf(response)).code).toBe("validation_failed");

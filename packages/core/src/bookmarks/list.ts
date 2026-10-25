@@ -28,6 +28,8 @@ export interface BookmarkListFilter {
   readonly forwarding?: boolean | undefined;
   /** The canonical form a bookmark's URL must have. */
   readonly urlCanonical?: string | undefined;
+  /** The folder the bookmark must be filed in. A folder the member does not own matches nothing. */
+  readonly folderId?: string | undefined;
 }
 
 /** The place after which a page resumes: the sort key of the last item as the database prints it (null for a bookmark never opened) and its identifier. */
@@ -79,6 +81,8 @@ export interface BookmarkListAsk {
   readonly forwarding: boolean | undefined;
   /** A URL as typed: the list is narrowed to the bookmarks whose canonical URL is its canonical form. */
   readonly url: string | undefined;
+  /** The list is narrowed to the bookmarks filed in this folder of the member's; an empty page for any other folder. */
+  readonly folderId?: string | undefined;
   readonly sort: BookmarkSort;
   /** 1 to 100. */
   readonly limit: number;
@@ -100,7 +104,7 @@ export type BookmarkListOutcome =
 
 /** What a cursor is bound to: the list it was issued for, written so that no two different lists share a scope. */
 function cursorScope(ask: BookmarkListAsk, filter: BookmarkListFilter): string {
-  return JSON.stringify([ask.workspaceId.toLowerCase(), ask.accountId.toLowerCase(), ask.scope, ask.sort, filter.pinned ?? null, filter.hasSlug ?? null, filter.forwarding ?? null, filter.urlCanonical ?? null]);
+  return JSON.stringify([ask.workspaceId.toLowerCase(), ask.accountId.toLowerCase(), ask.scope, ask.sort, filter.pinned ?? null, filter.hasSlug ?? null, filter.forwarding ?? null, filter.urlCanonical ?? null, filter.folderId ?? null]);
 }
 
 /** The filters a list, a select-all and a bulk request take, as the caller typed them. */
@@ -112,6 +116,8 @@ export interface BookmarkFilterAsk {
   readonly forwarding: boolean | undefined;
   /** A URL as typed: the match is narrowed to the bookmarks whose canonical URL is its canonical form. */
   readonly url: string | undefined;
+  /** The match is narrowed to the bookmarks filed in this folder of the member's. */
+  readonly folderId?: string | undefined;
 }
 
 /** The store's filter for `ask`, or the reason its `url` cannot be a bookmark's URL. */
@@ -124,7 +130,7 @@ export function bookmarkListFilter(ask: BookmarkFilterAsk): { readonly ok: true;
     }
     urlCanonical = normalized.value.canonical;
   }
-  return { ok: true, filter: { ownerId: ask.accountId, pinned: ask.pinned, hasSlug: ask.hasSlug, forwarding: ask.forwarding, urlCanonical } };
+  return { ok: true, filter: { ownerId: ask.accountId, pinned: ask.pinned, hasSlug: ask.hasSlug, forwarding: ask.forwarding, urlCanonical, folderId: ask.folderId === undefined ? undefined : ask.folderId.toLowerCase() } };
 }
 
 /** One page of `ask.accountId`'s bookmarks in the workspace of the transaction, with the cursor of the next and the capped total. */

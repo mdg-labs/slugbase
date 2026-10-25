@@ -42,7 +42,12 @@ import { acceptedVersions, entityTagOf } from "../workspaces/if-match.ts";
 // mismatched cursor is `400 bad_request`. `total` counts the filter's matches up to 10 000 and is null above, with `totalAtLeast`. A
 // plan-archived bookmark is never listed. A `url` that cannot be a bookmark's URL is `422 validation_failed` on `url`.
 //
-// PATCH /api/v1/bookmarks/{id} is a JSON Merge Patch of the url, title, description and pinned fields. The URL goes through the
+// `folderIds` on a creation and on a change file the bookmark in the caller's own folders in the same transaction (a change replaces the folders
+// it is in); a folder that is another member's, another workspace's or unknown is `404 not_found` and nothing is created or changed, and
+// filing moves no version. `folderId` on the list narrows it to the bookmarks filed in one of the caller's folders (another member's or
+// unknown is an empty page). Every bookmark body carries the `folders` it is filed in (doc 04 section 10.6, doc 02 sections 7.1 and 8.2).
+//
+// PATCH /api/v1/bookmarks/{id} is a JSON Merge Patch of the url, title, description, pinned and folderIds fields. The URL goes through the
 // normalisation of a creation, so its canonical form and host are derived again. `If-Match` is compared with the version under
 // the bookmark's row lock and a mismatch is `412 precondition_failed` with nothing written; without the header the patch applies
 // (an API token may leave it out). A patch that changes nothing answers 200 with the unchanged `ETag`. A plan-archived bookmark is
@@ -68,6 +73,7 @@ import { acceptedVersions, entityTagOf } from "../workspaces/if-match.ts";
 
 const NO_WORKSPACE = "No such resource.";
 const NO_SUCH_BOOKMARK = "No such resource.";
+const NO_SUCH_FOLDER = "No such resource.";
 const URL_NOT_ALLOWED = "Only http and https URLs can be saved as a bookmark.";
 const DESTINATION_NOT_ALLOWED = "The bookmark's address is not an http or https URL, so it is not opened.";
 const URL_INVALID = "The URL is not valid.";
@@ -103,9 +109,10 @@ function auditActorOf(principal: Principal | undefined, accountId: string, label
 function storeOf(tx: TenantTx): BookmarkStore {
   const repository = bookmarkRepository(tx);
   return {
-    create({ bookmark, ceiling, events }) {
+    create({ bookmark, ceiling, events, folderIds }) {
       return repository.create({
         bookmark,
+        folderIds,
         ceiling: ceiling === "unlimited" ? null : ceiling,
         jobs: events.map((event) => queueDomainEvent(event.eventId, event.name, event.payload)),
       });
@@ -157,6 +164,7 @@ function bookmarkBody(bookmark: BookmarkRecord): z.input<typeof BookmarkSchema> 
     pinned: bookmark.pinned,
     openCount: bookmark.openCount,
     lastOpenedAt: bookmark.lastOpenedAt === null ? null : bookmark.lastOpenedAt.toISOString(),
+    folders: bookmark.folders.map((folder) => ({ id: folder.id, name: folder.name, icon: folder.icon, color: folder.color })),
     version: bookmark.version,
     createdAt: bookmark.createdAt.toISOString(),
     updatedAt: bookmark.updatedAt.toISOString(),
@@ -182,6 +190,7 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage }: BookmarkRo
             title: body.title,
             description: body.description,
             pinned: body.pinned,
+            folderIds: body.folderIds,
             ceiling,
           },
         ),
@@ -198,6 +207,8 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage }: BookmarkRo
           throw new ProblemError("bookmark_limit_reached", AT_LIMIT, { members: { limit: outcome.limit, used: outcome.used } });
         case "unavailable":
           throw new ProblemError("not_found", NO_WORKSPACE);
+        case "folder_not_found":
+          throw new ProblemError("not_found", NO_SUCH_FOLDER);
       }
     }),
 
@@ -214,6 +225,7 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage }: BookmarkRo
             hasSlug: query.hasSlug === undefined ? undefined : query.hasSlug === "true",
             forwarding: query.forwarding === undefined ? undefined : query.forwarding === "true",
             url: query.url,
+            folderId: query.folderId,
             sort: query.sort,
             limit: query.limit,
             cursor: query.cursor,
@@ -317,6 +329,8 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage }: BookmarkRo
           throw new ProblemError("precondition_failed", STALE_VERSION);
         case "not_found":
           throw new ProblemError("not_found", NO_SUCH_BOOKMARK);
+        case "folder_not_found":
+          throw new ProblemError("not_found", NO_SUCH_FOLDER);
       }
     }),
 
