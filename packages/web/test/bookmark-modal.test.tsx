@@ -3,7 +3,6 @@ import { createHandlers, type Scenario } from "@slugbase/testing/msw";
 import { createMockServer, readOpenApiDocument } from "@slugbase/testing/msw/node";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
 import { renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
@@ -135,7 +134,7 @@ async function openEdit(): Promise<HTMLElement> {
   return dialog;
 }
 
-describe("creating a bookmark", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
+describe("creating a bookmark", () => {
   it("opens from the New bookmark button of the top bar, saves the address and the title, and closes", async () => {
     use({ fixtures: { createBookmark: BOOKMARK } });
     await openApp("/");
@@ -152,6 +151,20 @@ describe("creating a bookmark", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     });
     expect(await bodyOf(to("POST", "/api/v1/bookmarks")[0])).toEqual({ url: "https://example.com/docs", title: "Example docs" });
     expect(window.location.search).toBe("");
+  });
+
+  it("reads the folder and tag lists once, to their last page, and not on and on", async () => {
+    use();
+    await openApp("/?new=1");
+    await screen.findByRole("dialog", { name: "New bookmark" });
+    // The generated lists are one page and the last. A list that handed out a cursor to a page that never ends would be
+    // read page after page by the sidebar for as long as the app is open, starving everything else of the thread.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+
+    expect(to("GET", "/api/v1/folders").length).toBeLessThanOrEqual(2);
+    expect(to("GET", "/api/v1/tags").length).toBeLessThanOrEqual(2);
   });
 
   it("opens prefilled from ?new=1&url=, which is how a pasted address arrives", async () => {
@@ -218,7 +231,7 @@ describe("creating a bookmark", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   });
 });
 
-describe("editing a bookmark", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
+describe("editing a bookmark", () => {
   it("shows a skeleton while ?bookmark= loads, then the bookmark in the form", async () => {
     use({ fixtures: { getBookmark: BOOKMARK } });
     await openApp(`/bookmarks?bookmark=${ID}`);
@@ -320,7 +333,7 @@ describe("editing a bookmark", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   });
 });
 
-describe("closing with unsaved changes", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
+describe("closing with unsaved changes", () => {
   it("asks first, goes back to the form on Keep editing, and closes on Discard", async () => {
     const dialog = await openEdit();
     await type("Title", "Unsaved");
@@ -353,7 +366,7 @@ describe("closing with unsaved changes", { timeout: HEAVY_TEST_TIMEOUT_MS }, () 
   });
 });
 
-describe("deleting a bookmark", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
+describe("deleting a bookmark", () => {
   it("states the consequence, deletes only once confirmed, and closes", async () => {
     const dialog = await openEdit();
 
@@ -402,7 +415,7 @@ describe("deleting a bookmark", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   });
 });
 
-describe("on a phone", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
+describe("on a phone", () => {
   it("is a drawer below the md breakpoint", async () => {
     stubMatchMedia(true);
     await openApp("/?new=1");
