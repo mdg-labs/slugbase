@@ -152,8 +152,11 @@ for (const { name, viewport } of [
       await account.set({ locale: "en" });
 
       // A toast of an earlier step is not part of the page or the dialog under test, and the ones stacked behind the
-      // frontmost have a darkened background of their own, so each scan waits for them to go.
+      // frontmost have a darkened background of their own, so each scan waits for them to go. A toast does not go while
+      // the pointer rests on its stack, and on a phone the sheets and modals end the clicks of the journey in the band
+      // the toasts rise in, so the pointer is moved off to the corner first.
       const scan = async (): Promise<void> => {
+        await page.mouse.move(0, 0);
         await expect(page.locator("[data-slot='toast-title']")).toHaveCount(0);
         await app.scan();
       };
