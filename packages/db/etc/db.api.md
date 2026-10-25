@@ -15,6 +15,7 @@ import { BookmarkUpdateRequest } from '@slugbase/core';
 import { BookmarkUpdateResult } from '@slugbase/core';
 import type { CredentialTokenPurpose } from '@slugbase/core';
 import type { EntitlementVersionWriter } from '@slugbase/core';
+import type { FolderStore } from '@slugbase/core';
 import { InferInsertModel } from 'drizzle-orm';
 import { InferSelectModel } from 'drizzle-orm';
 import { InstanceAccount } from '@slugbase/core';
@@ -48,6 +49,7 @@ import { NewBookmark } from '@slugbase/core';
 import type { PgColumn } from 'drizzle-orm/pg-core';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import { SQL } from 'drizzle-orm';
+import type { TagStore } from '@slugbase/core';
 import type { WorkspaceAdministrationStore } from '@slugbase/core';
 import type { WorkspaceRenameRequest } from '@slugbase/core';
 import type { WorkspaceRenameResult } from '@slugbase/core';
@@ -509,6 +511,12 @@ export interface EntitlementUsage {
     readonly seatsUsed: number;
 }
 
+// @public (undocumented)
+export type FolderRepository = FolderStore;
+
+// @public (undocumented)
+export function folderRepository(tx: TenantTx): FolderRepository;
+
 // @public
 export class IdempotencyBusyError extends Error {
     constructor();
@@ -716,7 +724,13 @@ export interface InvitationRepository extends InvitationStore, InvitationManagem
 export function invitationRepository(tx: TenantTx): InvitationRepository;
 
 // @public
+export function isFolderNameTaken(error: unknown): boolean;
+
+// @public
 export function isLastOwnerViolation(error: unknown): boolean;
+
+// @public
+export function isTagNameTaken(error: unknown): boolean;
 
 // @public
 export interface JobHealth {
@@ -1350,6 +1364,12 @@ export interface StoredResponse {
     // (undocumented)
     readonly status: number;
 }
+
+// @public (undocumented)
+export type TagRepository = TagStore;
+
+// @public (undocumented)
+export function tagRepository(tx: TenantTx): TagRepository;
 
 // @public
 export interface TenantContext {

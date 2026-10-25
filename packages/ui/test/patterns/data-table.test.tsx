@@ -103,4 +103,46 @@ describe("DataTable", () => {
     expect(rows.map((row) => row.getAttribute("data-state"))).toEqual([null, "selected"]);
     expect(rows.map((row) => row.getAttribute("data-item-id"))).toEqual(["a", "b"]);
   });
+
+  it("is a grid while a selection is active, on a wide and on a narrow screen", async () => {
+    stubMatchMedia(false);
+    const { container, rerender } = render(<DataTable columns={COLUMNS} label="Files" rowKey={(row) => row.id} rows={ROWS} />);
+    expect(screen.queryByRole("grid")).toBeNull();
+
+    rerender(<DataTable columns={COLUMNS} label="Files" rowKey={(row) => row.id} rows={ROWS} selectionActive />);
+    expect(screen.queryByRole("table")).toBeNull();
+    const rows = within(screen.getByRole("grid", { name: "Files" })).getAllByRole("row");
+    expect(rows).toHaveLength(3);
+    expect(rows.slice(1).map((row) => within(row).getAllByRole("cell").length)).toEqual([3, 3]);
+    await expectNoViolations(container);
+  });
+
+  it("is a list of cards, and a grid of them while a selection is active, on a narrow screen", async () => {
+    stubMatchMedia(true);
+    const { container, rerender } = render(<DataTable columns={COLUMNS} label="Files" rowKey={(row) => row.id} rows={ROWS} />);
+    expect(screen.queryByRole("grid")).toBeNull();
+
+    rerender(<DataTable columns={COLUMNS} label="Files" rowKey={(row) => row.id} rows={ROWS} selectionActive />);
+
+    const grid = screen.getByRole("grid", { name: "Files" });
+    expect(within(grid).getAllByRole("row")).toHaveLength(2);
+    expect(within(grid).getAllByRole("gridcell")).toHaveLength(2);
+    await expectNoViolations(container);
+  });
+
+  it("takes one row as the stop on the Tab key and leaves the others to the arrow keys", () => {
+    stubMatchMedia(false);
+    render(<DataTable columns={COLUMNS} label="Files" rowKey={(row) => row.id} rows={ROWS} tabStopId="b" />);
+
+    const rows = within(screen.getByRole("table", { name: "Files" })).getAllByRole("row").slice(1);
+    expect(rows.map((row) => row.getAttribute("tabindex"))).toEqual(["-1", "0"]);
+    expect(rows.map((row) => row.getAttribute("data-item-id"))).toEqual(["a", "b"]);
+  });
+
+  it("leaves rows out of the Tab order without a tab stop", () => {
+    stubMatchMedia(false);
+    render(<DataTable columns={COLUMNS} label="Files" rowKey={(row) => row.id} rows={ROWS} />);
+
+    expect(within(screen.getByRole("table")).getAllByRole("row").slice(1).map((row) => row.getAttribute("tabindex"))).toEqual([null, null]);
+  });
 });

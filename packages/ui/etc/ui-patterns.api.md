@@ -222,6 +222,7 @@ export interface CardGridItemProps {
     selectionActive?: boolean;
     selectLabel: string;
     subtitle?: string;
+    tabStop?: boolean;
     title: string;
 }
 
@@ -229,6 +230,7 @@ export interface CardGridItemProps {
 export interface CardGridProps {
     children: ReactNode;
     label: string;
+    selectionActive?: boolean;
 }
 
 // @public
@@ -392,6 +394,8 @@ export interface DataTableProps<Row extends object> {
     // (undocumented)
     rows: readonly Row[];
     rowSelected?: (row: Row) => boolean;
+    selectionActive?: boolean;
+    tabStopId?: string;
 }
 
 // @public
@@ -805,6 +809,43 @@ export interface SettingSwitchProps {
 }
 
 export { ShieldCheckIcon }
+
+// @public
+export function ShortcutSheet(input: ShortcutSheetProps): ReactElement;
+
+// @public (undocumented)
+export interface ShortcutSheetGroup {
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    shortcuts: readonly ShortcutSheetItem[];
+    // (undocumented)
+    title: string;
+}
+
+// @public (undocumented)
+export interface ShortcutSheetItem {
+    id: string;
+    keys: readonly (readonly string[])[];
+    label: string;
+    sequence?: boolean;
+}
+
+// @public (undocumented)
+export interface ShortcutSheetProps {
+    closeLabel: string;
+    // (undocumented)
+    description?: ReactNode;
+    // (undocumented)
+    groups: readonly ShortcutSheetGroup[];
+    // (undocumented)
+    onOpenChange: (open: boolean) => void;
+    // (undocumented)
+    open: boolean;
+    thenLabel: string;
+    // (undocumented)
+    title: ReactNode;
+}
 
 // @public
 export function ShownOnce(input: ShownOnceProps): ReactElement;

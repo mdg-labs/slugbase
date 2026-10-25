@@ -1981,5 +1981,35 @@
         "unavailable": "Creating the account is not possible right now. Try again in a moment."
       }
     }
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "description": "Single-key shortcuts work anywhere except in a text field or inside an open dialog, menu or list box.",
+    "close": "Close the shortcut list",
+    "then": "then",
+    "key": {
+      "enter": "Enter",
+      "ctrl": "Ctrl",
+      "esc": "Esc"
+    },
+    "group": {
+      "app": "Anywhere in the app",
+      "list": "In the bookmark list"
+    },
+    "item": {
+      "newBookmark": "New bookmark",
+      "goHome": "Go to Home",
+      "goBookmarks": "Go to Bookmarks",
+      "help": "Show this list",
+      "move": "Move focus to the next or previous bookmark",
+      "open": "Open the focused bookmark",
+      "openNewTab": "Open the focused bookmark in a new tab",
+      "edit": "Edit the focused bookmark",
+      "pin": "Pin or unpin the focused bookmark",
+      "select": "Select or deselect the focused bookmark",
+      "selectAll": "Select every loaded bookmark",
+      "toggleView": "Switch between grid and table",
+      "escape": "Close the overlay that has focus, then clear the selection, then clear the filters"
+    }
   }
 }

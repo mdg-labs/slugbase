@@ -13,6 +13,10 @@ export type BookmarksTableProps = Pick<BookmarkActionHandlers, "onEdit" | "onPin
   readonly pendingPins: ReadonlySet<string>;
   /** The identifiers of the selected bookmarks. */
   readonly selected: ReadonlySet<string>;
+  /** Whether anything is selected, which makes the table a grid for assistive technology. */
+  readonly selectionActive: boolean;
+  /** The bookmark whose row is the table's one stop on the Tab key. */
+  readonly tabStopId: string | undefined;
   readonly onSelectedChange: (bookmark: Bookmark, selected: boolean) => void;
   /** The order the rows are in now. */
   readonly sort: BookmarkSort | undefined;
@@ -76,7 +80,7 @@ function ActionsCell(props: BookmarkActionHandlers): ReactElement {
  * from their headers, and the actions of the card. The address holds the order; below `md` each row is a card. The
  * folders and tags columns stay empty until those features arrive.
  */
-export function BookmarksTable({ bookmarks, pendingPins, sort: current, selected, onSelectedChange, onSort, onEdit, onPin, onDelete }: BookmarksTableProps): ReactElement {
+export function BookmarksTable({ bookmarks, pendingPins, sort: current, selected, selectionActive, tabStopId, onSelectedChange, onSort, onEdit, onPin, onDelete }: BookmarksTableProps): ReactElement {
   const { t } = useTranslation();
   const format = useFormat();
   const sort = current ?? DEFAULT_SORT;
@@ -151,5 +155,15 @@ export function BookmarksTable({ bookmarks, pendingPins, sort: current, selected
       cell: (bookmark) => <ActionsCell bookmark={bookmark} onDelete={onDelete} onEdit={onEdit} onPin={onPin} pinPending={pendingPins.has(bookmark.id)} />,
     },
   ];
-  return <DataTable columns={columns} label={t("bookmarks.list.label")} rowKey={(bookmark) => bookmark.id} rowSelected={(bookmark) => selected.has(bookmark.id)} rows={bookmarks} />;
+  return (
+    <DataTable
+      columns={columns}
+      label={t("bookmarks.list.label")}
+      rowKey={(bookmark) => bookmark.id}
+      rowSelected={(bookmark) => selected.has(bookmark.id)}
+      rows={bookmarks}
+      selectionActive={selectionActive}
+      {...(tabStopId === undefined ? {} : { tabStopId })}
+    />
+  );
 }

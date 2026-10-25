@@ -7,7 +7,7 @@ import {
   type TenantTx,
 } from "@slugbase/db";
 import type { TenantFixture } from "./fixture.js";
-import { REPOSITORY_SAMPLES, type RepositorySamples } from "./mapping.js";
+import { REPOSITORY_SAMPLES, sampleValues, type RepositorySamples } from "./mapping.js";
 import type { MatrixFailure } from "./report.js";
 
 // RLS-only mode of the cross-tenant matrix (doc 08 section 3.3, doc 01 section
@@ -163,7 +163,7 @@ export async function runRlsOnlyMatrix(options: RlsOnlyOptions): Promise<RlsOnly
         );
         continue;
       }
-      const columns = entry.method === "insert" ? sample.values : sample.set;
+      const columns = entry.method === "insert" ? sampleValues(sample, fixture) : sample.set;
       const key = entry.method === "insert" ? "values" : "set";
       inputs.push({ label: "in workspace A", input: { [key]: { ...columns, workspaceId: fixture.a.id } }, mayBeRefused: false });
       inputs.push({
@@ -221,7 +221,7 @@ export async function runRlsOnlyMatrix(options: RlsOnlyOptions): Promise<RlsOnly
       } else {
         const sample = samples[entry.repository];
         if (sample !== undefined) {
-          const columns = entry.method === "insert" ? sample.values : sample.set;
+          const columns = entry.method === "insert" ? sampleValues(sample, fixture) : sample.set;
           const key = entry.method === "insert" ? "values" : "set";
           for (const [side, workspaceId] of [["A", fixture.a.id], ["B", fixture.b.id]] as const) {
             outside.push({ label: `as the instance admin, naming workspace ${side}`, input: { [key]: { ...columns, workspaceId } }, mayBeRefused: true });

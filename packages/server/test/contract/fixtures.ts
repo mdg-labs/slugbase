@@ -35,6 +35,12 @@ export const B_INVITATION_ID = "0192f3a0-cccc-7000-8000-000000000007";
 /** A bookmark no workspace holds: the walker's request to read it is the declared 404. */
 export const UNKNOWN_BOOKMARK_ID = "0192f3a0-cccc-7000-8000-000000000008";
 
+/** A tag no workspace holds: the walker's request to rename or delete it is the declared 404. */
+export const UNKNOWN_TAG_ID = "0192f3a0-cccc-7000-8000-00000000000a";
+
+/** A folder no workspace holds: the walker's request to read, change or delete it is the declared 404. */
+export const UNKNOWN_FOLDER_ID = "0192f3a0-cccc-7000-8000-00000000000b";
+
 /** An invitation no workspace holds: the walker's request to resend, link or revoke it is the declared 404. */
 export const UNKNOWN_INVITATION_ID = "0192f3a0-cccc-7000-8000-000000000006";
 
@@ -244,6 +250,24 @@ export const FIXTURES: ContractFixtures = {
   // The open names a bookmark by identifier as well, and counts it only for a bookmark the caller owns: the valid request is the declared 404 for
   // a bookmark no workspace holds, and the matrix puts the bookmarks of workspace B in the path.
   openBookmark: { path: { id: UNKNOWN_BOOKMARK_ID }, status: 404, foreign: { path: { id: UNKNOWN_BOOKMARK_ID } } },
+  // The tags of the member who makes them. The creation takes a name and names no identifier of any workspace, so there is none of workspace B to put in it:
+  // the walker that calls it owns a workspace of its own, so the valid request is the declared 201 (a second creation of the name by the same account is the
+  // declared 409, which the matrix tolerates since it names no identifier). The list names none either and acts in the workspace of the request. The rename and
+  // the deletion name a tag by identifier, which the walker cannot know for a tag it would own, so their valid request names a tag that no workspace holds, the
+  // declared 404 whoever would hold it, and so is a tag of workspace B; the route tests rename and delete the walker's own tags, and the matrix puts the tag
+  // of workspace B in the path.
+  createTag: { body: { name: "Walker tag" } },
+  listTags: {},
+  renameTag: { path: { id: UNKNOWN_TAG_ID }, body: { name: "Walker tag" }, status: 404, foreign: { path: { id: UNKNOWN_TAG_ID }, body: { name: "Walker tag" } } },
+  deleteTag: { path: { id: UNKNOWN_TAG_ID }, status: 404, foreign: { path: { id: UNKNOWN_TAG_ID } } },
+  // The folders of the member who makes them, like the tags: the creation and the list name no identifier of any workspace, so the walker's valid request
+  // to create is the declared 201, and the read, the change and the deletion name a folder no workspace holds, the declared 404, which the matrix replaces
+  // with the folder of workspace B.
+  createFolder: { body: { name: "Walker folder" } },
+  listFolders: {},
+  getFolder: { path: { id: UNKNOWN_FOLDER_ID }, status: 404, foreign: { path: { id: UNKNOWN_FOLDER_ID } } },
+  updateFolder: { path: { id: UNKNOWN_FOLDER_ID }, body: { name: "Walker folder" }, status: 404, foreign: { path: { id: UNKNOWN_FOLDER_ID }, body: { name: "Walker folder" } } },
+  deleteFolder: { path: { id: UNKNOWN_FOLDER_ID }, status: 404, foreign: { path: { id: UNKNOWN_FOLDER_ID } } },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

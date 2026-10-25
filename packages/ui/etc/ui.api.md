@@ -4,8 +4,10 @@
 
 ```ts
 
+import { Checkbox as CheckboxPrimitive } from '@base-ui/react/checkbox';
 import { ClassProp } from 'class-variance-authority/types';
 import { ClassValue } from 'clsx';
+import { ContextMenu as ContextMenuPrimitive } from '@base-ui/react/context-menu';
 import { Input as InputPrimitive } from '@base-ui/react/input';
 import { Loader2Icon } from 'lucide-react';
 import * as React_2 from 'react';
@@ -16,6 +18,8 @@ import { ScrollArea as ScrollAreaPrimitive } from '@base-ui/react/scroll-area';
 import { Separator as SeparatorPrimitive } from '@base-ui/react/separator';
 import { Dialog as SheetPrimitive } from '@base-ui/react/dialog';
 import { Toast as ToastPrimitive } from '@base-ui/react/toast';
+import { ToggleGroup as ToggleGroupPrimitive } from '@base-ui/react/toggle-group';
+import { Toggle as TogglePrimitive } from '@base-ui/react/toggle';
 import { Tooltip as TooltipPrimitive } from '@base-ui/react/tooltip';
 import { useRender } from '@base-ui/react/use-render';
 import { VariantProps } from 'class-variance-authority';
@@ -116,7 +120,85 @@ export const buttonVariants: (props?: ({
 } & ClassProp) | undefined) => string;
 
 // @public (undocumented)
+export function Checkbox(input: CheckboxPrimitive.Root.Props): React_3.ReactElement;
+
+export { CheckboxPrimitive }
+
+// @public (undocumented)
 export function cn(...inputs: ClassValue[]): string;
+
+// @public (undocumented)
+export const ContextMenu: typeof ContextMenuPrimitive.Root;
+
+// @public (undocumented)
+export function ContextMenuCheckboxItem(input: ContextMenuPrimitive.CheckboxItem.Props & {
+    variant?: "default" | "switch";
+}): React_2.ReactElement;
+
+// @public (undocumented)
+export function ContextMenuGroup(props: ContextMenuPrimitive.Group.Props): React_2.ReactElement;
+
+// @public (undocumented)
+export function ContextMenuGroupLabel(input: ContextMenuPrimitive.GroupLabel.Props & {
+    inset?: boolean;
+}): React_2.ReactElement;
+
+// @public (undocumented)
+export function ContextMenuItem(input: ContextMenuPrimitive.Item.Props & {
+    inset?: boolean;
+    variant?: "default" | "destructive";
+}): React_2.ReactElement;
+
+// @public (undocumented)
+export function ContextMenuLinkItem(input: ContextMenuPrimitive.LinkItem.Props & {
+    inset?: boolean;
+    variant?: "default" | "destructive";
+}): React_2.ReactElement;
+
+// @public (undocumented)
+export function ContextMenuPopup(input: ContextMenuPrimitive.Popup.Props & {
+    align?: ContextMenuPrimitive.Positioner.Props["align"];
+    sideOffset?: ContextMenuPrimitive.Positioner.Props["sideOffset"];
+    alignOffset?: ContextMenuPrimitive.Positioner.Props["alignOffset"];
+    side?: ContextMenuPrimitive.Positioner.Props["side"];
+    anchor?: ContextMenuPrimitive.Positioner.Props["anchor"];
+    portalProps?: ContextMenuPrimitive.Portal.Props;
+}): React_2.ReactElement;
+
+// @public (undocumented)
+export const ContextMenuPortal: typeof ContextMenuPrimitive.Portal;
+
+export { ContextMenuPrimitive }
+
+// @public (undocumented)
+export function ContextMenuRadioGroup(props: ContextMenuPrimitive.RadioGroup.Props): React_2.ReactElement;
+
+// @public (undocumented)
+export function ContextMenuRadioItem(input: ContextMenuPrimitive.RadioItem.Props): React_2.ReactElement;
+
+// @public (undocumented)
+export function ContextMenuSeparator(input: ContextMenuPrimitive.Separator.Props): React_2.ReactElement;
+
+// @public (undocumented)
+export function ContextMenuShortcut(input: React_2.ComponentProps<"kbd">): React_2.ReactElement;
+
+// @public (undocumented)
+export function ContextMenuSub(props: ContextMenuPrimitive.SubmenuRoot.Props): React_2.ReactElement;
+
+// @public (undocumented)
+export function ContextMenuSubPopup(input: ContextMenuPrimitive.Popup.Props & {
+    align?: ContextMenuPrimitive.Positioner.Props["align"];
+    sideOffset?: ContextMenuPrimitive.Positioner.Props["sideOffset"];
+    alignOffset?: ContextMenuPrimitive.Positioner.Props["alignOffset"];
+}): React_2.ReactElement;
+
+// @public (undocumented)
+export function ContextMenuSubTrigger(input: ContextMenuPrimitive.SubmenuTrigger.Props & {
+    inset?: boolean;
+}): React_2.ReactElement;
+
+// @public (undocumented)
+export function ContextMenuTrigger(input: ContextMenuPrimitive.Trigger.Props): React_2.ReactElement;
 
 // @public (undocumented)
 export function Empty(input: React_3.ComponentProps<"div">): React_3.ReactElement;
@@ -152,6 +234,12 @@ export type InputProps = Omit<InputPrimitive.Props & React_2.RefAttributes<HTMLI
     unstyled?: boolean;
     nativeInput?: boolean;
 };
+
+// @public (undocumented)
+export function Kbd(input: React_2.ComponentProps<"kbd">): React_2.ReactElement;
+
+// @public (undocumented)
+export function KbdGroup(input: React_2.ComponentProps<"kbd">): React_2.ReactElement;
 
 // @public (undocumented)
 export type MediaQueryInput = {
@@ -436,6 +524,33 @@ export interface ToastProviderProps extends ToastPrimitive.Provider.Props {
     position?: ToastPosition;
     viewportLabel?: string;
 }
+
+// @public (undocumented)
+export function Toggle(input: TogglePrimitive.Props & VariantProps<typeof toggleVariants>): React_3.ReactElement;
+
+// @public (undocumented)
+export function ToggleGroup(input: ToggleGroupPrimitive.Props & VariantProps<typeof toggleVariants>): React_2.ReactElement;
+
+// @public (undocumented)
+export const ToggleGroupContext: React_2.Context<VariantProps<typeof toggleVariants>>;
+
+// @public (undocumented)
+export function ToggleGroupItem(input: TogglePrimitive.Props & VariantProps<typeof toggleVariants>): React_2.ReactElement;
+
+export { ToggleGroupPrimitive }
+
+// @public (undocumented)
+export function ToggleGroupSeparator(input: {
+    className?: string;
+} & React_2.ComponentProps<typeof Separator>): React_2.ReactElement;
+
+export { TogglePrimitive }
+
+// @public (undocumented)
+export const toggleVariants: (props?: ({
+    size?: "lg" | "sm" | "default" | null | undefined;
+    variant?: "default" | "outline" | null | undefined;
+} & ClassProp) | undefined) => string;
 
 // @public (undocumented)
 export const Tooltip: typeof TooltipPrimitive.Root;

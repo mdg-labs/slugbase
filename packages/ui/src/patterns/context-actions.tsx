@@ -1,6 +1,5 @@
-import { ContextMenu } from "@base-ui/react/context-menu";
 import type { ReactElement, ReactNode } from "react";
-import { MenuItem, MenuPopup } from "../components/ui/menu.tsx";
+import { ContextMenu, ContextMenuItem, ContextMenuPopup, ContextMenuTrigger } from "../components/ui/context-menu.tsx";
 import type { RowAction } from "./row-actions.tsx";
 
 export interface ContextActionsProps {
@@ -23,18 +22,18 @@ export function ContextActions({ label, actions, className, children }: ContextA
     return <div className={className}>{children}</div>;
   }
   return (
-    <ContextMenu.Root>
-      <ContextMenu.Trigger className={className} data-slot="context-actions">
+    <ContextMenu>
+      <ContextMenuTrigger className={className} data-slot="context-actions">
         {children}
-      </ContextMenu.Trigger>
-      <MenuPopup aria-label={label} side="right" align="start" sideOffset={0}>
+      </ContextMenuTrigger>
+      <ContextMenuPopup aria-label={label} side="right" align="start" sideOffset={0}>
         {actions.map(({ id, label: actionLabel, icon, destructive = false, disabled = false, onSelect }) => (
-          <MenuItem disabled={disabled} key={id} onClick={onSelect} variant={destructive ? "destructive" : "default"}>
+          <ContextMenuItem disabled={disabled} key={id} onClick={onSelect} variant={destructive ? "destructive" : "default"}>
             {icon}
             {actionLabel}
-          </MenuItem>
+          </ContextMenuItem>
         ))}
-      </MenuPopup>
-    </ContextMenu.Root>
+      </ContextMenuPopup>
+    </ContextMenu>
   );
 }

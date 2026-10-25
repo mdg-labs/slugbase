@@ -125,7 +125,7 @@ async function press(element: HTMLElement): Promise<void> {
 /** The card of a bookmark by its title. */
 async function card(title: string): Promise<HTMLElement> {
   const link = await screen.findByRole("link", { name: title });
-  const item = link.closest("li");
+  const item = link.closest("[data-item-id]");
   expect(item).not.toBeNull();
   return item as HTMLElement;
 }
@@ -159,7 +159,7 @@ describe("reaching the page", () => {
 
     await screen.findByRole("heading", { level: 1, name: "Bookmarks" });
     expect(window.location.pathname).toBe("/bookmarks");
-    expect(screen.getByRole("list", { name: "Bookmarks" }).querySelectorAll("li")).toHaveLength(2);
+    expect(screen.getByRole("list", { name: "Bookmarks" }).querySelectorAll("[data-item-id]")).toHaveLength(2);
     expect(screen.getByRole("link", { name: "Bookmarks" }).getAttribute("aria-current")).toBe("page");
     expect(lists()).toHaveLength(1);
     expect(lists()[0]?.params.get("sort")).toBe("recent");

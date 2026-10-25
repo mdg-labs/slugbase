@@ -1558,6 +1558,9 @@ export function createEntitlementService(input: EntitlementServiceOptions): Enti
 // @public (undocumented)
 export function createEntitlementUpgradeCheck(service: EntitlementService): EntitlementUpgradeCheck;
 
+// @public (undocumented)
+export function createFolder(input: FolderCreationDependencies, ask: FolderCreationAsk): Promise<FolderCreationOutcome>;
+
 // @public
 export function createInstanceWorkspace(input: InstanceWorkspaceDependencies, ask: InstanceWorkspaceCreationAsk): Promise<InstanceWorkspaceCreationOutcome>;
 
@@ -1572,6 +1575,9 @@ export function createPasswordPolicy(input?: PasswordPolicyOptions): PasswordPol
 
 // @public (undocumented)
 export function createSeatEntitlements(service: EntitlementService): SeatEntitlements;
+
+// @public (undocumented)
+export function createTag(input: TagCreationDependencies, ask: TagCreationAsk): Promise<TagCreationOutcome>;
 
 // @public
 export function createWorkspace(input: WorkspaceCreationDependencies, ask: WorkspaceCreationAsk): Promise<WorkspaceCreationOutcome>;
@@ -1606,7 +1612,13 @@ export function deleteAccount<Code extends string>(input: AccountDeletionDepende
 export function deleteBookmark(input: BookmarkDeletionDependencies, ask: BookmarkDeletionAsk): Promise<boolean>;
 
 // @public
+export function deleteFolder(input: FolderDeletionDependencies, ask: FolderDeletionAsk): Promise<boolean>;
+
+// @public
 export function deleteInstanceAccount<Code extends string>(input: InstanceAccountDeletionDependencies<Code>, ask: InstanceAccountDeletionAsk): Promise<InstanceAccountDeletionOutcome<Code>>;
+
+// @public
+export function deleteTag(input: TagDeletionDependencies, ask: TagDeletionAsk): Promise<boolean>;
 
 // @public (undocumented)
 export const DOMAIN_EVENT_NAMES: readonly DomainEventName[];
@@ -1906,6 +1918,265 @@ export const FLAG_ENTITLEMENTS: readonly FlagEntitlement[];
 
 // @public
 export type FlagEntitlement = "ai.suggestions" | "sharing.members" | "sharing.teams" | "members.invite" | "teams.manage" | "audit.log";
+
+// @public
+export const FOLDER_LIST_TOTAL_CAP = 10000;
+
+// @public
+export interface FolderChanges {
+    // (undocumented)
+    readonly color?: number;
+    // (undocumented)
+    readonly icon?: string;
+    // (undocumented)
+    readonly name?: string;
+}
+
+// @public (undocumented)
+export interface FolderCreationAsk {
+    readonly accountId: string;
+    readonly color: number | undefined;
+    readonly icon: string | undefined;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public (undocumented)
+export interface FolderCreationDependencies {
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: Pick<FolderStore, "create">;
+}
+
+// @public (undocumented)
+export type FolderCreationOutcome = {
+    readonly kind: "created";
+    readonly folder: FolderRecord;
+} | {
+    readonly kind: "invalid_name";
+    readonly reason: FolderNameRefusal;
+} | {
+    readonly kind: "name_taken";
+};
+
+// @public
+export interface FolderCursors {
+    open(cursor: string, scope: string): FolderPosition | undefined;
+    // (undocumented)
+    seal(position: FolderPosition, scope: string): string;
+}
+
+// @public (undocumented)
+export interface FolderDeletionAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly folderId: string;
+}
+
+// @public (undocumented)
+export interface FolderDeletionDependencies {
+    // (undocumented)
+    readonly store: Pick<FolderStore, "remove">;
+}
+
+// @public (undocumented)
+export interface FolderListAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly cursor: string | undefined;
+    readonly limit: number;
+    readonly scope: "all" | "mine";
+    // (undocumented)
+    readonly search: string | undefined;
+    // (undocumented)
+    readonly sort: FolderSort;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface FolderListDependencies {
+    // (undocumented)
+    readonly cursors: FolderCursors;
+    // (undocumented)
+    readonly store: Pick<FolderStore, "list" | "count">;
+}
+
+// @public (undocumented)
+export type FolderListOutcome = {
+    readonly kind: "listed";
+    readonly items: readonly FolderListRow[];
+    readonly nextCursor: string | null;
+    readonly total: number | null;
+}
+/** The cursor was not issued by this server for this account, workspace, scope, search and sort; nothing was read. */
+| {
+    readonly kind: "bad_cursor";
+};
+
+// @public (undocumented)
+export interface FolderListRequest {
+    readonly after: FolderPosition | undefined;
+    // (undocumented)
+    readonly limit: number;
+    // (undocumented)
+    readonly ownerId: string;
+    readonly search: string | undefined;
+    // (undocumented)
+    readonly sort: FolderSort;
+}
+
+// @public
+export interface FolderListRow extends FolderRecord {
+    // (undocumented)
+    readonly updatedKey: string;
+}
+
+// @public (undocumented)
+export type FolderNameRefusal = "empty" | "too_long";
+
+// @public
+export interface FolderPatch {
+    // (undocumented)
+    readonly color?: number;
+    // (undocumented)
+    readonly icon?: string;
+    // (undocumented)
+    readonly name?: string;
+}
+
+// @public
+export interface FolderPosition {
+    // (undocumented)
+    readonly count: number | undefined;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly updated: string | undefined;
+}
+
+// @public (undocumented)
+export interface FolderReadAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly folderId: string;
+}
+
+// @public (undocumented)
+export interface FolderReadDependencies {
+    // (undocumented)
+    readonly store: Pick<FolderStore, "find">;
+}
+
+// @public
+export interface FolderRecord {
+    readonly bookmarkCount: number;
+    readonly color: number;
+    // (undocumented)
+    readonly createdAt: Date;
+    // (undocumented)
+    readonly icon: string;
+    // (undocumented)
+    readonly id: string;
+    readonly name: string;
+    readonly ownerId: string | null;
+    // (undocumented)
+    readonly updatedAt: Date;
+    readonly version: number;
+}
+
+// @public (undocumented)
+export type FolderSort = "name" | "count" | "updated";
+
+// @public (undocumented)
+export interface FolderStore {
+    count(request: {
+        readonly ownerId: string;
+        readonly search: string | undefined;
+        readonly limit: number;
+    }): Promise<number>;
+    create(folder: NewFolder): Promise<FolderStoreCreationResult>;
+    find(request: {
+        readonly folderId: string;
+        readonly ownerId: string;
+    }): Promise<FolderRecord | undefined>;
+    list(request: FolderListRequest): Promise<readonly FolderListRow[]>;
+    remove(request: {
+        readonly folderId: string;
+        readonly ownerId: string;
+    }): Promise<boolean>;
+    update(request: FolderUpdateRequest): Promise<FolderUpdateResult>;
+}
+
+// @public (undocumented)
+export type FolderStoreCreationResult = {
+    readonly kind: "created";
+    readonly folder: FolderRecord;
+}
+/** The owner already has a folder of that name, spelled in any case. */
+| {
+    readonly kind: "name_taken";
+};
+
+// @public (undocumented)
+export interface FolderUpdateAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly expectedVersions: readonly number[] | undefined;
+    // (undocumented)
+    readonly folderId: string;
+    // (undocumented)
+    readonly patch: FolderPatch;
+}
+
+// @public (undocumented)
+export interface FolderUpdateDependencies {
+    // (undocumented)
+    readonly store: Pick<FolderStore, "update">;
+}
+
+// @public (undocumented)
+export type FolderUpdateOutcome = FolderUpdateResult | {
+    readonly kind: "invalid_name";
+    readonly reason: FolderNameRefusal;
+};
+
+// @public (undocumented)
+export interface FolderUpdateRequest {
+    // (undocumented)
+    readonly changes: FolderChanges;
+    readonly expectedVersions: readonly number[] | undefined;
+    // (undocumented)
+    readonly folderId: string;
+    readonly ownerId: string;
+}
+
+// @public (undocumented)
+export type FolderUpdateResult =
+/** The folder was changed; `folder` is the row after the change, its version moved by one. */
+    {
+    readonly kind: "updated";
+    readonly folder: FolderRecord;
+}
+/** The patch names the values the folder already has; nothing was written and the version stays. */
+| {
+    readonly kind: "unchanged";
+    readonly folder: FolderRecord;
+}
+/** The version of the folder, read under its lock, is none of the accepted ones; nothing was written. */
+| {
+    readonly kind: "stale";
+}
+/** The owner has another folder of that name; nothing was written. */
+| {
+    readonly kind: "name_taken";
+}
+/** The caller owns no such folder; nothing was written. */
+| {
+    readonly kind: "not_found";
+};
 
 // @public
 export function generateApiToken(): ApiToken;
@@ -3092,6 +3363,9 @@ export function listBookmarkIds(input: BookmarkIdsDependencies, ask: BookmarkIds
 export function listBookmarks(input: BookmarkListDependencies, ask: BookmarkListAsk): Promise<BookmarkListOutcome>;
 
 // @public
+export function listFolders(input: FolderListDependencies, ask: FolderListAsk): Promise<FolderListOutcome>;
+
+// @public
 export function listInstanceAccounts(input: InstanceAccountDependencies, ask: InstanceAccountAsk): Promise<readonly InstanceAccount[]>;
 
 // @public
@@ -3102,6 +3376,9 @@ export function listInvitations(input: Pick<InvitationActionDependencies, "store
     readonly afterId: string | null;
     readonly limit: number;
 }): Promise<InvitationListOutcome>;
+
+// @public
+export function listTags(input: TagListDependencies, ask: TagListAsk): Promise<TagListOutcome>;
 
 // @public
 export function loadBreachedPasswords(): BreachedPasswords;
@@ -3291,6 +3568,18 @@ export interface NewBookmark {
     readonly urlCanonical: string;
 }
 
+// @public
+export interface NewFolder {
+    // (undocumented)
+    readonly color: number;
+    // (undocumented)
+    readonly icon: string;
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+    readonly ownerId: string;
+}
+
 // @public (undocumented)
 export interface NewInvitation {
     // (undocumented)
@@ -3310,10 +3599,32 @@ export interface NewInvitation {
 export function newOidcHandshake(): OidcHandshake;
 
 // @public
+export interface NewTag {
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+    readonly ownerId: string;
+}
+
+// @public
 export function normalizeBookmarkUrl(input: string): BookmarkUrlResult;
 
 // @public
 export function normalizeEmail(raw: string): string;
+
+// @public
+export function normalizeFolderName(name: string): {
+    readonly name: string;
+} | {
+    readonly refusal: FolderNameRefusal;
+};
+
+// @public
+export function normalizeTagName(name: string): {
+    readonly name: string;
+} | {
+    readonly refusal: TagNameRefusal;
+};
 
 // @public
 export interface NotificationRecipient {
@@ -3545,6 +3856,9 @@ export interface RateLimitRequest {
 export function readBookmark(input: BookmarkReadDependencies, ask: BookmarkReadAsk): Promise<BookmarkRecord | undefined>;
 
 // @public
+export function readFolder(input: FolderReadDependencies, ask: FolderReadAsk): Promise<FolderRecord | undefined>;
+
+// @public
 export const REAUTH_WINDOW_MS: number;
 
 // @public
@@ -3570,6 +3884,9 @@ export function registrationUnavailable(settings: RegistrationSettings, mailAvai
 
 // @public
 export function reissueInstanceWorkspaceOwnerInvitation(input: InstanceWorkspaceDependencies, ask: InstanceOwnerInvitationAsk): Promise<InstanceOwnerInvitationOutcome>;
+
+// @public (undocumented)
+export function renameTag(input: TagRenameDependencies, ask: TagRenameAsk): Promise<TagRenameOutcome>;
 
 // @public
 export function renameWorkspace(input: WorkspaceAdministrationDependencies, ask: WorkspaceRenameAsk): Promise<WorkspaceRenameOutcome>;
@@ -3654,6 +3971,195 @@ export interface SessionCookieSpec {
 export function sessionCookieSpec(appOrigin: string): SessionCookieSpec;
 
 // @public
+export const TAG_LIST_TOTAL_CAP = 10000;
+
+// @public
+export const TAG_NAME_MAX_LENGTH = 40;
+
+// @public (undocumented)
+export const TAG_SORTS: readonly TagSort[];
+
+// @public (undocumented)
+export interface TagCreationAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public (undocumented)
+export interface TagCreationDependencies {
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: Pick<TagStore, "create">;
+}
+
+// @public (undocumented)
+export type TagCreationOutcome = {
+    readonly kind: "created";
+    readonly tag: TagRecord;
+} | {
+    readonly kind: "invalid_name";
+    readonly reason: TagNameRefusal;
+} | {
+    readonly kind: "name_taken";
+};
+
+// @public
+export interface TagCursors {
+    open(cursor: string, scope: string): TagPosition | undefined;
+    // (undocumented)
+    seal(position: TagPosition, scope: string): string;
+}
+
+// @public (undocumented)
+export interface TagDeletionAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly tagId: string;
+}
+
+// @public (undocumented)
+export interface TagDeletionDependencies {
+    // (undocumented)
+    readonly store: Pick<TagStore, "remove">;
+}
+
+// @public (undocumented)
+export interface TagListAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly cursor: string | undefined;
+    readonly limit: number;
+    // (undocumented)
+    readonly sort: TagSort;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface TagListDependencies {
+    // (undocumented)
+    readonly cursors: TagCursors;
+    // (undocumented)
+    readonly store: Pick<TagStore, "list" | "count">;
+}
+
+// @public (undocumented)
+export type TagListOutcome = {
+    readonly kind: "listed";
+    readonly items: readonly TagRecord[];
+    readonly nextCursor: string | null;
+    readonly total: number | null;
+}
+/** The cursor was not issued by this server for this account, workspace and sort; nothing was read. */
+| {
+    readonly kind: "bad_cursor";
+};
+
+// @public (undocumented)
+export interface TagListRequest {
+    readonly after: TagPosition | undefined;
+    // (undocumented)
+    readonly limit: number;
+    // (undocumented)
+    readonly ownerId: string;
+    // (undocumented)
+    readonly sort: TagSort;
+}
+
+// @public (undocumented)
+export type TagNameRefusal = "empty" | "too_long";
+
+// @public
+export interface TagPosition {
+    // (undocumented)
+    readonly count: number | undefined;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public
+export interface TagRecord {
+    readonly bookmarkCount: number;
+    // (undocumented)
+    readonly createdAt: Date;
+    // (undocumented)
+    readonly id: string;
+    readonly name: string;
+}
+
+// @public (undocumented)
+export interface TagRenameAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly tagId: string;
+}
+
+// @public (undocumented)
+export interface TagRenameDependencies {
+    // (undocumented)
+    readonly store: Pick<TagStore, "rename">;
+}
+
+// @public (undocumented)
+export type TagRenameOutcome = TagRenameResult | {
+    readonly kind: "invalid_name";
+    readonly reason: TagNameRefusal;
+};
+
+// @public (undocumented)
+export interface TagRenameRequest {
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly ownerId: string;
+    // (undocumented)
+    readonly tagId: string;
+}
+
+// @public (undocumented)
+export type TagRenameResult = {
+    readonly kind: "renamed";
+    readonly tag: TagRecord;
+} | {
+    readonly kind: "unchanged";
+    readonly tag: TagRecord;
+} | {
+    readonly kind: "name_taken";
+} | {
+    readonly kind: "not_found";
+};
+
+// @public (undocumented)
+export type TagSort = "name" | "count";
+
+// @public (undocumented)
+export interface TagStore {
+    count(ownerId: string, limit: number): Promise<number>;
+    create(tag: NewTag): Promise<TagStoreCreationResult>;
+    list(request: TagListRequest): Promise<readonly TagRecord[]>;
+    remove(request: {
+        readonly tagId: string;
+        readonly ownerId: string;
+    }): Promise<boolean>;
+    rename(request: TagRenameRequest): Promise<TagRenameResult>;
+}
+
+// @public (undocumented)
+export type TagStoreCreationResult = {
+    readonly kind: "created";
+    readonly tag: TagRecord;
+}
+/** The owner already has a tag of that name, spelled in any case. */
+| {
+    readonly kind: "name_taken";
+};
+
+// @public
 export type TenantPrincipal = {
     readonly kind: "session";
     readonly accountId: string;
@@ -3720,6 +4226,9 @@ export const UNSET_INSTANCE_SETTINGS: InstanceSettings;
 
 // @public
 export function updateBookmark(input: BookmarkUpdateDependencies, ask: BookmarkUpdateAsk): Promise<BookmarkUpdateOutcome>;
+
+// @public (undocumented)
+export function updateFolder(input: FolderUpdateDependencies, ask: FolderUpdateAsk): Promise<FolderUpdateOutcome>;
 
 // @public
 export function updateInstanceAccount(input: InstanceAccountDependencies, ask: InstanceAccountUpdateAsk): Promise<InstanceAccountUpdateOutcome>;

@@ -1,10 +1,8 @@
 import { Button } from "@slugbase/ui";
 import { PlusIcon } from "@slugbase/ui/patterns";
-import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "@tanstack/react-router";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { meQuery } from "../account/me.ts";
+import { useCanSaveBookmarks } from "./can-save-bookmarks.ts";
 import { useBookmarkModal } from "./modal-search.ts";
 
 /**
@@ -13,10 +11,9 @@ import { useBookmarkModal } from "./modal-search.ts";
  */
 export function NewBookmarkButton(): ReactElement | null {
   const { t } = useTranslation();
-  const router = useRouter();
   const modal = useBookmarkModal();
-  const me = useQuery({ ...meQuery(router.options.context.api), staleTime: Number.POSITIVE_INFINITY });
-  if (me.data?.activeWorkspaceId === null) {
+  const canSave = useCanSaveBookmarks();
+  if (!canSave) {
     return null;
   }
   return (

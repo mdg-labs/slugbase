@@ -52,4 +52,14 @@ void describe("the Playwright image of the journeys", () => {
     assert.doesNotMatch(workflowText, /playwright install/);
     assert.doesNotMatch(workflowText, /\bapt(-get)?\b/);
   });
+
+  void it("builds the workspace packages the journeys import before it runs them", () => {
+    const steps = workflowText.split(/^ {6}- /m);
+    const indexOf = (pattern: RegExp): number => steps.findIndex((step) => pattern.test(step));
+    const build = indexOf(/^\s*run: pnpm turbo run build --filter='?@slugbase\/e2e\^\.\.\.'?\s*$/m);
+    const journeys = indexOf(/^\s*run: bash e2e\/with-stack\.sh /m);
+    assert.notEqual(journeys, -1, "the step that runs the journeys is missing");
+    assert.notEqual(build, -1, "no step builds the workspace packages of @slugbase/e2e before the journeys");
+    assert.ok(build < journeys, "the workspace build must come before the journeys");
+  });
 });

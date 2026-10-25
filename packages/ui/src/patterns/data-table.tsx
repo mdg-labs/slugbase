@@ -5,6 +5,7 @@ import { Card, CardFrame } from "../components/ui/card.tsx";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table.tsx";
 import { useIsMobile } from "../hooks/use-media-query.ts";
 import { cn } from "../lib/utils.ts";
+import { listRoles } from "./list-roles.ts";
 
 /** How a sortable column is ordered now: the ARIA `aria-sort` values. */
 export type DataTableSortDirection = "ascending" | "descending" | "none";
@@ -35,6 +36,13 @@ export interface DataTableProps<Row extends object> {
   rowKey: (row: Row) => string;
   /** Marks the rows that are selected; the column that selects them is the caller's. */
   rowSelected?: (row: Row) => boolean;
+  /** Whether anything is selected: the table is an ARIA grid then (doc 03 section 15) and keeps its table role otherwise. */
+  selectionActive?: boolean;
+  /**
+   * The key of the row that is the one stop of the table on the Tab key (a roving tabindex): that row is focusable by
+   * Tab and the others only by script, which the arrow keys use. Left out, the rows are not focusable on their own.
+   */
+  tabStopId?: string;
   className?: string;
 }
 
@@ -45,7 +53,9 @@ const features = tableFeatures({});
  * can order the rows from its header. On a narrow screen each row becomes a card that lists the columns under their
  * headers, the first column without a card slot as its title.
  */
-export function DataTable<Row extends object>({ label, columns, rows, rowKey, rowSelected, className }: DataTableProps<Row>): ReactElement {
+export function DataTable<Row extends object>({ label, columns, rows, rowKey, rowSelected, selectionActive = false, tabStopId, className }: DataTableProps<Row>): ReactElement {
+  const roles = listRoles(selectionActive);
+  const tabIndexOf = (id: string): { tabIndex?: 0 | -1 } => (tabStopId === undefined ? {} : { tabIndex: id === tabStopId ? 0 : -1 });
   const narrow = useIsMobile();
   const columnDefs = useMemo(
     () =>
@@ -70,7 +80,7 @@ export function DataTable<Row extends object>({ label, columns, rows, rowKey, ro
     const trailing = headers.filter((header) => slotOf(header.column.id) === "trailing");
     const rest = headers.filter((header) => header !== title && !leading.includes(header) && !trailing.includes(header));
     return (
-      <ul aria-label={label} className={cn("flex flex-col gap-3", className)} data-slot="data-table">
+      <div aria-label={label} className={cn("flex flex-col gap-3", className)} data-slot="data-table" role={roles.list}>
         {table.getRowModel().rows.map((row) => {
           const cells = row.getAllCells();
           const cellOf = (columnId: string) => cells.find((cell) => cell.column.id === columnId);
@@ -79,37 +89,39 @@ export function DataTable<Row extends object>({ label, columns, rows, rowKey, ro
             return cell === undefined ? null : <table.FlexRender cell={cell} />;
           };
           return (
-            <li data-item-id={row.id} key={row.id}>
-              <Card className="gap-3 p-4 data-[selected=true]:ring-2 data-[selected=true]:ring-primary/60" data-selected={rowSelected?.(row.original) === true ? "true" : undefined}>
-                <div className="flex items-start gap-3">
-                  {leading.map((header) => (
-                    <div key={header.id}>{renderCell(header.column.id)}</div>
-                  ))}
-                  <div className="min-w-0 flex-1 font-medium text-sm">{title === undefined ? null : renderCell(title.column.id)}</div>
-                  {trailing.map((header) => (
-                    <div key={header.id}>{renderCell(header.column.id)}</div>
-                  ))}
-                </div>
-                <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
-                  {rest.map((header) => (
-                    <div className="col-span-2 grid grid-cols-subgrid items-center" key={header.id}>
-                      <dt className={cn("text-muted-foreground", options.get(header.column.id)?.hideHeader === true && "sr-only")}>
-                        <table.FlexRender header={header} />
-                      </dt>
-                      <dd className="min-w-0 justify-self-end">{renderCell(header.column.id)}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </Card>
-            </li>
+            <div className="group/row outline-none" data-item-id={row.id} key={row.id} role={roles.row} {...tabIndexOf(row.id)}>
+              <div role={roles.cell}>
+                <Card className="gap-3 p-4 group-focus-visible/row:ring-2 group-focus-visible/row:ring-ring data-[selected=true]:ring-2 data-[selected=true]:ring-primary/60" data-selected={rowSelected?.(row.original) === true ? "true" : undefined}>
+                  <div className="flex items-start gap-3">
+                    {leading.map((header) => (
+                      <div key={header.id}>{renderCell(header.column.id)}</div>
+                    ))}
+                    <div className="min-w-0 flex-1 font-medium text-sm">{title === undefined ? null : renderCell(title.column.id)}</div>
+                    {trailing.map((header) => (
+                      <div key={header.id}>{renderCell(header.column.id)}</div>
+                    ))}
+                  </div>
+                  <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+                    {rest.map((header) => (
+                      <div className="col-span-2 grid grid-cols-subgrid items-center" key={header.id}>
+                        <dt className={cn("text-muted-foreground", options.get(header.column.id)?.hideHeader === true && "sr-only")}>
+                          <table.FlexRender header={header} />
+                        </dt>
+                        <dd className="min-w-0 justify-self-end">{renderCell(header.column.id)}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </Card>
+              </div>
+            </div>
           );
         })}
-      </ul>
+      </div>
     );
   }
   return (
     <CardFrame className={className} data-slot="data-table">
-      <Table aria-label={label} variant="card">
+      <Table aria-label={label} role={selectionActive ? "grid" : undefined} variant="card">
         <TableHeader>
           <TableRow>
             {headers.map((header) => {
@@ -146,7 +158,7 @@ export function DataTable<Row extends object>({ label, columns, rows, rowKey, ro
         </TableHeader>
         <TableBody>
           {table.getRowModel().rows.map((row) => (
-            <TableRow data-item-id={row.id} data-state={rowSelected?.(row.original) === true ? "selected" : undefined} key={row.id}>
+            <TableRow data-item-id={row.id} data-state={rowSelected?.(row.original) === true ? "selected" : undefined} className="outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring" key={row.id} {...tabIndexOf(row.id)}>
               {row.getAllCells().map((cell) => (
                 <TableCell className={options.get(cell.column.id)?.className} key={cell.id}>
                   <table.FlexRender cell={cell} />

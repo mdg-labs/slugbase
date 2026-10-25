@@ -10,6 +10,14 @@ import { tenantHandle, type TenantTx } from "../tenant.ts";
 // of a second request with the same key waits on the unique index while the first transaction is open, for at
 // most `LOCK_WAIT`: after the commit it finds the stored response, and after a rollback it finds no row and
 // claims the key itself, so a request runs once and a failed one leaves nothing behind.
+//
+// A workspace transaction locks the workspace row FOR KEY SHARE before it inserts the key. The insert takes the account row
+// FOR KEY SHARE through the foreign key, and the deletion of an account locks the workspaces it belongs to FOR UPDATE and then
+// the account (doc 05 section 7.1), so a claim that took the account first and the workspace after, in the writes of the
+// request, would wait on the deletion while the deletion waits on it. KEY SHARE is the weakest lock that the deletion's
+// FOR UPDATE conflicts with and does not conflict with the FOR NO KEY UPDATE of the bookmark counter, so creations in one
+// workspace do not queue on each other. The wait on that lock is not the wait on the key: it is taken before `lock_timeout`
+// is lowered, and an account-level transaction takes no workspace lock.
 
 const LOCK_WAIT = "5s";
 const LOCK_NOT_AVAILABLE = "55P03";
@@ -86,6 +94,9 @@ export function idempotencyRepository(tx: TenantTx): IdempotencyRepository {
     async claim({ key, operation, requestHash }) {
       const handle = tenantHandle(tx);
       const hex = requestHash.toString("hex");
+      if (tx.workspaceId !== undefined) {
+        await handle.execute(sql`SELECT 1 FROM public.workspaces WHERE id = ${tx.workspaceId}::uuid FOR KEY SHARE`);
+      }
       const previous = (await handle.execute<SettingRow>(sql`SELECT current_setting('lock_timeout') AS value`))[0]?.value;
       if (previous === undefined) {
         throw new Error("reading lock_timeout did not return a row");

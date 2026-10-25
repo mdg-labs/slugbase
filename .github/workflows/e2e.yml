@@ -61,6 +61,14 @@ jobs:
         run: |
           set -euo pipefail
           docker build -f apps/slugbase/Dockerfile --build-arg "BUILD_COMMIT=$BUILD_COMMIT" -t slugbase:e2e .
+      # The journeys import workspace packages (@slugbase/testing for their fixtures)
+      # whose exports point at dist/, and the Docker build above produces no dist/ on
+      # the runner. The filter builds what @slugbase/e2e depends on, and what those
+      # depend on, so a journey that imports another package is covered without a
+      # change here; the Playwright image sees the output because in-image.sh mounts
+      # the checkout at its own path.
+      - name: Build the workspace packages the journeys import
+        run: pnpm turbo run build --filter='@slugbase/e2e^...'
       # The browsers and the system libraries they need, for the three projects of
       # e2e/playwright.config.ts, come with the image the journeys run in.
       - name: Pull the Playwright image

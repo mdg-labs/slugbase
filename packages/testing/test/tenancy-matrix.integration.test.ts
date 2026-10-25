@@ -42,6 +42,43 @@ async function seedWorkspaceRows(database: TestDatabase, workspaces: readonly { 
   });
 }
 
+/**
+ * The tags the RLS-only mode runs against: a tag is its owner's, so the owner of A has an account, a membership and a tag in A (the update and the
+ * delete of the registry touch it), and the owner of B has the same in B (the tag the methods must not reach).
+ */
+async function seedTagRows(database: TestDatabase, fixture: TenantFixture): Promise<void> {
+  const sides = [
+    { workspaceId: fixture.a.id, owner: fixture.a.owner.accountId, email: "matrix-tag-a@example.test", tagId: "0192f3a0-2222-7000-8000-00000000a0c1" },
+    { workspaceId: fixture.b.id, owner: fixture.b.owner.accountId, email: "matrix-tag-b@example.test", tagId: "0192f3a0-2222-7000-8000-00000000b0c1" },
+  ];
+  for (const { owner, email } of sides) {
+    await database.owner.begin(async (tx) => {
+      await tx`SELECT set_config('app.account_id', ${owner}, true)`;
+      await tx`INSERT INTO accounts (id, email, display_name) VALUES (${owner}, ${email}, 'Matrix tag owner') ON CONFLICT DO NOTHING`;
+    });
+  }
+  await database.owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    for (const { workspaceId, owner, tagId } of sides) {
+      await tx`INSERT INTO workspace_members (workspace_id, account_id, role) VALUES (${workspaceId}, ${owner}, 'owner') ON CONFLICT DO NOTHING`;
+      await tx`INSERT INTO tags (id, workspace_id, owner_id, name) VALUES (${tagId}, ${workspaceId}, ${owner}, 'matrix-tag-seed') ON CONFLICT DO NOTHING`;
+    }
+  });
+}
+
+/**
+ * The folders the RLS-only mode runs against. The policies of `folders` name the workspace only, so the update and the delete of the registry,
+ * which have no predicate, touch every folder of A: A holds one, and B holds the folder the methods must not reach. Both are ownerless, as the row
+ * of the folders sample's insert is.
+ */
+async function seedFolderRows(database: TestDatabase, fixture: TenantFixture): Promise<void> {
+  await database.owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    await tx`INSERT INTO folders (id, workspace_id, name) VALUES ('0192f3a0-2222-7000-8000-00000000a0d1', ${fixture.a.id}, 'matrix-folder-seed') ON CONFLICT DO NOTHING`;
+    await tx`INSERT INTO folders (id, workspace_id, name) VALUES ('0192f3a0-2222-7000-8000-00000000b0d1', ${fixture.b.id}, 'matrix-folder-seed') ON CONFLICT DO NOTHING`;
+  });
+}
+
 const database = useTestDatabase();
 let scoped: Probe;
 let permissive: Probe;
@@ -99,7 +136,7 @@ describe("the matrix over the committed contract and the repository registry", (
         ],
       },
     };
-    const matrix = await runApiMatrix({ document, fixture, request: answersAsTheChainDoes, mapping: { accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark" } });
+    const matrix = await runApiMatrix({ document, fixture, request: answersAsTheChainDoes, mapping: { accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark" } });
     // The matrix expects 404 for an identifier of workspace B. The one exception is the 422 every team is refused with (see above), for the two sessions
     // of A that reach the handler of the invitation; it is named exactly, and every other failure stays one.
     const teamRefusal = (failure: MatrixFailure): boolean => failure.subject.startsWith("createInvitation ") && failure.kind === "unexpected_status" && /answered 422, expected 404/.test(failure.detail);
@@ -109,28 +146,34 @@ describe("the matrix over the committed contract and the repository registry", (
     expect(report.classified.total).toBe(classification.operations.length);
     expect(report.classified.total).toBeGreaterThan(0);
     expect(Object.values(report.classified.byKind).reduce((sum, count) => sum + count, 0)).toBe(report.classified.total);
-    // The operations on /workspace (reading, renaming and deleting it), /workspace/settings, the entitlements, the members list and the creation of a bookmark act in the workspace of the request and take no identifier of B;
+    // The operations on /workspace (reading, renaming and deleting it), /workspace/settings, the entitlements, the members list, the creation of a bookmark, the creation and the list of tags and the creation and the list of folders act in the workspace of the request and take no identifier of B;
     // the role change, the ownership transfer and the removal name a member by account identifier, the removal and the leaving a recipient, the invitation a team,
-    // the resend, the link and the revocation of an invitation name an invitation, and the bookmark read, change, deletion and open name a bookmark, as do the select-all and the bulk request in their inputs; the invitation list takes no identifier.
-    expect(report.classified.byKind["tenant-scoped"]).toBe(24);
-    // Three sessions and six tokens of A, once on each of the nine operations that name no member, once for each of the three members of B on the role
+    // the resend, the link and the revocation of an invitation name an invitation, and the bookmark read, change, deletion and open name a bookmark, as do the select-all and the bulk request in their inputs, and the rename and the deletion of a tag name a tag, and the read, the change and the deletion of a folder name a folder; the invitation list takes no identifier.
+    expect(report.classified.byKind["tenant-scoped"]).toBe(33);
+    // Three sessions and six tokens of A, once on each of the fourteen operations that name no member, once for each of the three members of B on the role
     // change, on the ownership transfer and on the leaving, once for each pair of members of B (path and recipient) on the removal, once for the
     // team of B on the invitation, once for the invitation of B on each of the resend, the link and the revocation, and once for each of the two
     // bookmarks of B on each of the bookmark read, change, deletion and open, and in the `hasSlug` filter of the bookmark list and of the select-all (picked by
-    // its name), and once for each pair of a bookmark of B in `ids` and one in `filter.hasSlug` of the bulk request.
-    expect(report.attempts).toBe(9 * 10 + 9 * (3 + 3 + 3 + 3 * 3 + 3 + 4 * 2 + 2 + 2 + 2 * 2));
+    // its name), and once for each pair of a bookmark of B in `ids` and one in `filter.hasSlug` of the bulk request, and once for the tag of B on each of the rename and the deletion of a tag, and once for the folder of B on each of the read, the change and the deletion of a folder.
+    expect(report.attempts).toBe(9 * 14 + 9 * (3 + 3 + 3 + 3 * 3 + 3 + 4 * 2 + 2 + 2 + 2 * 2 + 2 + 3));
     assertMatrixPassed(report);
   });
 
   it("RLS-only mode passes over the scoped-repository registry as it stands", async () => {
-    // The tables of the registry that reference the workspace (the bookmarks) need the two workspaces of the fixture to exist, and a row of each.
+    // The tables of the registry that reference the workspace (the bookmarks, the tags and the folders) need the two workspaces of the fixture to exist, and a row of each.
     await seedWorkspaceRows(database(), [
       { id: PROBE_WORKSPACE_A, bookmarkId: "0192f3a0-2222-7000-8000-00000000a0b1" },
       { id: PROBE_WORKSPACE_B, bookmarkId: "0192f3a0-2222-7000-8000-00000000b0b1" },
     ]);
+    await seedTagRows(database(), scoped.fixture);
+    await seedFolderRows(database(), scoped.fixture);
     const methods = listRepositoryMethods();
     const report = await runRlsOnlyMatrix({ tenant: database().tenant, fixture: { ...scoped.fixture, instanceAdmin: PROBE_INSTANCE_ADMIN }, methods });
     expect(report.methods).toBe(methods.length);
+    // the tags repository is in the registry with all four methods: the application role may insert, rename, delete and read a tag, and the policy keeps it to its owner's
+    expect(methods.filter((entry) => entry.repository === "tags").map((entry) => entry.method).sort()).toEqual(["delete", "insert", "select", "update"]);
+    // the folders repository is in the registry with all four methods: the application role may insert, change, delete and read a folder, and the policies keep it to the workspace
+    expect(methods.filter((entry) => entry.repository === "folders").map((entry) => entry.method).sort()).toEqual(["delete", "insert", "select", "update"]);
     // the bookmarks repository is in the registry with the three methods the application role may run on the table, and no other: a delete is a system operation
     expect(methods.filter((entry) => entry.repository === "bookmarks").map((entry) => entry.method)).toEqual(["select", "insert", "update"]);
     // every method ran once more as the instance admin of the fixture, which belongs to neither workspace
