@@ -786,6 +786,46 @@
       }
     }
   },
+  "go": {
+    "retry": "Erneut versuchen",
+    "loadFailed": {
+      "title": "Dieser Slug konnte nicht nachgeschlagen werden",
+      "description": "Prüfe deine Verbindung und versuche es erneut."
+    },
+    "forward": {
+      "opening": "{title} wird geöffnet",
+      "failed": {
+        "title": "Das Lesezeichen konnte nicht geöffnet werden",
+        "description": "Versuche es erneut. Falls das weiter auftritt, hat sich das Lesezeichen möglicherweise geändert."
+      }
+    },
+    "choose": {
+      "title": "go/{slug} passt zu {count, plural, one {# Lesezeichen} other {# Lesezeichen}}",
+      "description": "Mehrere mit dir geteilte Lesezeichen haben diesen Slug. Wähle das, das du meinst.",
+      "label": "Lesezeichen mit diesem Slug",
+      "always": "Immer dieses für {slug} verwenden",
+      "manage": "Gemerkte Auswahl verwalten →",
+      "yours": "Dein Lesezeichen",
+      "shared": "Mit dir geteilt",
+      "sharedBy": "Geteilt von {owner}",
+      "via": {
+        "direct": "direkt",
+        "team": "über ein Team",
+        "folder": "über einen geteilten Ordner"
+      },
+      "failed": {
+        "title": "Dieses Lesezeichen konnte nicht geöffnet werden",
+        "description": "Die Lesezeichen mit diesem Slug haben sich möglicherweise geändert. Lade sie neu und wähle noch einmal."
+      }
+    },
+    "notFound": {
+      "title": "Kein Lesezeichen hat den Slug {slug} in {workspace}.",
+      "thisWorkspace": "diesem Workspace",
+      "description": "Prüfe die Schreibweise oder lege selbst ein Lesezeichen mit diesem Slug an.",
+      "create": "Lesezeichen mit diesem Slug anlegen",
+      "switch": "Gefunden in: {workspace} — wechseln und fortfahren"
+    }
+  },
   "admin": {
     "navigation": "Administration",
     "nav": {

@@ -786,6 +786,46 @@
       }
     }
   },
+  "go": {
+    "retry": "Try again",
+    "loadFailed": {
+      "title": "This slug could not be looked up",
+      "description": "Check your connection and try again."
+    },
+    "forward": {
+      "opening": "Opening {title}",
+      "failed": {
+        "title": "The bookmark could not be opened",
+        "description": "Try again. If this continues, the bookmark may have changed."
+      }
+    },
+    "choose": {
+      "title": "go/{slug} matches {count, plural, one {# bookmark} other {# bookmarks}}",
+      "description": "Several bookmarks shared with you have this slug. Choose the one you mean.",
+      "label": "Bookmarks with this slug",
+      "always": "Always use this for {slug}",
+      "manage": "Manage remembered choices →",
+      "yours": "Your bookmark",
+      "shared": "Shared with you",
+      "sharedBy": "Shared by {owner}",
+      "via": {
+        "direct": "directly",
+        "team": "through a team",
+        "folder": "through a shared folder"
+      },
+      "failed": {
+        "title": "That bookmark could not be opened",
+        "description": "The bookmarks with this slug may have changed. Load them again and choose once more."
+      }
+    },
+    "notFound": {
+      "title": "No bookmark has the slug {slug} in {workspace}.",
+      "thisWorkspace": "this workspace",
+      "description": "Check the spelling, or create a bookmark with this slug yourself.",
+      "create": "Create a bookmark with this slug",
+      "switch": "Found in: {workspace} — switch and continue"
+    }
+  },
   "admin": {
     "navigation": "Administration",
     "nav": {
