@@ -29,7 +29,7 @@ import { enqueueInTenantTransaction, type QueuedJob } from "../system/queue.ts";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
 import { deleteLinks, deleteLinksOutside, distinctIdentifiers, foldersOfBookmarks, insertLinks, lockOwnedFolders, requireIdentifiers, uuidArray } from "./folder-links.ts";
 import { defineScopedRepository } from "./scoped.ts";
-import { deleteTagLinks, deleteTagLinksMany, insertTagLinks, insertTagLinksMany, lockTaggingTags, ownedTags, ownedTagsExist, resolveTagNames, tagsOfBookmarks } from "./tag-links.ts";
+import { deleteTagLinks, deleteTagLinksMany, insertTagLinks, insertTagLinksMany, lockTaggingOwner, lockTaggingTags, ownedTags, ownedTagsExist, resolveTagNames, tagsOfBookmarks } from "./tag-links.ts";
 
 // The bookmarks of the active workspace (doc 05 section 2.4, doc 02 section 5, doc 10 T1, T2 and T11). Reads, the insert and the
 // update go through the scoped repository below, so every statement carries the workspace of the transaction and runs on the
@@ -465,6 +465,12 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
     async update({ bookmarkId, ownerId, changes, expectedVersions }) {
       if (tx.workspaceId === undefined) {
         throw new TenantContextError("workspace_required", "changing a bookmark needs a tenant transaction opened with a workspace");
+      }
+      // A change that names a tag by name may create one, and the insert takes the workspace row and the owner's membership row (`FOR KEY SHARE`) through its
+      // foreign keys. Every departure takes those two before the member's bookmarks, so they are taken here before the bookmark (src/repositories/tag-links.ts has the
+      // order of the locks). An owner who has left, or been removed, finds no membership row and is answered as for a bookmark that is not theirs.
+      if (changes.tags !== undefined && changes.tags.names.length > 0 && !(await lockTaggingOwner(tx, ownerId))) {
+        return { kind: "not_found" };
       }
       const [current] = await tenantHandle(tx)
         .select()

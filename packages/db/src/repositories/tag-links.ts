@@ -11,21 +11,25 @@ import { defineScopedRepository } from "./scoped.ts";
 // policies of `bookmark_tags` (src/sql/510-tags.sql, src/sql/550-bookmark-tagging.sql) refuse a link whose tag or bookmark is not the account's own in
 // that workspace, so a statement that forgot a predicate still writes nothing of anyone else's.
 //
-// Lock order. What takes row locks on the bookmarks and the tags of a member below takes them in the one order the workspace row, then the bookmarks (in the
-// order of their identifiers), then the tags (in the order of their identifiers):
-//  - a creation locks the workspace row (`sys_bookmark_count_take`), inserts its bookmark (a row that is not committed is nobody else's to hold) and then locks
-//    its tags; a change locks its bookmark (`FOR UPDATE`) and then its tags. Both lock every tag they name that exists, the ones named by identifier and the
-//    existing ones named by name, in one statement (`lockTaggingTags`, `FOR KEY SHARE`);
+// Lock order. What takes row locks on the bookmarks and the tags of a member below takes them in the one order the workspace row, then (for a tagging that
+// creates a tag by name) the owner's membership row, then the bookmarks (in the order of their identifiers), then the tags (in the order of their identifiers):
+//  - a creation locks the workspace row (`sys_bookmark_count_take`), inserts its bookmark (a row that is not committed is nobody else's to hold; the insert takes the
+//    owner's membership row through its foreign key) and then locks its tags; a change that names a tag by name locks the workspace row and the owner's membership
+//    row (`FOR KEY SHARE`, `lockTaggingOwner`) before its bookmark (`FOR UPDATE`), because the insert of the new tag takes both through its foreign keys, and then
+//    locks its tags. A change that names tags by identifier only takes neither. Both lock every tag they name that exists, the ones named by identifier and the
+//    existing ones named by name, in one statement (`lockTaggingTags`, `FOR KEY SHARE`), and insert the tags they create by name in the order of the lower-cased
+//    names (`resolveTagNames`), so that two taggings which create the same names cannot wait for each other at the unique index of the owner's tag names;
 //  - a merge of two tags locks the bookmarks of the source's links (`FOR KEY SHARE`) and then both tags (`FOR UPDATE`) (`lockTagsForMerge`);
-//  - the departure of a member (the foreign keys of `bookmarks` and `tags` to `workspace_members`) clears the owner of the member's bookmarks and then deletes
-//    the member's tags, and the deletion of an account locks the account's workspaces before anything else (src/sql/290-account-deletion.sql);
+//  - the departure of a member (the foreign keys of `bookmarks` and `tags` to `workspace_members`) locks the workspace row, deletes the membership row, clears the
+//    owner of the member's bookmarks and then deletes the member's tags, and the deletion of an account locks the account's workspaces before anything else
+//    (src/sql/290-account-deletion.sql);
 //  - the deletion of a bookmark takes the bookmark and its links, and the deletion of a tag takes the tag and its links.
-// So none of these waits for a bookmark while it holds a tag that the holder of that bookmark waits for. test/tag-merge-lock-order.integration.test.ts holds
-// an interleaving of a merge with a change, with the deletion of a bookmark and with a tagging that commits, of a creation with the deletion of an
-// account, and of a change with the removal of a member, and each ends in its own answer. Two cases are outside that order. A tag a tagging names by name
-// that the owner has none of is created, and a tag of such a name that another transaction creates after the tagging locked its tags is locked when the read that follows the insert finds
-// it, after the tags that were locked in order; and the insert of a new tag takes the owner's membership row through its foreign key, which a departing
-// member holds before the member's tags (that cycle is issue 582's).
+// So none of these waits for a bookmark while it holds a tag that the holder of that bookmark waits for, and a departure and a change queue on the workspace row or
+// the membership row, which the one takes before it reaches the member's bookmarks and the other before it locks one. test/tag-merge-lock-order.integration.test.ts holds
+// an interleaving of a merge with a change, with the deletion of a bookmark and with a tagging that commits, of a creation with the deletion of an account and with
+// the removal of a member, and of a change with the removal of a member and with the deletion of an account, and each ends in its own answer; it also shows that
+// a change which creates several names holds none of them while it waits for an earlier one (the insert order above). One case is outside that order. A tag a tagging names by name that the owner has none of is created, and a tag of such a name that another
+// transaction creates after the tagging locked its tags is locked when the read that follows the insert finds it, after the tags that were locked in order.
 // A tag named by identifier that is deleted or merged away before the tagging locks it is found gone and answered `tag_not_found` (a name it carried is created
 // anew); one that the tagging has locked cannot be deleted under it. Tags named by name are the owner's tag of that name, whatever its case, or a new one,
 // created in the transaction that links it. A tag that a name was resolved to, which another transaction created and committed, and that a different transaction deletes before the tagging has read it back
@@ -60,6 +64,24 @@ export async function ownedTagsExist(tx: TenantTx, ownerId: string, tagIds: read
     .from(tags)
     .where(and(eq(tags.workspaceId, workspaceId), eq(tags.ownerId, ownerId), sql`${tags.id} = ANY (${uuidArray(wanted)}::uuid[])`));
   return found.length === wanted.length;
+}
+
+/**
+ * Locks the workspace row and then the membership row of `ownerId` (`FOR KEY SHARE`), the two rows that the insert of a tag takes through its foreign keys, so that a
+ * tagging which creates a tag by name takes them before its bookmark, the order every departure takes them in. Answers whether both exist: false when the workspace is
+ * gone or the owner is no member of it any more, and the caller then answers as for a bookmark that is no longer the caller's, before it reads or writes the bookmark.
+ */
+export async function lockTaggingOwner(tx: TenantTx, ownerId: string): Promise<boolean> {
+  const workspaceId = requireWorkspace(tx, "tagging bookmarks");
+  requireIdentifiers([ownerId], "tagging bookmarks");
+  const handle = tenantHandle(tx);
+  const workspace = await handle.execute(sql`SELECT 1 FROM public.workspaces WHERE id = ${workspaceId}::uuid FOR KEY SHARE`);
+  if (workspace.length === 0) {
+    return false;
+  }
+  const member = await handle.execute(sql`
+    SELECT 1 FROM public.workspace_members WHERE workspace_id = ${workspaceId}::uuid AND account_id = ${ownerId}::uuid FOR KEY SHARE`);
+  return member.length === 1;
 }
 
 /**
@@ -102,6 +124,13 @@ async function tagsByName(tx: TenantTx, workspaceId: string, ownerId: string, na
   return new Map(found.map((row) => [row.position, row.id]));
 }
 
+function compareNames(a: string, b: string): number {
+  if (a === b) {
+    return 0;
+  }
+  return a < b ? -1 : 1;
+}
+
 const NAME_SAVEPOINT = sql.raw("tag_name_resolve");
 
 /**
@@ -117,7 +146,8 @@ export async function resolveTagNames(tx: TenantTx, ownerId: string, names: read
     return [];
   }
   let found = await tagsByName(tx, workspaceId, ownerId, names);
-  const missing = names.filter((_tag, index) => !found.has(index));
+  // In the order of the lower-cased names, whatever order the request gave them in, so that two transactions which create the same names wait at the unique index in the same order.
+  const missing = names.filter((_tag, index) => !found.has(index)).sort((a, b) => compareNames(a.name.toLowerCase(), b.name.toLowerCase()));
   if (missing.length > 0) {
     requireIdentifiers(missing.map((tag) => tag.newId), "creating tags");
     const handle = tenantHandle(tx);
