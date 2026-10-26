@@ -397,8 +397,8 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
       if (!(await ownedTagsExist(tx, bookmark.ownerId, tagging.ids))) {
         return { kind: "tag_not_found" };
       }
-      // A tag that the pre-check above found can still be deleted by the time the tags are locked below, after the place was taken and the bookmark inserted: the
-      // call then undoes everything from here (`ROLLBACK TO SAVEPOINT`, which also releases the locks taken since) and answers `tag_not_found`.
+      // A folder or a tag that the pre-checks above found can still be deleted by the time it is locked below, after the place was taken and the bookmark inserted:
+      // the call then undoes everything from here (`ROLLBACK TO SAVEPOINT`, which also releases the locks taken since) and answers `folder_not_found` or `tag_not_found`.
       await tenantHandle(tx).execute(sql`SAVEPOINT ${CREATION_SAVEPOINT}`);
       const taken = await tenantHandle(tx).execute<TakenRow>(sql`
         SELECT outcome, used FROM public.sys_bookmark_count_take(${tx.workspaceId}::uuid, ${ceiling}::integer)`);
@@ -430,8 +430,10 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
         pinnedAt: bookmark.pinned ? new Date() : null,
       });
       if (!(await lockOwnedFolders(tx, bookmark.ownerId, folderIds))) {
-        // A folder that was there a moment ago is gone: the call ends with an error, which rolls the place and the bookmark back with it.
-        throw new Error("a folder of the new bookmark was deleted while the bookmark was created");
+        // A folder that was there a moment ago is gone: the place and the bookmark are undone, and the answer is the one a folder that was never there gets.
+        await tenantHandle(tx).execute(sql`ROLLBACK TO SAVEPOINT ${CREATION_SAVEPOINT}`);
+        await tenantHandle(tx).execute(sql`RELEASE SAVEPOINT ${CREATION_SAVEPOINT}`);
+        return { kind: "folder_not_found" };
       }
       await insertLinks(tx, folderIds, [stored.id]);
       // A tag that was there a moment ago is gone: the place, the bookmark and whatever the call wrote since the savepoint are undone, and the answer is the one
