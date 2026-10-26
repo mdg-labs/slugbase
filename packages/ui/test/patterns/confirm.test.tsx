@@ -107,3 +107,39 @@ describe("Confirm", () => {
     expect(screen.queryByRole("alertdialog")).toBeNull();
   });
 });
+
+describe("Confirm keyboard trap", () => {
+  it("moves Tab from the last stop to the first, before the browser moves the focus", async () => {
+    render(<Harness onConfirm={() => undefined} />);
+    await screen.findByRole("alertdialog");
+    const last = screen.getByRole("button", { name: "Remove" });
+    last.focus();
+
+    const proceeded = fireEvent.keyDown(last, { key: "Tab" });
+
+    expect(proceeded).toBe(false);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Cancel" }));
+  });
+
+  it("moves Shift+Tab from the first stop to the last", async () => {
+    render(<Harness onConfirm={() => undefined} />);
+    await screen.findByRole("alertdialog");
+    const first = screen.getByRole("button", { name: "Cancel" });
+    first.focus();
+
+    const proceeded = fireEvent.keyDown(first, { key: "Tab", shiftKey: true });
+
+    expect(proceeded).toBe(false);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Remove" }));
+  });
+
+  it("leaves a Tab between the two buttons to the browser", async () => {
+    render(<Harness onConfirm={() => undefined} />);
+    await screen.findByRole("alertdialog");
+    const first = screen.getByRole("button", { name: "Cancel" });
+    first.focus();
+
+    expect(fireEvent.keyDown(first, { key: "Tab" })).toBe(true);
+    expect(document.activeElement).toBe(first);
+  });
+});

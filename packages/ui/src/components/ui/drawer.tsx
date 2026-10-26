@@ -10,6 +10,7 @@ import { useRender } from "@base-ui/react/use-render";
 import { ChevronRightIcon, XIcon } from "lucide-react";
 import type React from "react";
 import { createContext, useContext } from "react";
+import { keepTabInside } from "../../lib/keep-tab-inside.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "./button.tsx";
 import { ScrollArea } from "./scroll-area.tsx";
@@ -146,6 +147,7 @@ export function DrawerPopup({
   variant = "default",
   showBar = false,
   portalProps,
+  onKeyDown,
   ...props
 }: DrawerPrimitive.Popup.Props & {
   showCloseButton?: boolean;
@@ -211,6 +213,10 @@ export function DrawerPopup({
           )}
           data-slot="drawer-popup"
           {...props}
+          onKeyDown={(event) => {
+            onKeyDown?.(event);
+            keepTabInside(event);
+          }}
         >
           {children}
           {showCloseButton && (

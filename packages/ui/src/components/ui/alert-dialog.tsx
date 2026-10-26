@@ -2,6 +2,7 @@
 
 import { AlertDialog as AlertDialogPrimitive } from "@base-ui/react/alert-dialog";
 import type React from "react";
+import { keepTabInside } from "../../lib/keep-tab-inside.ts";
 import { cn } from "../../lib/utils.ts";
 
 export const AlertDialogCreateHandle: typeof AlertDialogPrimitive.createHandle =
@@ -57,6 +58,7 @@ export function AlertDialogPopup({
   className,
   bottomStickOnMobile = true,
   portalProps,
+  onKeyDown,
   ...props
 }: AlertDialogPrimitive.Popup.Props & {
   bottomStickOnMobile?: boolean;
@@ -80,6 +82,10 @@ export function AlertDialogPopup({
           )}
           data-slot="alert-dialog-popup"
           {...props}
+          onKeyDown={(event) => {
+            onKeyDown?.(event);
+            keepTabInside(event);
+          }}
         />
       </AlertDialogViewport>
     </AlertDialogPortal>

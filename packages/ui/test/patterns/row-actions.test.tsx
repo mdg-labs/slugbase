@@ -97,3 +97,43 @@ describe("RowActions", () => {
     expect(onSelect).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("RowActions keyboard trap on a narrow screen", () => {
+  async function openDrawer(): Promise<HTMLElement> {
+    stubMatchMedia(true);
+    render(<RowActions actions={actionsOf(() => undefined)} label="Actions for Ada" />);
+    await open();
+    return screen.findByRole("dialog", { name: "Actions for Ada" });
+  }
+
+  it("moves Tab from the last available action to the first, before the browser moves the focus", async () => {
+    const dialog = await openDrawer();
+    const last = within(dialog).getByRole("button", { name: "Remove" });
+    last.focus();
+
+    const proceeded = fireEvent.keyDown(last, { key: "Tab" });
+
+    expect(proceeded).toBe(false);
+    expect(document.activeElement).toBe(within(dialog).getByRole("button", { name: "Change role" }));
+  });
+
+  it("moves Shift+Tab from the first action to the last available one", async () => {
+    const dialog = await openDrawer();
+    const first = within(dialog).getByRole("button", { name: "Change role" });
+    first.focus();
+
+    const proceeded = fireEvent.keyDown(first, { key: "Tab", shiftKey: true });
+
+    expect(proceeded).toBe(false);
+    expect(document.activeElement).toBe(within(dialog).getByRole("button", { name: "Remove" }));
+  });
+
+  it("leaves a Tab between two actions to the browser", async () => {
+    const dialog = await openDrawer();
+    const first = within(dialog).getByRole("button", { name: "Change role" });
+    first.focus();
+
+    expect(fireEvent.keyDown(first, { key: "Tab" })).toBe(true);
+    expect(document.activeElement).toBe(first);
+  });
+});
