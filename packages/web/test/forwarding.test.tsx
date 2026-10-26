@@ -4,7 +4,7 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
-import { allowSlowRender, json, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
+import { CONFIG_BODY, allowSlowRender, json, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
 // The Forwarding page (doc 03 section 8, doc 02 section 6.4) through the app's own API client, against a stubbed transport that
 // keeps the member's bookmarks and remembered choices the way the API does: a bookmark list filtered by `hasSlug` and `scope`, a
@@ -70,6 +70,8 @@ interface Answers {
   readonly preferences?: (call: Call) => Response | undefined;
   /** Holds the answer to every read of the remembered choices until it settles. */
   readonly holdPreferences?: Promise<void>;
+  /** The origin `/api/config` reports; the test page itself is served from another. */
+  readonly origin?: string;
   /** The status the removal of a choice is refused with. */
   readonly refuseDelete?: number;
 }
@@ -90,7 +92,9 @@ function stubServer(world: World, answers: Answers = {}): Server {
   vi.stubGlobal(
     "fetch",
     vi.fn<Transport>((request) =>
-      signedIn(request, async (other) => {
+      answers.origin !== undefined && new URL(request.url).pathname === "/api/config"
+        ? Promise.resolve(json({ ...CONFIG_BODY, origin: answers.origin }))
+        : signedIn(request, async (other) => {
         const url = new URL(other.url);
         const text = other.method === "GET" || other.method === "DELETE" ? "" : await other.clone().text();
         const body: unknown = text === "" ? undefined : JSON.parse(text);
@@ -632,5 +636,101 @@ describe("empty and failed sections", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => 
       await held;
     });
     await screen.findByRole("table", { name: "Remembered choices" });
+  });
+});
+
+describe("setting up the browser", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
+  const ORIGIN = "https://links.example.org";
+
+  it("shows the search engine address on the configured origin and the keyword as values to copy", async () => {
+    stubServer(worldOf(), { origin: ORIGIN });
+    await openApp("/forwarding");
+
+    const address = await screen.findByRole("textbox", { name: "Search engine address" });
+    const keyword = screen.getByRole("textbox", { name: "Keyword" });
+
+    expect((address as HTMLInputElement).value).toBe(`${ORIGIN}/go/%s`);
+    expect((address as HTMLInputElement).readOnly).toBe(true);
+    expect((keyword as HTMLInputElement).value).toBe("go");
+    expect(window.location.origin).not.toBe(ORIGIN);
+  });
+
+  it("copies the address and the keyword", async () => {
+    stubServer(worldOf(), { origin: ORIGIN });
+    const writeText = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, "clipboard", { configurable: true, value: { writeText } });
+    await openApp("/forwarding");
+
+    await press(await screen.findByRole("button", { name: "Copy the search engine address" }));
+    await press(screen.getByRole("button", { name: "Copy the keyword" }));
+
+    expect(writeText.mock.calls.map(([text]) => text)).toEqual([`${ORIGIN}/go/%s`, "go"]);
+    Reflect.deleteProperty(window.navigator, "clipboard");
+  });
+
+  it("has a tab for each of Chrome, Firefox, Safari and Edge, whose steps name the address and the keyword", async () => {
+    stubServer(worldOf(), { origin: ORIGIN });
+    await openApp("/forwarding");
+    const tabs = await screen.findAllByRole("tab");
+
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["Chrome", "Firefox", "Safari", "Edge"]);
+    expect(screen.getByRole("tab", { name: "Chrome" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tabpanel", { name: "Chrome" }).textContent).toContain(`paste ${ORIGIN}/go/%s as the URL`);
+
+    await press(screen.getByRole("tab", { name: "Firefox" }));
+    expect(screen.getByRole("tabpanel", { name: "Firefox" }).textContent).toContain("Under Search Shortcuts, choose Add.");
+    expect(screen.getByRole("tabpanel", { name: "Firefox" }).textContent).toContain(`paste ${ORIGIN}/go/%s as the URL and enter go as the alias`);
+
+    await press(screen.getByRole("tab", { name: "Safari" }));
+    expect(screen.getByRole("tabpanel", { name: "Safari" }).textContent).toContain("Safari has no setting for a custom search engine.");
+    expect(screen.getByRole("tabpanel", { name: "Safari" }).textContent).toContain(`${ORIGIN}/go/%s`);
+
+    await press(screen.getByRole("tab", { name: "Edge" }));
+    expect(screen.getByRole("tabpanel", { name: "Edge" }).textContent).toContain("Address bar and search");
+    expect(screen.getByRole("tabpanel", { name: "Edge" }).textContent).toContain(`${ORIGIN}/go/%s`);
+  });
+
+  it("tries one of the member's own forwarding slugs, skipping one that does not forward", async () => {
+    const world: World = { bookmarks: [bookmarkOf(2, { slug: "docs", forwarding: false }), bookmarkOf(1, { slug: "mail", forwarding: true })], choices: [] };
+    stubServer(world);
+    await openApp("/forwarding");
+
+    const link = await screen.findByRole("link", { name: "Test it: open go/mail" });
+
+    expect(link.getAttribute("href")).toBe("/go/mail");
+    expect(link.getAttribute("target")).toBe("_blank");
+    expect(link.getAttribute("rel")).toContain("noopener");
+    expect(screen.getByText(/Opens go\/mail in a new tab\./)).toBeDefined();
+  });
+
+  it("tries a sample address when the member has no slug that forwards", async () => {
+    stubServer({ bookmarks: [bookmarkOf(2, { slug: "docs", forwarding: false })], choices: [] });
+    await openApp("/forwarding");
+
+    const link = await screen.findByRole("link", { name: "Test it: open go/sample" });
+
+    expect(link.getAttribute("href")).toBe("/go/sample");
+    expect(screen.getByText(/so this opens a sample address/)).toBeDefined();
+  });
+
+  it("still shows the section when the slugs could not be loaded, with the sample to try", async () => {
+    stubServer(worldOf(), { bookmarks: () => problem(500, "internal_error", "req-500") });
+    await openApp("/forwarding");
+
+    expect(await screen.findByRole("heading", { level: 2, name: "Set up your browser" })).toBeDefined();
+    expect((await screen.findByRole("link", { name: "Test it: open go/sample" })).getAttribute("href")).toBe("/go/sample");
+  });
+
+  it("is usable on a narrow screen and in German", async () => {
+    stubMatchMedia(true);
+    vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["de-DE", "de"]);
+    stubServer(worldOf(), { origin: ORIGIN });
+    await openApp("/forwarding");
+
+    expect(await screen.findByRole("heading", { level: 2, name: "Browser einrichten" })).toBeDefined();
+    expect(screen.getByRole<HTMLInputElement>("textbox", { name: "Adresse der Suchmaschine" }).value).toBe(`${ORIGIN}/go/%s`);
+    await press(screen.getByRole("tab", { name: "Firefox" }));
+    expect(screen.getByRole("tabpanel", { name: "Firefox" }).textContent).toContain("Wähle unter Suchkürzel Hinzufügen.");
+    expect(screen.getByRole("link", { name: /^Ausprobieren: go\/.+ öffnen$/ })).toBeDefined();
   });
 });

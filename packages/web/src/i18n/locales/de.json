@@ -664,6 +664,54 @@
     "page": {
       "title": "Weiterleitung"
     },
+    "setup": {
+      "title": "Browser einrichten",
+      "description": "Füge SlugBase deinem Browser als Suchmaschine mit einem Kürzel hinzu. Danach bringen dich das Kürzel und ein Slug in der Adressleiste direkt zum Lesezeichen.",
+      "address": {
+        "label": "Adresse der Suchmaschine",
+        "copy": "Adresse der Suchmaschine kopieren"
+      },
+      "keyword": {
+        "label": "Kürzel",
+        "copy": "Kürzel kopieren"
+      },
+      "copied": "In die Zwischenablage kopiert",
+      "browsers": "Browser",
+      "browser": {
+        "chrome": {
+          "name": "Chrome",
+          "open": "Öffne die Einstellungen, dann Suchmaschine, dann Suchmaschinen und Websitesuche verwalten.",
+          "add": "Wähle unter Websitesuche Hinzufügen.",
+          "fill": "Gib {name} als Namen und {keyword} als Kürzel ein und füge {address} als URL ein.",
+          "save": "Wähle Hinzufügen, um sie zu speichern."
+        },
+        "firefox": {
+          "name": "Firefox",
+          "open": "Öffne die Einstellungen und wähle Suche.",
+          "add": "Wähle unter Suchkürzel Hinzufügen.",
+          "fill": "Gib {name} als Namen ein, füge {address} als URL ein und gib {keyword} als Alias ein.",
+          "save": "Speichere die Suchmaschine."
+        },
+        "safari": {
+          "name": "Safari",
+          "limit": "Safari hat keine Einstellung für eine eigene Suchmaschine.",
+          "extension": "Installiere eine Safari-Erweiterung, die eigene Suchmaschinen hinzufügt.",
+          "fill": "Füge in der Erweiterung {name} mit der Adresse {address} und dem Kürzel {keyword} hinzu."
+        },
+        "edge": {
+          "name": "Edge",
+          "open": "Öffne die Einstellungen, dann Datenschutz, Suche und Dienste, dann Adressleiste und Suche.",
+          "add": "Wähle Suchmaschinen verwalten, dann Hinzufügen.",
+          "fill": "Gib {name} als Suchmaschine und {keyword} als Kürzel ein und füge {address} als URL ein.",
+          "save": "Wähle Hinzufügen, um sie zu speichern."
+        }
+      },
+      "test": {
+        "link": "Ausprobieren: go/{slug} öffnen",
+        "own": "Öffnet go/{slug} in einem neuen Tab. Sobald die Suchmaschine eingerichtet ist, gib {keyword} {slug} in die Adressleiste ein.",
+        "sample": "Du hast noch keinen Slug, der weiterleitet, daher öffnet das eine Beispieladresse. SlugBase antwortet, dass kein Lesezeichen diesen Slug hat, und bietet an, eines anzulegen."
+      }
+    },
     "slugs": {
       "title": "Deine Slugs",
       "description": "Deine Lesezeichen mit einem Slug. Die Weiterleitung entscheidet, ob dich der Slug bei go zum Lesezeichen bringt.",

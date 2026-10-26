@@ -56,3 +56,14 @@ export function forwardingFailureOf(error: unknown): ForwardingFailure | undefin
 export function goAddress(origin: string, slug: string): string {
   return `${origin.replace(/\/+$/, "")}/go/${slug}`;
 }
+
+/** The keyword the member gives the search engine, so that "go mail" in the address bar goes to the slug `mail`. */
+export const SEARCH_KEYWORD = "go";
+
+/** The slug the "Test it" link tries when the member has none of their own that forwards. */
+export const SAMPLE_SLUG = "sample";
+
+/** The address a browser's search engine is set up with: `%s` stands for what is typed after the keyword (doc 02 section 6.5). */
+export function searchTemplate(origin: string): string {
+  return goAddress(origin, "%s");
+}

@@ -120,7 +120,7 @@ describe("the dev server in any other mode", { timeout: HEAVY_TEST_TIMEOUT_MS },
     expect(html).not.toContain("/mock/main.ts");
     await expect(server.transformRequest("virtual:slugbase-openapi")).rejects.toThrow();
     expect((await request(server, "/mockServiceWorker.js")).passedOn).toBe(true);
-    expect(Object.keys(server.config.server.proxy ?? {})).toEqual(["/api", "/go", "/health"]);
+    expect(Object.keys(server.config.server.proxy ?? {})).toEqual(["/api", "/go", "/health", "/opensearch.xml"]);
   });
 });
 

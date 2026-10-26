@@ -664,6 +664,54 @@
     "page": {
       "title": "Forwarding"
     },
+    "setup": {
+      "title": "Set up your browser",
+      "description": "Add SlugBase to your browser as a search engine with a keyword. Then the keyword and a slug in the address bar take you straight to the bookmark.",
+      "address": {
+        "label": "Search engine address",
+        "copy": "Copy the search engine address"
+      },
+      "keyword": {
+        "label": "Keyword",
+        "copy": "Copy the keyword"
+      },
+      "copied": "Copied to the clipboard",
+      "browsers": "Browser",
+      "browser": {
+        "chrome": {
+          "name": "Chrome",
+          "open": "Open Settings, then Search engine, then Manage search engines and site search.",
+          "add": "Under Site search, choose Add.",
+          "fill": "Enter {name} as the name and {keyword} as the shortcut, and paste {address} as the URL.",
+          "save": "Choose Add to save it."
+        },
+        "firefox": {
+          "name": "Firefox",
+          "open": "Open Settings and choose Search.",
+          "add": "Under Search Shortcuts, choose Add.",
+          "fill": "Enter {name} as the name, paste {address} as the URL and enter {keyword} as the alias.",
+          "save": "Save the search engine."
+        },
+        "safari": {
+          "name": "Safari",
+          "limit": "Safari has no setting for a custom search engine.",
+          "extension": "Install a Safari extension that adds custom search engines.",
+          "fill": "In the extension, add {name} with the address {address} and the keyword {keyword}."
+        },
+        "edge": {
+          "name": "Edge",
+          "open": "Open Settings, then Privacy, search, and services, then Address bar and search.",
+          "add": "Choose Manage search engines, then Add.",
+          "fill": "Enter {name} as the search engine and {keyword} as the shortcut, and paste {address} as the URL.",
+          "save": "Choose Add to save it."
+        }
+      },
+      "test": {
+        "link": "Test it: open go/{slug}",
+        "own": "Opens go/{slug} in a new tab. Once the search engine is set up, type {keyword} {slug} in the address bar.",
+        "sample": "You have no slug that forwards yet, so this opens a sample address. SlugBase answers that no bookmark has that slug and offers to create one."
+      }
+    },
     "slugs": {
       "title": "Your slugs",
       "description": "The bookmarks of yours that have a slug. Forwarding decides whether the slug takes you to the bookmark when you go to it.",

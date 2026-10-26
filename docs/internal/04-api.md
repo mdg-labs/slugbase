@@ -381,7 +381,7 @@ The HTML pages carry `Cache-Control: no-store` and `Referrer-Policy: no-referrer
 
 ### 9.4 `GET /opensearch.xml`
 
-Unauthenticated, `Content-Type: application/opensearchdescription+xml`, built only from `APP_ORIGIN` and the product name (never from the request's `Host` or `X-Forwarded-Host`) and no user data. Its search URL is `<origin>/go/{searchTerms}`; the SPA shell links it with `<link rel="search">` so browsers can offer SlugBase as a search engine in one click.
+Unauthenticated, `Content-Type: application/opensearchdescription+xml`, built only from `APP_ORIGIN` and the product name (never from the request's `Host` or `X-Forwarded-Host`) and no user data. Its search URL is `<origin>/go/{searchTerms}`; the SPA shell links it with `<link rel="search">` so browsers can offer SlugBase as a search engine in one click. It is not an operation of the committed OpenAPI document: like the `/go` navigation it is declared for the chain's policy only (anonymous, the `public` bucket) and its `200` is XML, answered with `Cache-Control: public, max-age=3600`. Text taken from the product name or the origin is XML-escaped, and the short name is cut to the 16 characters OpenSearch allows.
 
 ---
 

@@ -4,7 +4,7 @@ import { defineConfig } from "vite";
 import { MOCK_MODE, mockPlugin } from "./mock/vite-plugin.ts";
 
 const SERVER = "http://127.0.0.1:3000";
-const PROXY: Record<string, string> = { "/api": SERVER, "/go": SERVER, "/health": SERVER };
+const PROXY: Record<string, string> = { "/api": SERVER, "/go": SERVER, "/health": SERVER, "/opensearch.xml": SERVER };
 const PACKAGES = resolve(import.meta.dirname, "../../packages");
 
 // One origin in development (D11, doc 08 section 1.3): the browser only sees the
