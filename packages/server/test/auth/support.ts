@@ -142,13 +142,14 @@ export interface SeedTokenOptions {
 /** Mints an API token of an account for a workspace through the repository, as creating one does; the value is the credential a client sends. */
 export async function seedApiToken(database: TestDatabase, options: SeedTokenOptions): Promise<{ readonly id: string; readonly value: string }> {
   tokenNumber += 1;
+  const number = tokenNumber;
   const token = generateApiToken();
-  const id = `0192f3a0-aaaa-7000-8000-${tokenNumber.toString(16).padStart(12, "0")}`;
+  const id = `0192f3a0-aaaa-7000-8000-${number.toString(16).padStart(12, "0")}`;
   const outcome = await tenantDatabase(database).withTenant({ accountId: options.accountId, requestId: "seed-api-token" }, (tx) =>
     apiTokenRepository(tx).create({
       id,
       workspaceId: options.workspaceId,
-      name: `seeded token ${String(tokenNumber)}`,
+      name: `seeded token ${String(number)}`,
       scope: options.scope ?? "read",
       tokenHash: token.hash,
       tokenPrefix: token.displayPrefix,
