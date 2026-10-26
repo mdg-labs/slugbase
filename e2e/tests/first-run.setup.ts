@@ -4,7 +4,8 @@ import { dirname } from "node:path";
 import { message } from "../support/catalog.ts";
 import { expectNoCspViolations, watchCsp } from "../support/csp.ts";
 import { STORAGE_STATE } from "../support/environment.ts";
-import { OWNER_EMAIL, OWNER_NAME, WORKSPACE_NAME } from "../support/instance.ts";
+import { OWNER_EMAIL, OWNER_NAME, SECOND_OWNER_EMAIL, SECOND_WORKSPACE_NAME, WORKSPACE_NAME } from "../support/instance.ts";
+import { createWorkspace, enrolSecondFactor } from "../support/instance-admin.ts";
 import { productName } from "../support/product.ts";
 import { expect, test } from "../support/test.ts";
 
@@ -16,6 +17,13 @@ import { expect, test } from "../support/test.ts";
 //
 // The account is made up for this run and its password is random; neither the password nor the token is
 // printed, and a message that fails here names the step, never a value.
+//
+// The owner is the instance admin, and CE lets only an instance admin with a second factor create a workspace
+// (ALLOW_WORKSPACE_CREATION is false; doc 04 section 10.10). The setup therefore turns on an authenticator app for
+// the owner through the API of the security page, with the password it holds only in memory, and creates one
+// workspace through the instance-admin API to show the run can: a journey that needs a second workspace calls
+// `createWorkspace` of support/instance-admin.ts on the owner's session. The setup key is not kept, because the
+// policy asks for an enrolled second factor and not for a code.
 
 test("accounts journey: the first-run setup claims the instance and signs the owner in", async ({ page, app }) => {
   const token = process.env.E2E_SETUP_TOKEN ?? "";
@@ -74,6 +82,12 @@ test("accounts journey: the first-run setup claims the instance and signs the ow
   // The wizard is gone for good once an account exists.
   const again = await page.request.get("/api/v1/setup/status");
   expect(((await again.json()) as { setupRequired?: unknown }).setupRequired, "first-run setup is done").toBe(false);
+
+  // The confirmation of the enrolment replaces the session cookie, which the context shares with `page.request`,
+  // so the state saved below holds the new session.
+  await enrolSecondFactor(page.request, password);
+  // The workspace waits for an owner who never accepts, so the owner stays a member of the one workspace the other journeys use.
+  await createWorkspace(page.request, SECOND_WORKSPACE_NAME, { ownerEmail: SECOND_OWNER_EMAIL });
 
   mkdirSync(dirname(STORAGE_STATE), { recursive: true });
   await page.context().storageState({ path: STORAGE_STATE });
