@@ -215,8 +215,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Delete, pin or unpin many bookmarks */
+        /** Delete, pin, unpin, file or tag many bookmarks */
         post: operations["bulkBookmarks"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bookmarks/bulk/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview adding tags to many bookmarks */
+        post: operations["previewBulkBookmarks"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1465,6 +1482,11 @@ export interface components {
             version: number;
         };
         BookmarkFilter: {
+            /**
+             * Format: uuid
+             * @description Matches the bookmarks filed in this folder of the caller's. A folder that is another member's, another workspace's or unknown matches nothing. Left out, folders are not filtered on
+             */
+            folderId?: string;
             /** @description true matches the bookmarks /go forwards to only and false those it does not; left out, forwarding is not filtered on */
             forwarding?: boolean;
             /** @description true matches bookmarks with a slug only and false those without one; left out, slugs are not filtered on */
@@ -1476,6 +1498,8 @@ export interface components {
              * @enum {string}
              */
             scope?: "all" | "mine";
+            /** @description Matches the bookmarks that carry every one of the given tags of the caller's (AND; OR is not offered), at most 10. A tag that is another member's, another workspace's or unknown matches nothing. Left out, tags are not filtered on */
+            tag?: string | string[];
             /** @description Matches the caller's bookmarks whose canonical URL equals the canonical form of this value; one that cannot be a bookmark's URL is refused with 422 */
             url?: string;
         };
@@ -1524,19 +1548,56 @@ export interface components {
             /** @description The tag's name, in the case it was entered in */
             name: string;
         };
-        BulkBookmarksRequest: {
+        BulkBookmarksPreview: {
+            /** @description How many of them the action would reach: the caller's own bookmarks that are not plan-archived */
+            affected: number;
+            /** @description How many bookmarks the request named (the distinct identifiers) or the filter matched */
+            requested: number;
+            /** @description How many it would leave alone: requested minus affected */
+            skipped: number;
+            /** @description The skipped bookmarks by reason, as counts only */
+            skippedReasons: {
+                /** @description Bookmarks the caller owns none of in this workspace: another member's, another workspace's, one that is gone, and, for every action but delete, a plan-archived one. They are not told apart */
+                not_found: number;
+                /** @description Bookmarks the caller can read and does not own; none exist until sharing arrives */
+                not_owner: number;
+            };
+            /** @description The tags the bookmarks the action would reach carry afterwards, in the order of their names: the tags they carry now and the tags the action adds */
+            tags: components["schemas"]["BulkPreviewTag"][];
+        };
+        BulkBookmarksPreviewRequest: {
             /**
-             * @description delete removes the bookmarks for good, pin pins them and unpin unpins them
-             * @enum {string}
+             * @description The action to preview; only add_tags has a preview
+             * @constant
              */
-            action: "delete" | "pin" | "unpin";
-            /** @description Acts on the caller's bookmarks that match this filter, which is the list's filters; a filter that matches more than 5 000 bookmarks is refused with 422. Give this or ids, and not both */
+            action: "add_tags";
+            /** @description Previews on the caller's bookmarks that match this filter, which is the list's filters; a filter that matches more than 5 000 bookmarks is refused with 422. Give this or ids, and not both */
             filter?: components["schemas"]["BookmarkFilter"];
             /** @description The bookmarks to act on, 1 to 1 000 identifiers; one named twice counts once. Give this or filter, and not both */
             ids?: string[];
+            /** @description The caller's tags add_tags would put on the bookmarks, 1 to 100 identifiers. A tag that is another member's, another workspace's or unknown is refused with 404 */
+            tagIds: string[];
+        };
+        BulkBookmarksRequest: {
+            /**
+             * @description delete removes the bookmarks for good, pin pins them and unpin unpins them. add_to_folder files them in the folder folderId as well as in the folders they are in, move_to_folder files them in that folder alone, and remove_from_folder takes them out of that folder. add_tags puts the tags tagIds on them and remove_tags takes those tags off
+             * @enum {string}
+             */
+            action: "delete" | "pin" | "unpin" | "add_to_folder" | "move_to_folder" | "remove_from_folder" | "add_tags" | "remove_tags";
+            /** @description Acts on the caller's bookmarks that match this filter, which is the list's filters; a filter that matches more than 5 000 bookmarks is refused with 422. Give this or ids, and not both */
+            filter?: components["schemas"]["BookmarkFilter"];
+            /**
+             * Format: uuid
+             * @description The caller's folder the three folder actions act with; required for them and refused for every other action. A folder that is another member's, another workspace's or unknown is refused with 404 and nothing is changed
+             */
+            folderId?: string;
+            /** @description The bookmarks to act on, 1 to 1 000 identifiers; one named twice counts once. Give this or filter, and not both */
+            ids?: string[];
+            /** @description The caller's tags add_tags and remove_tags act with, 1 to 100 identifiers; required for them and refused for every other action. A tag that is another member's, another workspace's or unknown is refused with 404 and nothing is changed */
+            tagIds?: string[];
         };
         BulkBookmarksResult: {
-            /** @description How many of them are now deleted, or are pinned or unpinned as asked (a bookmark that already was is counted) */
+            /** @description How many of them are now deleted, or are in the state the action asks for: pinned or unpinned, filed in or out of the folder, tagged or untagged (a bookmark that already was is counted) */
             affected: number;
             /** @description How many bookmarks the request named (the distinct identifiers) or the filter matched */
             requested: number;
@@ -1544,11 +1605,24 @@ export interface components {
             skipped: number;
             /** @description The skipped bookmarks by reason, as counts only */
             skippedReasons: {
-                /** @description Bookmarks the caller owns none of in this workspace: another member's, another workspace's, one that is gone, and, for pin and unpin, a plan-archived one. They are not told apart */
+                /** @description Bookmarks the caller owns none of in this workspace: another member's, another workspace's, one that is gone, and, for every action but delete, a plan-archived one. They are not told apart */
                 not_found: number;
                 /** @description Bookmarks the caller can read and does not own; none exist until sharing arrives */
                 not_owner: number;
             };
+        };
+        BulkPreviewTag: {
+            /** @description How many of them get the tag from the action: those that do not carry it yet */
+            added: number;
+            /** @description How many of the bookmarks the action would reach carry the tag afterwards */
+            bookmarkCount: number;
+            /**
+             * Format: uuid
+             * @description The tag's identifier
+             */
+            id: string;
+            /** @description The tag's name, in the case it was entered in */
+            name: string;
         };
         CancelEmailChangeRequest: {
             /** @description The token of the "this wasn't me" link mailed to the old address, from the fragment of /email-change/cancel#token=… */
@@ -3612,7 +3686,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description What the request did, as counts only. The whole request is one transaction: every bookmark it affects changes or none does. Only the caller's own bookmarks change; the others are skipped as not_found without saying whether they exist. A delete gives the workspace's bookmark count back once for the request, by the bookmarks that were not plan-archived, and records one bookmark.bulk_deleted audit event with the number deleted, never a title or a URL */
+            /** @description What the request did, as counts only. The whole request is one transaction: every bookmark it affects changes or none does. Only the caller's own bookmarks change; the others are skipped as not_found without saying whether they exist. A delete gives the workspace's bookmark count back once for the request, by the bookmarks that were not plan-archived, and records one bookmark.bulk_deleted audit event with the number deleted, never a title or a URL. Filing and tagging write links only: they move no bookmark's version, record no audit event, and leave a plan-archived bookmark alone */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3648,7 +3722,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted; or the folder of a folder action or a tag of a tag action is not one the caller has in it (another member's, another workspace's or unknown), and nothing is changed */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3657,7 +3731,96 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation (an unknown action, neither or both of ids and filter, no identifier or more than 1 000, a malformed identifier, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks. Nothing is written */
+            /** @description The body did not pass validation (an unknown action, neither or both of ids and filter, no identifier or more than 1 000, a malformed identifier, a folder action without folderId or a tag action without tagIds, a folderId or tagIds on an action that takes none, more than 100 tags, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks. Nothing is written */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    previewBulkBookmarks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkBookmarksPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description What add_tags with the same body would do, without writing anything: the counts as the bulk request reports them, and the tag set the bookmarks it reaches would carry afterwards. Only the caller's own bookmarks are counted; the others are skipped as not_found without saying whether they exist */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkBookmarksPreview"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the preview is a POST, so it takes the write scope though it writes nothing */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted; or a tag of tagIds is not one the caller has in it (another member's, another workspace's or unknown) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation (an action other than add_tags, neither or both of ids and filter, no identifier or more than 1 000, no tag or more than 100, a malformed identifier, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3696,6 +3859,8 @@ export interface operations {
                 hasSlug?: "true" | "false";
                 forwarding?: "true" | "false";
                 url?: string;
+                folderId?: string;
+                tag?: string | string[];
             };
             header?: never;
             path?: never;
@@ -3739,7 +3904,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The query did not pass validation (an unknown parameter, a boolean other than true or false), or the url is not a URL a bookmark can have */
+            /** @description The query did not pass validation (an unknown parameter, a boolean other than true or false, a malformed folderId or tag, more than 10 tags), or the url is not a URL a bookmark can have */
             422: {
                 headers: {
                     [name: string]: unknown;

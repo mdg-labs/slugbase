@@ -128,6 +128,21 @@ export async function deleteLinks(tx: TenantTx, folderIds: readonly string[], bo
   return deleted.length;
 }
 
+/** Removes the links of `bookmarkIds` to every folder but `keepFolderId` and answers how many there were. The bookmarks are locked and owned already. */
+export async function deleteLinksOutside(tx: TenantTx, keepFolderId: string, bookmarkIds: readonly string[]): Promise<number> {
+  requireWorkspace(tx, "unfiling bookmarks");
+  const bookmarkList = distinctIdentifiers(bookmarkIds);
+  requireIdentifiers([keepFolderId], "unfiling bookmarks");
+  requireIdentifiers(bookmarkList, "unfiling bookmarks");
+  if (bookmarkList.length === 0) {
+    return 0;
+  }
+  const deleted = await scoped
+    .bind(tx)
+    .delete(and(sql`${folderBookmarks.folderId} <> ${keepFolderId}::uuid`, sql`${folderBookmarks.bookmarkId} = ANY (${uuidArray(bookmarkList)}::uuid[])`));
+  return deleted.length;
+}
+
 /** The statement of `foldersOfBookmarks`, exported for the test that plans it. The identifiers are UUIDs, distinct. */
 export function foldersOfBookmarksQuery(tx: TenantTx, ownerId: string, bookmarkIds: readonly string[]) {
   const workspaceId = requireWorkspace(tx, "reading the folders of bookmarks");

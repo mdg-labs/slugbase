@@ -184,7 +184,7 @@ describe("the matrix over the committed contract and the repository registry", (
         ],
       },
     };
-    const matrix = await runApiMatrix({ document, fixture, request: answersAsTheChainDoes, mapping: { accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark" } });
+    const matrix = await runApiMatrix({ document, fixture, request: answersAsTheChainDoes, mapping: { accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "listBookmarkIds.folderId": "folder", "listBookmarkIds.tag": "tag", "listBookmarkIds.tag[]": "tag", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark", "bulkBookmarks.filter.folderId": "folder", "bulkBookmarks.filter.tag": "tag", "bulkBookmarks.filter.tag[]": "tag", "bulkBookmarks.folderId": "folder", "bulkBookmarks.tagIds[]": "tag", "previewBulkBookmarks.ids[]": "bookmark", "previewBulkBookmarks.filter.hasSlug": "bookmark", "previewBulkBookmarks.filter.folderId": "folder", "previewBulkBookmarks.filter.tag": "tag", "previewBulkBookmarks.filter.tag[]": "tag", "previewBulkBookmarks.tagIds[]": "tag" } });
     // The matrix expects 404 for an identifier of workspace B. The one exception is the 422 every team is refused with (see above), for the two sessions
     // of A that reach the handler of the invitation; it is named exactly, and every other failure stays one.
     const teamRefusal = (failure: MatrixFailure): boolean => failure.subject.startsWith("createInvitation ") && failure.kind === "unexpected_status" && /answered 422, expected 404/.test(failure.detail);
@@ -196,14 +196,14 @@ describe("the matrix over the committed contract and the repository registry", (
     expect(Object.values(report.classified.byKind).reduce((sum, count) => sum + count, 0)).toBe(report.classified.total);
     // The operations on /workspace (reading, renaming and deleting it), /workspace/settings, the entitlements, the members list, the creation of a bookmark (which the matrix calls once, with the one folder of B in `folderIds` and the one tag of B in `tagIds`), the creation, the list and the statistics of tags and the creation and the list of folders act in the workspace of the request and take no identifier of B;
     // the role change, the ownership transfer and the removal name a member by account identifier, the removal and the leaving a recipient, the invitation a team,
-    // the resend, the link and the revocation of an invitation name an invitation, and the bookmark read, change, deletion and open name a bookmark, as do the select-all and the bulk request in their inputs, and the rename, the merge and the deletion of a tag name a tag, and the read, the change and the deletion of a folder name a folder; the invitation list takes no identifier.
-    expect(report.classified.byKind["tenant-scoped"]).toBe(37);
+    // the resend, the link and the revocation of an invitation name an invitation, and the bookmark read, change, deletion and open name a bookmark, as do the select-all, the bulk request and the preview of adding tags in their inputs (and the folder and the tags they act with, and the folder and the tags of their filters, name a folder and tags of B), and the rename, the merge and the deletion of a tag name a tag, and the read, the change and the deletion of a folder name a folder; the invitation list takes no identifier.
+    expect(report.classified.byKind["tenant-scoped"]).toBe(38);
     // Three sessions and six tokens of A, once on each of the fifteen operations that name no member, once for each of the three members of B on the role
     // change, on the ownership transfer and on the leaving, once for each pair of members of B (path and recipient) on the removal, once for the
     // team of B on the invitation, once for the invitation of B on each of the resend, the link and the revocation, and once for each of the two
     // bookmarks of B on each of the bookmark read, change, deletion and open, and in the `hasSlug` filter of the bookmark list and of the select-all (picked by
-    // its name), and once for each pair of a bookmark of B in `ids` and one in `filter.hasSlug` of the bulk request, and once for the tag of B on each of the rename, the merge and the deletion of a tag, and once for the folder of B on each of the read, the change and the deletion of a folder, and once for each of the two bookmarks of B with the folder of B on each of the filing and the unfiling of bookmarks.
-    expect(report.attempts).toBe(9 * 15 + 9 * (3 + 3 + 3 + 3 * 3 + 3 + 4 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2));
+    // its name), and once for each pair of a bookmark of B in `ids` and one in `filter.hasSlug` of the bulk request and of its preview, and once for the tag of B on each of the rename, the merge and the deletion of a tag, and once for the folder of B on each of the read, the change and the deletion of a folder, and once for each of the two bookmarks of B with the folder of B on each of the filing and the unfiling of bookmarks.
+    expect(report.attempts).toBe(9 * 15 + 9 * (3 + 3 + 3 + 3 * 3 + 3 + 4 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2));
     assertMatrixPassed(report);
   });
 
@@ -814,5 +814,69 @@ describe("the bulk operations across workspaces", () => {
     expect(results).toEqual({ deleted: 0, pinned: 0, unpinned: 0, ids: [BOOKMARK_OF_A] });
     expect(namingB).toBeNull();
     expect({ a: await storedOf(PROBE_WORKSPACE_A), b: await storedOf(PROBE_WORKSPACE_B) }).toEqual({ a: before.a, b: before.b });
+  });
+
+  // The bulk filing, tagging and preview of adding tags (doc 02 section 5.8) take a bookmark and a folder or tags by identifier. From a transaction acting in A, a
+  // bookmark of B is not reached and a folder or a tag of B is not found, though the same account owns all of them, so the guard under test is the workspace.
+  it("files, tags and previews no bookmark of B, and finds no folder or tag of B, from a transaction acting in A, and writes no link in B", async () => {
+    const FOLDER_OF_A = "0192f3a0-4444-7000-8000-00000000a0f1";
+    const FOLDER_OF_B = "0192f3a0-4444-7000-8000-00000000b0f1";
+    const TAG_OF_A = "0192f3a0-5555-7000-8000-00000000a0c9";
+    const TAG_OF_B = "0192f3a0-5555-7000-8000-00000000b0c9";
+    await seedWorkspaceRows(database(), [
+      { id: PROBE_WORKSPACE_A, bookmarkId: BOOKMARK_OF_A },
+      { id: PROBE_WORKSPACE_B, bookmarkId: BOOKMARK_OF_B },
+    ]);
+    await database().owner.begin(async (tx) => {
+      await tx`SELECT set_config('app.account_id', ${MEMBER_OF_A}, true)`;
+      await tx`INSERT INTO accounts (id, email, display_name) VALUES (${MEMBER_OF_A}, 'bulk-matrix@example.test', 'Matrix member') ON CONFLICT DO NOTHING`;
+    });
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`INSERT INTO workspace_members (workspace_id, account_id, role) VALUES (${PROBE_WORKSPACE_A}, ${MEMBER_OF_A}, 'owner'), (${PROBE_WORKSPACE_B}, ${MEMBER_OF_A}, 'owner') ON CONFLICT DO NOTHING`;
+      await tx`UPDATE bookmarks SET owner_id = ${MEMBER_OF_A} WHERE id IN (${BOOKMARK_OF_A}, ${BOOKMARK_OF_B})`;
+      await tx`INSERT INTO folders (id, workspace_id, owner_id, name) VALUES (${FOLDER_OF_A}, ${PROBE_WORKSPACE_A}, ${MEMBER_OF_A}, 'bulk-matrix-a'), (${FOLDER_OF_B}, ${PROBE_WORKSPACE_B}, ${MEMBER_OF_A}, 'bulk-matrix-b')`;
+      await tx`INSERT INTO tags (id, workspace_id, owner_id, name) VALUES (${TAG_OF_A}, ${PROBE_WORKSPACE_A}, ${MEMBER_OF_A}, 'bulk-matrix-a'), (${TAG_OF_B}, ${PROBE_WORKSPACE_B}, ${MEMBER_OF_A}, 'bulk-matrix-b')`;
+    });
+    const linksIn = async (workspaceId: string): Promise<string> => {
+      const rows = await database().owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        return tx<{ link: string }[]>`
+          SELECT 'f:' || bookmark_id || '/' || folder_id AS link FROM folder_bookmarks WHERE workspace_id = ${workspaceId}
+          UNION ALL SELECT 't:' || bookmark_id || '/' || tag_id FROM bookmark_tags WHERE workspace_id = ${workspaceId} ORDER BY 1`;
+      });
+      return rows.map((row) => row.link).join("\n");
+    };
+    const before = { a: await linksIn(PROBE_WORKSPACE_A), b: await linksIn(PROBE_WORKSPACE_B) };
+    const context = { accountId: MEMBER_OF_A, workspaceId: PROBE_WORKSPACE_A, requestId: "matrix-bulk-linking" };
+
+    const results = await database().tenant.withTenant(context, async (tx) => {
+      const repository = bookmarkRepository(tx);
+      const owner = MEMBER_OF_A;
+      return {
+        fileBookmarkOfB: await repository.fileIn({ bookmarkIds: [BOOKMARK_OF_B], ownerId: owner, folderId: FOLDER_OF_A, mode: "add" }),
+        moveBookmarkOfB: await repository.fileIn({ bookmarkIds: [BOOKMARK_OF_B], ownerId: owner, folderId: FOLDER_OF_A, mode: "move" }),
+        removeBookmarkOfB: await repository.fileIn({ bookmarkIds: [BOOKMARK_OF_B], ownerId: owner, folderId: FOLDER_OF_A, mode: "remove" }),
+        fileIntoFolderOfB: await repository.fileIn({ bookmarkIds: [BOOKMARK_OF_A], ownerId: owner, folderId: FOLDER_OF_B, mode: "add" }),
+        tagBookmarkOfB: await repository.tag({ bookmarkIds: [BOOKMARK_OF_B], ownerId: owner, tagIds: [TAG_OF_A], mode: "add" }),
+        untagBookmarkOfB: await repository.tag({ bookmarkIds: [BOOKMARK_OF_B], ownerId: owner, tagIds: [TAG_OF_A], mode: "remove" }),
+        tagWithTagOfB: await repository.tag({ bookmarkIds: [BOOKMARK_OF_A], ownerId: owner, tagIds: [TAG_OF_B], mode: "add" }),
+        previewBookmarkOfB: await repository.previewTags({ bookmarkIds: [BOOKMARK_OF_B], ownerId: owner, tagIds: [TAG_OF_A] }),
+        previewTagOfB: await repository.previewTags({ bookmarkIds: [BOOKMARK_OF_A], ownerId: owner, tagIds: [TAG_OF_B] }),
+      };
+    });
+
+    expect(results).toEqual({
+      fileBookmarkOfB: { kind: "done", affected: 0 },
+      moveBookmarkOfB: { kind: "done", affected: 0 },
+      removeBookmarkOfB: { kind: "done", affected: 0 },
+      fileIntoFolderOfB: { kind: "target_not_found" },
+      tagBookmarkOfB: { kind: "done", affected: 0 },
+      untagBookmarkOfB: { kind: "done", affected: 0 },
+      tagWithTagOfB: { kind: "target_not_found" },
+      previewBookmarkOfB: { kind: "previewed", affected: 0, tags: [{ id: TAG_OF_A, name: "bulk-matrix-a", bookmarkCount: 0, added: 0 }] },
+      previewTagOfB: { kind: "target_not_found" },
+    });
+    expect({ a: await linksIn(PROBE_WORKSPACE_A), b: await linksIn(PROBE_WORKSPACE_B) }).toEqual(before);
   });
 });

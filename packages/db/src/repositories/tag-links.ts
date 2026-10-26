@@ -156,6 +156,56 @@ export async function insertTagLinks(tx: TenantTx, bookmarkId: string, tagIds: r
   return inserted.length;
 }
 
+/** Links every bookmark of `bookmarkIds` to every tag of `tagIds`, leaving the links that exist. The tags are locked and owned already, and so are the bookmarks. */
+export async function insertTagLinksMany(tx: TenantTx, bookmarkIds: readonly string[], tagIds: readonly string[]): Promise<number> {
+  const workspaceId = requireWorkspace(tx, "tagging bookmarks");
+  const bookmarkList = distinctIdentifiers(bookmarkIds);
+  const tagList = distinctIdentifiers(tagIds);
+  requireIdentifiers(bookmarkList, "tagging bookmarks");
+  requireIdentifiers(tagList, "tagging bookmarks");
+  if (bookmarkList.length === 0 || tagList.length === 0) {
+    return 0;
+  }
+  // The statement names the columns the application role may insert (a column grant).
+  const inserted = await tenantHandle(tx).execute<{ tag_id: string }>(sql`
+    INSERT INTO ${bookmarkTags} (workspace_id, bookmark_id, tag_id)
+    SELECT ${workspaceId}::uuid, b.id, t.id FROM unnest(${uuidArray(bookmarkList)}::uuid[]) AS b(id) CROSS JOIN unnest(${uuidArray(tagList)}::uuid[]) AS t(id)
+    ON CONFLICT (bookmark_id, tag_id) DO NOTHING
+    RETURNING tag_id`);
+  return inserted.length;
+}
+
+/** Removes the links of every bookmark of `bookmarkIds` to every tag of `tagIds` and answers how many there were. */
+export async function deleteTagLinksMany(tx: TenantTx, bookmarkIds: readonly string[], tagIds: readonly string[]): Promise<number> {
+  requireWorkspace(tx, "untagging bookmarks");
+  const bookmarkList = distinctIdentifiers(bookmarkIds);
+  const tagList = distinctIdentifiers(tagIds);
+  requireIdentifiers(bookmarkList, "untagging bookmarks");
+  requireIdentifiers(tagList, "untagging bookmarks");
+  if (bookmarkList.length === 0 || tagList.length === 0) {
+    return 0;
+  }
+  const deleted = await scoped
+    .bind(tx)
+    .delete(and(sql`${bookmarkTags.bookmarkId} = ANY (${uuidArray(bookmarkList)}::uuid[])`, sql`${bookmarkTags.tagId} = ANY (${uuidArray(tagList)}::uuid[])`));
+  return deleted.length;
+}
+
+/** The tags of `tagIds` that `ownerId` owns in the workspace of the transaction, read without a lock; fewer than the distinct identifiers when one is not the owner's. */
+export async function ownedTags(tx: TenantTx, ownerId: string, tagIds: readonly string[]): Promise<BookmarkTagRef[]> {
+  const workspaceId = requireWorkspace(tx, "tagging bookmarks");
+  const wanted = distinctIdentifiers(tagIds);
+  requireIdentifiers(wanted, "tagging bookmarks");
+  if (wanted.length === 0) {
+    return [];
+  }
+  return tenantHandle(tx)
+    .select({ id: tags.id, name: tags.name })
+    .from(tags)
+    .where(and(eq(tags.workspaceId, workspaceId), eq(tags.ownerId, ownerId), sql`${tags.id} = ANY (${uuidArray(wanted)}::uuid[])`))
+    .orderBy(asc(tags.name), asc(tags.id));
+}
+
 const MERGE_LOCK_ROUNDS = 5;
 const MERGE_LOCK_SAVEPOINT = sql.raw("tag_merge_locks");
 

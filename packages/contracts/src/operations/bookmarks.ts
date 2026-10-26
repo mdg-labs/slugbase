@@ -13,8 +13,10 @@ import { TAG_NAME_MAX_LENGTH } from "./tags.ts";
 // tags in the same way, by `tagIds` and by `tagNames` (a name the caller has no tag of creates one), and the list can be narrowed to the
 // bookmarks that carry every one of several tags (AND, doc 04 section 6.1); a tag that is another member's, another workspace's or unknown is
 // answered 404 and tags nothing (doc 02 sections 7.2 and 8.2, Q22). Every bookmark body carries the caller's own tags and nobody else's. The slug
-// of a bookmark is another operation. A bulk request deletes, pins or unpins many of the caller's own bookmarks at once, named by identifier or by the
-// list's filters, in one transaction; the select-all operation returns the identifiers a filter matches so a client can name them.
+// of a bookmark is another operation. A bulk request deletes, pins, unpins, files in a folder (adds to it, moves to it, takes out of it) or tags (adds tags, removes tags) many of the caller's own
+// bookmarks at once, named by identifier or by the list's filters, in one transaction; the folder or the tags it acts with are the caller's own, and one that is
+// not is answered 404 with nothing changed (doc 02 section 5.8). The preview of adding tags answers the tag set the bookmarks would carry, without writing. The
+// select-all operation returns the identifiers a filter matches so a client can name them.
 
 /** The longest bookmark URL, in characters (doc 02 section 5.1). */
 export const BOOKMARK_URL_MAX_LENGTH = 2048;
@@ -209,7 +211,20 @@ export const BOOKMARK_BULK_IDS_MAX = 1000;
  */
 export const BOOKMARK_SELECT_ALL_CAP = 5000;
 
-export const BULK_BOOKMARK_ACTIONS = ["delete", "pin", "unpin"] as const;
+export const BULK_FOLDER_ACTIONS = ["add_to_folder", "move_to_folder", "remove_from_folder"] as const;
+
+export const BULK_TAG_ACTIONS = ["add_tags", "remove_tags"] as const;
+
+export const BULK_BOOKMARK_ACTIONS = ["delete", "pin", "unpin", ...BULK_FOLDER_ACTIONS, ...BULK_TAG_ACTIONS] as const;
+
+/** The most tags a bulk request adds or removes at once. */
+export const BOOKMARK_BULK_TAGS_MAX = 100;
+
+const BookmarkTagFilterSchema = z
+  .union([z.uuid(), z.array(z.uuid()).max(BOOKMARK_TAG_FILTER_MAX)])
+  .describe(
+    "Matches the bookmarks that carry every one of the given tags of the caller's (AND; OR is not offered), at most 10. A tag that is another member's, another workspace's or unknown matches nothing. Left out, tags are not filtered on",
+  );
 
 export const BookmarkFilterSchema = z
   .strictObject({
@@ -223,44 +238,116 @@ export const BookmarkFilterSchema = z
       .max(BOOKMARK_URL_MAX_LENGTH)
       .optional()
       .describe("Matches the caller's bookmarks whose canonical URL equals the canonical form of this value; one that cannot be a bookmark's URL is refused with 422"),
+    folderId: z
+      .uuid()
+      .optional()
+      .describe("Matches the bookmarks filed in this folder of the caller's. A folder that is another member's, another workspace's or unknown matches nothing. Left out, folders are not filtered on"),
+    tag: BookmarkTagFilterSchema.optional(),
   })
   .meta({ id: "BookmarkFilter" });
 
+const BulkIdsSchema = z
+  .array(z.uuid())
+  .min(1)
+  .max(BOOKMARK_BULK_IDS_MAX)
+  .describe("The bookmarks to act on, 1 to 1 000 identifiers; one named twice counts once. Give this or filter, and not both");
+
+const BulkTagIdsSchema = z.array(z.uuid()).min(1).max(BOOKMARK_BULK_TAGS_MAX);
+
+const isOneOf = (actions: readonly string[], action: string): boolean => actions.includes(action);
+
 export const BulkBookmarksRequestSchema = z
   .strictObject({
-    action: z.enum(BULK_BOOKMARK_ACTIONS).describe("delete removes the bookmarks for good, pin pins them and unpin unpins them"),
-    ids: z
-      .array(z.uuid())
-      .min(1)
-      .max(BOOKMARK_BULK_IDS_MAX)
-      .optional()
-      .describe("The bookmarks to act on, 1 to 1 000 identifiers; one named twice counts once. Give this or filter, and not both"),
+    action: z
+      .enum(BULK_BOOKMARK_ACTIONS)
+      .describe(
+        "delete removes the bookmarks for good, pin pins them and unpin unpins them. add_to_folder files them in the folder folderId as well as in the folders they are in, move_to_folder files them in that folder alone, and remove_from_folder takes them out of that folder. add_tags puts the tags tagIds on them and remove_tags takes those tags off",
+      ),
+    ids: BulkIdsSchema.optional(),
     filter: BookmarkFilterSchema.optional().describe(
       "Acts on the caller's bookmarks that match this filter, which is the list's filters; a filter that matches more than 5 000 bookmarks is refused with 422. Give this or ids, and not both",
     ),
+    folderId: z
+      .uuid()
+      .optional()
+      .describe("The caller's folder the three folder actions act with; required for them and refused for every other action. A folder that is another member's, another workspace's or unknown is refused with 404 and nothing is changed"),
+    tagIds: BulkTagIdsSchema.optional().describe(
+      "The caller's tags add_tags and remove_tags act with, 1 to 100 identifiers; required for them and refused for every other action. A tag that is another member's, another workspace's or unknown is refused with 404 and nothing is changed",
+    ),
   })
-  .refine((request) => (request.ids === undefined) !== (request.filter === undefined), { message: "name either ids or filter" })
+  .superRefine((request, context) => {
+    if ((request.ids === undefined) === (request.filter === undefined)) {
+      context.addIssue({ code: "custom", message: "name either ids or filter" });
+    }
+    const wantsFolder = isOneOf(BULK_FOLDER_ACTIONS, request.action);
+    const wantsTags = isOneOf(BULK_TAG_ACTIONS, request.action);
+    if (wantsFolder !== (request.folderId !== undefined)) {
+      context.addIssue({ code: "custom", message: wantsFolder ? "name the folder" : "this action takes no folder", path: ["folderId"] });
+    }
+    if (wantsTags !== (request.tagIds !== undefined)) {
+      context.addIssue({ code: "custom", message: wantsTags ? "name the tags" : "this action takes no tags", path: ["tagIds"] });
+    }
+  })
   .meta({ id: "BulkBookmarksRequest" });
+
+const BulkSkippedReasonsSchema = z
+  .strictObject({
+    not_owner: z.number().int().min(0).describe("Bookmarks the caller can read and does not own; none exist until sharing arrives"),
+    not_found: z
+      .number()
+      .int()
+      .min(0)
+      .describe("Bookmarks the caller owns none of in this workspace: another member's, another workspace's, one that is gone, and, for every action but delete, a plan-archived one. They are not told apart"),
+  })
+  .describe("The skipped bookmarks by reason, as counts only");
 
 export const BulkBookmarksResultSchema = z
   .strictObject({
     requested: z.number().int().min(0).describe("How many bookmarks the request named (the distinct identifiers) or the filter matched"),
-    affected: z.number().int().min(0).describe("How many of them are now deleted, or are pinned or unpinned as asked (a bookmark that already was is counted)"),
+    affected: z
+      .number()
+      .int()
+      .min(0)
+      .describe("How many of them are now deleted, or are in the state the action asks for: pinned or unpinned, filed in or out of the folder, tagged or untagged (a bookmark that already was is counted)"),
     skipped: z.number().int().min(0).describe("How many were left alone: requested minus affected"),
-    skippedReasons: z
-      .strictObject({
-        not_owner: z.number().int().min(0).describe("Bookmarks the caller can read and does not own; none exist until sharing arrives"),
-        not_found: z
-          .number()
-          .int()
-          .min(0)
-          .describe("Bookmarks the caller owns none of in this workspace: another member's, another workspace's, one that is gone, and, for pin and unpin, a plan-archived one. They are not told apart"),
-      })
-      .describe("The skipped bookmarks by reason, as counts only"),
+    skippedReasons: BulkSkippedReasonsSchema,
   })
   .meta({ id: "BulkBookmarksResult" });
 
-export const BookmarkIdsQuerySchema = ListBookmarksQuerySchema.omit({ sort: true, limit: true, cursor: true, folderId: true, tag: true });
+export const BulkBookmarksPreviewRequestSchema = z
+  .strictObject({
+    action: z.literal("add_tags").describe("The action to preview; only add_tags has a preview"),
+    ids: BulkIdsSchema.optional(),
+    filter: BookmarkFilterSchema.optional().describe(
+      "Previews on the caller's bookmarks that match this filter, which is the list's filters; a filter that matches more than 5 000 bookmarks is refused with 422. Give this or ids, and not both",
+    ),
+    tagIds: BulkTagIdsSchema.describe("The caller's tags add_tags would put on the bookmarks, 1 to 100 identifiers. A tag that is another member's, another workspace's or unknown is refused with 404"),
+  })
+  .refine((request) => (request.ids === undefined) !== (request.filter === undefined), { message: "name either ids or filter" })
+  .meta({ id: "BulkBookmarksPreviewRequest" });
+
+export const BulkPreviewTagSchema = z
+  .strictObject({
+    id: z.uuid().describe("The tag's identifier"),
+    name: z.string().describe("The tag's name, in the case it was entered in"),
+    bookmarkCount: z.number().int().min(0).describe("How many of the bookmarks the action would reach carry the tag afterwards"),
+    added: z.number().int().min(0).describe("How many of them get the tag from the action: those that do not carry it yet"),
+  })
+  .meta({ id: "BulkPreviewTag" });
+
+export const BulkBookmarksPreviewSchema = z
+  .strictObject({
+    requested: z.number().int().min(0).describe("How many bookmarks the request named (the distinct identifiers) or the filter matched"),
+    affected: z.number().int().min(0).describe("How many of them the action would reach: the caller's own bookmarks that are not plan-archived"),
+    skipped: z.number().int().min(0).describe("How many it would leave alone: requested minus affected"),
+    skippedReasons: BulkSkippedReasonsSchema,
+    tags: z
+      .array(BulkPreviewTagSchema)
+      .describe("The tags the bookmarks the action would reach carry afterwards, in the order of their names: the tags they carry now and the tags the action adds"),
+  })
+  .meta({ id: "BulkBookmarksPreview" });
+
+export const BookmarkIdsQuerySchema = ListBookmarksQuerySchema.omit({ sort: true, limit: true, cursor: true });
 
 export const BookmarkIdsSchema = z
   .strictObject({
@@ -473,7 +560,7 @@ export const listBookmarkIds = defineOperation({
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),
-    422: problemResponse("The query did not pass validation (an unknown parameter, a boolean other than true or false), or the url is not a URL a bookmark can have"),
+    422: problemResponse("The query did not pass validation (an unknown parameter, a boolean other than true or false, a malformed folderId or tag, more than 10 tags), or the url is not a URL a bookmark can have"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },
@@ -484,22 +571,53 @@ export const bulkBookmarks = defineOperation({
   path: "/api/v1/bookmarks/bulk",
   operationId: "bulkBookmarks",
   tag: "bookmarks",
-  summary: "Delete, pin or unpin many bookmarks",
+  summary: "Delete, pin, unpin, file or tag many bookmarks",
   auth: "member",
   rate: "bulk",
   scope: "write",
   request: { body: BulkBookmarksRequestSchema },
   responses: {
     200: jsonResponse(
-      "What the request did, as counts only. The whole request is one transaction: every bookmark it affects changes or none does. Only the caller's own bookmarks change; the others are skipped as not_found without saying whether they exist. A delete gives the workspace's bookmark count back once for the request, by the bookmarks that were not plan-archived, and records one bookmark.bulk_deleted audit event with the number deleted, never a title or a URL",
+      "What the request did, as counts only. The whole request is one transaction: every bookmark it affects changes or none does. Only the caller's own bookmarks change; the others are skipped as not_found without saying whether they exist. A delete gives the workspace's bookmark count back once for the request, by the bookmarks that were not plan-archived, and records one bookmark.bulk_deleted audit event with the number deleted, never a title or a URL. Filing and tagging write links only: they move no bookmark's version, record no audit event, and leave a plan-archived bookmark alone",
       BulkBookmarksResultSchema,
     ),
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse("The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"),
-    404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),
+    404: problemResponse(
+      "The request acts in no workspace: the account has none, or the workspace is being deleted; or the folder of a folder action or a tag of a tag action is not one the caller has in it (another member's, another workspace's or unknown), and nothing is changed",
+    ),
     422: problemResponse(
-      "The body did not pass validation (an unknown action, neither or both of ids and filter, no identifier or more than 1 000, a malformed identifier, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks. Nothing is written",
+      "The body did not pass validation (an unknown action, neither or both of ids and filter, no identifier or more than 1 000, a malformed identifier, a folder action without folderId or a tag action without tagIds, a folderId or tagIds on an action that takes none, more than 100 tags, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks. Nothing is written",
+    ),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const previewBulkBookmarks = defineOperation({
+  method: "post",
+  path: "/api/v1/bookmarks/bulk/preview",
+  operationId: "previewBulkBookmarks",
+  tag: "bookmarks",
+  summary: "Preview adding tags to many bookmarks",
+  auth: "member",
+  rate: "read",
+  scope: "write",
+  request: { body: BulkBookmarksPreviewRequestSchema },
+  responses: {
+    200: jsonResponse(
+      "What add_tags with the same body would do, without writing anything: the counts as the bulk request reports them, and the tag set the bookmarks it reaches would carry afterwards. Only the caller's own bookmarks are counted; the others are skipped as not_found without saying whether they exist",
+      BulkBookmarksPreviewSchema,
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    403: problemResponse("The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the preview is a POST, so it takes the write scope though it writes nothing"),
+    404: problemResponse(
+      "The request acts in no workspace: the account has none, or the workspace is being deleted; or a tag of tagIds is not one the caller has in it (another member's, another workspace's or unknown)",
+    ),
+    422: problemResponse(
+      "The body did not pass validation (an action other than add_tags, neither or both of ids and filter, no identifier or more than 1 000, no tag or more than 100, a malformed identifier, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks",
     ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),

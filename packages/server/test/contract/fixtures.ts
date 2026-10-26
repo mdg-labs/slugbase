@@ -250,6 +250,14 @@ export const FIXTURES: ContractFixtures = {
   // request and the request naming a bookmark of workspace B are therefore the same 200. The matrix picks `ids[]` and, by its name, `filter.hasSlug`; the
   // test that runs it sends the identifiers in `ids` only, since a request with both is refused as malformed.
   bulkBookmarks: { body: { action: "pin", ids: [UNKNOWN_BOOKMARK_ID] }, status: 200, foreign: { body: { action: "pin", ids: [UNKNOWN_BOOKMARK_ID] } } },
+  // The folder and tag actions of the bulk request name a folder or tags of the caller's own, and the preview of adding tags names tags: a tag no workspace holds,
+  // and one of workspace B, are the declared 404 alike, whichever bookmarks are named. The matrix puts the bookmark, the folder and the tag of B in `ids`, `folderId`
+  // and `tagIds`; the test that runs it sends those in requests of their own, since a request with `ids` and `filter` is refused as malformed.
+  previewBulkBookmarks: {
+    body: { action: "add_tags", ids: [UNKNOWN_BOOKMARK_ID], tagIds: [UNKNOWN_TAG_ID] },
+    status: 404,
+    foreign: { body: { action: "add_tags", ids: [UNKNOWN_BOOKMARK_ID], tagIds: [UNKNOWN_TAG_ID] } },
+  },
   getBookmark: { path: { id: UNKNOWN_BOOKMARK_ID }, status: 404, foreign: { path: { id: UNKNOWN_BOOKMARK_ID } } },
   // The change and the deletion name a bookmark by identifier too, so their valid request is the declared 404 for the same reason: a bookmark no
   // workspace holds, and the matrix puts the bookmarks of workspace B in the path. The change takes a body, which is valid whoever would hold the bookmark.

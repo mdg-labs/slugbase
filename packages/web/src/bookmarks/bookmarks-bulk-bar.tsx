@@ -17,13 +17,8 @@ interface SelectAllRequest {
 export interface BookmarksBulkBarProps {
   readonly selection: BookmarkSelection;
   readonly bulk: BulkBookmarks;
-  /** The filters of the list on screen, which "select all matching" names. */
+  /** The filters of the list on screen, the folder and the tags included, which "select all matching" names. */
   readonly filters: BookmarkFilterParams;
-  /**
-   * Whether the filters on screen are all ones "select all matching" can name. A folder or tag filter is not: the
-   * identifiers endpoint takes neither, so the offer is withheld rather than selecting bookmarks the list does not show.
-   */
-  readonly matchingSelectable: boolean;
   /** How many bookmarks match the filters; null when more than the API counts. */
   readonly total: number | null;
 }
@@ -34,7 +29,7 @@ export interface BookmarksBulkBarProps {
  * select-all cap, and says so when more match. Delete first states how many bookmarks it removes and what happens to
  * their slugs.
  */
-export function BookmarksBulkBar({ selection, bulk, filters, matchingSelectable, total }: BookmarksBulkBarProps): ReactElement {
+export function BookmarksBulkBar({ selection, bulk, filters, total }: BookmarksBulkBarProps): ReactElement {
   const { t } = useTranslation();
   const format = useFormat();
   const router = useRouter();
@@ -75,7 +70,7 @@ export function BookmarksBulkBar({ selection, bulk, filters, matchingSelectable,
   } else {
     selectAllLabel = t("bookmarks.bulk.selectAll.all", { total: format.number(total) });
   }
-  const offerSelectAll = matchingSelectable && !capped && (total === null || total > size);
+  const offerSelectAll = !capped && (total === null || total > size);
 
   const actions: readonly BulkBarAction[] = [
     { id: "pin", label: t("bookmarks.bulk.pin"), icon: <PinIcon aria-hidden="true" />, loading: bulk.running === "pin", onSelect: () => { bulk.run("pin", ids); } },

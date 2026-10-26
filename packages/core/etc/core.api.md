@@ -944,10 +944,16 @@ export interface BillingWithdrawal {
 export function bindOidcState(key: Uint8Array, state: string): string;
 
 // @public (undocumented)
-export const BOOKMARK_BULK_ACTIONS: readonly ["delete", "pin", "unpin"];
+export const BOOKMARK_BULK_ACTIONS: readonly ["delete", "pin", "unpin", "add_to_folder", "move_to_folder", "remove_from_folder", "add_tags", "remove_tags"];
+
+// @public (undocumented)
+export const BOOKMARK_BULK_FOLDER_ACTIONS: readonly ["add_to_folder", "move_to_folder", "remove_from_folder"];
 
 // @public
 export const BOOKMARK_BULK_IDS_MAX = 1000;
+
+// @public (undocumented)
+export const BOOKMARK_BULK_TAG_ACTIONS: readonly ["add_tags", "remove_tags"];
 
 // @public
 export const BOOKMARK_DESCRIPTION_MAX_LENGTH = 1000;
@@ -999,8 +1005,10 @@ export interface BookmarkBulkAsk {
     readonly action: BookmarkBulkAction;
     // (undocumented)
     readonly actor: AuditActor;
+    readonly folderId?: string | undefined;
     // (undocumented)
     readonly ipPrefix: string | null;
+    readonly tagIds?: readonly string[] | undefined;
     // (undocumented)
     readonly target: BookmarkBulkTarget;
     readonly workspaceId: string;
@@ -1036,17 +1044,78 @@ export type BookmarkBulkOutcome = {
 /** The workspace of the transaction cannot be reached (it is being deleted); nothing was written. */
 | {
     readonly kind: "unavailable";
+}
+/** The folder of a folder action or a tag of a tag action is not one the caller has (another member's, another workspace's or unknown); nothing was written. */
+| {
+    readonly kind: "target_not_found";
+};
+
+// @public (undocumented)
+export interface BookmarkBulkPreviewAsk {
+    readonly accountId: string;
+    readonly tagIds: readonly string[];
+    // (undocumented)
+    readonly target: BookmarkBulkTarget;
+}
+
+// @public (undocumented)
+export interface BookmarkBulkPreviewDependencies {
+    // (undocumented)
+    readonly store: Pick<BookmarkBulkStore, "ids" | "previewTags">;
+}
+
+// @public (undocumented)
+export type BookmarkBulkPreviewOutcome = {
+    readonly kind: "previewed";
+    readonly requested: number;
+    readonly affected: number;
+    readonly skipped: {
+        readonly not_owner: number;
+        readonly not_found: number;
+    };
+    readonly tags: readonly BookmarkPreviewTag[];
+}
+/** The request names more identifiers than `BOOKMARK_BULK_IDS_MAX` or its filter matches more than `BOOKMARK_SELECT_ALL_CAP`. */
+| {
+    readonly kind: "too_many";
+    readonly limit: number;
+}
+/** The `url` filter is not a URL a bookmark can have. */
+| {
+    readonly kind: "url_refused";
+    readonly reason: BookmarkUrlRefusal;
+}
+/** A tag is not one the caller has (another member's, another workspace's or unknown). */
+| {
+    readonly kind: "target_not_found";
 };
 
 // @public (undocumented)
 export interface BookmarkBulkStore {
+    fileIn(request: {
+        readonly bookmarkIds: readonly string[];
+        readonly ownerId: string;
+        readonly folderId: string;
+        readonly mode: BookmarkFilingMode;
+    }): Promise<BookmarkLinkingResult>;
     ids(filter: BookmarkListFilter, limit: number): Promise<readonly string[]>;
+    previewTags(request: {
+        readonly bookmarkIds: readonly string[];
+        readonly ownerId: string;
+        readonly tagIds: readonly string[];
+    }): Promise<BookmarkTagPreviewResult>;
     removeMany(bookmarkIds: readonly string[]): Promise<number | undefined>;
     setPinned(request: {
         readonly bookmarkIds: readonly string[];
         readonly ownerId: string;
         readonly pinned: boolean;
     }): Promise<number>;
+    tag(request: {
+        readonly bookmarkIds: readonly string[];
+        readonly ownerId: string;
+        readonly tagIds: readonly string[];
+        readonly mode: BookmarkTaggingMode;
+    }): Promise<BookmarkLinkingResult>;
 }
 
 // @public (undocumented)
@@ -1060,6 +1129,8 @@ export type BookmarkBulkTarget = {
     readonly hasSlug: boolean | undefined;
     readonly forwarding: boolean | undefined;
     readonly url: string | undefined;
+    readonly folderId?: string | undefined;
+    readonly tagIds?: readonly string[] | undefined;
 };
 
 // @public
@@ -1168,6 +1239,9 @@ export interface BookmarkEntitlements {
 }
 
 // @public
+export type BookmarkFilingMode = "add" | "move" | "remove";
+
+// @public
 export interface BookmarkFilterAsk {
     readonly accountId: string;
     readonly folderId?: string | undefined;
@@ -1214,6 +1288,14 @@ export type BookmarkIdsOutcome = {
 | {
     readonly kind: "url_refused";
     readonly reason: BookmarkUrlRefusal;
+};
+
+// @public
+export type BookmarkLinkingResult = {
+    readonly kind: "done";
+    readonly affected: number;
+} | {
+    readonly kind: "target_not_found";
 };
 
 // @public (undocumented)
@@ -1363,6 +1445,18 @@ export interface BookmarkPosition {
     readonly key: string | null;
 }
 
+// @public
+export interface BookmarkPreviewTag {
+    // (undocumented)
+    readonly added: number;
+    // (undocumented)
+    readonly bookmarkCount: number;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+}
+
 // @public (undocumented)
 export interface BookmarkReadAsk {
     readonly accountId: string;
@@ -1448,11 +1542,23 @@ export type BookmarkStoreResult = {
     readonly kind: "tag_not_found";
 };
 
+// @public (undocumented)
+export type BookmarkTaggingMode = "add" | "remove";
+
 // @public
 export interface BookmarkTagName {
     readonly name: string;
     readonly newId: string;
 }
+
+// @public (undocumented)
+export type BookmarkTagPreviewResult = {
+    readonly kind: "previewed";
+    readonly affected: number;
+    readonly tags: readonly BookmarkPreviewTag[];
+} | {
+    readonly kind: "target_not_found";
+};
 
 // @public
 export interface BookmarkTagRef {
@@ -3949,6 +4055,9 @@ export type PortUnavailableCode = Extract<ProblemCode, "unavailable" | "mail_una
 
 // @public
 export function prepareAuditRecord<Name extends AuditAction>(event: AuditEventInput<Name>, newId: () => string): AuditRecord;
+
+// @public
+export function previewBulkTags(input: BookmarkBulkPreviewDependencies, ask: BookmarkBulkPreviewAsk): Promise<BookmarkBulkPreviewOutcome>;
 
 // @public
 export function provisionPersonalWorkspace(input: PersonalWorkspaceDependencies, accountId: string, ownedMax: EntitlementLimit): Promise<PersonalWorkspaceOutcome>;

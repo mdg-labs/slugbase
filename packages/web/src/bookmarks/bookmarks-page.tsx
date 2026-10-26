@@ -14,7 +14,7 @@ import { useBulkBookmarks, usePendingPins, useDeleteBookmark, usePinBookmark } f
 import { useBookmarkSelection, useSelectionShortcuts } from "./bookmark-selection.ts";
 import { bookmarkFailureOf, bookmarkListQuery, type Bookmark } from "./bookmarks.ts";
 import { BookmarksToolbar } from "./bookmarks-toolbar.tsx";
-import { BOOKMARK_PAGE_SIZES, DEFAULT_SORT, filterParamsOf, hasActiveFilters, listFilterParamsOf, listParamsOf, pageSizeOfSearch, useBookmarkListControls, useBookmarkListSearch, withoutFolder, type BookmarkView } from "./list-search.ts";
+import { BOOKMARK_PAGE_SIZES, DEFAULT_SORT, filterParamsOf, hasActiveFilters, listParamsOf, pageSizeOfSearch, useBookmarkListControls, useBookmarkListSearch, withoutFolder, type BookmarkView } from "./list-search.ts";
 import { useBookmarkModal } from "./modal-search.ts";
 import { useListShortcuts } from "./use-list-shortcuts.ts";
 import { usePasteToCreate } from "./use-paste-to-create.ts";
@@ -99,7 +99,7 @@ export function BookmarksPage(): ReactElement {
   const [deleting, setDeleting] = useState<Bookmark | undefined>(undefined);
   const filters = filterParamsOf(search);
   // The selection belongs to the filters it was made under, the folder and the tags included; the sort, the view and the size do not change which bookmarks match.
-  const selection = useBookmarkSelection(JSON.stringify(listFilterParamsOf(search)));
+  const selection = useBookmarkSelection(JSON.stringify(filters));
   const bulk = useBulkBookmarks(selection);
   const remove = useDeleteBookmark(() => {
     if (deleting !== undefined) {
@@ -296,7 +296,7 @@ export function BookmarksPage(): ReactElement {
       ) : null}
       <BookmarksToolbar controls={controls} folders={folders} search={search} tags={tags} />
       {body}
-      <BookmarksBulkBar bulk={bulk} filters={filters} matchingSelectable={search.folderId === undefined && search.tag === undefined} selection={selection} total={lastPage?.total ?? null} />
+      <BookmarksBulkBar bulk={bulk} filters={filters} selection={selection} total={lastPage?.total ?? null} />
       <p aria-live="polite" className="sr-only" role="status">
         {bulk.announcement}
       </p>

@@ -1,5 +1,5 @@
 import { LimitedEntitlementSource } from "@slugbase/testing";
-import { classifyOperations, createProbe, loadOpenApiDocument, PROBE_INSTANCE_ADMIN, runApiMatrix, runTokenMatrix, type MatrixFailure, type Probe } from "@slugbase/testing/tenancy";
+import { classifyOperations, createProbe, loadOpenApiDocument, PROBE_INSTANCE_ADMIN, runApiMatrix, runTokenMatrix, type ApiCall, type ApiResponse, type MatrixFailure, type Probe } from "@slugbase/testing/tenancy";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { beforeAll, describe, expect, it } from "vitest";
 import { createAccountOnlyTenantResolver } from "../../src/auth/tenant-resolver.ts";
@@ -14,17 +14,62 @@ import { recordingLogger, serverConfig } from "../support.ts";
 import { buildDocument, type TestDocument } from "./build-document.ts";
 import { readOperations, type ContractFailure } from "./document.ts";
 import { seedAccount, seedApiToken, seedMembership, seedWorkspace } from "../auth/support.ts";
-import { B_INVITATION_ID, FIXTURES, UNKNOWN_TEAM_ID, WALKER_ACCOUNT, WALKER_WORKSPACE_ID } from "./fixtures.ts";
+import { B_INVITATION_ID, FIXTURES, UNKNOWN_TAG_ID, UNKNOWN_TEAM_ID, WALKER_ACCOUNT, WALKER_WORKSPACE_ID } from "./fixtures.ts";
 import { matrixRequest, tokenMatrixRequest } from "./matrix.ts";
 import { getProbeAdminRow, getProbeRow, probeFixtures, probeModule, probeOperations } from "./probe-module.ts";
 import { createStubWorld, type StubWorld } from "./stubs.ts";
 import { appUrl, tenantDatabase } from "./support.ts";
-import type { PolicyHooks } from "./walker.ts";
+import type { ContractFixtures, PolicyHooks } from "./walker.ts";
 import { walkContract } from "./walker.ts";
 
-/** The body of a bulk request without its `filter`, which the request is refused for when it names `ids` as well. */
-function withoutFilter(body: unknown): unknown {
-  return typeof body === "object" && body !== null ? Object.fromEntries(Object.entries(body).filter(([key]) => key !== "filter")) : body;
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** What one call of the matrix to the bulk request or its preview was answered when sent as each of the requests that carry its identifiers of workspace B. */
+interface VariantStatuses {
+  readonly operation: "bulkBookmarks" | "previewBulkBookmarks";
+  readonly statuses: Readonly<Record<string, number>>;
+  /** How many bookmarks the request that names a bookmark of B in `ids` reports affected, when it is answered 200. */
+  readonly affectedById: number | undefined;
+  /** How many bookmarks the request whose filter names the folder and the tags of B reports, when it is answered 200. */
+  readonly requestedByFilter: number | undefined;
+}
+
+type Send = (call: ApiCall) => Promise<ApiResponse>;
+
+function countOf(response: ApiResponse, name: "affected" | "requested"): number | undefined {
+  return response.status === 200 && isRecord(response.body) && typeof response.body[name] === "number" ? response.body[name] : undefined;
+}
+
+/**
+ * Sends one call of the matrix to the bulk request, or to its preview of adding tags, as separate requests, each of which reaches the handler with some of the
+ * identifiers of workspace B: `ids` with a pin, the folder of B with a move to it, the tags of B with an add, the folder and the tags of B in the filter with a pin and
+ * with a move. The answer returned is the one the matrix judges (the folder action, and for the preview the tags), and every answer is recorded in `variants`.
+ */
+async function sendVariants(call: ApiCall, send: Send, sendByFilter: Send, variants: VariantStatuses[]): Promise<ApiResponse> {
+  const fields = isRecord(call.body) ? call.body : {};
+  const given = isRecord(fields.filter) ? fields.filter : {};
+  const filter = { folderId: given.folderId, tag: given.tag };
+  const using = (body: Record<string, unknown>): ApiCall => ({ ...call, body });
+  if (call.operation.operationId === "previewBulkBookmarks") {
+    const byIds = await send(using({ ids: fields.ids, tagIds: fields.tagIds }));
+    const byFilter = await sendByFilter(using({ filter, tagIds: fields.tagIds }));
+    variants.push({ operation: "previewBulkBookmarks", statuses: { byIds: byIds.status, byFilter: byFilter.status }, affectedById: undefined, requestedByFilter: undefined });
+    return byIds;
+  }
+  const skippedById = await send(using({ action: "pin", ids: fields.ids }));
+  const folderOfB = await send(using({ action: "move_to_folder", ids: fields.ids, folderId: fields.folderId }));
+  const tagsOfB = await send(using({ action: "add_tags", ids: fields.ids, tagIds: fields.tagIds }));
+  const filterOfB = await sendByFilter(using({ action: "pin", filter }));
+  const filterAndFolderOfB = await sendByFilter(using({ action: "add_to_folder", filter, folderId: fields.folderId }));
+  variants.push({
+    operation: "bulkBookmarks",
+    statuses: { skippedById: skippedById.status, folderOfB: folderOfB.status, tagsOfB: tagsOfB.status, filterOfB: filterOfB.status, filterAndFolderOfB: filterAndFolderOfB.status },
+    affectedById: countOf(skippedById, "affected"),
+    requestedByFilter: countOf(filterOfB, "requested"),
+  });
+  return folderOfB;
 }
 
 // The contract tests of doc 04 section 1.3 and the cross-tenant matrix of doc 08
@@ -262,12 +307,12 @@ describe("the walker over the committed document", () => {
     expect(report.failures.filter((failure) => !teamRefusal(failure) && !skippedNotRefused(failure))).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each operation. Each of the seventy-six that need a session also answers 401 without one, each of the seventeen that declare
-    // re-authentication answers 401 reauth_required without it, and each of the fifty-two whose policy has a role below it (the twenty-five of a member, the ten
+    // One valid request for each operation. Each of the seventy-seven that need a session also answers 401 without one, each of the seventeen that declare
+    // re-authentication answers 401 reauth_required without it, and each of the fifty-three whose policy has a role below it (the twenty-six of a member, the ten
     // of an admin, the two of an owner and the fifteen of the instance admin) answers the principal just below it (404 below member, 403 below the others).
-    // Each of the fourteen that declare the write scope answers 403 token_scope to a token that may only read, each of the four that declare an entitlement answers
-    // 403 to an account without it, and each of the twenty-four that name a member, a recipient, a team, an invitation, a bookmark, a tag or a folder, or an input that can carry one, answers for one of workspace B.
-    expect(report.calls).toBe(operations.length + 76 + 17 + 52 + 14 + 4 + 24);
+    // Each of the fifteen that declare the write scope answers 403 token_scope to a token that may only read, each of the four that declare an entitlement answers
+    // 403 to an account without it, and each of the twenty-five that name a member, a recipient, a team, an invitation, a bookmark, a tag or a folder, or an input that can carry one, answers for one of workspace B.
+    expect(report.calls).toBe(operations.length + 77 + 17 + 53 + 15 + 4 + 25);
   }, WALK_TIMEOUT_MS);
 });
 
@@ -466,7 +511,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     }
   }
 
-  it("passes for the thirty-seven tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations, its bookmarks, its tags, its folders and its audit log as they were", async () => {
+  it("passes for the thirty-eight tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations, its bookmarks, its tags, its folders and its audit log as they were", async () => {
     await seedFixtureWorkspaces();
     const before = await contentOfB();
     // The deletion of the workspace takes no identifier, so the matrix repeats it as every principal of A (the sessions of the matrix have just
@@ -490,15 +535,26 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     };
 
     const send = matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: FIXTURES, credentialsOf: (principal) => world.credentialsOf(principal) });
+    const byFilterFixtures: ContractFixtures = {
+      ...FIXTURES,
+      bulkBookmarks: { body: { action: "pin", filter: {} }, status: 200, foreign: { body: { action: "pin", filter: {} } } },
+      previewBulkBookmarks: { body: { action: "add_tags", filter: {}, tagIds: [UNKNOWN_TAG_ID] }, status: 404, foreign: { body: { action: "add_tags", filter: {}, tagIds: [UNKNOWN_TAG_ID] } } },
+    };
+    const sendByFilter = matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: byFilterFixtures, credentialsOf: (principal) => world.credentialsOf(principal) });
+    const variants: VariantStatuses[] = [];
     const instanceAdminStatuses: number[] = [];
     const matrix = await runApiMatrix({
       document: committed,
       fixture,
-      mapping: { rowId: "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark" },
+      mapping: { rowId: "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "listBookmarkIds.folderId": "folder", "listBookmarkIds.tag": "tag", "listBookmarkIds.tag[]": "tag", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark", "bulkBookmarks.filter.folderId": "folder", "bulkBookmarks.filter.tag": "tag", "bulkBookmarks.filter.tag[]": "tag", "bulkBookmarks.folderId": "folder", "bulkBookmarks.tagIds[]": "tag", "previewBulkBookmarks.ids[]": "bookmark", "previewBulkBookmarks.filter.hasSlug": "bookmark", "previewBulkBookmarks.filter.folderId": "folder", "previewBulkBookmarks.filter.tag": "tag", "previewBulkBookmarks.filter.tag[]": "tag", "previewBulkBookmarks.tagIds[]": "tag" },
       request: async (call) => {
-        // The bulk request takes the identifiers of B in `ids` or in the `hasSlug` of its filter, and a request with both is malformed; it is sent with `ids` only, so that the
-        // handler is reached and what it does with them is looked at. The matrix sends the same identifiers in the filter's boolean as well, which no handler is asked.
-        const response = await send(call.operation.operationId === "bulkBookmarks" ? { ...call, body: withoutFilter(call.body) } : call);
+        // The bulk request and the preview name the identifiers of B in several inputs, and one request cannot carry them all: `ids` and `filter` together are malformed, the
+        // `hasSlug` of the filter is a boolean, and the folder and the tag go with different actions. Each call is therefore sent as the requests below, which reach the
+        // handler with the identifiers of B in turn, and the one that names the folder (the preview: the tags) of B is the answer the matrix judges. The others are held to what the
+        // handler answers for them in the assertions after the run.
+        const operationId = call.operation.operationId;
+        const response =
+          operationId === "bulkBookmarks" || operationId === "previewBulkBookmarks" ? await sendVariants(call, send, sendByFilter, variants) : await send(call);
         if ("instanceAdmin" in call.principal) {
           instanceAdminStatuses.push(response.status);
         }
@@ -515,15 +571,27 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // the matrix puts in it is refused as a malformed query, 422, before any bookmark is looked at, for every principal that reaches the operation.
     // The select-all has the same `hasSlug` filter, and the bulk request skips an identifier of B as not found with a 200 (nothing is written and B's content is as it was).
     const filterRefusal = (failure: MatrixFailure): boolean => (failure.subject.startsWith("listBookmarks ") || failure.subject.startsWith("listBookmarkIds ")) && refusedAs422(failure);
-    const skippedAs200 = (failure: MatrixFailure): boolean => failure.subject.startsWith("bulkBookmarks ") && failure.kind === "unexpected_status" && /answered 200, expected 404/.test(failure.detail);
-    const report = { ...matrix, failures: matrix.failures.filter((failure) => !teamRefusal(failure) && !filterRefusal(failure) && !skippedAs200(failure)) };
+    const report = { ...matrix, failures: matrix.failures.filter((failure) => !teamRefusal(failure) && !filterRefusal(failure)) };
     expect(matrix.failures.filter(teamRefusal).map((failure) => failure.detail.slice(0, "as owner of A".length))).toEqual(["as owner of A", "as admin of A"]);
     // Each of the ten principals, the instance admin among them, naming the two bookmarks of B once in the `hasSlug` of the list and once in that of the select-all.
     expect(matrix.failures.filter(filterRefusal)).toHaveLength(10 * 2 * 2);
     expect(report.failures).toEqual([]);
-    expect(report.classified.byKind["tenant-scoped"]).toBe(37);
-    // The bulk request reaches its handler as the three sessions and the three read-write tokens of A, once for each pair of the two bookmarks of B and of the two inputs the matrix fills (the filter is dropped before it is sent).
-    expect(matrix.failures.filter(skippedAs200)).toHaveLength(6 * 2 * 2);
+    expect(report.classified.byKind["tenant-scoped"]).toBe(38);
+    // The bulk request reaches its handler as the three sessions and the three read-write tokens of A, once for each pair of the two bookmarks of B and of the two inputs the matrix fills in `ids` and
+    // in the filter's `hasSlug`, and the preview of adding tags is called as the same ten principals. Where the bulk handler is reached, a bookmark of B named in `ids` is skipped as not found with a
+    // 200 that reports nothing affected, a filter on the folder and the tags of B matches nothing, and a folder or a tag of B is the declared 404 whichever action names it. Where it is not (a token that
+    // may only read, the instance admin) every request gets the one answer of the stage before the handler.
+    const bulkCalls = variants.filter((variant) => variant.operation === "bulkBookmarks");
+    const previewCalls = variants.filter((variant) => variant.operation === "previewBulkBookmarks");
+    expect([bulkCalls.length, previewCalls.length]).toEqual([10 * 2 * 2, 10 * 2 * 2]);
+    const reaching = bulkCalls.filter((variant) => variant.statuses.skippedById === 200);
+    expect(reaching).toHaveLength(6 * 2 * 2);
+    expect(reaching.map((variant) => [variant.statuses, variant.affectedById, variant.requestedByFilter])).toEqual(
+      reaching.map(() => [{ skippedById: 200, folderOfB: 404, tagsOfB: 404, filterOfB: 200, filterAndFolderOfB: 404 }, 0, 0]),
+    );
+    for (const variant of [...bulkCalls.filter((candidate) => candidate.statuses.skippedById !== 200), ...previewCalls]) {
+      expect(new Set(Object.values(variant.statuses)).size).toBe(1);
+    }
     // the three sessions and the six tokens (a read and a read-write one of each role) of A, once on each of the nine operations that name no member
     // (the entitlements, the invitation list and the creation of a bookmark among them) and on the invitation, which names the one team of B,
     // and on the operations that name members of B once for each of them: the role change, and the leaving, which names a recipient, once for each
@@ -532,10 +600,10 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // The instance admin is a tenth principal making the same thirty calls, and each of them is answered 404 whatever the policy of the operation:
     // it holds no membership, so there is no workspace for a handler to act in or a role to be refused for.
     // The bookmark read, change, deletion and open name each of the two bookmarks of B once each, and so do the bookmark list and the select-all in their `hasSlug` input (the list also names the one tag of B in `tag`, and that query is refused as a whole);
-    // the bulk request names each of the two in `ids` once for each of the two in `filter.hasSlug`.
+    // the bulk request, and its preview of adding tags, name each of the two in `ids` once for each of the two in `filter.hasSlug`.
     // The creation, the list and the statistics of tags and the creation and the list of folders name none, and the rename, the merge and the deletion of a tag and the read, the change and the deletion of a folder name the one tag or folder of B once each (the merge names it in the path and as the target, the one pair, which the handler answers 404 as it does any other since the tag is not the caller's).
     // The filing and the unfiling of bookmarks name the one folder of B in the path and each of the two bookmarks of B in the body, once for each of the two.
-    const calls = 15 + (3 + 3 + 3 + 3 * 3 + 3) + 4 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2;
+    const calls = 15 + (3 + 3 + 3 + 3 * 3 + 3) + 4 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2;
     expect(report.attempts).toBe(10 * calls);
     // The four exceptions are the identifiers of B in the `hasSlug` filter of the bookmark list and of the select-all, which the query validation refuses before the instance admin's missing membership is looked at.
     expect(instanceAdminStatuses.toSorted()).toEqual([...Array<number>(calls - 4).fill(404), 422, 422, 422, 422]);

@@ -11,7 +11,7 @@ import { allowSlowRender, renderApp, stubBrowserApis, stubMatchMedia } from "./s
 // section 3.1) against the handlers generated from openapi.json, through the app's own API client. The failure scenarios
 // are a filter that does not reach the address or the request (or an address that does not reach the controls), a
 // folder or tag list that failed read as "no folders" or "no tags", a folder of the address that the member does not have
-// and that keeps narrowing the list, a "select all matching" that reaches bookmarks the filters hide, and a folder or
+// and that keeps narrowing the list, a "select all matching" that reaches bookmarks the filters hide (or is withheld under a folder or tag filter), and a folder or
 // tag name rendered as markup.
 
 type Bookmark = ComponentTypes["schemas"]["Bookmark"];
@@ -86,6 +86,8 @@ interface World {
   /** Replaces the folder list's whole answer. */
   readonly foldersBody?: unknown;
   readonly tags?: readonly Tag[];
+  /** The identifiers the select-all answers. */
+  readonly ids?: readonly string[];
   readonly statuses?: Scenario["statuses"];
 }
 
@@ -100,6 +102,7 @@ function serve(world: World = {}): void {
           listBookmarks: world.bookmarks ?? bookmarks([bookmark(1)]),
           listFolders: world.foldersBody ?? listOf(world.folders ?? FOLDERS),
           listTags: listOf(world.tags ?? TAGS),
+          listBookmarkIds: { ids: world.ids ?? [], truncated: false },
         },
       },
     }),
@@ -529,8 +532,9 @@ describe("the active filters", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(screen.queryByRole("list", { name: "Active filters" })).toBeNull();
   });
 
-  it("does not offer to select every matching bookmark under a folder or tag filter, which the identifiers endpoint cannot name", async () => {
-    serve({ bookmarks: bookmarks([bookmark(1)], 3) });
+  it("offers to select every matching bookmark under a folder filter, asks for the folder's identifiers and selects exactly those", async () => {
+    const inFolder = [bookmark(1), bookmark(2), bookmark(3)];
+    serve({ bookmarks: bookmarks([bookmark(1)], 3), ids: inFolder.map((item) => item.id) });
     await openApp("/bookmarks");
     await press(within(await card("Bookmark 1")).getByRole("checkbox", { name: "Select Bookmark 1" }));
     expect(await screen.findByRole("button", { name: "Select all 3 matching" })).toBeDefined();
@@ -538,9 +542,26 @@ describe("the active filters", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await press(screen.getByRole("button", { name: "Clear selection" }));
     await press(screen.getByRole("link", { name: "Work" }));
     await press(within(await card("Bookmark 1")).getByRole("checkbox", { name: "Select Bookmark 1" }));
+    await press(await screen.findByRole("button", { name: "Select all 3 matching" }));
 
-    expect(await screen.findByText("1 selected")).toBeDefined();
-    expect(screen.queryByRole("button", { name: /Select all/ })).toBeNull();
+    expect(await screen.findByText("3 selected")).toBeDefined();
+    const asked = calls.filter((call) => call.method === "GET" && call.path === `${LIST}/ids`);
+    expect(asked).toHaveLength(1);
+    expect(asked[0]?.params.get("folderId")).toBe(WORK);
+    expect(asked[0]?.params.getAll("tag")).toEqual([]);
+  });
+
+  it("offers it under a tag filter as well and names every tag of the filter in the request", async () => {
+    serve({ bookmarks: bookmarks([bookmark(1)], 2), ids: [bookmark(1).id, bookmark(2).id] });
+    await openApp(`/bookmarks?tag=${TAG_GO}&tag=${TAG_RUST}`);
+    await press(within(await card("Bookmark 1")).getByRole("checkbox", { name: "Select Bookmark 1" }));
+
+    await press(await screen.findByRole("button", { name: "Select all 2 matching" }));
+
+    expect(await screen.findByText("2 selected")).toBeDefined();
+    const asked = calls.filter((call) => call.method === "GET" && call.path === `${LIST}/ids`);
+    expect(asked[0]?.params.getAll("tag").toSorted()).toEqual([TAG_GO, TAG_RUST].toSorted());
+    expect(asked[0]?.params.get("folderId")).toBeNull();
   });
 });
 

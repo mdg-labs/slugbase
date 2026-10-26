@@ -7,10 +7,14 @@
 import type { AccountDeletionScope } from '@slugbase/core';
 import type { AuditRecord } from '@slugbase/core';
 import { BookmarkArchiveTransaction } from '@slugbase/core';
+import { BookmarkFilingMode } from '@slugbase/core';
+import { BookmarkLinkingResult } from '@slugbase/core';
 import { BookmarkListFilter } from '@slugbase/core';
 import { BookmarkListRequest } from '@slugbase/core';
 import { BookmarkListRow } from '@slugbase/core';
 import { BookmarkRecord } from '@slugbase/core';
+import { BookmarkTaggingMode } from '@slugbase/core';
+import { BookmarkTagPreviewResult } from '@slugbase/core';
 import { BookmarkTagSelection } from '@slugbase/core';
 import { BookmarkUpdateRequest } from '@slugbase/core';
 import { BookmarkUpdateResult } from '@slugbase/core';
@@ -324,9 +328,20 @@ export type BookmarkCreationResult = {
 export interface BookmarkRepository {
     count(filter: BookmarkListFilter, limit: number): Promise<number>;
     create(creation: BookmarkCreation): Promise<BookmarkCreationResult>;
+    fileIn(request: {
+        readonly bookmarkIds: readonly string[];
+        readonly ownerId: string;
+        readonly folderId: string;
+        readonly mode: BookmarkFilingMode;
+    }): Promise<BookmarkLinkingResult>;
     find(bookmarkId: string): Promise<BookmarkRecord | undefined>;
     ids(filter: BookmarkListFilter, limit: number): Promise<readonly string[]>;
     list(request: BookmarkListRequest): Promise<readonly BookmarkListRow[]>;
+    previewTags(request: {
+        readonly bookmarkIds: readonly string[];
+        readonly ownerId: string;
+        readonly tagIds: readonly string[];
+    }): Promise<BookmarkTagPreviewResult>;
     remove(request: {
         readonly bookmarkId: string;
         readonly ownerId: string;
@@ -343,6 +358,12 @@ export interface BookmarkRepository {
         readonly ownerId: string;
         readonly pinned: boolean;
     }): Promise<number>;
+    tag(request: {
+        readonly bookmarkIds: readonly string[];
+        readonly ownerId: string;
+        readonly tagIds: readonly string[];
+        readonly mode: BookmarkTaggingMode;
+    }): Promise<BookmarkLinkingResult>;
     update(request: BookmarkUpdateRequest): Promise<BookmarkUpdateResult>;
 }
 

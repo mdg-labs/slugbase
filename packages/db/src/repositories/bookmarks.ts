@@ -1,7 +1,12 @@
 import {
   createAuditWriter,
   type BookmarkArchiveTransaction,
+  type BookmarkFilingMode,
   type BookmarkFolderRef,
+  type BookmarkLinkingResult,
+  type BookmarkPreviewTag,
+  type BookmarkTagPreviewResult,
+  type BookmarkTaggingMode,
   type BookmarkTagRef,
   type BookmarkTagSelection,
   type BookmarkListFilter,
@@ -22,9 +27,9 @@ import { auditEventRepository } from "./audit-events.ts";
 import { entitlementRepository } from "./entitlements.ts";
 import { enqueueInTenantTransaction, type QueuedJob } from "../system/queue.ts";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
-import { deleteLinks, distinctIdentifiers, foldersOfBookmarks, insertLinks, lockOwnedFolders, requireIdentifiers, uuidArray } from "./folder-links.ts";
+import { deleteLinks, deleteLinksOutside, distinctIdentifiers, foldersOfBookmarks, insertLinks, lockOwnedFolders, requireIdentifiers, uuidArray } from "./folder-links.ts";
 import { defineScopedRepository } from "./scoped.ts";
-import { deleteTagLinks, insertTagLinks, lockTaggingTags, ownedTagsExist, resolveTagNames, tagsOfBookmarks } from "./tag-links.ts";
+import { deleteTagLinks, deleteTagLinksMany, insertTagLinks, insertTagLinksMany, lockTaggingTags, ownedTags, ownedTagsExist, resolveTagNames, tagsOfBookmarks } from "./tag-links.ts";
 
 // The bookmarks of the active workspace (doc 05 section 2.4, doc 02 section 5, doc 10 T1, T2 and T11). Reads, the insert and the
 // update go through the scoped repository below, so every statement carries the workspace of the transaction and runs on the
@@ -32,7 +37,7 @@ import { deleteTagLinks, insertTagLinks, lockTaggingTags, ownedTagsExist, resolv
 // bookmark that is plan-archived is not one the product shows or edits, so a lookup and an update leave it out; its owner may still
 // delete it. Changing and deleting a bookmark are its owner's: both name the owner in the statement, so another member's bookmark
 // is a row the statement does not find. A delete is the system operation `sys_bookmark_delete`, which removes the row and gives
-// its place under `bookmarks.max` back in the same statement of the transaction, so the counter and the rows cannot part; a bulk delete is `sys_bookmark_delete_many`, which lowers the counter once for all the rows it deletes. A bulk pin or unpin locks the caller's rows in identifier order and writes the pin of those not in the wanted state. The place under
+// its place under `bookmarks.max` back in the same statement of the transaction, so the counter and the rows cannot part; a bulk delete is `sys_bookmark_delete_many`, which lowers the counter once for all the rows it deletes. A bulk pin or unpin locks the caller's rows in identifier order and writes the pin of those not in the wanted state. A bulk filing or tagging locks the caller's rows (`FOR KEY SHARE`, in the order of their identifiers) and then the folder or the tags it acts with, the order of a change of one bookmark, and writes links only: no bookmark row changes, so no version moves. The place under
 // `bookmarks.max` is taken by the system operation `sys_bookmark_count_take`, which locks the workspace's row, compares the
 // workspace's `bookmark_count` with the ceiling and raises it, in the transaction that inserts the bookmark: a failed
 // insert takes the place back with it, and two creations at the limit minus one make one. Archiving and restoring are the system
@@ -149,6 +154,25 @@ export interface BookmarkRepository {
    * Needs a transaction opened with a workspace.
    */
   setPinned(request: { readonly bookmarkIds: readonly string[]; readonly ownerId: string; readonly pinned: boolean }): Promise<number>;
+  /**
+   * Files the bookmarks of `bookmarkIds` that `ownerId` owns in the workspace of the transaction and that are not plan-archived in the folder `folderId` of the owner's
+   * (`add`), in that folder alone (`move`: their links to every other folder are removed), or takes them out of it (`remove`), and answers how many such bookmarks there
+   * are, whether or not they were filed so already. The bookmarks are locked first and then the folder, and a folder that is not the owner's is `target_not_found` with
+   * nothing written, even when no bookmark is among the identifiers. `ownerId` is the account of the transaction. Needs a transaction opened with a workspace.
+   */
+  fileIn(request: { readonly bookmarkIds: readonly string[]; readonly ownerId: string; readonly folderId: string; readonly mode: BookmarkFilingMode }): Promise<BookmarkLinkingResult>;
+  /**
+   * Puts the tags `tagIds` on the bookmarks of `bookmarkIds` that `ownerId` owns and that are not plan-archived (`add`), or takes them off (`remove`), and answers how many
+   * such bookmarks there are, whether or not they carried the tags already. The bookmarks are locked first and then the tags, and a tag that is not the owner's is
+   * `target_not_found` with nothing written. `ownerId` is the account of the transaction. Needs a transaction opened with a workspace.
+   */
+  tag(request: { readonly bookmarkIds: readonly string[]; readonly ownerId: string; readonly tagIds: readonly string[]; readonly mode: BookmarkTaggingMode }): Promise<BookmarkLinkingResult>;
+  /**
+   * What `tag` with `add` would leave on the same bookmarks, read and not written, and not locked: how many bookmarks it reaches and the tags they would carry
+   * afterwards, in the order of the tags' names, each with how many of them carry it afterwards and how many get it. A tag that is not the owner's is
+   * `target_not_found`. Needs a transaction opened with a workspace.
+   */
+  previewTags(request: { readonly bookmarkIds: readonly string[]; readonly ownerId: string; readonly tagIds: readonly string[] }): Promise<BookmarkTagPreviewResult>;
   /**
    * The identifiers of the bookmarks that `filter.ownerId` owns in the workspace of the transaction and that match the filter, newest
    * first and without the plan-archived ones, at most `limit`. Needs a transaction opened with a workspace.
@@ -329,6 +353,30 @@ function requireListWorkspace(tx: TenantTx, action: string): string {
 async function tagIdsOf(tx: TenantTx, ownerId: string, tagging: BookmarkTagSelection): Promise<string[] | undefined> {
   const named = await resolveTagNames(tx, ownerId, tagging.names);
   return named === undefined ? undefined : distinctIdentifiers([...tagging.ids, ...named]);
+}
+
+/**
+ * The identifiers of the bookmarks of `bookmarkIds` that `ownerId` owns in the workspace of the transaction and that are not plan-archived, in the order of their
+ * identifiers; locked `FOR KEY SHARE` unless `lock` is false, so a bookmark that a concurrent transaction deletes is waited for and left out, and none is gone under the links written next.
+ */
+async function ownedLiveBookmarks(tx: TenantTx, workspaceId: string, ownerId: string, bookmarkIds: readonly string[], lock: boolean): Promise<string[]> {
+  const wanted = distinctIdentifiers(bookmarkIds);
+  requireIdentifiers(wanted, "acting on bookmarks");
+  if (wanted.length === 0) {
+    return [];
+  }
+  const query = tenantHandle(tx)
+    .select({ id: bookmarks.id })
+    .from(bookmarks)
+    .where(and(eq(bookmarks.workspaceId, workspaceId), eq(bookmarks.ownerId, ownerId), isNull(bookmarks.planArchivedAt), sql`${bookmarks.id} = ANY (${uuidArray(wanted)}::uuid[])`))
+    .orderBy(bookmarks.id);
+  return (lock ? await query.for("key share") : await query).map((row) => row.id);
+}
+
+function requireAccountOwner(tx: TenantTx, ownerId: string, action: string): void {
+  if (ownerId.toLowerCase() !== tx.accountId.toLowerCase()) {
+    throw new Error(`only the account of the transaction ${action} its own bookmarks`);
+  }
 }
 
 const CREATION_SAVEPOINT = sql.raw("bookmark_creation");
@@ -555,6 +603,75 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
         }
       }
       return owned.length;
+    },
+
+    async fileIn({ bookmarkIds, ownerId, folderId, mode }) {
+      const workspaceId = requireListWorkspace(tx, "filing bookmarks");
+      requireAccountOwner(tx, ownerId, "files");
+      requireIdentifiers([folderId], "filing bookmarks");
+      const owned = await ownedLiveBookmarks(tx, workspaceId, ownerId, bookmarkIds, true);
+      // After the bookmarks and before the first write (src/repositories/folder-links.ts): a folder that is not the owner's ends the call with nothing written.
+      if (!(await lockOwnedFolders(tx, ownerId, [folderId]))) {
+        return { kind: "target_not_found" };
+      }
+      if (mode === "remove") {
+        await deleteLinks(tx, [folderId], owned);
+      } else {
+        if (mode === "move") {
+          await deleteLinksOutside(tx, folderId, owned);
+        }
+        await insertLinks(tx, [folderId], owned);
+      }
+      return { kind: "done", affected: owned.length };
+    },
+
+    async tag({ bookmarkIds, ownerId, tagIds, mode }) {
+      const workspaceId = requireListWorkspace(tx, "tagging bookmarks");
+      requireAccountOwner(tx, ownerId, "tags");
+      const owned = await ownedLiveBookmarks(tx, workspaceId, ownerId, bookmarkIds, true);
+      // After the bookmarks and before the first write (src/repositories/tag-links.ts has the order of the locks): a tag that is not the owner's, or that a merge or a deletion has taken away, ends the call with nothing written.
+      if (!(await lockTaggingTags(tx, ownerId, { ids: tagIds, names: [] }))) {
+        return { kind: "target_not_found" };
+      }
+      if (mode === "add") {
+        await insertTagLinksMany(tx, owned, tagIds);
+      } else {
+        await deleteTagLinksMany(tx, owned, tagIds);
+      }
+      return { kind: "done", affected: owned.length };
+    },
+
+    async previewTags({ bookmarkIds, ownerId, tagIds }) {
+      const workspaceId = requireListWorkspace(tx, "previewing the tagging of bookmarks");
+      requireAccountOwner(tx, ownerId, "previews");
+      const wanted = await ownedTags(tx, ownerId, tagIds);
+      if (wanted.length !== distinctIdentifiers(tagIds).length) {
+        return { kind: "target_not_found" };
+      }
+      const owned = await ownedLiveBookmarks(tx, workspaceId, ownerId, bookmarkIds, false);
+      const carried = await tagsOfBookmarks(tx, ownerId, owned);
+      const preview = new Map<string, { id: string; name: string; bookmarkCount: number; added: number }>();
+      for (const tag of wanted) {
+        preview.set(tag.id, { ...tag, bookmarkCount: 0, added: 0 });
+      }
+      for (const id of owned) {
+        const has = new Set<string>();
+        for (const tag of carried.get(id) ?? []) {
+          has.add(tag.id);
+          const entry = preview.get(tag.id) ?? { ...tag, bookmarkCount: 0, added: 0 };
+          entry.bookmarkCount += 1;
+          preview.set(tag.id, entry);
+        }
+        for (const tag of wanted) {
+          const entry = preview.get(tag.id);
+          if (entry !== undefined && !has.has(tag.id)) {
+            entry.bookmarkCount += 1;
+            entry.added += 1;
+          }
+        }
+      }
+      const tags: BookmarkPreviewTag[] = [...preview.values()].toSorted((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()) || a.id.localeCompare(b.id));
+      return { kind: "previewed", affected: owned.length, tags };
     },
 
     async ids(filter, limit) {
