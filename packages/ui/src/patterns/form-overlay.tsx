@@ -12,6 +12,7 @@ import {
   DrawerTitle,
 } from "../components/ui/drawer.tsx";
 import { useIsMobile } from "../hooks/use-media-query.ts";
+import { keepTabInside } from "../lib/keep-tab-inside.ts";
 
 export interface FormOverlayProps {
   open: boolean;
@@ -33,7 +34,7 @@ export function FormOverlay({ open, onOpenChange, title, description, closeLabel
   if (narrow) {
     return (
       <Drawer onOpenChange={onOpenChange} open={open}>
-        <DrawerPopup data-slot="form-overlay">
+        <DrawerPopup data-slot="form-overlay" onKeyDown={keepTabInside}>
           <DrawerHeader className="pe-14">
             <DrawerTitle>{title}</DrawerTitle>
             {description === undefined ? null : <DrawerDescription>{description}</DrawerDescription>}
