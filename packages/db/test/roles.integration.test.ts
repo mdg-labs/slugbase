@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { readFileSync } from "node:fs";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { useCluster, type ClusterUse } from "../src/testing.ts";
 
 // Applies packages/db/provision/roles.sql to a throwaway database on the
 // development Postgres of compose.dev.yml (doc 05 section 3.1, doc 10 T1).
@@ -35,10 +36,9 @@ const superuser: Login = {
 const appLogin: Login = { username: "slugbase_app", password: APP_PASSWORD };
 const migratorLogin: Login = { username: "slugbase_migrator", password: MIGRATOR_PASSWORD };
 
-// Roles are cluster-wide, and the drift test changes them, so only one run of
-// this file may use a cluster at a time. The lock is a session advisory lock
-// on the admin database, which every run of the file connects to first.
-const CLUSTER_LOCK_KEY = 7_354_190_025;
+// Roles are cluster-wide. This file reads them like every test database does,
+// so it holds the cluster shared for its whole run, and the drift test, which
+// changes them, holds it exclusively for that test alone (`@slugbase/db/testing`).
 const ROLE_NAMES = ["slugbase_app", "slugbase_migrator", "slugbase_owner", "slugbase_system"];
 
 // Waiting for another run to release the cluster lock counts against this.
@@ -123,6 +123,7 @@ async function snapshot(sql: postgres.Sql): Promise<Record<string, unknown>> {
   return { roles, memberships, database, schemas };
 }
 
+let cluster: ClusterUse | undefined;
 let admin: postgres.Sql;
 let owner: postgres.Sql;
 let app: postgres.Sql;
@@ -134,8 +135,8 @@ let secondRun: PsqlResult;
 let schemaCreatePublicBefore: number;
 
 beforeAll(async () => {
+  cluster = await useCluster();
   admin = connect(superuser, server.pathname.slice(1));
-  await admin`SELECT pg_advisory_lock(${CLUSTER_LOCK_KEY})`;
   await admin.unsafe(`CREATE DATABASE ${dbName}`);
   owner = connect(superuser, dbName);
 
@@ -210,8 +211,11 @@ afterAll(async () => {
       await cleanup.end({ timeout: 5 });
     }
   } finally {
-    // Ending the session releases the cluster lock.
-    await admin.end({ timeout: 5 });
+    try {
+      await admin.end({ timeout: 5 });
+    } finally {
+      await cluster?.release();
+    }
   }
 }, HOOK_TIMEOUT_MS);
 
@@ -444,7 +448,30 @@ describe("compose.dev.yml", () => {
   });
 });
 
+// The one test that changes the roles of the cluster: every test database of
+// every run waits for this step, and it waits for each of them to be dropped, so
+// it takes the cluster exclusively from just before the test until just after it.
+// The roles are converged once more before the cluster is given back, so a test
+// that failed half way leaves no drift behind for the others.
 describe("a run converges drifted roles", () => {
+  let endStep: (() => Promise<void>) | undefined;
+
+  beforeAll(async () => {
+    endStep = await cluster?.lockExclusive();
+  }, HOOK_TIMEOUT_MS);
+
+  afterAll(async () => {
+    try {
+      const result = runRolesSql({
+        login: superuser,
+        args: ["-v", `app_password=${APP_PASSWORD}`, "-v", `migrator_password=${MIGRATOR_PASSWORD}`],
+      });
+      expect(result.status).toBe(0);
+    } finally {
+      await endStep?.();
+    }
+  }, HOOK_TIMEOUT_MS);
+
   it("restores attributes and memberships changed by hand", async () => {
     await owner.unsafe("ALTER ROLE slugbase_app BYPASSRLS");
     await owner.unsafe("GRANT slugbase_owner TO slugbase_app");

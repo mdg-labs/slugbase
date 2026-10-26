@@ -116,6 +116,14 @@ Every changed migration, custom SQL file or `roles.sql` leaves one more template
 
 A process that wants a template the prune has just dropped builds it again.
 
+Roles are cluster-wide, and every test database depends on them staying as `roles.sql` leaves them, so the harness keeps one advisory lock per cluster (the *cluster lock*) beside the per-template ones:
+
+- **Shared, for as long as a process uses the cluster.** A process holds it, through one superuser session, from before its first test database exists until its last one is dropped. A test file that reads the roles without a database of its own (`migrate.integration.test.ts`, `roles.integration.test.ts`) holds it the same way through `useCluster()`. Any number of processes, in any number of runs, hold it at once, so holders of the shared lock never wait for one another.
+- **Exclusive, for the step of a test that changes the roles.** `lockExclusive()` of `useCluster()` waits until no other process holds the lock, which includes every test database of every run, and gives the lock back (shared again) when the step is over. Only the drift test of `roles.integration.test.ts` takes it, and it converges the roles once more before giving the lock back, so a test that failed half way leaves no drift behind. A process that has a test database of its own cannot take it, because it would wait for itself.
+- **What a harness user waits for.** A shared request queues behind an exclusive one that waits, so from the moment a step asks for the lock until the step is over, the first test database of a process that does not yet hold the cluster waits. A process that already holds the cluster (it has a test database in use) asks again for nothing and creates more test databases without waiting. That window is the wait for the databases in use to be dropped plus the step itself, and it is the only time the cluster lock holds a harness user up. A test file never takes the lock by itself (`packages/db/test/integration-concurrency.test.ts` checks this), and `harness-cluster-lock.integration.test.ts` runs two harness users at once to show that a test database waits for the exclusive step and not for the rest of the file of the process that took it.
+
+Three concurrent runs (§1.2) share one cluster lock this way.
+
 ### 3.3 The cross-tenant matrix (D8, doc 01 §5.5)
 
 The single most important test in the codebase. It lives in `packages/testing/src/tenancy/` and runs in two modes:

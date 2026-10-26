@@ -39,9 +39,10 @@ const DEFAULT_SERVER_URL = "postgres://slugbase:slugbase@127.0.0.1:54329/slugbas
 const APP_PASSWORD = "slugbase_app_dev_only";
 const MIGRATOR_PASSWORD = "slugbase_migrator_dev_only";
 
-// Roles are cluster-wide, and the tests of roles.sql and of `migrate` change or
-// depend on them, so each holds this advisory lock exclusively for its run. A
-// test database holds it shared for its lifetime.
+// Roles are cluster-wide, and every test database depends on them staying as
+// roles.sql leaves them. Each process holds this advisory lock shared for as
+// long as it has a test database, or a use of the cluster (`useCluster`), and
+// takes it exclusively only for the step of a test that changes the roles.
 const CLUSTER_LOCK_KEY = 7_354_190_025;
 
 // Per template, two session advisory locks: the build lock, held exclusively
@@ -131,7 +132,7 @@ function resolveServer(serverUrl: string | undefined): Server {
     database: database === "" ? "postgres" : database,
     username,
     password: decodeURIComponent(url.password),
-    key: `${url.hostname}:${String(port)}:${username}`,
+    key: `${url.hostname}:${String(port)}:${username}:${database}`,
   };
 }
 
@@ -353,8 +354,10 @@ interface Session {
 
 // One superuser connection per server and process, which holds the cluster
 // lock shared for as long as a test database of the process exists. It is
-// shared because a second shared request queues behind a waiting exclusive
-// one, and a process must never wait for itself.
+// shared because a process must never wait for itself. A shared request queues
+// behind an exclusive one that waits, so from the moment an exclusive step asks
+// until it is over, the test databases of processes that do not yet hold the
+// cluster wait; a process that already holds it creates more without waiting.
 const sessions = new Map<string, Session>();
 
 async function acquireSession(server: Server): Promise<Session> {
@@ -394,6 +397,70 @@ async function endTemplateUse(server: Server, session: Session, template: string
     await session.admin`SELECT pg_advisory_unlock_shared(hashtext(${useLockLabel(template)}))`;
   } finally {
     await releaseSession(server, session);
+  }
+}
+
+/** A process's hold on the roles of a cluster, for a test file that depends on them or changes them. */
+export interface ClusterUse {
+  /**
+   * Waits until no other process holds the cluster, which includes every test
+   * database of every run, and holds it exclusively until the returned function
+   * is called, which holds it shared again. Only the step of a test that
+   * changes the roles of the cluster belongs in between: a test database of any
+   * other process waits for it from now on. Refuses while this process has a
+   * test database, which would be waited for by itself.
+   */
+  lockExclusive(): Promise<() => Promise<void>>;
+  /** Lets go of the cluster, also when an exclusive step is still held. Safe to call more than once. */
+  release(): Promise<void>;
+}
+
+/**
+ * Holds the cluster lock shared, as a test database does, for a test file that
+ * asserts on the roles of the cluster without needing a test database of its
+ * own. Pass the result to `release()` when the file is done, also when it failed.
+ */
+export async function useCluster(options: Pick<TestDatabaseOptions, "serverUrl"> = {}): Promise<ClusterUse> {
+  const server = resolveServer(options.serverUrl);
+  const session = await acquireSession(server);
+  let exclusive = false;
+  let released: Promise<void> | undefined;
+  return {
+    async lockExclusive() {
+      if (released !== undefined || exclusive) {
+        throw new Error("the cluster is already released or held exclusively by this use");
+      }
+      if (session.holders !== 1) {
+        throw new Error("this process has a test database, so it would wait for itself to get the cluster exclusively");
+      }
+      // Giving up the shared hold first keeps two processes that both want the
+      // exclusive one from waiting for each other.
+      await unlockCluster(session, "shared");
+      await session.admin`SELECT pg_advisory_lock(${CLUSTER_LOCK_KEY})`;
+      exclusive = true;
+      return async () => {
+        if (!exclusive) {
+          return;
+        }
+        exclusive = false;
+        await unlockCluster(session, "exclusive");
+        await session.admin`SELECT pg_advisory_lock_shared(${CLUSTER_LOCK_KEY})`;
+      };
+    },
+    release() {
+      released ??= releaseSession(server, session);
+      return released;
+    },
+  };
+}
+
+async function unlockCluster(session: Session, mode: "shared" | "exclusive"): Promise<void> {
+  const rows =
+    mode === "shared"
+      ? await session.admin<{ unlocked: boolean }[]>`SELECT pg_advisory_unlock_shared(${CLUSTER_LOCK_KEY}) AS unlocked`
+      : await session.admin<{ unlocked: boolean }[]>`SELECT pg_advisory_unlock(${CLUSTER_LOCK_KEY}) AS unlocked`;
+  if (rows[0]?.unlocked !== true) {
+    throw new Error(`the process did not hold the cluster ${mode}`);
   }
 }
 

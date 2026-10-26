@@ -8,6 +8,12 @@ import postgres from 'postgres';
 import type { SQL } from 'drizzle-orm';
 
 // @public
+export interface ClusterUse {
+    lockExclusive(): Promise<() => Promise<void>>;
+    release(): Promise<void>;
+}
+
+// @public
 export function createTestDatabase(options?: TestDatabaseOptions): Promise<TestDatabase>;
 
 // @public
@@ -116,6 +122,9 @@ export type TestSql = postgres.Sql;
 
 // @public
 export function testTemplateName(chains?: readonly MigrationChain[]): string;
+
+// @public
+export function useCluster(options?: Pick<TestDatabaseOptions, "serverUrl">): Promise<ClusterUse>;
 
 // @public
 export function withTestDatabase<T>(work: (database: TestDatabase) => Promise<T>, options?: TestDatabaseOptions): Promise<T>;
