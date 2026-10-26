@@ -363,19 +363,21 @@ Probes are unauthenticated, not rate-limited and send `Cache-Control: no-store`.
 
 ### 9.3 `GET /go/<slug>`
 
-Not part of `/api/v1`, but specified here because it is the product's main entry point. It is a browser navigation: a bearer token answers `401`, and the `go` bucket applies.
+Not part of `/api/v1`, but specified here because it is the product's main entry point. It is a browser navigation: a bearer token answers `401`, and the `go` bucket applies. It is served through the middleware chain like every route, as the two navigations `GET /go/{slug}` and `GET /go/*` (a path after the slug, or none), declared in the server with the `anonymous` policy and the `go` bucket and not in the contracts, so neither is in `openapi.json`; the handler decides what the caller is answered with, and takes the account's `go` limit once it knows the session is a full one.
 
 | Situation | Response |
 |---|---|
-| Not signed in | `302 /login?returnTo=/go/<slug>` (the sign-in pages honour `returnTo` only for a same-origin `/go/<valid slug>` path) |
-| Partial session | `302 /login/mfa?returnTo=…` |
+| An `Authorization` header, whatever it holds | `401 unauthenticated` (problem), before anything else: an API token cannot navigate, and the request's cookies are not read |
+| Not signed in | `302 /login?returnTo=/go/<slug>` (the sign-in pages honour `returnTo` only for a same-origin `/go/<valid slug>` path: exactly `/go/` and a slug of the grammar, never a scheme, a `//`, a backslash, a dot segment, a query or a fragment, and any other value lands on the default page); the same answer whether the slug exists or not. A slug outside the grammar or anything after the slug carries no `returnTo`: `302 /login` |
+| Partial session | `302 /login/mfa?returnTo=…`, on the same terms |
 | Slug grammar invalid (checked after the segment is lower-cased: `/go/Mail` is `/go/mail`) | SPA not-found page (`404`, HTML) |
 | No accessible forwarding bookmark | SPA "slug not found" page (`404`, HTML) offering "create a bookmark with this slug" and, when the slug resolves in another workspace of the member, "switch and continue" (`otherWorkspaces`, §10.8) |
 | Exactly one match, or a remembered preference | `302 <destination>` with `Referrer-Policy: no-referrer`, `Cache-Control: no-store`; usage recorded asynchronously |
 | Several matches, no preference | SPA disambiguation page (`200`, HTML) at the same URL; the SPA calls `POST /api/v1/go/resolve` |
-| Extra path or query after the slug (`/go/jira/PROJ-12`) | `404` slug-not-found page; path appending is post-v1 (Q43) |
+| Extra path or query after the slug (`/go/jira/PROJ-12`, `/go/mail?x=1`, `/go/mail/`, `/go/`) | `404` slug-not-found page; path appending is post-v1 (Q43); nothing after the slug is appended to or forwarded to a destination |
+| Signed in with no active workspace | `404` slug-not-found page |
 
-The HTML pages carry `Cache-Control: no-store` and `Referrer-Policy: no-referrer` as well. Only `http:` and `https:` destinations are ever redirected to (enforced on write and re-checked on read); `javascript:`, `data:` and anything else is impossible by construction.
+The HTML pages carry `Cache-Control: no-store` and `Referrer-Policy: no-referrer` as well, and are the SPA's `index.html` read from the web root; a composition without a web build has no page to answer with, and answers `404 not_found` as a problem instead. Only `http:` and `https:` destinations are ever redirected to (enforced on write and re-checked on read); `javascript:`, `data:` and anything else is impossible by construction. A stored address that fails the re-check is never redirected to and is answered as no match: the `404` page. A cross-site top-level `GET` is allowed (doc 10 §5, residual 3): the browser sends the session cookie (`SameSite=Lax`) and the member is forwarded to a destination they saved themselves.
 
 ### 9.4 `GET /opensearch.xml`
 

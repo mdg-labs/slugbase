@@ -87,6 +87,8 @@ export interface WorkspaceHarness {
     readonly hookTimeoutMs?: number;
     /** Where opens of bookmarks are counted; by default a buffer over a pool on the test database. */
     readonly usage?: UsageBuffer;
+    /** The directory the server serves the SPA from; by default none. */
+    readonly webRoot?: string;
   }): World;
   /** A verified account with a session that re-authenticated just now. */
   person(world: World): Promise<Person>;
@@ -160,6 +162,7 @@ export function workspaceHarness(database: () => TestDatabase): WorkspaceHarness
         ...(options.instanceAdminGrant === undefined ? {} : { instanceAdminGrant: options.instanceAdminGrant }),
         ...(options.hookTimeoutMs === undefined ? {} : { hookTimeoutMs: options.hookTimeoutMs }),
         ...(options.usage === undefined ? {} : { usage: options.usage }),
+        ...(options.webRoot === undefined ? {} : { webRoot: options.webRoot }),
       });
       return { server, origin: config.APP_ORIGIN };
     },

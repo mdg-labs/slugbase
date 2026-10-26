@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { isSessionEnded } from "../api/client.ts";
 import { AuthPage } from "../auth/auth-page.tsx";
 import { isMfaRequired } from "../auth/mfa.ts";
+import { goReturnPath } from "../auth/next-path.ts";
 import { MfaForm } from "../auth/mfa-form.tsx";
 import { sessionQuery } from "../auth/session.ts";
 import { useConfig } from "../config/config-context.tsx";
@@ -12,17 +13,19 @@ import { isSetupRequired } from "../config/setup-state.ts";
 function LoginMfaPage(): ReactElement {
   const { t } = useTranslation();
   const { product } = useConfig();
-  const { next } = Route.useSearch();
+  const { next, returnTo } = Route.useSearch();
   return (
     <AuthPage description={t("loginMfa.description")} productName={product.name} title={t("loginMfa.title")}>
-      <MfaForm next={next} />
+      <MfaForm next={goReturnPath(returnTo) ?? next} />
     </AuthPage>
   );
 }
 
 export const Route = createFileRoute("/login_/mfa")({
-  validateSearch: (search: Record<string, unknown>): { next?: string } =>
-    typeof search.next === "string" ? { next: search.next } : {},
+  validateSearch: (search: Record<string, unknown>): { next?: string; returnTo?: string } => ({
+    ...(typeof search.next === "string" ? { next: search.next } : {}),
+    ...(typeof search.returnTo === "string" ? { returnTo: search.returnTo } : {}),
+  }),
   // The page is for a visitor who has given the right password and still owes the code. The session is
   // asked afresh: a full one has nothing to do here, none at all means the sign-in has to start over,
   // and a check that cannot be answered leaves the form in place, where giving the code reports what is wrong.
@@ -40,8 +43,9 @@ export const Route = createFileRoute("/login_/mfa")({
       throw redirect({ to: "/", replace: true });
     }
     if (state === "none") {
+      const landing = goReturnPath(search.returnTo) ?? search.next;
       // eslint-disable-next-line @typescript-eslint/only-throw-error -- the router takes a thrown redirect (#82)
-      throw redirect({ to: "/login", search: search.next === undefined ? {} : { next: search.next }, replace: true });
+      throw redirect({ to: "/login", search: landing === undefined ? {} : { next: landing }, replace: true });
     }
   },
   component: LoginMfaPage,

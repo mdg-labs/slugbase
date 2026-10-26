@@ -6,7 +6,7 @@ import { useEffect, useRef, useState, type ReactElement, type SyntheticEvent } f
 import { useTranslation } from "react-i18next";
 import { ApiProblemError } from "../api/client.ts";
 import { mfaPath } from "./mfa.ts";
-import { safeNextPath } from "./next-path.ts";
+import { continueTo } from "./continue-to.ts";
 import { ResendButton, ResendStatus, useResendVerification } from "./resend-verification.tsx";
 
 type FieldName = "email" | "password";
@@ -185,7 +185,11 @@ export function LoginForm({ next, initialEmail = "", onSignedIn }: LoginFormProp
       onSignedIn();
       return;
     }
-    router.history.replace(secondFactor ? mfaPath(next) : safeNextPath(next));
+    if (secondFactor) {
+      router.history.replace(mfaPath(next));
+    } else {
+      continueTo(router.history, next);
+    }
   }
 
   const emailError = fieldMessage("email");

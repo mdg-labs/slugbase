@@ -48,6 +48,7 @@ import { bookmarkRoutes } from "./routes/bookmarks/index.ts";
 import { tagRoutes } from "./routes/tags/index.ts";
 import { folderRoutes } from "./routes/folders/index.ts";
 import { goRoutes } from "./routes/go/index.ts";
+import { goNavigationRoutes, isGoShell } from "./routes/go/navigate.ts";
 import { slugRoutes } from "./routes/slugs/index.ts";
 import { entitlementRoutes } from "./routes/entitlements.ts";
 import { instanceRoutes, type InstanceAdminGrantCheck } from "./routes/instance/index.ts";
@@ -545,9 +546,11 @@ export function createServer(options: CreateServerOptions): Server {
   builtInRoutes.push(...(auth.routes ?? []));
   // So is first-run setup: it signs the first account in, on the same pool.
   builtInRoutes.push(...setupRoutes({ config, store: authStore, passwordPolicy }));
+  // The navigation to a slug is typed into the address bar, so it is no operation of the API's document: it takes the chain's policy and nothing else from a contract.
+  const navigationRoutes = goNavigationRoutes({ usage, webRoot: options.webRoot });
   const builtIn: ServerModule = {
     name: "@slugbase/server",
-    register: () => ({ routes: builtInRoutes, authenticators: auth.authenticators ?? [] }),
+    register: () => ({ routes: [...builtInRoutes, ...navigationRoutes], authenticators: auth.authenticators ?? [] }),
   };
   // Requests no operation matches: the paths served as files rather than as operations.
   const docs: readonly Unrouted[] = config.API_DOCS_ENABLED ? [apiDocs()] : [];
@@ -661,7 +664,7 @@ export function createServer(options: CreateServerOptions): Server {
     migrationSets = composition.migrations;
     // The built-in routes are checked against the document committed with the contracts, whatever
     // document the modules' routes are registered against.
-    const builtInSet = new Set(builtInRoutes);
+    const builtInSet = new Set([...builtInRoutes, ...navigationRoutes]);
     const unregistrable =
       checkRegistrations(builtInRoutes, committedDocument) ??
       checkRegistrations(
@@ -705,9 +708,9 @@ export function createServer(options: CreateServerOptions): Server {
       }
       return validation(context, next);
     },
-    // The committed document is sent as stored; checking it must not re-serialise it.
+    // The committed document is sent as stored, and the page a `/go` navigation answers with is the SPA's; checking either must not re-serialise it.
     response: (context) =>
-      isOpenApiDocument(context.get("route")?.operation.operationId, context.res.status) ? undefined : validateResponse(context),
+      isOpenApiDocument(context.get("route")?.operation.operationId, context.res.status) || isGoShell(context) ? undefined : validateResponse(context),
   };
 
   const app = new Hono<ChainEnv>();

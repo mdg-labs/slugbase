@@ -2539,6 +2539,36 @@ export type GoChooseOutcome =
 };
 
 // @public (undocumented)
+export interface GoNavigateAsk {
+    readonly accountId: string;
+    readonly slug: string;
+}
+
+// @public (undocumented)
+export interface GoNavigateDependencies {
+    // (undocumented)
+    readonly store: GoStore;
+    // (undocumented)
+    readonly usage: BookmarkUsage;
+}
+
+// @public (undocumented)
+export type GoNavigation =
+/** Forward to this address, an `http` or `https` URL; the use is counted. */
+    {
+    readonly kind: "forward";
+    readonly url: string;
+}
+/** Several bookmarks shared with the member have the slug and none is preferred: the member chooses. */
+| {
+    readonly kind: "choose";
+}
+/** Nothing the member can read has the slug, or what does cannot be forwarded to. */
+| {
+    readonly kind: "not_found";
+};
+
+// @public (undocumented)
 export type GoResolution =
 /** Nothing the member can read has the slug (or the slug is not one). */
     {
@@ -3931,6 +3961,9 @@ export interface MembershipEndStore extends MemberRoleStore {
 
 // @public (undocumented)
 export function mergeTag(input: TagMergeDependencies, ask: TagMergeAsk): Promise<TagMergeResult>;
+
+// @public (undocumented)
+export function navigateToSlug(input: GoNavigateDependencies, ask: GoNavigateAsk): Promise<GoNavigation>;
 
 // @public (undocumented)
 export interface NewAccountAcceptance {

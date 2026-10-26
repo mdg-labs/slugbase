@@ -181,41 +181,52 @@ export interface ChainDependencies {
 
 interface CompiledRoute {
   readonly method: string;
+  /** The segments the template names; a trailing `*` is not among them. */
   readonly segments: readonly string[];
   readonly parameters: number;
+  /** The template ends in `*`: it also matches any number of segments after `segments`, at least one. */
+  readonly rest: boolean;
   readonly binding: RouteBinding;
 }
 
 const PARAMETER = /^\{([A-Za-z_][A-Za-z0-9_]*)\}$/;
+const REST = "*";
 
 function segmentsOf(path: string): string[] {
   return path.split("/").slice(1);
 }
 
-/** The routes of the composition, matched by the path template of their operation. */
+/**
+ * The routes of the composition, matched by the path template of their operation. A template ends in `*` only for
+ * a navigation that answers whatever lies below a path, such as `/go/*`; it matches at least one more segment, even
+ * an empty one (a trailing slash), and loses to a template that names every segment of the path.
+ */
 export class RouteTable {
   readonly #routes: readonly CompiledRoute[];
 
   constructor(bindings: readonly RouteBinding[]) {
     this.#routes = bindings
       .map((binding) => {
-        const segments = segmentsOf(binding.operation.path);
+        const template = segmentsOf(binding.operation.path);
+        const rest = template.at(-1) === REST;
+        const segments = rest ? template.slice(0, -1) : template;
         return {
           method: binding.operation.method.toUpperCase(),
           segments,
           parameters: segments.filter((segment) => PARAMETER.test(segment)).length,
+          rest,
           binding,
         };
       })
-      // A literal segment wins over a parameter at the same position.
-      .sort((a, b) => a.parameters - b.parameters);
+      // A template that names every segment wins over one that ends in `*`, and a literal segment over a parameter at the same position.
+      .sort((a, b) => Number(a.rest) - Number(b.rest) || a.parameters - b.parameters);
   }
 
   match(method: string, path: string): MatchedRoute | undefined {
     const requested = segmentsOf(path);
     const upper = method.toUpperCase();
     for (const route of this.#routes) {
-      if (route.method !== upper || route.segments.length !== requested.length) {
+      if (route.method !== upper || (route.rest ? requested.length <= route.segments.length : requested.length !== route.segments.length)) {
         continue;
       }
       const params = matchSegments(route.segments, requested);

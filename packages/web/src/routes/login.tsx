@@ -5,7 +5,7 @@ import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { AuthPage } from "../auth/auth-page.tsx";
 import { LoginForm } from "../auth/login-form.tsx";
-import { safeNextPath } from "../auth/next-path.ts";
+import { goReturnPath, safeNextPath } from "../auth/next-path.ts";
 import { LOGIN_INTENT, OIDC_FAILED, oidcProvidersOf } from "../auth/oidc.ts";
 import { ProviderButtons } from "../auth/provider-buttons.tsx";
 import { sessionQuery } from "../auth/session.ts";
@@ -17,14 +17,16 @@ function LoginPage(): ReactElement {
   const { t } = useTranslation();
   const config = useConfig();
   const name = config.instance?.displayName ?? config.product.name;
-  const { next, error } = Route.useSearch();
+  const { next, returnTo, error } = Route.useSearch();
+  // `returnTo` is where the server sent a browser it did not know from `/go/<slug>`; it wins over a `next` only as such an address.
+  const landing = goReturnPath(returnTo) ?? next;
   const providers = oidcProvidersOf(config);
   return (
     <AuthPage description={t("login.description", { name })} productName={name} title={t("login.title")}>
       <div className="flex flex-col gap-4">
         <SignInNotice />
         {error === OIDC_FAILED ? <Banner title={t("login.error.oidcFailed")} variant="error" /> : null}
-        <LoginForm next={next} />
+        <LoginForm next={landing} />
         {providers.length === 0 ? null : (
           <>
             <div className="flex items-center gap-3 text-muted-foreground text-sm">
@@ -36,7 +38,7 @@ function LoginPage(): ReactElement {
               intent={LOGIN_INTENT}
               label={(name) => t("login.provider", { name })}
               providers={providers}
-              returnTo={safeNextPath(next)}
+              returnTo={safeNextPath(landing)}
             />
           </>
         )}
@@ -54,8 +56,9 @@ function LoginPage(): ReactElement {
 
 export const Route = createFileRoute("/login")({
   // `error` is the code the OIDC callback redirects with; only that one is acted on, and it is never shown as given.
-  validateSearch: (search: Record<string, unknown>): { next?: string; error?: string } => ({
+  validateSearch: (search: Record<string, unknown>): { next?: string; returnTo?: string; error?: string } => ({
     ...(typeof search.next === "string" ? { next: search.next } : {}),
+    ...(typeof search.returnTo === "string" ? { returnTo: search.returnTo } : {}),
     ...(typeof search.error === "string" ? { error: search.error } : {}),
   }),
   // A visitor who is signed in has nothing to do here. The session is asked afresh each time:

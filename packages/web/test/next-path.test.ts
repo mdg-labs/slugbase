@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { safeNextPath } from "../src/auth/next-path.ts";
+import { goReturnPath, isServerPath, safeNextPath } from "../src/auth/next-path.ts";
 import { currentReturnTo, oidcInvitationStartPath, oidcStartPath } from "../src/auth/oidc.ts";
 
 describe("safeNextPath", () => {
@@ -32,6 +32,59 @@ describe("safeNextPath", () => {
 
   it.each([undefined, null, 42, true, ["/a"], { path: "/a" }])("ignores %j, which is not a string", (value) => {
     expect(safeNextPath(value)).toBe("/");
+  });
+});
+
+describe("goReturnPath", () => {
+  it.each(["/go/mail", "/go/a", "/go/0", "/go/my-slug-2", `/go/${"a".repeat(64)}`])("keeps the address %s of a slug", (value) => {
+    expect(goReturnPath(value)).toBe(value);
+  });
+
+  it.each([
+    "https://evil.example",
+    "https://evil.example/go/mail",
+    "//evil.example",
+    "//evil.example/go/mail",
+    "/\\evil.example",
+    "/go/\\evil.example",
+    "/go/../admin",
+    "/go/./mail",
+    "/go/%2e%2e",
+    "/go/mail%2f..%2fadmin",
+    "javascript:alert(1)",
+    "data:text/html,x",
+    "/go/Mail",
+    "/go/-mail",
+    "/go/ma il",
+    "/go/mail\n",
+    "/go/mail/",
+    "/go/mail/inbox",
+    "/go/mail?x=1",
+    "/go/mail#x",
+    `/go/${"a".repeat(65)}`,
+    "/go/",
+    "/go",
+    "go/mail",
+    " /go/mail",
+    "/Go/mail",
+    "/settings",
+    "",
+  ])("ignores %j", (value) => {
+    expect(goReturnPath(value)).toBeUndefined();
+  });
+
+  it.each([undefined, null, 42, ["/go/mail"], { path: "/go/mail" }])("ignores %j, which is not a string", (value) => {
+    expect(goReturnPath(value)).toBeUndefined();
+  });
+});
+
+describe("isServerPath", () => {
+  it.each(["/go", "/go/mail", "/go/mail/x"])("says %s is answered by the server", (path) => {
+    expect(isServerPath(path)).toBe(true);
+  });
+
+  it.each(["/", "/bookmarks", "/gone", "/goal/x", "/settings/go/x"])("says %s is the router's", (path) => {
+    expect(isServerPath(path)).toBe(false);
   });
 });
 

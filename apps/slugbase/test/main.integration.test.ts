@@ -683,3 +683,62 @@ describe("apps/slugbase main server and the usage counter", () => {
     expect(rows[0]?.last_opened_at).toBeInstanceOf(Date);
   }, 60_000);
 });
+
+// GET /go/<slug> is composed too, on the same usage buffer. The sign-in is the first account of a database of its own.
+describe("apps/slugbase main server and the go navigation", () => {
+  let database: TestDatabase;
+
+  beforeAll(async () => {
+    database = await createTestDatabase();
+  }, 300_000);
+
+  afterAll(async () => {
+    await database.drop();
+  }, 300_000);
+
+  const env = (): Record<string, string> => ({
+    NODE_ENV: "test",
+    DATABASE_URL: databaseUrl(database),
+    DATABASE_MIGRATE_URL: databaseUrl(database, "owner"),
+    SETUP_ENABLED: "true",
+    SETUP_TOKEN_REQUIRED: "false",
+  });
+  const first = { displayName: "Ada", email: "ada@example.test", password: "a long enough password for ada", workspaceName: "Home" };
+
+  // A browser without a session is sent to sign in and back, one with a session is forwarded with no referrer and no caching, the use is counted by the
+  // graceful shutdown, and a token on /go is refused.
+  it("composes GET /go/<slug>: it sends a visitor to sign in, forwards a member, refuses a bearer credential, and counts the use at SIGTERM", async () => {
+    const visit = (port: number, path: string, headers: string): Promise<string> => send(port, `GET ${path} HTTP/1.1\r\nHost: localhost\r\n${headers}Connection: close\r\n\r\n`);
+    const { status, output, observed } = await runServer(env(), async (port) => {
+      const created = await post(port, "/api/v1/setup", first);
+      const cookie = /set-cookie: (__Host-slugbase_session=[A-Za-z0-9_-]+)/i.exec(created)?.[1] ?? "";
+      const text = JSON.stringify({ url: "https://example.com/forwarded", title: "Forwarded", slug: "forwarded" });
+      const bookmark = await send(
+        port,
+        `POST /api/v1/bookmarks HTTP/1.1\r\nHost: localhost\r\nOrigin: ${valid.APP_ORIGIN}\r\nCookie: ${cookie}\r\nContent-Type: application/json\r\nContent-Length: ${String(Buffer.byteLength(text))}\r\nConnection: close\r\n\r\n${text}`,
+      );
+      const id = /"id":"([0-9a-f-]{36})"/.exec(bookmark)?.[1] ?? "";
+      const answers = [
+        await visit(port, "/go/forwarded", ""),
+        await visit(port, "/go/forwarded", `Cookie: ${cookie}\r\n`),
+        await visit(port, "/go/forwarded", "Authorization: Bearer sb_unknown\r\n"),
+      ];
+      return [id, ...answers].join("\n=====\n");
+    });
+    expect(status, output).toBe(0);
+    const [id = "", signedOut = "", signedIn = "", withToken = ""] = (observed ?? "").split("\n=====\n");
+    expect(signedOut).toMatch(/^HTTP\/1\.1 302 /);
+    expect(signedOut).toMatch(/\r\nlocation: \/login\?returnTo=\/go\/forwarded\r\n/i);
+    expect(signedIn).toMatch(/^HTTP\/1\.1 302 /);
+    expect(signedIn).toMatch(/\r\nlocation: https:\/\/example\.com\/forwarded\r\n/i);
+    expect(signedIn).toMatch(/\r\nreferrer-policy: no-referrer\r\n/i);
+    expect(signedIn).toMatch(/\r\ncache-control: no-store\r\n/i);
+    expect(withToken).toMatch(/^HTTP\/1\.1 401 /);
+    expect(withToken).not.toMatch(/\r\nlocation: /i);
+    const rows = await database.owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      return tx<{ open_count: string }[]>`SELECT open_count::text FROM bookmarks WHERE id = ${id}`;
+    });
+    expect(rows[0]?.open_count).toBe("1");
+  }, 60_000);
+});

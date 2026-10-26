@@ -172,6 +172,23 @@ describe("the middleware chain", () => {
     expect((await app.request("/api/v1/bookmarks/1/2")).status).toBe(404);
   });
 
+  it("matches a template that ends in * to anything below its path, at least one segment deep, and prefers a template that names every segment", async () => {
+    const { app } = build([
+      { operation: operation("get", "/go/*", "goBeyond"), handler: () => Response.json({ route: "beyond" }) },
+      { operation: operation("get", "/go/{slug}", "goTo"), handler: (_context, route) => Response.json({ route: "slug", ...route.params }) },
+      { operation: operation("get", "/go/suggest", "goSuggest"), handler: () => Response.json({ route: "suggest" }) },
+    ]);
+    const answer = async (path: string): Promise<unknown> => (await app.request(path)).json();
+    expect(await answer("/go/mail")).toEqual({ route: "slug", slug: "mail" });
+    expect(await answer("/go/suggest")).toEqual({ route: "suggest" });
+    for (const path of ["/go/mail/inbox", "/go/mail/", "/go/", "/go/a/b/c"]) {
+      expect(await answer(path), path).toEqual({ route: "beyond" });
+    }
+    expect((await app.request("/go")).status).toBe(404);
+    expect((await app.request("/gone/mail")).status).toBe(404);
+    expect((await app.request("/go/mail", { method: "DELETE", headers: { origin: "https://bookmarks.example.com", "content-type": "application/json" } })).status).toBe(404);
+  });
+
   it("answers a failing stage with a 500 problem that carries neither the message nor the stack", async () => {
     const trace: string[] = [];
     const { app, logger } = build([ping(trace)], {
