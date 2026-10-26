@@ -45,7 +45,8 @@ function countOf(response: ApiResponse, name: "affected" | "requested"): number 
 /**
  * Sends one call of the matrix to the bulk request, or to its preview of adding tags, as separate requests, each of which reaches the handler with some of the
  * identifiers of workspace B: `ids` with a pin, the folder of B with a move to it, the tags of B with an add, the folder and the tags of B in the filter with a pin and
- * with a move. The answer returned is the one the matrix judges (the folder action, and for the preview the tags), and every answer is recorded in `variants`.
+ * with a move. The requests are made at the same time: none of them changes anything a sibling reads (each is refused or skips the identifiers of B). The answer returned is the
+ * one the matrix judges (the folder action, and for the preview the tags), and every answer is recorded in `variants`.
  */
 async function sendVariants(call: ApiCall, send: Send, sendByFilter: Send, variants: VariantStatuses[]): Promise<ApiResponse> {
   const fields = isRecord(call.body) ? call.body : {};
@@ -53,16 +54,17 @@ async function sendVariants(call: ApiCall, send: Send, sendByFilter: Send, varia
   const filter = { folderId: given.folderId, tag: given.tag };
   const using = (body: Record<string, unknown>): ApiCall => ({ ...call, body });
   if (call.operation.operationId === "previewBulkBookmarks") {
-    const byIds = await send(using({ ids: fields.ids, tagIds: fields.tagIds }));
-    const byFilter = await sendByFilter(using({ filter, tagIds: fields.tagIds }));
+    const [byIds, byFilter] = await Promise.all([send(using({ ids: fields.ids, tagIds: fields.tagIds })), sendByFilter(using({ filter, tagIds: fields.tagIds }))]);
     variants.push({ operation: "previewBulkBookmarks", statuses: { byIds: byIds.status, byFilter: byFilter.status }, affectedById: undefined, requestedByFilter: undefined });
     return byIds;
   }
-  const skippedById = await send(using({ action: "pin", ids: fields.ids }));
-  const folderOfB = await send(using({ action: "move_to_folder", ids: fields.ids, folderId: fields.folderId }));
-  const tagsOfB = await send(using({ action: "add_tags", ids: fields.ids, tagIds: fields.tagIds }));
-  const filterOfB = await sendByFilter(using({ action: "pin", filter }));
-  const filterAndFolderOfB = await sendByFilter(using({ action: "add_to_folder", filter, folderId: fields.folderId }));
+  const [skippedById, folderOfB, tagsOfB, filterOfB, filterAndFolderOfB] = await Promise.all([
+    send(using({ action: "pin", ids: fields.ids })),
+    send(using({ action: "move_to_folder", ids: fields.ids, folderId: fields.folderId })),
+    send(using({ action: "add_tags", ids: fields.ids, tagIds: fields.tagIds })),
+    sendByFilter(using({ action: "pin", filter })),
+    sendByFilter(using({ action: "add_to_folder", filter, folderId: fields.folderId })),
+  ]);
   variants.push({
     operation: "bulkBookmarks",
     statuses: { skippedById: skippedById.status, folderOfB: folderOfB.status, tagsOfB: tagsOfB.status, filterOfB: filterOfB.status, filterAndFolderOfB: filterAndFolderOfB.status },
@@ -81,6 +83,7 @@ async function sendVariants(call: ApiCall, send: Send, sendByFilter: Send, varia
 
 const HOOK_TIMEOUT_MS = 300_000;
 const WALK_TIMEOUT_MS = 60_000;
+const MATRIX_PARTS = 4;
 
 const database = useTestDatabase();
 let probe: Probe;
@@ -139,6 +142,21 @@ async function sneakyLookup({ params }: { params: { rowId: string } }): Promise<
 
 const origin = serverConfig({ NODE_ENV: "test" }).APP_ORIGIN;
 const committed = loadOpenApiDocument();
+
+/** The committed document with only the operations named, each under its own path, and everything else of it (the components among them) as it is. */
+function documentOf(operationIds: ReadonlySet<string>): unknown {
+  if (!isRecord(committed) || !isRecord(committed.paths)) {
+    throw new Error("the committed document has no paths");
+  }
+  const paths: Record<string, unknown> = {};
+  for (const [path, item] of Object.entries(committed.paths)) {
+    const kept = isRecord(item) ? Object.entries(item).filter(([, operation]) => isRecord(operation) && typeof operation.operationId === "string" && operationIds.has(operation.operationId)) : [];
+    if (kept.length > 0) {
+      paths[path] = Object.fromEntries(kept);
+    }
+  }
+  return { ...committed, paths };
+}
 
 describe("the walker over the committed document", () => {
   // The committed document declares the sign-in operations, so the walker signs in as a real account and
@@ -455,60 +473,49 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
   // The probe fixture names two workspaces and their members without creating them, so the rows the operations read and change are made here:
   // the accounts, the workspaces under the fixture's identifiers, each member with the role of its principal, and the settings rows.
   async function seedFixtureWorkspaces(): Promise<void> {
-    for (const [side, workspace] of [["a", probe.fixture.a], ["b", probe.fixture.b]] as const) {
-      for (const member of [workspace.owner, workspace.admin, workspace.member]) {
-        await database().owner.begin(async (tx) => {
+    const bookmarkIds = probe.fixture.b.identifiers.filter((identifier) => identifier.kind === "bookmark");
+    const firstBookmark = bookmarkIds[0]?.id;
+    // One transaction: the accounts first, each under its own account context, then everything else as the system role.
+    await database().owner.begin(async (tx) => {
+      for (const [side, workspace] of [["a", probe.fixture.a], ["b", probe.fixture.b]] as const) {
+        for (const member of [workspace.owner, workspace.admin, workspace.member]) {
           await tx`SELECT set_config('app.account_id', ${member.accountId}, true)`;
           await tx`INSERT INTO accounts (id, email, display_name) VALUES (${member.accountId}, ${`matrix-${side}-${member.role}@example.test`}, ${`Matrix ${side} ${member.role}`})`;
-        });
+        }
       }
-      await database().owner.begin(async (tx) => {
-        await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`SET LOCAL ROLE slugbase_system`;
+      for (const [side, workspace] of [["a", probe.fixture.a], ["b", probe.fixture.b]] as const) {
         await tx`INSERT INTO workspaces (id, name) VALUES (${workspace.id}, ${`Matrix workspace ${side.toUpperCase()}`})`;
         await tx`INSERT INTO workspace_settings (workspace_id) VALUES (${workspace.id})`;
         for (const member of [workspace.owner, workspace.admin, workspace.member]) {
           await tx`INSERT INTO workspace_members (workspace_id, account_id, role) VALUES (${workspace.id}, ${member.accountId}, ${member.role})`;
         }
-      });
-    }
-    // One pending invitation of workspace B, which the matrix names in the invitation operations of A.
-    await database().owner.begin(async (tx) => {
-      await tx`SET LOCAL ROLE slugbase_system`;
+      }
+      // One pending invitation of workspace B, which the matrix names in the invitation operations of A.
       await tx`
         INSERT INTO workspace_invitations (id, workspace_id, email, role, token_hash, expires_at)
         VALUES (${B_INVITATION_ID}, ${probe.fixture.b.id}, 'matrix-b-invitee@example.test', 'member', sha256('matrix-b-invitation'::bytea), now() + interval '7 days')`;
-    });
-    // The two bookmarks of workspace B the fixture names, owned by its members: the matrix puts their identifiers in the path of the bookmark read.
-    const bookmarkIds = probe.fixture.b.identifiers.filter((identifier) => identifier.kind === "bookmark");
-    for (const [index, { id }] of bookmarkIds.entries()) {
-      await database().owner.begin(async (tx) => {
-        await tx`SET LOCAL ROLE slugbase_system`;
+      // The two bookmarks of workspace B the fixture names, owned by its members: the matrix puts their identifiers in the path of the bookmark read.
+      for (const [index, { id }] of bookmarkIds.entries()) {
         await tx`
           INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title)
           VALUES (${id}, ${probe.fixture.b.id}, ${[probe.fixture.b.owner, probe.fixture.b.member][index % 2]?.accountId ?? null}, 'https://example.com/matrix-b', 'https://example.com/matrix-b', 'example.com', ${`matrix-bookmark-of-b-${String(index)}`})`;
-      });
-    }
-    // The tag of workspace B the fixture names, owned by its owner, linked to the first bookmark of B: the matrix puts its identifier in the path of the rename and of the deletion.
-    const firstBookmark = bookmarkIds[0]?.id;
-    for (const { id } of probe.fixture.b.identifiers.filter((identifier) => identifier.kind === "tag")) {
-      await database().owner.begin(async (tx) => {
-        await tx`SET LOCAL ROLE slugbase_system`;
+      }
+      // The tag of workspace B the fixture names, owned by its owner, linked to the first bookmark of B: the matrix puts its identifier in the path of the rename and of the deletion.
+      for (const { id } of probe.fixture.b.identifiers.filter((identifier) => identifier.kind === "tag")) {
         await tx`INSERT INTO tags (id, workspace_id, owner_id, name) VALUES (${id}, ${probe.fixture.b.id}, ${probe.fixture.b.owner.accountId}, 'matrix-tag-of-b')`;
         if (firstBookmark !== undefined) {
           await tx`INSERT INTO bookmark_tags (workspace_id, bookmark_id, tag_id) VALUES (${probe.fixture.b.id}, ${firstBookmark}, ${id})`;
         }
-      });
-    }
-    // The folder of workspace B the fixture names, owned by its owner, with the first bookmark of B filed in it: the matrix puts its identifier in the path of the read, the change and the deletion.
-    for (const { id } of probe.fixture.b.identifiers.filter((identifier) => identifier.kind === "folder")) {
-      await database().owner.begin(async (tx) => {
-        await tx`SET LOCAL ROLE slugbase_system`;
+      }
+      // The folder of workspace B the fixture names, owned by its owner, with the first bookmark of B filed in it: the matrix puts its identifier in the path of the read, the change and the deletion.
+      for (const { id } of probe.fixture.b.identifiers.filter((identifier) => identifier.kind === "folder")) {
         await tx`INSERT INTO folders (id, workspace_id, owner_id, name) VALUES (${id}, ${probe.fixture.b.id}, ${probe.fixture.b.owner.accountId}, 'matrix-folder-of-b')`;
         if (firstBookmark !== undefined) {
           await tx`INSERT INTO folder_bookmarks (workspace_id, folder_id, bookmark_id) VALUES (${probe.fixture.b.id}, ${id}, ${firstBookmark})`;
         }
-      });
-    }
+      }
+    });
   }
 
   it("passes for the thirty-eight tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations, its bookmarks, its tags, its folders and its audit log as they were", async () => {
@@ -543,24 +550,37 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     const sendByFilter = matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: byFilterFixtures, credentialsOf: (principal) => world.credentialsOf(principal) });
     const variants: VariantStatuses[] = [];
     const instanceAdminStatuses: number[] = [];
-    const matrix = await runApiMatrix({
-      document: committed,
-      fixture,
-      mapping: { rowId: "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "listBookmarkIds.folderId": "folder", "listBookmarkIds.tag": "tag", "listBookmarkIds.tag[]": "tag", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark", "bulkBookmarks.filter.folderId": "folder", "bulkBookmarks.filter.tag": "tag", "bulkBookmarks.filter.tag[]": "tag", "bulkBookmarks.folderId": "folder", "bulkBookmarks.tagIds[]": "tag", "previewBulkBookmarks.ids[]": "bookmark", "previewBulkBookmarks.filter.hasSlug": "bookmark", "previewBulkBookmarks.filter.folderId": "folder", "previewBulkBookmarks.filter.tag": "tag", "previewBulkBookmarks.filter.tag[]": "tag", "previewBulkBookmarks.tagIds[]": "tag" },
-      request: async (call) => {
-        // The bulk request and the preview name the identifiers of B in several inputs, and one request cannot carry them all: `ids` and `filter` together are malformed, the
-        // `hasSlug` of the filter is a boolean, and the folder and the tag go with different actions. Each call is therefore sent as the requests below, which reach the
-        // handler with the identifiers of B in turn, and the one that names the folder (the preview: the tags) of B is the answer the matrix judges. The others are held to what the
-        // handler answers for them in the assertions after the run.
-        const operationId = call.operation.operationId;
-        const response =
-          operationId === "bulkBookmarks" || operationId === "previewBulkBookmarks" ? await sendVariants(call, send, sendByFilter, variants) : await send(call);
-        if ("instanceAdmin" in call.principal) {
-          instanceAdminStatuses.push(response.status);
-        }
-        return response;
-      },
-    });
+    const mapping = { rowId: "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "listBookmarkIds.folderId": "folder", "listBookmarkIds.tag": "tag", "listBookmarkIds.tag[]": "tag", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark", "bulkBookmarks.filter.folderId": "folder", "bulkBookmarks.filter.tag": "tag", "bulkBookmarks.filter.tag[]": "tag", "bulkBookmarks.folderId": "folder", "bulkBookmarks.tagIds[]": "tag", "previewBulkBookmarks.ids[]": "bookmark", "previewBulkBookmarks.filter.hasSlug": "bookmark", "previewBulkBookmarks.filter.folderId": "folder", "previewBulkBookmarks.filter.tag": "tag", "previewBulkBookmarks.filter.tag[]": "tag", "previewBulkBookmarks.tagIds[]": "tag" } as const;
+    const request = async (call: ApiCall): Promise<ApiResponse> => {
+      // The bulk request and the preview name the identifiers of B in several inputs, and one request cannot carry them all: `ids` and `filter` together are malformed, the
+      // `hasSlug` of the filter is a boolean, and the folder and the tag go with different actions. Each call is therefore sent as the requests below, which reach the
+      // handler with the identifiers of B in turn, and the one that names the folder (the preview: the tags) of B is the answer the matrix judges. The others are held to what the
+      // handler answers for them in the assertions after the run.
+      const operationId = call.operation.operationId;
+      const response =
+        operationId === "bulkBookmarks" || operationId === "previewBulkBookmarks" ? await sendVariants(call, send, sendByFilter, variants) : await send(call);
+      if ("instanceAdmin" in call.principal) {
+        instanceAdminStatuses.push(response.status);
+      }
+      return response;
+    };
+    // The tenant-scoped operations are run as separate matrices over disjoint parts of the document, at the same time, because the runner makes its calls one after the other and each
+    // waits on the database. The matrix judges a call by its status and by the names of B in its answer, which no operation's writes to A change, and each effect in A
+    // that the assertions after the run read (the tags and folders each account makes, the renaming, the settings) is made by one operation, whose calls stay in order within its part. Every part has
+    // the same fixture, principals and check of B's content.
+    const classification = classifyOperations(committed);
+    const tenantScoped = classification.operations.filter((operation) => operation.kind === "tenant-scoped").map((operation) => operation.operationId);
+    const runs = await Promise.all(
+      Array.from({ length: MATRIX_PARTS }, (_, part) =>
+        runApiMatrix({ document: documentOf(new Set(tenantScoped.filter((_, index) => index % MATRIX_PARTS === part))), fixture, mapping, request }),
+      ),
+    );
+    const matrix = {
+      classified: classification.summary,
+      tenantScoped: runs.reduce((count, run) => count + run.classified.byKind["tenant-scoped"], 0),
+      attempts: runs.reduce((count, run) => count + run.attempts, 0),
+      failures: [...classification.problems.map((problem) => ({ mode: "api" as const, subject: problem.subject, kind: "unclassified_operation", detail: problem.detail })), ...runs.flatMap((run) => run.failures)],
+    };
 
     // A team is refused with 422 whichever workspace holds it, because no team can be invited into yet and none can be told from another, which
     // discloses nothing; the matrix expects 404 for an identifier of workspace B. The exception names exactly that answer, for the two sessions of A
@@ -576,6 +596,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // Each of the ten principals, the instance admin among them, naming the two bookmarks of B once in the `hasSlug` of the list and once in that of the select-all.
     expect(matrix.failures.filter(filterRefusal)).toHaveLength(10 * 2 * 2);
     expect(report.failures).toEqual([]);
+    expect(report.tenantScoped).toBe(38);
     expect(report.classified.byKind["tenant-scoped"]).toBe(38);
     // The bulk request reaches its handler as the three sessions and the three read-write tokens of A, once for each pair of the two bookmarks of B and of the two inputs the matrix fills in `ids` and
     // in the filter's `hasSlug`, and the preview of adding tags is called as the same ten principals. Where the bulk handler is reached, a bookmark of B named in `ids` is skipped as not found with a
