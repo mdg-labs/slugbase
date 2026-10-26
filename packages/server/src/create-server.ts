@@ -36,6 +36,7 @@ import { authContribution } from "./routes/auth/index.ts";
 import { apiTokenRoutes } from "./routes/me/api-tokens.ts";
 import { accountDeletionRoutes } from "./routes/me/delete.ts";
 import { emailChangeRoutes } from "./routes/me/email.ts";
+import { goPreferenceRoutes } from "./routes/me/go-preferences.ts";
 import { identityRoutes } from "./routes/me/identities.ts";
 import { mfaRoutes } from "./routes/me/mfa.ts";
 import { profileRoutes } from "./routes/me/profile.ts";
@@ -585,6 +586,7 @@ export function createServer(options: CreateServerOptions): Server {
   builtInRoutes.push(...slugRoutes());
   // And what a slug resolves to for the member, and the member's choice among its candidates, which counts the use in the same buffer an open does.
   builtInRoutes.push(...goRoutes({ usage }));
+  builtInRoutes.push(...goPreferenceRoutes({ cursorSecret: config.SESSION_SECRET }));
   const ownedWorkspaceEntitlements = createOwnedWorkspaceEntitlements(entitlementService);
   // Stage 9 and the handlers that decide an entitlement themselves (accepting an invitation) ask the same check, so an operation is gated the same way wherever it is decided.
   const entitlementCheck: EntitlementCheck = options.entitlements ?? (adapters.entitlements.available ? createEntitlementCheck(entitlementService) : denyEntitlements);

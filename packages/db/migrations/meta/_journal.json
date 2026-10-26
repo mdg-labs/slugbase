@@ -624,6 +624,13 @@
       "when": 1793021515167,
       "tag": "20261026133155_add_slug_preferences",
       "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1793029240542,
+      "tag": "20261026154040_add_slug_preference_delete",
+      "breakpoints": true
     }
   ]
 }

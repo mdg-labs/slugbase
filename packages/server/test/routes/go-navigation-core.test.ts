@@ -27,6 +27,10 @@ function navigating(candidates: readonly GoCandidate[], preferredId?: string) {
           events.push("remember");
           return Promise.resolve(true);
         },
+        forgetStale: (request: { readonly slug: string; readonly bookmarkId: string; readonly accountId: string }) => {
+          events.push(`forget ${request.bookmarkId}`);
+          return Promise.resolve(true);
+        },
       },
       usage: { record: (bookmarkId: string) => void events.push(`use ${bookmarkId}`) },
     },
@@ -49,6 +53,23 @@ describe("navigateToSlug", () => {
 
     expect(await navigateToSlug(dependencies, { accountId: ME, slug: "mail" })).toEqual({ kind: "forward", url: "https://example.com/theirs" });
     expect(events).toEqual([`use ${theirs.id}`]);
+  });
+
+  it("forgets a remembered choice that is no candidate any more and forwards as if there were none, counting the use of what it forwards to", async () => {
+    const mine = candidate(1, ME, "owner", "https://example.com/mine");
+    const stale = "0192f3a0-aaaa-7000-8000-000000000009";
+    const { dependencies, events } = navigating([mine], stale);
+
+    expect(await navigateToSlug(dependencies, { accountId: ME, slug: "mail" })).toEqual({ kind: "forward", url: "https://example.com/mine" });
+    expect(events).toEqual([`forget ${stale}`, `use ${mine.id}`]);
+  });
+
+  it("forgets a remembered choice when no bookmark has the slug any more and is not_found, counting nothing", async () => {
+    const stale = "0192f3a0-aaaa-7000-8000-000000000009";
+    const { dependencies, events } = navigating([], stale);
+
+    expect(await navigateToSlug(dependencies, { accountId: ME, slug: "mail" })).toEqual({ kind: "not_found" });
+    expect(events).toEqual([`forget ${stale}`]);
   });
 
   it("forwards to the one bookmark shared with the caller", async () => {

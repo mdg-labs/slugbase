@@ -88,7 +88,7 @@ export const resolveSlug = defineOperation({
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse(
-      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the resolution is a POST, so it takes the write scope though it writes nothing",
+      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the resolution is a POST, so it takes the write scope though it counts nothing and writes only the deletion of the caller's own stale remembered choice for the slug (doc 02 §6.4)",
     ),
     404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),
     422: problemResponse("The body did not pass validation"),

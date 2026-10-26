@@ -18,8 +18,10 @@ function summary(id: string, title: string, ownerId: string | null, ownerName: s
 
 function store(found: GoCandidateSet, summaries: readonly GoBookmarkSummary[]) {
   const asked: { slug: string; accountId: string }[] = [];
+  const forgotten: { slug: string; bookmarkId: string; accountId: string }[] = [];
   return {
     asked,
+    forgotten,
     dependencies: {
       store: {
         candidates: (request: { slug: string; accountId: string }) => {
@@ -27,6 +29,10 @@ function store(found: GoCandidateSet, summaries: readonly GoBookmarkSummary[]) {
           return Promise.resolve(found);
         },
         summaries: (ids: readonly string[]) => Promise.resolve(summaries.filter((entry) => ids.includes(entry.id))),
+        forgetStale: (request: { slug: string; bookmarkId: string; accountId: string }) => {
+          forgotten.push(request);
+          return Promise.resolve(true);
+        },
       },
     },
   };
@@ -135,5 +141,47 @@ describe("resolveSlug", () => {
     const text = JSON.stringify(await resolveSlug(dependencies, { accountId: ME, slug: "mail" }));
 
     expect(text).not.toContain("https://");
+  });
+
+  describe("a remembered choice that is no candidate", () => {
+    it("is ignored, asked to be forgotten with the account and the slug, and the caller's own bookmark resolves", async () => {
+      const { dependencies, forgotten } = store({ candidates: [MINE], preferredId: ANNS.id }, SUMMARIES);
+
+      expect(await resolveSlug(dependencies, { accountId: ME, slug: "Mail" })).toMatchObject({ kind: "single", bookmark: { id: MINE.id } });
+      expect(forgotten).toEqual([{ slug: "mail", bookmarkId: ANNS.id, accountId: ME }]);
+    });
+
+    it("is asked to be forgotten when no bookmark has the slug at all, which resolves to none", async () => {
+      const { dependencies, forgotten } = store({ candidates: [], preferredId: ANNS.id }, []);
+
+      expect(await resolveSlug(dependencies, { accountId: ME, slug: "mail" })).toEqual({ kind: "none" });
+      expect(forgotten).toEqual([{ slug: "mail", bookmarkId: ANNS.id, accountId: ME }]);
+    });
+
+    it("is asked to be forgotten when its candidate was deleted between the two reads", async () => {
+      const { dependencies, forgotten } = store({ candidates: [MINE, ANNS], preferredId: ANNS.id }, [SUMMARIES[0] as GoBookmarkSummary]);
+
+      await resolveSlug(dependencies, { accountId: ME, slug: "mail" });
+
+      expect(forgotten).toEqual([{ slug: "mail", bookmarkId: ANNS.id, accountId: ME }]);
+    });
+
+    it("is not asked about when the choice is a candidate, or when there is no choice", async () => {
+      const chosen = store({ candidates: [MINE, ANNS], preferredId: ANNS.id }, SUMMARIES);
+      const none = store({ candidates: [MINE], preferredId: undefined }, SUMMARIES);
+
+      await resolveSlug(chosen.dependencies, { accountId: ME, slug: "mail" });
+      await resolveSlug(none.dependencies, { accountId: ME, slug: "mail" });
+
+      expect(chosen.forgotten).toEqual([]);
+      expect(none.forgotten).toEqual([]);
+    });
+
+    it("lets a failure of the store to forget it fail the resolution, as nothing hides it", async () => {
+      const { dependencies } = store({ candidates: [MINE], preferredId: ANNS.id }, SUMMARIES);
+      const failing = { store: { ...dependencies.store, forgetStale: () => Promise.reject(new Error("write failed")) } };
+
+      await expect(resolveSlug(failing, { accountId: ME, slug: "mail" })).rejects.toThrow("write failed");
+    });
   });
 });

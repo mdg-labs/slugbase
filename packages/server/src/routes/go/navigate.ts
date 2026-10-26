@@ -12,7 +12,7 @@ import { webShell, type Shell } from "./shell.ts";
 // Every answer is one of: a `302` to sign in, a `302` to the destination, the SPA shell, or a problem. The sign-in redirect goes before anything is looked up, so a
 // signed-out browser learns nothing about a slug. A bearer credential is refused with `401` whatever it is, because an API token cannot navigate, and a
 // partial session (the second factor still owed) goes to the second step. A signed-in member takes one token of the account's `go` limit, then the slug is
-// resolved in the active workspace only. A cross-site top-level `GET` is allowed (doc 10 section 5, residual 3): there is no state to change but a usage counter.
+// resolved in the active workspace only. A cross-site top-level `GET` is allowed (doc 10 section 5, residual 3): there is no state to change but a usage counter and the deletion of the member's own remembered choice for the slug when it is no candidate any more (doc 02 section 6.4).
 //
 // The shell is answered with `200` where the member has to choose among several bookmarks and with `404` where nothing is found, and a slug outside the grammar,
 // anything after the slug (a path or a query string, Q43), a member with no workspace and a destination that is not an `http` or `https` URL are the second. The

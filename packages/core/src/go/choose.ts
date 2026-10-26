@@ -11,7 +11,7 @@ import { parseSlug } from "./slug.ts";
 // in the usage buffer, which never blocks the answer.
 
 export interface GoChooseDependencies {
-  readonly store: GoStore;
+  readonly store: Pick<GoStore, "candidates" | "remember">;
   readonly usage: BookmarkUsage;
 }
 

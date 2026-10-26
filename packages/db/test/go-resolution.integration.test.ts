@@ -7,7 +7,8 @@ import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 // The candidates of a slug, the remembered choice and the table behind it (doc 05 sections 2.6 and 4, doc 02 sections 6.2 to 6.4, doc 10 T1, T2 and
 // T12). The failure scenario: a member of workspace A resolves and remembers a slug that exists only in workspace B, a bookmark that does not forward, a
 // plan-archived one and another member's private bookmark with the same slug, and none of them is a candidate, none can be remembered, and nothing is
-// written. The plan of the scan on a workspace of 50 000 bookmarks is in go-resolution-plan.integration.test.ts.
+// written. A remembered choice is forgotten with its bookmark, and ignored and deleted on the next resolution once its bookmark has another slug, has stopped
+// forwarding or can no longer be read (doc 02 section 6.4): the scenario is a choice for `mail` on a bookmark that is then renamed to `post`. The plan of the scan on a workspace of 50 000 bookmarks is in go-resolution-plan.integration.test.ts.
 
 const HOOK_TIMEOUT_MS = 300_000;
 const ROW_LEVEL_SECURITY = "42501";
@@ -127,7 +128,7 @@ describe("the table", () => {
     expect(slug?.data_type).toBe("text");
   });
 
-  it("gives slugbase_app no way to delete a preference or to change what it belongs to", async () => {
+  it("lets slugbase_app delete a preference, and gives it no way to change what it belongs to", async () => {
     const [privileges] = await db.owner<{ select: boolean; insert: boolean; update: boolean; remove: boolean; slug_update: boolean; bookmark_update: boolean }[]>`
       SELECT has_table_privilege('slugbase_app', 'public.slug_preferences', 'SELECT') AS select,
              has_table_privilege('slugbase_app', 'public.slug_preferences', 'INSERT') AS insert,
@@ -135,7 +136,7 @@ describe("the table", () => {
              has_table_privilege('slugbase_app', 'public.slug_preferences', 'DELETE') AS remove,
              has_column_privilege('slugbase_app', 'public.slug_preferences', 'slug', 'UPDATE') AS slug_update,
              has_column_privilege('slugbase_app', 'public.slug_preferences', 'bookmark_id', 'UPDATE') AS bookmark_update`;
-    expect(privileges).toEqual({ select: true, insert: false, update: false, remove: false, slug_update: false, bookmark_update: true });
+    expect(privileges).toEqual({ select: true, insert: false, update: false, remove: true, slug_update: false, bookmark_update: true });
   });
 });
 
@@ -353,5 +354,201 @@ describe("the summaries of candidates", () => {
 
     expect(summaries).toEqual([expect.objectContaining({ id: mine, title: "Mail", host: "example.com", ownerId: workspace.me })]);
     expect(await inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).summaries([]))).toEqual([]);
+  });
+});
+
+async function rememberFor(workspace: Workspace, accountId: string, slug: string, bookmarkId: string): Promise<void> {
+  expect(await inTenant(workspace.id, accountId, (tx) => goRepository(tx).remember({ slug, bookmarkId, accountId }))).toBe(true);
+}
+
+describe("a remembered choice whose bookmark has stopped being a candidate", () => {
+  it("survives the rename of its bookmark until the slug is resolved, and then the resolution finds it and forgets it", async () => {
+    const workspace = await workspaceOf();
+    const renamed = await seedBookmark(workspace.id, { ownerId: workspace.me, slug: "mail" });
+    await rememberFor(workspace, workspace.me, "mail", renamed);
+    await asSystem(db, (tx) => tx`UPDATE bookmarks SET slug = 'post' WHERE id = ${renamed}`);
+    expect((await preferences(workspace.id)).map((row) => [row.slug, row.bookmark_id])).toEqual([["mail", renamed]]);
+
+    const found = await inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).candidates({ slug: "mail", accountId: workspace.me }));
+    expect(found).toEqual({ candidates: [], preferredId: renamed });
+    expect(await inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).forgetStale({ slug: "mail", bookmarkId: renamed, accountId: workspace.me }))).toBe(true);
+
+    expect(await preferences(workspace.id)).toEqual([]);
+    expect(await inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).candidates({ slug: "mail", accountId: workspace.me }))).toEqual({ candidates: [], preferredId: undefined });
+  });
+
+  it.each([
+    ["has another slug", `UPDATE bookmarks SET slug = 'post' WHERE id = $1`],
+    ["has stopped forwarding", `UPDATE bookmarks SET forwarding = false WHERE id = $1`],
+    ["has lost its slug", `UPDATE bookmarks SET slug = NULL, forwarding = false WHERE id = $1`],
+    ["is no longer readable by the member (another owner)", `UPDATE bookmarks SET owner_id = (SELECT account_id FROM workspace_members WHERE workspace_id = bookmarks.workspace_id AND account_id <> $2 LIMIT 1) WHERE id = $1`],
+    ["is no longer readable by the member (no owner)", `UPDATE bookmarks SET owner_id = NULL WHERE id = $1`],
+  ])("is forgotten when its bookmark %s", async (_reason, change) => {
+    const workspace = await workspaceOf();
+    const chosen = await seedBookmark(workspace.id, { ownerId: workspace.me, slug: "mail" });
+    await rememberFor(workspace, workspace.me, "mail", chosen);
+    await asSystem(db, (tx) => tx.unsafe(change, change.includes("$2") ? [chosen, workspace.me] : [chosen]));
+
+    const forgotten = await inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).forgetStale({ slug: "mail", bookmarkId: chosen, accountId: workspace.me }));
+
+    expect(forgotten).toBe(true);
+    expect(await preferences(workspace.id)).toEqual([]);
+  });
+
+  it("is kept while it is still a candidate, and while its bookmark is only plan-archived", async () => {
+    const workspace = await workspaceOf();
+    const live = await seedBookmark(workspace.id, { ownerId: workspace.me, slug: "mail" });
+    const archived = await seedBookmark(workspace.id, { ownerId: workspace.me, slug: "later" });
+    await rememberFor(workspace, workspace.me, "mail", live);
+    await rememberFor(workspace, workspace.me, "later", archived);
+    await asSystem(db, (tx) => tx`UPDATE bookmarks SET plan_archived_at = now() WHERE id = ${archived}`);
+
+    expect(await inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).forgetStale({ slug: "mail", bookmarkId: live, accountId: workspace.me }))).toBe(false);
+    expect(await inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).forgetStale({ slug: "later", bookmarkId: archived, accountId: workspace.me }))).toBe(false);
+
+    expect((await preferences(workspace.id)).map((row) => row.slug)).toEqual(["later", "mail"]);
+  });
+
+  it("is not deleted for a bookmark it no longer names, so a choice made again in the meantime stays", async () => {
+    const workspace = await workspaceOf();
+    const stale = await seedBookmark(workspace.id, { ownerId: workspace.me, slug: "mail" });
+    const again = await seedBookmark(workspace.id, { ownerId: workspace.me, slug: "mail-again" });
+    await rememberFor(workspace, workspace.me, "mail", stale);
+    await asSystem(db, (tx) => tx`UPDATE bookmarks SET slug = 'post' WHERE id = ${stale}`);
+    await asSystem(db, (tx) => tx`UPDATE bookmarks SET slug = 'mail' WHERE id = ${again}`);
+    await rememberFor(workspace, workspace.me, "mail", again);
+
+    expect(await inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).forgetStale({ slug: "mail", bookmarkId: stale, accountId: workspace.me }))).toBe(false);
+
+    expect((await preferences(workspace.id)).map((row) => row.bookmark_id)).toEqual([again]);
+  });
+
+  it("is forgotten for the account of the transaction only, and a choice of another member for the same slug stays", async () => {
+    const workspace = await workspaceOf();
+    const mine = await seedBookmark(workspace.id, { ownerId: workspace.me, slug: "mail" });
+    const theirs = await seedBookmark(workspace.id, { ownerId: workspace.other, slug: "mail" });
+    await rememberFor(workspace, workspace.me, "mail", mine);
+    await rememberFor(workspace, workspace.other, "mail", theirs);
+    await asSystem(db, (tx) => tx`UPDATE bookmarks SET slug = 'post' WHERE id IN (${mine}, ${theirs})`);
+
+    expect(await inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).forgetStale({ slug: "mail", bookmarkId: theirs, accountId: workspace.me }))).toBe(false);
+    expect(await inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).forgetStale({ slug: "mail", bookmarkId: mine, accountId: workspace.me }))).toBe(true);
+
+    expect((await preferences(workspace.id)).map((row) => [row.account_id, row.bookmark_id])).toEqual([[workspace.other, theirs]]);
+    await expect(inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).forgetStale({ slug: "mail", bookmarkId: theirs, accountId: workspace.other }))).rejects.toThrow("only the account of the transaction");
+  });
+});
+
+describe("the remembered choices of a member", () => {
+  it("are listed with the bookmark they name, in the order of the slugs, and only those whose bookmark is still a candidate", async () => {
+    const workspace = await workspaceOf();
+    const inbox = await seedBookmark(workspace.id, { ownerId: workspace.me, slug: "inbox", title: "Inbox", url: "https://mail.example.com/secret-path" });
+    const mail = await seedBookmark(workspace.id, { ownerId: workspace.me, slug: "mail", title: "Mail" });
+    const renamed = await seedBookmark(workspace.id, { ownerId: workspace.me, slug: "old" });
+    const paused = await seedBookmark(workspace.id, { ownerId: workspace.me, slug: "paused" });
+    const archived = await seedBookmark(workspace.id, { ownerId: workspace.me, slug: "archived" });
+    for (const [slug, id] of [["mail", mail], ["inbox", inbox], ["old", renamed], ["paused", paused], ["archived", archived]] as const) {
+      await rememberFor(workspace, workspace.me, slug, id);
+    }
+    await asSystem(db, (tx) => tx`UPDATE bookmarks SET slug = 'new' WHERE id = ${renamed}`);
+    await asSystem(db, (tx) => tx`UPDATE bookmarks SET forwarding = false WHERE id = ${paused}`);
+    await asSystem(db, (tx) => tx`UPDATE bookmarks SET plan_archived_at = now() WHERE id = ${archived}`);
+
+    const listed = await inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).listPreferences({ accountId: workspace.me, afterSlug: undefined, limit: 10 }));
+
+    expect(listed.map(({ slug, bookmarkId, title, host, ownerId }) => ({ slug, bookmarkId, title, host, ownerId }))).toEqual([
+      { slug: "inbox", bookmarkId: inbox, title: "Inbox", host: "example.com", ownerId: workspace.me },
+      { slug: "mail", bookmarkId: mail, title: "Mail", host: "example.com", ownerId: workspace.me },
+    ]);
+    expect(listed.every((row) => row.ownerName !== null)).toBe(true);
+    expect(JSON.stringify(listed)).not.toContain("secret-path");
+  });
+
+  it("are listed in pages that follow the slug, hyphens and digits included, whatever the collation", async () => {
+    const workspace = await workspaceOf();
+    const slugs = ["a-b", "a1", "ab", "b", "0a", "a-a"];
+    for (const slug of slugs) {
+      await rememberFor(workspace, workspace.me, slug, await seedBookmark(workspace.id, { ownerId: workspace.me, slug }));
+    }
+
+    const seen: string[] = [];
+    let after: string | undefined;
+    for (let page = 0; page < 6; page += 1) {
+      const listed = await inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).listPreferences({ accountId: workspace.me, afterSlug: after, limit: 2 }));
+      seen.push(...listed.map((row) => row.slug));
+      after = listed.at(-1)?.slug;
+      if (listed.length < 2) {
+        break;
+      }
+    }
+
+    expect(seen).toEqual([...slugs].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)));
+  });
+
+  it("are the caller's alone: another member's choices, and another workspace's, are not listed", async () => {
+    const workspace = await workspaceOf();
+    const elsewhere = await workspaceOf();
+    await seedMember(db, { workspaceId: elsewhere.id, accountId: workspace.me, role: "member" });
+    const mine = await seedBookmark(workspace.id, { ownerId: workspace.me, slug: "mail" });
+    const theirs = await seedBookmark(workspace.id, { ownerId: workspace.other, slug: "theirs" });
+    const inElsewhere = await seedBookmark(elsewhere.id, { ownerId: workspace.me, slug: "elsewhere" });
+    await rememberFor(workspace, workspace.me, "mail", mine);
+    await rememberFor(workspace, workspace.other, "theirs", theirs);
+    await rememberFor(elsewhere, workspace.me, "elsewhere", inElsewhere);
+
+    const listed = await inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).listPreferences({ accountId: workspace.me, afterSlug: undefined, limit: 10 }));
+
+    expect(listed.map((row) => row.slug)).toEqual(["mail"]);
+    await expect(inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).listPreferences({ accountId: workspace.other, afterSlug: undefined, limit: 10 }))).rejects.toThrow("only the account of the transaction");
+    await expect(inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).listPreferences({ accountId: workspace.me, afterSlug: undefined, limit: 0 }))).rejects.toThrow("positive whole limit");
+    await expect(db.tenant.withTenant({ accountId: workspace.me, requestId: "go-resolution-test" }, (tx) => goRepository(tx).listPreferences({ accountId: workspace.me, afterSlug: undefined, limit: 10 }))).rejects.toBeInstanceOf(TenantContextError);
+  });
+
+  it("are forgotten one at a time, for the caller's own slug only", async () => {
+    const workspace = await workspaceOf();
+    const elsewhere = await workspaceOf();
+    await seedMember(db, { workspaceId: elsewhere.id, accountId: workspace.me, role: "member" });
+    const mail = await seedBookmark(workspace.id, { ownerId: workspace.me, slug: "mail" });
+    const inbox = await seedBookmark(workspace.id, { ownerId: workspace.me, slug: "inbox" });
+    const theirs = await seedBookmark(workspace.id, { ownerId: workspace.other, slug: "mail" });
+    const inElsewhere = await seedBookmark(elsewhere.id, { ownerId: workspace.me, slug: "mail" });
+    await rememberFor(workspace, workspace.me, "mail", mail);
+    await rememberFor(workspace, workspace.me, "inbox", inbox);
+    await rememberFor(workspace, workspace.other, "mail", theirs);
+    await rememberFor(elsewhere, workspace.me, "mail", inElsewhere);
+
+    expect(await inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).forgetPreference({ slug: "mail", accountId: workspace.me }))).toBe(true);
+    expect(await inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).forgetPreference({ slug: "mail", accountId: workspace.me }))).toBe(false);
+    expect(await inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).forgetPreference({ slug: "unknown", accountId: workspace.me }))).toBe(false);
+
+    expect((await preferences(workspace.id)).map((row) => [row.account_id, row.slug])).toEqual(
+      [[workspace.me, "inbox"], [workspace.other, "mail"]].sort((a, b) => (a[0] ?? "").localeCompare(b[0] ?? "")),
+    );
+    expect((await preferences(elsewhere.id)).map((row) => row.slug)).toEqual(["mail"]);
+    await expect(inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).forgetPreference({ slug: "mail", accountId: workspace.other }))).rejects.toThrow("only the account of the transaction");
+  });
+
+  it("cannot be deleted by another member, nor from another workspace, by a statement that names them", async () => {
+    const workspace = await workspaceOf();
+    const elsewhere = await workspaceOf();
+    await seedMember(db, { workspaceId: elsewhere.id, accountId: workspace.me, role: "member" });
+    const mine = await seedBookmark(workspace.id, { ownerId: workspace.me, slug: "mail" });
+    const inElsewhere = await seedBookmark(elsewhere.id, { ownerId: workspace.me, slug: "mail" });
+    await rememberFor(workspace, workspace.me, "mail", mine);
+    await rememberFor(elsewhere, workspace.me, "mail", inElsewhere);
+
+    const asOther = await db.app.begin(async (tx) => {
+      await tx`SELECT set_config('app.account_id', ${workspace.other}, true), set_config('app.workspace_id', ${workspace.id}, true)`;
+      return tx`DELETE FROM slug_preferences WHERE slug = 'mail' RETURNING slug`;
+    });
+    const fromWorkspaceOfAnother = await db.app.begin(async (tx) => {
+      await tx`SELECT set_config('app.account_id', ${workspace.me}, true), set_config('app.workspace_id', ${workspace.id}, true)`;
+      return tx`DELETE FROM slug_preferences WHERE workspace_id = ${elsewhere.id} RETURNING slug`;
+    });
+
+    expect(asOther).toHaveLength(0);
+    expect(fromWorkspaceOfAnother).toHaveLength(0);
+    expect(await preferences(workspace.id)).toHaveLength(1);
+    expect(await preferences(elsewhere.id)).toHaveLength(1);
   });
 });

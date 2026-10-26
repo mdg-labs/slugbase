@@ -290,6 +290,10 @@ export const FIXTURES: ContractFixtures = {
   // the deletion name a tag by identifier, which the walker cannot know for a tag it would own, so their valid request names a tag that no workspace holds, the
   // declared 404 whoever would hold it, and so is a tag of workspace B; the route tests rename and delete the walker's own tags, and the matrix puts the tag
   // of workspace B in the path.
+  // The remembered choices are the caller's own in the workspace of the request. The list names no identifier. Forgetting names a slug the caller writes: the walker has no choice
+  // for it, the declared 404, and the matrix puts the slugs of workspace B there, whose owner has a choice for the first of them, which the caller does not reach, the same 404.
+  listGoPreferences: {},
+  deleteGoPreference: { path: { slug: "walker" }, status: 404, foreign: { path: { slug: "walker" } } },
   createTag: { body: { name: "Walker tag" } },
   listTags: {},
   renameTag: { path: { id: UNKNOWN_TAG_ID }, body: { name: "Walker tag" }, status: 404, foreign: { path: { id: UNKNOWN_TAG_ID }, body: { name: "Walker tag" } } },

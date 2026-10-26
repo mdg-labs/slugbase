@@ -1871,6 +1871,89 @@
         ],
         "type": "object"
       },
+      "GoPreference": {
+        "additionalProperties": false,
+        "properties": {
+          "bookmarkId": {
+            "description": "The bookmark the slug goes to for the caller",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "host": {
+            "description": "The host of the bookmark's destination, never the whole address",
+            "type": "string"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "accountId": {
+                    "description": "The owner's account",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "description": "The owner's display name, as a member of the workspace sees it",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "accountId",
+                  "displayName"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who owns a bookmark that belongs to another member; null for the caller's own bookmark and for one whose owner has left the workspace"
+          },
+          "slug": {
+            "description": "The slug the choice is for, in lower case",
+            "type": "string"
+          },
+          "title": {
+            "description": "The bookmark's title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "bookmarkId",
+          "title",
+          "host",
+          "owner"
+        ],
+        "type": "object"
+      },
+      "GoPreferenceList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "One page of the caller's remembered choices in the workspace, in the order of their slugs",
+            "items": {
+              "$ref": "#/components/schemas/GoPreference"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "description": "Passed as `cursor` to get the next page; null on the last page",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "type": "object"
+      },
       "GoResolution": {
         "oneOf": [
           {
@@ -7969,7 +8052,7 @@
                 }
               }
             },
-            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the resolution is a POST, so it takes the write scope though it writes nothing"
+            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the resolution is a POST, so it takes the write scope though it counts nothing and writes only the deletion of the caller's own stale remembered choice for the slug (doc 02 §6.4)"
           },
           "404": {
             "content": {
@@ -11453,6 +11536,235 @@
         ],
         "x-slugbase-auth": "account",
         "x-slugbase-rate": "write"
+      }
+    },
+    "/api/v1/me/go-preferences": {
+      "get": {
+        "operationId": "listGoPreferences",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "The most choices to return, at most 100",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "description": "The `nextCursor` of the previous page. It is valid only for the account and workspace that received it; any other cursor is refused with 400",
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoPreferenceList"
+                }
+              }
+            },
+            "description": "One page of the caller's remembered choices in the workspace in the order of their slugs, each with the bookmark it names by identifier, title, host and owner and never its address. Only a choice whose bookmark still has the slug, forwards, is not plan-archived and is readable by the caller is listed: the choices the resolution would follow"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed, or the cursor is not one this account was issued for this workspace (bad_request)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace: the account has none, or the workspace is being deleted"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The query did not pass validation (an unknown parameter, a limit outside 1 to 100)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "List my remembered go choices",
+        "tags": [
+          "me"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-rate": "read",
+        "x-slugbase-scope": "read"
+      }
+    },
+    "/api/v1/me/go-preferences/{slug}": {
+      "delete": {
+        "operationId": "deleteGoPreference",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "slug",
+            "required": true,
+            "schema": {
+              "description": "The slug whose remembered choice is forgotten. It is trimmed and lower-cased before it is looked up; a slug outside the grammar has no choice",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The caller's remembered choice for the slug in the workspace is deleted; the bookmark stays and the slug resolves as it did before the choice was made"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The caller has no remembered choice for the slug in the workspace: another member's choice, one of another workspace, a slug outside the grammar, one that was never remembered and one that was forgotten before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204; or the request acts in no workspace"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The slug did not pass validation"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Forget a remembered go choice",
+        "tags": [
+          "me"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-rate": "write",
+        "x-slugbase-scope": "write"
       }
     },
     "/api/v1/me/identities": {

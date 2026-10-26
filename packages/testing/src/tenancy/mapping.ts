@@ -46,7 +46,9 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  * - Slug: the body input `slug` of `resolveSlug` and of `chooseSlug` is the handle the caller resolves and not the identifier of a row, so the default maps it to a bookmark like the
  *   other inputs named slug, which the default fixture holds. A fixture that holds the slugs of the forwarding bookmarks of workspace B (kind `slug`), which the caller has no bookmark of, maps
  *   it to `slug` and holds that a slug of B resolves to nothing for the caller. The body input `bookmarkId` of `chooseSlug` takes a bookmark identifier, and the choice of a bookmark of B is
- *   `404 slug_not_found`. `resolveSlug` answers an empty `200` and not `404` for a slug of B, which `runApiMatrix` is told by its `emptyAnswers` option.
+ *   `404 slug_not_found`. `resolveSlug` answers an empty `200` and not `404` for a slug of B, which `runApiMatrix` is told by its `emptyAnswers` option. The path parameter `slug` of
+ *   `deleteGoPreference` is a slug as well, and the default maps it to a bookmark; a fixture that holds the slugs of workspace B maps it to `slug`, and forgetting a slug of B, which the owner of B
+ *   has a remembered choice for and the caller has none, is `404 not_found` and leaves the choice of B as it was. `listGoPreferences` has no identifier input.
  * - Tag identifier: the path parameter `id` of `renameTag`, `mergeTag` and `deleteTag`, the body input `intoTagId` of `mergeTag`, the query parameter `tag` of `listBookmarks` and `listBookmarkIds` (as a single value and as a repeated one), the body input `filter.tag` of `bulkBookmarks` and
  *   `previewBulkBookmarks` (as a single value and as a list) and the body input `tagIds[]` of `createBookmark`, `updateBookmark`, `bulkBookmarks` and `previewBulkBookmarks`. The body input `tagNames[]` of the two is a name, not an identifier, and takes no entry.
  * - Folder identifier: the path parameter `id` of `getFolder`, `updateFolder`, `deleteFolder`, `addFolderBookmarks` and `removeFolderBookmarks`, the query
@@ -71,6 +73,7 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
   "resolveSlug.slug": "bookmark",
   "chooseSlug.slug": "bookmark",
   "chooseSlug.bookmarkId": "bookmark",
+  "deleteGoPreference.slug": "bookmark",
   "updateBookmark.id": "bookmark",
   "deleteBookmark.id": "bookmark",
   "openBookmark.id": "bookmark",

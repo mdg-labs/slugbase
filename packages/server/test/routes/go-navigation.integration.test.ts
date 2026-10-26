@@ -77,6 +77,14 @@ async function inDatabase(statement: string, params: string[] = []): Promise<voi
   });
 }
 
+async function storedSlugs(): Promise<string[]> {
+  return database().owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    const rows = await tx<{ slug: string }[]>`SELECT slug FROM slug_preferences ORDER BY slug`;
+    return rows.map((row) => row.slug);
+  });
+}
+
 async function setup(world: World) {
   const owner = await harness.person(world);
   const member = await harness.person(world);
@@ -225,6 +233,33 @@ describe("GET /go/<slug> for a signed-in member", () => {
 
       expect((await visit(world, "/go/mail", { cookie: owner.cookie })).headers.get("location")).toBe("https://example.com/Owner%20mail");
       expect((await visit(world, "/go/mail", { cookie: member.cookie })).headers.get("location")).toBe("https://example.com/Member%20mail");
+      await usage.stop();
+      await close();
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "forgets a remembered choice whose bookmark has another slug by now, and forwards to what the slug resolves to",
+    async () => {
+      const { usage, written, close } = observedBuffer();
+      const world = harness.serve({ usage, webRoot });
+      const { owner } = await setup(world);
+      const old = await created(world, owner, "Old mail", "mail");
+      const current = await created(world, owner, "Current mail", "inbox");
+      expect((await send(world, "POST", CHOOSE, { cookie: owner.cookie }, { slug: "mail", bookmarkId: old.id, remember: true })).status).toBe(200);
+      expect((await send(world, "PATCH", `${BOOKMARKS}/${old.id}`, { cookie: owner.cookie }, { slug: "post" })).status).toBe(200);
+      expect((await send(world, "PATCH", `${BOOKMARKS}/${current.id}`, { cookie: owner.cookie }, { slug: "mail" })).status).toBe(200);
+      expect(await storedSlugs()).toEqual(["mail"]);
+
+      const response = await visit(world, "/go/mail", { cookie: owner.cookie });
+
+      expect(response.status).toBe(302);
+      expect(response.headers.get("location")).toBe("https://example.com/Current%20mail");
+      expect(await storedSlugs()).toEqual([]);
+      await usage.flush();
+      // The choosing counted one use of the old bookmark; the navigation counts one of the current one and none of the old.
+      expect(written.flat().map((entry) => [entry.bookmarkId, entry.count]).sort()).toEqual([[old.id, 1], [current.id, 1]].sort());
       await usage.stop();
       await close();
     },

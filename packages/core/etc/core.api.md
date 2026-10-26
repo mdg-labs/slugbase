@@ -2447,6 +2447,9 @@ export type FolderUpdateResult =
 };
 
 // @public
+export function forgetGoPreference(input: GoPreferenceForgetDependencies, ask: GoPreferenceForgetAsk): Promise<boolean>;
+
+// @public
 export function generateApiToken(): ApiToken;
 
 // @public
@@ -2517,7 +2520,7 @@ export interface GoChooseAsk {
 // @public (undocumented)
 export interface GoChooseDependencies {
     // (undocumented)
-    readonly store: GoStore;
+    readonly store: Pick<GoStore, "candidates" | "remember">;
     // (undocumented)
     readonly usage: BookmarkUsage;
 }
@@ -2568,6 +2571,96 @@ export type GoNavigation =
     readonly kind: "not_found";
 };
 
+// @public
+export interface GoPreference {
+    // (undocumented)
+    readonly bookmarkId: string;
+    // (undocumented)
+    readonly host: string;
+    readonly owner: {
+        readonly accountId: string;
+        readonly displayName: string;
+    } | null;
+    // (undocumented)
+    readonly slug: string;
+    // (undocumented)
+    readonly title: string;
+}
+
+// @public
+export interface GoPreferenceCursors {
+    open(cursor: string, scope: string): string | undefined;
+    // (undocumented)
+    seal(afterSlug: string, scope: string): string;
+}
+
+// @public (undocumented)
+export interface GoPreferenceForgetAsk {
+    readonly accountId: string;
+    readonly slug: string;
+}
+
+// @public (undocumented)
+export interface GoPreferenceForgetDependencies {
+    // (undocumented)
+    readonly store: Pick<GoPreferenceStore, "forgetPreference">;
+}
+
+// @public (undocumented)
+export interface GoPreferenceListAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly cursor: string | undefined;
+    readonly limit: number;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface GoPreferenceListDependencies {
+    // (undocumented)
+    readonly cursors: GoPreferenceCursors;
+    // (undocumented)
+    readonly store: Pick<GoPreferenceStore, "listPreferences">;
+}
+
+// @public (undocumented)
+export type GoPreferenceListOutcome = {
+    readonly kind: "listed";
+    readonly items: readonly GoPreference[];
+    readonly nextCursor: string | null;
+}
+/** The cursor was not issued by this server for this account and workspace, or does not hold a slug; nothing was read. */
+| {
+    readonly kind: "bad_cursor";
+};
+
+// @public
+export interface GoPreferenceRecord {
+    // (undocumented)
+    readonly bookmarkId: string;
+    readonly host: string;
+    readonly ownerId: string | null;
+    readonly ownerName: string | null;
+    // (undocumented)
+    readonly slug: string;
+    // (undocumented)
+    readonly title: string;
+}
+
+// @public (undocumented)
+export interface GoPreferenceStore {
+    forgetPreference(request: {
+        readonly slug: string;
+        readonly accountId: string;
+    }): Promise<boolean>;
+    listPreferences(request: {
+        readonly accountId: string;
+        readonly afterSlug: string | undefined;
+        readonly limit: number;
+    }): Promise<readonly GoPreferenceRecord[]>;
+}
+
 // @public (undocumented)
 export type GoResolution =
 /** Nothing the member can read has the slug (or the slug is not one). */
@@ -2599,7 +2692,7 @@ export interface GoResolveAsk {
 // @public (undocumented)
 export interface GoResolveDependencies {
     // (undocumented)
-    readonly store: Pick<GoStore, "candidates" | "summaries">;
+    readonly store: Pick<GoStore, "candidates" | "summaries" | "forgetStale">;
 }
 
 // @public (undocumented)
@@ -2608,6 +2701,11 @@ export interface GoStore {
         readonly slug: string;
         readonly accountId: string;
     }): Promise<GoCandidateSet>;
+    forgetStale(request: {
+        readonly slug: string;
+        readonly bookmarkId: string;
+        readonly accountId: string;
+    }): Promise<boolean>;
     remember(request: {
         readonly slug: string;
         readonly bookmarkId: string;
@@ -3793,6 +3891,9 @@ export function listBookmarks(input: BookmarkListDependencies, ask: BookmarkList
 
 // @public
 export function listFolders(input: FolderListDependencies, ask: FolderListAsk): Promise<FolderListOutcome>;
+
+// @public
+export function listGoPreferences(input: GoPreferenceListDependencies, ask: GoPreferenceListAsk): Promise<GoPreferenceListOutcome>;
 
 // @public
 export function listInstanceAccounts(input: InstanceAccountDependencies, ask: InstanceAccountAsk): Promise<readonly InstanceAccount[]>;

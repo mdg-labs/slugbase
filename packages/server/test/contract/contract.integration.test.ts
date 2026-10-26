@@ -325,12 +325,12 @@ describe("the walker over the committed document", () => {
     expect(report.failures.filter((failure) => !teamRefusal(failure) && !skippedNotRefused(failure))).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each operation. Each of the eighty that need a session also answers 401 without one, each of the seventeen that declare
-    // re-authentication answers 401 reauth_required without it, and each of the fifty-six whose policy has a role below it (the twenty-nine of a member, the ten
+    // One valid request for each operation. Each of the eighty-two that need a session also answers 401 without one, each of the seventeen that declare
+    // re-authentication answers 401 reauth_required without it, and each of the fifty-eight whose policy has a role below it (the thirty-one of a member, the ten
     // of an admin, the two of an owner and the fifteen of the instance admin) answers the principal just below it (404 below member, 403 below the others).
-    // Each of the seventeen that declare the write scope answers 403 token_scope to a token that may only read, each of the four that declare an entitlement answers
-    // 403 to an account without it, and each of the twenty-eight that name a member, a recipient, a team, an invitation, a bookmark, a slug, a tag or a folder, or an input that can carry one, answers for one of workspace B.
-    expect(report.calls).toBe(operations.length + 80 + 17 + 56 + 17 + 4 + 28);
+    // Each of the eighteen that declare the write scope answers 403 token_scope to a token that may only read, each of the four that declare an entitlement answers
+    // 403 to an account without it, and each of the twenty-nine that name a member, a recipient, a team, an invitation, a bookmark, a slug, a tag or a folder, or an input that can carry one, answers for one of workspace B.
+    expect(report.calls).toBe(operations.length + 82 + 17 + 58 + 18 + 4 + 29);
   }, WALK_TIMEOUT_MS);
 });
 
@@ -523,7 +523,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     });
   }
 
-  it("passes for the forty-one tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations, its bookmarks, its tags, its folders, its remembered choices and its audit log as they were", async () => {
+  it("passes for the forty-three tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations, its bookmarks, its tags, its folders, its remembered choices and its audit log as they were", async () => {
     await seedFixtureWorkspaces();
     const before = await contentOfB();
     // The deletion of the workspace takes no identifier, so the matrix repeats it as every principal of A (the sessions of the matrix have just
@@ -558,7 +558,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     const sendByFilter = matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: byFilterFixtures, credentialsOf: (principal) => world.credentialsOf(principal) });
     const variants: VariantStatuses[] = [];
     const instanceAdminStatuses: number[] = [];
-    const mapping = { rowId: "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "createBookmark.slug": "bookmark", "updateBookmark.slug": "bookmark", "checkSlugAvailability.slug": "bookmark", "checkSlugAvailability.bookmarkId": "bookmark", "resolveSlug.slug": "slug", "chooseSlug.slug": "slug", "chooseSlug.bookmarkId": "bookmark", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "listBookmarkIds.folderId": "folder", "listBookmarkIds.tag": "tag", "listBookmarkIds.tag[]": "tag", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark", "bulkBookmarks.filter.folderId": "folder", "bulkBookmarks.filter.tag": "tag", "bulkBookmarks.filter.tag[]": "tag", "bulkBookmarks.folderId": "folder", "bulkBookmarks.tagIds[]": "tag", "previewBulkBookmarks.ids[]": "bookmark", "previewBulkBookmarks.filter.hasSlug": "bookmark", "previewBulkBookmarks.filter.folderId": "folder", "previewBulkBookmarks.filter.tag": "tag", "previewBulkBookmarks.filter.tag[]": "tag", "previewBulkBookmarks.tagIds[]": "tag" } as const;
+    const mapping = { rowId: "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "createBookmark.slug": "bookmark", "updateBookmark.slug": "bookmark", "checkSlugAvailability.slug": "bookmark", "checkSlugAvailability.bookmarkId": "bookmark", "resolveSlug.slug": "slug", "chooseSlug.slug": "slug", "chooseSlug.bookmarkId": "bookmark", "deleteGoPreference.slug": "slug", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "listBookmarkIds.folderId": "folder", "listBookmarkIds.tag": "tag", "listBookmarkIds.tag[]": "tag", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark", "bulkBookmarks.filter.folderId": "folder", "bulkBookmarks.filter.tag": "tag", "bulkBookmarks.filter.tag[]": "tag", "bulkBookmarks.folderId": "folder", "bulkBookmarks.tagIds[]": "tag", "previewBulkBookmarks.ids[]": "bookmark", "previewBulkBookmarks.filter.hasSlug": "bookmark", "previewBulkBookmarks.filter.folderId": "folder", "previewBulkBookmarks.filter.tag": "tag", "previewBulkBookmarks.filter.tag[]": "tag", "previewBulkBookmarks.tagIds[]": "tag" } as const;
     const request = async (call: ApiCall): Promise<ApiResponse> => {
       // The bulk request and the preview name the identifiers of B in several inputs, and one request cannot carry them all: `ids` and `filter` together are malformed, the
       // `hasSlug` of the filter is a boolean, and the folder and the tag go with different actions. Each call is therefore sent as the requests below, which reach the
@@ -604,8 +604,8 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // Each of the ten principals, the instance admin among them, naming the two bookmarks of B once in the `hasSlug` of the list and once in that of the select-all.
     expect(matrix.failures.filter(filterRefusal)).toHaveLength(10 * 2 * 2);
     expect(report.failures).toEqual([]);
-    expect(report.tenantScoped).toBe(41);
-    expect(report.classified.byKind["tenant-scoped"]).toBe(41);
+    expect(report.tenantScoped).toBe(43);
+    expect(report.classified.byKind["tenant-scoped"]).toBe(43);
     // The bulk request reaches its handler as the three sessions and the three read-write tokens of A, once for each pair of the two bookmarks of B and of the two inputs the matrix fills in `ids` and
     // in the filter's `hasSlug`, and the preview of adding tags is called as the same ten principals. Where the bulk handler is reached, a bookmark of B named in `ids` is skipped as not found with a
     // 200 that reports nothing affected, a filter on the folder and the tags of B matches nothing, and a folder or a tag of B is the declared 404 whichever action names it. Where it is not (a token that
@@ -634,7 +634,8 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // The creation, the list and the statistics of tags and the creation and the list of folders name none, and the rename, the merge and the deletion of a tag and the read, the change and the deletion of a folder name the one tag or folder of B once each (the merge names it in the path and as the target, the one pair, which the handler answers 404 as it does any other since the tag is not the caller's).
     // The filing and the unfiling of bookmarks name the one folder of B in the path and each of the two bookmarks of B in the body, once for each of the two.
     // The resolution of a slug names each of the two slugs of B once, which the caller resolves to nothing with an empty 200 (the caller has no bookmark with it, and workspace B is not read for it), and the choice names each of the two slugs of B once for each of the two bookmarks that have them, the right pair among them, which is the declared 404 slug_not_found.
-    const calls = 16 + (3 + 3 + 3 + 3 * 3 + 3) + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2;
+    // The list of remembered choices names none (one of the seventeen calls that name nothing), and forgetting one names each of the two slugs of B once, the first of which the owner of B has a choice for, which is the declared 404 not_found and leaves it.
+    const calls = 17 + (3 + 3 + 3 + 3 * 3 + 3) + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2;
     expect(report.attempts).toBe(10 * calls);
     // The four exceptions are the identifiers of B in the `hasSlug` filter of the bookmark list and of the select-all, which the query validation refuses before the instance admin's missing membership is looked at.
     expect(instanceAdminStatuses.toSorted()).toEqual([...Array<number>(calls - 4).fill(404), 422, 422, 422, 422]);

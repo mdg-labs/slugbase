@@ -1148,6 +1148,20 @@ export interface ComponentTypes {
         GoDestination: {
             url: string;
         };
+        GoPreference: {
+            bookmarkId: string;
+            host: string;
+            owner: {
+                accountId: string;
+                displayName: string;
+            } | null;
+            slug: string;
+            title: string;
+        };
+        GoPreferenceList: {
+            items: ComponentTypes["schemas"]["GoPreference"][];
+            nextCursor: string | null;
+        };
         GoResolution: {
             result: "none";
         } | {
@@ -2244,6 +2258,33 @@ export const deleteFolder: {
 };
 
 // @public (undocumented)
+export const deleteGoPreference: {
+    readonly method: "delete";
+    readonly path: "/api/v1/me/go-preferences/{slug}";
+    readonly operationId: "deleteGoPreference";
+    readonly tag: "me";
+    readonly summary: "Forget a remembered go choice";
+    readonly auth: "member";
+    readonly rate: "write";
+    readonly scope: "write";
+    readonly request: {
+        readonly params: z.ZodObject<{
+            slug: z.ZodString;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 204: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
 export const deleteInstanceAccount: {
     readonly method: "delete";
     readonly path: "/api/v1/instance/accounts/{id}";
@@ -3122,6 +3163,15 @@ export const getWorkspaceSettings: {
     };
 };
 
+// @public
+export const GO_PREFERENCE_CURSOR_MAX_LENGTH = 512;
+
+// @public
+export const GO_PREFERENCE_LIST_DEFAULT_LIMIT = 50;
+
+// @public
+export const GO_PREFERENCE_LIST_MAX_LIMIT = 100;
+
 // @public (undocumented)
 export const GO_RESOLUTIONS: readonly ["none", "preferred", "single", "multiple"];
 
@@ -3154,6 +3204,38 @@ export const GoChooseRequestSchema: z.ZodObject<{
 // @public (undocumented)
 export const GoDestinationSchema: z.ZodObject<{
     url: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const GoPreferenceListSchema: z.ZodObject<{
+    items: z.ZodArray<z.ZodObject<{
+        slug: z.ZodString;
+        bookmarkId: z.ZodUUID;
+        title: z.ZodString;
+        host: z.ZodString;
+        owner: z.ZodNullable<z.ZodObject<{
+            accountId: z.ZodUUID;
+            displayName: z.ZodString;
+        }, z.core.$strict>>;
+    }, z.core.$strict>>;
+    nextCursor: z.ZodNullable<z.ZodString>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const GoPreferenceParamsSchema: z.ZodObject<{
+    slug: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const GoPreferenceSchema: z.ZodObject<{
+    slug: z.ZodString;
+    bookmarkId: z.ZodUUID;
+    title: z.ZodString;
+    host: z.ZodString;
+    owner: z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+    }, z.core.$strict>>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -3990,6 +4072,51 @@ export const ListFoldersQuerySchema: z.ZodObject<{
         count: "count";
         updated: "updated";
     }>>;
+    limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+    cursor: z.ZodOptional<z.ZodString>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const listGoPreferences: {
+    readonly method: "get";
+    readonly path: "/api/v1/me/go-preferences";
+    readonly operationId: "listGoPreferences";
+    readonly tag: "me";
+    readonly summary: "List my remembered go choices";
+    readonly auth: "member";
+    readonly rate: "read";
+    readonly scope: "read";
+    readonly request: {
+        readonly query: z.ZodObject<{
+            limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+            cursor: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        items: z.ZodArray<z.ZodObject<{
+        slug: z.ZodString;
+        bookmarkId: z.ZodUUID;
+        title: z.ZodString;
+        host: z.ZodString;
+        owner: z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        }, z.core.$strict>>;
+        }, z.core.$strict>>;
+        nextCursor: z.ZodNullable<z.ZodString>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const ListGoPreferencesQuerySchema: z.ZodObject<{
     limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
     cursor: z.ZodOptional<z.ZodString>;
 }, z.core.$strict>;
@@ -6461,6 +6588,83 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    deleteGoPreference: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     deleteInstanceAccount: {
         parameters: {
             query?: never;
@@ -8338,6 +8542,78 @@ export interface OperationTypes {
                 };
                 content: {
                     "application/json": ComponentTypes["schemas"]["FolderList"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    listGoPreferences: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["GoPreferenceList"];
                 };
             };
             400: {
@@ -12703,6 +12979,40 @@ export interface paths {
         put?: never;
         post?: never;
         delete: OperationTypes["cancelPendingEmailChange"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/me/go-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["listGoPreferences"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/me/go-preferences/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: OperationTypes["deleteGoPreference"];
         options?: never;
         head?: never;
         patch?: never;

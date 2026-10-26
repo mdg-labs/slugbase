@@ -831,6 +831,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/me/go-preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List my remembered go choices */
+        get: operations["listGoPreferences"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/go-preferences/{slug}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Forget a remembered go choice */
+        delete: operations["deleteGoPreference"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/me/identities": {
         parameters: {
             query?: never;
@@ -1955,6 +1989,35 @@ export interface components {
         GoDestination: {
             /** @description The destination to go to: the bookmark's URL as stored, checked again to be an http or https URL */
             url: string;
+        };
+        GoPreference: {
+            /**
+             * Format: uuid
+             * @description The bookmark the slug goes to for the caller
+             */
+            bookmarkId: string;
+            /** @description The host of the bookmark's destination, never the whole address */
+            host: string;
+            /** @description Who owns a bookmark that belongs to another member; null for the caller's own bookmark and for one whose owner has left the workspace */
+            owner: {
+                /**
+                 * Format: uuid
+                 * @description The owner's account
+                 */
+                accountId: string;
+                /** @description The owner's display name, as a member of the workspace sees it */
+                displayName: string;
+            } | null;
+            /** @description The slug the choice is for, in lower case */
+            slug: string;
+            /** @description The bookmark's title */
+            title: string;
+        };
+        GoPreferenceList: {
+            /** @description One page of the caller's remembered choices in the workspace, in the order of their slugs */
+            items: components["schemas"]["GoPreference"][];
+            /** @description Passed as `cursor` to get the next page; null on the last page */
+            nextCursor: string | null;
         };
         GoResolution: {
             /**
@@ -5277,7 +5340,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the resolution is a POST, so it takes the write scope though it writes nothing */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the resolution is a POST, so it takes the write scope though it counts nothing and writes only the deletion of the caller's own stale remembered choice for the slug (doc 02 §6.4) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7918,6 +7981,170 @@ export interface operations {
             };
             /** @description The request did not come from the application itself, or the credential is an API token */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listGoPreferences: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of the caller's remembered choices in the workspace in the order of their slugs, each with the bookmark it names by identifier, title, host and owner and never its address. Only a choice whose bookmark still has the slug, forwards, is not plan-archived and is readable by the caller is listed: the choices the resolution would follow */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoPreferenceList"];
+                };
+            };
+            /** @description The request was malformed, or the cursor is not one this account was issued for this workspace (bad_request) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The query did not pass validation (an unknown parameter, a limit outside 1 to 100) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteGoPreference: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's remembered choice for the slug in the workspace is deleted; the bookmark stays and the slug resolves as it did before the choice was made */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The caller has no remembered choice for the slug in the workspace: another member's choice, one of another workspace, a slug outside the grammar, one that was never remembered and one that was forgotten before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204; or the request acts in no workspace */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The slug did not pass validation */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

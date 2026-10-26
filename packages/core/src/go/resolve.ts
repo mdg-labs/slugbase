@@ -5,7 +5,8 @@ import { parseSlug } from "./slug.ts";
 // is readable by its owner; sharing, when it is built, widens the store's predicate and nothing here). The choice among them is made here, in the order of Q25: a
 // remembered preference that is still a candidate, then the member's own bookmark, then the one shared candidate, then the several shared candidates, which
 // the member picks from. Nothing is found for a slug outside the grammar, and a bookmark the member cannot read is never named, so a slug that exists only in
-// another workspace, or only as another member's private bookmark, resolves to nothing.
+// another workspace, or only as another member's private bookmark, resolves to nothing. A remembered choice that is no candidate is ignored, and the store forgets
+// it when its bookmark has changed its slug, stopped forwarding or can no longer be read by the member (doc 02 section 6.4).
 
 /** How the member can read a candidate: as its owner, or through a direct share, a team's share or a shared folder. */
 export type GoAccess = "owner" | "direct" | "team" | "folder";
@@ -22,7 +23,7 @@ export interface GoCandidate {
 
 export interface GoCandidateSet {
   readonly candidates: readonly GoCandidate[];
-  /** The bookmark the member remembered for the slug; it may no longer be a candidate. */
+  /** The bookmark the member remembered for the slug, whether or not there is a candidate; it may no longer be one. */
   readonly preferredId: string | undefined;
 }
 
@@ -47,6 +48,12 @@ export interface GoStore {
    * bookmark is no longer a candidate of the slug for the member, so a preference never names a bookmark that cannot be resolved to.
    */
   remember(request: { readonly slug: string; readonly bookmarkId: string; readonly accountId: string }): Promise<boolean>;
+  /**
+   * Deletes the member's remembered choice for `slug` if it names `bookmarkId` and that bookmark has no longer the slug, no longer forwards or is no longer readable by the
+   * member, judged by the statement that deletes, and answers whether it deleted. A bookmark that is only plan-archived keeps its choice, which is ignored while the bookmark
+   * is archived; a choice that names another bookmark by now (the member chose again) stays.
+   */
+  forgetStale(request: { readonly slug: string; readonly bookmarkId: string; readonly accountId: string }): Promise<boolean>;
 }
 
 /** One bookmark the resolution names. */
@@ -71,7 +78,7 @@ export type GoResolution =
   | { readonly kind: "multiple"; readonly candidates: readonly GoChoice[] };
 
 export interface GoResolveDependencies {
-  readonly store: Pick<GoStore, "candidates" | "summaries">;
+  readonly store: Pick<GoStore, "candidates" | "summaries" | "forgetStale">;
 }
 
 export interface GoResolveAsk {
@@ -97,6 +104,13 @@ function byTitle(a: GoChoice, b: GoChoice): number {
   return titles !== 0 ? titles : a.id.localeCompare(b.id, "en");
 }
 
+/** A remembered choice that is no candidate is ignored by the resolution above and forgotten here, if the store finds its bookmark stale (see `GoStore.forgetStale`). */
+async function forgetUnlessCandidate(store: Pick<GoStore, "forgetStale">, ask: { readonly slug: string; readonly accountId: string }, preferredId: string | undefined): Promise<void> {
+  if (preferredId !== undefined) {
+    await store.forgetStale({ ...ask, bookmarkId: preferredId });
+  }
+}
+
 /** The candidates of `slug` for the account, among those that still exist, in the order of Q25. */
 export async function resolveSlug({ store }: GoResolveDependencies, ask: GoResolveAsk): Promise<GoResolution> {
   const accountId = ask.accountId.toLowerCase();
@@ -106,6 +120,7 @@ export async function resolveSlug({ store }: GoResolveDependencies, ask: GoResol
   }
   const found = await store.candidates({ slug, accountId });
   if (found.candidates.length === 0) {
+    await forgetUnlessCandidate(store, { slug, accountId }, found.preferredId);
     return { kind: "none" };
   }
   // A candidate that was deleted between the two reads has no summary and is no longer one.
@@ -119,6 +134,7 @@ export async function resolveSlug({ store }: GoResolveDependencies, ask: GoResol
   if (preferred !== undefined) {
     return { kind: "preferred", bookmark: preferred.choice };
   }
+  await forgetUnlessCandidate(store, { slug, accountId }, found.preferredId);
   const own = choices.filter(({ candidate }) => candidate.access === "owner" && candidate.ownerId === accountId).sort((a, b) => byTitle(a.choice, b.choice))[0];
   if (own !== undefined) {
     return { kind: "single", bookmark: own.choice };
