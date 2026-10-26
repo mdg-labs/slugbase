@@ -292,7 +292,7 @@ describe("the availability of a slug", { timeout: HEAVY_TEST_TIMEOUT_MS }, () =>
     stubServer({ availability: () => json({ status: "available", othersUseCount: 2 }) });
     const dialog = await openApp("/?new=1&slug=mail");
 
-    expect(await within(dialog).findByText("2 other bookmarks in this workspace have this slug too. In go, yours comes first.")).toBeTruthy();
+    expect(await within(dialog).findByText("2 other bookmarks in this workspace have this slug too. In go, yours comes first unless you have remembered another choice for this slug.")).toBeTruthy();
     expect(within(dialog).getByLabelText("Go address")).toBeTruthy();
   });
 

@@ -298,7 +298,7 @@
         "placeholder": "mail",
         "checking": "Checking the slug",
         "available": "This slug is free.",
-        "othersUse": "{count, plural, one {# other bookmark in this workspace has this slug too. In go, yours comes first.} other {# other bookmarks in this workspace have this slug too. In go, yours comes first.}}",
+        "othersUse": "{count, plural, one {# other bookmark in this workspace has this slug too. In go, yours comes first unless you have remembered another choice for this slug.} other {# other bookmarks in this workspace have this slug too. In go, yours comes first unless you have remembered another choice for this slug.}}",
         "unchecked": "We could not check whether this slug is free. You can still save.",
         "error": {
           "invalid": "Use 1 to {max, number} lowercase letters, digits and hyphens, and do not start with a hyphen.",

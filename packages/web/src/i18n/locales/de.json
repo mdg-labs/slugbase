@@ -298,7 +298,7 @@
         "placeholder": "mail",
         "checking": "Der Slug wird geprüft",
         "available": "Dieser Slug ist frei.",
-        "othersUse": "{count, plural, one {# weiteres Lesezeichen in diesem Workspace hat diesen Slug ebenfalls. Bei go kommt deines zuerst.} other {# weitere Lesezeichen in diesem Workspace haben diesen Slug ebenfalls. Bei go kommt deines zuerst.}}",
+        "othersUse": "{count, plural, one {# weiteres Lesezeichen in diesem Workspace hat diesen Slug ebenfalls. Bei go kommt deines zuerst, außer du hast dir für diesen Slug eine andere Wahl gemerkt.} other {# weitere Lesezeichen in diesem Workspace haben diesen Slug ebenfalls. Bei go kommt deines zuerst, außer du hast dir für diesen Slug eine andere Wahl gemerkt.}}",
         "unchecked": "Wir konnten nicht prüfen, ob dieser Slug frei ist. Du kannst trotzdem speichern.",
         "error": {
           "invalid": "Verwende 1 bis {max, number} Kleinbuchstaben, Ziffern und Bindestriche und beginne nicht mit einem Bindestrich.",
