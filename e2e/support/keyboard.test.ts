@@ -67,4 +67,26 @@ void describe("the keyboard steps of the journeys", () => {
     assert.ok(url !== undefined);
     await assert.rejects(waitForInitialFocus(url, "the URL field", 100), /the URL field has the initial focus within 100 ms/);
   });
+
+  // A locator of a field that never mounts waits for it until the timeout it is given, or until the test's own timeout
+  // when it is given none; this one waits for ever without one.
+  void it("the wait bounds the wait for an element that never exists by its own deadline", { timeout: 2000 }, async () => {
+    const timeouts: number[] = [];
+    const missing: FocusTarget = {
+      evaluate: (_pageFunction, _arg, options) => {
+        const timeout = options?.timeout;
+        if (timeout === undefined) {
+          return new Promise<boolean>(() => undefined);
+        }
+        timeouts.push(timeout);
+        return new Promise<boolean>((_resolve, reject) => {
+          setTimeout(() => {
+            reject(new Error("locator.evaluate: Timeout"));
+          }, timeout);
+        });
+      },
+    };
+    await assert.rejects(waitForInitialFocus(missing, "the URL field", 100), /the URL field has the initial focus within 100 ms/);
+    assert.ok(timeouts.length > 0 && timeouts.every((timeout) => timeout > 0 && timeout <= 100), `timeouts ${timeouts.join(", ")}`);
+  });
 });
