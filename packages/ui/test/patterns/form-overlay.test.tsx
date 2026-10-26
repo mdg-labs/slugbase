@@ -29,6 +29,12 @@ describe("FormOverlay", () => {
     const dialog = await screen.findByRole("dialog", { name: "Confirm it is you" });
     expect(dialog.getAttribute("aria-describedby")).toBeTruthy();
     expect(screen.getByLabelText("Password")).toBeTruthy();
+  });
+
+  it("is free of accessibility violations", async () => {
+    render(<Harness />);
+    await screen.findByRole("dialog", { name: "Confirm it is you" });
+
     await expectNoViolations(document.body);
   });
 

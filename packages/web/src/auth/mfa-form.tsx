@@ -5,8 +5,8 @@ import { useRouter } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactElement, type SyntheticEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { ApiProblemError } from "../api/client.ts";
+import { continueTo } from "./continue-to.ts";
 import { loginPath } from "./mfa.ts";
-import { safeNextPath } from "./next-path.ts";
 
 const CODE_LENGTH = 6;
 const SECONDS_PER_MINUTE = 60;
@@ -144,7 +144,7 @@ export function MfaForm({ next }: { next: string | undefined }): ReactElement {
     if (done) {
       // What the previous visitor of this browser left in the cache is not for the next one.
       queryClient.clear();
-      router.history.replace(safeNextPath(next));
+      continueTo(router.history, next);
     }
   }
 

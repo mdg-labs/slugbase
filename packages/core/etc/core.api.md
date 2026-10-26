@@ -1139,7 +1139,10 @@ export interface BookmarkChanges {
     readonly description?: string | null;
     readonly folderIds?: readonly string[];
     // (undocumented)
+    readonly forwarding?: boolean;
+    // (undocumented)
     readonly pinned?: boolean;
+    readonly slug?: string | null;
     readonly tags?: BookmarkTagSelection;
     // (undocumented)
     readonly title?: string;
@@ -1154,8 +1157,10 @@ export interface BookmarkCreationAsk {
     // (undocumented)
     readonly description: string | undefined;
     readonly folderIds: readonly string[] | undefined;
+    readonly forwarding?: boolean | undefined;
     // (undocumented)
     readonly pinned: boolean | undefined;
+    readonly slug?: string | undefined;
     readonly tagIds?: readonly string[] | undefined;
     // (undocumented)
     readonly tagNames?: readonly string[] | undefined;
@@ -1201,6 +1206,18 @@ export type BookmarkCreationOutcome = {
 /** A tag is not one the account has in this workspace (another member's, another workspace's, or none); nothing was written. */
 | {
     readonly kind: "tag_not_found";
+}
+/** The slug is outside the grammar once trimmed and lower-cased; nothing was written. */
+| {
+    readonly kind: "slug_invalid";
+}
+/** Forwarding was asked for without a slug; nothing was written. */
+| {
+    readonly kind: "forwarding_requires_slug";
+}
+/** The account already has another bookmark with the slug in this workspace; nothing was written. */
+| {
+    readonly kind: "slug_taken";
 };
 
 // @public (undocumented)
@@ -1426,8 +1443,10 @@ export interface BookmarkPatch {
     // (undocumented)
     readonly description?: string | null;
     readonly folderIds?: readonly string[];
+    readonly forwarding?: boolean;
     // (undocumented)
     readonly pinned?: boolean;
+    readonly slug?: string | null;
     readonly tagIds?: readonly string[];
     // (undocumented)
     readonly tagNames?: readonly string[];
@@ -1540,6 +1559,10 @@ export type BookmarkStoreResult = {
 /** One of the tags is not one the owner has in this workspace; nothing is written. */
 | {
     readonly kind: "tag_not_found";
+}
+/** The owner already has another bookmark with the slug in this workspace; nothing is written. */
+| {
+    readonly kind: "slug_taken";
 };
 
 // @public (undocumented)
@@ -1601,6 +1624,10 @@ export type BookmarkUpdateOutcome = BookmarkUpdateResult
 | {
     readonly kind: "url_refused";
     readonly reason: BookmarkUrlRefusal;
+}
+/** The new slug is outside the grammar once trimmed and lower-cased; nothing was written. */
+| {
+    readonly kind: "slug_invalid";
 };
 
 // @public (undocumented)
@@ -1632,6 +1659,14 @@ export type BookmarkUpdateResult =
 /** A tag of the selection is not one the owner has in this workspace; nothing was written. */
 | {
     readonly kind: "tag_not_found";
+}
+/** The owner already has another bookmark with the slug in this workspace; nothing was written. */
+| {
+    readonly kind: "slug_taken";
+}
+/** The bookmark would forward without a slug: its slug is cleared while forwarding stays on, or forwarding is turned on without one; nothing was written. */
+| {
+    readonly kind: "forwarding_requires_slug";
 }
 /** The version of the bookmark, read under its lock, is none of the accepted ones; nothing was written. */
 | {
@@ -1708,6 +1743,9 @@ export function changeMemberRole(input: MemberRoleDependencies, ask: MemberRoleA
 
 // @public
 export function changeWorkspaceSettings(input: WorkspaceAdministrationDependencies, ask: WorkspaceSettingsAsk): Promise<WorkspaceSettingsOutcome>;
+
+// @public (undocumented)
+export function chooseSlugBookmark(input: GoChooseDependencies, ask: GoChooseAsk): Promise<GoChooseOutcome>;
 
 // @public
 export interface ClientErrorReportPort extends Port {
@@ -2409,6 +2447,9 @@ export type FolderUpdateResult =
 };
 
 // @public
+export function forgetGoPreference(input: GoPreferenceForgetDependencies, ask: GoPreferenceForgetAsk): Promise<boolean>;
+
+// @public
 export function generateApiToken(): ApiToken;
 
 // @public
@@ -2419,6 +2460,259 @@ export function generateCredentialToken(): CredentialToken;
 
 // @public
 export function generateTotpSecret(): Uint8Array;
+
+// @public
+export type GoAccess = "owner" | "direct" | "team" | "folder";
+
+// @public
+export interface GoBookmarkSummary {
+    readonly host: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly ownerId: string | null;
+    readonly ownerName: string | null;
+    // (undocumented)
+    readonly title: string;
+}
+
+// @public
+export interface GoCandidate {
+    // (undocumented)
+    readonly access: GoAccess;
+    // (undocumented)
+    readonly id: string;
+    readonly ownerId: string | null;
+    readonly url: string;
+}
+
+// @public (undocumented)
+export interface GoCandidateSet {
+    // (undocumented)
+    readonly candidates: readonly GoCandidate[];
+    readonly preferredId: string | undefined;
+}
+
+// @public
+export interface GoChoice {
+    // (undocumented)
+    readonly host: string;
+    // (undocumented)
+    readonly id: string;
+    readonly owner: {
+        readonly accountId: string;
+        readonly displayName: string;
+    } | null;
+    readonly sharedVia: "direct" | "team" | "folder" | null;
+    // (undocumented)
+    readonly title: string;
+}
+
+// @public (undocumented)
+export interface GoChooseAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly bookmarkId: string;
+    readonly remember: boolean;
+    readonly slug: string;
+}
+
+// @public (undocumented)
+export interface GoChooseDependencies {
+    // (undocumented)
+    readonly store: Pick<GoStore, "candidates" | "remember">;
+    // (undocumented)
+    readonly usage: BookmarkUsage;
+}
+
+// @public (undocumented)
+export type GoChooseOutcome =
+/** The destination to go to; the use is counted and the choice remembered when it was asked for. */
+    {
+    readonly kind: "chosen";
+    readonly url: string;
+}
+/** The bookmark is no candidate of the slug for the member; which of the reasons it is stays unsaid. Nothing is written or counted. */
+| {
+    readonly kind: "not_found";
+}
+/** The stored URL is not an `http` or `https` URL. Nothing is written or counted. */
+| {
+    readonly kind: "url_refused";
+};
+
+// @public (undocumented)
+export interface GoNavigateAsk {
+    readonly accountId: string;
+    readonly slug: string;
+}
+
+// @public (undocumented)
+export interface GoNavigateDependencies {
+    // (undocumented)
+    readonly store: GoStore;
+    // (undocumented)
+    readonly usage: BookmarkUsage;
+}
+
+// @public (undocumented)
+export type GoNavigation =
+/** Forward to this address, an `http` or `https` URL; the use is counted. */
+    {
+    readonly kind: "forward";
+    readonly url: string;
+}
+/** Several bookmarks shared with the member have the slug and none is preferred: the member chooses. */
+| {
+    readonly kind: "choose";
+}
+/** Nothing the member can read has the slug, or what does cannot be forwarded to. */
+| {
+    readonly kind: "not_found";
+};
+
+// @public
+export interface GoPreference {
+    // (undocumented)
+    readonly bookmarkId: string;
+    // (undocumented)
+    readonly host: string;
+    readonly owner: {
+        readonly accountId: string;
+        readonly displayName: string;
+    } | null;
+    // (undocumented)
+    readonly slug: string;
+    // (undocumented)
+    readonly title: string;
+}
+
+// @public
+export interface GoPreferenceCursors {
+    open(cursor: string, scope: string): string | undefined;
+    // (undocumented)
+    seal(afterSlug: string, scope: string): string;
+}
+
+// @public (undocumented)
+export interface GoPreferenceForgetAsk {
+    readonly accountId: string;
+    readonly slug: string;
+}
+
+// @public (undocumented)
+export interface GoPreferenceForgetDependencies {
+    // (undocumented)
+    readonly store: Pick<GoPreferenceStore, "forgetPreference">;
+}
+
+// @public (undocumented)
+export interface GoPreferenceListAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly cursor: string | undefined;
+    readonly limit: number;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface GoPreferenceListDependencies {
+    // (undocumented)
+    readonly cursors: GoPreferenceCursors;
+    // (undocumented)
+    readonly store: Pick<GoPreferenceStore, "listPreferences">;
+}
+
+// @public (undocumented)
+export type GoPreferenceListOutcome = {
+    readonly kind: "listed";
+    readonly items: readonly GoPreference[];
+    readonly nextCursor: string | null;
+}
+/** The cursor was not issued by this server for this account and workspace, or does not hold a slug; nothing was read. */
+| {
+    readonly kind: "bad_cursor";
+};
+
+// @public
+export interface GoPreferenceRecord {
+    // (undocumented)
+    readonly bookmarkId: string;
+    readonly host: string;
+    readonly ownerId: string | null;
+    readonly ownerName: string | null;
+    // (undocumented)
+    readonly slug: string;
+    // (undocumented)
+    readonly title: string;
+}
+
+// @public (undocumented)
+export interface GoPreferenceStore {
+    forgetPreference(request: {
+        readonly slug: string;
+        readonly accountId: string;
+    }): Promise<boolean>;
+    listPreferences(request: {
+        readonly accountId: string;
+        readonly afterSlug: string | undefined;
+        readonly limit: number;
+    }): Promise<readonly GoPreferenceRecord[]>;
+}
+
+// @public (undocumented)
+export type GoResolution =
+/** Nothing the member can read has the slug (or the slug is not one). */
+    {
+    readonly kind: "none";
+}
+/** The member's remembered choice, which is still a candidate. */
+| {
+    readonly kind: "preferred";
+    readonly bookmark: GoChoice;
+}
+/** The member's own bookmark, or the one bookmark shared with them. */
+| {
+    readonly kind: "single";
+    readonly bookmark: GoChoice;
+}
+/** Several bookmarks shared with the member and none of their own, for the member to choose from, in the order of their titles. */
+| {
+    readonly kind: "multiple";
+    readonly candidates: readonly GoChoice[];
+};
+
+// @public (undocumented)
+export interface GoResolveAsk {
+    readonly accountId: string;
+    readonly slug: string;
+}
+
+// @public (undocumented)
+export interface GoResolveDependencies {
+    // (undocumented)
+    readonly store: Pick<GoStore, "candidates" | "summaries" | "forgetStale">;
+}
+
+// @public (undocumented)
+export interface GoStore {
+    candidates(request: {
+        readonly slug: string;
+        readonly accountId: string;
+    }): Promise<GoCandidateSet>;
+    forgetStale(request: {
+        readonly slug: string;
+        readonly bookmarkId: string;
+        readonly accountId: string;
+    }): Promise<boolean>;
+    remember(request: {
+        readonly slug: string;
+        readonly bookmarkId: string;
+        readonly accountId: string;
+    }): Promise<boolean>;
+    summaries(ids: readonly string[]): Promise<readonly GoBookmarkSummary[]>;
+}
 
 // @public
 export function hashApiToken(value: string): Buffer;
@@ -3579,6 +3873,9 @@ export function isInstanceAuditAction(value: unknown): value is InstanceAuditAct
 export function issueInstanceResetLink(input: InstanceRecoveryDependencies, ask: InstanceResetLinkAsk): Promise<InstanceResetLinkOutcome>;
 
 // @public
+export function isValidSlug(slug: string): boolean;
+
+// @public
 export interface JoiningEntitlements {
     // (undocumented)
     readonly upgradeAvailable: boolean;
@@ -3594,6 +3891,9 @@ export function listBookmarks(input: BookmarkListDependencies, ask: BookmarkList
 
 // @public
 export function listFolders(input: FolderListDependencies, ask: FolderListAsk): Promise<FolderListOutcome>;
+
+// @public
+export function listGoPreferences(input: GoPreferenceListDependencies, ask: GoPreferenceListAsk): Promise<GoPreferenceListOutcome>;
 
 // @public
 export function listInstanceAccounts(input: InstanceAccountDependencies, ask: InstanceAccountAsk): Promise<readonly InstanceAccount[]>;
@@ -3764,6 +4064,9 @@ export interface MembershipEndStore extends MemberRoleStore {
 export function mergeTag(input: TagMergeDependencies, ask: TagMergeAsk): Promise<TagMergeResult>;
 
 // @public (undocumented)
+export function navigateToSlug(input: GoNavigateDependencies, ask: GoNavigateAsk): Promise<GoNavigation>;
+
+// @public (undocumented)
 export interface NewAccountAcceptance {
     readonly accountId: string;
     // (undocumented)
@@ -3787,12 +4090,14 @@ export interface NewAccountAcceptance {
 export interface NewBookmark {
     // (undocumented)
     readonly description: string | null;
+    readonly forwarding?: boolean;
     // (undocumented)
     readonly host: string;
     readonly id: string;
     readonly ownerId: string;
     // (undocumented)
     readonly pinned: boolean;
+    readonly slug?: string;
     // (undocumented)
     readonly title: string;
     // (undocumented)
@@ -3851,6 +4156,9 @@ export function normalizeFolderName(name: string): {
 } | {
     readonly refusal: FolderNameRefusal;
 };
+
+// @public
+export function normalizeSlug(input: string): string;
 
 // @public
 export function normalizeTagName(name: string): {
@@ -3972,6 +4280,9 @@ export function parseAuditMetadata<Name extends AuditAction>(name: Name, value: 
 
 // @public
 export function parseDomainEventPayload<Name extends DomainEventName>(name: Name, value: unknown): DomainEventPayload<Name>;
+
+// @public
+export function parseSlug(input: string): string | undefined;
 
 // @public
 export function parseWorkspaceEntitlements(answer: unknown): WorkspaceEntitlementValues;
@@ -4152,6 +4463,9 @@ export function resendInvitation(input: InvitationActionDependencies, ask: Invit
 export function resetInstanceAccountMfa(input: InstanceRecoveryDependencies, ask: InstanceMfaResetAsk): Promise<InstanceMfaResetOutcome>;
 
 // @public
+export function resolveSlug(input: GoResolveDependencies, ask: GoResolveAsk): Promise<GoResolution>;
+
+// @public
 export function restoreBookmarks(tx: BookmarkArchiveTransaction, request: BookmarkArchiveRequest): Promise<{
     readonly restored: number;
 }>;
@@ -4205,6 +4519,49 @@ export interface SessionCookieSpec {
 
 // @public
 export function sessionCookieSpec(appOrigin: string): SessionCookieSpec;
+
+// @public
+export function slugAvailability(input: SlugAvailabilityDependencies, ask: SlugAvailabilityAsk): Promise<SlugAvailabilityOutcome>;
+
+// @public (undocumented)
+export interface SlugAvailabilityAsk {
+    readonly accountId: string;
+    readonly bookmarkId: string | undefined;
+    readonly slug: string;
+}
+
+// @public (undocumented)
+export interface SlugAvailabilityDependencies {
+    // (undocumented)
+    readonly store: SlugAvailabilityStore;
+}
+
+// @public (undocumented)
+export type SlugAvailabilityOutcome = {
+    readonly kind: "checked";
+    readonly status: "available" | "taken_by_me" | "invalid";
+    readonly othersUseCount: number;
+}
+/** `bookmarkId` names no bookmark the account owns: another member's, another workspace's, plan-archived or unknown, which a caller must not tell apart. */
+| {
+    readonly kind: "bookmark_not_found";
+};
+
+// @public (undocumented)
+export interface SlugAvailabilityStore {
+    find: BookmarkStore["find"];
+    slugUse(request: {
+        readonly slug: string;
+        readonly ownerId: string;
+        readonly exceptBookmarkId: string | undefined;
+    }): Promise<SlugUse>;
+}
+
+// @public
+export interface SlugUse {
+    readonly othersUseCount: number;
+    readonly takenByOwner: boolean;
+}
 
 // @public
 export const TAG_LIST_TOTAL_CAP = 10000;

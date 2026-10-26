@@ -76,6 +76,12 @@ describe("TypedConfirm", () => {
     expect(dialog.getAttribute("aria-describedby")).toBeTruthy();
     expect(screen.getByText("Grace Hopper becomes an owner.").id).toBe(dialog.getAttribute("aria-describedby"));
     expect(screen.getByText("An option of the action.")).toBeTruthy();
+  });
+
+  it("is free of accessibility violations", async () => {
+    render(<Harness onConfirm={() => undefined} />);
+    await screen.findByRole("alertdialog", { name: "Transfer ownership?" });
+
     await expectNoViolations(document.body);
   });
 

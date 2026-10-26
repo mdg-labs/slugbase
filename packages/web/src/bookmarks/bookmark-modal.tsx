@@ -12,7 +12,7 @@ import { useBookmarkModal } from "./modal-search.ts";
 function CreateBookmark(): ReactElement {
   const search = useSearch({ from: "/_app" });
   const modal = useBookmarkModal();
-  return <BookmarkEditor initialUrl={search.url} onClose={modal.close} onEditExisting={modal.edit} />;
+  return <BookmarkEditor initialSlug={search.slug} initialUrl={search.url} onClose={modal.close} onEditExisting={modal.edit} />;
 }
 
 function EditBookmark({ id }: { id: string }): ReactElement {

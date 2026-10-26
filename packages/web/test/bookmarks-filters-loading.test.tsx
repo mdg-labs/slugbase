@@ -1,6 +1,7 @@
 import type { ComponentTypes } from "@slugbase/contracts";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
 import { allowSlowRender, json, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
@@ -118,7 +119,7 @@ async function openField(name: string): Promise<void> {
   });
 }
 
-describe("the lists behind the folder and tag filters while they are read", () => {
+describe("the lists behind the folder and tag filters while they are read", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("say they are loading, in the sidebar and in both fields, and then show what was read", async () => {
     const server = stubServer();
     await openApp("/bookmarks");

@@ -23,6 +23,7 @@ export interface ApiCall {
 // @public (undocumented)
 export interface ApiMatrixOptions {
     readonly document: unknown;
+    readonly emptyAnswers?: Readonly<Record<string, number>>;
     // (undocumented)
     readonly fixture: TenantFixture;
     readonly mapping?: PathParameterMapping;

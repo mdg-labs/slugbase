@@ -22,6 +22,8 @@ import type { CredentialTokenPurpose } from '@slugbase/core';
 import type { EntitlementVersionWriter } from '@slugbase/core';
 import type { FolderFilingStore } from '@slugbase/core';
 import type { FolderStore } from '@slugbase/core';
+import type { GoPreferenceStore } from '@slugbase/core';
+import type { GoStore } from '@slugbase/core';
 import { InferInsertModel } from 'drizzle-orm';
 import { InferSelectModel } from 'drizzle-orm';
 import { InstanceAccount } from '@slugbase/core';
@@ -54,6 +56,7 @@ import type { MemberRoleStore } from '@slugbase/core';
 import { NewBookmark } from '@slugbase/core';
 import { PgColumn } from 'drizzle-orm/pg-core';
 import { PgTable } from 'drizzle-orm/pg-core';
+import { SlugUse } from '@slugbase/core';
 import { SQL } from 'drizzle-orm';
 import type { TagStore } from '@slugbase/core';
 import type { WorkspaceAdministrationStore } from '@slugbase/core';
@@ -322,6 +325,10 @@ export type BookmarkCreationResult = {
 /** A tag named by identifier is not one the owner has in the workspace; nothing is written. */
 | {
     readonly kind: "tag_not_found";
+}
+/** The owner already has another bookmark with the slug in the workspace; nothing is written. */
+| {
+    readonly kind: "slug_taken";
 };
 
 // @public (undocumented)
@@ -358,6 +365,11 @@ export interface BookmarkRepository {
         readonly ownerId: string;
         readonly pinned: boolean;
     }): Promise<number>;
+    slugUse(request: {
+        readonly slug: string;
+        readonly ownerId: string;
+        readonly exceptBookmarkId: string | undefined;
+    }): Promise<SlugUse>;
     tag(request: {
         readonly bookmarkIds: readonly string[];
         readonly ownerId: string;
@@ -549,6 +561,12 @@ export type FolderRepository = FolderStore & FolderFilingStore;
 
 // @public (undocumented)
 export function folderRepository(tx: TenantTx): FolderRepository;
+
+// @public (undocumented)
+export type GoRepository = GoStore & GoPreferenceStore;
+
+// @public
+export function goRepository(tx: TenantTx): GoRepository;
 
 // @public
 export class IdempotencyBusyError extends Error {
@@ -755,6 +773,9 @@ export interface InvitationRepository extends InvitationStore, InvitationManagem
 
 // @public (undocumented)
 export function invitationRepository(tx: TenantTx): InvitationRepository;
+
+// @public
+export function isBookmarkSlugTaken(error: unknown): boolean;
 
 // @public
 export function isFolderNameTaken(error: unknown): boolean;

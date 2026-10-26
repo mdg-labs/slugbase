@@ -184,11 +184,12 @@ describe("the internal metrics listener", () => {
     await get(listening.port, "/api/v1/items/x", "PURGE");
 
     const text = await scrape(listening.metricsPort ?? 0);
-    for (const value of [SECRET_SLUG, EMAIL, ACCOUNT, "profile", "/go/", "PURGE", "token"]) {
+    for (const value of [SECRET_SLUG, EMAIL, ACCOUNT, "profile", "PURGE", "token"]) {
       expect(text, value).not.toContain(value);
     }
     const routes = new Set([...text.matchAll(/route="([^"]*)"/g)].map((match) => match[1]));
-    expect([...routes].sort()).toEqual(["/api/v1/items/{id}", "unmatched"]);
+    // The navigation to a slug is counted under its template, never under the slug it was asked for.
+    expect([...routes].sort()).toEqual(["/api/v1/items/{id}", "/go/{slug}", "unmatched"]);
     const methods = new Set([...text.matchAll(/method="([^"]*)"/g)].map((match) => match[1]));
     expect([...methods].sort()).toEqual(["GET", "_OTHER"]);
   });

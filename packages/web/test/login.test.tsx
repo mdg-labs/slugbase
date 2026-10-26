@@ -1,7 +1,10 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { navigateTo } from "../src/auth/navigate.ts";
 import { createWebApp } from "../src/index.ts";
 import { CONFIG_BODY, PRODUCT_NAME, SESSION_PATH, json, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
+
+vi.mock("../src/auth/navigate.ts", () => ({ navigateTo: vi.fn() }));
 
 type Transport = (request: Request) => Promise<Response>;
 
@@ -64,6 +67,7 @@ async function signInWith(email = "ada@example.org", password = "correct horse")
 }
 
 beforeEach(() => {
+  vi.mocked(navigateTo).mockClear();
   stubBrowserApis();
   stubMatchMedia();
   vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["en-US", "en"]);
@@ -423,5 +427,62 @@ describe("the sign-in page with instance settings", () => {
     await openLogin();
 
     expect(screen.queryByRole("note")).toBeNull();
+  });
+});
+
+describe("coming back from a /go address (doc 04 section 9.3)", () => {
+  it("goes back to /go/<slug> with a request to the server, which forwards it, not with the router", async () => {
+    stubServer(done);
+    await openLogin(`/login?returnTo=${encodeURIComponent("/go/mail")}`);
+
+    await signInWith();
+
+    await waitFor(() => {
+      expect(navigateTo).toHaveBeenCalledExactlyOnceWith("/go/mail");
+    });
+    expect(window.location.pathname).toBe("/login");
+  });
+
+  it.each([
+    "https://evil.example",
+    "https://evil.example/go/mail",
+    "//evil.example",
+    "//evil.example/go/mail",
+    "/\\evil.example",
+    "/go/../admin",
+    "/go/mail/..%2fadmin",
+    "javascript:alert(1)",
+    "/go/Mail",
+    "/go/-mail",
+    "/go/mail/inbox",
+    "/go/mail?next=/admin",
+    "/go/mail#x",
+    "/go/%2e%2e",
+    "/go/ma%20il",
+    `/go/${"a".repeat(65)}`,
+    "/go/",
+    "/go",
+    "/settings/account/security",
+  ])("ignores the return address %j and lands on the default page", async (returnTo) => {
+    stubServer(done);
+    await openLogin(`/login?returnTo=${encodeURIComponent(returnTo)}`);
+
+    await signInWith();
+
+    expect(await screen.findByRole("heading", { level: 1, name: `Welcome to ${PRODUCT_NAME}` })).toBeTruthy();
+    expect(window.location.pathname).toBe("/");
+    expect(window.location.hostname).toBe("localhost");
+    expect(navigateTo).not.toHaveBeenCalled();
+  });
+
+  it("goes to the /go address of a `next` too, with a request to the server", async () => {
+    stubServer(done);
+    await openLogin(`/login?next=${encodeURIComponent("/go/mail")}`);
+
+    await signInWith();
+
+    await waitFor(() => {
+      expect(navigateTo).toHaveBeenCalledExactlyOnceWith("/go/mail");
+    });
   });
 });

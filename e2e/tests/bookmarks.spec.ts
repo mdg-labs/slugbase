@@ -3,6 +3,7 @@ import type { Dialog, Locator, Page, Request, Response } from "@playwright/test"
 import { bookmarkBody, bookmarkShape } from "../support/bookmark-fixtures.ts";
 import { message } from "../support/catalog.ts";
 import { appOrigin } from "../support/environment.ts";
+import { tabTo, waitForInitialFocus } from "../support/keyboard.ts";
 import { expect, test } from "../support/test.ts";
 
 // The bookmarks journey (doc 08 section 5.1, doc 03 sections 3 and 4, doc 10 T14, doc 12 Phase 3), after the first-run
@@ -99,17 +100,6 @@ async function expectWithinScreen(page: Page, dialog: Locator): Promise<void> {
     expect(box.x, "the dialog starts within the screen").toBeGreaterThanOrEqual(0);
     expect(box.x + box.width, "the dialog ends within the screen").toBeLessThanOrEqual(size.width);
   }
-}
-
-/** Presses Tab until the element has focus; the keyboard is the only input that moves it. */
-async function tabTo(page: Page, target: Locator, presses = 20): Promise<void> {
-  for (let press = 0; press < presses; press++) {
-    if (await target.evaluate((element) => element === document.activeElement)) {
-      return;
-    }
-    await page.keyboard.press("Tab");
-  }
-  await expect(target, `Tab reaches the element within ${String(presses)} presses`).toBeFocused({ timeout: 1000 });
 }
 
 /**
@@ -319,7 +309,13 @@ for (const { name, viewport } of [
 
           await page.keyboard.press("c");
           await expect(create).toBeVisible();
-          await tabTo(page, create.getByLabel(en("bookmarks.modal.url.label"), { exact: true }));
+          // The modal moves the focus a moment after it shows, to the URL field in the dialog and to the sheet itself on a
+          // phone; a Tab before that starts from the wrong place.
+          const url = create.getByLabel(en("bookmarks.modal.url.label"), { exact: true });
+          await (viewport === undefined
+            ? waitForInitialFocus(url, "the URL field of the New bookmark dialog")
+            : waitForInitialFocus(create, "the New bookmark sheet"));
+          await tabTo(page, url);
           await page.keyboard.type(`https://example.com/keyboard-${token}`);
           await tabTo(page, create.getByLabel(en("bookmarks.modal.title.label"), { exact: true }));
           await page.keyboard.type(keyboardTitle);

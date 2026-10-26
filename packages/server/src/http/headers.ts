@@ -92,6 +92,21 @@ export function declaredCachePolicy(operation: OperationDefinition, status: numb
   return entry === undefined ? undefined : literalOf(entry[1]);
 }
 
+/**
+ * The rules judge the path as the router reads it too: a segment is matched decoded, so `/%67o/slug` reaches the route of `/go/slug`, and a rule that read
+ * only the path as sent would leave that answer without the headers of its class.
+ */
+function appliesTo(rule: HeaderRule, path: string): boolean {
+  if (rule.applies(path)) {
+    return true;
+  }
+  try {
+    return rule.applies(decodeURIComponent(path));
+  } catch {
+    return false;
+  }
+}
+
 export interface SecurityHeadersOptions {
   /** `APP_ORIGIN`: the scheme decides whether `Strict-Transport-Security` is sent. */
   readonly appOrigin: string;
@@ -122,7 +137,7 @@ export function createSecurityHeaders({ appOrigin }: SecurityHeadersOptions): Se
 
     const wanted: Record<string, string> = { ...BASE_HEADERS, ...transport };
     for (const rule of HEADER_RULES) {
-      if (rule.applies(path)) {
+      if (appliesTo(rule, path)) {
         Object.assign(wanted, rule.headers);
       }
     }

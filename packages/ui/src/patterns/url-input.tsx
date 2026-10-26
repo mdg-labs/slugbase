@@ -35,6 +35,7 @@ export function UrlInput({ value, onValueChange, onBlur, onPaste, pending = fals
         onValueChange={(next) => { onValueChange(next); }}
         placeholder={placeholder}
         spellCheck={false}
+        translate="no"
         type="url"
         value={value}
       />

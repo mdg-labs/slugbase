@@ -1,4 +1,4 @@
 {
-  "sha256": "e549b42fec26ce6488cf36afb37a3e54f7940e8423c8b5f798117bc17e109f33",
-  "migration": "20261025131050_add_bookmark_tagging"
+  "sha256": "14aec5f08df16483e2a5e82eafc966a88c211128574fc295630048d7ed345ad7",
+  "migration": "20261026154040_add_slug_preference_delete"
 }

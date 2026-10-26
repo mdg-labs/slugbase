@@ -127,6 +127,22 @@ async function seedTagLinkRows(database: TestDatabase, fixture: TenantFixture): 
   });
 }
 
+/**
+ * The remembered choices the RLS-only mode runs against: a choice is its member's own, so the owner of A has one in A (the update of the registry has no
+ * predicate and points every choice it can see at another bookmark), and the owner of B has one in B, which the methods must not reach. Both name a
+ * bookmark of their owner that `seedLinkRows` made.
+ */
+async function seedPreferenceRows(database: TestDatabase, fixture: TenantFixture): Promise<void> {
+  await database.owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    await tx`
+      INSERT INTO slug_preferences (workspace_id, account_id, slug, bookmark_id)
+      VALUES (${fixture.a.id}, ${fixture.a.owner.accountId}, 'matrix-seed', '0192f3a0-2222-7000-8000-00000000a0b2'),
+             (${fixture.b.id}, ${fixture.b.owner.accountId}, 'matrix-seed', '0192f3a0-2222-7000-8000-00000000b0b2')
+      ON CONFLICT DO NOTHING`;
+  });
+}
+
 const database = useTestDatabase();
 let scoped: Probe;
 let permissive: Probe;
@@ -160,14 +176,13 @@ describe("the matrix over the committed contract and the repository registry", (
       return Promise.resolve({ status: 422 });
     }
     const tokenRefused = "scope" in call.principal && (call.operation.scope === undefined || (call.operation.scope === "write" && call.principal.scope !== "read-write"));
-    return Promise.resolve({
-      status:
-        tokenRefused ||
-        (call.principal.role === "member" && call.operation.policy !== "member") ||
-        (call.principal.role === "admin" && call.operation.policy === "owner")
-          ? 403
-          : 404,
-    });
+    const refused =
+      tokenRefused ||
+      (call.principal.role === "member" && call.operation.policy !== "member") ||
+      (call.principal.role === "admin" && call.operation.policy === "owner");
+    // A slug that nothing the caller can read has resolves to nothing, an empty 200, for a principal that reaches the handler; the instance admin has no workspace to resolve in.
+    const resolvesToNothing = call.operation.operationId === "resolveSlug" && !("instanceAdmin" in call.principal);
+    return Promise.resolve({ status: refused ? 403 : resolvesToNothing ? 200 : 404 });
   };
 
   it(`API mode classifies the ${String(classification.summary.total)} operations of openapi.json and calls each tenant-scoped one once for every principal of A`, async () => {
@@ -181,10 +196,12 @@ describe("the matrix over the committed contract and the repository registry", (
           ...scoped.fixture.b.identifiers,
           { kind: "team" as const, id: "0192f3a0-cccc-7000-8000-000000000005" },
           { kind: "invitation" as const, id: "0192f3a0-cccc-7000-8000-000000000007" },
+          { kind: "slug" as const, id: "matrix-b-slug-0" },
+          { kind: "slug" as const, id: "matrix-b-slug-1" },
         ],
       },
     };
-    const matrix = await runApiMatrix({ document, fixture, request: answersAsTheChainDoes, mapping: { accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "listBookmarkIds.folderId": "folder", "listBookmarkIds.tag": "tag", "listBookmarkIds.tag[]": "tag", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark", "bulkBookmarks.filter.folderId": "folder", "bulkBookmarks.filter.tag": "tag", "bulkBookmarks.filter.tag[]": "tag", "bulkBookmarks.folderId": "folder", "bulkBookmarks.tagIds[]": "tag", "previewBulkBookmarks.ids[]": "bookmark", "previewBulkBookmarks.filter.hasSlug": "bookmark", "previewBulkBookmarks.filter.folderId": "folder", "previewBulkBookmarks.filter.tag": "tag", "previewBulkBookmarks.filter.tag[]": "tag", "previewBulkBookmarks.tagIds[]": "tag" } });
+    const matrix = await runApiMatrix({ document, fixture, request: answersAsTheChainDoes, mapping: { accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "createBookmark.slug": "bookmark", "updateBookmark.slug": "bookmark", "checkSlugAvailability.slug": "bookmark", "checkSlugAvailability.bookmarkId": "bookmark", "resolveSlug.slug": "slug", "chooseSlug.slug": "slug", "chooseSlug.bookmarkId": "bookmark", "deleteGoPreference.slug": "slug", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "listBookmarkIds.folderId": "folder", "listBookmarkIds.tag": "tag", "listBookmarkIds.tag[]": "tag", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark", "bulkBookmarks.filter.folderId": "folder", "bulkBookmarks.filter.tag": "tag", "bulkBookmarks.filter.tag[]": "tag", "bulkBookmarks.folderId": "folder", "bulkBookmarks.tagIds[]": "tag", "previewBulkBookmarks.ids[]": "bookmark", "previewBulkBookmarks.filter.hasSlug": "bookmark", "previewBulkBookmarks.filter.folderId": "folder", "previewBulkBookmarks.filter.tag": "tag", "previewBulkBookmarks.filter.tag[]": "tag", "previewBulkBookmarks.tagIds[]": "tag" }, emptyAnswers: { resolveSlug: 200 } });
     // The matrix expects 404 for an identifier of workspace B. The one exception is the 422 every team is refused with (see above), for the two sessions
     // of A that reach the handler of the invitation; it is named exactly, and every other failure stays one.
     const teamRefusal = (failure: MatrixFailure): boolean => failure.subject.startsWith("createInvitation ") && failure.kind === "unexpected_status" && /answered 422, expected 404/.test(failure.detail);
@@ -194,16 +211,16 @@ describe("the matrix over the committed contract and the repository registry", (
     expect(report.classified.total).toBe(classification.operations.length);
     expect(report.classified.total).toBeGreaterThan(0);
     expect(Object.values(report.classified.byKind).reduce((sum, count) => sum + count, 0)).toBe(report.classified.total);
-    // The operations on /workspace (reading, renaming and deleting it), /workspace/settings, the entitlements, the members list, the creation of a bookmark (which the matrix calls once, with the one folder of B in `folderIds` and the one tag of B in `tagIds`), the creation, the list and the statistics of tags and the creation and the list of folders act in the workspace of the request and take no identifier of B;
+    // The operations on /workspace (reading, renaming and deleting it), /workspace/settings, the entitlements, the members list, the creation of a bookmark (which the matrix calls once, with the one folder of B in `folderIds` and the one tag of B in `tagIds`), the creation, the list and the statistics of tags, the creation and the list of folders and the list of remembered choices act in the workspace of the request and take no identifier of B;
     // the role change, the ownership transfer and the removal name a member by account identifier, the removal and the leaving a recipient, the invitation a team,
     // the resend, the link and the revocation of an invitation name an invitation, and the bookmark read, change, deletion and open name a bookmark, as do the select-all, the bulk request and the preview of adding tags in their inputs (and the folder and the tags they act with, and the folder and the tags of their filters, name a folder and tags of B), and the rename, the merge and the deletion of a tag name a tag, and the read, the change and the deletion of a folder name a folder; the invitation list takes no identifier.
-    expect(report.classified.byKind["tenant-scoped"]).toBe(38);
-    // Three sessions and six tokens of A, once on each of the fifteen operations that name no member, once for each of the three members of B on the role
+    expect(report.classified.byKind["tenant-scoped"]).toBe(43);
+    // Three sessions and six tokens of A, once on each of the fifteen operations that name no member and twice on the creation of a bookmark (once for each of the two bookmarks of B put in its `slug`, which is mapped to a bookmark and judged with the folder and the tag of B in the same call), once for each of the three members of B on the role
     // change, on the ownership transfer and on the leaving, once for each pair of members of B (path and recipient) on the removal, once for the
     // team of B on the invitation, once for the invitation of B on each of the resend, the link and the revocation, and once for each of the two
     // bookmarks of B on each of the bookmark read, change, deletion and open, and in the `hasSlug` filter of the bookmark list and of the select-all (picked by
-    // its name), and once for each pair of a bookmark of B in `ids` and one in `filter.hasSlug` of the bulk request and of its preview, and once for the tag of B on each of the rename, the merge and the deletion of a tag, and once for the folder of B on each of the read, the change and the deletion of a folder, and once for each of the two bookmarks of B with the folder of B on each of the filing and the unfiling of bookmarks.
-    expect(report.attempts).toBe(9 * 15 + 9 * (3 + 3 + 3 + 3 * 3 + 3 + 4 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2));
+    // its name), and once for each pair of a bookmark of B in `ids` and one in `filter.hasSlug` of the bulk request and of its preview, and once for the tag of B on each of the rename, the merge and the deletion of a tag, and once for the folder of B on each of the read, the change and the deletion of a folder, and once for each of the two bookmarks of B with the folder of B on each of the filing and the unfiling of bookmarks, and once for each pair of a bookmark of B in `id` and one in `slug` on the change of a bookmark, and for each pair of a bookmark of B in `bookmarkId` and one in `slug` on the slug availability, and once for each of the two slugs of B on the resolution of a slug and on the choice of a bookmark (the choice for each of the two bookmarks of B as well), and once for each of the two slugs of B on the forgetting of a remembered choice.
+    expect(report.attempts).toBe(9 * 17 + 9 * (3 + 3 + 3 + 3 * 3 + 3 + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2));
     assertMatrixPassed(report);
   });
 
@@ -217,6 +234,7 @@ describe("the matrix over the committed contract and the repository registry", (
     await seedFolderRows(database(), scoped.fixture);
     await seedLinkRows(database(), scoped.fixture);
     await seedTagLinkRows(database(), scoped.fixture);
+    await seedPreferenceRows(database(), scoped.fixture);
     const methods = listRepositoryMethods();
     const report = await runRlsOnlyMatrix({ tenant: database().tenant, fixture: { ...scoped.fixture, instanceAdmin: PROBE_INSTANCE_ADMIN }, methods });
     expect(report.methods).toBe(methods.length);
@@ -228,6 +246,8 @@ describe("the matrix over the committed contract and the repository registry", (
     expect(methods.filter((entry) => entry.repository === "folder_bookmarks").map((entry) => entry.method)).toEqual(["select", "insert", "delete"]);
     // the repository of the tag links is in the registry with the same three methods: the application role reads, inserts the columns of a link and deletes, and updates none
     expect(methods.filter((entry) => entry.repository === "bookmark_tags").map((entry) => entry.method)).toEqual(["select", "insert", "delete"]);
+    // the repository of the remembered choices is in the registry with the four methods the application role may run on the table: it reads, inserts the columns of a choice, updates the bookmark and deletes, and the policy keeps it to its member's own
+    expect(methods.filter((entry) => entry.repository === "slug_preferences").map((entry) => entry.method)).toEqual(["select", "insert", "update", "delete"]);
     // the bookmarks repository is in the registry with the three methods the application role may run on the table, and no other: a delete is a system operation
     expect(methods.filter((entry) => entry.repository === "bookmarks").map((entry) => entry.method)).toEqual(["select", "insert", "update"]);
     // every method ran once more as the instance admin of the fixture, which belongs to neither workspace
@@ -622,6 +642,87 @@ describe("API mode over the probe table", () => {
     // the first attempt against each of the two rows removes it
     expect(report.failures.map((failure) => failure.kind)).toEqual(["workspace_changed", "workspace_changed"]);
     expect(report.failures[0]?.subject).toContain("deleteBookmark");
+  });
+
+  describe("an operation that looks a slug up and answers an empty result for one that names nothing", () => {
+    const RESOLVE_API = {
+      openapi: "3.1.0",
+      paths: {
+        "/api/v1/go/resolve": {
+          post: {
+            operationId: "resolveSlug",
+            "x-slugbase-auth": "member",
+            requestBody: { content: { "application/json": { schema: { type: "object", properties: { slug: { type: "string" } }, required: ["slug"] } } } },
+          },
+        },
+      },
+    };
+    const slugs = ["matrix-b-slug-0", "matrix-b-slug-1"];
+    const withSlugs = (fixture: TenantFixture): TenantFixture => ({
+      ...sessionsOnly(fixture),
+      b: { ...fixture.b, identifiers: [...fixture.b.identifiers, ...slugs.map((id) => ({ kind: "slug" as const, id }))] },
+    });
+    const slugMapping = { slug: "slug" } as const;
+
+    it("passes the status the operation is declared to answer, when the answer names nothing of B", async () => {
+      const report = await runApiMatrix({
+        document: RESOLVE_API,
+        fixture: withSlugs(scoped.fixture),
+        mapping: slugMapping,
+        emptyAnswers: { resolveSlug: 200 },
+        request: () => Promise.resolve({ status: 200, body: { result: "none" } }),
+      });
+      expect(report.failures).toEqual([]);
+      // three sessions of A against the two slugs of B
+      expect(report.attempts).toBe(6);
+    });
+
+    it("still expects 404 where the operation is not declared to answer empty", async () => {
+      const report = await runApiMatrix({
+        document: RESOLVE_API,
+        fixture: withSlugs(scoped.fixture),
+        mapping: slugMapping,
+        request: () => Promise.resolve({ status: 200, body: { result: "none" } }),
+      });
+      expect(report.failures.map((failure) => failure.kind)).toEqual(Array<string>(6).fill("unexpected_status"));
+    });
+
+    it("fails an answer other than the declared one, with the reason", async () => {
+      const report = await runApiMatrix({
+        document: RESOLVE_API,
+        fixture: withSlugs(scoped.fixture),
+        mapping: slugMapping,
+        emptyAnswers: { resolveSlug: 200 },
+        request: () => Promise.resolve({ status: 404 }),
+      });
+      expect(report.failures.map((failure) => failure.kind)).toEqual(Array<string>(6).fill("unexpected_status"));
+      expect(report.failures[0]?.detail).toContain("answered 404, expected 200");
+      expect(report.failures[0]?.detail).toContain("looks the handle up");
+    });
+
+    it("fails an empty answer that quotes something of B", async () => {
+      const report = await runApiMatrix({
+        document: RESOLVE_API,
+        fixture: withSlugs(scoped.fixture),
+        mapping: slugMapping,
+        emptyAnswers: { resolveSlug: 200 },
+        request: () => Promise.resolve({ status: 200, body: { result: "single", bookmark: { title: "matrix-probe-b-shared" } } }),
+      });
+      expect(new Set(report.failures.map((failure) => failure.kind))).toEqual(new Set(["leaked_name"]));
+      expect(report.failures).toHaveLength(6);
+    });
+
+    it("holds the instance admin, which has no workspace, to 404 whatever the operation answers for a member", async () => {
+      const report = await runApiMatrix({
+        document: RESOLVE_API,
+        fixture: { ...withSlugs(scoped.fixture), instanceAdmin: PROBE_INSTANCE_ADMIN },
+        mapping: slugMapping,
+        emptyAnswers: { resolveSlug: 200 },
+        request: () => Promise.resolve({ status: 200, body: { result: "none" } }),
+      });
+      expect(report.failures.map((failure) => failure.detail.slice(0, "as instance admin".length))).toEqual(["as instance admin", "as instance admin"]);
+      expect(report.failures.every((failure) => failure.kind === "unexpected_status")).toBe(true);
+    });
   });
 });
 

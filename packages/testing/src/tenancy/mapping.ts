@@ -38,7 +38,17 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  *
  * - Bookmark identifier: the path parameter `id` of `getBookmark`, `updateBookmark`, `deleteBookmark` and `openBookmark`, the query parameter
  *   `hasSlug` of `listBookmarks` and `listBookmarkIds` and the body inputs `ids[]` and `filter.hasSlug` of `bulkBookmarks` and `previewBulkBookmarks`.
- *   `hasSlug` is a flag, not an identifier, but the classifier selects every name ending in `Slug`, so it is mapped like the others.
+ *   `hasSlug` is a flag, not an identifier, but the classifier selects every name ending in `Slug`, so it is mapped like the others. The same holds for the body input `slug`
+ *   of `createBookmark` and `updateBookmark`, which is the slug the caller gives the bookmark, and for the query parameter `slug` of `checkSlugAvailability`, which is the slug
+ *   the caller asks about: none of the three refers to a row, so each is mapped to a bookmark and is judged together with the inputs of the same call that do refer to one. The query
+ *   parameter `bookmarkId` of `checkSlugAvailability` names the caller's bookmark and takes a bookmark identifier. A bookmark of B in that parameter, in the `folderIds` or `tagIds` of a
+ *   creation or in the path of a change is answered 404 before the slug is looked at, which is what the matrix expects of the call.
+ * - Slug: the body input `slug` of `resolveSlug` and of `chooseSlug` is the handle the caller resolves and not the identifier of a row, so the default maps it to a bookmark like the
+ *   other inputs named slug, which the default fixture holds. A fixture that holds the slugs of the forwarding bookmarks of workspace B (kind `slug`), which the caller has no bookmark of, maps
+ *   it to `slug` and holds that a slug of B resolves to nothing for the caller. The body input `bookmarkId` of `chooseSlug` takes a bookmark identifier, and the choice of a bookmark of B is
+ *   `404 slug_not_found`. `resolveSlug` answers an empty `200` and not `404` for a slug of B, which `runApiMatrix` is told by its `emptyAnswers` option. The path parameter `slug` of
+ *   `deleteGoPreference` is a slug as well, and the default maps it to a bookmark; a fixture that holds the slugs of workspace B maps it to `slug`, and forgetting a slug of B, which the owner of B
+ *   has a remembered choice for and the caller has none, is `404 not_found` and leaves the choice of B as it was. `listGoPreferences` has no identifier input.
  * - Tag identifier: the path parameter `id` of `renameTag`, `mergeTag` and `deleteTag`, the body input `intoTagId` of `mergeTag`, the query parameter `tag` of `listBookmarks` and `listBookmarkIds` (as a single value and as a repeated one), the body input `filter.tag` of `bulkBookmarks` and
  *   `previewBulkBookmarks` (as a single value and as a list) and the body input `tagIds[]` of `createBookmark`, `updateBookmark`, `bulkBookmarks` and `previewBulkBookmarks`. The body input `tagNames[]` of the two is a name, not an identifier, and takes no entry.
  * - Folder identifier: the path parameter `id` of `getFolder`, `updateFolder`, `deleteFolder`, `addFolderBookmarks` and `removeFolderBookmarks`, the query
@@ -56,6 +66,14 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  */
 export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
   "getBookmark.id": "bookmark",
+  "createBookmark.slug": "bookmark",
+  "updateBookmark.slug": "bookmark",
+  "checkSlugAvailability.slug": "bookmark",
+  "checkSlugAvailability.bookmarkId": "bookmark",
+  "resolveSlug.slug": "bookmark",
+  "chooseSlug.slug": "bookmark",
+  "chooseSlug.bookmarkId": "bookmark",
+  "deleteGoPreference.slug": "bookmark",
   "updateBookmark.id": "bookmark",
   "deleteBookmark.id": "bookmark",
   "openBookmark.id": "bookmark",
@@ -120,6 +138,9 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
  * folder, a bookmark and a link of its own that the methods must not reach. The links of the tags follow the same rule, with the tag in place of the
  * folder: the `bookmark_tags` sample names the tag of the owner of A (`...a0c1`) and a bookmark (`...a0b4`) that the owner owns in A, with no link between them yet, and
  * the fixture must hold the tag and the bookmark and another bookmark of that owner linked to the tag, which the delete of the registry removes; B holds the same of its own.
+ * A remembered choice is its member's own in the workspace: the `slug_preferences` sample names the owner of A and a bookmark (`...a0b2`) of that owner's in A, and its update points
+ * the preference at another bookmark of the owner's (`...a0b3`); the fixture must hold a preference of the owner of A in A, which the update touches, and one of the owner of B in B, which the
+ * methods must not reach. The policy names the account of the transaction too, so the owner of A sees its own preferences only.
  */
 export const REPOSITORY_SAMPLES: RepositorySamples = {
   bookmarks: {
@@ -129,6 +150,8 @@ export const REPOSITORY_SAMPLES: RepositorySamples = {
       urlCanonical: "https://example.com/matrix",
       host: "example.com",
       title: "matrix-bookmark-inserted",
+      slug: "matrix-slug",
+      forwarding: true,
     },
     set: { title: "matrix-bookmark-updated" },
   },
@@ -143,6 +166,10 @@ export const REPOSITORY_SAMPLES: RepositorySamples = {
   bookmark_tags: {
     values: { bookmarkId: "0192f3a0-2222-7000-8000-00000000a0b4", tagId: "0192f3a0-2222-7000-8000-00000000a0c1" },
     set: {},
+  },
+  slug_preferences: {
+    values: (fixture) => ({ accountId: fixture.a.owner.accountId, slug: "matrix-pref", bookmarkId: "0192f3a0-2222-7000-8000-00000000a0b2" }),
+    set: { bookmarkId: "0192f3a0-2222-7000-8000-00000000a0b3" },
   },
   tags: {
     values: (fixture) => ({ id: "0192f3a0-2222-7000-8000-00000000b00d", ownerId: fixture.a.owner.accountId, name: "matrix-tag-inserted" }),

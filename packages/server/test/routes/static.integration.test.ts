@@ -117,6 +117,8 @@ describe("the web root on the running server", () => {
     expect(refused.status).toBe(404);
     expect(refused.headers.get("content-type")).toBe("application/problem+json");
     expect((await request(port, "/api/v1/unknown", NAVIGATION)).status).toBe(404);
-    expect((await request(port, "/go/unknown", NAVIGATION)).status).toBe(404);
+    const forwarded = await request(port, "/go/unknown", NAVIGATION);
+    expect(forwarded.status).toBe(302);
+    expect(forwarded.body).not.toBe(INDEX);
   });
 });

@@ -12,10 +12,12 @@ import { TAGS_QUERY_KEY, TAG_NAME_MAX_LENGTH } from "../tags/tags.ts";
 import { sameIds } from "./bookmark-choices.ts";
 import { CREATE_FOLDER_MUTATION_KEY, FolderPick } from "./folder-pick.tsx";
 import { rateLimitMessage } from "./rate-limit-message.ts";
+import { SlugFields } from "./slug-fields.tsx";
 import { TagPick } from "./tag-pick.tsx";
 import {
   BOOKMARKS_QUERY_KEY,
   BOOKMARK_DESCRIPTION_MAX_LENGTH,
+  BOOKMARK_SLUG_MAX_LENGTH,
   BOOKMARK_TITLE_MAX_LENGTH,
   BOOKMARK_URL_MAX_LENGTH,
   bookmarkFailureOf,
@@ -39,6 +41,9 @@ interface Values {
   readonly url: string;
   readonly title: string;
   readonly description: string;
+  /** Trimmed and lower-cased as it is typed; empty for none. */
+  readonly slug: string;
+  readonly forwarding: boolean;
   readonly pinned: boolean;
   readonly folderIds: readonly string[];
   readonly tagIds: readonly string[];
@@ -54,6 +59,8 @@ export interface BookmarkEditorProps {
   bookmark?: Bookmark | undefined;
   /** The address a new bookmark starts with. */
   initialUrl?: string | undefined;
+  /** The slug a new bookmark starts with. */
+  initialSlug?: string | undefined;
   /** Leaves the modal; the editor has already asked about unsaved changes. */
   onClose: () => void;
   /** Moves the modal to another bookmark, the one the duplicate warning names. */
@@ -62,16 +69,27 @@ export interface BookmarkEditorProps {
   onReload?: (() => Promise<boolean>) | undefined;
 }
 
-function valuesOf(bookmark: Bookmark | undefined, initialUrl: string | undefined): Values {
+function valuesOf(bookmark: Bookmark | undefined, initialUrl: string | undefined, initialSlug: string | undefined): Values {
+  const slug = bookmark === undefined ? (initialSlug ?? "").trim().toLowerCase() : (bookmark.slug ?? "");
   return {
     url: bookmark?.url ?? initialUrl ?? "",
     title: bookmark?.title ?? "",
     description: bookmark?.description ?? "",
+    slug,
+    forwarding: bookmark === undefined ? slug !== "" : bookmark.forwarding,
     pinned: bookmark?.pinned ?? false,
     folderIds: bookmark?.folders.map(({ id }) => id) ?? [],
     tagIds: bookmark?.tags.map(({ id }) => id) ?? [],
     tagNames: [],
   };
+}
+
+/** A slug turns forwarding on when the bookmark had none, and without one there is nothing to forward. */
+function forwardingAfter(before: Values, slug: string): boolean {
+  if (slug === "") {
+    return false;
+  }
+  return before.slug === "" ? true : before.forwarding;
 }
 
 function useFieldMessage(): (field: FieldName, problem: FieldProblem | undefined) => string | undefined {
@@ -84,6 +102,8 @@ function useFieldMessage(): (field: FieldName, problem: FieldProblem | undefined
         return t("bookmarks.modal.title.error.tooLong", { max: BOOKMARK_TITLE_MAX_LENGTH });
       case "description":
         return t("bookmarks.modal.description.error.tooLong", { max: BOOKMARK_DESCRIPTION_MAX_LENGTH });
+      case "slug":
+        return t("bookmarks.modal.slug.error.invalid", { max: BOOKMARK_SLUG_MAX_LENGTH });
       case "tagNames":
         return t("bookmarks.modal.tags.error.tooLong", { max: TAG_NAME_MAX_LENGTH });
     }
@@ -98,7 +118,12 @@ function useFieldMessage(): (field: FieldName, problem: FieldProblem | undefined
         return tooLong(field);
       case "notAllowed":
         return t("bookmarks.modal.url.error.notAllowed");
+      case "taken":
+        return t("bookmarks.modal.slug.error.taken");
       case "invalid":
+        if (field === "slug") {
+          return t("bookmarks.modal.slug.error.invalid", { max: BOOKMARK_SLUG_MAX_LENGTH });
+        }
         return field === "url" ? t("bookmarks.modal.url.error.invalid") : t("bookmarks.modal.error.invalid");
     }
   };
@@ -161,6 +186,7 @@ const SHOWN_IN_THE_MODAL = inPlaceRefusals([
   { status: 422, code: "validation_failed" },
   { status: 422, code: "url_not_allowed" },
   { status: 422, code: "bookmark_limit_reached" },
+  { status: 409, code: "slug_taken" },
   { status: 412, code: "precondition_failed" },
   { status: 404, code: "not_found" },
   { status: 429, code: "rate_limited" },
@@ -177,14 +203,14 @@ type Request =
  * unsaved changes asks first. When the address is left, pasted or prefilled, the caller's own bookmarks with the same
  * canonical address are looked up and named in a warning; saving a duplicate stays allowed.
  */
-export function BookmarkEditor({ bookmark, initialUrl, onClose, onEditExisting, onReload }: BookmarkEditorProps): ReactElement {
+export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onEditExisting, onReload }: BookmarkEditorProps): ReactElement {
   const { t } = useTranslation();
   const router = useRouter();
   const queryClient = useQueryClient();
   const api = router.options.context.api;
   const fieldMessage = useFieldMessage();
   const editing = bookmark !== undefined;
-  const [initial] = useState(() => valuesOf(bookmark, initialUrl));
+  const [initial] = useState(() => valuesOf(bookmark, initialUrl, initialSlug));
   const [values, setValues] = useState<Values>(initial);
   const [problems, setProblems] = useState<FieldProblems>({});
   const [failure, setFailure] = useState<EditorFailure | undefined>(undefined);
@@ -209,6 +235,8 @@ export function BookmarkEditor({ bookmark, initialUrl, onClose, onEditExisting, 
     values.url !== initial.url ||
     values.title !== initial.title ||
     values.description !== initial.description ||
+    values.slug !== initial.slug ||
+    values.forwarding !== initial.forwarding ||
     values.pinned !== initial.pinned ||
     !sameIds(values.folderIds, initial.folderIds) ||
     !sameIds(values.tagIds, initial.tagIds) ||
@@ -295,6 +323,7 @@ export function BookmarkEditor({ bookmark, initialUrl, onClose, onEditExisting, 
         url,
         title,
         ...(description === "" ? {} : { description }),
+        ...(values.slug === "" ? {} : { slug: values.slug, forwarding: values.forwarding }),
         ...(values.pinned ? { pinned: true } : {}),
         ...(values.folderIds.length === 0 ? {} : { folderIds: [...values.folderIds] }),
         ...(values.tagIds.length === 0 ? {} : { tagIds: [...values.tagIds] }),
@@ -311,6 +340,8 @@ export function BookmarkEditor({ bookmark, initialUrl, onClose, onEditExisting, 
       ...(url === bookmark.url ? {} : { url }),
       ...(title === bookmark.title ? {} : { title }),
       ...(description === (bookmark.description ?? "") ? {} : { description: description === "" ? null : description }),
+      ...(values.slug === initial.slug ? {} : { slug: values.slug === "" ? null : values.slug }),
+      ...(values.forwarding === bookmark.forwarding ? {} : { forwarding: values.forwarding }),
       ...(values.pinned === bookmark.pinned ? {} : { pinned: values.pinned }),
       ...(sameIds(values.folderIds, initial.folderIds) ? {} : { folderIds: [...values.folderIds] }),
       // The tags a patch names replace the bookmark's, so a change to them sends all of the ones that stay.
@@ -361,6 +392,7 @@ export function BookmarkEditor({ bookmark, initialUrl, onClose, onEditExisting, 
   const titleError = fieldMessage("title", problems.title);
   const descriptionError = fieldMessage("description", problems.description);
   const tagsError = fieldMessage("tagNames", problems.tagNames);
+  const slugError = fieldMessage("slug", problems.slug);
   const slugged = bookmark?.slug !== null && bookmark?.slug !== undefined;
   return (
     <>
@@ -445,6 +477,20 @@ export function BookmarkEditor({ bookmark, initialUrl, onClose, onEditExisting, 
               value={values.title}
             />
           </FormField>
+          <SlugFields
+            bookmarkId={bookmark?.id}
+            disabled={busy}
+            forwarding={values.forwarding}
+            onForwardingChange={(forwarding) => {
+              change({ forwarding });
+            }}
+            onSlugChange={(slug) => {
+              change({ slug, forwarding: forwardingAfter(values, slug) });
+              setProblems((current) => ({ ...current, slug: undefined }));
+            }}
+            problem={slugError}
+            slug={values.slug}
+          />
           <FolderPick
             disabled={busy}
             known={bookmark?.folders ?? []}

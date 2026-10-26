@@ -1,6 +1,6 @@
 import { BOOKMARK_LIST_TOTAL_CAP, bulkBookmarks as bulkBookmarksOperation, createBookmark as createBookmarkOperation, deleteBookmark as deleteBookmarkOperation, getBookmark, listBookmarkIds as listBookmarkIdsOperation, listBookmarks as listBookmarksOperation, openBookmark as openBookmarkOperation, previewBulkBookmarks as previewBulkBookmarksOperation, updateBookmark as updateBookmarkOperation, type BookmarkSchema, type BulkBookmarksRequestSchema } from "@slugbase/contracts";
-import { bulkBookmarks, createAuditWriter, createBookmark, deleteBookmark, listBookmarkIds, listBookmarks, openBookmark, previewBulkTags, readBookmark, updateBookmark, type AuditActor, type BookmarkBulkStore, type BookmarkCursors, type BookmarkEntitlements, type BookmarkListStore, type BookmarkRecord, type BookmarkStore, type BookmarkUsage } from "@slugbase/core";
-import { accountProfileRepository, auditEventRepository, bookmarkRepository, type TenantTx } from "@slugbase/db";
+import { bulkBookmarks, createAuditWriter, createBookmark, deleteBookmark, listBookmarkIds, listBookmarks, normalizeSlug, openBookmark, previewBulkTags, readBookmark, updateBookmark, type AuditActor, type BookmarkBulkStore, type BookmarkCursors, type BookmarkEntitlements, type BookmarkListStore, type BookmarkRecord, type BookmarkStore, type BookmarkUsage } from "@slugbase/core";
+import { accountProfileRepository, auditEventRepository, bookmarkRepository, isBookmarkSlugTaken, type TenantTx } from "@slugbase/db";
 import type { z } from "zod";
 import { createPageCursorCodec } from "../../auth/page-cursor.ts";
 import { uuidv7 } from "../../auth/uuidv7.ts";
@@ -31,6 +31,13 @@ import { acceptedVersions, entityTagOf } from "../workspaces/if-match.ts";
 // `422 bookmark_limit_reached` with `limit` and `used`, and nothing is written. The operation declares no stage 9
 // entitlement, since a limit of zero must read as `bookmark_limit_reached`, so the handler decides it.
 //
+// `slug` and `forwarding` on a creation and on a change (doc 02 section 6.1, doc 04 sections 1 and 10.6, doc 05 section 2.4): a slug is trimmed and lower-cased and
+// then held to the grammar before anything is written, and one outside it is `422 validation_failed` on `slug`. A slug is unique per owner within the workspace: one
+// the caller already uses on another bookmark is `409 slug_taken` on `slug` and writes nothing, and two requests that set the same slug at once make one success and one
+// `409`, the key of the table being the judge (the loser's statement ends its transaction, which is answered as a slug that is taken). Forwarding needs a slug: creating with a
+// slug and no `forwarding` stores true, forwarding without a slug, and clearing the slug of a bookmark that forwards unless the patch turns forwarding off, are `422
+// validation_failed` on `forwarding`, and turning forwarding off keeps the slug. GET /api/v1/slugs/availability answers whether a slug is free (routes/slugs).
+//
 // A bookmark is its owner's: reading, changing or deleting one that another member owns, one of another workspace and one that
 // does not exist are the same `404 not_found` (doc 04 section 2.4), and the body carries the bookmark's version, which the `ETag`
 // repeats.
@@ -53,7 +60,7 @@ import { acceptedVersions, entityTagOf } from "../workspaces/if-match.ts";
 // narrows it to the bookmarks that carry every one of the caller's tags named (AND; a tag that is not the caller's is an empty page). Every body
 // carries the caller's own `tags` and no other member's (doc 04 section 10.6, doc 02 sections 7.2 and 8.2, doc 13 Q22).
 //
-// PATCH /api/v1/bookmarks/{id} is a JSON Merge Patch of the url, title, description, pinned, folderIds, tagIds and tagNames fields. The URL goes through the
+// PATCH /api/v1/bookmarks/{id} is a JSON Merge Patch of the url, title, description, pinned, slug, forwarding, folderIds, tagIds and tagNames fields. The URL goes through the
 // normalisation of a creation, so its canonical form and host are derived again. `If-Match` is compared with the version under
 // the bookmark's row lock and a mismatch is `412 precondition_failed` with nothing written; without the header the patch applies
 // (an API token may leave it out). A patch that changes nothing answers 200 with the unchanged `ETag`. A plan-archived bookmark is
@@ -93,6 +100,8 @@ const STALE_VERSION = "The bookmark has changed since it was read; read it again
 const AT_LIMIT = "Your plan allows no more bookmarks in this workspace.";
 const BAD_CURSOR = "The cursor is not valid.";
 const TOO_MANY_MATCHES = "The filter matches more bookmarks than one request can act on; narrow it.";
+const SLUG_INVALID = "A slug has 1 to 64 lower-case letters, digits and hyphens and does not start with a hyphen.";
+const FORWARDING_NEEDS_SLUG = "A bookmark forwards only while it has a slug; give it one or turn forwarding off.";
 const URL_FIELD_CODES = { empty: "too_small", too_long: "too_big", malformed: "invalid_url" } as const;
 
 export interface BookmarkRoutesOptions {
@@ -115,6 +124,18 @@ function tenantOf(context: ChainContext): RequestTenant {
 /** Who the audit log names for a change: the token when a bearer token made the request, the account otherwise. */
 function auditActorOf(principal: Principal | undefined, accountId: string, label: string): AuditActor {
   return principal?.kind === "api-token" ? { type: "api_token", accountId, tokenId: principal.tokenId, label } : { type: "account", accountId, label };
+}
+
+/** A statement that met another bookmark's slug of the same owner at the key of the table ended its transaction with nothing written; that is the answer `slug_taken`. */
+function slugTakenWhen(error: unknown): { readonly kind: "slug_taken" } {
+  if (isBookmarkSlugTaken(error)) {
+    return { kind: "slug_taken" };
+  }
+  throw error;
+}
+
+function slugTaken(slug: string | null | undefined): ProblemError {
+  return new ProblemError("slug_taken", `You already use the slug "${normalizeSlug(slug ?? "")}" in this workspace.`, { errors: [{ path: "slug", code: "slug_taken" }] });
 }
 
 /** The core store over the repository of the open transaction; the events become jobs of the same transaction. */
@@ -222,23 +243,27 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage }: BookmarkRo
       if (ceiling === undefined) {
         throw new ProblemError("not_found", NO_WORKSPACE);
       }
-      const outcome = await tenant.withTenant((tx) =>
-        createBookmark(
-          { store: storeOf(tx), newId: uuidv7 },
-          {
-            workspaceId: tenant.workspaceId,
-            accountId: tenant.accountId,
-            url: body.url,
-            title: body.title,
-            description: body.description,
-            pinned: body.pinned,
-            folderIds: body.folderIds,
-            tagIds: body.tagIds,
-            tagNames: body.tagNames,
-            ceiling,
-          },
-        ),
-      );
+      const outcome = await tenant
+        .withTenant((tx) =>
+          createBookmark(
+            { store: storeOf(tx), newId: uuidv7 },
+            {
+              workspaceId: tenant.workspaceId,
+              accountId: tenant.accountId,
+              url: body.url,
+              title: body.title,
+              description: body.description,
+              pinned: body.pinned,
+              slug: body.slug,
+              forwarding: body.forwarding,
+              folderIds: body.folderIds,
+              tagIds: body.tagIds,
+              tagNames: body.tagNames,
+              ceiling,
+            },
+          ),
+        )
+        .catch(slugTakenWhen);
       switch (outcome.kind) {
         case "created":
           return { status: 201, body: bookmarkBody(outcome.bookmark) };
@@ -255,6 +280,12 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage }: BookmarkRo
           throw new ProblemError("not_found", NO_SUCH_FOLDER);
         case "tag_not_found":
           throw new ProblemError("not_found", NO_SUCH_TAG);
+        case "slug_invalid":
+          throw new ProblemError("validation_failed", SLUG_INVALID, { errors: [{ path: "slug", code: "invalid_slug" }] });
+        case "forwarding_requires_slug":
+          throw new ProblemError("validation_failed", FORWARDING_NEEDS_SLUG, { errors: [{ path: "forwarding", code: "forwarding_requires_slug" }] });
+        case "slug_taken":
+          throw slugTaken(body.slug);
       }
     }),
 
@@ -385,9 +416,9 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage }: BookmarkRo
     route(updateBookmarkOperation).handle(async ({ params, body }, context) => {
       const tenant = tenantOf(context);
       const expectedVersions = acceptedVersions(context.req.header("if-match"));
-      const outcome = await tenant.withTenant((tx) =>
-        updateBookmark({ store: storeOf(tx), newId: uuidv7 }, { bookmarkId: params.id, accountId: tenant.accountId, patch: body, expectedVersions }),
-      );
+      const outcome = await tenant
+        .withTenant((tx) => updateBookmark({ store: storeOf(tx), newId: uuidv7 }, { bookmarkId: params.id, accountId: tenant.accountId, patch: body, expectedVersions }))
+        .catch(slugTakenWhen);
       switch (outcome.kind) {
         case "updated":
         case "unchanged":
@@ -405,6 +436,12 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage }: BookmarkRo
           throw new ProblemError("not_found", NO_SUCH_FOLDER);
         case "tag_not_found":
           throw new ProblemError("not_found", NO_SUCH_TAG);
+        case "slug_invalid":
+          throw new ProblemError("validation_failed", SLUG_INVALID, { errors: [{ path: "slug", code: "invalid_slug" }] });
+        case "forwarding_requires_slug":
+          throw new ProblemError("validation_failed", FORWARDING_NEEDS_SLUG, { errors: [{ path: "forwarding", code: "forwarding_requires_slug" }] });
+        case "slug_taken":
+          throw slugTaken(body.slug);
       }
     }),
 

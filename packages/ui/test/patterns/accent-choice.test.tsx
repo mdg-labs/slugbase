@@ -14,15 +14,25 @@ const NAMES: Record<Accent, string> = {
 };
 
 describe("AccentChoice", () => {
-  it("offers the six presets as named radios, each painted with its own preset, and checks the current one", async () => {
-    const { container } = render(<AccentChoice label="Accent colour" names={NAMES} onValueChange={() => undefined} value="rose" />);
+  it("is a radio group named by its label", () => {
+    render(<AccentChoice label="Accent colour" names={NAMES} onValueChange={() => undefined} value="rose" />);
 
     expect(screen.getByRole("radiogroup", { name: "Accent colour" })).toBeTruthy();
+  });
+
+  it("offers the six presets as named radios, each painted with its own preset, and checks the current one", () => {
+    render(<AccentChoice label="Accent colour" names={NAMES} onValueChange={() => undefined} value="rose" />);
+
     const radios = screen.getAllByRole("radio");
     expect(radios.map((radio) => radio.getAttribute("aria-label"))).toEqual(ACCENTS.map((accent) => NAMES[accent]));
     expect(radios.map((radio) => radio.getAttribute("data-accent"))).toEqual([...ACCENTS]);
     expect(screen.getByRole("radio", { name: "Rose" }).getAttribute("aria-checked")).toBe("true");
     expect(radios.filter((radio) => radio.getAttribute("aria-checked") === "true")).toHaveLength(1);
+  });
+
+  it("is free of accessibility violations", async () => {
+    const { container } = render(<AccentChoice label="Accent colour" names={NAMES} onValueChange={() => undefined} value="rose" />);
+
     await expectNoViolations(container);
   });
 

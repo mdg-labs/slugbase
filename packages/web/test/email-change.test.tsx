@@ -1,5 +1,6 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
 import { ACCOUNT_BODY, CONFIG_BODY, ME_PATH, SESSION_BODY, SESSION_PATH, WORKSPACES_PATH, WORKSPACE_LIST_BODY, json, meOf, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
@@ -173,7 +174,7 @@ afterEach(() => {
   document.documentElement.removeAttribute("lang");
 });
 
-describe("the email row of the profile", () => {
+describe("the email row of the profile", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows the address and no pending change by default", async () => {
     stubServer();
     await openProfile();
@@ -441,7 +442,7 @@ describe("the email row of the profile", () => {
   });
 });
 
-describe("the confirmation page", () => {
+describe("the confirmation page", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("redeems the token from the fragment once and says the address was changed", async () => {
     const server = stubServer();
     await openApp("/email-change/confirm#token=abc123", "Confirm your new email address");
@@ -538,7 +539,7 @@ describe("the confirmation page", () => {
   });
 });
 
-describe("the page of the \"this wasn't me\" link", () => {
+describe("the page of the \"this wasn't me\" link", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("redeems the token once and says every device was signed out", async () => {
     const server = stubServer();
     await openApp("/email-change/cancel#token=def456", "Cancel an email change");

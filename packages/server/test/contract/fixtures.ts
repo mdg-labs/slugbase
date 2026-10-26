@@ -44,6 +44,9 @@ export const UNKNOWN_TARGET_TAG_ID = "0192f3a0-cccc-7000-8000-00000000000c";
 /** A folder no workspace holds: the walker's request to read, change or delete it is the declared 404. */
 export const UNKNOWN_FOLDER_ID = "0192f3a0-cccc-7000-8000-00000000000b";
 
+/** The slugs of the two forwarding bookmarks the matrix seeds in workspace B, which the resolution and the choice of A name: workspace A has no bookmark with either. */
+export const B_SLUGS = ["matrix-b-slug-0", "matrix-b-slug-1"] as const;
+
 /** An invitation no workspace holds: the walker's request to resend, link or revoke it is the declared 404. */
 export const UNKNOWN_INVITATION_ID = "0192f3a0-cccc-7000-8000-000000000006";
 
@@ -266,12 +269,31 @@ export const FIXTURES: ContractFixtures = {
   // The open names a bookmark by identifier as well, and counts it only for a bookmark the caller owns: the valid request is the declared 404 for
   // a bookmark no workspace holds, and the matrix puts the bookmarks of workspace B in the path.
   openBookmark: { path: { id: UNKNOWN_BOOKMARK_ID }, status: 404, foreign: { path: { id: UNKNOWN_BOOKMARK_ID } } },
+  // Whether a slug is free names the caller's bookmark in `bookmarkId` when it has one: a bookmark no workspace holds, and so one of workspace B, is the declared
+  // 404 whoever would hold it, before the slug is looked at. Without it the slug is judged for a new bookmark, which names nothing of any workspace: the valid
+  // request is the declared 200. The matrix picks `slug` as an input that can carry an identifier, by its name, and puts a bookmark of B in it and in `bookmarkId`.
+  checkSlugAvailability: { query: { slug: "walker" }, foreign: { query: { slug: "walker", bookmarkId: UNKNOWN_BOOKMARK_ID } } },
+  // What a slug resolves to, and the choice of one of its candidates, name a slug the caller writes and not the identifier of a row. A slug nothing the caller can read has,
+  // the walker's own and one that exists only in workspace B alike, resolves to nothing, an empty 200; the choice names a bookmark as well, and one that is no candidate of
+  // the slug for the caller, a bookmark no workspace holds and so one of workspace B, is the declared 404 slug_not_found, which is also the valid request of the walker,
+  // who owns no bookmark with the slug. The matrix puts the slugs and the bookmarks of B in both inputs.
+  resolveSlug: { body: { slug: "walker" }, foreign: { body: { slug: "walker" } }, foreignAnswer: { status: 200 } },
+  chooseSlug: {
+    body: { slug: "walker", bookmarkId: UNKNOWN_BOOKMARK_ID, remember: false },
+    status: 404,
+    foreign: { body: { slug: "walker", bookmarkId: UNKNOWN_BOOKMARK_ID, remember: false } },
+    foreignAnswer: { status: 404, code: "slug_not_found" },
+  },
   // The tags of the member who makes them. The creation takes a name and names no identifier of any workspace, so there is none of workspace B to put in it:
   // the walker that calls it owns a workspace of its own, so the valid request is the declared 201 (a second creation of the name by the same account is the
   // declared 409, which the matrix tolerates since it names no identifier). The list names none either and acts in the workspace of the request. The rename and
   // the deletion name a tag by identifier, which the walker cannot know for a tag it would own, so their valid request names a tag that no workspace holds, the
   // declared 404 whoever would hold it, and so is a tag of workspace B; the route tests rename and delete the walker's own tags, and the matrix puts the tag
   // of workspace B in the path.
+  // The remembered choices are the caller's own in the workspace of the request. The list names no identifier. Forgetting names a slug the caller writes: the walker has no choice
+  // for it, the declared 404, and the matrix puts the slugs of workspace B there, whose owner has a choice for the first of them, which the caller does not reach, the same 404.
+  listGoPreferences: {},
+  deleteGoPreference: { path: { slug: "walker" }, status: 404, foreign: { path: { slug: "walker" } } },
   createTag: { body: { name: "Walker tag" } },
   listTags: {},
   renameTag: { path: { id: UNKNOWN_TAG_ID }, body: { name: "Walker tag" }, status: 404, foreign: { path: { id: UNKNOWN_TAG_ID }, body: { name: "Walker tag" } } },

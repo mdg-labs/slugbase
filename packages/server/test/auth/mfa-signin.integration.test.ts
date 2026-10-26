@@ -292,8 +292,10 @@ describe("what a partial session may call", () => {
       const fixture = operation.operationId === "getMfaSigninProbe" ? {} : FIXTURES[operation.operationId];
       expect(fixture, operation.operationId).toBeDefined();
       const path = operation.path.replace(/\{([^}]+)\}/g, (_match, name: string) => encodeURIComponent(fixture?.path?.[name] ?? "x"));
+      // A query the operation requires is sent too: the stages that validate a request run before the one that refuses a partial session.
+      const query = new URLSearchParams(Object.entries(fixture?.query ?? {}).flatMap(([name, value]) => (typeof value === "string" ? [value] : value).map((item): [string, string] => [name, item]))).toString();
       const response = await world.server.fetch(
-        buildRequest({ method: operation.method, url: path, body: fixture?.body, credentials: { headers }, origin: world.origin }),
+        buildRequest({ method: operation.method, url: query === "" ? path : `${path}?${query}`, body: fixture?.body, credentials: { headers }, origin: world.origin }),
       );
       expect(response.status, `${operation.method} ${operation.path}`).toBe(401);
       expect(await problem(response), `${operation.method} ${operation.path}`).toMatchObject({ code: "mfa_required" });

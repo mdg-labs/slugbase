@@ -20,27 +20,49 @@ async function rightClick(element: HTMLElement): Promise<void> {
 }
 
 describe("ContextActions", () => {
-  it("opens the actions on a right click, runs the chosen one and closes", async () => {
-    const onSelect = vi.fn<() => void>();
-    const actions: readonly RowAction[] = [
-      { id: "edit", label: "Edit", onSelect },
-      { id: "delete", label: "Delete", destructive: true, onSelect: () => undefined },
-      { id: "locked", label: "Locked", disabled: true, onSelect: () => undefined },
-    ];
+  const actions = (onSelect: () => void): readonly RowAction[] => [
+    { id: "edit", label: "Edit", onSelect },
+    { id: "delete", label: "Delete", destructive: true, onSelect: () => undefined },
+    { id: "locked", label: "Locked", disabled: true, onSelect: () => undefined },
+  ];
+
+  it("is free of accessibility violations while closed", async () => {
     const { container } = render(
-      <ContextActions actions={actions} label="Actions for Example">
+      <ContextActions actions={actions(() => undefined)} label="Actions for Example">
         <p>Card</p>
       </ContextActions>,
     );
     expect(screen.queryByRole("menu")).toBeNull();
+
     await expectNoViolations(container);
+  });
+
+  it("opens the actions on a right click, the unavailable one disabled", async () => {
+    render(
+      <ContextActions actions={actions(() => undefined)} label="Actions for Example">
+        <p>Card</p>
+      </ContextActions>,
+    );
 
     await rightClick(screen.getByText("Card"));
     const menu = await screen.findByRole("menu", { name: "Actions for Example" });
     const items = screen.getAllByRole("menuitem");
+
     expect(menu).toBeDefined();
     expect(items.map((item) => item.textContent)).toEqual(["Edit", "Delete", "Locked"]);
     expect(items[2]?.getAttribute("aria-disabled")).toBe("true");
+  });
+
+  it("runs the chosen action", async () => {
+    const onSelect = vi.fn<() => void>();
+    render(
+      <ContextActions actions={actions(onSelect)} label="Actions for Example">
+        <p>Card</p>
+      </ContextActions>,
+    );
+
+    await rightClick(screen.getByText("Card"));
+    const items = await screen.findAllByRole("menuitem");
     await act(async () => {
       fireEvent.click(items[0] as HTMLElement);
       await Promise.resolve();

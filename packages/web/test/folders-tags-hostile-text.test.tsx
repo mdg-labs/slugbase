@@ -380,6 +380,10 @@ describe("the Tags page with hostile names", { timeout: HEAVY_TEST_TIMEOUT_MS },
         await chooseAction(`Actions for ${texts[0] ?? ""}`, "Rename");
         const dialog = await screen.findByRole("dialog", { name: "Rename tag" });
         const field = within(dialog).getByLabelText<HTMLInputElement>("Name");
+        // Base UI focuses the first field after opening; changing it earlier makes data-touched depend on timing.
+        await waitFor(() => {
+          expect(document.activeElement).toBe(field);
+        });
         await act(async () => {
           fireEvent.change(field, { target: { value: texts[1] ?? "" } });
           await Promise.resolve();

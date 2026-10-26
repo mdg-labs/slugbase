@@ -36,6 +36,7 @@ import { authContribution } from "./routes/auth/index.ts";
 import { apiTokenRoutes } from "./routes/me/api-tokens.ts";
 import { accountDeletionRoutes } from "./routes/me/delete.ts";
 import { emailChangeRoutes } from "./routes/me/email.ts";
+import { goPreferenceRoutes } from "./routes/me/go-preferences.ts";
 import { identityRoutes } from "./routes/me/identities.ts";
 import { mfaRoutes } from "./routes/me/mfa.ts";
 import { profileRoutes } from "./routes/me/profile.ts";
@@ -47,6 +48,9 @@ import { invitationRoutes } from "./routes/invitations/index.ts";
 import { bookmarkRoutes } from "./routes/bookmarks/index.ts";
 import { tagRoutes } from "./routes/tags/index.ts";
 import { folderRoutes } from "./routes/folders/index.ts";
+import { goRoutes } from "./routes/go/index.ts";
+import { goNavigationRoutes, isGoShell } from "./routes/go/navigate.ts";
+import { slugRoutes } from "./routes/slugs/index.ts";
 import { entitlementRoutes } from "./routes/entitlements.ts";
 import { instanceRoutes, type InstanceAdminGrantCheck } from "./routes/instance/index.ts";
 import { memberRoutes } from "./routes/members/index.ts";
@@ -543,9 +547,11 @@ export function createServer(options: CreateServerOptions): Server {
   builtInRoutes.push(...(auth.routes ?? []));
   // So is first-run setup: it signs the first account in, on the same pool.
   builtInRoutes.push(...setupRoutes({ config, store: authStore, passwordPolicy }));
+  // The navigation to a slug is typed into the address bar, so it is no operation of the API's document: it takes the chain's policy and nothing else from a contract.
+  const navigationRoutes = goNavigationRoutes({ usage, webRoot: options.webRoot });
   const builtIn: ServerModule = {
     name: "@slugbase/server",
-    register: () => ({ routes: builtInRoutes, authenticators: auth.authenticators ?? [] }),
+    register: () => ({ routes: [...builtInRoutes, ...navigationRoutes], authenticators: auth.authenticators ?? [] }),
   };
   // Requests no operation matches: the paths served as files rather than as operations.
   const docs: readonly Unrouted[] = config.API_DOCS_ENABLED ? [apiDocs()] : [];
@@ -576,6 +582,11 @@ export function createServer(options: CreateServerOptions): Server {
   builtInRoutes.push(...tagRoutes({ cursorSecret: config.SESSION_SECRET }));
   // And the folders of the member who makes them: created, listed with their bookmark counts, read, changed (with `If-Match`) and deleted by their owner alone.
   builtInRoutes.push(...folderRoutes({ cursorSecret: config.SESSION_SECRET }));
+  // And whether a slug is free for the member: answered from their own bookmarks, with a count of the others' that use it.
+  builtInRoutes.push(...slugRoutes());
+  // And what a slug resolves to for the member, and the member's choice among its candidates, which counts the use in the same buffer an open does.
+  builtInRoutes.push(...goRoutes({ usage }));
+  builtInRoutes.push(...goPreferenceRoutes({ cursorSecret: config.SESSION_SECRET }));
   const ownedWorkspaceEntitlements = createOwnedWorkspaceEntitlements(entitlementService);
   // Stage 9 and the handlers that decide an entitlement themselves (accepting an invitation) ask the same check, so an operation is gated the same way wherever it is decided.
   const entitlementCheck: EntitlementCheck = options.entitlements ?? (adapters.entitlements.available ? createEntitlementCheck(entitlementService) : denyEntitlements);
@@ -655,7 +666,7 @@ export function createServer(options: CreateServerOptions): Server {
     migrationSets = composition.migrations;
     // The built-in routes are checked against the document committed with the contracts, whatever
     // document the modules' routes are registered against.
-    const builtInSet = new Set(builtInRoutes);
+    const builtInSet = new Set([...builtInRoutes, ...navigationRoutes]);
     const unregistrable =
       checkRegistrations(builtInRoutes, committedDocument) ??
       checkRegistrations(
@@ -699,9 +710,9 @@ export function createServer(options: CreateServerOptions): Server {
       }
       return validation(context, next);
     },
-    // The committed document is sent as stored; checking it must not re-serialise it.
+    // The committed document is sent as stored, and the page a `/go` navigation answers with is the SPA's; checking either must not re-serialise it.
     response: (context) =>
-      isOpenApiDocument(context.get("route")?.operation.operationId, context.res.status) ? undefined : validateResponse(context),
+      isOpenApiDocument(context.get("route")?.operation.operationId, context.res.status) || isGoShell(context) ? undefined : validateResponse(context),
   };
 
   const app = new Hono<ChainEnv>();

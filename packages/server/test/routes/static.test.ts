@@ -251,8 +251,23 @@ describe("history fallback", () => {
 
   it("never answers a path under /api/ or /go/ with the app", async () => {
     const server = start({ webRoot });
-    for (const path of ["/api", "/api/", "/api/v1/nothing", "/api/anything/else", "/go", "/go/", "/go/some-slug", "/%61pi/v1/x", "/%67o/slug", "/api%2fv1"]) {
+    for (const path of ["/api", "/api/", "/api/v1/nothing", "/api/anything/else", "/go", "/%61pi/v1/x", "/api%2fv1", "/go%2fslug"]) {
       await expectNotFound(await get(server, path, HTML));
+    }
+  });
+
+  it("answers a path under /go/ with the navigation, which sends a visitor to sign in, and never with the app", async () => {
+    const server = start({ webRoot });
+    for (const [path, location] of [
+      ["/go/some-slug", "/login?returnTo=/go/some-slug"],
+      ["/%67o/some-slug", "/login?returnTo=/go/some-slug"],
+      ["/go/", "/login"],
+      ["/go/some-slug/more", "/login"],
+    ] as const) {
+      const answer = await get(server, path, HTML);
+      expect(answer.status, path).toBe(302);
+      expect(answer.headers.get("location"), path).toBe(location);
+      expect(await answer.text(), path).toBe("");
     }
   });
 

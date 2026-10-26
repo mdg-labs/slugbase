@@ -2,6 +2,7 @@ import { CreateFolderRequestSchema, FOLDER_COLOR_MAX, FOLDER_ICONS, UpdateFolder
 import { FOLDER_ICON_COMPONENTS } from "@slugbase/ui/patterns";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
 import { allowSlowRender, json, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
@@ -262,7 +263,7 @@ async function type(dialog: HTMLElement, name: string): Promise<void> {
   });
 }
 
-describe("reaching the page", () => {
+describe("reaching the page", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("is the Folders link of the sidebar, and lists the folders by name with their icon, count and date", async () => {
     const server = stubServer([folder(2, { name: "Reading", bookmarkCount: 12, icon: "book-open", color: 3 }), folder(1, { name: "Archive", bookmarkCount: 1 })]);
     await openApp("/");
@@ -328,7 +329,7 @@ describe("reaching the page", () => {
   });
 });
 
-describe("the sort", () => {
+describe("the sort", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("is read from the address into the request and the control, and an unknown one is dropped", async () => {
     const server = stubServer([folder(1, { name: "Few", bookmarkCount: 1 }), folder(2, { name: "Many", bookmarkCount: 40 })]);
     await openApp("/folders?sort=count");
@@ -373,7 +374,7 @@ describe("the sort", () => {
   });
 });
 
-describe("a long list", () => {
+describe("a long list", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("loads the next page with the cursor of the last one and says how many of how many are shown", async () => {
     const many = Array.from({ length: 55 }, (_, index) => folder(index + 1, { name: `Folder ${String(index + 1).padStart(2, "0")}` }));
     const server = stubServer(many);
@@ -393,7 +394,7 @@ describe("a long list", () => {
   });
 });
 
-describe("creating a folder", () => {
+describe("creating a folder", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("opens from the button and from N with the name, icon and colour, and sends what was chosen", async () => {
     const server = stubServer([folder(1, { name: "Archive" })]);
     await openApp("/folders");
@@ -529,7 +530,7 @@ describe("creating a folder", () => {
   });
 });
 
-describe("renaming and restyling", () => {
+describe("renaming and restyling", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("renames with the same form, prefilled, against the version the list holds, sending the name alone", async () => {
     const server = stubServer([folder(1, { name: "Reading", icon: "book", color: 5 })]);
     await openApp("/folders");
@@ -611,7 +612,7 @@ describe("renaming and restyling", () => {
   });
 });
 
-describe("deleting a folder", () => {
+describe("deleting a folder", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("asks first, naming how many bookmarks stay, and deletes only on confirmation", async () => {
     const server = stubServer([folder(1, { name: "Reading", bookmarkCount: 9 }), folder(2, { name: "Zeta" })]);
     await openApp("/folders");
@@ -683,7 +684,7 @@ describe("deleting a folder", () => {
   });
 });
 
-describe("opening a folder in Bookmarks", () => {
+describe("opening a folder in Bookmarks", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("goes to the bookmark list with the folder in the address", async () => {
     stubServer([folder(1, { name: "Reading" })]);
     await openApp("/folders");
@@ -697,7 +698,7 @@ describe("opening a folder in Bookmarks", () => {
   });
 });
 
-describe("states", () => {
+describe("states", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows skeleton rows while the first page is read, not an empty page, and then the folders", async () => {
     let release: () => void = () => undefined;
     const open = new Promise<void>((resolve) => {

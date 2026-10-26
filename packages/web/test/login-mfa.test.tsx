@@ -1,8 +1,11 @@
 import { act, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
+import { navigateTo } from "../src/auth/navigate.ts";
 import { createWebApp } from "../src/index.ts";
 import { CONFIG_BODY, ME_PATH, PRODUCT_NAME, SESSION_BODY, SESSION_PATH, json, meBody, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
+
+vi.mock("../src/auth/navigate.ts", () => ({ navigateTo: vi.fn() }));
 
 type Transport = (request: Request) => Promise<Response>;
 
@@ -95,6 +98,7 @@ async function typeCode(digits: string): Promise<void> {
 }
 
 beforeEach(() => {
+  vi.mocked(navigateTo).mockClear();
   stubBrowserApis();
   stubMatchMedia();
   vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["en-US", "en"]);
@@ -449,4 +453,42 @@ describe("back to sign in", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("Going back to sign in did not work. Try again.");
     expect(window.location.pathname).toBe("/login/mfa");
   });
+});
+
+describe("coming back from a /go address (doc 04 section 9.3)", () => {
+  it("goes back to /go/<slug> with a request to the server once the code is verified", async () => {
+    const server = stubServer("partial");
+    await openMfa(`/login/mfa?returnTo=${encodeURIComponent("/go/mail")}`);
+
+    await typeCode("123456");
+
+    await waitFor(() => {
+      expect(navigateTo).toHaveBeenCalledExactlyOnceWith("/go/mail");
+    });
+    expect(await server.verifications()).toEqual([{ code: "123456" }]);
+  });
+
+  it("keeps the return address through the sign-in that starts over when the pending session is gone", async () => {
+    stubServer("none");
+
+    await open(`/login/mfa?returnTo=${encodeURIComponent("/go/mail")}`);
+
+    expect(await screen.findByRole("heading", { level: 1, name: "Sign in" })).toBeTruthy();
+    expect(window.location.pathname).toBe("/login");
+    expect(window.location.search).toBe(`?next=${encodeURIComponent("/go/mail")}`);
+  });
+
+  it.each(["https://evil.example/go/mail", "//evil.example", "/\\evil.example", "/go/../admin", "javascript:alert(1)", "/go/mail/inbox", "/go/Mail"])(
+    "ignores the return address %j and lands on the default page",
+    async (returnTo) => {
+      stubServer("partial");
+      await openMfa(`/login/mfa?returnTo=${encodeURIComponent(returnTo)}`);
+
+      await typeCode("123456");
+
+      expect(await screen.findByRole("heading", { level: 1, name: `Welcome to ${PRODUCT_NAME}` })).toBeTruthy();
+      expect(window.location.pathname).toBe("/");
+      expect(navigateTo).not.toHaveBeenCalled();
+    },
+  );
 });

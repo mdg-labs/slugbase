@@ -34,6 +34,12 @@ describe("UnsavedGuard", () => {
 
     expect(await screen.findByRole("alertdialog", { name: "Discard your changes?" })).toBeTruthy();
     expect(screen.getByText("Your changes are lost.")).toBeTruthy();
+  });
+
+  it("is free of accessibility violations", async () => {
+    render(guard(() => undefined, () => undefined));
+    await screen.findByRole("alertdialog", { name: "Discard your changes?" });
+
     await expectNoViolations(document.body);
   });
 

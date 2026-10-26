@@ -51,6 +51,12 @@ describe("ShortcutSheet", () => {
 
     const dialog = await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
     expect(screen.getByText("Keys that work anywhere in the app.").id).toBe(dialog.getAttribute("aria-describedby"));
+  });
+
+  it("is free of accessibility violations", async () => {
+    render(<Harness />);
+    await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
+
     await expectNoViolations(document.body);
   });
 

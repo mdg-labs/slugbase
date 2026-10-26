@@ -589,6 +589,48 @@
       "when": 1792933850606,
       "tag": "20261025131050_add_bookmark_tagging",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1793015652719,
+      "tag": "20261026115412_drop_bookmark_search",
+      "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1793015661520,
+      "tag": "20261026115421_add_bookmark_slugs",
+      "breakpoints": true
+    },
+    {
+      "idx": 86,
+      "version": "7",
+      "when": 1793015661521,
+      "tag": "20261026115422_index_bookmark_slugs",
+      "breakpoints": true
+    },
+    {
+      "idx": 87,
+      "version": "7",
+      "when": 1793015661522,
+      "tag": "20261026115423_index_bookmark_slugs_2",
+      "breakpoints": true
+    },
+    {
+      "idx": 88,
+      "version": "7",
+      "when": 1793021515167,
+      "tag": "20261026133155_add_slug_preferences",
+      "breakpoints": true
+    },
+    {
+      "idx": 89,
+      "version": "7",
+      "when": 1793029240542,
+      "tag": "20261026154040_add_slug_preference_delete",
+      "breakpoints": true
     }
   ]
 }

@@ -86,6 +86,7 @@ existing line by adding its PR number.
 - **race window at the wrong point** — a concurrency test widens the race with a pause before the read it needs to overlap rather than between that read and the commit, so the overlap lasts only as long as one commit and the test flakes on a slow runner — PR 506
 - **lookup of a fresh key** — a negative assertion ("nothing resolves any more") looks up a freshly generated key (a new token hash) that was never stored, instead of the keys the fixture seeded, so it passes whatever the code under test does — PR 510
 - **wait on a promise that may never settle** — a test helper awaits a completion promise of every object of a kind (an animation's `finished`) without filtering out the states in which it never settles on its own (paused, idle), so one such object blocks the helper until the test times out — PR 524
+- **deadline checked only between polls** — a polling helper checks its own deadline between calls while each call auto-waits on its own (a Playwright locator action waiting for its element), so a missing element holds one call until the test's timeout and the helper's bound and named error never fire — PR 602
 - **unescaped literal in a pattern** — a test builds a `RegExp` from a literal value (an origin, a hostname) without escaping it, so each `.` matches any character and the assertion accepts look-alike values — PR 529
 
 ## Web UI

@@ -14,6 +14,7 @@ import {
   migrationLevel,
   type MigrationChain,
 } from "../../src/migrate.ts";
+import { useCluster, type ClusterUse } from "../../src/testing.ts";
 
 // Runs the migration engine against throwaway databases on the development
 // Postgres of compose.dev.yml (doc 08 section 3.4). Every database is
@@ -30,9 +31,8 @@ const server = new URL(
   process.env.SLUGBASE_TEST_PG_URL ?? "postgres://slugbase:slugbase@127.0.0.1:54329/slugbase_dev",
 );
 
-// Roles are cluster-wide and the roles test changes them, so this file holds
-// the cluster lock of that test for its whole run.
-const CLUSTER_LOCK_KEY = 7_354_190_025;
+// Roles are cluster-wide and the roles test changes them for a step, so this
+// file holds the cluster shared, like a test database, for its whole run.
 const HOOK_TIMEOUT_MS = 300_000;
 
 function fixture(name: string): MigrationChain {
@@ -63,6 +63,7 @@ function appUrl(database: string): string {
 const clients: postgres.Sql[] = [];
 const databases: string[] = [];
 const scratchDirectories: string[] = [];
+let cluster: ClusterUse | undefined;
 let admin: postgres.Sql;
 
 function track(client: postgres.Sql): postgres.Sql {
@@ -268,8 +269,8 @@ async function indexes(owner: postgres.Sql, names: string[]): Promise<{ name: st
 }
 
 beforeAll(async () => {
+  cluster = await useCluster();
   admin = track(connectAs(decodeURIComponent(server.username), decodeURIComponent(server.password), server.pathname.slice(1)));
-  await admin`SELECT pg_advisory_lock(${CLUSTER_LOCK_KEY})`;
 }, HOOK_TIMEOUT_MS);
 
 afterAll(async () => {
@@ -282,8 +283,11 @@ afterAll(async () => {
       rmSync(directory, { recursive: true, force: true });
     }
   } finally {
-    // Ending the session releases the cluster lock.
-    await admin.end({ timeout: 5 });
+    try {
+      await admin.end({ timeout: 5 });
+    } finally {
+      await cluster?.release();
+    }
   }
 }, HOOK_TIMEOUT_MS);
 

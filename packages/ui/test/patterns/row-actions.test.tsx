@@ -28,23 +28,49 @@ afterEach(() => {
 });
 
 describe("RowActions", () => {
-  it("opens a menu from an icon button named for the row, and runs the chosen action", async () => {
-    const onSelect = vi.fn<() => void>();
-    const { container } = render(<RowActions actions={actionsOf(onSelect)} label="Actions for Ada" />);
+  it("is an icon button named for the row, with no menu until it is pressed", () => {
+    render(<RowActions actions={actionsOf(() => undefined)} label="Actions for Ada" />);
+
+    expect(screen.getByRole("button", { name: "Actions for Ada" })).toBeTruthy();
     expect(screen.queryByRole("menuitem")).toBeNull();
-    await expectNoViolations(container);
+  });
+
+  it("opens a menu listing the actions, the unavailable one disabled", async () => {
+    render(<RowActions actions={actionsOf(() => undefined)} label="Actions for Ada" />);
 
     await open();
     const items = await screen.findAllByRole("menuitem");
+
     expect(items.map((item) => item.textContent)).toEqual(["Change role", "Remove", "Transfer ownership"]);
     expect(items[2]?.getAttribute("aria-disabled")).toBe("true");
-    await expectNoViolations(document.body);
+  });
+
+  it("runs the chosen action", async () => {
+    const onSelect = vi.fn<() => void>();
+    render(<RowActions actions={actionsOf(onSelect)} label="Actions for Ada" />);
+
+    await open();
+    const items = await screen.findAllByRole("menuitem");
     await act(async () => {
       fireEvent.click(items[0] as HTMLElement);
       await Promise.resolve();
     });
 
     expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it("is free of accessibility violations while closed", async () => {
+    const { container } = render(<RowActions actions={actionsOf(() => undefined)} label="Actions for Ada" />);
+
+    await expectNoViolations(container);
+  });
+
+  it("is free of accessibility violations while open", async () => {
+    render(<RowActions actions={actionsOf(() => undefined)} label="Actions for Ada" />);
+
+    await open();
+    await screen.findAllByRole("menuitem");
+    await expectNoViolations(document.body);
   });
 
   it("shows no button for a row without actions", () => {

@@ -225,6 +225,18 @@ describe("the security headers of a /go response", () => {
   });
 });
 
+describe("the security headers of a path sent encoded", () => {
+  it("are those of the route the encoded path reaches: /%67o/docs is /go/docs and /%61pi/v1/ping is /api/v1/ping", async () => {
+    const port = await listen();
+    const go = await get(port, "/%67o/docs");
+    expect(go.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(go.headers.get("cache-control")).toBe(NO_STORE);
+    const api = await get(port, "/%61pi/v1/ping");
+    expect(api.status).toBe(200);
+    expect(api.headers.get("cache-control")).toBe(NO_STORE);
+  });
+});
+
 describe("Strict-Transport-Security", () => {
   it("is sent when APP_ORIGIN is https", async () => {
     const port = await listen({ APP_ORIGIN: "https://bookmarks.example.com" });

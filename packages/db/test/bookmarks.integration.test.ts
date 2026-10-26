@@ -177,7 +177,7 @@ describe("the table", () => {
 
     expect(columns.map((column) => column.column_name)).toEqual([
       "id", "workspace_id", "owner_id", "url", "url_canonical", "host", "title", "description", "slug", "forwarding", "pinned_at",
-      "plan_archived_at", "open_count", "last_opened_at", "search", "version", "created_at", "updated_at",
+      "plan_archived_at", "open_count", "last_opened_at", "version", "created_at", "updated_at", "search",
     ]);
     const nullable = columns.filter((column) => column.is_nullable === "YES").map((column) => column.column_name);
     expect(nullable).toEqual(["owner_id", "description", "slug", "pinned_at", "plan_archived_at", "last_opened_at", "search"]);
@@ -315,8 +315,8 @@ describe("row-level security and privileges", () => {
       SELECT privilege_type, column_name FROM information_schema.column_privileges
       WHERE table_name = 'bookmarks' AND grantee = 'slugbase_app' AND privilege_type IN ('INSERT', 'UPDATE') ORDER BY privilege_type, column_name`;
     expect(columns).toEqual([
-      ...["description", "host", "id", "owner_id", "pinned_at", "title", "url", "url_canonical", "workspace_id"].map((column_name) => ({ privilege_type: "INSERT", column_name })),
-      ...["description", "host", "pinned_at", "title", "url", "url_canonical"].map((column_name) => ({ privilege_type: "UPDATE", column_name })),
+      ...["description", "forwarding", "host", "id", "owner_id", "pinned_at", "slug", "title", "url", "url_canonical", "workspace_id"].map((column_name) => ({ privilege_type: "INSERT", column_name })),
+      ...["description", "forwarding", "host", "pinned_at", "slug", "title", "url", "url_canonical"].map((column_name) => ({ privilege_type: "UPDATE", column_name })),
     ]);
   });
 
@@ -327,7 +327,7 @@ describe("row-level security and privileges", () => {
     const acting = { accountId: owner, workspaceId: workspace.id };
 
     expect(await refusedWith(appAs(acting, (tx) => tx`DELETE FROM bookmarks WHERE id = ${id}`))).toBe(INSUFFICIENT_PRIVILEGE);
-    for (const set of ["slug = 'mine'", "forwarding = false", "plan_archived_at = now()", "open_count = 7", "last_opened_at = now()", "version = 9", `owner_id = '${memberOf(workspace, 1)}'`, `workspace_id = '${workspace.id}'`, "id = id", "created_at = now()", "updated_at = now()"]) {
+    for (const set of ["plan_archived_at = now()", "open_count = 7", "last_opened_at = now()", "version = 9", `owner_id = '${memberOf(workspace, 1)}'`, `workspace_id = '${workspace.id}'`, "id = id", "created_at = now()", "updated_at = now()"]) {
       expect(await refusedWith(appAs(acting, (tx) => tx.unsafe(`UPDATE bookmarks SET ${set} WHERE id = '${id}'`))), set).toBe(INSUFFICIENT_PRIVILEGE);
     }
     expect(await storedRows(workspace.id)).toBe(1);
@@ -352,7 +352,7 @@ describe("row-level security and privileges", () => {
     expect(rows.find((row) => row.id === own)).toMatchObject({ title: "Changed", description: "swept" });
   });
 
-  it("refuses an insert that names a column a request may not write: the slug, forwarding, the archive, the usage, the version and the counter of the workspace", async () => {
+  it("refuses an insert that names a column a request may not write: the archive, the usage, the version and the counter of the workspace", async () => {
     const workspace = await workspaceOf(1);
     const owner = memberOf(workspace, 0);
     const insertWith = (column: string, value: string) =>
@@ -363,8 +363,6 @@ describe("row-level security and privileges", () => {
         ),
       );
 
-    expect(await refusedWith(insertWith("slug", "'mine'"))).toBe(INSUFFICIENT_PRIVILEGE);
-    expect(await refusedWith(insertWith("forwarding", "false"))).toBe(INSUFFICIENT_PRIVILEGE);
     expect(await refusedWith(insertWith("plan_archived_at", "now()"))).toBe(INSUFFICIENT_PRIVILEGE);
     expect(await refusedWith(insertWith("open_count", "7"))).toBe(INSUFFICIENT_PRIVILEGE);
     expect(await refusedWith(insertWith("last_opened_at", "now()"))).toBe(INSUFFICIENT_PRIVILEGE);

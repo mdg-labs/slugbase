@@ -237,7 +237,7 @@ On a selection of **own** bookmarks: delete, add to folder, move to folder (repl
 
 ### 6.1 Slug rules
 
-- Grammar: `^[a-z0-9][a-z0-9-]{0,63}$` — lower-case letters, digits and hyphens, 1–64 characters, not starting with a hyphen. Input is lower-cased and trimmed before validation; anything else is rejected with an explanation (no silent rewriting beyond case).
+- Grammar: `^[a-z0-9][a-z0-9-]{0,63}$` — lower-case letters, digits and hyphens, 1–64 characters, not starting with a hyphen. Input is lower-cased and trimmed before validation, wherever a slug enters: the bookmark modal, an import, an AI suggestion, the `/go` address and the palette's `go` mode; anything else is rejected with an explanation (no silent rewriting beyond case). A slug is stored and compared lower-case, so a slug that differs from another only in case is the same slug: `Mail` and `mail` resolve alike, collide as one for uniqueness and name one go preference.
 - **Unique per owner within a workspace.** Two members may each own `mail`; one member cannot have two `mail`s.
 - **No reserved words.** Every slug lives under `/go/`, so slugs cannot collide with application routes; the old reserved-word list is dropped.
 - A slug is required while forwarding is on; turning forwarding off keeps the slug (it then resolves to nothing but stays the bookmark's handle in search and the palette).

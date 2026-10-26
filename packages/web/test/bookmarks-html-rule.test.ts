@@ -10,10 +10,20 @@ import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 // own eslint.config.js, fails on a component that does. The rule itself (slugbase/no-unsafe-html) is declared once in the
 // shared configuration; these tests prove this package's configuration applies it to the bookmark components.
 
+const UNSAFE_HTML_RULE = "slugbase/no-unsafe-html";
+
 const WEB = resolve(import.meta.dirname, "..");
 const REPO = resolve(WEB, "../..");
 
-const eslint = new ESLint({ cwd: WEB });
+// The rule reads syntax alone, so these checks run it alone and parse without type information. Building the TypeScript
+// program for the typed rules cost the first lint of this file most of its time, and `pnpm lint` runs those rules over the
+// same files. The package's own configuration still decides which files carry the rule and at what severity; loading it is
+// what the first lint still costs, which is why these tests keep the heavy bound.
+const eslint = new ESLint({
+  cwd: WEB,
+  ruleFilter: ({ ruleId }) => ruleId === UNSAFE_HTML_RULE,
+  overrideConfig: { languageOptions: { parserOptions: { projectService: false } } },
+});
 
 // The rule reads string literals too, so the names it bans are put together here and this file passes the rule it tests.
 const SET_INNER = ["dangerously", "SetInner", "HTML"].join("");
@@ -43,7 +53,7 @@ describe("unsanitised HTML in the bookmark components", () => {
     ["the DOM property", `export function show(element: HTMLElement, title: string): void {\n  element.${INNER} = title;\n}\n`],
     ["the DOM property by a quoted name", `export function show(element: HTMLElement, title: string): void {\n  element["${INNER}"] = title;\n}\n`],
   ])("fails a bookmark component that uses %s", { timeout: HEAVY_TEST_TIMEOUT_MS }, async (_name, code) => {
-    expect(await ruleIds("src/bookmarks/bookmark-card.tsx", code)).toContain("slugbase/no-unsafe-html");
+    expect(await ruleIds("src/bookmarks/bookmark-card.tsx", code)).toContain(UNSAFE_HTML_RULE);
   });
 
   it("passes the bookmark card as it is", { timeout: HEAVY_TEST_TIMEOUT_MS }, async () => {
