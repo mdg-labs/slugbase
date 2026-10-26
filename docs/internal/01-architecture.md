@@ -238,7 +238,7 @@ createServer({
 })
 ```
 
-`webRoot` is the directory the server serves the SPA from: content-hashed assets with `Cache-Control: public, max-age=31536000, immutable`, `index.html` with `no-cache`, and `index.html` for any other `GET` that accepts HTML (an unknown path under `/api/` or `/go/` is a `404` problem, never the SPA). Only `GET` and `HEAD` are served; path traversal is refused.
+`webRoot` is the directory the server serves the SPA from: content-hashed assets with `Cache-Control: public, max-age=31536000, immutable`, `index.html` with `no-cache`, and `index.html` for any other `GET` that accepts HTML (an unknown path under `/api/`, and a path under `/go` that the `/go` routes do not serve, is a `404` problem, never the SPA; `GET /go/<slug>` itself is served by the `/go` routes, which answer the SPA shell with `200` or `404` as doc 04 §9.3 describes). Only `GET` and `HEAD` are served; path traversal is refused.
 
 - A module's `register(context)` returns a contribution whose `routes` are `route(operation).handle(handler)` bindings (`route` is exported by `@slugbase/server`; operations are declared in `@slugbase/contracts`). `createServer` refuses to start, with a `CompositionError`, when a route's operation declares no valid policy, is not in the OpenAPI document or differs from it, is registered twice, or carries an invalid `audience` declaration (doc 04 §1.1, §5.1). By default the document is the committed `openapi.json`; a composition that adds operations passes the merged document as the `openApiDocument` option.
 - CE's own `main` calls it with CE adapters and no extra modules.
