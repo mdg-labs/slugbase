@@ -178,6 +178,11 @@
       "clear": "Auswahl aufheben",
       "pin": "Anheften",
       "unpin": "Anheftung lösen",
+      "addToFolder": "Zu Ordner hinzufügen",
+      "removeFromFolder": "Aus Ordner entfernen",
+      "addTags": "Tags hinzufügen",
+      "removeTags": "Tags entfernen",
+      "undo": "Rückgängig",
       "delete": {
         "action": "Löschen",
         "title": "{count, plural, one {# Lesezeichen} other {# Lesezeichen}} löschen?",
@@ -195,14 +200,61 @@
       "done": {
         "delete": "{count, plural, one {# Lesezeichen gelöscht.} other {# Lesezeichen gelöscht.}}",
         "pin": "{count, plural, one {# Lesezeichen angeheftet.} other {# Lesezeichen angeheftet.}}",
-        "unpin": "{count, plural, one {Anheftung von # Lesezeichen gelöst.} other {Anheftung von # Lesezeichen gelöst.}}"
+        "unpin": "{count, plural, one {Anheftung von # Lesezeichen gelöst.} other {Anheftung von # Lesezeichen gelöst.}}",
+        "addToFolder": "{count, plural, one {# Lesezeichen zu „{folder}“ hinzugefügt.} other {# Lesezeichen zu „{folder}“ hinzugefügt.}}",
+        "removeFromFolder": "{count, plural, one {# Lesezeichen aus „{folder}“ entfernt.} other {# Lesezeichen aus „{folder}“ entfernt.}}",
+        "addTags": "{count, plural, one {Tags zu # Lesezeichen hinzugefügt.} other {Tags zu # Lesezeichen hinzugefügt.}}",
+        "removeTags": "{count, plural, one {Tags von # Lesezeichen entfernt.} other {Tags von # Lesezeichen entfernt.}}",
+        "undone": "{count, plural, one {# Lesezeichen wieder in „{folder}“ gelegt.} other {# Lesezeichen wieder in „{folder}“ gelegt.}}"
       },
       "skipped": "{count, plural, one {# Lesezeichen wurde übersprungen, weil es nicht mehr existiert oder sich nicht ändern lässt.} other {# Lesezeichen wurden übersprungen, weil sie nicht mehr existieren oder sich nicht ändern lassen.}}",
       "error": {
         "delete": "Die Lesezeichen konnten nicht gelöscht werden. Es wurde nichts geändert. Versuche es gleich noch einmal.",
         "pin": "Die Lesezeichen konnten nicht angeheftet werden. Es wurde nichts geändert. Versuche es gleich noch einmal.",
         "unpin": "Die Anheftung der Lesezeichen konnte nicht gelöst werden. Es wurde nichts geändert. Versuche es gleich noch einmal.",
-        "partial": "Nur {done, number} von {total, number} Lesezeichen wurden vor einem Fehler geändert. Die übrigen bleiben ausgewählt; versuche es gleich noch einmal."
+        "partial": "Nur {done, number} von {total, number} Lesezeichen wurden vor einem Fehler geändert. Die übrigen bleiben ausgewählt; versuche es gleich noch einmal.",
+        "addToFolder": "Die Lesezeichen konnten nicht zum Ordner hinzugefügt werden. Es wurde nichts geändert. Versuche es gleich noch einmal.",
+        "removeFromFolder": "Die Lesezeichen konnten nicht aus dem Ordner entfernt werden. Es wurde nichts geändert. Versuche es gleich noch einmal.",
+        "addTags": "Die Tags konnten nicht hinzugefügt werden. Es wurde nichts geändert. Versuche es gleich noch einmal.",
+        "removeTags": "Die Tags konnten nicht entfernt werden. Es wurde nichts geändert. Versuche es gleich noch einmal.",
+        "folderGone": "Dieser Ordner existiert nicht mehr. Es wurde nichts geändert.",
+        "tagsGone": "Einer dieser Tags existiert nicht mehr. Es wurde nichts geändert.",
+        "undo": "Die Lesezeichen konnten nicht wieder in den Ordner gelegt werden. Versuche es gleich noch einmal."
+      },
+      "link": {
+        "close": "Schließen",
+        "cancel": "Abbrechen",
+        "retry": "Erneut versuchen",
+        "title": {
+          "addToFolder": "{count, plural, one {# Lesezeichen} other {# Lesezeichen}} zu einem Ordner hinzufügen",
+          "removeFromFolder": "{count, plural, one {# Lesezeichen} other {# Lesezeichen}} aus einem Ordner entfernen",
+          "addTags": "Tags zu {count, plural, one {# Lesezeichen} other {# Lesezeichen}} hinzufügen",
+          "removeTags": "Tags von {count, plural, one {# Lesezeichen} other {# Lesezeichen}} entfernen"
+        },
+        "folder": {
+          "label": "Ordner",
+          "placeholder": "Deine Ordner durchsuchen",
+          "empty": "Du hast noch keine Ordner.",
+          "loading": "Deine Ordner werden geladen",
+          "loadFailed": "Deine Ordner konnten nicht geladen werden."
+        },
+        "tags": {
+          "label": "Tags",
+          "placeholder": "Deine Tags durchsuchen",
+          "empty": "Du hast noch keine Tags.",
+          "loading": "Deine Tags werden geladen",
+          "loadFailed": "Deine Tags konnten nicht geladen werden.",
+          "remove": "{name} entfernen",
+          "limit": "Wähle höchstens {max, number} Tags auf einmal."
+        },
+        "preview": {
+          "title": "Tags nach dem Hinzufügen",
+          "loading": "Es wird ermittelt, welche Tags diese Lesezeichen haben werden",
+          "error": "Die Vorschau konnte nicht geladen werden.",
+          "summary": "{count, plural, one {# Lesezeichen erhält diese Tags.} other {# Lesezeichen erhalten diese Tags.}}",
+          "skipped": "{count, plural, one {# Lesezeichen wird übersprungen, weil es nicht mehr existiert oder sich nicht ändern lässt.} other {# Lesezeichen werden übersprungen, weil sie nicht mehr existieren oder sich nicht ändern lassen.}}",
+          "tagCount": "{bookmarkCount, plural, one {# Lesezeichen} other {# Lesezeichen}}, {added, number} neu"
+        }
       }
     },
     "modal": {

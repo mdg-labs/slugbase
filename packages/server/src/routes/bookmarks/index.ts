@@ -1,5 +1,5 @@
-import { BOOKMARK_LIST_TOTAL_CAP, bulkBookmarks as bulkBookmarksOperation, createBookmark as createBookmarkOperation, deleteBookmark as deleteBookmarkOperation, getBookmark, listBookmarkIds as listBookmarkIdsOperation, listBookmarks as listBookmarksOperation, openBookmark as openBookmarkOperation, updateBookmark as updateBookmarkOperation, type BookmarkSchema } from "@slugbase/contracts";
-import { bulkBookmarks, createAuditWriter, createBookmark, deleteBookmark, listBookmarkIds, listBookmarks, openBookmark, readBookmark, updateBookmark, type AuditActor, type BookmarkBulkStore, type BookmarkCursors, type BookmarkEntitlements, type BookmarkListStore, type BookmarkRecord, type BookmarkStore, type BookmarkUsage } from "@slugbase/core";
+import { BOOKMARK_LIST_TOTAL_CAP, bulkBookmarks as bulkBookmarksOperation, createBookmark as createBookmarkOperation, deleteBookmark as deleteBookmarkOperation, getBookmark, listBookmarkIds as listBookmarkIdsOperation, listBookmarks as listBookmarksOperation, openBookmark as openBookmarkOperation, previewBulkBookmarks as previewBulkBookmarksOperation, updateBookmark as updateBookmarkOperation, type BookmarkSchema, type BulkBookmarksRequestSchema } from "@slugbase/contracts";
+import { bulkBookmarks, createAuditWriter, createBookmark, deleteBookmark, listBookmarkIds, listBookmarks, openBookmark, previewBulkTags, readBookmark, updateBookmark, type AuditActor, type BookmarkBulkStore, type BookmarkCursors, type BookmarkEntitlements, type BookmarkListStore, type BookmarkRecord, type BookmarkStore, type BookmarkUsage } from "@slugbase/core";
 import { accountProfileRepository, auditEventRepository, bookmarkRepository, type TenantTx } from "@slugbase/db";
 import type { z } from "zod";
 import { createPageCursorCodec } from "../../auth/page-cursor.ts";
@@ -70,6 +70,11 @@ import { acceptedVersions, entityTagOf } from "../workspaces/if-match.ts";
 // one `bookmark.bulk_deleted` audit event of a delete. It answers `requested`, `affected` and `skipped` counts and nothing else: another
 // member's bookmark, another workspace's and a missing one are skipped as `not_found` alike. It takes from the `bulk` bucket, whose limit
 // the `RATE_LIMIT_BULK_*` keys set. Both are registered before the routes with `{id}` in their path, so `ids` is not read as an identifier.
+// The select-all and the bulk filter take `folderId` and `tag` as the list does, so a selection under a folder or tag filter is exactly the
+// filtered bookmarks. `add_to_folder`, `move_to_folder` and `remove_from_folder` act with the `folderId` of the body and `add_tags` and
+// `remove_tags` with its `tagIds`, all the caller's own: one that is not is `404 not_found` and nothing is changed (doc 02 section 5.8). They write
+// links only, so no bookmark moves its version, and a plan-archived bookmark is skipped as `not_found`. POST /api/v1/bookmarks/bulk/preview
+// answers what `add_tags` would do, with the tag set the bookmarks it reaches would carry, and writes nothing; it takes from the `read` bucket and, being a POST, needs a token of the `write` scope.
 //
 // POST /api/v1/bookmarks/{id}/open (doc 04 section 10.6, doc 02 section 5.5, doc 01 section 8.1, doc 10 T1, T2 and T12) answers the
 // destination of a bookmark the caller can read and counts the open in the usage buffer of this process, which a timer writes to
@@ -138,6 +143,9 @@ function bulkStoreOf(tx: TenantTx): BookmarkBulkStore {
     ids: (filter, limit) => repository.ids(filter, limit),
     removeMany: (bookmarkIds) => repository.removeMany({ bookmarkIds }),
     setPinned: (request) => repository.setPinned(request),
+    fileIn: (request) => repository.fileIn(request),
+    tag: (request) => repository.tag(request),
+    previewTags: (request) => repository.previewTags(request),
   };
 }
 
@@ -157,6 +165,31 @@ function bookmarkCursors(secret: string): BookmarkCursors {
       return key === undefined || rest.length > 0 || position === undefined || typeof id !== "string" ? undefined : { key: position, id };
     },
   };
+}
+
+/** The tags of a `tag` filter, which is one identifier or several. */
+function tagIdsOf(tag: string | readonly string[] | undefined): readonly string[] | undefined {
+  return tag === undefined ? undefined : typeof tag === "string" ? [tag] : tag;
+}
+
+type BulkFilter = NonNullable<z.input<typeof BulkBookmarksRequestSchema>["filter"]>;
+
+/** What a bulk request or its preview names: the identifiers, or the filter as the list takes it. */
+function bulkTargetOf(body: { readonly ids?: readonly string[] | undefined; readonly filter?: BulkFilter | undefined }) {
+  if (body.ids !== undefined) {
+    return { kind: "ids", ids: body.ids } as const;
+  }
+  const filter = body.filter;
+  return {
+    kind: "filter",
+    scope: filter?.scope ?? "mine",
+    pinned: filter?.pinned,
+    hasSlug: filter?.hasSlug,
+    forwarding: filter?.forwarding,
+    url: filter?.url,
+    folderId: filter?.folderId,
+    tagIds: tagIdsOf(filter?.tag),
+  } as const;
 }
 
 function bookmarkBody(bookmark: BookmarkRecord): z.input<typeof BookmarkSchema> {
@@ -239,7 +272,7 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage }: BookmarkRo
             forwarding: query.forwarding === undefined ? undefined : query.forwarding === "true",
             url: query.url,
             folderId: query.folderId,
-            tagIds: query.tag === undefined ? undefined : typeof query.tag === "string" ? [query.tag] : query.tag,
+            tagIds: tagIdsOf(query.tag),
             sort: query.sort,
             limit: query.limit,
             cursor: query.cursor,
@@ -276,6 +309,8 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage }: BookmarkRo
             hasSlug: query.hasSlug === undefined ? undefined : query.hasSlug === "true",
             forwarding: query.forwarding === undefined ? undefined : query.forwarding === "true",
             url: query.url,
+            folderId: query.folderId,
+            tagIds: tagIdsOf(query.tag),
           },
         ),
       );
@@ -288,10 +323,7 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage }: BookmarkRo
     route(bulkBookmarksOperation).handle(async ({ body }, context) => {
       const tenant = tenantOf(context);
       const ipPrefix = networkPrefixOf(context.get("clientIp")) ?? null;
-      const target =
-        body.ids !== undefined
-          ? ({ kind: "ids", ids: body.ids } as const)
-          : ({ kind: "filter", scope: body.filter?.scope ?? "mine", pinned: body.filter?.pinned, hasSlug: body.filter?.hasSlug, forwarding: body.filter?.forwarding, url: body.filter?.url } as const);
+      const target = bulkTargetOf(body);
       const outcome = await tenant.withTenant(async (tx) => {
         const profile = await accountProfileRepository(tx).profile();
         if (profile === undefined) {
@@ -300,7 +332,7 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage }: BookmarkRo
         const actor = auditActorOf(context.get("principal"), tenant.accountId, profile.displayName);
         return bulkBookmarks(
           { store: bulkStoreOf(tx), audit: createAuditWriter({ store: auditEventRepository(tx), newId: uuidv7 }) },
-          { workspaceId: tenant.workspaceId, accountId: tenant.accountId, actor, ipPrefix, action: body.action, target },
+          { workspaceId: tenant.workspaceId, accountId: tenant.accountId, actor, ipPrefix, action: body.action, target, folderId: body.folderId, tagIds: body.tagIds },
         );
       });
       switch (outcome.kind) {
@@ -312,6 +344,32 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage }: BookmarkRo
           throw new ProblemError("validation_failed", URL_INVALID, { errors: [{ path: "filter.url", code: outcome.reason === "not_http" ? "url_not_allowed" : URL_FIELD_CODES[outcome.reason] }] });
         case "unavailable":
           throw new ProblemError("not_found", NO_WORKSPACE);
+        case "target_not_found":
+          throw new ProblemError("not_found", body.folderId === undefined ? NO_SUCH_TAG : NO_SUCH_FOLDER);
+      }
+    }),
+
+    route(previewBulkBookmarksOperation).handle(async ({ body }, context) => {
+      const tenant = tenantOf(context);
+      const outcome = await tenant.withTenant((tx) => previewBulkTags({ store: bulkStoreOf(tx) }, { accountId: tenant.accountId, target: bulkTargetOf(body), tagIds: body.tagIds }));
+      switch (outcome.kind) {
+        case "previewed":
+          return {
+            status: 200,
+            body: {
+              requested: outcome.requested,
+              affected: outcome.affected,
+              skipped: outcome.requested - outcome.affected,
+              skippedReasons: outcome.skipped,
+              tags: outcome.tags.map((tag) => ({ id: tag.id, name: tag.name, bookmarkCount: tag.bookmarkCount, added: tag.added })),
+            },
+          };
+        case "too_many":
+          throw new ProblemError("validation_failed", TOO_MANY_MATCHES, { errors: [{ path: body.ids === undefined ? "filter" : "ids", code: "too_big" }] });
+        case "url_refused":
+          throw new ProblemError("validation_failed", URL_INVALID, { errors: [{ path: "filter.url", code: outcome.reason === "not_http" ? "url_not_allowed" : URL_FIELD_CODES[outcome.reason] }] });
+        case "target_not_found":
+          throw new ProblemError("not_found", NO_SUCH_TAG);
       }
     }),
 

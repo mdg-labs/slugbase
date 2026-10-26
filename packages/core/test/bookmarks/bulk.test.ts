@@ -4,27 +4,46 @@ import {
   BOOKMARK_SELECT_ALL_CAP,
   bulkBookmarks,
   listBookmarkIds,
+  previewBulkTags,
   type AuditActor,
   type AuditEventInput,
   type BookmarkBulkAction,
+  type BookmarkBulkStore,
   type BookmarkBulkTarget,
+  type BookmarkLinkingResult,
   type BookmarkListFilter,
+  type BookmarkTagPreviewResult,
 } from "../../src/index.ts";
 
 const WORKSPACE = "0192f3a0-aaaa-7000-8000-0000000000a1";
 const ACCOUNT = "0192f3a0-bbbb-7000-8000-00000000000A";
 const ACTOR: AuditActor = { type: "account", accountId: ACCOUNT, label: "Ada" };
 const idOf = (index: number): string => `0192f3a0-cccc-7000-8000-${index.toString(16).padStart(12, "0")}`;
+const FOLDER = "0192f3a0-dddd-7000-8000-0000000000F1";
+const TAG_A = "0192f3a0-eeee-7000-8000-0000000000A1";
+const TAG_B = "0192f3a0-eeee-7000-8000-0000000000B2";
 
 interface Calls {
   readonly removed: (readonly string[])[];
   readonly pinned: { readonly bookmarkIds: readonly string[]; readonly ownerId: string; readonly pinned: boolean }[];
   readonly filters: { readonly filter: BookmarkListFilter; readonly limit: number }[];
   readonly events: AuditEventInput[];
+  readonly filed: Parameters<BookmarkBulkStore["fileIn"]>[0][];
+  readonly tagged: Parameters<BookmarkBulkStore["tag"]>[0][];
+  readonly previewed: Parameters<BookmarkBulkStore["previewTags"]>[0][];
 }
 
-function bulking(options: { readonly matching?: readonly string[]; readonly removed?: number | undefined; readonly pinned?: number } = {}) {
-  const calls: Calls = { removed: [], pinned: [], filters: [], events: [] };
+interface BulkingOptions {
+  readonly matching?: readonly string[];
+  readonly removed?: number | undefined;
+  readonly pinned?: number;
+  /** What the store answers a filing and a tagging; the number of bookmarks it was given when left out. */
+  readonly linking?: BookmarkLinkingResult;
+  readonly previewing?: BookmarkTagPreviewResult;
+}
+
+function bulking(options: BulkingOptions = {}) {
+  const calls: Calls = { removed: [], pinned: [], filters: [], events: [], filed: [], tagged: [], previewed: [] };
   const dependencies = {
     store: {
       ids: (filter: BookmarkListFilter, limit: number) => {
@@ -39,6 +58,18 @@ function bulking(options: { readonly matching?: readonly string[]; readonly remo
         calls.pinned.push(request);
         return Promise.resolve(options.pinned ?? request.bookmarkIds.length);
       },
+      fileIn: (request: Parameters<BookmarkBulkStore["fileIn"]>[0]) => {
+        calls.filed.push(request);
+        return Promise.resolve(options.linking ?? ({ kind: "done", affected: request.bookmarkIds.length } as const));
+      },
+      tag: (request: Parameters<BookmarkBulkStore["tag"]>[0]) => {
+        calls.tagged.push(request);
+        return Promise.resolve(options.linking ?? ({ kind: "done", affected: request.bookmarkIds.length } as const));
+      },
+      previewTags: (request: Parameters<BookmarkBulkStore["previewTags"]>[0]) => {
+        calls.previewed.push(request);
+        return Promise.resolve(options.previewing ?? ({ kind: "previewed", affected: request.bookmarkIds.length, tags: [] } as const));
+      },
     },
     audit: {
       write: (event: AuditEventInput) => {
@@ -47,9 +78,10 @@ function bulking(options: { readonly matching?: readonly string[]; readonly remo
       },
     },
   };
-  const run = (action: BookmarkBulkAction, target: BookmarkBulkTarget) =>
-    bulkBookmarks(dependencies, { workspaceId: WORKSPACE, accountId: ACCOUNT, actor: ACTOR, ipPrefix: "203.0.0.0/16", action, target });
-  return { calls, run };
+  const run = (action: BookmarkBulkAction, target: BookmarkBulkTarget, acting: { readonly folderId?: string; readonly tagIds?: readonly string[] } = {}) =>
+    bulkBookmarks(dependencies, { workspaceId: WORKSPACE, accountId: ACCOUNT, actor: ACTOR, ipPrefix: "203.0.0.0/16", action, target, ...acting });
+  const preview = (target: BookmarkBulkTarget, tagIds: readonly string[]) => previewBulkTags(dependencies, { accountId: ACCOUNT, target, tagIds });
+  return { calls, run, preview };
 }
 
 const noFilter: BookmarkBulkTarget = { kind: "filter", scope: "mine", pinned: undefined, hasSlug: undefined, forwarding: undefined, url: undefined };
@@ -172,6 +204,117 @@ describe("bulkBookmarks by filter", () => {
   });
 });
 
+describe("bulkBookmarks filing", () => {
+  it.each([
+    ["add_to_folder", "add"],
+    ["move_to_folder", "move"],
+    ["remove_from_folder", "remove"],
+  ] as const)("%s hands the store the distinct valid identifiers, the account and the lower-cased folder in mode %s, and writes no event", async (action, mode) => {
+    const { calls, run } = bulking({ linking: { kind: "done", affected: 2 } });
+
+    const outcome = await run(action, { kind: "ids", ids: [idOf(1), idOf(2), idOf(2), "x"] }, { folderId: FOLDER });
+
+    expect(outcome).toEqual({ kind: "done", requested: 3, affected: 2, skipped: { not_owner: 0, not_found: 1 } });
+    expect(calls.filed).toEqual([{ bookmarkIds: [idOf(1), idOf(2)], ownerId: ACCOUNT.toLowerCase(), folderId: FOLDER.toLowerCase(), mode }]);
+    expect(calls.events).toEqual([]);
+    expect(calls.removed).toEqual([]);
+    expect(calls.pinned).toEqual([]);
+  });
+
+  it("asks the store even when no identifier is valid, so a folder that is not the caller's is refused whatever the bookmarks", async () => {
+    const { calls, run } = bulking({ linking: { kind: "target_not_found" } });
+
+    expect(await run("add_to_folder", { kind: "ids", ids: ["x"] }, { folderId: FOLDER })).toEqual({ kind: "target_not_found" });
+    expect(calls.filed).toHaveLength(1);
+  });
+
+  it("reports a folder that is not the caller's as target_not_found, not as skipped bookmarks", async () => {
+    const { run } = bulking({ linking: { kind: "target_not_found" } });
+
+    expect(await run("move_to_folder", { kind: "ids", ids: [idOf(1)] }, { folderId: FOLDER })).toEqual({ kind: "target_not_found" });
+  });
+
+  it("acts on the bookmarks a filter with a folder and tags matches, and hands the filter to the store as the list does", async () => {
+    const { calls, run } = bulking({ matching: [idOf(1), idOf(2)] });
+
+    const outcome = await run("add_to_folder", { ...noFilter, folderId: FOLDER, tagIds: [TAG_B, TAG_A, TAG_B] }, { folderId: FOLDER });
+
+    expect(outcome).toEqual({ kind: "done", requested: 2, affected: 2, skipped: { not_owner: 0, not_found: 0 } });
+    expect(calls.filters[0]?.filter).toEqual({ ownerId: ACCOUNT.toLowerCase(), folderId: FOLDER.toLowerCase(), tagIds: [TAG_A.toLowerCase(), TAG_B.toLowerCase()] });
+  });
+
+  it("throws when a folder action names no folder, which the contract refuses first", async () => {
+    const { calls, run } = bulking();
+
+    await expect(run("add_to_folder", { kind: "ids", ids: [idOf(1)] })).rejects.toThrow(RangeError);
+    expect(calls.filed).toEqual([]);
+  });
+});
+
+describe("bulkBookmarks tagging", () => {
+  it.each([
+    ["add_tags", "add"],
+    ["remove_tags", "remove"],
+  ] as const)("%s hands the store the distinct tags and the account in mode %s, and writes no event", async (action, mode) => {
+    const { calls, run } = bulking();
+
+    const outcome = await run(action, { kind: "ids", ids: [idOf(1), idOf(2)] }, { tagIds: [TAG_A, TAG_A.toLowerCase(), TAG_B] });
+
+    expect(outcome).toEqual({ kind: "done", requested: 2, affected: 2, skipped: { not_owner: 0, not_found: 0 } });
+    expect(calls.tagged).toEqual([{ bookmarkIds: [idOf(1), idOf(2)], ownerId: ACCOUNT.toLowerCase(), tagIds: [TAG_A.toLowerCase(), TAG_B.toLowerCase()], mode }]);
+    expect(calls.events).toEqual([]);
+  });
+
+  it("reports a tag that is not the caller's as target_not_found", async () => {
+    const { run } = bulking({ linking: { kind: "target_not_found" } });
+
+    expect(await run("add_tags", { kind: "ids", ids: [idOf(1)] }, { tagIds: [TAG_A] })).toEqual({ kind: "target_not_found" });
+  });
+
+  it("throws when a tag action names no tags, which the contract refuses first", async () => {
+    const { calls, run } = bulking();
+
+    await expect(run("remove_tags", { kind: "ids", ids: [idOf(1)] }, { tagIds: [] })).rejects.toThrow(RangeError);
+    expect(calls.tagged).toEqual([]);
+  });
+});
+
+describe("previewBulkTags", () => {
+  it("counts like the bulk request and answers the tag set the store computed, writing nothing", async () => {
+    const tags = [{ id: TAG_A.toLowerCase(), name: "alpha", bookmarkCount: 2, added: 1 }];
+    const { calls, preview } = bulking({ previewing: { kind: "previewed", affected: 2, tags } });
+
+    const outcome = await preview({ kind: "ids", ids: [idOf(1), idOf(2), idOf(3)] }, [TAG_A]);
+
+    expect(outcome).toEqual({ kind: "previewed", requested: 3, affected: 2, skipped: { not_owner: 0, not_found: 1 }, tags });
+    expect(calls.previewed).toEqual([{ bookmarkIds: [idOf(1), idOf(2), idOf(3)], ownerId: ACCOUNT.toLowerCase(), tagIds: [TAG_A.toLowerCase()] }]);
+    expect(calls.tagged).toEqual([]);
+    expect(calls.events).toEqual([]);
+  });
+
+  it("resolves a filter to the account's own identifiers, and refuses one that matches more than the cap", async () => {
+    const { calls, preview } = bulking({ matching: Array.from({ length: BOOKMARK_SELECT_ALL_CAP + 1 }, (_, index) => idOf(index)) });
+
+    expect(await preview({ ...noFilter, tagIds: [TAG_B] }, [TAG_A])).toEqual({ kind: "too_many", limit: BOOKMARK_SELECT_ALL_CAP });
+    expect(calls.filters[0]?.filter).toMatchObject({ ownerId: ACCOUNT.toLowerCase(), tagIds: [TAG_B.toLowerCase()] });
+    expect(calls.previewed).toEqual([]);
+  });
+
+  it("refuses more than the identifier limit and a url that cannot be a bookmark's, reading nothing", async () => {
+    const { calls, preview } = bulking();
+
+    expect(await preview({ kind: "ids", ids: Array.from({ length: BOOKMARK_BULK_IDS_MAX + 1 }, (_, index) => idOf(index)) }, [TAG_A])).toEqual({ kind: "too_many", limit: BOOKMARK_BULK_IDS_MAX });
+    expect(await preview({ ...noFilter, url: "ftp://example.com/x" }, [TAG_A])).toEqual({ kind: "url_refused", reason: "not_http" });
+    expect(calls.previewed).toEqual([]);
+  });
+
+  it("reports a tag that is not the caller's as target_not_found", async () => {
+    const { preview } = bulking({ previewing: { kind: "target_not_found" } });
+
+    expect(await preview({ kind: "ids", ids: [idOf(1)] }, [TAG_A])).toEqual({ kind: "target_not_found" });
+  });
+});
+
 describe("listBookmarkIds", () => {
   it("returns the identifiers the filter matches, and says when it cut them at the cap", async () => {
     const matching = Array.from({ length: BOOKMARK_SELECT_ALL_CAP + 1 }, (_, index) => idOf(index));
@@ -184,6 +327,15 @@ describe("listBookmarkIds", () => {
     expect(cut).toEqual({ kind: "listed", ids: matching.slice(0, BOOKMARK_SELECT_ALL_CAP), truncated: true });
     expect(whole).toEqual({ kind: "listed", ids: matching.slice(0, 3), truncated: false });
     expect(calls.filters[0]).toEqual({ filter: { ownerId: ACCOUNT, pinned: undefined, hasSlug: false, forwarding: undefined, urlCanonical: undefined }, limit: BOOKMARK_SELECT_ALL_CAP + 1 });
+  });
+
+  it("hands the folder and the tags of the list to the store as the list does", async () => {
+    const { calls } = bulking();
+    const store = { ids: (filter: BookmarkListFilter, limit: number) => (calls.filters.push({ filter, limit }), Promise.resolve([])) };
+
+    await listBookmarkIds({ store }, { accountId: ACCOUNT, scope: "all", pinned: undefined, hasSlug: undefined, forwarding: undefined, url: undefined, folderId: FOLDER, tagIds: [TAG_B, TAG_A] });
+
+    expect(calls.filters[0]?.filter).toMatchObject({ folderId: FOLDER.toLowerCase(), tagIds: [TAG_A.toLowerCase(), TAG_B.toLowerCase()] });
   });
 
   it("refuses a url that cannot be a bookmark's", async () => {

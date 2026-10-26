@@ -292,6 +292,9 @@ export type AuthPolicy = (typeof AUTH_POLICIES)[number];
 export const BOOKMARK_BULK_IDS_MAX = 1000;
 
 // @public
+export const BOOKMARK_BULK_TAGS_MAX = 100;
+
+// @public
 export const BOOKMARK_CURSOR_MAX_LENGTH = 4096;
 
 // @public
@@ -337,6 +340,8 @@ export const BookmarkFilterSchema: z.ZodObject<{
     hasSlug: z.ZodOptional<z.ZodBoolean>;
     forwarding: z.ZodOptional<z.ZodBoolean>;
     url: z.ZodOptional<z.ZodString>;
+    folderId: z.ZodOptional<z.ZodUUID>;
+    tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -366,6 +371,8 @@ export const BookmarkIdsQuerySchema: z.ZodObject<{
         true: "true";
         false: "false";
     }>>;
+    folderId: z.ZodOptional<z.ZodUUID>;
+    tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -467,7 +474,13 @@ export const BookmarkTagSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
-export const BULK_BOOKMARK_ACTIONS: readonly ["delete", "pin", "unpin"];
+export const BULK_BOOKMARK_ACTIONS: readonly ["delete", "pin", "unpin", "add_to_folder", "move_to_folder", "remove_from_folder", "add_tags", "remove_tags"];
+
+// @public (undocumented)
+export const BULK_FOLDER_ACTIONS: readonly ["add_to_folder", "move_to_folder", "remove_from_folder"];
+
+// @public (undocumented)
+export const BULK_TAG_ACTIONS: readonly ["add_tags", "remove_tags"];
 
 // @public (undocumented)
 export const bulkBookmarks: {
@@ -475,7 +488,7 @@ export const bulkBookmarks: {
     readonly path: "/api/v1/bookmarks/bulk";
     readonly operationId: "bulkBookmarks";
     readonly tag: "bookmarks";
-    readonly summary: "Delete, pin or unpin many bookmarks";
+    readonly summary: "Delete, pin, unpin, file or tag many bookmarks";
     readonly auth: "member";
     readonly rate: "bulk";
     readonly scope: "write";
@@ -483,6 +496,11 @@ export const bulkBookmarks: {
         readonly body: z.ZodObject<{
             action: z.ZodEnum<{
                 delete: "delete";
+                add_to_folder: "add_to_folder";
+                move_to_folder: "move_to_folder";
+                remove_from_folder: "remove_from_folder";
+                add_tags: "add_tags";
+                remove_tags: "remove_tags";
                 pin: "pin";
                 unpin: "unpin";
             }>;
@@ -496,7 +514,11 @@ export const bulkBookmarks: {
                 hasSlug: z.ZodOptional<z.ZodBoolean>;
                 forwarding: z.ZodOptional<z.ZodBoolean>;
                 url: z.ZodOptional<z.ZodString>;
+                folderId: z.ZodOptional<z.ZodUUID>;
+                tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
             }, z.core.$strict>>;
+            folderId: z.ZodOptional<z.ZodUUID>;
+            tagIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
         }, z.core.$strict>;
     };
     readonly responses: {
@@ -520,9 +542,50 @@ export const bulkBookmarks: {
 };
 
 // @public (undocumented)
+export const BulkBookmarksPreviewRequestSchema: z.ZodObject<{
+    action: z.ZodLiteral<"add_tags">;
+    ids: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+    filter: z.ZodOptional<z.ZodObject<{
+        scope: z.ZodOptional<z.ZodEnum<{
+            all: "all";
+            mine: "mine";
+        }>>;
+        pinned: z.ZodOptional<z.ZodBoolean>;
+        hasSlug: z.ZodOptional<z.ZodBoolean>;
+        forwarding: z.ZodOptional<z.ZodBoolean>;
+        url: z.ZodOptional<z.ZodString>;
+        folderId: z.ZodOptional<z.ZodUUID>;
+        tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
+    }, z.core.$strict>>;
+    tagIds: z.ZodArray<z.ZodUUID>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const BulkBookmarksPreviewSchema: z.ZodObject<{
+    requested: z.ZodNumber;
+    affected: z.ZodNumber;
+    skipped: z.ZodNumber;
+    skippedReasons: z.ZodObject<{
+        not_owner: z.ZodNumber;
+        not_found: z.ZodNumber;
+    }, z.core.$strict>;
+    tags: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        bookmarkCount: z.ZodNumber;
+        added: z.ZodNumber;
+    }, z.core.$strict>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
 export const BulkBookmarksRequestSchema: z.ZodObject<{
     action: z.ZodEnum<{
         delete: "delete";
+        add_to_folder: "add_to_folder";
+        move_to_folder: "move_to_folder";
+        remove_from_folder: "remove_from_folder";
+        add_tags: "add_tags";
+        remove_tags: "remove_tags";
         pin: "pin";
         unpin: "unpin";
     }>;
@@ -536,7 +599,11 @@ export const BulkBookmarksRequestSchema: z.ZodObject<{
         hasSlug: z.ZodOptional<z.ZodBoolean>;
         forwarding: z.ZodOptional<z.ZodBoolean>;
         url: z.ZodOptional<z.ZodString>;
+        folderId: z.ZodOptional<z.ZodUUID>;
+        tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
     }, z.core.$strict>>;
+    folderId: z.ZodOptional<z.ZodUUID>;
+    tagIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -548,6 +615,14 @@ export const BulkBookmarksResultSchema: z.ZodObject<{
         not_owner: z.ZodNumber;
         not_found: z.ZodNumber;
     }, z.core.$strict>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const BulkPreviewTagSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    name: z.ZodString;
+    bookmarkCount: z.ZodNumber;
+    added: z.ZodNumber;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -799,10 +874,12 @@ export interface ComponentTypes {
             version: number;
         };
         BookmarkFilter: {
+            folderId?: string;
             forwarding?: boolean;
             hasSlug?: boolean;
             pinned?: boolean;
             scope?: "all" | "mine";
+            tag?: string | string[];
             url?: string;
         };
         BookmarkFolder: {
@@ -828,10 +905,28 @@ export interface ComponentTypes {
             id: string;
             name: string;
         };
-        BulkBookmarksRequest: {
-            action: "delete" | "pin" | "unpin";
+        BulkBookmarksPreview: {
+            affected: number;
+            requested: number;
+            skipped: number;
+            skippedReasons: {
+                not_found: number;
+                not_owner: number;
+            };
+            tags: ComponentTypes["schemas"]["BulkPreviewTag"][];
+        };
+        BulkBookmarksPreviewRequest: {
+            action: "add_tags";
             filter?: ComponentTypes["schemas"]["BookmarkFilter"];
             ids?: string[];
+            tagIds: string[];
+        };
+        BulkBookmarksRequest: {
+            action: "delete" | "pin" | "unpin" | "add_to_folder" | "move_to_folder" | "remove_from_folder" | "add_tags" | "remove_tags";
+            filter?: ComponentTypes["schemas"]["BookmarkFilter"];
+            folderId?: string;
+            ids?: string[];
+            tagIds?: string[];
         };
         BulkBookmarksResult: {
             affected: number;
@@ -841,6 +936,12 @@ export interface ComponentTypes {
                 not_found: number;
                 not_owner: number;
             };
+        };
+        BulkPreviewTag: {
+            added: number;
+            bookmarkCount: number;
+            id: string;
+            name: string;
         };
         CancelEmailChangeRequest: {
             token: string;
@@ -3490,6 +3591,8 @@ export const listBookmarkIds: {
                 true: "true";
                 false: "false";
             }>>;
+            folderId: z.ZodOptional<z.ZodUUID>;
+            tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
         }, z.core.$strict>;
     };
     readonly responses: {
@@ -7708,6 +7811,8 @@ export interface OperationTypes {
                 hasSlug?: "true" | "false";
                 forwarding?: "true" | "false";
                 url?: string;
+                folderId?: string;
+                tag?: string | string[];
             };
             header?: never;
             path?: never;
@@ -8699,6 +8804,87 @@ export interface OperationTypes {
                 };
                 content: {
                     "application/json": ComponentTypes["schemas"]["BookmarkOpen"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    previewBulkBookmarks: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["BulkBookmarksPreviewRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["BulkBookmarksPreview"];
                 };
             };
             400: {
@@ -11480,6 +11666,23 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/bookmarks/bulk/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["previewBulkBookmarks"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/api/v1/bookmarks/ids": {
         parameters: {
             query?: never;
@@ -12500,6 +12703,61 @@ export interface paths {
         trace?: never;
     };
 }
+
+// @public (undocumented)
+export const previewBulkBookmarks: {
+    readonly method: "post";
+    readonly path: "/api/v1/bookmarks/bulk/preview";
+    readonly operationId: "previewBulkBookmarks";
+    readonly tag: "bookmarks";
+    readonly summary: "Preview adding tags to many bookmarks";
+    readonly auth: "member";
+    readonly rate: "read";
+    readonly scope: "write";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            action: z.ZodLiteral<"add_tags">;
+            ids: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+            filter: z.ZodOptional<z.ZodObject<{
+                scope: z.ZodOptional<z.ZodEnum<{
+                    all: "all";
+                    mine: "mine";
+                }>>;
+                pinned: z.ZodOptional<z.ZodBoolean>;
+                hasSlug: z.ZodOptional<z.ZodBoolean>;
+                forwarding: z.ZodOptional<z.ZodBoolean>;
+                url: z.ZodOptional<z.ZodString>;
+                folderId: z.ZodOptional<z.ZodUUID>;
+                tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
+            }, z.core.$strict>>;
+            tagIds: z.ZodArray<z.ZodUUID>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        requested: z.ZodNumber;
+        affected: z.ZodNumber;
+        skipped: z.ZodNumber;
+        skippedReasons: z.ZodObject<{
+        not_owner: z.ZodNumber;
+        not_found: z.ZodNumber;
+        }, z.core.$strict>;
+        tags: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        bookmarkCount: z.ZodNumber;
+        added: z.ZodNumber;
+        }, z.core.$strict>>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
 
 // @public (undocumented)
 export type Problem = z.infer<typeof ProblemSchema>;

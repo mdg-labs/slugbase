@@ -539,6 +539,12 @@
       "BookmarkFilter": {
         "additionalProperties": false,
         "properties": {
+          "folderId": {
+            "description": "Matches the bookmarks filed in this folder of the caller's. A folder that is another member's, another workspace's or unknown matches nothing. Left out, folders are not filtered on",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
           "forwarding": {
             "description": "true matches the bookmarks /go forwards to only and false those it does not; left out, forwarding is not filtered on",
             "type": "boolean"
@@ -558,6 +564,25 @@
               "mine"
             ],
             "type": "string"
+          },
+          "tag": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                "type": "string"
+              },
+              {
+                "items": {
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "type": "string"
+                },
+                "maxItems": 10,
+                "type": "array"
+              }
+            ],
+            "description": "Matches the bookmarks that carry every one of the given tags of the caller's (AND; OR is not offered), at most 10. A tag that is another member's, another workspace's or unknown matches nothing. Left out, tags are not filtered on"
           },
           "url": {
             "description": "Matches the caller's bookmarks whose canonical URL equals the canonical form of this value; one that cannot be a bookmark's URL is refused with 422",
@@ -700,21 +725,78 @@
         ],
         "type": "object"
       },
-      "BulkBookmarksRequest": {
+      "BulkBookmarksPreview": {
+        "additionalProperties": false,
+        "properties": {
+          "affected": {
+            "description": "How many of them the action would reach: the caller's own bookmarks that are not plan-archived",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "requested": {
+            "description": "How many bookmarks the request named (the distinct identifiers) or the filter matched",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "skipped": {
+            "description": "How many it would leave alone: requested minus affected",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "skippedReasons": {
+            "additionalProperties": false,
+            "description": "The skipped bookmarks by reason, as counts only",
+            "properties": {
+              "not_found": {
+                "description": "Bookmarks the caller owns none of in this workspace: another member's, another workspace's, one that is gone, and, for every action but delete, a plan-archived one. They are not told apart",
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "not_owner": {
+                "description": "Bookmarks the caller can read and does not own; none exist until sharing arrives",
+                "maximum": 9007199254740991,
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "not_owner",
+              "not_found"
+            ],
+            "type": "object"
+          },
+          "tags": {
+            "description": "The tags the bookmarks the action would reach carry afterwards, in the order of their names: the tags they carry now and the tags the action adds",
+            "items": {
+              "$ref": "#/components/schemas/BulkPreviewTag"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "requested",
+          "affected",
+          "skipped",
+          "skippedReasons",
+          "tags"
+        ],
+        "type": "object"
+      },
+      "BulkBookmarksPreviewRequest": {
         "additionalProperties": false,
         "properties": {
           "action": {
-            "description": "delete removes the bookmarks for good, pin pins them and unpin unpins them",
-            "enum": [
-              "delete",
-              "pin",
-              "unpin"
-            ],
+            "const": "add_tags",
+            "description": "The action to preview; only add_tags has a preview",
             "type": "string"
           },
           "filter": {
             "$ref": "#/components/schemas/BookmarkFilter",
-            "description": "Acts on the caller's bookmarks that match this filter, which is the list's filters; a filter that matches more than 5 000 bookmarks is refused with 422. Give this or ids, and not both"
+            "description": "Previews on the caller's bookmarks that match this filter, which is the list's filters; a filter that matches more than 5 000 bookmarks is refused with 422. Give this or ids, and not both"
           },
           "ids": {
             "description": "The bookmarks to act on, 1 to 1 000 identifiers; one named twice counts once. Give this or filter, and not both",
@@ -724,6 +806,73 @@
               "type": "string"
             },
             "maxItems": 1000,
+            "minItems": 1,
+            "type": "array"
+          },
+          "tagIds": {
+            "description": "The caller's tags add_tags would put on the bookmarks, 1 to 100 identifiers. A tag that is another member's, another workspace's or unknown is refused with 404",
+            "items": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "action",
+          "tagIds"
+        ],
+        "type": "object"
+      },
+      "BulkBookmarksRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "action": {
+            "description": "delete removes the bookmarks for good, pin pins them and unpin unpins them. add_to_folder files them in the folder folderId as well as in the folders they are in, move_to_folder files them in that folder alone, and remove_from_folder takes them out of that folder. add_tags puts the tags tagIds on them and remove_tags takes those tags off",
+            "enum": [
+              "delete",
+              "pin",
+              "unpin",
+              "add_to_folder",
+              "move_to_folder",
+              "remove_from_folder",
+              "add_tags",
+              "remove_tags"
+            ],
+            "type": "string"
+          },
+          "filter": {
+            "$ref": "#/components/schemas/BookmarkFilter",
+            "description": "Acts on the caller's bookmarks that match this filter, which is the list's filters; a filter that matches more than 5 000 bookmarks is refused with 422. Give this or ids, and not both"
+          },
+          "folderId": {
+            "description": "The caller's folder the three folder actions act with; required for them and refused for every other action. A folder that is another member's, another workspace's or unknown is refused with 404 and nothing is changed",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "ids": {
+            "description": "The bookmarks to act on, 1 to 1 000 identifiers; one named twice counts once. Give this or filter, and not both",
+            "items": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "type": "array"
+          },
+          "tagIds": {
+            "description": "The caller's tags add_tags and remove_tags act with, 1 to 100 identifiers; required for them and refused for every other action. A tag that is another member's, another workspace's or unknown is refused with 404 and nothing is changed",
+            "items": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            },
+            "maxItems": 100,
             "minItems": 1,
             "type": "array"
           }
@@ -737,7 +886,7 @@
         "additionalProperties": false,
         "properties": {
           "affected": {
-            "description": "How many of them are now deleted, or are pinned or unpinned as asked (a bookmark that already was is counted)",
+            "description": "How many of them are now deleted, or are in the state the action asks for: pinned or unpinned, filed in or out of the folder, tagged or untagged (a bookmark that already was is counted)",
             "maximum": 9007199254740991,
             "minimum": 0,
             "type": "integer"
@@ -759,7 +908,7 @@
             "description": "The skipped bookmarks by reason, as counts only",
             "properties": {
               "not_found": {
-                "description": "Bookmarks the caller owns none of in this workspace: another member's, another workspace's, one that is gone, and, for pin and unpin, a plan-archived one. They are not told apart",
+                "description": "Bookmarks the caller owns none of in this workspace: another member's, another workspace's, one that is gone, and, for every action but delete, a plan-archived one. They are not told apart",
                 "maximum": 9007199254740991,
                 "minimum": 0,
                 "type": "integer"
@@ -783,6 +932,40 @@
           "affected",
           "skipped",
           "skippedReasons"
+        ],
+        "type": "object"
+      },
+      "BulkPreviewTag": {
+        "additionalProperties": false,
+        "properties": {
+          "added": {
+            "description": "How many of them get the tag from the action: those that do not carry it yet",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "bookmarkCount": {
+            "description": "How many of the bookmarks the action would reach carry the tag afterwards",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "id": {
+            "description": "The tag's identifier",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "name": {
+            "description": "The tag's name, in the case it was entered in",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "bookmarkCount",
+          "added"
         ],
         "type": "object"
       },
@@ -5441,7 +5624,7 @@
                 }
               }
             },
-            "description": "What the request did, as counts only. The whole request is one transaction: every bookmark it affects changes or none does. Only the caller's own bookmarks change; the others are skipped as not_found without saying whether they exist. A delete gives the workspace's bookmark count back once for the request, by the bookmarks that were not plan-archived, and records one bookmark.bulk_deleted audit event with the number deleted, never a title or a URL"
+            "description": "What the request did, as counts only. The whole request is one transaction: every bookmark it affects changes or none does. Only the caller's own bookmarks change; the others are skipped as not_found without saying whether they exist. A delete gives the workspace's bookmark count back once for the request, by the bookmarks that were not plan-archived, and records one bookmark.bulk_deleted audit event with the number deleted, never a title or a URL. Filing and tagging write links only: they move no bookmark's version, record no audit event, and leave a plan-archived bookmark alone"
           },
           "400": {
             "content": {
@@ -5481,7 +5664,7 @@
                 }
               }
             },
-            "description": "The request acts in no workspace: the account has none, or the workspace is being deleted"
+            "description": "The request acts in no workspace: the account has none, or the workspace is being deleted; or the folder of a folder action or a tag of a tag action is not one the caller has in it (another member's, another workspace's or unknown), and nothing is changed"
           },
           "422": {
             "content": {
@@ -5491,7 +5674,7 @@
                 }
               }
             },
-            "description": "The body did not pass validation (an unknown action, neither or both of ids and filter, no identifier or more than 1 000, a malformed identifier, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks. Nothing is written"
+            "description": "The body did not pass validation (an unknown action, neither or both of ids and filter, no identifier or more than 1 000, a malformed identifier, a folder action without folderId or a tag action without tagIds, a folderId or tagIds on an action that takes none, more than 100 tags, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks. Nothing is written"
           },
           "429": {
             "content": {
@@ -5525,12 +5708,127 @@
             "description": "The service is temporarily unavailable"
           }
         },
-        "summary": "Delete, pin or unpin many bookmarks",
+        "summary": "Delete, pin, unpin, file or tag many bookmarks",
         "tags": [
           "bookmarks"
         ],
         "x-slugbase-auth": "member",
         "x-slugbase-rate": "bulk",
+        "x-slugbase-scope": "write"
+      }
+    },
+    "/api/v1/bookmarks/bulk/preview": {
+      "post": {
+        "operationId": "previewBulkBookmarks",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkBookmarksPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkBookmarksPreview"
+                }
+              }
+            },
+            "description": "What add_tags with the same body would do, without writing anything: the counts as the bulk request reports them, and the tag set the bookmarks it reaches would carry afterwards. Only the caller's own bookmarks are counted; the others are skipped as not_found without saying whether they exist"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the preview is a POST, so it takes the write scope though it writes nothing"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace: the account has none, or the workspace is being deleted; or a tag of tagIds is not one the caller has in it (another member's, another workspace's or unknown)"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body did not pass validation (an action other than add_tags, neither or both of ids and filter, no identifier or more than 1 000, no tag or more than 100, a malformed identifier, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Preview adding tags to many bookmarks",
+        "tags": [
+          "bookmarks"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-rate": "read",
         "x-slugbase-scope": "write"
       }
     },
@@ -5601,6 +5899,41 @@
               "minLength": 1,
               "type": "string"
             }
+          },
+          {
+            "in": "query",
+            "name": "folderId",
+            "required": false,
+            "schema": {
+              "description": "Lists the bookmarks filed in this folder of the caller's. A folder that is another member's, another workspace's or unknown lists nothing: an empty page, not an error. Left out, folders are not filtered on",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "tag",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "type": "string"
+                },
+                {
+                  "items": {
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "maxItems": 10,
+                  "type": "array"
+                }
+              ],
+              "description": "Lists the bookmarks that carry every one of the given tags of the caller's (AND; OR is not offered): repeat the parameter, at most 10 times. Tags are addressed by identifier, so a rename breaks no link. A tag that is another member's, another workspace's or unknown lists nothing: an empty page, not an error. Left out, tags are not filtered on"
+            }
           }
         ],
         "responses": {
@@ -5652,7 +5985,7 @@
                 }
               }
             },
-            "description": "The query did not pass validation (an unknown parameter, a boolean other than true or false), or the url is not a URL a bookmark can have"
+            "description": "The query did not pass validation (an unknown parameter, a boolean other than true or false, a malformed folderId or tag, more than 10 tags), or the url is not a URL a bookmark can have"
           },
           "429": {
             "content": {

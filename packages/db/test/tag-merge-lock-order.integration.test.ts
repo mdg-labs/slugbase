@@ -1,8 +1,10 @@
 import type { BookmarkTagName } from "@slugbase/core";
+import { sql } from "drizzle-orm";
 import type postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { accountDeletionRepository, bookmarkRepository, tagRepository } from "../src/index.ts";
+import { accountDeletionRepository, bookmarkRepository, memberRepository, tagRepository } from "../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
+import { tenantHandle, type TenantTx } from "../src/tenant.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
 import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 
@@ -454,5 +456,215 @@ describe("a change of the tags of a bookmark against the removal of the member w
     finish.open();
 
     expect([await holding, await changed, await removed]).toEqual(["merged", "updated", true]);
+  }, TEST_TIMEOUT_MS);
+});
+
+// The departure of a member and the creation of a tag by name (doc 05 section 2.4, issue 582). A change that names a tag its owner has none of inserts it, and
+// the insert takes the owner's membership row and the workspace row through foreign keys (`FOR KEY SHARE`). Every departure takes the workspace row and then the
+// membership row before it reaches the member's bookmarks, so a change that took the two only at its insert, after its bookmark, would wait for a departure that
+// waits for the bookmark. Where a test needs the change held at the insert of its new tag, an uncommitted tag of that name, which another transaction ends by
+// rolling back, holds it there. The waits are attributed with `pg_blocking_pids` (`waitingBlockedBy`), except the removal's in the first test, which is counted
+// (`waitUntilWaiting`) because the membership row it waits for is held by the uncommitted tag and by the change. The account-deletion test holds the deletion
+// first, with no uncommitted tag, and the creation test runs a creation, not a change, against the removal.
+
+class RolledBack extends Error {}
+
+/** A transaction as slugbase_system that inserts the tag `name` of `ownerId` and keeps it uncommitted until `release` is called, which rolls it back, so that an insert of that name waits for it and then goes on. */
+async function uncommittedTag(of: Scene, ownerId: string, name: string): Promise<{ readonly pid: number; readonly release: () => void; readonly done: Promise<unknown> }> {
+  const held = gate();
+  const release = gate();
+  let pid = 0;
+  const done = settle(
+    asSystem(db, async (tx) => {
+      pid = (await tx<{ pid: number }[]>`SELECT pg_backend_pid() AS pid`)[0]?.pid ?? 0;
+      await tx`INSERT INTO tags (id, workspace_id, owner_id, name) VALUES (${freshId()}, ${of.workspaceId}, ${ownerId}, ${name})`;
+      held.open();
+      await release.opened;
+      throw new RolledBack();
+    }),
+  );
+  await Promise.race([held.opened, done]);
+  return { pid, release: release.open, done };
+}
+
+async function backendPid(tx: TenantTx): Promise<number> {
+  return (await tenantHandle(tx).execute<{ pid: number }>(sql`SELECT pg_backend_pid() AS pid`))[0]?.pid ?? 0;
+}
+
+/** The scene's owner and a member with a bookmark and a tag "Kept" of their own. */
+async function memberScene(): Promise<{ of: Scene; member: string; as: Scene; bookmark: string; kept: string }> {
+  const of = await scene();
+  const member = freshId();
+  await seedAccount(db, { id: member, email: `tag-departure-member${String(emailNumber)}@example.test`, passwordHash: "$argon2id$stub" });
+  await seedMember(db, { workspaceId: of.workspaceId, accountId: member, role: "member" });
+  const as = { workspaceId: of.workspaceId, owner: member };
+  return { of, member, as, bookmark: await seedBookmark(as), kept: await seedTag(as, "Kept") };
+}
+
+/** The workspace's owner removes `member`, the way a removal does: the roles are read (the workspace row is locked), then the membership is deleted, and `afterwards` may hold the transaction open. */
+function removing(of: Scene, member: string, afterwards: (pid: number) => Promise<void> = () => Promise.resolve()): Promise<boolean | string> {
+  return settle(
+    inTenant(of, async (tx) => {
+      const members = memberRepository(tx);
+      await members.roles(member);
+      const removed = await members.remove(member, []);
+      await afterwards(await backendPid(tx));
+      return removed;
+    }),
+  );
+}
+
+function changing(as: Scene, bookmark: string, tags: { ids: string[]; names: BookmarkTagName[] }): Promise<string> {
+  return settle(inTenant(as, (tx) => bookmarkRepository(tx).update({ bookmarkId: bookmark, ownerId: as.owner, expectedVersions: undefined, changes: { tags } })).then((result) => result.kind));
+}
+
+async function storedOf(as: Scene): Promise<{ tags: string[]; links: number; owners: (string | null)[] }> {
+  return asSystem(db, async (tx) => ({
+    tags: (await tx<{ name: string }[]>`SELECT name::text AS name FROM tags WHERE workspace_id = ${as.workspaceId} ORDER BY name`).map((row) => row.name),
+    links: (await tx<{ n: number }[]>`SELECT count(*)::int AS n FROM bookmark_tags WHERE workspace_id = ${as.workspaceId}`)[0]?.n ?? -1,
+    owners: (await tx<{ owner_id: string | null }[]>`SELECT owner_id FROM bookmarks WHERE workspace_id = ${as.workspaceId} ORDER BY id`).map((row) => row.owner_id),
+  }));
+}
+
+/** Waits until a backend is blocked by exactly `expected` (`pg_blocking_pids`) and answers its pid; fails with what every waiting backend is blocked by when none ever is. */
+async function waitingBlockedBy(expected: readonly number[], what: string): Promise<number> {
+  const wanted = [...expected].sort((a, b) => a - b).join();
+  const deadline = Date.now() + BLOCKED_DEADLINE_MS;
+  for (;;) {
+    const seen: string[] = [];
+    for (const waiting of await waitingPids()) {
+      const by = (await blockers(waiting)).join();
+      if (by === wanted) {
+        return waiting;
+      }
+      seen.push(`${String(waiting)} by [${by}]`);
+    }
+    if (Date.now() > deadline) {
+      throw new Error(`${what}: no backend is blocked by [${wanted}]; waiting: ${seen.join("; ")}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+  }
+}
+
+/** Runs `work` while `pending` holds its uncommitted tag, and rolls the tag back when `work` ends, whichever way. */
+async function whileUncommitted<T>(pending: { readonly release: () => void; readonly done: Promise<unknown> }, work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } finally {
+    pending.release();
+    await pending.done;
+  }
+}
+
+describe("a change that creates a tag by name against the departure of its owner", () => {
+  // The uncommitted tag's insert holds the membership row and the workspace row `FOR KEY SHARE` through its foreign keys, so a departure waits for it as well.
+  it("queues the removal behind the change, which commits its new tag, and then removes the member", async () => {
+    const { of, member, as, bookmark, kept } = await memberScene();
+    const pending = await uncommittedTag(as, member, "Fresh");
+    const [changed, removed] = await whileUncommitted(pending, async () => {
+      const change = changing(as, bookmark, { ids: [kept], names: named("Fresh") });
+      // The change waits at the insert of "Fresh" for the uncommitted tag, holding its bookmark and "Kept".
+      await waitingBlockedBy([pending.pid], "the change waits at the new tag for the uncommitted one");
+      const removal = removing(of, member);
+      // The removal waits for the membership row, which the uncommitted tag and the change both hold `FOR KEY SHARE`; the database names the first of the holders it waits for.
+      await waitUntilWaiting(2, "the removal");
+      return [change, removal] as const;
+    });
+
+    expect([await changed, await removed]).toEqual(["updated", true]);
+    expect(await storedOf(as)).toEqual({ tags: [], links: 0, owners: [null] });
+  }, TEST_TIMEOUT_MS);
+
+  it("waits for a removal that holds the membership, and answers not_found, writing no tag and no link, when the removal commits", async () => {
+    const { of, member, as, bookmark, kept } = await memberScene();
+    const reached = gate();
+    const finish = gate();
+    let removalPid = 0;
+    const removed = removing(of, member, async (pid) => {
+      removalPid = pid;
+      reached.open();
+      await finish.opened;
+    });
+    await Promise.race([reached.opened, removed]);
+    let changed: Promise<string> | undefined;
+    try {
+      changed = changing(as, bookmark, { ids: [kept], names: named("Fresh") });
+      await waitingBlockedBy([removalPid], "the change waits for the removal");
+    } finally {
+      finish.open();
+    }
+
+    expect([await removed, await changed]).toEqual([true, "not_found"]);
+    expect(await storedOf(as)).toEqual({ tags: [], links: 0, owners: [null] });
+  }, TEST_TIMEOUT_MS);
+
+  it("waits for the deletion of the owner's account, which holds the workspace, and answers not_found when the account is gone", async () => {
+    const { member, as, bookmark, kept } = await memberScene();
+    const reached = gate();
+    const proceed = gate();
+    let deletionPid = 0;
+    // The deletion of an account locks the account's workspaces first (its scope), runs its guards, and then deletes the account, whose membership, bookmarks and tags go with it.
+    const deleting = settle(
+      db.tenant.withTenant({ accountId: member, requestId: "tag-merge-order" }, async (tx) => {
+        const repository = accountDeletionRepository(tx);
+        const scope = await repository.scope();
+        deletionPid = await backendPid(tx);
+        reached.open();
+        await proceed.opened;
+        return repository.delete(scope.soleMember.map((workspace) => workspace.id), []);
+      }),
+    );
+    await Promise.race([reached.opened, deleting]);
+    let changed: Promise<string> | undefined;
+    try {
+      changed = changing(as, bookmark, { ids: [kept], names: named("Fresh") });
+      await waitingBlockedBy([deletionPid], "the change waits for the deletion");
+    } finally {
+      proceed.open();
+    }
+
+    expect([await deleting, await changed]).toEqual([true, "not_found"]);
+    expect(await storedOf(as)).toEqual({ tags: [], links: 0, owners: [null] });
+  }, TEST_TIMEOUT_MS);
+
+  it("ends a creation that names a new tag and the removal of its owner in their own answers", async () => {
+    const { of, member, as } = await memberScene();
+    const pending = await uncommittedTag(as, member, "Fresh");
+    const bookmark = { id: freshId(), ownerId: member, url: "https://example.com/new", urlCanonical: "https://example.com/new", host: "example.com", title: "New", description: null, pinned: false };
+    const [created, removed] = await whileUncommitted(pending, async () => {
+      // A creation locks the workspace row before its bookmark and its tags, so a removal, which locks it first too, queues behind it.
+      const creation = settle(inTenant(as, (tx) => bookmarkRepository(tx).create({ bookmark, ceiling: null, jobs: [], tags: { ids: [], names: named("Fresh") } })).then((result) => result.kind));
+      const createPid = await waitingBlockedBy([pending.pid], "the creation waits at the new tag for the uncommitted one");
+      const removal = removing(of, member);
+      await waitingBlockedBy([createPid], "the removal waits for the creation");
+      return [creation, removal] as const;
+    });
+
+    expect([await created, await removed]).toEqual(["created", true]);
+    expect(await storedOf(as)).toEqual({ tags: [], links: 0, owners: [null, null] });
+  }, TEST_TIMEOUT_MS);
+});
+
+describe("the tags a change creates by name", () => {
+  it("are inserted in the order of their lower-cased names, so a change cannot hold a later name while it waits for an earlier one", async () => {
+    const { member, as, bookmark } = await memberScene();
+    // Another transaction has "Alpha" uncommitted; the change names "Beta" first and "Alpha" second.
+    const pending = await uncommittedTag(as, member, "Alpha");
+    const [changed, third] = await whileUncommitted(pending, async () => {
+      const change = changing(as, bookmark, { ids: [], names: named("Beta", "Alpha") });
+      await waitingBlockedBy([pending.pid], "the change waits at Alpha for the uncommitted tag");
+      // A third transaction creates "Beta": the change must not hold it, so this commits without waiting. The wait is bounded, and a "Beta" the change holds ends it in 55P03.
+      const inserted = await settle(
+        asSystem(db, async (tx) => {
+          await tx`SET LOCAL lock_timeout = '3s'`;
+          return (await tx`INSERT INTO tags (id, workspace_id, owner_id, name) VALUES (${freshId()}, ${as.workspaceId}, ${member}, 'Beta') ON CONFLICT DO NOTHING RETURNING id`).count;
+        }),
+      );
+      return [change, inserted] as const;
+    });
+
+    expect(third).toBe(1);
+    expect(await changed).toBe("updated");
+    expect((await storedOf(as)).tags).toEqual(["Alpha", "Beta", "Kept"]);
   }, TEST_TIMEOUT_MS);
 });

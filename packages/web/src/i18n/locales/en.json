@@ -178,6 +178,11 @@
       "clear": "Clear selection",
       "pin": "Pin",
       "unpin": "Unpin",
+      "addToFolder": "Add to folder",
+      "removeFromFolder": "Remove from folder",
+      "addTags": "Add tags",
+      "removeTags": "Remove tags",
+      "undo": "Undo",
       "delete": {
         "action": "Delete",
         "title": "Delete {count, plural, one {# bookmark} other {# bookmarks}}?",
@@ -195,14 +200,61 @@
       "done": {
         "delete": "{count, plural, one {# bookmark deleted.} other {# bookmarks deleted.}}",
         "pin": "{count, plural, one {# bookmark pinned.} other {# bookmarks pinned.}}",
-        "unpin": "{count, plural, one {# bookmark unpinned.} other {# bookmarks unpinned.}}"
+        "unpin": "{count, plural, one {# bookmark unpinned.} other {# bookmarks unpinned.}}",
+        "addToFolder": "{count, plural, one {# bookmark added to “{folder}”.} other {# bookmarks added to “{folder}”.}}",
+        "removeFromFolder": "{count, plural, one {# bookmark removed from “{folder}”.} other {# bookmarks removed from “{folder}”.}}",
+        "addTags": "{count, plural, one {Tags added to # bookmark.} other {Tags added to # bookmarks.}}",
+        "removeTags": "{count, plural, one {Tags removed from # bookmark.} other {Tags removed from # bookmarks.}}",
+        "undone": "{count, plural, one {# bookmark put back in “{folder}”.} other {# bookmarks put back in “{folder}”.}}"
       },
       "skipped": "{count, plural, one {# bookmark was skipped because it no longer exists or can’t be changed.} other {# bookmarks were skipped because they no longer exist or can’t be changed.}}",
       "error": {
         "delete": "The bookmarks could not be deleted. Nothing was changed. Try again in a moment.",
         "pin": "The bookmarks could not be pinned. Nothing was changed. Try again in a moment.",
         "unpin": "The bookmarks could not be unpinned. Nothing was changed. Try again in a moment.",
-        "partial": "Only {done, number} of {total, number} bookmarks were changed before an error. The rest are still selected; try again in a moment."
+        "partial": "Only {done, number} of {total, number} bookmarks were changed before an error. The rest are still selected; try again in a moment.",
+        "addToFolder": "The bookmarks could not be added to the folder. Nothing was changed. Try again in a moment.",
+        "removeFromFolder": "The bookmarks could not be removed from the folder. Nothing was changed. Try again in a moment.",
+        "addTags": "The tags could not be added. Nothing was changed. Try again in a moment.",
+        "removeTags": "The tags could not be removed. Nothing was changed. Try again in a moment.",
+        "folderGone": "That folder no longer exists. Nothing was changed.",
+        "tagsGone": "One of those tags no longer exists. Nothing was changed.",
+        "undo": "The bookmarks could not be put back in the folder. Try again in a moment."
+      },
+      "link": {
+        "close": "Close",
+        "cancel": "Cancel",
+        "retry": "Try again",
+        "title": {
+          "addToFolder": "Add {count, plural, one {# bookmark} other {# bookmarks}} to a folder",
+          "removeFromFolder": "Remove {count, plural, one {# bookmark} other {# bookmarks}} from a folder",
+          "addTags": "Add tags to {count, plural, one {# bookmark} other {# bookmarks}}",
+          "removeTags": "Remove tags from {count, plural, one {# bookmark} other {# bookmarks}}"
+        },
+        "folder": {
+          "label": "Folder",
+          "placeholder": "Search your folders",
+          "empty": "You have no folders yet.",
+          "loading": "Loading your folders",
+          "loadFailed": "Your folders could not be loaded."
+        },
+        "tags": {
+          "label": "Tags",
+          "placeholder": "Search your tags",
+          "empty": "You have no tags yet.",
+          "loading": "Loading your tags",
+          "loadFailed": "Your tags could not be loaded.",
+          "remove": "Remove {name}",
+          "limit": "Choose at most {max, number} tags at once."
+        },
+        "preview": {
+          "title": "Tags after adding",
+          "loading": "Working out the tags these bookmarks will have",
+          "error": "The preview could not be loaded.",
+          "summary": "{count, plural, one {# bookmark will get these tags.} other {# bookmarks will get these tags.}}",
+          "skipped": "{count, plural, one {# bookmark will be skipped because it no longer exists or can’t be changed.} other {# bookmarks will be skipped because they no longer exist or can’t be changed.}}",
+          "tagCount": "{bookmarkCount, plural, one {# bookmark} other {# bookmarks}}, {added, number} new"
+        }
       }
     },
     "modal": {

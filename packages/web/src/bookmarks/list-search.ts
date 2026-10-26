@@ -138,16 +138,12 @@ export function hasActiveFilters(search: BookmarkListSearch): boolean {
   );
 }
 
-/** The filters "select all matching" can name: the identifiers endpoint takes these and no folder or tag. */
+/** The parameters that choose which bookmarks the list holds, which "select all matching" names as well; the sort and the size only shape how they are laid out. */
 export interface BookmarkFilterParams {
   readonly pinned?: "true";
   readonly hasSlug?: "true";
   readonly forwarding?: "true";
   readonly scope?: "mine";
-}
-
-/** The parameters that choose which bookmarks the list holds; the sort and the size only shape how they are laid out. */
-export interface BookmarkListFilterParams extends BookmarkFilterParams {
   readonly folderId?: string;
   readonly tag?: string[];
 }
@@ -160,31 +156,25 @@ export function withoutFolder(search: BookmarkListSearch): BookmarkListSearch {
 }
 
 /** The filters, sort and size a request for the list carries; the cursor is added by the query. */
-export interface BookmarkListParams extends BookmarkListFilterParams {
+export interface BookmarkListParams extends BookmarkFilterParams {
   readonly sort: BookmarkSort;
   readonly limit: BookmarkPageSize;
 }
 
+/** Every filter that chooses which bookmarks the list holds, the folder and the tags included. */
 export function filterParamsOf(search: BookmarkListSearch): BookmarkFilterParams {
   return {
     ...(search.pinned === true ? { pinned: "true" as const } : {}),
     ...(search.hasSlug === true ? { hasSlug: "true" as const } : {}),
     ...(search.forwarding === true ? { forwarding: "true" as const } : {}),
     ...(search.scope === undefined ? {} : { scope: search.scope }),
-  };
-}
-
-/** Every filter that chooses which bookmarks the list holds, the folder and the tags included. */
-export function listFilterParamsOf(search: BookmarkListSearch): BookmarkListFilterParams {
-  return {
-    ...filterParamsOf(search),
     ...(search.folderId === undefined ? {} : { folderId: search.folderId }),
     ...(search.tag === undefined || search.tag.length === 0 ? {} : { tag: [...search.tag] }),
   };
 }
 
 export function listParamsOf(search: BookmarkListSearch): BookmarkListParams {
-  return { ...listFilterParamsOf(search), sort: search.sort ?? DEFAULT_SORT, limit: pageSizeOfSearch(search) };
+  return { ...filterParamsOf(search), sort: search.sort ?? DEFAULT_SORT, limit: pageSizeOfSearch(search) };
 }
 
 export interface BookmarkListControls {

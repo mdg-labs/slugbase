@@ -37,12 +37,12 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  * contract, so a run of `runApiMatrix` over `openapi.json` with no `mapping` option reports no "no mapping" for one.
  *
  * - Bookmark identifier: the path parameter `id` of `getBookmark`, `updateBookmark`, `deleteBookmark` and `openBookmark`, the query parameter
- *   `hasSlug` of `listBookmarks` and `listBookmarkIds` and the body inputs `ids[]` and `filter.hasSlug` of `bulkBookmarks`. `hasSlug` is a flag, not
- *   an identifier, but the classifier selects every name ending in `Slug`, so it is mapped like the others.
- * - Tag identifier: the path parameter `id` of `renameTag`, `mergeTag` and `deleteTag`, the body input `intoTagId` of `mergeTag`, the query parameter `tag` of `listBookmarks` (as a single value and as a repeated one) and the body input `tagIds[]` of
- *   `createBookmark` and `updateBookmark`. The body input `tagNames[]` of the two is a name, not an identifier, and takes no entry.
+ *   `hasSlug` of `listBookmarks` and `listBookmarkIds` and the body inputs `ids[]` and `filter.hasSlug` of `bulkBookmarks` and `previewBulkBookmarks`.
+ *   `hasSlug` is a flag, not an identifier, but the classifier selects every name ending in `Slug`, so it is mapped like the others.
+ * - Tag identifier: the path parameter `id` of `renameTag`, `mergeTag` and `deleteTag`, the body input `intoTagId` of `mergeTag`, the query parameter `tag` of `listBookmarks` and `listBookmarkIds` (as a single value and as a repeated one), the body input `filter.tag` of `bulkBookmarks` and
+ *   `previewBulkBookmarks` (as a single value and as a list) and the body input `tagIds[]` of `createBookmark`, `updateBookmark`, `bulkBookmarks` and `previewBulkBookmarks`. The body input `tagNames[]` of the two is a name, not an identifier, and takes no entry.
  * - Folder identifier: the path parameter `id` of `getFolder`, `updateFolder`, `deleteFolder`, `addFolderBookmarks` and `removeFolderBookmarks`, the query
- *   parameter `folderId` of `listBookmarks` and the body input `folderIds[]` of `createBookmark` and `updateBookmark`. The body input `bookmarkIds[]` of
+ *   parameter `folderId` of `listBookmarks` and `listBookmarkIds`, the body inputs `folderId` and `filter.folderId` of `bulkBookmarks` (the second also of `previewBulkBookmarks`) and the body input `folderIds[]` of `createBookmark` and `updateBookmark`. The body input `bookmarkIds[]` of
  *   `addFolderBookmarks` and `removeFolderBookmarks` takes a bookmark identifier.
  * - Member identifier (an account): `accountId` of `removeMember`, `updateMember` and `transferWorkspaceOwnership`, and `transferTo` of
  *   `removeMember` and `leaveWorkspace`.
@@ -79,8 +79,22 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
   "updateBookmark.folderIds[]": "folder",
   "listBookmarks.hasSlug": "bookmark",
   "listBookmarkIds.hasSlug": "bookmark",
+  "listBookmarkIds.folderId": "folder",
+  "listBookmarkIds.tag": "tag",
+  "listBookmarkIds.tag[]": "tag",
   "bulkBookmarks.ids[]": "bookmark",
   "bulkBookmarks.filter.hasSlug": "bookmark",
+  "bulkBookmarks.filter.folderId": "folder",
+  "bulkBookmarks.filter.tag": "tag",
+  "bulkBookmarks.filter.tag[]": "tag",
+  "bulkBookmarks.folderId": "folder",
+  "bulkBookmarks.tagIds[]": "tag",
+  "previewBulkBookmarks.ids[]": "bookmark",
+  "previewBulkBookmarks.filter.hasSlug": "bookmark",
+  "previewBulkBookmarks.filter.folderId": "folder",
+  "previewBulkBookmarks.filter.tag": "tag",
+  "previewBulkBookmarks.filter.tag[]": "tag",
+  "previewBulkBookmarks.tagIds[]": "tag",
   "createInvitation.teamIds[]": "team",
   "revokeInvitation.id": "invitation",
   "createInvitationLink.id": "invitation",
