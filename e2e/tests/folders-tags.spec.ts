@@ -4,6 +4,7 @@ import { findViolations, loadAllowlist } from "../support/axe.ts";
 import { bookmarkBody, bookmarkShape } from "../support/bookmark-fixtures.ts";
 import { message } from "../support/catalog.ts";
 import { appOrigin } from "../support/environment.ts";
+import { tabTo, waitForInitialFocus } from "../support/keyboard.ts";
 import { expect, test } from "../support/test.ts";
 
 // The folders and tags journey (doc 08 section 5.1, doc 03 sections 3, 4, 6 and 7, doc 02 section 7, doc 10 T14 and T2),
@@ -101,17 +102,6 @@ async function chooseRowAction(page: Page, label: string, action: string): Promi
   await page.getByRole("button", { name: label, exact: true }).click();
   await page.getByRole("menuitem", { name: action, exact: true }).click();
   await expect(page.getByRole("menu")).toHaveCount(0);
-}
-
-/** Presses Tab until the element has focus; the keyboard is the only input that moves it. */
-async function tabTo(page: Page, target: Locator, presses = 20): Promise<void> {
-  for (let press = 0; press < presses; press++) {
-    if (await target.evaluate((element) => element === document.activeElement)) {
-      return;
-    }
-    await page.keyboard.press("Tab");
-  }
-  await expect(target, `Tab reaches the element within ${String(presses)} presses`).toBeFocused({ timeout: 1000 });
 }
 
 /** Presses the down arrow until the item of a menu has focus. */
@@ -472,7 +462,10 @@ test.describe("folders and tags journey", () => {
 
         await page.keyboard.press("n");
         await expect(create).toBeVisible();
-        await tabTo(page, create.getByLabel(en("folders.form.name.label"), { exact: true }));
+        // The form moves the focus to the name field a moment after it shows; a Tab before that starts from the wrong place.
+        const createName = create.getByLabel(en("folders.form.name.label"), { exact: true });
+        await waitForInitialFocus(createName, "the name field of the New folder dialog");
+        await tabTo(page, createName);
         await page.keyboard.type(names.keyboardFolder);
         await scan();
         await tabTo(page, create.getByRole("button", { name: en("folders.form.submit.create"), exact: true }));
@@ -491,6 +484,7 @@ test.describe("folders and tags journey", () => {
         const rename = page.getByRole("dialog", { name: en("folders.form.title.rename"), exact: true });
         await expect(rename).toBeVisible();
         const name = rename.getByLabel(en("folders.form.name.label"), { exact: true });
+        await waitForInitialFocus(name, "the name field of the Rename folder dialog");
         await tabTo(page, name);
         await expect(name).toHaveValue(names.keyboardFolder);
         await page.keyboard.press("ControlOrMeta+a");
