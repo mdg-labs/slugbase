@@ -15,6 +15,8 @@ export interface CopyValueProps {
   copyLabel: string;
   /** Replaces the button's name and is announced once the value is on the clipboard. */
   copiedLabel: string;
+  /** Called once the value is on the clipboard, not when the clipboard refuses it. */
+  onCopied?: () => void;
   className?: string;
 }
 
@@ -22,7 +24,7 @@ export interface CopyValueProps {
  * A value to read and copy: a read-only mono field with a copy button. When the
  * clipboard refuses the write, the value is selected instead, so it can be copied by hand.
  */
-export function CopyValue({ value, label, copyLabel, copiedLabel, className }: CopyValueProps): ReactElement {
+export function CopyValue({ value, label, copyLabel, copiedLabel, onCopied, className }: CopyValueProps): ReactElement {
   const [copied, setCopied] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
@@ -41,15 +43,17 @@ export function CopyValue({ value, label, copyLabel, copiedLabel, className }: C
   async function copy(): Promise<void> {
     try {
       await globalThis.navigator.clipboard.writeText(value);
-      setCopied(true);
     } catch {
       input.current?.select();
+      return;
     }
+    setCopied(true);
+    onCopied?.();
   }
 
   return (
     <div className={cn("flex items-center gap-2", className)}>
-      <Input aria-label={label} className="font-mono" readOnly ref={input} value={value} />
+      <Input aria-label={label} className="font-mono" readOnly ref={input} translate="no" value={value} />
       <Button
         aria-label={copied ? copiedLabel : copyLabel}
         onClick={() => {

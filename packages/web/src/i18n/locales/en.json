@@ -293,6 +293,29 @@
           "tooLong": "Use at most {max, number} characters."
         }
       },
+      "slug": {
+        "label": "Slug",
+        "placeholder": "mail",
+        "checking": "Checking the slug",
+        "available": "This slug is free.",
+        "othersUse": "{count, plural, one {# other bookmark in this workspace has this slug too. In go, yours comes first.} other {# other bookmarks in this workspace have this slug too. In go, yours comes first.}}",
+        "unchecked": "We could not check whether this slug is free. You can still save.",
+        "error": {
+          "invalid": "Use 1 to {max, number} lowercase letters, digits and hyphens, and do not start with a hyphen.",
+          "taken": "You already use this slug on another bookmark. Choose a different one."
+        },
+        "address": {
+          "label": "Go address",
+          "copy": "Copy go address",
+          "copied": "Go address copied",
+          "toast": "Address copied to the clipboard."
+        }
+      },
+      "forwarding": {
+        "label": "Forwarding",
+        "description": "Go forwards to this bookmark by its slug.",
+        "needsSlug": "Give the bookmark a slug to turn forwarding on."
+      },
       "folders": {
         "label": "Folders",
         "placeholder": "Search or create a folder",

@@ -293,6 +293,29 @@
           "tooLong": "Verwende höchstens {max, number} Zeichen."
         }
       },
+      "slug": {
+        "label": "Slug",
+        "placeholder": "mail",
+        "checking": "Der Slug wird geprüft",
+        "available": "Dieser Slug ist frei.",
+        "othersUse": "{count, plural, one {# weiteres Lesezeichen in diesem Workspace hat diesen Slug ebenfalls. Bei go kommt deines zuerst.} other {# weitere Lesezeichen in diesem Workspace haben diesen Slug ebenfalls. Bei go kommt deines zuerst.}}",
+        "unchecked": "Wir konnten nicht prüfen, ob dieser Slug frei ist. Du kannst trotzdem speichern.",
+        "error": {
+          "invalid": "Verwende 1 bis {max, number} Kleinbuchstaben, Ziffern und Bindestriche und beginne nicht mit einem Bindestrich.",
+          "taken": "Du verwendest diesen Slug schon bei einem anderen Lesezeichen. Wähle einen anderen."
+        },
+        "address": {
+          "label": "Go-Adresse",
+          "copy": "Go-Adresse kopieren",
+          "copied": "Go-Adresse kopiert",
+          "toast": "Adresse in die Zwischenablage kopiert."
+        }
+      },
+      "forwarding": {
+        "label": "Weiterleitung",
+        "description": "Go leitet über den Slug zu diesem Lesezeichen weiter.",
+        "needsSlug": "Gib dem Lesezeichen einen Slug, um die Weiterleitung einzuschalten."
+      },
       "folders": {
         "label": "Ordner",
         "placeholder": "Ordner suchen oder erstellen",

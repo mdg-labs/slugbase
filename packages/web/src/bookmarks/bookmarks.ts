@@ -1,4 +1,4 @@
-import { BOOKMARK_BULK_IDS_MAX, CreateBookmarkRequestSchema, UpdateBookmarkRequestSchema, type ComponentTypes } from "@slugbase/contracts";
+import { BOOKMARK_BULK_IDS_MAX, BOOKMARK_SLUG_PATTERN, CreateBookmarkRequestSchema, UpdateBookmarkRequestSchema, type ComponentTypes } from "@slugbase/contracts";
 import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { ApiProblemError, isSessionEnded, type ApiClient } from "../api/client.ts";
 import type { BookmarkFilterParams, BookmarkListParams } from "./list-search.ts";
@@ -16,7 +16,9 @@ export const BOOKMARKS_QUERY_KEY = ["bookmarks"] as const;
 /** The key every loaded list of bookmarks is under, whatever its filters. */
 export const BOOKMARK_LISTS_QUERY_KEY = [...BOOKMARKS_QUERY_KEY, "list"] as const;
 
-export { BOOKMARK_DESCRIPTION_MAX_LENGTH, BOOKMARK_TITLE_MAX_LENGTH, BOOKMARK_URL_MAX_LENGTH } from "@slugbase/contracts";
+export { BOOKMARK_DESCRIPTION_MAX_LENGTH, BOOKMARK_SLUG_MAX_LENGTH, BOOKMARK_TITLE_MAX_LENGTH, BOOKMARK_URL_MAX_LENGTH } from "@slugbase/contracts";
+
+export type SlugAvailability = ComponentTypes["schemas"]["SlugAvailability"];
 
 /** One bookmark of the caller, as the modal edits it. */
 export function bookmarkQuery(api: ApiClient, id: string) {
@@ -73,6 +75,37 @@ export function bookmarksByUrlQuery(api: ApiClient, url: string | undefined) {
     staleTime: 0,
     gcTime: 0,
   });
+}
+
+/**
+ * Whether the caller can use `slug` in the workspace (doc 04 section 10.6). `bookmarkId` is the bookmark being changed, whose own
+ * slug is then available; a new bookmark has none.
+ */
+export function slugAvailabilityQuery(api: ApiClient, slug: string | undefined, bookmarkId: string | undefined) {
+  return queryOptions({
+    queryKey: ["slugs", "availability", slug, bookmarkId],
+    queryFn: async ({ signal }): Promise<SlugAvailability> => {
+      if (slug === undefined) {
+        throw new Error("There is no slug to check");
+      }
+      const { data, error } = await api.GET("/api/v1/slugs/availability", {
+        params: { query: { slug, ...(bookmarkId === undefined ? {} : { bookmarkId }) } },
+        signal,
+      });
+      if (data === undefined) {
+        throw new Error("The slug check did not answer with a document", { cause: error });
+      }
+      return data;
+    },
+    enabled: slug !== undefined,
+    staleTime: 0,
+    gcTime: 0,
+  });
+}
+
+/** Whether `slug`, as the member typed it, is one the API accepts: 1 to 64 lower-case letters, digits and hyphens, not starting with a hyphen. */
+export function isValidSlug(slug: string): boolean {
+  return BOOKMARK_SLUG_PATTERN.test(slug);
 }
 
 export async function createBookmark(api: ApiClient, body: CreateBookmarkRequest): Promise<Bookmark> {
@@ -222,10 +255,10 @@ export async function previewAddTags(api: ApiClient, ids: readonly string[], tag
   return { requested, affected, skipped, tags: [...tags.values()].sort((a, b) => a.name.localeCompare(b.name)) };
 }
 
-export type FieldName = "url" | "title" | "description" | "tagNames";
+export type FieldName = "url" | "title" | "description" | "slug" | "tagNames";
 
 /** Why a field's value is refused. */
-export type FieldProblem = "required" | "tooLong" | "notAllowed" | "invalid";
+export type FieldProblem = "required" | "tooLong" | "notAllowed" | "invalid" | "taken";
 
 export type FieldProblems = Partial<Record<FieldName, FieldProblem>>;
 
@@ -239,7 +272,7 @@ export type BookmarkFailure =
   | { readonly kind: "unavailable" }
   | { readonly kind: "loadFailed" };
 
-const FIELDS: readonly FieldName[] = ["url", "title", "description", "tagNames"];
+const FIELDS: readonly FieldName[] = ["url", "title", "description", "slug", "tagNames"];
 
 function isFieldName(path: string): path is FieldName {
   return (FIELDS as readonly string[]).includes(path);
@@ -292,6 +325,9 @@ export function bookmarkFailureOf(error: unknown): BookmarkFailure | undefined {
     if (error.code === "url_not_allowed") {
       return { kind: "fields", problems: { url: "notAllowed" } };
     }
+    if (error.code === "slug_taken") {
+      return { kind: "fields", problems: { slug: "taken" } };
+    }
     if (error.status === 422) {
       const problems = fieldProblemsOf(error.errors);
       if (Object.keys(problems).length > 0) {
@@ -314,19 +350,23 @@ export function isHttpUrl(value: string): boolean {
 
 /** The problems of the fields of a bookmark to create, from the shared schema of the API contract. */
 export function validateCreate(body: CreateBookmarkRequest): FieldProblems {
-  return validate(CreateBookmarkRequestSchema.safeParse(body), body.url);
+  return validate(CreateBookmarkRequestSchema.safeParse(body), body.url, body.slug);
 }
 
 /** The problems of the fields of a change to a bookmark, from the shared schema of the API contract. */
 export function validateUpdate(body: UpdateBookmarkRequest): FieldProblems {
-  return validate(UpdateBookmarkRequestSchema.safeParse(body), body.url);
+  return validate(UpdateBookmarkRequestSchema.safeParse(body), body.url, body.slug);
 }
 
-function validate(result: { success: boolean; error?: { issues: readonly { path: readonly PropertyKey[]; code: string }[] } }, url: string | undefined): FieldProblems {
+function validate(result: { success: boolean; error?: { issues: readonly { path: readonly PropertyKey[]; code: string }[] } }, url: string | undefined, slug: string | null | undefined): FieldProblems {
   const problems: Partial<Record<FieldName, FieldProblem>> = result.success || result.error === undefined ? {} : fieldProblemsOf(result.error.issues.map(({ path, code }) => ({ path: String(path[0]), code })));
   // The schema bounds the address; the scheme is the server's rule (doc 02 section 5.1), checked here to spare the round trip.
   if (url !== undefined && problems.url === undefined && !isHttpUrl(url)) {
     problems.url = "notAllowed";
+  }
+  // The schema takes any text for a slug, since the API trims and lower-cases it first; the form sends it that way already.
+  if (typeof slug === "string" && !isValidSlug(slug)) {
+    problems.slug = "invalid";
   }
   return problems;
 }

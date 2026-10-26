@@ -335,6 +335,7 @@ export interface CopyValueProps {
     copiedLabel: string;
     copyLabel: string;
     label: string;
+    onCopied?: () => void;
     // (undocumented)
     value: string;
 }
@@ -931,6 +932,22 @@ export interface SidePanelProps {
     open: boolean;
     // (undocumented)
     title: ReactNode;
+}
+
+// @public
+export function SlugInput(input: SlugInputProps): ReactElement;
+
+// @public (undocumented)
+export interface SlugInputProps {
+    // (undocumented)
+    disabled?: boolean;
+    onBlur?: (event: FocusEvent_2<HTMLInputElement>) => void;
+    onValueChange: (value: string) => void;
+    pending?: boolean;
+    pendingLabel: string;
+    // (undocumented)
+    placeholder?: string;
+    value: string;
 }
 
 // @public
