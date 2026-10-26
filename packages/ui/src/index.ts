@@ -21,6 +21,8 @@ export * from "./components/ui/sheet.tsx";
 export * from "./components/ui/sidebar.tsx";
 export * from "./components/ui/skeleton.tsx";
 export * from "./components/ui/spinner.tsx";
+export * from "./components/ui/switch.tsx";
+export * from "./components/ui/tabs.tsx";
 export * from "./components/ui/toast.tsx";
 export * from "./components/ui/toggle-group.tsx";
 export * from "./components/ui/toggle.tsx";

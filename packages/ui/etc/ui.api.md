@@ -17,6 +17,8 @@ import { ReactNode } from 'react';
 import { ScrollArea as ScrollAreaPrimitive } from '@base-ui/react/scroll-area';
 import { Separator as SeparatorPrimitive } from '@base-ui/react/separator';
 import { Dialog as SheetPrimitive } from '@base-ui/react/dialog';
+import { Switch as SwitchPrimitive } from '@base-ui/react/switch';
+import { Tabs as TabsPrimitive } from '@base-ui/react/tabs';
 import { Toast as ToastPrimitive } from '@base-ui/react/toast';
 import { ToggleGroup as ToggleGroupPrimitive } from '@base-ui/react/toggle-group';
 import { Toggle as TogglePrimitive } from '@base-ui/react/toggle';
@@ -475,6 +477,30 @@ export interface SpinnerLabelProviderProps {
     children: React_3.ReactNode;
     label: string;
 }
+
+// @public (undocumented)
+export function Switch(input: SwitchPrimitive.Root.Props): React_3.ReactElement;
+
+export { SwitchPrimitive }
+
+// @public (undocumented)
+export function Tabs(input: TabsPrimitive.Root.Props): React_3.ReactElement;
+
+// @public (undocumented)
+export function TabsList(input: TabsPrimitive.List.Props & {
+    variant?: TabsVariant;
+}): React_3.ReactElement;
+
+// @public (undocumented)
+export function TabsPanel(input: TabsPrimitive.Panel.Props): React_3.ReactElement;
+
+export { TabsPrimitive }
+
+// @public (undocumented)
+export function TabsTab(input: TabsPrimitive.Tab.Props): React_3.ReactElement;
+
+// @public (undocumented)
+export type TabsVariant = "default" | "underline";
 
 // @public (undocumented)
 export type Theme = "light" | "dark" | "system";

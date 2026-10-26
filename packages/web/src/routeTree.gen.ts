@@ -23,6 +23,7 @@ import { Route as App403RouteImport } from "./routes/_app/403.tsx";
 import { Route as AppAdminRouteImport } from "./routes/_app/admin.tsx";
 import { Route as AppBookmarksRouteImport } from "./routes/_app/bookmarks.tsx";
 import { Route as AppFoldersRouteImport } from "./routes/_app/folders.tsx";
+import { Route as AppForwardingRouteImport } from "./routes/_app/forwarding.tsx";
 import { Route as AppSettingsRouteImport } from "./routes/_app/settings.tsx";
 import { Route as AppTagsRouteImport } from "./routes/_app/tags.tsx";
 import { Route as EmailChangeCancelRouteImport } from "./routes/email-change.cancel.tsx";
@@ -108,6 +109,11 @@ const AppBookmarksRoute = AppBookmarksRouteImport.update({
 const AppFoldersRoute = AppFoldersRouteImport.update({
   id: "/folders",
   path: "/folders",
+  getParentRoute: () => AppRoute,
+} as any);
+const AppForwardingRoute = AppForwardingRouteImport.update({
+  id: "/forwarding",
+  path: "/forwarding",
   getParentRoute: () => AppRoute,
 } as any);
 const AppSettingsRoute = AppSettingsRouteImport.update({
@@ -215,6 +221,7 @@ export interface FileRoutesByFullPath {
   "/admin": typeof AppAdminRouteWithChildren;
   "/bookmarks": typeof AppBookmarksRoute;
   "/folders": typeof AppFoldersRoute;
+  "/forwarding": typeof AppForwardingRoute;
   "/settings": typeof AppSettingsRouteWithChildren;
   "/tags": typeof AppTagsRoute;
   "/email-change/cancel": typeof EmailChangeCancelRoute;
@@ -245,6 +252,7 @@ export interface FileRoutesByTo {
   "/403": typeof App403Route;
   "/bookmarks": typeof AppBookmarksRoute;
   "/folders": typeof AppFoldersRoute;
+  "/forwarding": typeof AppForwardingRoute;
   "/tags": typeof AppTagsRoute;
   "/email-change/cancel": typeof EmailChangeCancelRoute;
   "/email-change/confirm": typeof EmailChangeConfirmRoute;
@@ -278,6 +286,7 @@ export interface FileRoutesById {
   "/_app/admin": typeof AppAdminRouteWithChildren;
   "/_app/bookmarks": typeof AppBookmarksRoute;
   "/_app/folders": typeof AppFoldersRoute;
+  "/_app/forwarding": typeof AppForwardingRoute;
   "/_app/settings": typeof AppSettingsRouteWithChildren;
   "/_app/tags": typeof AppTagsRoute;
   "/email-change/cancel": typeof EmailChangeCancelRoute;
@@ -313,6 +322,7 @@ export interface FileRouteTypes {
     | "/admin"
     | "/bookmarks"
     | "/folders"
+    | "/forwarding"
     | "/settings"
     | "/tags"
     | "/email-change/cancel"
@@ -343,6 +353,7 @@ export interface FileRouteTypes {
     | "/403"
     | "/bookmarks"
     | "/folders"
+    | "/forwarding"
     | "/tags"
     | "/email-change/cancel"
     | "/email-change/confirm"
@@ -375,6 +386,7 @@ export interface FileRouteTypes {
     | "/_app/admin"
     | "/_app/bookmarks"
     | "/_app/folders"
+    | "/_app/forwarding"
     | "/_app/settings"
     | "/_app/tags"
     | "/email-change/cancel"
@@ -508,6 +520,13 @@ declare module "@tanstack/react-router" {
       path: "/folders";
       fullPath: "/folders";
       preLoaderRoute: typeof AppFoldersRouteImport;
+      parentRoute: typeof AppRoute;
+    };
+    "/_app/forwarding": {
+      id: "/_app/forwarding";
+      path: "/forwarding";
+      fullPath: "/forwarding";
+      preLoaderRoute: typeof AppForwardingRouteImport;
       parentRoute: typeof AppRoute;
     };
     "/_app/settings": {
@@ -680,6 +699,7 @@ interface AppRouteChildren {
   AppAdminRoute: typeof AppAdminRouteWithChildren;
   AppBookmarksRoute: typeof AppBookmarksRoute;
   AppFoldersRoute: typeof AppFoldersRoute;
+  AppForwardingRoute: typeof AppForwardingRoute;
   AppSettingsRoute: typeof AppSettingsRouteWithChildren;
   AppTagsRoute: typeof AppTagsRoute;
   AppIndexRoute: typeof AppIndexRoute;
@@ -691,6 +711,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppAdminRoute: AppAdminRouteWithChildren,
   AppBookmarksRoute: AppBookmarksRoute,
   AppFoldersRoute: AppFoldersRoute,
+  AppForwardingRoute: AppForwardingRoute,
   AppSettingsRoute: AppSettingsRouteWithChildren,
   AppTagsRoute: AppTagsRoute,
   AppIndexRoute: AppIndexRoute,

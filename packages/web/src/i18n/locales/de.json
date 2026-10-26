@@ -11,6 +11,7 @@
     "bookmarks": "Lesezeichen",
     "folders": "Ordner",
     "tags": "Tags",
+    "forwarding": "Weiterleitung",
     "helpAndDocs": "Hilfe & Doku",
     "switchToDark": "Zum dunklen Design wechseln",
     "switchToLight": "Zum hellen Design wechseln",
@@ -656,6 +657,84 @@
       "cancel": "Abbrechen",
       "error": {
         "notFound": "Diesen Tag gibt es nicht mehr."
+      }
+    }
+  },
+  "forwarding": {
+    "page": {
+      "title": "Weiterleitung"
+    },
+    "slugs": {
+      "title": "Deine Slugs",
+      "description": "Deine Lesezeichen mit einem Slug. Die Weiterleitung entscheidet, ob dich der Slug bei go zum Lesezeichen bringt.",
+      "label": "Deine Slugs",
+      "loading": "Deine Slugs werden geladen",
+      "loadFailed": "Deine Slugs konnten nicht geladen werden.",
+      "loadMoreFailed": "Weitere Slugs konnten nicht geladen werden.",
+      "refreshFailed": "Die Slugs konnten nicht aktualisiert werden.",
+      "retry": "Erneut versuchen",
+      "loadMore": "Mehr laden",
+      "count": "{shown} von {total} angezeigt",
+      "countAtLeast": "{shown} von {total}+ angezeigt",
+      "table": {
+        "slug": "Slug",
+        "host": "Ziel",
+        "forwarding": "Weiterleitung",
+        "opens": "Aufrufe",
+        "lastOpened": "Zuletzt geöffnet",
+        "never": "Nie",
+        "actions": "Aktionen"
+      },
+      "switch": "Weiterleitung für {slug}",
+      "actionsFor": "Aktionen für {slug}",
+      "edit": "Bearbeiten",
+      "copy": "Adresse kopieren",
+      "turnOff": "Weiterleitung ausschalten",
+      "copied": "{address} kopiert",
+      "copyFailed": "Die Adresse konnte nicht kopiert werden. Markiere sie und kopiere sie von Hand.",
+      "empty": {
+        "title": "Noch keine Slugs",
+        "description": "Gib einem Lesezeichen einen kurzen Slug, und go bringt dich direkt hin. Gib go und den Slug in die Adressleiste deines Browsers ein, sobald er eingerichtet ist.",
+        "action": "Neues Lesezeichen"
+      },
+      "error": {
+        "turnOn": "Die Weiterleitung konnte nicht eingeschaltet werden. Sie ist wieder aus.",
+        "turnOff": "Die Weiterleitung konnte nicht ausgeschaltet werden. Sie ist wieder an.",
+        "changedElsewhere": "Dieses Lesezeichen wurde anderswo geändert, daher blieb die Weiterleitung unverändert. Die Liste ist wieder aktuell.",
+        "notFound": "Dieses Lesezeichen gibt es nicht mehr."
+      }
+    },
+    "choices": {
+      "title": "Gemerkte Auswahl",
+      "description": "Wenn mehrere Lesezeichen denselben Slug haben, schickt dich go zu dem, das du immer verwenden wolltest.",
+      "label": "Gemerkte Auswahl",
+      "loading": "Deine gemerkte Auswahl wird geladen",
+      "loadFailed": "Deine gemerkte Auswahl konnte nicht geladen werden.",
+      "loadMoreFailed": "Weitere gemerkte Auswahl konnte nicht geladen werden.",
+      "refreshFailed": "Die gemerkte Auswahl konnte nicht aktualisiert werden.",
+      "retry": "Erneut versuchen",
+      "loadMore": "Mehr laden",
+      "count": "{shown} angezeigt",
+      "table": {
+        "slug": "Slug",
+        "bookmark": "Lesezeichen",
+        "host": "Ziel",
+        "owner": "Besitzer",
+        "actions": "Aktionen"
+      },
+      "you": "Du",
+      "remove": "Entfernen",
+      "removeFor": "Gemerkte Auswahl für {slug} entfernen",
+      "removed": "Auswahl für {slug} vergessen.",
+      "undo": "Rückgängig",
+      "restored": "Auswahl für {slug} wieder gemerkt.",
+      "empty": {
+        "title": "Noch nichts gemerkt",
+        "description": "Passt ein Slug auf mehrere Lesezeichen und entscheidest du dich, immer eines davon zu verwenden, erscheint die Auswahl hier."
+      },
+      "error": {
+        "remove": "Die gemerkte Auswahl konnte nicht entfernt werden.",
+        "notFound": "Diese Auswahl ist schon weg."
       }
     }
   },
@@ -2407,6 +2486,7 @@
       "goBookmarks": "Zu Lesezeichen gehen",
       "goFolders": "Zu Ordnern gehen",
       "goTags": "Zu Tags gehen",
+      "goForwarding": "Zu Weiterleitung gehen",
       "newFolder": "Neuer Ordner (auf der Seite Ordner)",
       "help": "Diese Liste anzeigen",
       "move": "Fokus zum nächsten oder vorherigen Lesezeichen bewegen",

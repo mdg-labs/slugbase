@@ -9,7 +9,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@slugbase/ui";
-import { AccountMenu, AppShell, BookmarkIcon, FolderIcon, HomeIcon, LifeBuoyIcon, LockIcon, LogOutIcon, SettingsIcon, ShieldCheckIcon, TagIcon, ThemeToggle } from "@slugbase/ui/patterns";
+import { AccountMenu, AppShell, BookmarkIcon, FolderIcon, ForwardIcon, HomeIcon, LifeBuoyIcon, LockIcon, LogOutIcon, SettingsIcon, ShieldCheckIcon, TagIcon, ThemeToggle } from "@slugbase/ui/patterns";
 import { Link, Outlet, useRouter, useRouterState } from "@tanstack/react-router";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
@@ -48,6 +48,7 @@ function AppLayoutShell(): ReactElement {
   const filterFolder = folders.folders.find((folder) => folder.id === filterFolderId);
   const inFolders = pathname === "/folders" || pathname.startsWith("/folders/");
   const inTags = pathname === "/tags" || pathname.startsWith("/tags/");
+  const inForwarding = pathname === "/forwarding" || pathname.startsWith("/forwarding/");
   const inSettings = pathname === "/settings" || pathname.startsWith("/settings/");
   const inAdmin = pathname === "/admin" || pathname.startsWith("/admin/");
   const accountItems = [
@@ -103,7 +104,7 @@ function AppLayoutShell(): ReactElement {
               </>
             ) : (
               <BreadcrumbItem>
-                <BreadcrumbPage>{inAdmin ? t("shell.admin") : inSettings ? t("shell.settings") : inBookmarks ? t("shell.bookmarks") : inFolders ? t("shell.folders") : inTags ? t("shell.tags") : t("shell.home")}</BreadcrumbPage>
+                <BreadcrumbPage>{inAdmin ? t("shell.admin") : inSettings ? t("shell.settings") : inBookmarks ? t("shell.bookmarks") : inFolders ? t("shell.folders") : inTags ? t("shell.tags") : inForwarding ? t("shell.forwarding") : t("shell.home")}</BreadcrumbPage>
               </BreadcrumbItem>
             )}
           </BreadcrumbList>
@@ -158,6 +159,12 @@ function AppLayoutShell(): ReactElement {
               <SidebarMenuButton isActive={inTags} render={<Link to="/tags" />} tooltip={t("shell.tags")}>
                 <TagIcon aria-hidden="true" />
                 <span>{t("shell.tags")}</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton isActive={inForwarding} render={<Link to="/forwarding" />} tooltip={t("shell.forwarding")}>
+                <ForwardIcon aria-hidden="true" />
+                <span>{t("shell.forwarding")}</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
             {account?.isInstanceAdmin === true ? (

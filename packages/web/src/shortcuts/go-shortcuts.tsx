@@ -6,13 +6,14 @@ import { useEffect, useRef, type ReactElement, type RefObject } from "react";
 const GO_WINDOW_MS = 1500;
 
 /**
- * The places `G` then a key goes to (doc 03 section 14). Forwarding (`W`) is added here by the work that builds its page.
+ * The places `G` then a key goes to (doc 03 section 14).
  */
 const GO_TARGETS = [
   { key: "h", to: "/" },
   { key: "b", to: "/bookmarks" },
   { key: "f", to: "/folders" },
   { key: "t", to: "/tags" },
+  { key: "w", to: "/forwarding" },
 ] as const;
 
 const MODIFIER_KEYS: ReadonlySet<string> = new Set(["Shift", "Control", "Alt", "Meta"]);
@@ -29,7 +30,7 @@ function GoTarget({ shortcutKey, to, armedUntil }: { readonly shortcutKey: strin
 }
 
 /**
- * The `G` then `H` / `B` / `F` / `T` navigation sequences. `G` arms the sequence for a moment; the next key goes to its place when it
+ * The `G` then `H` / `B` / `F` / `T` / `W` navigation sequences. `G` arms the sequence for a moment; the next key goes to its place when it
  * names one. Any other key that is released first ends the sequence. They are single-key shortcuts, so they follow the
  * account's switch, and stay quiet in text fields and overlays.
  */

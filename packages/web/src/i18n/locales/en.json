@@ -11,6 +11,7 @@
     "bookmarks": "Bookmarks",
     "folders": "Folders",
     "tags": "Tags",
+    "forwarding": "Forwarding",
     "helpAndDocs": "Help & docs",
     "switchToDark": "Switch to dark theme",
     "switchToLight": "Switch to light theme",
@@ -656,6 +657,84 @@
       "cancel": "Cancel",
       "error": {
         "notFound": "This tag no longer exists."
+      }
+    }
+  },
+  "forwarding": {
+    "page": {
+      "title": "Forwarding"
+    },
+    "slugs": {
+      "title": "Your slugs",
+      "description": "The bookmarks of yours that have a slug. Forwarding decides whether the slug takes you to the bookmark when you go to it.",
+      "label": "Your slugs",
+      "loading": "Loading your slugs",
+      "loadFailed": "Your slugs could not be loaded.",
+      "loadMoreFailed": "More slugs could not be loaded.",
+      "refreshFailed": "The slugs could not be refreshed.",
+      "retry": "Try again",
+      "loadMore": "Load more",
+      "count": "Showing {shown} of {total}",
+      "countAtLeast": "Showing {shown} of {total}+",
+      "table": {
+        "slug": "Slug",
+        "host": "Destination",
+        "forwarding": "Forwarding",
+        "opens": "Opens",
+        "lastOpened": "Last opened",
+        "never": "Never",
+        "actions": "Actions"
+      },
+      "switch": "Forwarding for {slug}",
+      "actionsFor": "Actions for {slug}",
+      "edit": "Edit",
+      "copy": "Copy address",
+      "turnOff": "Turn off forwarding",
+      "copied": "Copied {address}",
+      "copyFailed": "The address could not be copied. Select it and copy it by hand.",
+      "empty": {
+        "title": "No slugs yet",
+        "description": "Give a bookmark a short slug and go takes you straight to it. Type go and the slug into your browser’s address bar once it is set up.",
+        "action": "New bookmark"
+      },
+      "error": {
+        "turnOn": "Forwarding could not be turned on. It is off again.",
+        "turnOff": "Forwarding could not be turned off. It is on again.",
+        "changedElsewhere": "This bookmark was changed elsewhere, so forwarding was not changed. The list is up to date again.",
+        "notFound": "This bookmark no longer exists."
+      }
+    },
+    "choices": {
+      "title": "Remembered choices",
+      "description": "When several bookmarks share a slug, go sends you to the one you chose to always use.",
+      "label": "Remembered choices",
+      "loading": "Loading your remembered choices",
+      "loadFailed": "Your remembered choices could not be loaded.",
+      "loadMoreFailed": "More remembered choices could not be loaded.",
+      "refreshFailed": "The remembered choices could not be refreshed.",
+      "retry": "Try again",
+      "loadMore": "Load more",
+      "count": "Showing {shown}",
+      "table": {
+        "slug": "Slug",
+        "bookmark": "Bookmark",
+        "host": "Destination",
+        "owner": "Owner",
+        "actions": "Actions"
+      },
+      "you": "You",
+      "remove": "Remove",
+      "removeFor": "Remove the remembered choice for {slug}",
+      "removed": "Forgot your choice for {slug}.",
+      "undo": "Undo",
+      "restored": "Remembered your choice for {slug} again.",
+      "empty": {
+        "title": "Nothing remembered yet",
+        "description": "When a slug matches several bookmarks and you choose to always use one of them, the choice shows up here."
+      },
+      "error": {
+        "remove": "The remembered choice could not be removed.",
+        "notFound": "That choice is already gone."
       }
     }
   },
@@ -2407,6 +2486,7 @@
       "goBookmarks": "Go to Bookmarks",
       "goFolders": "Go to Folders",
       "goTags": "Go to Tags",
+      "goForwarding": "Go to Forwarding",
       "newFolder": "New folder (on the Folders page)",
       "help": "Show this list",
       "move": "Move focus to the next or previous bookmark",
