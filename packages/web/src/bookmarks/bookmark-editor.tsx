@@ -1,11 +1,18 @@
 import { Button, Input } from "@slugbase/ui";
 import { Banner, Confirm, Disclosure, FormField, FormOverlay, SettingSwitch, TextareaField, UnsavedGuard, UrlInput, feedbackToast } from "@slugbase/ui/patterns";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useRef, useState, type KeyboardEvent, type ReactElement, type SyntheticEvent } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { Slot } from "../extensions/index.ts";
+import { inPlaceRefusals } from "../shell/mutation-error-toasts.tsx";
+import { FOLDERS_QUERY_KEY } from "../folders/folders.ts";
+import { TAGS_QUERY_KEY, TAG_NAME_MAX_LENGTH } from "../tags/tags.ts";
+import { sameIds } from "./bookmark-choices.ts";
+import { CREATE_FOLDER_MUTATION_KEY, FolderPick } from "./folder-pick.tsx";
+import { rateLimitMessage } from "./rate-limit-message.ts";
+import { TagPick } from "./tag-pick.tsx";
 import {
   BOOKMARKS_QUERY_KEY,
   BOOKMARK_DESCRIPTION_MAX_LENGTH,
@@ -28,14 +35,19 @@ import {
   type UpdateBookmarkRequest,
 } from "./bookmarks.ts";
 
-const SECONDS_PER_MINUTE = 60;
-
 interface Values {
   readonly url: string;
   readonly title: string;
   readonly description: string;
   readonly pinned: boolean;
+  readonly folderIds: readonly string[];
+  readonly tagIds: readonly string[];
+  /** Tag names the member has no tag of yet; the API makes the tags with the bookmark. */
+  readonly tagNames: readonly string[];
 }
+
+/** Why a save did not go through: the failures of `bookmarkFailureOf`, and a folder or tag that is gone. */
+type EditorFailure = BookmarkFailure | { readonly kind: "choiceNotFound" };
 
 export interface BookmarkEditorProps {
   /** The bookmark to change, as loaded; none to create one. */
@@ -56,6 +68,9 @@ function valuesOf(bookmark: Bookmark | undefined, initialUrl: string | undefined
     title: bookmark?.title ?? "",
     description: bookmark?.description ?? "",
     pinned: bookmark?.pinned ?? false,
+    folderIds: bookmark?.folders.map(({ id }) => id) ?? [],
+    tagIds: bookmark?.tags.map(({ id }) => id) ?? [],
+    tagNames: [],
   };
 }
 
@@ -69,6 +84,8 @@ function useFieldMessage(): (field: FieldName, problem: FieldProblem | undefined
         return t("bookmarks.modal.title.error.tooLong", { max: BOOKMARK_TITLE_MAX_LENGTH });
       case "description":
         return t("bookmarks.modal.description.error.tooLong", { max: BOOKMARK_DESCRIPTION_MAX_LENGTH });
+      case "tagNames":
+        return t("bookmarks.modal.tags.error.tooLong", { max: TAG_NAME_MAX_LENGTH });
     }
   }
   return (field, problem) => {
@@ -87,7 +104,7 @@ function useFieldMessage(): (field: FieldName, problem: FieldProblem | undefined
   };
 }
 
-function FailureBanner({ failure, reloading, onReload }: { failure: BookmarkFailure; reloading: boolean; onReload: (() => void) | undefined }): ReactElement | null {
+function FailureBanner({ failure, reloading, onReload }: { failure: EditorFailure; reloading: boolean; onReload: (() => void) | undefined }): ReactElement | null {
   const { t } = useTranslation();
   switch (failure.kind) {
     case "fields":
@@ -116,6 +133,8 @@ function FailureBanner({ failure, reloading, onReload }: { failure: BookmarkFail
       );
     case "notFound":
       return <Banner description={t("bookmarks.modal.error.notFound.description")} title={t("bookmarks.modal.error.notFound.title")} variant="error" />;
+    case "choiceNotFound":
+      return <Banner description={t("bookmarks.modal.error.choiceNotFound.description")} title={t("bookmarks.modal.error.choiceNotFound.title")} variant="error" />;
     case "rateLimited":
       return <Banner title={rateLimitMessage(t, failure.seconds)} variant="error" />;
     case "unavailable":
@@ -123,15 +142,6 @@ function FailureBanner({ failure, reloading, onReload }: { failure: BookmarkFail
     case "loadFailed":
       return <Banner title={t("bookmarks.modal.error.loadFailed")} variant="error" />;
   }
-}
-
-function rateLimitMessage(t: TFunction, seconds: number | undefined): string {
-  if (seconds === undefined) {
-    return t("reauth.error.rateLimited.unknown");
-  }
-  return seconds < SECONDS_PER_MINUTE
-    ? t("reauth.error.rateLimited.seconds", { count: seconds })
-    : t("reauth.error.rateLimited.minutes", { count: Math.ceil(seconds / SECONDS_PER_MINUTE) });
 }
 
 function deleteFailureMessage(t: TFunction, failure: BookmarkFailure): string {
@@ -145,13 +155,24 @@ function deleteFailureMessage(t: TFunction, failure: BookmarkFailure): string {
   }
 }
 
+// The refusals of a save that `bookmarkFailureOf` and the editor tell in the modal, for which the shared error toast stays quiet; any
+// other failure still raises it. A `404` is the bookmark, or a folder or tag, that is gone.
+const SHOWN_IN_THE_MODAL = inPlaceRefusals([
+  { status: 422, code: "validation_failed" },
+  { status: 422, code: "url_not_allowed" },
+  { status: 422, code: "bookmark_limit_reached" },
+  { status: 412, code: "precondition_failed" },
+  { status: 404, code: "not_found" },
+  { status: 429, code: "rate_limited" },
+]);
+
 type Request =
   | { readonly kind: "create"; readonly body: CreateBookmarkRequest }
   | { readonly kind: "update"; readonly id: string; readonly version: number; readonly body: UpdateBookmarkRequest };
 
 /**
- * The bookmark form in its overlay (doc 02 sections 5.2 and 5.3, doc 03 section 4): the address, the title, a description
- * under "More" and the pin, for a new bookmark or one loaded to change. A change is sent against the version that was
+ * The bookmark form in its overlay (doc 02 sections 5.2 and 5.3, doc 03 section 4): the address, the title, the folders and tags,
+ * a description under "More" and the pin, for a new bookmark or one loaded to change. A change is sent against the version that was
  * loaded, so one made elsewhere is refused and offered to be read again instead of being overwritten. Closing with
  * unsaved changes asks first. When the address is left, pasted or prefilled, the caller's own bookmarks with the same
  * canonical address are looked up and named in a warning; saving a duplicate stays allowed.
@@ -166,7 +187,7 @@ export function BookmarkEditor({ bookmark, initialUrl, onClose, onEditExisting, 
   const [initial] = useState(() => valuesOf(bookmark, initialUrl));
   const [values, setValues] = useState<Values>(initial);
   const [problems, setProblems] = useState<FieldProblems>({});
-  const [failure, setFailure] = useState<BookmarkFailure | undefined>(undefined);
+  const [failure, setFailure] = useState<EditorFailure | undefined>(undefined);
   const [reloading, setReloading] = useState(false);
   const [lookupUrl, setLookupUrl] = useState<string | undefined>(() => {
     const url = initial.url.trim();
@@ -182,21 +203,41 @@ export function BookmarkEditor({ bookmark, initialUrl, onClose, onEditExisting, 
   const lookupCurrent = lookupUrl !== undefined && lookupUrl === trimmedUrl;
   const duplicate = lookupCurrent ? lookup.data?.find(({ id }) => id !== bookmark?.id) : undefined;
 
-  const dirty = values.url !== initial.url || values.title !== initial.title || values.description !== initial.description || values.pinned !== initial.pinned;
+  const creatingFolder = useIsMutating({ mutationKey: CREATE_FOLDER_MUTATION_KEY }) > 0;
+
+  const dirty =
+    values.url !== initial.url ||
+    values.title !== initial.title ||
+    values.description !== initial.description ||
+    values.pinned !== initial.pinned ||
+    !sameIds(values.folderIds, initial.folderIds) ||
+    !sameIds(values.tagIds, initial.tagIds) ||
+    values.tagNames.length > 0;
 
   const save = useMutation({
     mutationKey: ["bookmarks", "save"],
+    meta: SHOWN_IN_THE_MODAL,
     mutationFn: (request: Request): Promise<Bookmark> =>
       request.kind === "create" ? createBookmark(api, request.body) : updateBookmark(api, request.id, request.version, request.body),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: BOOKMARKS_QUERY_KEY });
+      // Filing and tagging move the counts of the folders and tags, and a new tag name made a tag.
+      void queryClient.invalidateQueries({ queryKey: FOLDERS_QUERY_KEY });
+      void queryClient.invalidateQueries({ queryKey: TAGS_QUERY_KEY });
       feedbackToast.success(editing ? t("bookmarks.modal.saved.updated") : t("bookmarks.modal.saved.created"));
       onClose();
     },
-    onError: (error) => {
+    onError: (error, request) => {
       const next = bookmarkFailureOf(error);
       if (next?.kind === "fields") {
         setProblems(next.problems);
+        return;
+      }
+      // The API answers a folder or tag that is not the member's, or was deleted since the lists were read, like a bookmark that is not found.
+      if (next?.kind === "notFound" && (request.body.folderIds !== undefined || request.body.tagIds !== undefined)) {
+        setFailure({ kind: "choiceNotFound" });
+        void queryClient.invalidateQueries({ queryKey: FOLDERS_QUERY_KEY });
+        void queryClient.invalidateQueries({ queryKey: TAGS_QUERY_KEY });
         return;
       }
       setFailure(next);
@@ -216,7 +257,7 @@ export function BookmarkEditor({ bookmark, initialUrl, onClose, onEditExisting, 
     },
   });
 
-  const busy = save.isPending || remove.isPending || reloading;
+  const busy = save.isPending || remove.isPending || reloading || creatingFolder;
 
   function change(next: Partial<Values>): void {
     setValues((current) => ({ ...current, ...next }));
@@ -250,7 +291,15 @@ export function BookmarkEditor({ bookmark, initialUrl, onClose, onEditExisting, 
     const title = values.title.trim();
     const description = values.description.trim();
     if (bookmark === undefined) {
-      const body: CreateBookmarkRequest = { url, title, ...(description === "" ? {} : { description }), ...(values.pinned ? { pinned: true } : {}) };
+      const body: CreateBookmarkRequest = {
+        url,
+        title,
+        ...(description === "" ? {} : { description }),
+        ...(values.pinned ? { pinned: true } : {}),
+        ...(values.folderIds.length === 0 ? {} : { folderIds: [...values.folderIds] }),
+        ...(values.tagIds.length === 0 ? {} : { tagIds: [...values.tagIds] }),
+        ...(values.tagNames.length === 0 ? {} : { tagNames: [...values.tagNames] }),
+      };
       const found = validateCreate(body);
       setProblems(found);
       if (Object.keys(found).length === 0) {
@@ -263,6 +312,11 @@ export function BookmarkEditor({ bookmark, initialUrl, onClose, onEditExisting, 
       ...(title === bookmark.title ? {} : { title }),
       ...(description === (bookmark.description ?? "") ? {} : { description: description === "" ? null : description }),
       ...(values.pinned === bookmark.pinned ? {} : { pinned: values.pinned }),
+      ...(sameIds(values.folderIds, initial.folderIds) ? {} : { folderIds: [...values.folderIds] }),
+      // The tags a patch names replace the bookmark's, so a change to them sends all of the ones that stay.
+      ...(sameIds(values.tagIds, initial.tagIds) && values.tagNames.length === 0
+        ? {}
+        : { tagIds: [...values.tagIds], ...(values.tagNames.length === 0 ? {} : { tagNames: [...values.tagNames] }) }),
     };
     if (Object.keys(body).length === 0) {
       onClose();
@@ -273,6 +327,10 @@ export function BookmarkEditor({ bookmark, initialUrl, onClose, onEditExisting, 
     if (Object.keys(found).length === 0) {
       save.mutate({ kind: "update", id: bookmark.id, version: bookmark.version, body });
     }
+  }
+
+  function refuseTagName(): void {
+    setProblems((current) => ({ ...current, tagNames: "tooLong" }));
   }
 
   function onFormSubmit(event: SyntheticEvent): void {
@@ -302,6 +360,7 @@ export function BookmarkEditor({ bookmark, initialUrl, onClose, onEditExisting, 
   const urlError = fieldMessage("url", problems.url);
   const titleError = fieldMessage("title", problems.title);
   const descriptionError = fieldMessage("description", problems.description);
+  const tagsError = fieldMessage("tagNames", problems.tagNames);
   const slugged = bookmark?.slug !== null && bookmark?.slug !== undefined;
   return (
     <>
@@ -386,6 +445,30 @@ export function BookmarkEditor({ bookmark, initialUrl, onClose, onEditExisting, 
               value={values.title}
             />
           </FormField>
+          <FolderPick
+            disabled={busy}
+            known={bookmark?.folders ?? []}
+            onChange={(folderIds) => {
+              change({ folderIds });
+            }}
+            onCreated={(folder) => {
+              setValues((current) => ({ ...current, folderIds: [...current.folderIds, folder.id] }));
+              setFailure(undefined);
+            }}
+            value={values.folderIds}
+          />
+          <TagPick
+            disabled={busy}
+            error={tagsError}
+            ids={values.tagIds}
+            known={bookmark?.tags ?? []}
+            names={values.tagNames}
+            onChange={(tagIds, tagNames) => {
+              change({ tagIds, tagNames });
+              setProblems((current) => ({ ...current, tagNames: undefined }));
+            }}
+            onTooLong={refuseTagName}
+          />
           <Disclosure defaultOpen={initial.description !== "" || problems.description !== undefined} label={t("bookmarks.modal.more")}>
             <TextareaField
               counter={t("bookmarks.modal.description.counter", { count: values.description.length, max: BOOKMARK_DESCRIPTION_MAX_LENGTH })}

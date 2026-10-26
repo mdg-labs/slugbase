@@ -21,3 +21,5 @@ export { updateFolder } from "./update.ts";
 export type { FolderChanges, FolderPatch, FolderUpdateAsk, FolderUpdateDependencies, FolderUpdateOutcome, FolderUpdateRequest, FolderUpdateResult } from "./update.ts";
 export { deleteFolder } from "./delete.ts";
 export type { FolderDeletionAsk, FolderDeletionDependencies } from "./delete.ts";
+export { fileBookmarks, unfileBookmarks } from "./filing.ts";
+export type { FolderFilingAsk, FolderFilingDependencies, FolderFilingRequest, FolderFilingResult, FolderFilingStore } from "./filing.ts";

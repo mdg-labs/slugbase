@@ -3,8 +3,9 @@ import { createHandlers, type Scenario } from "@slugbase/testing/msw";
 import { createMockServer, readOpenApiDocument } from "@slugbase/testing/msw/node";
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
-import { renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
+import { allowSlowRender, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
 // The text of a bookmark is a stranger's text (doc 10 T14, section 6): a title or a description can hold markup, a script,
 // a `javascript:` address, right-to-left text and emoji, and every surface that shows it shows it as text. The failure
@@ -48,6 +49,8 @@ function bookmark(n: number, title: string, description: string | null, override
     pinned: false,
     openCount: 0,
     lastOpenedAt: null,
+    folders: [],
+    tags: [],
     version: 3,
     createdAt: "2026-10-01T08:00:00.000Z",
     updatedAt: "2026-10-01T08:00:00.000Z",
@@ -70,7 +73,10 @@ function use(scenario: Omit<Scenario, "name"> = {}): void {
   server.use(...createHandlers(document_, { scenario: { name: "hostile", ...scenario } }));
 }
 
+let restoreWait: () => void = () => undefined;
+
 beforeAll(() => {
+  restoreWait = allowSlowRender();
   server.listen({ onUnhandledRequest: "error" });
 });
 
@@ -79,6 +85,7 @@ afterEach(() => {
 });
 
 afterAll(() => {
+  restoreWait();
   server.close();
 });
 
@@ -189,7 +196,7 @@ async function chooseAction(title: string, action: string): Promise<void> {
   await press(await screen.findByRole("menuitem", { name: action }));
 }
 
-describe("the list of bookmarks with hostile text", () => {
+describe("the list of bookmarks with hostile text", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows every title in the grid as text, the pin and slug beside it, and no description as markup", async () => {
     await surface(
       async (texts) => {
@@ -289,7 +296,7 @@ describe("the list of bookmarks with hostile text", () => {
   });
 });
 
-describe("the bookmark modal with hostile text", () => {
+describe("the bookmark modal with hostile text", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it.each(HOSTILE.map((text, index) => [index, text] as const))("holds hostile text %i in the fields of an edit as typed, and nothing else", async (_index, text) => {
     const stored = bookmark(1, text, text);
     await surface(

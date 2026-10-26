@@ -22,7 +22,9 @@ import { Route as AppSplatRouteImport } from "./routes/_app/$.tsx";
 import { Route as App403RouteImport } from "./routes/_app/403.tsx";
 import { Route as AppAdminRouteImport } from "./routes/_app/admin.tsx";
 import { Route as AppBookmarksRouteImport } from "./routes/_app/bookmarks.tsx";
+import { Route as AppFoldersRouteImport } from "./routes/_app/folders.tsx";
 import { Route as AppSettingsRouteImport } from "./routes/_app/settings.tsx";
+import { Route as AppTagsRouteImport } from "./routes/_app/tags.tsx";
 import { Route as EmailChangeCancelRouteImport } from "./routes/email-change.cancel.tsx";
 import { Route as EmailChangeConfirmRouteImport } from "./routes/email-change.confirm.tsx";
 import { Route as InviteTokenRouteImport } from "./routes/invite.$token.tsx";
@@ -103,9 +105,19 @@ const AppBookmarksRoute = AppBookmarksRouteImport.update({
   path: "/bookmarks",
   getParentRoute: () => AppRoute,
 } as any);
+const AppFoldersRoute = AppFoldersRouteImport.update({
+  id: "/folders",
+  path: "/folders",
+  getParentRoute: () => AppRoute,
+} as any);
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: "/settings",
   path: "/settings",
+  getParentRoute: () => AppRoute,
+} as any);
+const AppTagsRoute = AppTagsRouteImport.update({
+  id: "/tags",
+  path: "/tags",
   getParentRoute: () => AppRoute,
 } as any);
 const EmailChangeCancelRoute = EmailChangeCancelRouteImport.update({
@@ -202,7 +214,9 @@ export interface FileRoutesByFullPath {
   "/403": typeof App403Route;
   "/admin": typeof AppAdminRouteWithChildren;
   "/bookmarks": typeof AppBookmarksRoute;
+  "/folders": typeof AppFoldersRoute;
   "/settings": typeof AppSettingsRouteWithChildren;
+  "/tags": typeof AppTagsRoute;
   "/email-change/cancel": typeof EmailChangeCancelRoute;
   "/email-change/confirm": typeof EmailChangeConfirmRoute;
   "/invite/$token": typeof InviteTokenRoute;
@@ -230,6 +244,8 @@ export interface FileRoutesByTo {
   "/$": typeof AppSplatRoute;
   "/403": typeof App403Route;
   "/bookmarks": typeof AppBookmarksRoute;
+  "/folders": typeof AppFoldersRoute;
+  "/tags": typeof AppTagsRoute;
   "/email-change/cancel": typeof EmailChangeCancelRoute;
   "/email-change/confirm": typeof EmailChangeConfirmRoute;
   "/invite/$token": typeof InviteTokenRoute;
@@ -261,7 +277,9 @@ export interface FileRoutesById {
   "/_app/403": typeof App403Route;
   "/_app/admin": typeof AppAdminRouteWithChildren;
   "/_app/bookmarks": typeof AppBookmarksRoute;
+  "/_app/folders": typeof AppFoldersRoute;
   "/_app/settings": typeof AppSettingsRouteWithChildren;
+  "/_app/tags": typeof AppTagsRoute;
   "/email-change/cancel": typeof EmailChangeCancelRoute;
   "/email-change/confirm": typeof EmailChangeConfirmRoute;
   "/invite/$token": typeof InviteTokenRoute;
@@ -294,7 +312,9 @@ export interface FileRouteTypes {
     | "/403"
     | "/admin"
     | "/bookmarks"
+    | "/folders"
     | "/settings"
+    | "/tags"
     | "/email-change/cancel"
     | "/email-change/confirm"
     | "/invite/$token"
@@ -322,6 +342,8 @@ export interface FileRouteTypes {
     | "/$"
     | "/403"
     | "/bookmarks"
+    | "/folders"
+    | "/tags"
     | "/email-change/cancel"
     | "/email-change/confirm"
     | "/invite/$token"
@@ -352,7 +374,9 @@ export interface FileRouteTypes {
     | "/_app/403"
     | "/_app/admin"
     | "/_app/bookmarks"
+    | "/_app/folders"
     | "/_app/settings"
+    | "/_app/tags"
     | "/email-change/cancel"
     | "/email-change/confirm"
     | "/invite/$token"
@@ -479,11 +503,25 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AppBookmarksRouteImport;
       parentRoute: typeof AppRoute;
     };
+    "/_app/folders": {
+      id: "/_app/folders";
+      path: "/folders";
+      fullPath: "/folders";
+      preLoaderRoute: typeof AppFoldersRouteImport;
+      parentRoute: typeof AppRoute;
+    };
     "/_app/settings": {
       id: "/_app/settings";
       path: "/settings";
       fullPath: "/settings";
       preLoaderRoute: typeof AppSettingsRouteImport;
+      parentRoute: typeof AppRoute;
+    };
+    "/_app/tags": {
+      id: "/_app/tags";
+      path: "/tags";
+      fullPath: "/tags";
+      preLoaderRoute: typeof AppTagsRouteImport;
       parentRoute: typeof AppRoute;
     };
     "/email-change/cancel": {
@@ -641,7 +679,9 @@ interface AppRouteChildren {
   App403Route: typeof App403Route;
   AppAdminRoute: typeof AppAdminRouteWithChildren;
   AppBookmarksRoute: typeof AppBookmarksRoute;
+  AppFoldersRoute: typeof AppFoldersRoute;
   AppSettingsRoute: typeof AppSettingsRouteWithChildren;
+  AppTagsRoute: typeof AppTagsRoute;
   AppIndexRoute: typeof AppIndexRoute;
 }
 
@@ -650,7 +690,9 @@ const AppRouteChildren: AppRouteChildren = {
   App403Route: App403Route,
   AppAdminRoute: AppAdminRouteWithChildren,
   AppBookmarksRoute: AppBookmarksRoute,
+  AppFoldersRoute: AppFoldersRoute,
   AppSettingsRoute: AppSettingsRouteWithChildren,
+  AppTagsRoute: AppTagsRoute,
   AppIndexRoute: AppIndexRoute,
 };
 

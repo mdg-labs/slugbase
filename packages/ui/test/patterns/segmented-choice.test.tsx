@@ -48,4 +48,25 @@ describe("SegmentedChoice", () => {
 
     expect(onValueChange).not.toHaveBeenCalled();
   });
+
+  it("names an icon-only option for assistive technology and the pointer, and reports it when chosen", async () => {
+    const onValueChange = vi.fn<(value: string) => void>();
+    const options = THEMES.map((option) => ({ ...option, icon: <svg aria-hidden="true" /> }));
+    const { container } = render(<SegmentedChoice iconOnly label="Theme" onValueChange={onValueChange} options={options} value="system" />);
+
+    const light = screen.getByRole("radio", { name: "Light" });
+    expect(light.getAttribute("title")).toBe("Light");
+    expect(light.querySelector(".sr-only")?.textContent).toBe("Light");
+    fireEvent.click(light);
+
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith("light");
+    await expectNoViolations(container);
+  });
+
+  it("keeps the visible labels and no title when icon-only is not asked for", () => {
+    render(<SegmentedChoice label="Theme" onValueChange={() => undefined} options={THEMES} value="system" />);
+
+    expect(screen.getByRole("radio", { name: "Light" }).getAttribute("title")).toBeNull();
+    expect(document.querySelector(".sr-only")).toBeNull();
+  });
 });

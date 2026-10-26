@@ -1,4 +1,5 @@
 import { useNavigate, useSearch } from "@tanstack/react-router";
+import { useMemo } from "react";
 import { useCachedAccount } from "../account/use-cached-account.ts";
 
 /** The orders the list offers, from the API's `sort` parameter (doc 02 section 5.7). */
@@ -17,6 +18,12 @@ export type BookmarkScope = "all" | "mine";
 
 export const DEFAULT_SORT: BookmarkSort = "recent";
 
+/** How many tags a request may name (doc 04, the `tag` parameter of the list). */
+export const BOOKMARK_TAG_FILTER_MAX = 10;
+
+// The identifiers the API accepts: versions 1 to 8, or the nil and max values. Anything else would be refused with 422.
+const IDENTIFIER = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$/i;
+
 /**
  * What the address of `/bookmarks` says about the list (doc 03 section 3.1). Every parameter is optional and a filter,
  * sort or size is only written when it differs from the default, so the plain address is the plain list. The view is
@@ -30,6 +37,10 @@ export interface BookmarkListSearch {
   hasSlug?: true;
   /** Only the bookmarks `/go` forwards to. */
   forwarding?: true;
+  /** Only bookmarks filed in this folder. */
+  folderId?: string;
+  /** Only bookmarks that carry every one of these tags (AND), by identifier. */
+  tag?: readonly string[];
   scope?: Exclude<BookmarkScope, "all">;
   sort?: BookmarkSort;
   /** How the list is shown; left out, the account's default view applies. */
@@ -44,6 +55,17 @@ function isTrue(value: unknown): boolean {
 
 function isSort(value: unknown): value is BookmarkSort {
   return (BOOKMARK_SORTS as readonly unknown[]).includes(value);
+}
+
+function identifierOf(value: unknown): string | undefined {
+  return typeof value === "string" && IDENTIFIER.test(value) ? value : undefined;
+}
+
+function identifiersOf(value: unknown): readonly string[] {
+  // One tag arrives as a bare string and several as a list; a value that is no identifier is dropped, a repeat counts once.
+  const entries: readonly unknown[] = Array.isArray(value) ? (value as readonly unknown[]) : [value];
+  const identifiers = entries.flatMap((entry) => identifierOf(entry) ?? []);
+  return [...new Set(identifiers)].slice(0, BOOKMARK_TAG_FILTER_MAX);
 }
 
 function pageSizeOf(value: unknown): BookmarkPageSize | undefined {
@@ -62,6 +84,14 @@ export function validateBookmarkListSearch(search: Record<string, unknown>): Boo
   }
   if (isTrue(search.forwarding)) {
     result.forwarding = true;
+  }
+  const folderId = identifierOf(search.folderId);
+  if (folderId !== undefined) {
+    result.folderId = folderId;
+  }
+  const tag = identifiersOf(search.tag);
+  if (tag.length > 0) {
+    result.tag = tag;
   }
   if (search.scope === "mine") {
     result.scope = "mine";
@@ -98,21 +128,42 @@ export function pageSizeOfSearch(search: BookmarkListSearch): BookmarkPageSize {
 
 /** Whether any filter narrows the list; the sort, the view and the size do not. */
 export function hasActiveFilters(search: BookmarkListSearch): boolean {
-  return search.pinned === true || search.hasSlug === true || search.forwarding === true || search.scope !== undefined;
+  return (
+    search.pinned === true ||
+    search.hasSlug === true ||
+    search.forwarding === true ||
+    search.scope !== undefined ||
+    search.folderId !== undefined ||
+    (search.tag?.length ?? 0) > 0
+  );
 }
 
-/** The filters, sort and size a request for the list carries; the cursor is added by the query. */
-export interface BookmarkListParams {
+/** The filters "select all matching" can name: the identifiers endpoint takes these and no folder or tag. */
+export interface BookmarkFilterParams {
   readonly pinned?: "true";
   readonly hasSlug?: "true";
   readonly forwarding?: "true";
   readonly scope?: "mine";
-  readonly sort: BookmarkSort;
-  readonly limit: BookmarkPageSize;
 }
 
 /** The parameters that choose which bookmarks the list holds; the sort and the size only shape how they are laid out. */
-export type BookmarkFilterParams = Omit<BookmarkListParams, "sort" | "limit">;
+export interface BookmarkListFilterParams extends BookmarkFilterParams {
+  readonly folderId?: string;
+  readonly tag?: string[];
+}
+
+/** The search without its folder filter, for a folder the member does not have. */
+export function withoutFolder(search: BookmarkListSearch): BookmarkListSearch {
+  const rest = { ...search };
+  Reflect.deleteProperty(rest, "folderId");
+  return rest;
+}
+
+/** The filters, sort and size a request for the list carries; the cursor is added by the query. */
+export interface BookmarkListParams extends BookmarkListFilterParams {
+  readonly sort: BookmarkSort;
+  readonly limit: BookmarkPageSize;
+}
 
 export function filterParamsOf(search: BookmarkListSearch): BookmarkFilterParams {
   return {
@@ -123,13 +174,22 @@ export function filterParamsOf(search: BookmarkListSearch): BookmarkFilterParams
   };
 }
 
+/** Every filter that chooses which bookmarks the list holds, the folder and the tags included. */
+export function listFilterParamsOf(search: BookmarkListSearch): BookmarkListFilterParams {
+  return {
+    ...filterParamsOf(search),
+    ...(search.folderId === undefined ? {} : { folderId: search.folderId }),
+    ...(search.tag === undefined || search.tag.length === 0 ? {} : { tag: [...search.tag] }),
+  };
+}
+
 export function listParamsOf(search: BookmarkListSearch): BookmarkListParams {
-  return { ...filterParamsOf(search), sort: search.sort ?? DEFAULT_SORT, limit: pageSizeOfSearch(search) };
+  return { ...listFilterParamsOf(search), sort: search.sort ?? DEFAULT_SORT, limit: pageSizeOfSearch(search) };
 }
 
 export interface BookmarkListControls {
   /** Changes parameters of the list, as a navigation: back returns to the list as it was. A key set to `undefined` is removed. */
-  readonly update: (changes: { readonly [Key in keyof BookmarkListSearch]: BookmarkListSearch[Key] | undefined }) => void;
+  readonly update: (changes: { readonly [Key in keyof BookmarkListSearch]: BookmarkListSearch[Key] | undefined }, options?: { readonly replace?: boolean }) => void;
   /** Removes every filter and keeps the sort, the view and the size. */
   readonly clearFilters: () => void;
 }
@@ -137,30 +197,32 @@ export interface BookmarkListControls {
 /** The ways to change the list's parameters from the page. Whatever else the address holds (the bookmark modal's parameters) stays. */
 export function useBookmarkListControls(): BookmarkListControls {
   const navigate = useNavigate();
-  function go(change: (previous: Record<string, unknown>) => Record<string, unknown>): void {
-    void navigate({ to: ".", search: (previous) => change(previous) });
-  }
-  return {
-    update: (changes) => {
-      go((previous) => {
-        const next: Record<string, unknown> = { ...previous, ...changes };
-        const entries: [string, unknown][] = Object.entries(changes);
-        for (const [key, value] of entries) {
-          if (value === undefined) {
+  return useMemo(() => {
+    function go(change: (previous: Record<string, unknown>) => Record<string, unknown>, replace: boolean): void {
+      void navigate({ to: ".", search: (previous) => change(previous), replace });
+    }
+    return {
+      update: (changes, options) => {
+        go((previous) => {
+          const next: Record<string, unknown> = { ...previous, ...changes };
+          const entries: [string, unknown][] = Object.entries(changes);
+          for (const [key, value] of entries) {
+            if (value === undefined) {
+              Reflect.deleteProperty(next, key);
+            }
+          }
+          return next;
+        }, options?.replace === true);
+      },
+      clearFilters: () => {
+        go((previous) => {
+          const next = { ...previous };
+          for (const key of ["pinned", "hasSlug", "forwarding", "scope", "folderId", "tag"]) {
             Reflect.deleteProperty(next, key);
           }
-        }
-        return next;
-      });
-    },
-    clearFilters: () => {
-      go((previous) => {
-        const next = { ...previous };
-        for (const key of ["pinned", "hasSlug", "forwarding", "scope"]) {
-          Reflect.deleteProperty(next, key);
-        }
-        return next;
-      });
-    },
-  };
+          return next;
+        }, false);
+      },
+    };
+  }, [navigate]);
 }

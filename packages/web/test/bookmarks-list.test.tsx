@@ -35,6 +35,8 @@ function bookmark(n: number, overrides: Partial<Bookmark> = {}): Bookmark {
     pinned: false,
     openCount: 0,
     lastOpenedAt: null,
+    folders: [],
+    tags: [],
     version: 3,
     createdAt: "2026-10-01T08:00:00.000Z",
     updatedAt: "2026-10-01T08:00:00.000Z",

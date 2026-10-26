@@ -7,7 +7,7 @@ const ALICE = "0192f3a0-bbbb-7000-8000-00000000000B";
 function record(id: string): BookmarkRecord {
   return {
     id, ownerId: ALICE.toLowerCase(), url: "https://example.com/", host: "example.com", title: id, description: null, slug: null, forwarding: false, pinned: false,
-    openCount: 0, lastOpenedAt: null, version: 1, createdAt: new Date(0), updatedAt: new Date(0),
+    openCount: 0, lastOpenedAt: null, folders: [], tags: [], version: 1, createdAt: new Date(0), updatedAt: new Date(0),
   };
 }
 
@@ -50,6 +50,41 @@ function ask(overrides: Partial<BookmarkListAsk> = {}): BookmarkListAsk {
 const ROWS: readonly BookmarkListRow[] = ["a", "b", "c"].map((id) => ({ bookmark: record(id), key: `key-${id}` }));
 
 describe("listBookmarks", () => {
+  it("hands the store the folder to narrow to, in lower case, and seals the cursor for that folder alone", async () => {
+    const { port, lists, counts } = store(ROWS);
+    const { codec } = cursors();
+    const folder = "0192f3a0-dddd-7000-8000-00000000000A";
+    const dependencies = { store: port, cursors: codec };
+
+    const first = await listBookmarks(dependencies, ask({ folderId: folder }));
+
+    expect(lists[0]?.filter.folderId).toBe(folder.toLowerCase());
+    expect(counts[0]?.filter.folderId).toBe(folder.toLowerCase());
+    expect(first).toMatchObject({ kind: "listed", nextCursor: "cursor-0" });
+    expect(await listBookmarks(dependencies, ask({ folderId: folder, cursor: "cursor-0" }))).toMatchObject({ kind: "listed" });
+    expect(await listBookmarks(dependencies, ask({ folderId: "0192f3a0-dddd-7000-8000-00000000000b", cursor: "cursor-0" }))).toEqual({ kind: "bad_cursor" });
+    expect(await listBookmarks(dependencies, ask({ cursor: "cursor-0" }))).toEqual({ kind: "bad_cursor" });
+  });
+
+  it("hands the store the tags to narrow to, in lower case, without repeats and in a stable order, and seals the cursor for that set alone", async () => {
+    const { port, lists, counts } = store(ROWS);
+    const { codec } = cursors();
+    const upper = "0192f3a0-ffff-7000-8000-00000000000B";
+    const lower = "0192f3a0-ffff-7000-8000-00000000000a";
+    const dependencies = { store: port, cursors: codec };
+
+    const page = await listBookmarks(dependencies, ask({ tagIds: [upper, lower, upper.toLowerCase()] }));
+
+    expect(lists[0]?.filter.tagIds).toEqual(["0192f3a0-ffff-7000-8000-00000000000a", "0192f3a0-ffff-7000-8000-00000000000b"]);
+    expect(counts[0]?.filter.tagIds).toEqual(lists[0]?.filter.tagIds);
+    expect(page).toMatchObject({ kind: "listed", nextCursor: "cursor-0" });
+    // The same tags in another order and spelling are the same list.
+    expect(await listBookmarks(dependencies, ask({ tagIds: [lower, upper.toLowerCase()], cursor: "cursor-0" }))).toMatchObject({ kind: "listed" });
+    // A cursor of the AND of two tags opens neither for one of them nor for none.
+    expect(await listBookmarks(dependencies, ask({ tagIds: [lower], cursor: "cursor-0" }))).toEqual({ kind: "bad_cursor" });
+    expect(await listBookmarks(dependencies, ask({ cursor: "cursor-0" }))).toEqual({ kind: "bad_cursor" });
+  });
+
   it("returns a page, asks the store for one more bookmark than the page to know whether another follows, and seals the cursor at the last item of the page", async () => {
     const { port, lists } = store(ROWS);
     const { codec, sealed } = cursors();

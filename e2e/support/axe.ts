@@ -58,14 +58,27 @@ function selectorOf(target: readonly unknown[]): string {
  * Waits until every running animation of the page that ends has ended. A dialog that is still fading and
  * growing in has the contrast and the size of a frame on the way, not of the page the visitor gets; an
  * animation that never ends (a spinner) is left alone, and so is one that is paused or idle, whose finished
- * promise settles only once something plays it again.
+ * promise settles only once something plays it again. A dialog opens with a starting style that is removed a
+ * frame later, and only then does its transition start, so the frames pass before the animations are read, and
+ * they are read again once those have ended, in case one started meanwhile.
  */
 export async function settleAnimations(page: Page): Promise<void> {
   await page.evaluate(async () => {
-    const finite = document
-      .getAnimations()
-      .filter((animation) => animation.playState === "running" && animation.effect?.getComputedTiming().iterations !== Infinity);
-    await Promise.all(finite.map((animation) => animation.finished.catch(() => undefined)));
+    const frame = (): Promise<void> =>
+      new Promise((resolve) => {
+        requestAnimationFrame(() => {
+          resolve();
+        });
+      });
+    let finite: Animation[];
+    do {
+      await frame();
+      await frame();
+      finite = document
+        .getAnimations()
+        .filter((animation) => animation.playState === "running" && animation.effect?.getComputedTiming().iterations !== Infinity);
+      await Promise.all(finite.map((animation) => animation.finished.catch(() => undefined)));
+    } while (finite.length > 0);
   });
 }
 

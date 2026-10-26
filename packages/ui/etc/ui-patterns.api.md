@@ -8,14 +8,18 @@ import { BookmarkIcon } from 'lucide-react';
 import { ChangeEventHandler } from 'react';
 import type { ClipboardEvent as ClipboardEvent_2 } from 'react';
 import { CompassIcon } from 'lucide-react';
+import { ExternalLinkIcon } from 'lucide-react';
 import { FilterXIcon } from 'lucide-react';
 import type { FocusEvent as FocusEvent_2 } from 'react';
+import { FolderIcon } from 'lucide-react';
 import { HomeIcon } from 'lucide-react';
 import { InboxIcon } from 'lucide-react';
 import { LayoutGridIcon } from 'lucide-react';
 import { LifeBuoyIcon } from 'lucide-react';
 import { LockIcon } from 'lucide-react';
 import { LogOutIcon } from 'lucide-react';
+import { LucideIcon } from 'lucide-react';
+import { PaletteIcon } from 'lucide-react';
 import { PencilIcon } from 'lucide-react';
 import { PinIcon } from 'lucide-react';
 import { PinOffIcon } from 'lucide-react';
@@ -26,8 +30,10 @@ import { Ref } from 'react';
 import { SettingsIcon } from 'lucide-react';
 import { ShieldCheckIcon } from 'lucide-react';
 import { TableIcon } from 'lucide-react';
+import { TagIcon } from 'lucide-react';
 import { Trash2Icon } from 'lucide-react';
 import { TriangleAlertIcon } from 'lucide-react';
+import { XIcon } from 'lucide-react';
 
 // @public
 export type Accent = "periwinkle" | "violet" | "rose" | "amber" | "green" | "teal";
@@ -428,6 +434,8 @@ export interface EmptyStateProps {
     title: ReactNode;
 }
 
+export { ExternalLinkIcon }
+
 // @public
 export const feedbackToast: {
     info: (title: string, description?: ReactNode) => string;
@@ -446,6 +454,11 @@ export interface FeedbackToastProviderProps {
 }
 
 export { FilterXIcon }
+
+// @public
+export const FOLDER_ICON_COMPONENTS: Readonly<Record<string, LucideIcon>>;
+
+export { FolderIcon }
 
 // @public
 export function FormField(input: FormFieldProps): ReactElement;
@@ -555,6 +568,39 @@ export interface MetricTileProps {
 }
 
 // @public
+export function MultiPick(input: MultiPickProps): ReactElement;
+
+// @public
+export interface MultiPickCreate {
+    label: (name: string) => string;
+    onCreate: (name: string) => void;
+}
+
+// @public (undocumented)
+export interface MultiPickProps {
+    // (undocumented)
+    className?: string;
+    creatable?: MultiPickCreate;
+    description?: ReactNode;
+    // (undocumented)
+    disabled?: boolean;
+    emptyLabel: ReactNode;
+    error?: ReactNode;
+    // (undocumented)
+    label: ReactNode;
+    loadingLabel?: ReactNode;
+    // (undocumented)
+    onValueChange: (value: string[]) => void;
+    options: readonly PickerOption[];
+    placeholder?: string;
+    removeLabel: (label: string) => string;
+    unavailableLabel?: ReactNode;
+    value: readonly string[];
+}
+
+export { PaletteIcon }
+
+// @public
 export type PasswordScore = 0 | 1 | 2 | 3 | 4;
 
 // @public
@@ -578,6 +624,7 @@ export function Picker(input: PickerProps): ReactElement;
 // @public (undocumented)
 export interface PickerOption {
     description?: string;
+    icon?: ReactNode;
     // (undocumented)
     label: string;
     // (undocumented)
@@ -595,11 +642,13 @@ export interface PickerProps {
     error?: ReactNode;
     // (undocumented)
     label: ReactNode;
+    loadingLabel?: ReactNode;
     // (undocumented)
     onValueChange: (value: string) => void;
     // (undocumented)
     options: readonly PickerOption[];
     placeholder?: string;
+    unavailableLabel?: ReactNode;
     value: string | undefined;
 }
 
@@ -684,6 +733,7 @@ export interface SegmentedChoiceProps {
     // (undocumented)
     disabled?: boolean;
     error?: ReactNode;
+    iconOnly?: boolean;
     label: ReactNode;
     name?: string;
     // (undocumented)
@@ -867,6 +917,23 @@ export interface ShownOnceProps {
 }
 
 // @public
+export function SidePanel(input: SidePanelProps): ReactElement;
+
+// @public (undocumented)
+export interface SidePanelProps {
+    children: ReactNode;
+    closeLabel: string;
+    // (undocumented)
+    description?: ReactNode;
+    // (undocumented)
+    onOpenChange: (open: boolean) => void;
+    // (undocumented)
+    open: boolean;
+    // (undocumented)
+    title: ReactNode;
+}
+
+// @public
 export function StatusBadge(input: StatusBadgeProps): ReactElement;
 
 // @public (undocumented)
@@ -882,6 +949,8 @@ export interface StatusBadgeProps {
 export type StatusBadgeVariant = "info" | "neutral" | "success" | "warning" | "error";
 
 export { TableIcon }
+
+export { TagIcon }
 
 // @public
 export function TextareaField(input: TextareaFieldProps): ReactElement;
@@ -1001,6 +1070,19 @@ export interface UrlInputProps {
 }
 
 // @public
+export function UsageMeter(input: UsageMeterProps): ReactElement;
+
+// @public (undocumented)
+export interface UsageMeterProps {
+    // (undocumented)
+    className?: string;
+    label: string;
+    max: number;
+    value: number;
+    valueLabel: string;
+}
+
+// @public
 export function Wizard(input: WizardProps): ReactElement;
 
 // @public (undocumented)
@@ -1070,6 +1152,8 @@ export interface WorkspaceSwitcherProps {
     retryLabel: string;
     workspaces: readonly WorkspaceSwitcherItem[];
 }
+
+export { XIcon }
 
 // (No @packageDocumentation comment for this package)
 

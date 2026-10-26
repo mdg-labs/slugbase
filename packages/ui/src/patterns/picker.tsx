@@ -9,6 +9,8 @@ export interface PickerOption {
   label: string;
   /** A second line that tells options of one label apart, such as an email address; the search reads it too. */
   description?: string;
+  /** A decorative icon shown before the label in the list and in the field once the option is chosen. */
+  icon?: ReactNode;
 }
 
 export interface PickerProps {
@@ -23,8 +25,12 @@ export interface PickerProps {
   onValueChange: (value: string) => void;
   /** Shown in the input while nothing is chosen. */
   placeholder?: string;
-  /** Shown in the list when no option matches the search, or when there are none. */
+  /** Shown in the list when no option matches the search, or when there are none. Not shown while the options are loading or could not be loaded. */
   emptyLabel: ReactNode;
+  /** Set while the options are still being read; the list says so instead of saying there are none. */
+  loadingLabel?: ReactNode;
+  /** Set when the options could not be read; the list says so instead of saying there are none. */
+  unavailableLabel?: ReactNode;
   disabled?: boolean;
   className?: string;
 }
@@ -36,11 +42,13 @@ function matches(option: PickerOption, query: string): boolean {
 
 /**
  * One option out of many, chosen by searching (doc 03 `picker`): a Base UI combobox whose input filters the list by
- * label and description, with a message in the list when nothing matches.
+ * label and description, with a message in the list when nothing matches. The list says it is loading, or that it
+ * could not be read, instead of saying there is nothing to choose.
  */
-export function Picker({ label, description, error, options, value, onValueChange, placeholder, emptyLabel, disabled, className }: PickerProps): ReactElement {
+export function Picker({ label, description, error, options, value, onValueChange, placeholder, emptyLabel, loadingLabel, unavailableLabel, disabled, className }: PickerProps): ReactElement {
   const invalid = error !== undefined && error !== null && error !== false;
   const selected = options.find((option) => option.value === value) ?? null;
+  const listed = loadingLabel !== undefined || unavailableLabel !== undefined;
   return (
     <Field className={cn("items-stretch gap-1.5", className)} disabled={disabled} invalid={invalid}>
       <FieldLabel>{label}</FieldLabel>
@@ -57,8 +65,13 @@ export function Picker({ label, description, error, options, value, onValueChang
         value={selected}
       >
         <div className="relative">
+          {selected?.icon === undefined ? null : (
+            <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 start-3 flex items-center text-muted-foreground">
+              {selected.icon}
+            </span>
+          )}
           <Combobox.Input
-            className="h-9 w-full min-w-0 rounded-lg border border-input bg-background px-3 pe-9 text-base text-foreground shadow-xs/5 outline-none ring-ring/24 transition-shadow placeholder:text-muted-foreground/72 focus-visible:border-ring focus-visible:ring-[3px] aria-invalid:border-destructive/36 disabled:opacity-64 sm:h-8 sm:text-sm dark:bg-input/32"
+            className={cn("h-9 w-full min-w-0 rounded-lg border border-input bg-background px-3 pe-9 text-base text-foreground shadow-xs/5 outline-none ring-ring/24 transition-shadow placeholder:text-muted-foreground/72 focus-visible:border-ring focus-visible:ring-[3px] aria-invalid:border-destructive/36 disabled:opacity-64 sm:h-8 sm:text-sm dark:bg-input/32", selected?.icon !== undefined && "ps-9")}
             data-slot="picker-input"
             placeholder={placeholder}
           />
@@ -76,16 +89,33 @@ export function Picker({ label, description, error, options, value, onValueChang
               className="w-(--anchor-width) origin-(--transform-origin) rounded-lg border bg-popover text-foreground shadow-lg/5 outline-none"
               data-slot="picker-popup"
             >
-              <Combobox.Empty className="px-3 py-2 text-muted-foreground text-sm empty:hidden">{emptyLabel}</Combobox.Empty>
+              {loadingLabel === undefined ? null : (
+                <div className="px-3 py-2 text-muted-foreground text-sm" data-slot="picker-loading" role="status">
+                  {loadingLabel}
+                </div>
+              )}
+              {unavailableLabel === undefined ? null : (
+                <div className="px-3 py-2 text-destructive-text text-sm" data-slot="picker-unavailable" role="alert">
+                  {unavailableLabel}
+                </div>
+              )}
+              <Combobox.Empty className="px-3 py-2 text-muted-foreground text-sm empty:hidden">{listed ? null : emptyLabel}</Combobox.Empty>
               <Combobox.List className="max-h-60 overflow-y-auto p-1 empty:hidden" data-slot="picker-list">
                 {(option: PickerOption) => (
                   <Combobox.Item
-                    className="flex min-h-8 cursor-default flex-col justify-center rounded-sm px-2 py-1 text-base outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground sm:text-sm"
+                    className="flex min-h-8 cursor-default items-center gap-2 rounded-sm px-2 py-1 text-base outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground sm:text-sm"
                     key={option.value}
                     value={option}
                   >
-                    <span className="wrap-anywhere">{option.label}</span>
-                    {option.description === undefined ? null : <span className="wrap-anywhere text-muted-foreground text-xs">{option.description}</span>}
+                    {option.icon === undefined ? null : (
+                      <span aria-hidden="true" className="shrink-0 text-muted-foreground">
+                        {option.icon}
+                      </span>
+                    )}
+                    <span className="flex min-w-0 flex-col">
+                      <span className="wrap-anywhere">{option.label}</span>
+                      {option.description === undefined ? null : <span className="wrap-anywhere text-muted-foreground text-xs">{option.description}</span>}
+                    </span>
                   </Combobox.Item>
                 )}
               </Combobox.List>

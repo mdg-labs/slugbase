@@ -10,7 +10,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { CasingCache } from "drizzle-orm/casing";
-import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
+import { getTableConfig, type PgColumn, type PgTable } from "drizzle-orm/pg-core";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
 import {
   registerRepositoryMethods,
@@ -124,9 +124,15 @@ function assertWorkspaceColumn(name: string, table: PgTable): void {
 
 type TenantHandle = ReturnType<typeof tenantHandle>;
 
+/** The columns of the primary key of the table: the column marked as the key, or the columns of a composite key. */
+function keyColumnsOf(table: PgTable): PgColumn[] {
+  const marked = Object.values(getTableColumns(table)).filter((column) => column.primary);
+  return marked.length > 0 ? marked : (getTableConfig(table).primaryKeys[0]?.columns ?? []);
+}
+
 /**
  * An insert that names the columns it is given and no other, inside the list `allowed` and the workspace; the row is read back by its primary
- * key, with the workspace predicate of `scope`.
+ * key (all its columns, when it is a composite one), with the workspace predicate of `scope`.
  */
 async function insertNamed(
   handle: TenantHandle,
@@ -141,10 +147,9 @@ async function insertNamed(
   if (refused !== undefined) {
     throw new Error(`the column ${refused} of ${getTableName(table)} is not one the repository inserts`);
   }
-  const primary = Object.values(columns).filter((column) => column.primary);
-  const key = primary[0];
-  if (primary.length !== 1 || key === undefined) {
-    throw new Error(`the table ${getTableName(table)} has no single-column primary key to read an inserted row back by`);
+  const keys = keyColumnsOf(table);
+  if (keys.length === 0) {
+    throw new Error(`the table ${getTableName(table)} has no primary key to read an inserted row back by`);
   }
   const named = (column: PgColumn): Name => sql.identifier(casing.getColumnCasing(column));
   const entries = given.map((name) => {
@@ -157,12 +162,12 @@ async function insertNamed(
   const inserted = await handle.execute(sql`
     INSERT INTO ${table} (${sql.join(entries.map(named), sql`, `)})
     VALUES (${sql.join(entries.map((column, index) => sql`${sql.param(written[given[index] ?? ""], column)}`), sql`, `)})
-    RETURNING ${named(key)} AS "primary_key"`);
-  const id = inserted[0]?.["primary_key"];
-  if (inserted.length !== 1 || id === undefined) {
+    RETURNING ${sql.join(keys.map((key, index) => sql`${named(key)} AS ${sql.identifier(`primary_key_${String(index)}`)}`), sql`, `)}`);
+  const values = keys.map((_key, index) => inserted[0]?.[`primary_key_${String(index)}`]);
+  if (inserted.length !== 1 || values.some((value) => value === undefined)) {
     throw new Error("an insert returned no row");
   }
-  const [row] = await handle.select().from(table).where(scope(eq(key, id)));
+  const [row] = await handle.select().from(table).where(scope(and(...keys.map((key, index) => eq(key, values[index])))));
   if (row === undefined) {
     throw new Error("an inserted row cannot be read back");
   }

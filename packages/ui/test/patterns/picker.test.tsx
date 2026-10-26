@@ -74,4 +74,40 @@ describe("Picker", () => {
     expect(screen.getByText("Choose a recipient.")).toBeTruthy();
     await expectNoViolations(container);
   });
+
+  it("draws an option's icon in the list and in the field once the option is chosen, as decoration", async () => {
+    const options = [
+      { value: "star", label: "Star", icon: <svg data-testid="star-icon" /> },
+      { value: "moon", label: "Moon" },
+    ];
+    const { rerender } = render(<Picker emptyLabel="Nothing" label="Icon" onValueChange={() => undefined} options={options} value="moon" />);
+    expect(screen.queryByTestId("star-icon")).toBeNull();
+
+    rerender(<Picker emptyLabel="Nothing" label="Icon" onValueChange={() => undefined} options={options} value="star" />);
+
+    expect(screen.getByTestId("star-icon").closest("[aria-hidden='true']")).not.toBeNull();
+    expect(screen.getByRole<HTMLInputElement>("combobox", { name: "Icon" }).className).toContain("ps-9");
+    await act(async () => {
+      const input = screen.getByRole("combobox", { name: "Icon" });
+      fireEvent.pointerDown(input);
+      fireEvent.mouseDown(input);
+      fireEvent.click(input);
+      await Promise.resolve();
+    });
+    expect((await screen.findAllByRole("option")).map((option) => option.textContent)).toEqual(["Star", "Moon"]);
+    expect(screen.getAllByTestId("star-icon")).toHaveLength(2);
+  });
+
+  it("says the options are loading, or could not be read, and not that there are none", async () => {
+    const { rerender } = render(<Picker emptyLabel="Nobody" label="Recipient" loadingLabel="Loading members" onValueChange={() => undefined} options={[]} value={undefined} />);
+    await open();
+    expect((await screen.findByText("Loading members")).getAttribute("data-slot")).toBe("picker-loading");
+    expect(screen.queryByText("Nobody")).toBeNull();
+
+    rerender(<Picker emptyLabel="Nobody" label="Recipient" onValueChange={() => undefined} options={[]} unavailableLabel="The members could not be loaded" value={undefined} />);
+    const failed = await screen.findByText("The members could not be loaded");
+    expect(failed.getAttribute("data-slot")).toBe("picker-unavailable");
+    expect(failed.getAttribute("role")).toBe("alert");
+    expect(screen.queryByText("Nobody")).toBeNull();
+  });
 });

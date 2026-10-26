@@ -50,11 +50,25 @@ function numberFrom(schema: Readonly<Record<string, unknown>>, integer: boolean)
   return integer ? Math.ceil(value) : value;
 }
 
+/** The property that names the next page of a list; the contract says it is null on the last page. */
+const NEXT_PAGE_PROPERTY = "nextCursor";
+
+function allowsNull(document: OpenApiDocument, value: unknown): boolean {
+  const schema = dereference(document, value);
+  return isRecord(schema) && Array.isArray(schema.type) && schema.type.includes("null");
+}
+
 function generateObject(document: OpenApiDocument, schema: Readonly<Record<string, unknown>>, stack: readonly string[]): unknown {
   const required = new Set(Array.isArray(schema.required) ? schema.required.filter((key) => typeof key === "string") : []);
   const result: Record<string, unknown> = {};
   if (isRecord(schema.properties)) {
     for (const [name, property] of Object.entries(schema.properties)) {
+      // A generated list is one page and the last: a cursor to a further page would send a reader that follows it to the
+      // end (the sidebar's folders) through pages that never stop. A scenario that needs a next page sets its own fixture.
+      if (name === NEXT_PAGE_PROPERTY && allowsNull(document, property)) {
+        result[name] = null;
+        continue;
+      }
       const value = generate(document, property, stack);
       if (value === CYCLE) {
         if (required.has(name)) {

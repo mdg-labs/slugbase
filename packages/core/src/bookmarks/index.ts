@@ -6,11 +6,14 @@ export type {
   BookmarkCreationDependencies,
   BookmarkCreationOutcome,
   BookmarkCreationRequest,
+  BookmarkFolderRef,
   BookmarkRecord,
   BookmarkStore,
   BookmarkStoreResult,
   NewBookmark,
 } from "./create.ts";
+export { bookmarkTagSelection } from "./tagging.ts";
+export type { BookmarkTagName, BookmarkTagRef, BookmarkTagSelection } from "./tagging.ts";
 export { readBookmark } from "./read.ts";
 export type { BookmarkReadAsk, BookmarkReadDependencies } from "./read.ts";
 export { updateBookmark } from "./update.ts";

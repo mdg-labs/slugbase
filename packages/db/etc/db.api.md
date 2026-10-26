@@ -11,10 +11,12 @@ import { BookmarkListFilter } from '@slugbase/core';
 import { BookmarkListRequest } from '@slugbase/core';
 import { BookmarkListRow } from '@slugbase/core';
 import { BookmarkRecord } from '@slugbase/core';
+import { BookmarkTagSelection } from '@slugbase/core';
 import { BookmarkUpdateRequest } from '@slugbase/core';
 import { BookmarkUpdateResult } from '@slugbase/core';
 import type { CredentialTokenPurpose } from '@slugbase/core';
 import type { EntitlementVersionWriter } from '@slugbase/core';
+import type { FolderFilingStore } from '@slugbase/core';
 import type { FolderStore } from '@slugbase/core';
 import { InferInsertModel } from 'drizzle-orm';
 import { InferSelectModel } from 'drizzle-orm';
@@ -46,8 +48,8 @@ import type { InvitationSignupSession } from '@slugbase/core';
 import type { InvitationStore } from '@slugbase/core';
 import type { MemberRoleStore } from '@slugbase/core';
 import { NewBookmark } from '@slugbase/core';
-import type { PgColumn } from 'drizzle-orm/pg-core';
-import type { PgTable } from 'drizzle-orm/pg-core';
+import { PgColumn } from 'drizzle-orm/pg-core';
+import { PgTable } from 'drizzle-orm/pg-core';
 import { SQL } from 'drizzle-orm';
 import type { TagStore } from '@slugbase/core';
 import type { WorkspaceAdministrationStore } from '@slugbase/core';
@@ -290,7 +292,9 @@ export interface BookmarkCreation {
     // (undocumented)
     readonly bookmark: NewBookmark;
     readonly ceiling: number | null;
+    readonly folderIds?: readonly string[];
     readonly jobs: readonly QueuedJob[];
+    readonly tags?: BookmarkTagSelection;
 }
 
 // @public (undocumented)
@@ -306,6 +310,14 @@ export type BookmarkCreationResult = {
 /** The workspace of the transaction cannot be reached: it is being deleted, or the account is no member of it. */
 | {
     readonly kind: "unavailable";
+}
+/** A folder is not one the owner has in the workspace; nothing is written. */
+| {
+    readonly kind: "folder_not_found";
+}
+/** A tag named by identifier is not one the owner has in the workspace; nothing is written. */
+| {
+    readonly kind: "tag_not_found";
 };
 
 // @public (undocumented)
@@ -512,7 +524,7 @@ export interface EntitlementUsage {
 }
 
 // @public (undocumented)
-export type FolderRepository = FolderStore;
+export type FolderRepository = FolderStore & FolderFilingStore;
 
 // @public (undocumented)
 export function folderRepository(tx: TenantTx): FolderRepository;

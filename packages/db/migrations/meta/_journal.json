@@ -575,6 +575,20 @@
       "when": 1792865637516,
       "tag": "20261024181357_add_folder_departure",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1792927933111,
+      "tag": "20261025113213_add_folder_filing",
+      "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1792933850606,
+      "tag": "20261025131050_add_bookmark_tagging",
+      "breakpoints": true
     }
   ]
 }

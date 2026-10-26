@@ -3,6 +3,7 @@ import { useRouter } from "@tanstack/react-router";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { useFormat } from "../i18n/use-format.ts";
+import { FolderDots, TagBadges } from "./bookmark-labels.tsx";
 import { isHttpUrl, recordOpen, type Bookmark } from "./bookmarks.ts";
 
 export interface BookmarkActionHandlers {
@@ -80,6 +81,12 @@ export function BookmarkCard({ bookmark, pinPending, selected, selectionActive, 
       subtitle={bookmark.host}
       title={bookmark.title}
     >
+      {bookmark.folders.length === 0 && bookmark.tags.length === 0 ? null : (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <FolderDots folders={bookmark.folders} />
+          <TagBadges tags={bookmark.tags} />
+        </div>
+      )}
       <div className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-xs">
         {bookmark.slug === null ? (
           <span className="text-muted-foreground">{t("bookmarks.list.noSlug")}</span>

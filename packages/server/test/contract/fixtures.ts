@@ -38,6 +38,9 @@ export const UNKNOWN_BOOKMARK_ID = "0192f3a0-cccc-7000-8000-000000000008";
 /** A tag no workspace holds: the walker's request to rename or delete it is the declared 404. */
 export const UNKNOWN_TAG_ID = "0192f3a0-cccc-7000-8000-00000000000a";
 
+/** A second tag no workspace holds: the target of the walker's request to merge a tag, which must not be the tag it merges. */
+export const UNKNOWN_TARGET_TAG_ID = "0192f3a0-cccc-7000-8000-00000000000c";
+
 /** A folder no workspace holds: the walker's request to read, change or delete it is the declared 404. */
 export const UNKNOWN_FOLDER_ID = "0192f3a0-cccc-7000-8000-00000000000b";
 
@@ -229,7 +232,12 @@ export const FIXTURES: ContractFixtures = {
   // nothing, so the valid request is the declared 201. The reading names a bookmark by identifier, and the walker cannot know the identifier of one it
   // would own, so its valid request names a bookmark that no workspace holds, which is the declared 404 whoever would hold it, and so is a bookmark of
   // workspace B; the route tests read the walker's own bookmarks, and the matrix puts the bookmarks of workspace B in the path.
-  createBookmark: { body: { url: "https://example.com/walker", title: "Walker bookmark" } },
+  // The creation also takes `folderIds` and `tagIds`, which the matrix picks as inputs that can carry an identifier: a folder or a tag of workspace B is
+  // refused with the declared 404, and nothing is created, whoever would hold them.
+  createBookmark: {
+    body: { url: "https://example.com/walker", title: "Walker bookmark" },
+    foreign: { body: { url: "https://example.com/walker", title: "Walker bookmark", folderIds: [UNKNOWN_FOLDER_ID], tagIds: [UNKNOWN_TAG_ID] } },
+  },
   // The list names no identifier and acts in the workspace of the request: the walker lists the bookmarks of the workspace it owns. The matrix picks
   // the input `hasSlug` as one that can carry an identifier, because its name ends in `Slug`; it is a boolean filter, so the identifier the matrix puts
   // in it is refused as a malformed query (422) and never reaches a bookmark, whichever workspace holds it.
@@ -260,6 +268,16 @@ export const FIXTURES: ContractFixtures = {
   listTags: {},
   renameTag: { path: { id: UNKNOWN_TAG_ID }, body: { name: "Walker tag" }, status: 404, foreign: { path: { id: UNKNOWN_TAG_ID }, body: { name: "Walker tag" } } },
   deleteTag: { path: { id: UNKNOWN_TAG_ID }, status: 404, foreign: { path: { id: UNKNOWN_TAG_ID } } },
+  // The merge names two tags, the one in the path and the target in the body, and acts on the caller's own only: the valid request names two that no workspace holds,
+  // the declared 404, and the matrix puts the tags of workspace B in both places, where it is the same 404 whichever of them it is (even the same tag twice, which is
+  // judged only after the tags are found). The statistics name no identifier and act in the workspace of the request.
+  mergeTag: {
+    path: { id: UNKNOWN_TAG_ID },
+    body: { intoTagId: UNKNOWN_TARGET_TAG_ID },
+    status: 404,
+    foreign: { path: { id: UNKNOWN_TAG_ID }, body: { intoTagId: UNKNOWN_TARGET_TAG_ID } },
+  },
+  getTagStats: {},
   // The folders of the member who makes them, like the tags: the creation and the list name no identifier of any workspace, so the walker's valid request
   // to create is the declared 201, and the read, the change and the deletion name a folder no workspace holds, the declared 404, which the matrix replaces
   // with the folder of workspace B.
@@ -268,6 +286,20 @@ export const FIXTURES: ContractFixtures = {
   getFolder: { path: { id: UNKNOWN_FOLDER_ID }, status: 404, foreign: { path: { id: UNKNOWN_FOLDER_ID } } },
   updateFolder: { path: { id: UNKNOWN_FOLDER_ID }, body: { name: "Walker folder" }, status: 404, foreign: { path: { id: UNKNOWN_FOLDER_ID }, body: { name: "Walker folder" } } },
   deleteFolder: { path: { id: UNKNOWN_FOLDER_ID }, status: 404, foreign: { path: { id: UNKNOWN_FOLDER_ID } } },
+  // Filing names a folder in the path and the bookmarks in the body, and acts on the caller's own folders and bookmarks only: the valid request names a
+  // folder and a bookmark that no workspace holds, the declared 404 whoever would hold them, and so does the request naming those of workspace B.
+  addFolderBookmarks: {
+    path: { id: UNKNOWN_FOLDER_ID },
+    body: { bookmarkIds: [UNKNOWN_BOOKMARK_ID] },
+    status: 404,
+    foreign: { path: { id: UNKNOWN_FOLDER_ID }, body: { bookmarkIds: [UNKNOWN_BOOKMARK_ID] } },
+  },
+  removeFolderBookmarks: {
+    path: { id: UNKNOWN_FOLDER_ID },
+    body: { bookmarkIds: [UNKNOWN_BOOKMARK_ID] },
+    status: 404,
+    foreign: { path: { id: UNKNOWN_FOLDER_ID }, body: { bookmarkIds: [UNKNOWN_BOOKMARK_ID] } },
+  },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

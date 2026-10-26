@@ -355,10 +355,10 @@ describe("the requests that redeem an invitation token (T8)", () => {
     readonly call: (world: AuthWorld, token: string, from: string) => Promise<Response>;
   }
 
-  /** The three requests, each one from the address it names; the signed-in acceptance is made by an account of its own so that its per-account count reads the same. */
-  async function forms(): Promise<readonly Form[]> {
+  /** The three requests, each one from the address it names; the signed-in acceptance is made by `accounts` accounts in turn, so that its per-account count reads the same while no account is used twice. */
+  async function forms(accounts = 24): Promise<readonly Form[]> {
     const setup = serveAuth(database(), store);
-    const people = await Promise.all(Array.from({ length: 24 }, () => harness.person(setup)));
+    const people = await Promise.all(Array.from({ length: accounts }, () => harness.person(setup)));
     let next = 0;
     return [
       { name: "the inspection", call: (world, token, from) => inspect(world, token, { "x-forwarded-for": from }) },
@@ -381,9 +381,12 @@ describe("the requests that redeem an invitation token (T8)", () => {
     const world = serveAuth(database(), store, { env: { ...REDEEM_ENV, TRUSTED_PROXY_HOPS: "1" } });
     const byForm: { form: string; answers: { name: string; answer: Awaited<ReturnType<typeof answerOf>> }[] }[] = [];
     let hop = 0;
-    for (const form of await forms()) {
+    // A refused redemption writes nothing, so one set of dead tokens serves all three requests.
+    const [dead, requests] = await Promise.all([deadTokens(), forms(6)]);
+    expect(dead).toHaveLength(6);
+    for (const form of requests) {
       const answers: { name: string; answer: Awaited<ReturnType<typeof answerOf>> }[] = [];
-      for (const { name, token } of await deadTokens()) {
+      for (const { name, token } of dead) {
         hop += 1;
         // Each request comes from its own address, so the rate-limit headers, which count per address, read the same too.
         const response = await form.call(world, token, `198.51.100.${String(hop)}`);

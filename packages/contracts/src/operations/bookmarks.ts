@@ -1,13 +1,19 @@
 import { z } from "zod";
 import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
+import { TAG_NAME_MAX_LENGTH } from "./tags.ts";
 
 // The bookmarks tag of doc 04 section 10.6: the operations that create a bookmark, read it back, change it and delete it. They
 // act in the workspace the request is bound to and name none (D11), and a bookmark is its owner's: another member's bookmark of
 // the same workspace and any bookmark of another workspace are answered 404, like one that does not exist (doc 04 section 2.4,
 // doc 10 T1 and T2). The URL is stored normalised and only `http` and `https` are stored (doc 02 section 5.1, doc 10 T12 and
 // T13). The list pages through the caller's own bookmarks by a signed keyset cursor (doc 04 section 6.1). An open records that the
-// caller used a bookmark and answers the destination to go to (doc 02 section 5.5). The slug and the folders and tags of a bookmark
-// are other operations. A bulk request deletes, pins or unpins many of the caller's own bookmarks at once, named by identifier or by the
+// caller used a bookmark and answers the destination to go to (doc 02 section 5.5). A bookmark is filed in the caller's own folders by
+// `folderIds` on a creation and a change, and the list can be narrowed to one folder; a folder that is another member's, another
+// workspace's or unknown is answered 404 and files nothing (doc 02 sections 7.1 and 8.2, Q22). A bookmark is tagged with the caller's own
+// tags in the same way, by `tagIds` and by `tagNames` (a name the caller has no tag of creates one), and the list can be narrowed to the
+// bookmarks that carry every one of several tags (AND, doc 04 section 6.1); a tag that is another member's, another workspace's or unknown is
+// answered 404 and tags nothing (doc 02 sections 7.2 and 8.2, Q22). Every bookmark body carries the caller's own tags and nobody else's. The slug
+// of a bookmark is another operation. A bulk request deletes, pins or unpins many of the caller's own bookmarks at once, named by identifier or by the
 // list's filters, in one transaction; the select-all operation returns the identifiers a filter matches so a client can name them.
 
 /** The longest bookmark URL, in characters (doc 02 section 5.1). */
@@ -18,6 +24,21 @@ export const BOOKMARK_TITLE_MAX_LENGTH = 300;
 
 /** The longest bookmark description, in characters (doc 02 section 5.1). */
 export const BOOKMARK_DESCRIPTION_MAX_LENGTH = 1000;
+
+/** The most folders a creation or a change names for one bookmark. */
+export const BOOKMARK_FOLDER_IDS_MAX = 100;
+
+const BookmarkFolderIdsSchema = z.array(z.uuid()).max(BOOKMARK_FOLDER_IDS_MAX);
+
+/** The most tags a creation or a change names for one bookmark, by identifier and by name each. */
+export const BOOKMARK_TAGS_MAX = 100;
+
+/** The most tags a list is narrowed to at once. */
+export const BOOKMARK_TAG_FILTER_MAX = 10;
+
+const BookmarkTagIdsSchema = z.array(z.uuid()).max(BOOKMARK_TAGS_MAX);
+
+const BookmarkTagNamesSchema = z.array(z.string().trim().min(1).max(TAG_NAME_MAX_LENGTH)).max(BOOKMARK_TAGS_MAX);
 
 export const CreateBookmarkRequestSchema = z
   .strictObject({
@@ -36,6 +57,15 @@ export const CreateBookmarkRequestSchema = z
       .optional()
       .describe("The bookmark's description, 0 to 1 000 characters; surrounding whitespace is removed and an empty one is stored as none"),
     pinned: z.boolean().optional().describe("Whether the bookmark is pinned; not pinned when left out"),
+    folderIds: BookmarkFolderIdsSchema.optional().describe(
+      "The caller's folders to file the bookmark in, at most 100 identifiers; one named twice counts once. A folder that is another member's, another workspace's or unknown is refused with 404 and nothing is created. Filed in none when left out",
+    ),
+    tagIds: BookmarkTagIdsSchema.optional().describe(
+      "The caller's tags to put on the bookmark, at most 100 identifiers; one named twice counts once. A tag that is another member's, another workspace's or unknown is refused with 404 and nothing is created. Together with tagNames they name the union. No tags when both are left out",
+    ),
+    tagNames: BookmarkTagNamesSchema.optional().describe(
+      "The names of the tags to put on the bookmark, at most 100, each 1 to 40 characters after the whitespace around it is removed. The caller's tag of that name is used, whatever the case it is written in, and a name the caller has no tag of creates one in the same transaction; two spellings of one name count once",
+    ),
   })
   .meta({ id: "CreateBookmarkRequest" });
 
@@ -58,8 +88,33 @@ export const UpdateBookmarkRequestSchema = z
       .optional()
       .describe("The new description, 0 to 1 000 characters; surrounding whitespace is removed, and an empty one and null clear it. Left out, the description is left as it is"),
     pinned: z.boolean().optional().describe("Pins or unpins the bookmark; left out, the pin is left as it is"),
+    folderIds: BookmarkFolderIdsSchema.optional().describe(
+      "The caller's folders the bookmark is filed in afterwards, at most 100 identifiers: the list replaces the folders it is in, and an empty list takes it out of all of them. Filing moves no version. A folder that is another member's, another workspace's or unknown is refused with 404 and nothing is changed. Left out, the folders are left as they are",
+    ),
+    tagIds: BookmarkTagIdsSchema.optional().describe(
+      "The caller's tags the bookmark carries afterwards, at most 100 identifiers. With tagNames they name the union, which replaces the tags the bookmark has; an empty list takes all of them off. Tagging moves no version. A tag that is another member's, another workspace's or unknown is refused with 404 and nothing is changed. Left out together with tagNames, the tags are left as they are",
+    ),
+    tagNames: BookmarkTagNamesSchema.optional().describe(
+      "The names of the tags the bookmark carries afterwards, at most 100, each 1 to 40 characters after the whitespace around it is removed. The caller's tag of that name is used, whatever the case it is written in, and a name the caller has no tag of creates one in the same transaction. With tagIds they name the union, which replaces the tags the bookmark has",
+    ),
   })
   .meta({ id: "UpdateBookmarkRequest" });
+
+export const BookmarkFolderSchema = z
+  .strictObject({
+    id: z.uuid().describe("The folder's identifier"),
+    name: z.string().describe("The folder's name, in the case it was entered in"),
+    icon: z.string().describe("The folder's icon, a lucide icon name"),
+    color: z.number().int().min(1).max(8).describe("The folder's colour, 1 to 8: the number of the --folder-N theme token"),
+  })
+  .meta({ id: "BookmarkFolder" });
+
+export const BookmarkTagSchema = z
+  .strictObject({
+    id: z.uuid().describe("The tag's identifier"),
+    name: z.string().describe("The tag's name, in the case it was entered in"),
+  })
+  .meta({ id: "BookmarkTag" });
 
 export const BookmarkSchema = z
   .strictObject({
@@ -74,6 +129,8 @@ export const BookmarkSchema = z
     pinned: z.boolean().describe("Whether the bookmark is pinned"),
     openCount: z.number().int().min(0).describe("How many times the bookmark was opened"),
     lastOpenedAt: z.iso.datetime().nullable().describe("When the bookmark was last opened, RFC 3339 UTC, null when it never was"),
+    folders: z.array(BookmarkFolderSchema).describe("The owner's folders the bookmark is filed in, in the order of their names; empty when it is filed in none"),
+    tags: z.array(BookmarkTagSchema).describe("The caller's own tags on the bookmark, in the order of their names; another member's tags are never in it, and empty when the caller put none on it"),
     version: z.number().int().min(1).describe("Moves by one with every change; the ETag header carries it and If-Match takes it back"),
     createdAt: z.iso.datetime().describe("When the bookmark was created, RFC 3339 UTC"),
     updatedAt: z.iso.datetime().describe("When the bookmark last changed, RFC 3339 UTC"),
@@ -111,6 +168,16 @@ export const ListBookmarksQuerySchema = z.strictObject({
     .optional()
     .describe(
       "Lists the caller's bookmarks whose canonical URL equals the canonical form of this value, which the duplicate warning of a new bookmark uses. The value is normalised as a bookmark's URL is, and one that cannot be a bookmark's URL is refused with 422",
+    ),
+  folderId: z
+    .uuid()
+    .optional()
+    .describe("Lists the bookmarks filed in this folder of the caller's. A folder that is another member's, another workspace's or unknown lists nothing: an empty page, not an error. Left out, folders are not filtered on"),
+  tag: z
+    .union([z.uuid(), z.array(z.uuid()).max(BOOKMARK_TAG_FILTER_MAX)])
+    .optional()
+    .describe(
+      "Lists the bookmarks that carry every one of the given tags of the caller's (AND; OR is not offered): repeat the parameter, at most 10 times. Tags are addressed by identifier, so a rename breaks no link. A tag that is another member's, another workspace's or unknown lists nothing: an empty page, not an error. Left out, tags are not filtered on",
     ),
   sort: BookmarkSortSchema.default("recent").describe(
     "The order, with the identifier as the tiebreak: recent (newest first), oldest, title_asc and title_desc (by title, ignoring case), most_used (most opens first) or recently_opened (last opened first, never-opened bookmarks last)",
@@ -193,7 +260,7 @@ export const BulkBookmarksResultSchema = z
   })
   .meta({ id: "BulkBookmarksResult" });
 
-export const BookmarkIdsQuerySchema = ListBookmarksQuerySchema.omit({ sort: true, limit: true, cursor: true });
+export const BookmarkIdsQuerySchema = ListBookmarksQuerySchema.omit({ sort: true, limit: true, cursor: true, folderId: true, tag: true });
 
 export const BookmarkIdsSchema = z
   .strictObject({
@@ -237,16 +304,18 @@ export const createBookmark = defineOperation({
   request: { body: CreateBookmarkRequestSchema },
   responses: {
     201: jsonResponse(
-      "The bookmark, owned by the caller and private to them, with its id and its version in the body (the ETag of a later read repeats the version). The workspace's bookmark count is raised by one in the same transaction, and bookmark.created is announced once it is committed. A retry with the same Idempotency-Key and the same request answers this response again with Idempotency-Replayed: true and stores nothing; a replay restores the status and the body and no header, so the response carries none",
+      "The bookmark, owned by the caller and private to them, filed in the folders folderIds named and tagged with the tags tagIds and tagNames named, with its id and its version in the body (the ETag of a later read repeats the version). The workspace's bookmark count is raised by one in the same transaction, and bookmark.created is announced once it is committed. A retry with the same Idempotency-Key and the same request answers this response again with Idempotency-Replayed: true and stores nothing; a replay restores the status and the body and no header, so the response carries none",
       BookmarkSchema,
     ),
     400: problemResponse("The request was malformed, or the Idempotency-Key header is not a UUID"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse("The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"),
-    404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),
+    404: problemResponse(
+      "The request acts in no workspace: the account has none, or the workspace is being deleted; or a folder of folderIds or a tag of tagIds is not one the caller has in it (another member's, another workspace's or unknown), and nothing is created",
+    ),
     409: problemResponse("The Idempotency-Key was used before for another request (idempotency_conflict); nothing is written"),
     422: problemResponse(
-      "The body did not pass validation (a missing, empty or over-long URL, title or description, a malformed URL, or a field the operation does not declare), the URL is not an http or https URL (url_not_allowed), or the workspace already holds as many bookmarks as its bookmarks.max entitlement allows (bookmark_limit_reached; the problem carries limit and used). Nothing is written, and a refused request keeps no key, so a retry with it runs",
+      "The body did not pass validation (a missing, empty or over-long URL, title or description, a malformed URL, a folderIds, tagIds or tagNames list of more than 100 or with a malformed identifier, or a tag name that is empty or over 40 characters, or a field the operation does not declare), the URL is not an http or https URL (url_not_allowed), or the workspace already holds as many bookmarks as its bookmarks.max entitlement allows (bookmark_limit_reached; the problem carries limit and used). Nothing is written, and a refused request keeps no key, so a retry with it runs",
     ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse(
@@ -273,7 +342,7 @@ export const listBookmarks = defineOperation({
     400: problemResponse("The request was malformed, or the cursor is not one this account was issued for this workspace, these filters and this sort (bad_request)"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),
-    422: problemResponse("The query did not pass validation (an unknown parameter or sort, a boolean other than true or false, a limit outside 1 to 100), or the url is not a URL a bookmark can have"),
+    422: problemResponse("The query did not pass validation (an unknown parameter or sort, a boolean other than true or false, a folderId or a tag that is not an identifier, more than 10 tags, a limit outside 1 to 100), or the url is not a URL a bookmark can have"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },
@@ -314,7 +383,7 @@ export const updateBookmark = defineOperation({
   request: { params: BookmarkParamsSchema, headers: BookmarkIfMatchHeaderSchema, body: UpdateBookmarkRequestSchema },
   responses: {
     200: jsonResponse(
-      "The caller's bookmark after a JSON Merge Patch of its url, title, description and pinned fields. A change moves the version by one and the ETag is that of the new version; a patch that names the values the bookmark has, and an empty one, write nothing and answer with the unchanged version",
+      "The caller's bookmark after a JSON Merge Patch of its url, title, description, pinned, folderIds, tagIds and tagNames fields. A change moves the version by one and the ETag is that of the new version; a patch that names the values the bookmark has, in the folders it is already in and with the tags it already has, and an empty one, write nothing and answer with the unchanged version; a patch of folderIds, tagIds or tagNames alone changes the folders or the tags and keeps the version",
       BookmarkSchema,
       { headers: BookmarkEntityTag },
     ),
@@ -322,11 +391,11 @@ export const updateBookmark = defineOperation({
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse("The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"),
     404: problemResponse(
-      "The workspace the request acts in has no bookmark of the caller with this identifier that can be changed: another member's bookmark, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike",
+      "The workspace the request acts in has no bookmark of the caller with this identifier that can be changed: another member's bookmark, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike. A folder of folderIds or a tag of tagIds that is not the caller's (another member's, another workspace's or unknown) is answered alike, and nothing is changed",
     ),
     412: problemResponse("If-Match names a version other than the bookmark's current one (precondition_failed); the bookmark is unchanged"),
     422: problemResponse(
-      "The identifier or the body did not pass validation (a malformed, empty or over-long URL, a title that is blank or over-long, a description over 1 000 characters, a null title or URL, or a field the operation does not declare), or the URL is not an http or https URL (url_not_allowed). Nothing is written",
+      "The identifier or the body did not pass validation (a malformed, empty or over-long URL, a title that is blank or over-long, a description over 1 000 characters, a null title or URL, a folderIds, tagIds or tagNames list of more than 100 or with a malformed identifier, or a tag name that is empty or over 40 characters, or a field the operation does not declare), or the URL is not an http or https URL (url_not_allowed). Nothing is written",
     ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),

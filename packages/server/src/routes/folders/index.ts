@@ -1,5 +1,5 @@
-import { FOLDER_LIST_TOTAL_CAP, createFolder as createFolderOperation, deleteFolder as deleteFolderOperation, getFolder as getFolderOperation, listFolders as listFoldersOperation, updateFolder as updateFolderOperation, type FolderSchema } from "@slugbase/contracts";
-import { createFolder, deleteFolder, listFolders, readFolder, updateFolder, type FolderCursors, type FolderRecord } from "@slugbase/core";
+import { FOLDER_LIST_TOTAL_CAP, addFolderBookmarks as addFolderBookmarksOperation, createFolder as createFolderOperation, deleteFolder as deleteFolderOperation, getFolder as getFolderOperation, listFolders as listFoldersOperation, removeFolderBookmarks as removeFolderBookmarksOperation, updateFolder as updateFolderOperation, type FolderSchema } from "@slugbase/contracts";
+import { createFolder, deleteFolder, fileBookmarks, listFolders, readFolder, unfileBookmarks, updateFolder, type FolderCursors, type FolderRecord } from "@slugbase/core";
 import { folderRepository, isFolderNameTaken } from "@slugbase/db";
 import type { z } from "zod";
 import { createPageCursorCodec } from "../../auth/page-cursor.ts";
@@ -30,6 +30,12 @@ import { acceptedVersions, entityTagOf } from "../workspaces/if-match.ts";
 // GET and PATCH answer the folder's version in the body and as `ETag`. PATCH is a JSON Merge Patch of the name, the icon and the colour;
 // `If-Match` is compared with the version under the folder's row lock and a mismatch is `412 precondition_failed` with nothing written;
 // without the header the patch applies (an API token may leave it out). A patch that changes nothing answers 200 with the unchanged `ETag`.
+//
+// POST and DELETE /api/v1/folders/{id}/bookmarks (doc 04 section 10.7, doc 02 sections 7.1 and 8.2, doc 13 Q22, doc 10 T1 and T2) file bookmarks in
+// the folder and take them out of it. Only the owner files: the caller must own the folder and every bookmark named (doc 04 says "visible to the
+// caller" for the read operations, which the ownership rule of doc 02 section 8.2 and Q22 narrows), and another member's folder or bookmark, one
+// of another workspace, a plan-archived bookmark (to file) and one that does not exist are the same `404 not_found` with none of the bookmarks
+// filed. The request is one transaction, all or nothing, and repeating it changes nothing. Both answer 200 with the folder and its count.
 
 const NO_WORKSPACE = "No such resource.";
 const NO_SUCH_FOLDER = "No such resource.";
@@ -160,6 +166,24 @@ export function folderRoutes({ cursorSecret }: FolderRoutesOptions): RouteBindin
         case "not_found":
           throw new ProblemError("not_found", NO_SUCH_FOLDER);
       }
+    }),
+
+    route(addFolderBookmarksOperation).handle(async ({ params, body }, context) => {
+      const tenant = tenantOf(context);
+      const outcome = await tenant.withTenant((tx) => fileBookmarks({ store: folderRepository(tx) }, { folderId: params.id, accountId: tenant.accountId, bookmarkIds: body.bookmarkIds }));
+      if (outcome.kind === "not_found") {
+        throw new ProblemError("not_found", NO_SUCH_FOLDER);
+      }
+      return { status: 200, body: folderBody(outcome.folder), headers: { ETag: entityTagOf(outcome.folder.version) } };
+    }),
+
+    route(removeFolderBookmarksOperation).handle(async ({ params, body }, context) => {
+      const tenant = tenantOf(context);
+      const outcome = await tenant.withTenant((tx) => unfileBookmarks({ store: folderRepository(tx) }, { folderId: params.id, accountId: tenant.accountId, bookmarkIds: body.bookmarkIds }));
+      if (outcome.kind === "not_found") {
+        throw new ProblemError("not_found", NO_SUCH_FOLDER);
+      }
+      return { status: 200, body: folderBody(outcome.folder), headers: { ETag: entityTagOf(outcome.folder.version) } };
     }),
 
     route(deleteFolderOperation).handle(async ({ params }, context) => {

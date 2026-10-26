@@ -1,3 +1,4 @@
+import type { TagMergeRequest, TagMergeResult } from "./merge.ts";
 import type { TagRenameRequest, TagRenameResult } from "./rename.ts";
 
 // Creating a tag (doc 02 section 7.2, doc 04 section 10.7, doc 10 T2). A tag is its owner's and nobody else's: the store creates it for
@@ -65,6 +66,12 @@ export interface TagStore {
    * owner does not own, whoever does, and one that does not exist.
    */
   rename(request: TagRenameRequest): Promise<TagRenameResult>;
+  /**
+   * Moves the links of the tag `request.sourceId` to the tag `request.targetId`, both owned by `request.ownerId`, and deletes the source, in the
+   * transaction of the caller. A bookmark linked to both keeps its one link to the target. `not_found` when either tag is not the owner's, whoever owns
+   * it, or does not exist, and `same_tag` when both are one owned tag; nothing is written for either.
+   */
+  merge(request: TagMergeRequest): Promise<TagMergeResult>;
   /** Deletes the tag that `request.ownerId` owns together with its links to bookmarks; false when the owner owns no such tag. */
   remove(request: { readonly tagId: string; readonly ownerId: string }): Promise<boolean>;
 }

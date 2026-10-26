@@ -64,6 +64,7 @@ existing line by adding its PR number.
 ## Client state
 
 - **refreshed only on refusal** — a client cache of a server-decided grant (the entitlements behind a UI gate) never goes stale and is refreshed only when the client itself is refused, so a grant made elsewhere (another tab, an upgrade) leaves the gate closed until a reload — PR 541
+- **absence read from a cache** — a client concludes from a cached list that a thing does not exist (a folder named in the address) and acts on it (clears the filter, says it is gone), though the list may predate the thing (made on another device), so a valid choice is thrown away — PR 587
 
 ## Input handling
 

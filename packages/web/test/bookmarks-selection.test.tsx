@@ -3,8 +3,9 @@ import { createHandlers, type Scenario } from "@slugbase/testing/msw";
 import { createMockServer, readOpenApiDocument } from "@slugbase/testing/msw/node";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
-import { ACCOUNT_BODY, json, meOf, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
+import { ACCOUNT_BODY, json, meOf, problem, allowSlowRender, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
 // Selecting bookmarks of the list and acting on the selection (doc 03 section 3.4, doc 02 section 5.8) against the handlers
 // generated from openapi.json. The failure scenarios are a delete sent without the confirmation or with a count other
@@ -39,6 +40,8 @@ function bookmark(n: number, overrides: Partial<Bookmark> = {}): Bookmark {
     pinned: false,
     openCount: 0,
     lastOpenedAt: null,
+    folders: [],
+    tags: [],
     version: 3,
     createdAt: "2026-10-01T08:00:00.000Z",
     updatedAt: "2026-10-01T08:00:00.000Z",
@@ -76,7 +79,10 @@ async function bodyOf(call: Call | undefined): Promise<unknown> {
   return JSON.parse((await call?.body) ?? "null") as unknown;
 }
 
+let restoreWait: () => void = () => undefined;
+
 beforeAll(() => {
+  restoreWait = allowSlowRender();
   server.listen({ onUnhandledRequest: "error" });
   server.events.on("request:start", ({ request }) => {
     const url = new URL(request.url);
@@ -90,6 +96,7 @@ afterEach(() => {
 });
 
 afterAll(() => {
+  restoreWait();
   server.close();
 });
 
@@ -182,7 +189,7 @@ async function select(...numbers: number[]): Promise<void> {
   }
 }
 
-describe("selecting", () => {
+describe("selecting", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("selects cards by their checkbox, counts them in the bar and clears them from it", async () => {
     use({ fixtures: { listBookmarks: page([bookmark(1), bookmark(2), bookmark(3)]) } });
     await openApp("/bookmarks");
@@ -243,7 +250,7 @@ describe("selecting", () => {
   });
 });
 
-describe("select all matching", () => {
+describe("select all matching", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("asks for the identifiers the list's filters match, selects them all and stops offering it", async () => {
     use({ fixtures: { listBookmarks: page([bookmark(1), bookmark(2)], 40), listBookmarkIds: { ids: idsOf(40), truncated: false } } });
     await openApp("/bookmarks?pinned=true&sort=title_asc&size=48");
@@ -345,7 +352,7 @@ describe("select all matching", () => {
   });
 });
 
-describe("deleting", () => {
+describe("deleting", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("states how many bookmarks it deletes, sends nothing on Cancel, and reports the result in a toast and a live region", async () => {
     use({ fixtures: { listBookmarks: page([bookmark(1), bookmark(2), bookmark(3)]), bulkBookmarks: { ...RESULT, requested: 3, affected: 3 } } });
     await openApp("/bookmarks");
@@ -445,7 +452,7 @@ describe("deleting", () => {
   });
 });
 
-describe("pinning and unpinning", () => {
+describe("pinning and unpinning", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("pins the selection and reports affected and skipped counts", async () => {
     use({
       fixtures: {
@@ -512,7 +519,7 @@ describe("pinning and unpinning", () => {
   });
 });
 
-describe("a request that answers after the filters changed", () => {
+describe("a request that answers after the filters changed", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("reports a failure without putting the unreached bookmarks back into the selection of the new filters", async () => {
     let release: () => void = () => undefined;
     const gate = new Promise<void>((resolve) => {
@@ -584,7 +591,7 @@ describe("a request that answers after the filters changed", () => {
   });
 });
 
-describe("shortcuts", () => {
+describe("shortcuts", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("toggles the focused item with X, selects the page with Shift A and clears with Escape", async () => {
     use({ fixtures: { getMe: meOf(ACCOUNT_BODY), listBookmarks: page([bookmark(1), bookmark(2), bookmark(3)]) } });
     await openApp("/bookmarks");

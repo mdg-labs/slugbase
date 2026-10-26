@@ -77,6 +77,7 @@ describe("createWebApp", () => {
       ME_PATH,
       WORKSPACES_PATH,
       "/api/v1/entitlements",
+      "/api/v1/folders",
     ]);
   });
 

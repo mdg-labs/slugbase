@@ -16,12 +16,14 @@ export { DataTable, type DataTableCardSlot, type DataTableColumn, type DataTable
 export { Disclosure, type DisclosureProps } from "./disclosure.tsx";
 export { EmptyState, type EmptyStateProps } from "./empty-state.tsx";
 export { FeedbackToastProvider, feedbackToast, type FeedbackToastProviderProps } from "./feedback-toast.tsx";
+export { FOLDER_ICON_COMPONENTS } from "./folder-icons.ts";
 export { FormField, type FormFieldProps } from "./form-field.tsx";
 export { FormOverlay, type FormOverlayProps } from "./form-overlay.tsx";
 export { InlineNote, type InlineNoteProps } from "./inline-note.tsx";
 export { LoadMore, type LoadMorePageSize, type LoadMoreProps } from "./load-more.tsx";
 export { Loading, type LoadingProps } from "./loading.tsx";
 export { MetricTile, type MetricTileProps } from "./metric-tile.tsx";
+export { MultiPick, type MultiPickCreate, type MultiPickProps } from "./multi-pick.tsx";
 export { PasswordStrength, type PasswordScore, type PasswordStrengthProps } from "./password-strength.tsx";
 export { Picker, type PickerOption, type PickerProps } from "./picker.tsx";
 export { RowActions, type RowAction, type RowActionsProps } from "./row-actions.tsx";
@@ -34,12 +36,14 @@ export { SettingsNav, type SettingsNavGroup, type SettingsNavItem, type Settings
 export { SettingsSection, type SettingsSectionProps } from "./settings-section.tsx";
 export { ShortcutSheet, type ShortcutSheetGroup, type ShortcutSheetItem, type ShortcutSheetProps } from "./shortcut-sheet.tsx";
 export { ShownOnce, type ShownOnceProps } from "./shown-once.tsx";
+export { SidePanel, type SidePanelProps } from "./side-panel.tsx";
 export { StatusBadge, type StatusBadgeProps, type StatusBadgeVariant } from "./status-badge.tsx";
 export { TextareaField, type TextareaFieldProps } from "./textarea-field.tsx";
 export { Totp, type TotpProps } from "./totp.tsx";
 export { TypedConfirm, matchesExpected, type TypedConfirmProps } from "./typed-confirm.tsx";
 export { UnsavedGuard, type UnsavedGuardProps } from "./unsaved-guard.tsx";
 export { UrlInput, type UrlInputProps } from "./url-input.tsx";
+export { UsageMeter, type UsageMeterProps } from "./usage-meter.tsx";
 export { Wizard, type WizardProps } from "./wizard.tsx";
 export type { WorkspaceSwitcherAction, WorkspaceSwitcherItem, WorkspaceSwitcherProps } from "./workspace-switcher.tsx";
 export type { Accent, ResolvedTheme } from "../theme/theme-provider.tsx";
@@ -48,13 +52,16 @@ export { ThemeToggle, type ThemeToggleProps } from "./theme-toggle.tsx";
 export {
   BookmarkIcon,
   CompassIcon,
+  ExternalLinkIcon,
   FilterXIcon,
+  FolderIcon,
   HomeIcon,
   InboxIcon,
   LayoutGridIcon,
   LifeBuoyIcon,
   LockIcon,
   LogOutIcon,
+  PaletteIcon,
   PencilIcon,
   PinIcon,
   PinOffIcon,
@@ -62,6 +69,8 @@ export {
   SettingsIcon,
   ShieldCheckIcon,
   TableIcon,
+  TagIcon,
   Trash2Icon,
   TriangleAlertIcon,
+  XIcon,
 } from "lucide-react";

@@ -4,6 +4,7 @@ import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { useFormat } from "../i18n/use-format.ts";
 import { monogramOf, useBookmarkActions, type BookmarkActionHandlers } from "./bookmark-card.tsx";
+import { FolderDots, TagBadges } from "./bookmark-labels.tsx";
 import { isHttpUrl, recordOpen, type Bookmark } from "./bookmarks.ts";
 import { DEFAULT_SORT, type BookmarkSort } from "./list-search.ts";
 
@@ -78,7 +79,7 @@ function ActionsCell(props: BookmarkActionHandlers): ReactElement {
 /**
  * The bookmarks as a table (doc 03 section 3.3): the title, slug, host, usage and date columns, which order the list
  * from their headers, and the actions of the card. The address holds the order; below `md` each row is a card. The
- * folders and tags columns stay empty until those features arrive.
+ * folders column shows a dot for each folder and the tags column the first three tags.
  */
 export function BookmarksTable({ bookmarks, pendingPins, sort: current, selected, selectionActive, tabStopId, onSelectedChange, onSort, onEdit, onPin, onDelete }: BookmarksTableProps): ReactElement {
   const { t } = useTranslation();
@@ -126,8 +127,8 @@ export function BookmarksTable({ bookmarks, pendingPins, sort: current, selected
         </span>
       ),
     },
-    { id: "folders", header: t("bookmarks.list.table.folders"), cell: () => null },
-    { id: "tags", header: t("bookmarks.list.table.tags"), cell: () => null },
+    { id: "folders", header: t("bookmarks.list.table.folders"), cell: (bookmark) => <FolderDots folders={bookmark.folders} /> },
+    { id: "tags", header: t("bookmarks.list.table.tags"), cell: (bookmark) => <TagBadges tags={bookmark.tags} /> },
     {
       id: "opens",
       header: t("bookmarks.list.table.opens"),

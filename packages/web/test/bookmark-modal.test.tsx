@@ -33,6 +33,8 @@ const BOOKMARK: Bookmark = {
   pinned: false,
   openCount: 0,
   lastOpenedAt: null,
+  folders: [],
+  tags: [],
   version: 3,
   createdAt: "2026-10-01T08:00:00.000Z",
   updatedAt: "2026-10-01T08:00:00.000Z",
@@ -149,6 +151,20 @@ describe("creating a bookmark", () => {
     });
     expect(await bodyOf(to("POST", "/api/v1/bookmarks")[0])).toEqual({ url: "https://example.com/docs", title: "Example docs" });
     expect(window.location.search).toBe("");
+  });
+
+  it("reads the folder and tag lists once, to their last page, and not on and on", async () => {
+    use();
+    await openApp("/?new=1");
+    await screen.findByRole("dialog", { name: "New bookmark" });
+    // The generated lists are one page and the last. A list that handed out a cursor to a page that never ends would be
+    // read page after page by the sidebar for as long as the app is open, starving everything else of the thread.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    });
+
+    expect(to("GET", "/api/v1/folders").length).toBeLessThanOrEqual(2);
+    expect(to("GET", "/api/v1/tags").length).toBeLessThanOrEqual(2);
   });
 
   it("opens prefilled from ?new=1&url=, which is how a pasted address arrives", async () => {

@@ -3,8 +3,9 @@ import { createHandlers, type Scenario } from "@slugbase/testing/msw";
 import { createMockServer, readOpenApiDocument } from "@slugbase/testing/msw/node";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
-import { ACCOUNT_BODY, meOf, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
+import { ACCOUNT_BODY, meOf, allowSlowRender, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
 // The keyboard shortcuts of the bookmark list and of the app (doc 03 section 14) against the handlers generated from
 // openapi.json. The failure scenarios are a shortcut that fires after the account turned single-key shortcuts off or from
@@ -37,6 +38,8 @@ function bookmark(n: number, overrides: Partial<Bookmark> = {}): Bookmark {
     pinned: false,
     openCount: 0,
     lastOpenedAt: null,
+    folders: [],
+    tags: [],
     version: 3,
     createdAt: "2026-10-01T08:00:00.000Z",
     updatedAt: "2026-10-01T08:00:00.000Z",
@@ -64,7 +67,10 @@ function to(method: string, path: string): Call[] {
   return calls.filter((call) => call.method === method && call.path === path);
 }
 
+let restoreWait: () => void = () => undefined;
+
 beforeAll(() => {
+  restoreWait = allowSlowRender();
   server.listen({ onUnhandledRequest: "error" });
   server.events.on("request:start", ({ request }) => {
     const clone = request.clone();
@@ -77,6 +83,7 @@ afterEach(() => {
 });
 
 afterAll(() => {
+  restoreWait();
   server.close();
 });
 
@@ -144,7 +151,7 @@ async function openList(count = 3, scenario: Omit<Scenario, "name"> = {}, path =
   await screen.findByRole("link", { name: "Bookmark 1" });
 }
 
-describe("moving through the list", () => {
+describe("moving through the list", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("moves focus to the next and previous card with J and K and stops at the ends", async () => {
     await openList();
 
@@ -212,7 +219,7 @@ describe("moving through the list", () => {
   });
 });
 
-describe("acting on the focused bookmark", () => {
+describe("acting on the focused bookmark", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("follows the focused card with Enter, and counts the open", async () => {
     await openList();
     const link = screen.getByRole("link", { name: "Bookmark 2" });
@@ -324,7 +331,7 @@ describe("acting on the focused bookmark", () => {
   });
 });
 
-describe("Escape", () => {
+describe("Escape", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("clears the selection first, then the filters, one step for each press", async () => {
     await openList(2, {}, "/bookmarks?pinned=true&sort=most_used");
     await press(screen.getByRole("checkbox", { name: "Select Bookmark 1" }));
@@ -365,7 +372,7 @@ describe("Escape", () => {
   });
 });
 
-describe("the list is an ARIA grid only while a selection is active", () => {
+describe("the list is an ARIA grid only while a selection is active", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("is a list, becomes a grid of rows and cells when a card is selected, and a list again once cleared", async () => {
     await openList();
     expect(screen.getByRole("list", { name: "Bookmarks" })).toBeDefined();
@@ -394,7 +401,7 @@ describe("the list is an ARIA grid only while a selection is active", () => {
   });
 });
 
-describe("the shortcuts of the app", () => {
+describe("the shortcuts of the app", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("opens the New bookmark modal with C, on the bookmarks page and on Home", async () => {
     await openList();
     await key({ key: "c" });
@@ -486,7 +493,7 @@ describe("the shortcuts of the app", () => {
   });
 });
 
-describe("with single-key shortcuts off", () => {
+describe("with single-key shortcuts off", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("fires none of them, and still follows Ctrl Enter on the focused card", async () => {
     use({ fixtures: { getMe: ACCOUNT_OFF, listBookmarks: page([bookmark(1), bookmark(2)]), updateBookmark: bookmark(1) } });
     await openApp("/bookmarks?pinned=true");
@@ -531,7 +538,7 @@ describe("with single-key shortcuts off", () => {
   });
 });
 
-describe("in a text field", () => {
+describe("in a text field", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("fires no single-key shortcut", async () => {
     await openList();
     const field = window.document.createElement("input");

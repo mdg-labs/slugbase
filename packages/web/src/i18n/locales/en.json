@@ -9,6 +9,8 @@
     "breadcrumb": "Breadcrumb",
     "home": "Home",
     "bookmarks": "Bookmarks",
+    "folders": "Folders",
+    "tags": "Tags",
     "helpAndDocs": "Help & docs",
     "switchToDark": "Switch to dark theme",
     "switchToLight": "Switch to light theme",
@@ -31,6 +33,13 @@
       "title": "Email is not set up",
       "description": "This server sends no email, so invitation emails, address verification and password-reset emails are not delivered. Invitation and reset links are shown to you instead, to pass on by hand.",
       "action": "Open settings & status"
+    },
+    "foldersSection": {
+      "label": "Folders",
+      "loading": "Loading the folder list",
+      "loadFailed": "The folder list could not be loaded.",
+      "retry": "Reload folders",
+      "empty": "You have no folders yet"
     }
   },
   "home": {
@@ -68,6 +77,35 @@
         "hasSlug": "Has slug",
         "forwarding": "Forwarding on"
       },
+      "filters": {
+        "active": "Active filters",
+        "remove": "Remove filter: {label}",
+        "folderChip": "Folder: {name}",
+        "folderChipUnknown": "Folder",
+        "folder": {
+          "label": "Folder",
+          "placeholder": "Any folder",
+          "loading": "Loading the folders",
+          "loadFailed": "The folders could not be loaded.",
+          "empty": "You have no folders yet"
+        },
+        "tags": {
+          "label": "Tags",
+          "placeholder": "Any tags",
+          "loading": "Loading the tags",
+          "loadFailed": "The tags could not be loaded.",
+          "empty": "You have no tags yet",
+          "remove": "Remove tag {name}",
+          "unknown": "Unknown tag",
+          "pending": "Tag",
+          "limit": "A bookmark must carry every tag chosen, up to {max}."
+        },
+        "staleFolder": {
+          "title": "That folder no longer exists",
+          "description": "The folder filter was removed, so the list is no longer narrowed to it.",
+          "dismiss": "Dismiss"
+        }
+      },
       "view": {
         "label": "View",
         "grid": "Grid",
@@ -104,6 +142,8 @@
       "select": "Select {title}",
       "noSlug": "No slug",
       "pinned": "Pinned",
+      "moreTags": "{count, plural, one {# more tag} other {# more tags}}",
+      "moreTagsShort": "+{count}",
       "neverOpened": "Not opened yet",
       "opens": "{count, plural, one {# open} other {# opens}}",
       "usage": "{count, plural, one {# open} other {# opens}} · {when}",
@@ -201,6 +241,31 @@
           "tooLong": "Use at most {max, number} characters."
         }
       },
+      "folders": {
+        "label": "Folders",
+        "placeholder": "Search or create a folder",
+        "empty": "You have no folders yet. Type a name to create one.",
+        "loading": "Loading your folders",
+        "loadFailed": "Your folders could not be loaded.",
+        "create": "Create folder “{name}”",
+        "remove": "Remove {name}",
+        "error": {
+          "taken": "You already have a folder with this name. Choose it from the list.",
+          "invalid": "Use a name of 1 to {max, number} characters."
+        }
+      },
+      "tags": {
+        "label": "Tags",
+        "placeholder": "Search or add a tag",
+        "empty": "You have no tags yet. Type a name to create one.",
+        "loading": "Loading your tags",
+        "loadFailed": "Your tags could not be loaded.",
+        "create": "Create tag “{name}”",
+        "remove": "Remove {name}",
+        "error": {
+          "tooLong": "Use a tag name of at most {max, number} characters."
+        }
+      },
       "description": {
         "label": "Description",
         "counter": "{count, number} / {max, number}",
@@ -250,7 +315,272 @@
         "notFound": {
           "title": "Bookmark not found",
           "description": "It may have been deleted, or it is not one of yours."
+        },
+        "choiceNotFound": {
+          "title": "A folder or tag was not found",
+          "description": "The bookmark, a folder or a tag you chose may have been deleted. Your choices are kept; check them and save again."
         }
+      }
+    }
+  },
+  "folders": {
+    "page": {
+      "title": "Folders"
+    },
+    "new": "New folder",
+    "deleted": "Folder deleted.",
+    "sort": {
+      "label": "Sort by",
+      "name": "Name",
+      "count": "Bookmarks",
+      "updated": "Recently updated"
+    },
+    "list": {
+      "label": "Folders",
+      "loading": "Loading the folders",
+      "loadFailed": "The folders could not be loaded. Try again in a moment.",
+      "loadMoreFailed": "More folders could not be loaded. Try again in a moment.",
+      "refreshFailed": "The folders could not be refreshed. What is shown may be out of date.",
+      "retry": "Try again",
+      "loadMore": "Load more",
+      "count": "Showing {shown} of {total}",
+      "countAtLeast": "Showing {shown} of {total}+",
+      "actionsFor": "Actions for {name}",
+      "bookmarkCount": "{count, plural, one {# bookmark} other {# bookmarks}}",
+      "table": {
+        "name": "Name",
+        "bookmarks": "Bookmarks",
+        "updated": "Updated",
+        "actions": "Actions"
+      },
+      "empty": {
+        "title": "No folders yet",
+        "description": "Folders group related bookmarks, like everything for one project or one topic. A bookmark can be filed in several folders, and deleting a folder never deletes the bookmarks in it."
+      }
+    },
+    "actions": {
+      "open": "Open in Bookmarks",
+      "rename": "Rename",
+      "restyle": "Change icon and colour",
+      "delete": "Delete"
+    },
+    "delete": {
+      "title": "Delete “{name}”?",
+      "description": "{count, plural, =0 {No bookmarks are in this folder; only the folder goes.} one {The # bookmark stays; only the folder goes.} other {The # bookmarks stay; only the folder goes.}}",
+      "confirm": "Delete folder",
+      "cancel": "Cancel",
+      "error": {
+        "unavailable": "The folder could not be deleted right now. Try again in a moment.",
+        "notFound": "This folder no longer exists."
+      }
+    },
+    "form": {
+      "close": "Close the folder form",
+      "description": "A folder is private to you.",
+      "title": {
+        "create": "New folder",
+        "rename": "Rename folder",
+        "style": "Change icon and colour"
+      },
+      "name": {
+        "label": "Name",
+        "error": {
+          "required": "Enter a name for the folder.",
+          "taken": "You already have a folder with this name.",
+          "invalid": "Use a name of 1 to {max} characters."
+        }
+      },
+      "icon": {
+        "label": "Icon",
+        "placeholder": "Search icons",
+        "empty": "No icon matches."
+      },
+      "color": {
+        "label": "Colour"
+      },
+      "preview": "Folder name",
+      "cancel": "Cancel",
+      "submit": {
+        "create": "Create folder",
+        "update": "Save changes"
+      },
+      "saved": {
+        "created": "Folder created.",
+        "updated": "Folder saved."
+      },
+      "error": {
+        "changedElsewhere": "This folder was changed somewhere else. Close this form and open it again to see the latest version.",
+        "notFound": "This folder no longer exists.",
+        "unavailable": "The folder could not be saved right now. Try again in a moment."
+      }
+    },
+    "color": {
+      "1": "Periwinkle",
+      "2": "Green",
+      "3": "Amber",
+      "4": "Red",
+      "5": "Blue",
+      "6": "Purple",
+      "7": "Pink",
+      "8": "Mint"
+    },
+    "icon": {
+      "folder": "Folder",
+      "folder-open": "Open folder",
+      "folder-heart": "Folder with a heart",
+      "folder-code": "Folder with code",
+      "folder-archive": "Archive folder",
+      "briefcase": "Briefcase",
+      "building-2": "Building",
+      "book": "Book",
+      "book-open": "Open book",
+      "bookmark": "Bookmark",
+      "star": "Star",
+      "heart": "Heart",
+      "house": "House",
+      "newspaper": "Newspaper",
+      "graduation-cap": "Graduation cap",
+      "flask-conical": "Flask",
+      "code": "Code",
+      "terminal": "Terminal",
+      "cpu": "Processor",
+      "database": "Database",
+      "server": "Server",
+      "cloud": "Cloud",
+      "globe": "Globe",
+      "map": "Map",
+      "map-pin": "Map pin",
+      "plane": "Plane",
+      "car": "Car",
+      "utensils": "Cutlery",
+      "coffee": "Coffee",
+      "shopping-cart": "Shopping cart",
+      "gift": "Gift",
+      "music": "Music",
+      "film": "Film",
+      "camera": "Camera",
+      "image": "Image",
+      "video": "Video",
+      "gamepad-2": "Game controller",
+      "palette": "Palette",
+      "lightbulb": "Light bulb",
+      "rocket": "Rocket",
+      "target": "Target",
+      "trophy": "Trophy",
+      "flag": "Flag",
+      "tag": "Tag",
+      "wallet": "Wallet",
+      "credit-card": "Credit card",
+      "dumbbell": "Dumbbell",
+      "leaf": "Leaf",
+      "sun": "Sun",
+      "moon": "Moon",
+      "zap": "Lightning bolt",
+      "shield": "Shield",
+      "lock": "Lock",
+      "users": "People",
+      "mail": "Mail",
+      "calendar": "Calendar",
+      "inbox": "Inbox",
+      "package": "Package",
+      "wrench": "Wrench",
+      "sparkles": "Sparkles"
+    }
+  },
+  "tags": {
+    "page": {
+      "title": "Tags"
+    },
+    "note": "Tags are private to you. Other members of the workspace never see them.",
+    "deleted": "Tag deleted.",
+    "sort": {
+      "label": "Sort by",
+      "name": "Name",
+      "count": "Count"
+    },
+    "search": {
+      "label": "Search tags",
+      "placeholder": "Search tags",
+      "clear": "Clear search",
+      "none": {
+        "title": "No tag matches",
+        "description": "None of your tags contains “{query}”."
+      }
+    },
+    "list": {
+      "label": "Tags",
+      "loading": "Loading the tags",
+      "loadFailed": "The tags could not be loaded. Try again in a moment.",
+      "retry": "Try again",
+      "actionsFor": "Actions for {name}",
+      "bookmarkCount": "{count, plural, one {# bookmark} other {# bookmarks}}",
+      "empty": {
+        "title": "No tags yet",
+        "description": "Tags label bookmarks across folders, like a topic or a project, and a bookmark can carry several. Add a tag when you save or edit a bookmark, and it shows up here with the bookmarks that use it.",
+        "action": "Go to Bookmarks"
+      },
+      "table": {
+        "name": "Name",
+        "bookmarks": "Bookmarks",
+        "actions": "Actions"
+      }
+    },
+    "actions": {
+      "open": "View all in Bookmarks",
+      "rename": "Rename",
+      "delete": "Delete"
+    },
+    "preview": {
+      "label": "Newest bookmarks tagged {name}",
+      "loading": "Loading the bookmarks",
+      "loadFailed": "The bookmarks of this tag could not be loaded. Try again in a moment.",
+      "retry": "Try again",
+      "empty": "No bookmark carries this tag.",
+      "viewAll": "View all in Bookmarks",
+      "close": "Close the preview",
+      "missing": "This tag does not exist. It may have been renamed, merged or deleted.",
+      "placeholder": {
+        "title": "Pick a tag",
+        "description": "Select a tag to see its newest bookmarks."
+      },
+      "table": {
+        "title": "Bookmark",
+        "added": "Added"
+      }
+    },
+    "form": {
+      "close": "Close the rename form",
+      "title": "Rename tag",
+      "description": "A tag is private to you.",
+      "name": {
+        "label": "Name",
+        "error": {
+          "required": "Enter a name for the tag.",
+          "taken": "You already have a tag with this name.",
+          "invalid": "Use a name of 1 to {max} characters."
+        }
+      },
+      "cancel": "Cancel",
+      "submit": "Save",
+      "saved": "Tag renamed.",
+      "error": {
+        "notFound": "This tag no longer exists."
+      }
+    },
+    "merge": {
+      "title": "Merge into “{into}”?",
+      "description": "{count, plural, =0 {You already have a tag named “{into}”. “{from}” is on no bookmark; it is deleted.} one {You already have a tag named “{into}”. The # bookmark tagged “{from}” is tagged “{into}” instead, and “{from}” is deleted. The bookmark stays.} other {You already have a tag named “{into}”. The # bookmarks tagged “{from}” are tagged “{into}” instead, and “{from}” is deleted. The bookmarks stay.}}",
+      "confirm": "Merge tags",
+      "cancel": "Back to rename",
+      "merged": "Merged into “{name}”."
+    },
+    "delete": {
+      "title": "Delete “{name}”?",
+      "description": "{count, plural, =0 {No bookmark carries this tag; only the tag goes.} one {The tag is taken off its # bookmark. The bookmark stays; only the tag goes.} other {The tag is taken off its # bookmarks. The bookmarks stay; only the tag goes.}}",
+      "confirm": "Delete tag",
+      "cancel": "Cancel",
+      "error": {
+        "notFound": "This tag no longer exists."
       }
     }
   },
@@ -2000,6 +2330,9 @@
       "newBookmark": "New bookmark",
       "goHome": "Go to Home",
       "goBookmarks": "Go to Bookmarks",
+      "goFolders": "Go to Folders",
+      "goTags": "Go to Tags",
+      "newFolder": "New folder (on the Folders page)",
       "help": "Show this list",
       "move": "Move focus to the next or previous bookmark",
       "open": "Open the focused bookmark",

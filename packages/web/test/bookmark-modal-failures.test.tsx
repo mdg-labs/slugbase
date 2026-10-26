@@ -27,6 +27,8 @@ const BOOKMARK: Bookmark = {
   pinned: false,
   openCount: 0,
   lastOpenedAt: null,
+  folders: [],
+  tags: [],
   version: 1,
   createdAt: "2026-10-01T08:00:00.000Z",
   updatedAt: "2026-10-01T08:00:00.000Z",
@@ -47,7 +49,7 @@ interface Server {
 }
 
 /** A signed-in server whose bookmark operations answer as `create` and `read` say (a created bookmark by default). */
-function stubServer(answers: { create?: () => Response; read?: () => Response } = {}): Server {
+function stubServer(answers: { create?: () => Response; read?: () => Response; update?: () => Response } = {}): Server {
   const posts: unknown[] = [];
   const patches: unknown[] = [];
   vi.stubGlobal(
@@ -75,7 +77,7 @@ function stubServer(answers: { create?: () => Response; read?: () => Response } 
       }
       if (pathname === `${BOOKMARKS_PATH}/${ID}` && request.method === "PATCH") {
         patches.push(JSON.parse(await request.clone().text()) as unknown);
-        return json({ ...BOOKMARK, version: 2 });
+        return answers.update?.() ?? json({ ...BOOKMARK, version: 2 });
       }
       if (pathname === "/api/v1/workspaces" || pathname === "/api/v1/entitlements") {
         return problem(503, "unavailable", "req-503");
@@ -201,6 +203,96 @@ describe("a refused save", () => {
     expect(modal()).toBeTruthy();
     expect(window.location.search).toBe("?new=1");
     expect(within(dialog).getByRole<HTMLButtonElement>("button", { name: "Save" }).disabled).toBe(false);
+  });
+});
+
+const TOAST_TITLE = "The change was not saved";
+
+describe("the error toast of a refused save", () => {
+  it("is not raised for a field refusal the modal shows on the field", async () => {
+    const refused = stubServer({ create: () => withErrors(422, "validation_failed", [{ path: "url", code: "invalid_url" }]) });
+    await openApp("/?new=1");
+    const dialog = await fillAndSave();
+    expect(await within(dialog).findByText("This is not a valid address.")).toBeTruthy();
+    expect(refused.posts).toHaveLength(1);
+    expect(screen.queryByText(TOAST_TITLE)).toBeNull();
+  });
+
+  it("is raised for a 500 on the same save", async () => {
+    stubServer({ create: () => problem(500, "internal", "req-500") });
+    await openApp("/?new=1");
+
+    const dialog = await fillAndSave();
+
+    expect(await within(dialog).findByText("The bookmark could not be saved right now. Try again in a moment.")).toBeTruthy();
+    expect((await screen.findAllByText(TOAST_TITLE)).length).toBeGreaterThan(0);
+  });
+
+  it("is not raised for a refused address", async () => {
+    stubServer({ create: () => problem(422, "url_not_allowed", "req-url") });
+    await openApp("/?new=1");
+
+    const dialog = await fillAndSave();
+
+    expect(await within(dialog).findByText("Enter an address that starts with http:// or https://.")).toBeTruthy();
+    expect(screen.queryByText(TOAST_TITLE)).toBeNull();
+  });
+
+  it("is not raised for the bookmark limit, shown as a banner", async () => {
+    stubServer({ create: () => problem(422, "bookmark_limit_reached", "req-limit") });
+    await openApp("/?new=1");
+
+    const dialog = await fillAndSave();
+
+    expect(await within(dialog).findByText("Bookmark limit reached")).toBeTruthy();
+    expect(screen.queryByText(TOAST_TITLE)).toBeNull();
+  });
+
+  it("is not raised for a rate limit, shown as a banner", async () => {
+    stubServer({ create: () => problem(429, "rate_limited", "req-429") });
+    await openApp("/?new=1");
+
+    const dialog = await fillAndSave();
+
+    expect(await within(dialog).findByText("Too many attempts. Try again later.")).toBeTruthy();
+    expect(screen.queryByText(TOAST_TITLE)).toBeNull();
+  });
+
+  it("is not raised for a bookmark that is gone, shown as a banner", async () => {
+    stubServer({ update: () => problem(404, "not_found", "req-404") });
+    await openApp(`/bookmarks?bookmark=${ID}`);
+    await screen.findByRole("dialog", { name: "Edit bookmark" });
+    await type("Title", "My edit");
+
+    await act_(() => {
+      fireEvent.click(within(screen.getByRole("dialog", { name: "Edit bookmark" })).getByRole("button", { name: "Save" }));
+    });
+
+    expect(await screen.findByText("Bookmark not found")).toBeTruthy();
+    expect(screen.queryByText(TOAST_TITLE)).toBeNull();
+  });
+
+  it("is not raised for a change made elsewhere, shown as a banner", async () => {
+    stubServer({ update: () => problem(412, "precondition_failed", "req-412") });
+    await openApp(`/bookmarks?bookmark=${ID}`);
+    await screen.findByRole("dialog", { name: "Edit bookmark" });
+    await type("Title", "My edit");
+
+    await act_(() => {
+      fireEvent.click(within(screen.getByRole("dialog", { name: "Edit bookmark" })).getByRole("button", { name: "Save" }));
+    });
+
+    expect(await screen.findByText("This bookmark changed elsewhere")).toBeTruthy();
+    expect(screen.queryByText(TOAST_TITLE)).toBeNull();
+  });
+
+  it("is raised for a 422 the modal does not tell, such as a refusal of another operation's kind", async () => {
+    stubServer({ create: () => problem(422, "weak_password", "req-422") });
+    await openApp("/?new=1");
+
+    await fillAndSave();
+
+    expect((await screen.findAllByText(TOAST_TITLE)).length).toBeGreaterThan(0);
   });
 });
 

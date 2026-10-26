@@ -9,15 +9,39 @@ interface FakeAnimation {
   readonly finished: Promise<void>;
 }
 
+/** A fake animation that, like a real one, is "finished" once its finished promise has settled. */
 function animation(playState: AnimationPlayState, iterations: number, finished: Promise<void>): FakeAnimation {
-  return { playState, effect: { getComputedTiming: () => ({ iterations }) }, finished };
+  let ended = false;
+  void finished.then(() => {
+    ended = true;
+  });
+  return {
+    get playState() {
+      return ended ? "finished" : playState;
+    },
+    effect: { getComputedTiming: () => ({ iterations }) },
+    finished,
+  };
 }
 
 const NEVER = new Promise<void>(() => undefined);
 
-/** A page whose evaluate runs the callback here, against a document that holds the given animations. */
-function pageWith(animations: readonly FakeAnimation[]): Page {
-  Object.defineProperty(globalThis, "document", { value: { getAnimations: () => animations }, configurable: true });
+/**
+ * A page whose evaluate runs the callback here, against a document that holds the given animations, or the ones
+ * `animations` gives once the given number of frames has passed.
+ */
+function pageWith(animations: readonly FakeAnimation[] | ((frames: number) => readonly FakeAnimation[])): Page {
+  let frames = 0;
+  const current = typeof animations === "function" ? animations : () => animations;
+  Object.defineProperty(globalThis, "document", { value: { getAnimations: () => current(frames) }, configurable: true });
+  Object.defineProperty(globalThis, "requestAnimationFrame", {
+    value: (callback: () => void) =>
+      setTimeout(() => {
+        frames += 1;
+        callback();
+      }, 1),
+    configurable: true,
+  });
   return { evaluate: (callback: () => Promise<void>) => callback() } as unknown as Page;
 }
 
@@ -35,6 +59,7 @@ function within<T>(promise: Promise<T>, what: string, ms = 1000): Promise<T> {
 void describe("settling the animations before a scan", () => {
   afterEach(() => {
     Reflect.deleteProperty(globalThis, "document");
+    Reflect.deleteProperty(globalThis, "requestAnimationFrame");
   });
 
   void it("waits for a running animation that ends", async () => {
@@ -43,6 +68,19 @@ void describe("settling the animations before a scan", () => {
       ended = true;
     });
     await within(settleAnimations(pageWith([animation("running", 1, finished)])), "a running animation");
+    assert.equal(ended, true);
+  });
+
+  void it("waits for a transition that starts a frame later, as a dialog's does once its starting style is removed", async () => {
+    let ended = false;
+    const fadeIn = animation(
+      "running",
+      1,
+      new Promise<void>((resolve) => setTimeout(resolve, 20)).then(() => {
+        ended = true;
+      }),
+    );
+    await within(settleAnimations(pageWith((frames) => (frames >= 1 && !ended ? [fadeIn] : []))), "a transition that starts late");
     assert.equal(ended, true);
   });
 

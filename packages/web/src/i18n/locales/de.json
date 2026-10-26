@@ -9,6 +9,8 @@
     "breadcrumb": "Brotkrumennavigation",
     "home": "Start",
     "bookmarks": "Lesezeichen",
+    "folders": "Ordner",
+    "tags": "Tags",
     "helpAndDocs": "Hilfe & Doku",
     "switchToDark": "Zum dunklen Design wechseln",
     "switchToLight": "Zum hellen Design wechseln",
@@ -31,6 +33,13 @@
       "title": "E-Mail ist nicht eingerichtet",
       "description": "Dieser Server sendet keine E-Mails, deshalb werden Einladungen, die Bestätigung von Adressen und E-Mails zum Zurücksetzen des Passworts nicht zugestellt. Einladungs- und Zurücksetzen-Links werden dir stattdessen angezeigt, damit du sie selbst weitergibst.",
       "action": "Einstellungen & Status öffnen"
+    },
+    "foldersSection": {
+      "label": "Ordner",
+      "loading": "Die Ordnerliste wird geladen",
+      "loadFailed": "Die Ordnerliste konnte nicht geladen werden.",
+      "retry": "Ordner neu laden",
+      "empty": "Du hast noch keine Ordner"
     }
   },
   "home": {
@@ -68,6 +77,35 @@
         "hasSlug": "Mit Slug",
         "forwarding": "Weiterleitung aktiv"
       },
+      "filters": {
+        "active": "Aktive Filter",
+        "remove": "Filter entfernen: {label}",
+        "folderChip": "Ordner: {name}",
+        "folderChipUnknown": "Ordner",
+        "folder": {
+          "label": "Ordner",
+          "placeholder": "Beliebiger Ordner",
+          "loading": "Ordner werden geladen",
+          "loadFailed": "Die Ordner konnten nicht geladen werden.",
+          "empty": "Du hast noch keine Ordner"
+        },
+        "tags": {
+          "label": "Tags",
+          "placeholder": "Beliebige Tags",
+          "loading": "Tags werden geladen",
+          "loadFailed": "Die Tags konnten nicht geladen werden.",
+          "empty": "Du hast noch keine Tags",
+          "remove": "Tag {name} entfernen",
+          "unknown": "Unbekannter Tag",
+          "pending": "Tag",
+          "limit": "Ein Lesezeichen muss jeden gewählten Tag tragen, höchstens {max}."
+        },
+        "staleFolder": {
+          "title": "Dieser Ordner existiert nicht mehr",
+          "description": "Der Ordnerfilter wurde entfernt, die Liste ist nicht mehr darauf eingeschränkt.",
+          "dismiss": "Schließen"
+        }
+      },
       "view": {
         "label": "Ansicht",
         "grid": "Raster",
@@ -104,6 +142,8 @@
       "select": "{title} auswählen",
       "noSlug": "Kein Slug",
       "pinned": "Angeheftet",
+      "moreTags": "{count, plural, one {# weiterer Tag} other {# weitere Tags}}",
+      "moreTagsShort": "+{count}",
       "neverOpened": "Noch nicht geöffnet",
       "opens": "{count, plural, one {# Aufruf} other {# Aufrufe}}",
       "usage": "{count, plural, one {# Aufruf} other {# Aufrufe}} · {when}",
@@ -201,6 +241,31 @@
           "tooLong": "Verwende höchstens {max, number} Zeichen."
         }
       },
+      "folders": {
+        "label": "Ordner",
+        "placeholder": "Ordner suchen oder erstellen",
+        "empty": "Du hast noch keine Ordner. Gib einen Namen ein, um einen zu erstellen.",
+        "loading": "Deine Ordner werden geladen",
+        "loadFailed": "Deine Ordner konnten nicht geladen werden.",
+        "create": "Ordner „{name}“ erstellen",
+        "remove": "{name} entfernen",
+        "error": {
+          "taken": "Du hast bereits einen Ordner mit diesem Namen. Wähle ihn aus der Liste.",
+          "invalid": "Verwende einen Namen mit 1 bis {max, number} Zeichen."
+        }
+      },
+      "tags": {
+        "label": "Tags",
+        "placeholder": "Tag suchen oder hinzufügen",
+        "empty": "Du hast noch keine Tags. Gib einen Namen ein, um einen zu erstellen.",
+        "loading": "Deine Tags werden geladen",
+        "loadFailed": "Deine Tags konnten nicht geladen werden.",
+        "create": "Tag „{name}“ erstellen",
+        "remove": "{name} entfernen",
+        "error": {
+          "tooLong": "Verwende einen Tag-Namen mit höchstens {max, number} Zeichen."
+        }
+      },
       "description": {
         "label": "Beschreibung",
         "counter": "{count, number} / {max, number}",
@@ -250,7 +315,272 @@
         "notFound": {
           "title": "Lesezeichen nicht gefunden",
           "description": "Es wurde vielleicht gelöscht oder gehört nicht dir."
+        },
+        "choiceNotFound": {
+          "title": "Ein Ordner oder Tag wurde nicht gefunden",
+          "description": "Das Lesezeichen, ein Ordner oder ein Tag, den du gewählt hast, wurde vielleicht gelöscht. Deine Auswahl bleibt erhalten; prüfe sie und speichere erneut."
         }
+      }
+    }
+  },
+  "folders": {
+    "page": {
+      "title": "Ordner"
+    },
+    "new": "Neuer Ordner",
+    "deleted": "Ordner gelöscht.",
+    "sort": {
+      "label": "Sortieren nach",
+      "name": "Name",
+      "count": "Lesezeichen",
+      "updated": "Zuletzt geändert"
+    },
+    "list": {
+      "label": "Ordner",
+      "loading": "Ordner werden geladen",
+      "loadFailed": "Die Ordner konnten nicht geladen werden. Versuche es gleich noch einmal.",
+      "loadMoreFailed": "Weitere Ordner konnten nicht geladen werden. Versuche es gleich noch einmal.",
+      "refreshFailed": "Die Ordner konnten nicht aktualisiert werden. Die Anzeige ist womöglich veraltet.",
+      "retry": "Erneut versuchen",
+      "loadMore": "Mehr laden",
+      "count": "{shown} von {total} angezeigt",
+      "countAtLeast": "{shown} von {total}+ angezeigt",
+      "actionsFor": "Aktionen für {name}",
+      "bookmarkCount": "{count, plural, one {# Lesezeichen} other {# Lesezeichen}}",
+      "table": {
+        "name": "Name",
+        "bookmarks": "Lesezeichen",
+        "updated": "Geändert",
+        "actions": "Aktionen"
+      },
+      "empty": {
+        "title": "Noch keine Ordner",
+        "description": "Ordner fassen zusammengehörige Lesezeichen zusammen, etwa alles zu einem Projekt oder einem Thema. Ein Lesezeichen kann in mehreren Ordnern liegen, und das Löschen eines Ordners löscht nie die Lesezeichen darin."
+      }
+    },
+    "actions": {
+      "open": "In Lesezeichen öffnen",
+      "rename": "Umbenennen",
+      "restyle": "Symbol und Farbe ändern",
+      "delete": "Löschen"
+    },
+    "delete": {
+      "title": "„{name}“ löschen?",
+      "description": "{count, plural, =0 {In diesem Ordner liegen keine Lesezeichen; nur der Ordner wird gelöscht.} one {Das # Lesezeichen bleibt erhalten; nur der Ordner wird gelöscht.} other {Die # Lesezeichen bleiben erhalten; nur der Ordner wird gelöscht.}}",
+      "confirm": "Ordner löschen",
+      "cancel": "Abbrechen",
+      "error": {
+        "unavailable": "Der Ordner konnte gerade nicht gelöscht werden. Versuche es gleich noch einmal.",
+        "notFound": "Diesen Ordner gibt es nicht mehr."
+      }
+    },
+    "form": {
+      "close": "Ordnerformular schließen",
+      "description": "Ein Ordner ist nur für dich sichtbar.",
+      "title": {
+        "create": "Neuer Ordner",
+        "rename": "Ordner umbenennen",
+        "style": "Symbol und Farbe ändern"
+      },
+      "name": {
+        "label": "Name",
+        "error": {
+          "required": "Gib dem Ordner einen Namen.",
+          "taken": "Du hast bereits einen Ordner mit diesem Namen.",
+          "invalid": "Verwende einen Namen mit 1 bis {max} Zeichen."
+        }
+      },
+      "icon": {
+        "label": "Symbol",
+        "placeholder": "Symbole suchen",
+        "empty": "Kein Symbol passt."
+      },
+      "color": {
+        "label": "Farbe"
+      },
+      "preview": "Ordnername",
+      "cancel": "Abbrechen",
+      "submit": {
+        "create": "Ordner erstellen",
+        "update": "Änderungen speichern"
+      },
+      "saved": {
+        "created": "Ordner erstellt.",
+        "updated": "Ordner gespeichert."
+      },
+      "error": {
+        "changedElsewhere": "Dieser Ordner wurde woanders geändert. Schließe dieses Formular und öffne es erneut, um die neueste Version zu sehen.",
+        "notFound": "Diesen Ordner gibt es nicht mehr.",
+        "unavailable": "Der Ordner konnte gerade nicht gespeichert werden. Versuche es gleich noch einmal."
+      }
+    },
+    "color": {
+      "1": "Vergissmeinnicht",
+      "2": "Grün",
+      "3": "Bernstein",
+      "4": "Rot",
+      "5": "Blau",
+      "6": "Violett",
+      "7": "Rosa",
+      "8": "Mint"
+    },
+    "icon": {
+      "folder": "Ordner",
+      "folder-open": "Offener Ordner",
+      "folder-heart": "Ordner mit Herz",
+      "folder-code": "Ordner mit Code",
+      "folder-archive": "Archivordner",
+      "briefcase": "Aktentasche",
+      "building-2": "Gebäude",
+      "book": "Buch",
+      "book-open": "Offenes Buch",
+      "bookmark": "Lesezeichen",
+      "star": "Stern",
+      "heart": "Herz",
+      "house": "Haus",
+      "newspaper": "Zeitung",
+      "graduation-cap": "Doktorhut",
+      "flask-conical": "Kolben",
+      "code": "Code",
+      "terminal": "Terminal",
+      "cpu": "Prozessor",
+      "database": "Datenbank",
+      "server": "Server",
+      "cloud": "Wolke",
+      "globe": "Globus",
+      "map": "Karte",
+      "map-pin": "Kartenmarkierung",
+      "plane": "Flugzeug",
+      "car": "Auto",
+      "utensils": "Besteck",
+      "coffee": "Kaffee",
+      "shopping-cart": "Einkaufswagen",
+      "gift": "Geschenk",
+      "music": "Musik",
+      "film": "Film",
+      "camera": "Kamera",
+      "image": "Bild",
+      "video": "Video",
+      "gamepad-2": "Spielcontroller",
+      "palette": "Farbpalette",
+      "lightbulb": "Glühbirne",
+      "rocket": "Rakete",
+      "target": "Zielscheibe",
+      "trophy": "Pokal",
+      "flag": "Flagge",
+      "tag": "Etikett",
+      "wallet": "Geldbörse",
+      "credit-card": "Kreditkarte",
+      "dumbbell": "Hantel",
+      "leaf": "Blatt",
+      "sun": "Sonne",
+      "moon": "Mond",
+      "zap": "Blitz",
+      "shield": "Schild",
+      "lock": "Schloss",
+      "users": "Personen",
+      "mail": "Brief",
+      "calendar": "Kalender",
+      "inbox": "Posteingang",
+      "package": "Paket",
+      "wrench": "Schraubenschlüssel",
+      "sparkles": "Funken"
+    }
+  },
+  "tags": {
+    "page": {
+      "title": "Tags"
+    },
+    "note": "Tags sind nur für dich sichtbar. Andere Mitglieder des Arbeitsbereichs sehen sie nie.",
+    "deleted": "Tag gelöscht.",
+    "sort": {
+      "label": "Sortieren nach",
+      "name": "Name",
+      "count": "Anzahl"
+    },
+    "search": {
+      "label": "Tags durchsuchen",
+      "placeholder": "Tags durchsuchen",
+      "clear": "Suche zurücksetzen",
+      "none": {
+        "title": "Kein Tag passt",
+        "description": "Keiner deiner Tags enthält „{query}“."
+      }
+    },
+    "list": {
+      "label": "Tags",
+      "loading": "Tags werden geladen",
+      "loadFailed": "Die Tags konnten nicht geladen werden. Versuche es gleich noch einmal.",
+      "retry": "Erneut versuchen",
+      "actionsFor": "Aktionen für {name}",
+      "bookmarkCount": "{count, plural, one {# Lesezeichen} other {# Lesezeichen}}",
+      "empty": {
+        "title": "Noch keine Tags",
+        "description": "Tags kennzeichnen Lesezeichen über Ordner hinweg, etwa nach Thema oder Projekt, und ein Lesezeichen kann mehrere tragen. Füge einen Tag hinzu, wenn du ein Lesezeichen speicherst oder bearbeitest, dann erscheint er hier mit den Lesezeichen, die ihn verwenden.",
+        "action": "Zu den Lesezeichen"
+      },
+      "table": {
+        "name": "Name",
+        "bookmarks": "Lesezeichen",
+        "actions": "Aktionen"
+      }
+    },
+    "actions": {
+      "open": "Alle in Lesezeichen anzeigen",
+      "rename": "Umbenennen",
+      "delete": "Löschen"
+    },
+    "preview": {
+      "label": "Neueste Lesezeichen mit dem Tag {name}",
+      "loading": "Lesezeichen werden geladen",
+      "loadFailed": "Die Lesezeichen dieses Tags konnten nicht geladen werden. Versuche es gleich noch einmal.",
+      "retry": "Erneut versuchen",
+      "empty": "Kein Lesezeichen trägt diesen Tag.",
+      "viewAll": "Alle in Lesezeichen anzeigen",
+      "close": "Vorschau schließen",
+      "missing": "Diesen Tag gibt es nicht. Er wurde vielleicht umbenannt, zusammengeführt oder gelöscht.",
+      "placeholder": {
+        "title": "Tag auswählen",
+        "description": "Wähle einen Tag, um seine neuesten Lesezeichen zu sehen."
+      },
+      "table": {
+        "title": "Lesezeichen",
+        "added": "Hinzugefügt"
+      }
+    },
+    "form": {
+      "close": "Umbenennen-Formular schließen",
+      "title": "Tag umbenennen",
+      "description": "Ein Tag ist nur für dich sichtbar.",
+      "name": {
+        "label": "Name",
+        "error": {
+          "required": "Gib dem Tag einen Namen.",
+          "taken": "Du hast bereits einen Tag mit diesem Namen.",
+          "invalid": "Verwende einen Namen mit 1 bis {max} Zeichen."
+        }
+      },
+      "cancel": "Abbrechen",
+      "submit": "Speichern",
+      "saved": "Tag umbenannt.",
+      "error": {
+        "notFound": "Diesen Tag gibt es nicht mehr."
+      }
+    },
+    "merge": {
+      "title": "In „{into}“ zusammenführen?",
+      "description": "{count, plural, =0 {Du hast bereits einen Tag namens „{into}“. „{from}“ liegt auf keinem Lesezeichen und wird gelöscht.} one {Du hast bereits einen Tag namens „{into}“. Das # Lesezeichen mit dem Tag „{from}“ erhält stattdessen „{into}“, und „{from}“ wird gelöscht. Das Lesezeichen bleibt erhalten.} other {Du hast bereits einen Tag namens „{into}“. Die # Lesezeichen mit dem Tag „{from}“ erhalten stattdessen „{into}“, und „{from}“ wird gelöscht. Die Lesezeichen bleiben erhalten.}}",
+      "confirm": "Tags zusammenführen",
+      "cancel": "Zurück zum Umbenennen",
+      "merged": "In „{name}“ zusammengeführt."
+    },
+    "delete": {
+      "title": "„{name}“ löschen?",
+      "description": "{count, plural, =0 {Kein Lesezeichen trägt diesen Tag; nur der Tag wird gelöscht.} one {Der Tag wird von seinem # Lesezeichen entfernt. Das Lesezeichen bleibt erhalten; nur der Tag wird gelöscht.} other {Der Tag wird von seinen # Lesezeichen entfernt. Die Lesezeichen bleiben erhalten; nur der Tag wird gelöscht.}}",
+      "confirm": "Tag löschen",
+      "cancel": "Abbrechen",
+      "error": {
+        "notFound": "Diesen Tag gibt es nicht mehr."
       }
     }
   },
@@ -2000,6 +2330,9 @@
       "newBookmark": "Neues Lesezeichen",
       "goHome": "Zu Start gehen",
       "goBookmarks": "Zu Lesezeichen gehen",
+      "goFolders": "Zu Ordnern gehen",
+      "goTags": "Zu Tags gehen",
+      "newFolder": "Neuer Ordner (auf der Seite Ordner)",
       "help": "Diese Liste anzeigen",
       "move": "Fokus zum nächsten oder vorherigen Lesezeichen bewegen",
       "open": "Das fokussierte Lesezeichen öffnen",
