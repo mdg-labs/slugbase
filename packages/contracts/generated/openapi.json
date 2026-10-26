@@ -1787,6 +1787,167 @@
         ],
         "type": "object"
       },
+      "GoCandidate": {
+        "additionalProperties": false,
+        "properties": {
+          "host": {
+            "description": "The host of the bookmark's destination, never the whole address",
+            "type": "string"
+          },
+          "id": {
+            "description": "The bookmark's identifier; the choice names it",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "accountId": {
+                    "description": "The owner's account",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "description": "The owner's display name, as a member of the workspace sees it",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "accountId",
+                  "displayName"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who owns a bookmark that is shared with the caller; null for the caller's own bookmark and for one whose owner has left the workspace"
+          },
+          "sharedVia": {
+            "anyOf": [
+              {
+                "enum": [
+                  "direct",
+                  "team",
+                  "folder"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How the bookmark is shared with the caller: directly, through a team or through a shared folder; null for the caller's own bookmark"
+          },
+          "title": {
+            "description": "The bookmark's title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "host",
+          "owner",
+          "sharedVia"
+        ],
+        "type": "object"
+      },
+      "GoDestination": {
+        "additionalProperties": false,
+        "properties": {
+          "url": {
+            "description": "The destination to go to: the bookmark's URL as stored, checked again to be an http or https URL",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "type": "object"
+      },
+      "GoResolution": {
+        "oneOf": [
+          {
+            "additionalProperties": false,
+            "properties": {
+              "result": {
+                "const": "none",
+                "description": "Nothing the caller can read has the slug in the workspace, or the slug is not one",
+                "type": "string"
+              }
+            },
+            "required": [
+              "result"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "bookmark": {
+                "$ref": "#/components/schemas/GoCandidate"
+              },
+              "result": {
+                "const": "preferred",
+                "description": "The caller remembered a bookmark for the slug and it is still a candidate",
+                "type": "string"
+              }
+            },
+            "required": [
+              "result",
+              "bookmark"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "bookmark": {
+                "$ref": "#/components/schemas/GoCandidate"
+              },
+              "result": {
+                "const": "single",
+                "description": "The caller's own bookmark with the slug, or the one bookmark shared with the caller that has it",
+                "type": "string"
+              }
+            },
+            "required": [
+              "result",
+              "bookmark"
+            ],
+            "type": "object"
+          },
+          {
+            "additionalProperties": false,
+            "properties": {
+              "candidates": {
+                "description": "The candidates in the order of their titles, then their identifiers",
+                "items": {
+                  "$ref": "#/components/schemas/GoCandidate"
+                },
+                "minItems": 2,
+                "type": "array"
+              },
+              "result": {
+                "const": "multiple",
+                "description": "Several bookmarks shared with the caller have the slug and the caller has none of their own: the caller chooses one",
+                "type": "string"
+              }
+            },
+            "required": [
+              "result",
+              "candidates"
+            ],
+            "type": "object"
+          }
+        ]
+      },
       "HealthStatus": {
         "additionalProperties": false,
         "properties": {
@@ -7607,6 +7768,267 @@
         ],
         "x-slugbase-auth": "member",
         "x-slugbase-rate": "write",
+        "x-slugbase-scope": "write"
+      }
+    },
+    "/api/v1/go/choose": {
+      "post": {
+        "operationId": "chooseSlug",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "bookmarkId": {
+                    "description": "The bookmark to go to. It has to be a current candidate of the slug for the caller",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "remember": {
+                    "description": "Whether to remember the choice, so that the slug resolves to this bookmark from now on while it stays a candidate; the choice is not remembered when this is left out",
+                    "type": "boolean"
+                  },
+                  "slug": {
+                    "description": "The slug that was resolved, as the caller wrote it",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "slug",
+                  "bookmarkId"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoDestination"
+                }
+              }
+            },
+            "description": "The destination of the chosen bookmark. The use is counted asynchronously, as the open of a bookmark is, and the choice is remembered for the slug when remember is true, replacing an earlier one"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The slug has no such bookmark among its current candidates for the caller (slug_not_found): another member's bookmark that is not shared with the caller, a bookmark of another workspace, one that does not forward, a plan-archived one, one with another slug, an unknown identifier and a slug outside the grammar are answered alike, and nothing is remembered or counted; or the request acts in no workspace"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body did not pass validation, or the stored URL is not an http or https URL (url_not_allowed); nothing is remembered or counted"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Choose a bookmark of a slug and get its destination",
+        "tags": [
+          "go"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-rate": "go",
+        "x-slugbase-scope": "write"
+      }
+    },
+    "/api/v1/go/resolve": {
+      "post": {
+        "operationId": "resolveSlug",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "slug": {
+                    "description": "The slug to resolve. It is trimmed and lower-cased before it is judged; one that is empty or outside the grammar resolves to nothing, not to an error",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "slug"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoResolution"
+                }
+              }
+            },
+            "description": "What the slug resolves to for the caller in the workspace, in the order of Q25: the bookmark the caller remembered for it if it is still a candidate (preferred), the caller's own bookmark (single), the one bookmark shared with the caller (single), several bookmarks shared with the caller (multiple), or none. A slug that nothing the caller can read has is none, whoever else has it and in whichever workspace; the answer names no address and counts no use"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the resolution is a POST, so it takes the write scope though it writes nothing"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace: the account has none, or the workspace is being deleted"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body did not pass validation"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Resolve a slug for the caller",
+        "tags": [
+          "go"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-rate": "go",
         "x-slugbase-scope": "write"
       }
     },
@@ -14831,6 +15253,9 @@
     },
     {
       "name": "folders"
+    },
+    {
+      "name": "go"
     },
     {
       "name": "instance"

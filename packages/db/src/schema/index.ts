@@ -11,6 +11,7 @@ export type { MemberRole } from "./workspaces.ts";
 export { bookmarks } from "./bookmarks.ts";
 export { bookmarkTags, tags } from "./tags.ts";
 export { folderBookmarks, folders } from "./folders.ts";
+export { slugPreferences } from "./slug-preferences.ts";
 export { workspaceInvitations } from "./invitations.ts";
 export type { InvitationStatus } from "./invitations.ts";
 export { idempotencyKeys } from "./idempotency-keys.ts";

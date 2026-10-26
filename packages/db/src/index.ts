@@ -48,6 +48,8 @@ export type { BookmarkCreation, BookmarkCreationResult, BookmarkRepository } fro
 export { isTagNameTaken, tagRepository } from "./repositories/tags.ts";
 export type { TagRepository } from "./repositories/tags.ts";
 export { folderRepository, isFolderNameTaken } from "./repositories/folders.ts";
+export { goRepository } from "./repositories/go.ts";
+export type { GoRepository } from "./repositories/go.ts";
 export type { FolderRepository } from "./repositories/folders.ts";
 export { workspaceRepository } from "./repositories/workspaces.ts";
 export type { NewWorkspace, WorkspaceDetail, WorkspaceRepository, WorkspaceSummary } from "./repositories/workspaces.ts";

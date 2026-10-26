@@ -39,6 +39,11 @@ export interface OperationFixture extends RequestParts {
   readonly status?: number;
   /** The request naming the resources of workspace B; needed by a tenant-scoped operation that takes an identifier. */
   readonly foreign?: RequestParts;
+  /**
+   * What the request naming the resources of workspace B is answered, when it is not `404 not_found`: an operation that looks a slug up answers `404`
+   * with its own code (`slug_not_found`), or an empty `200`, for a slug nothing the caller can read has.
+   */
+  readonly foreignAnswer?: { readonly status: number; readonly code?: string };
 }
 
 export type ContractFixtures = Readonly<Record<string, OperationFixture>>;
@@ -336,7 +341,7 @@ export async function walkContract(options: WalkerOptions): Promise<WalkerReport
       if (fixture.foreign === undefined) {
         fail("no_foreign_fixture", "a tenant-scoped operation that takes an identifier needs the request naming a resource of workspace B (foreign)");
       } else {
-        await exercise("resource of workspace B", hooks.workspaceA(operation), fixture.foreign, { status: 404, code: "not_found" });
+        await exercise("resource of workspace B", hooks.workspaceA(operation), fixture.foreign, fixture.foreignAnswer ?? { status: 404, code: "not_found" });
       }
     }
   }

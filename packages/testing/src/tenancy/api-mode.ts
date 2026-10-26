@@ -34,6 +34,11 @@ import { isTokenCallable } from "./token-mode.js";
 // `owner`. A principal of workspace A below it never reaches the handler, so a
 // 404 is asserted exactly where a lookup happens.
 //
+// An operation that looks something up by a handle which the caller writes (a slug) and not by the identifier of a row may answer, for a handle that
+// names nothing the caller can read, an empty answer instead of 404: `ApiMatrixOptions.emptyAnswers` names the status of each such operation. It
+// replaces the 404 of a principal that reaches the handler and nothing else: the refusals of a role below the policy and of a token, and the 404 of the
+// instance admin, stay as they are, and the answer still must not quote anything of B.
+//
 // The principals of A are its three sessions and, when the fixture holds them,
 // its API tokens, bound to A. A token is refused before the role is looked at:
 // 403 where the operation is not token-callable (it declares no scope, or
@@ -47,7 +52,7 @@ import { isTokenCallable } from "./token-mode.js";
 const ROLE_RANK: Readonly<Record<PrincipalRole, number>> = { member: 1, admin: 2, owner: 3 };
 
 /** The status the chain answers a principal of workspace A for a row of workspace B, by the policy of the operation. */
-function expectedStatus(operation: ClassifiedOperation, principal: MatrixPrincipal): number {
+function expectedStatus(operation: ClassifiedOperation, principal: MatrixPrincipal, emptyAnswers: Readonly<Record<string, number>>): number {
   if (isFixtureInstanceAdmin(principal)) {
     return 404;
   }
@@ -56,7 +61,10 @@ function expectedStatus(operation: ClassifiedOperation, principal: MatrixPrincip
   }
   const required = Object.hasOwn(ROLE_RANK, operation.policy) ? ROLE_RANK[operation.policy as PrincipalRole] : undefined;
   // A policy outside the tenant-scoped ones does not reach here; it is held to the stricter answer.
-  return required !== undefined && ROLE_RANK[principal.role] < required ? 403 : 404;
+  if (required !== undefined && ROLE_RANK[principal.role] < required) {
+    return 403;
+  }
+  return emptyAnswers[operation.operationId] ?? 404;
 }
 
 /** How a failure names the principal: `admin of A`, or `admin of A by a read-write token`. */
@@ -68,12 +76,15 @@ function describePrincipal(principal: MatrixPrincipal): string {
 }
 
 /** Why the status is the expected one, for the failure that says it was not. */
-function reasonFor(operation: ClassifiedOperation, principal: MatrixPrincipal, expected: number): string {
+function reasonFor(operation: ClassifiedOperation, principal: MatrixPrincipal, expected: number, emptyAnswers: Readonly<Record<string, number>>): string {
   if (isFixtureInstanceAdmin(principal)) {
     return "the instance-admin flag is no membership: the principal has no workspace to act in, and an answer other than 404 discloses what a workspace holds";
   }
   if (expected === 404) {
     return "a 403 discloses that the row exists";
+  }
+  if (emptyAnswers[operation.operationId] === expected) {
+    return "the operation looks the handle up and answers an empty result for one that names nothing the caller can read";
   }
   if (isFixtureToken(principal) && !isTokenCallable(operation)) {
     return "the operation declares no scope for a token, or re-authentication: a token never calls it";
@@ -125,6 +136,12 @@ export interface ApiMatrixOptions {
    * `ClassifiedOperation.inputs`).
    */
   readonly mapping?: PathParameterMapping;
+  /**
+   * The operations that look something up by a handle the caller writes (a slug) and answer a handle that names nothing the caller can read with an
+   * empty result and not 404: the status of each, by operation identifier. It stands in for the 404 of a principal that reaches the handler; the
+   * answer still must not quote anything of workspace B, and workspace B must be unchanged.
+   */
+  readonly emptyAnswers?: Readonly<Record<string, number>>;
 }
 
 export interface ApiMatrixReport {
@@ -232,6 +249,7 @@ function leakedNames(body: unknown, names: readonly string[], request: string): 
 
 export async function runApiMatrix(options: ApiMatrixOptions): Promise<ApiMatrixReport> {
   const mapping = options.mapping ?? PATH_PARAMETER_MAPPING;
+  const emptyAnswers = options.emptyAnswers ?? {};
   const { fixture, request } = options;
   const classification = classifyOperations(options.document);
   const failures: MatrixFailure[] = classification.problems.map((problem) =>
@@ -310,14 +328,14 @@ export async function runApiMatrix(options: ApiMatrixOptions): Promise<ApiMatrix
         }
 
         if (response !== undefined) {
-          const expected = expectedStatus(operation, principal);
+          const expected = expectedStatus(operation, principal, emptyAnswers);
           // An instance admin has no workspace, so it is answered 404 by an operation that names nothing as well.
           if ((targets.length > 0 || isFixtureInstanceAdmin(principal)) && response.status !== expected) {
             failures.push(
               failure(
                 subject,
                 "unexpected_status",
-                `${where}: answered ${String(response.status)}, expected ${String(expected)} (${reasonFor(operation, principal, expected)})`,
+                `${where}: answered ${String(response.status)}, expected ${String(expected)} (${reasonFor(operation, principal, expected, emptyAnswers)})`,
               ),
             );
           }

@@ -365,6 +365,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/go/choose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Choose a bookmark of a slug and get its destination */
+        post: operations["chooseSlug"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/go/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resolve a slug for the caller */
+        post: operations["resolveSlug"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/instance/accounts": {
         parameters: {
             query?: never;
@@ -1894,6 +1928,62 @@ export interface components {
              * @description The email address of the account whose password is to be reset; case does not matter
              */
             email: string;
+        };
+        GoCandidate: {
+            /** @description The host of the bookmark's destination, never the whole address */
+            host: string;
+            /**
+             * Format: uuid
+             * @description The bookmark's identifier; the choice names it
+             */
+            id: string;
+            /** @description Who owns a bookmark that is shared with the caller; null for the caller's own bookmark and for one whose owner has left the workspace */
+            owner: {
+                /**
+                 * Format: uuid
+                 * @description The owner's account
+                 */
+                accountId: string;
+                /** @description The owner's display name, as a member of the workspace sees it */
+                displayName: string;
+            } | null;
+            /** @description How the bookmark is shared with the caller: directly, through a team or through a shared folder; null for the caller's own bookmark */
+            sharedVia: ("direct" | "team" | "folder") | null;
+            /** @description The bookmark's title */
+            title: string;
+        };
+        GoDestination: {
+            /** @description The destination to go to: the bookmark's URL as stored, checked again to be an http or https URL */
+            url: string;
+        };
+        GoResolution: {
+            /**
+             * @description Nothing the caller can read has the slug in the workspace, or the slug is not one
+             * @constant
+             */
+            result: "none";
+        } | {
+            bookmark: components["schemas"]["GoCandidate"];
+            /**
+             * @description The caller remembered a bookmark for the slug and it is still a candidate
+             * @constant
+             */
+            result: "preferred";
+        } | {
+            bookmark: components["schemas"]["GoCandidate"];
+            /**
+             * @description The caller's own bookmark with the slug, or the one bookmark shared with the caller that has it
+             * @constant
+             */
+            result: "single";
+        } | {
+            /** @description The candidates in the order of their titles, then their identifiers */
+            candidates: components["schemas"]["GoCandidate"][];
+            /**
+             * @description Several bookmarks shared with the caller have the slug and the caller has none of their own: the caller chooses one
+             * @constant
+             */
+            result: "multiple";
         };
         HealthStatus: {
             /** @constant */
@@ -5015,6 +5105,197 @@ export interface operations {
                 };
             };
             /** @description The identifier or the body did not pass validation (no bookmark identifier, more than 1 000, a malformed identifier, or a field the operation does not declare). Nothing is written */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    chooseSlug: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /**
+                     * Format: uuid
+                     * @description The bookmark to go to. It has to be a current candidate of the slug for the caller
+                     */
+                    bookmarkId: string;
+                    /** @description Whether to remember the choice, so that the slug resolves to this bookmark from now on while it stays a candidate; the choice is not remembered when this is left out */
+                    remember?: boolean;
+                    /** @description The slug that was resolved, as the caller wrote it */
+                    slug: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The destination of the chosen bookmark. The use is counted asynchronously, as the open of a bookmark is, and the choice is remembered for the slug when remember is true, replacing an earlier one */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoDestination"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The slug has no such bookmark among its current candidates for the caller (slug_not_found): another member's bookmark that is not shared with the caller, a bookmark of another workspace, one that does not forward, a plan-archived one, one with another slug, an unknown identifier and a slug outside the grammar are answered alike, and nothing is remembered or counted; or the request acts in no workspace */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation, or the stored URL is not an http or https URL (url_not_allowed); nothing is remembered or counted */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    resolveSlug: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** @description The slug to resolve. It is trimmed and lower-cased before it is judged; one that is empty or outside the grammar resolves to nothing, not to an error */
+                    slug: string;
+                };
+            };
+        };
+        responses: {
+            /** @description What the slug resolves to for the caller in the workspace, in the order of Q25: the bookmark the caller remembered for it if it is still a candidate (preferred), the caller's own bookmark (single), the one bookmark shared with the caller (single), several bookmarks shared with the caller (multiple), or none. A slug that nothing the caller can read has is none, whoever else has it and in whichever workspace; the answer names no address and counts no use */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoResolution"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the resolution is a POST, so it takes the write scope though it writes nothing */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation */
             422: {
                 headers: {
                     [name: string]: unknown;

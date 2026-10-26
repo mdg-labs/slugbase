@@ -1744,6 +1744,9 @@ export function changeMemberRole(input: MemberRoleDependencies, ask: MemberRoleA
 // @public
 export function changeWorkspaceSettings(input: WorkspaceAdministrationDependencies, ask: WorkspaceSettingsAsk): Promise<WorkspaceSettingsOutcome>;
 
+// @public (undocumented)
+export function chooseSlugBookmark(input: GoChooseDependencies, ask: GoChooseAsk): Promise<GoChooseOutcome>;
+
 // @public
 export interface ClientErrorReportPort extends Port {
     // (undocumented)
@@ -2454,6 +2457,134 @@ export function generateCredentialToken(): CredentialToken;
 
 // @public
 export function generateTotpSecret(): Uint8Array;
+
+// @public
+export type GoAccess = "owner" | "direct" | "team" | "folder";
+
+// @public
+export interface GoBookmarkSummary {
+    readonly host: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly ownerId: string | null;
+    readonly ownerName: string | null;
+    // (undocumented)
+    readonly title: string;
+}
+
+// @public
+export interface GoCandidate {
+    // (undocumented)
+    readonly access: GoAccess;
+    // (undocumented)
+    readonly id: string;
+    readonly ownerId: string | null;
+    readonly url: string;
+}
+
+// @public (undocumented)
+export interface GoCandidateSet {
+    // (undocumented)
+    readonly candidates: readonly GoCandidate[];
+    readonly preferredId: string | undefined;
+}
+
+// @public
+export interface GoChoice {
+    // (undocumented)
+    readonly host: string;
+    // (undocumented)
+    readonly id: string;
+    readonly owner: {
+        readonly accountId: string;
+        readonly displayName: string;
+    } | null;
+    readonly sharedVia: "direct" | "team" | "folder" | null;
+    // (undocumented)
+    readonly title: string;
+}
+
+// @public (undocumented)
+export interface GoChooseAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly bookmarkId: string;
+    readonly remember: boolean;
+    readonly slug: string;
+}
+
+// @public (undocumented)
+export interface GoChooseDependencies {
+    // (undocumented)
+    readonly store: GoStore;
+    // (undocumented)
+    readonly usage: BookmarkUsage;
+}
+
+// @public (undocumented)
+export type GoChooseOutcome =
+/** The destination to go to; the use is counted and the choice remembered when it was asked for. */
+    {
+    readonly kind: "chosen";
+    readonly url: string;
+}
+/** The bookmark is no candidate of the slug for the member; which of the reasons it is stays unsaid. Nothing is written or counted. */
+| {
+    readonly kind: "not_found";
+}
+/** The stored URL is not an `http` or `https` URL. Nothing is written or counted. */
+| {
+    readonly kind: "url_refused";
+};
+
+// @public (undocumented)
+export type GoResolution =
+/** Nothing the member can read has the slug (or the slug is not one). */
+    {
+    readonly kind: "none";
+}
+/** The member's remembered choice, which is still a candidate. */
+| {
+    readonly kind: "preferred";
+    readonly bookmark: GoChoice;
+}
+/** The member's own bookmark, or the one bookmark shared with them. */
+| {
+    readonly kind: "single";
+    readonly bookmark: GoChoice;
+}
+/** Several bookmarks shared with the member and none of their own, for the member to choose from, in the order of their titles. */
+| {
+    readonly kind: "multiple";
+    readonly candidates: readonly GoChoice[];
+};
+
+// @public (undocumented)
+export interface GoResolveAsk {
+    readonly accountId: string;
+    readonly slug: string;
+}
+
+// @public (undocumented)
+export interface GoResolveDependencies {
+    // (undocumented)
+    readonly store: Pick<GoStore, "candidates" | "summaries">;
+}
+
+// @public (undocumented)
+export interface GoStore {
+    candidates(request: {
+        readonly slug: string;
+        readonly accountId: string;
+    }): Promise<GoCandidateSet>;
+    remember(request: {
+        readonly slug: string;
+        readonly bookmarkId: string;
+        readonly accountId: string;
+    }): Promise<boolean>;
+    summaries(ids: readonly string[]): Promise<readonly GoBookmarkSummary[]>;
+}
 
 // @public
 export function hashApiToken(value: string): Buffer;
@@ -4196,6 +4327,9 @@ export function resendInvitation(input: InvitationActionDependencies, ask: Invit
 
 // @public
 export function resetInstanceAccountMfa(input: InstanceRecoveryDependencies, ask: InstanceMfaResetAsk): Promise<InstanceMfaResetOutcome>;
+
+// @public
+export function resolveSlug(input: GoResolveDependencies, ask: GoResolveAsk): Promise<GoResolution>;
 
 // @public
 export function restoreBookmarks(tx: BookmarkArchiveTransaction, request: BookmarkArchiveRequest): Promise<{

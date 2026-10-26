@@ -47,6 +47,7 @@ import { invitationRoutes } from "./routes/invitations/index.ts";
 import { bookmarkRoutes } from "./routes/bookmarks/index.ts";
 import { tagRoutes } from "./routes/tags/index.ts";
 import { folderRoutes } from "./routes/folders/index.ts";
+import { goRoutes } from "./routes/go/index.ts";
 import { slugRoutes } from "./routes/slugs/index.ts";
 import { entitlementRoutes } from "./routes/entitlements.ts";
 import { instanceRoutes, type InstanceAdminGrantCheck } from "./routes/instance/index.ts";
@@ -579,6 +580,8 @@ export function createServer(options: CreateServerOptions): Server {
   builtInRoutes.push(...folderRoutes({ cursorSecret: config.SESSION_SECRET }));
   // And whether a slug is free for the member: answered from their own bookmarks, with a count of the others' that use it.
   builtInRoutes.push(...slugRoutes());
+  // And what a slug resolves to for the member, and the member's choice among its candidates, which counts the use in the same buffer an open does.
+  builtInRoutes.push(...goRoutes({ usage }));
   const ownedWorkspaceEntitlements = createOwnedWorkspaceEntitlements(entitlementService);
   // Stage 9 and the handlers that decide an entitlement themselves (accepting an invitation) ask the same check, so an operation is gated the same way wherever it is decided.
   const entitlementCheck: EntitlementCheck = options.entitlements ?? (adapters.entitlements.available ? createEntitlementCheck(entitlementService) : denyEntitlements);

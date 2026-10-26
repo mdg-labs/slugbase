@@ -748,6 +748,37 @@ export const checkSlugAvailability: {
 };
 
 // @public (undocumented)
+export const chooseSlug: {
+    readonly method: "post";
+    readonly path: "/api/v1/go/choose";
+    readonly operationId: "chooseSlug";
+    readonly tag: "go";
+    readonly summary: "Choose a bookmark of a slug and get its destination";
+    readonly auth: "member";
+    readonly rate: "go";
+    readonly scope: "write";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            slug: z.ZodString;
+            bookmarkId: z.ZodUUID;
+            remember: z.ZodOptional<z.ZodBoolean>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        url: z.ZodString;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
 export const completeOidcSignIn: {
     readonly method: "get";
     readonly path: "/api/v1/auth/oidc/{provider}/callback";
@@ -1103,6 +1134,31 @@ export interface ComponentTypes {
         };
         ForgotPasswordRequest: {
             email: string;
+        };
+        GoCandidate: {
+            host: string;
+            id: string;
+            owner: {
+                accountId: string;
+                displayName: string;
+            } | null;
+            sharedVia: ("direct" | "team" | "folder") | null;
+            title: string;
+        };
+        GoDestination: {
+            url: string;
+        };
+        GoResolution: {
+            result: "none";
+        } | {
+            bookmark: ComponentTypes["schemas"]["GoCandidate"];
+            result: "preferred";
+        } | {
+            bookmark: ComponentTypes["schemas"]["GoCandidate"];
+            result: "single";
+        } | {
+            candidates: ComponentTypes["schemas"]["GoCandidate"][];
+            result: "multiple";
         };
         HealthStatus: {
             status: "ok";
@@ -1747,6 +1803,7 @@ export const createFolder: {
                 code: "code";
                 tag: "tag";
                 folder: "folder";
+                bookmark: "bookmark";
                 "folder-open": "folder-open";
                 "folder-heart": "folder-heart";
                 "folder-code": "folder-code";
@@ -1755,7 +1812,6 @@ export const createFolder: {
                 "building-2": "building-2";
                 book: "book";
                 "book-open": "book-open";
-                bookmark: "bookmark";
                 star: "star";
                 heart: "heart";
                 house: "house";
@@ -1838,6 +1894,7 @@ export const CreateFolderRequestSchema: z.ZodObject<{
         code: "code";
         tag: "tag";
         folder: "folder";
+        bookmark: "bookmark";
         "folder-open": "folder-open";
         "folder-heart": "folder-heart";
         "folder-code": "folder-code";
@@ -1846,7 +1903,6 @@ export const CreateFolderRequestSchema: z.ZodObject<{
         "building-2": "building-2";
         book: "book";
         "book-open": "book-open";
-        bookmark: "bookmark";
         star: "star";
         heart: "heart";
         house: "house";
@@ -3065,6 +3121,98 @@ export const getWorkspaceSettings: {
         readonly 503: ProblemResponse;
     };
 };
+
+// @public (undocumented)
+export const GO_RESOLUTIONS: readonly ["none", "preferred", "single", "multiple"];
+
+// @public (undocumented)
+export const GO_SHARED_VIA: readonly ["direct", "team", "folder"];
+
+// @public (undocumented)
+export const GoCandidateSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    title: z.ZodString;
+    host: z.ZodString;
+    owner: z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+    }, z.core.$strict>>;
+    sharedVia: z.ZodNullable<z.ZodEnum<{
+        direct: "direct";
+        team: "team";
+        folder: "folder";
+    }>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const GoChooseRequestSchema: z.ZodObject<{
+    slug: z.ZodString;
+    bookmarkId: z.ZodUUID;
+    remember: z.ZodOptional<z.ZodBoolean>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const GoDestinationSchema: z.ZodObject<{
+    url: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const GoResolutionSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
+    result: z.ZodLiteral<"none">;
+}, z.core.$strict>, z.ZodObject<{
+    result: z.ZodLiteral<"preferred">;
+    bookmark: z.ZodObject<{
+        id: z.ZodUUID;
+        title: z.ZodString;
+        host: z.ZodString;
+        owner: z.ZodNullable<z.ZodObject<{
+            accountId: z.ZodUUID;
+            displayName: z.ZodString;
+        }, z.core.$strict>>;
+        sharedVia: z.ZodNullable<z.ZodEnum<{
+            direct: "direct";
+            team: "team";
+            folder: "folder";
+        }>>;
+    }, z.core.$strict>;
+}, z.core.$strict>, z.ZodObject<{
+    result: z.ZodLiteral<"single">;
+    bookmark: z.ZodObject<{
+        id: z.ZodUUID;
+        title: z.ZodString;
+        host: z.ZodString;
+        owner: z.ZodNullable<z.ZodObject<{
+            accountId: z.ZodUUID;
+            displayName: z.ZodString;
+        }, z.core.$strict>>;
+        sharedVia: z.ZodNullable<z.ZodEnum<{
+            direct: "direct";
+            team: "team";
+            folder: "folder";
+        }>>;
+    }, z.core.$strict>;
+}, z.core.$strict>, z.ZodObject<{
+    result: z.ZodLiteral<"multiple">;
+    candidates: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        title: z.ZodString;
+        host: z.ZodString;
+        owner: z.ZodNullable<z.ZodObject<{
+            accountId: z.ZodUUID;
+            displayName: z.ZodString;
+        }, z.core.$strict>>;
+        sharedVia: z.ZodNullable<z.ZodEnum<{
+            direct: "direct";
+            team: "team";
+            folder: "folder";
+        }>>;
+    }, z.core.$strict>>;
+}, z.core.$strict>], "result">;
+
+// @public (undocumented)
+export const GoSlugRequestSchema: z.ZodObject<{
+    slug: z.ZodString;
+}, z.core.$strict>;
 
 // @public (undocumented)
 export const HealthStatusSchema: z.ZodObject<{
@@ -5091,6 +5239,91 @@ export interface OperationTypes {
                 };
             };
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    chooseSlug: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    bookmarkId: string;
+                    remember?: boolean;
+                    slug: string;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["GoDestination"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10077,6 +10310,89 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    resolveSlug: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    slug: string;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["GoResolution"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     revokeApiToken: {
         parameters: {
             query?: never;
@@ -11934,6 +12250,40 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/go/choose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["chooseSlug"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/go/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["resolveSlug"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/api/v1/instance/accounts": {
         parameters: {
             query?: never;
@@ -13677,6 +14027,83 @@ export const ResetPasswordResultSchema: z.ZodObject<{
     }>;
 }, z.core.$strict>;
 
+// @public (undocumented)
+export const resolveSlug: {
+    readonly method: "post";
+    readonly path: "/api/v1/go/resolve";
+    readonly operationId: "resolveSlug";
+    readonly tag: "go";
+    readonly summary: "Resolve a slug for the caller";
+    readonly auth: "member";
+    readonly rate: "go";
+    readonly scope: "write";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            slug: z.ZodString;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodDiscriminatedUnion<[z.ZodObject<{
+        result: z.ZodLiteral<"none">;
+        }, z.core.$strict>, z.ZodObject<{
+        result: z.ZodLiteral<"preferred">;
+        bookmark: z.ZodObject<{
+        id: z.ZodUUID;
+        title: z.ZodString;
+        host: z.ZodString;
+        owner: z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        }, z.core.$strict>>;
+        sharedVia: z.ZodNullable<z.ZodEnum<{
+        direct: "direct";
+        team: "team";
+        folder: "folder";
+        }>>;
+        }, z.core.$strict>;
+        }, z.core.$strict>, z.ZodObject<{
+        result: z.ZodLiteral<"single">;
+        bookmark: z.ZodObject<{
+        id: z.ZodUUID;
+        title: z.ZodString;
+        host: z.ZodString;
+        owner: z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        }, z.core.$strict>>;
+        sharedVia: z.ZodNullable<z.ZodEnum<{
+        direct: "direct";
+        team: "team";
+        folder: "folder";
+        }>>;
+        }, z.core.$strict>;
+        }, z.core.$strict>, z.ZodObject<{
+        result: z.ZodLiteral<"multiple">;
+        candidates: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        title: z.ZodString;
+        host: z.ZodString;
+        owner: z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        }, z.core.$strict>>;
+        sharedVia: z.ZodNullable<z.ZodEnum<{
+        direct: "direct";
+        team: "team";
+        folder: "folder";
+        }>>;
+        }, z.core.$strict>>;
+        }, z.core.$strict>], "result">, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
 // @public
 export interface ResponseHeader {
     // (undocumented)
@@ -14298,6 +14725,7 @@ export const updateFolder: {
                 code: "code";
                 tag: "tag";
                 folder: "folder";
+                bookmark: "bookmark";
                 "folder-open": "folder-open";
                 "folder-heart": "folder-heart";
                 "folder-code": "folder-code";
@@ -14306,7 +14734,6 @@ export const updateFolder: {
                 "building-2": "building-2";
                 book: "book";
                 "book-open": "book-open";
-                bookmark: "bookmark";
                 star: "star";
                 heart: "heart";
                 house: "house";
@@ -14395,6 +14822,7 @@ export const UpdateFolderRequestSchema: z.ZodObject<{
         code: "code";
         tag: "tag";
         folder: "folder";
+        bookmark: "bookmark";
         "folder-open": "folder-open";
         "folder-heart": "folder-heart";
         "folder-code": "folder-code";
@@ -14403,7 +14831,6 @@ export const UpdateFolderRequestSchema: z.ZodObject<{
         "building-2": "building-2";
         book: "book";
         "book-open": "book-open";
-        bookmark: "bookmark";
         star: "star";
         heart: "heart";
         house: "house";

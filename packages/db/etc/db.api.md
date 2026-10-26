@@ -22,6 +22,7 @@ import type { CredentialTokenPurpose } from '@slugbase/core';
 import type { EntitlementVersionWriter } from '@slugbase/core';
 import type { FolderFilingStore } from '@slugbase/core';
 import type { FolderStore } from '@slugbase/core';
+import type { GoStore } from '@slugbase/core';
 import { InferInsertModel } from 'drizzle-orm';
 import { InferSelectModel } from 'drizzle-orm';
 import { InstanceAccount } from '@slugbase/core';
@@ -559,6 +560,12 @@ export type FolderRepository = FolderStore & FolderFilingStore;
 
 // @public (undocumented)
 export function folderRepository(tx: TenantTx): FolderRepository;
+
+// @public (undocumented)
+export type GoRepository = GoStore;
+
+// @public
+export function goRepository(tx: TenantTx): GoRepository;
 
 // @public
 export class IdempotencyBusyError extends Error {
