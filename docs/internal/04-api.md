@@ -89,6 +89,7 @@ Actions that are not CRUD use a sub-resource noun (`POST /bookmarks/{id}/open`, 
 | Absent vs null | Optional fields are omitted when unset in requests; responses always include declared fields, `null` when empty. `PATCH` distinguishes "omitted" (unchanged) from `null` (clear) |
 | Money (Cloud) | Integer minor units plus an ISO 4217 currency code — never floats, never formatted strings in the API |
 | Enums | Lower-case snake strings (`owner`, `shared_with_me`, `past_due`) |
+| Slugs | Lower-case (doc 02 §6.1). Every slug a request carries — the `slug` of a bookmark body, the `slug` query of `GET /slugs/availability`, the `slug` of `POST /go/resolve` and `POST /go/choose`, the `prefix` of `GET /go/suggest`, the `{slug}` of `DELETE /me/go-preferences/{slug}` and the segment of `GET /go/<slug>` — is trimmed and lower-cased by the server before it is validated, written or looked up, so `Mail` and `mail` are the same slug and a slug differing only in case is `slug_taken`. Responses always carry the lower-case form |
 | Booleans | Never stringly typed; query-string booleans are `true`/`false` only |
 | Unknown fields | Rejected with `422 validation_failed` (Zod `strict`) — a typo never silently does nothing |
 | Locale | Problem `detail` is always English (doc 02 §15); the SPA renders localised text from `code`. The account locale and `Accept-Language` affect only emails; data is locale-independent |
@@ -368,7 +369,7 @@ Not part of `/api/v1`, but specified here because it is the product's main entry
 |---|---|
 | Not signed in | `302 /login?returnTo=/go/<slug>` (the sign-in pages honour `returnTo` only for a same-origin `/go/<valid slug>` path) |
 | Partial session | `302 /login/mfa?returnTo=…` |
-| Slug grammar invalid | SPA not-found page (`404`, HTML) |
+| Slug grammar invalid (checked after the segment is lower-cased: `/go/Mail` is `/go/mail`) | SPA not-found page (`404`, HTML) |
 | No accessible forwarding bookmark | SPA "slug not found" page (`404`, HTML) offering "create a bookmark with this slug" and, when the slug resolves in another workspace of the member, "switch and continue" (`otherWorkspaces`, §10.8) |
 | Exactly one match, or a remembered preference | `302 <destination>` with `Referrer-Policy: no-referrer`, `Cache-Control: no-store`; usage recorded asynchronously |
 | Several matches, no preference | SPA disambiguation page (`200`, HTML) at the same URL; the SPA calls `POST /api/v1/go/resolve` |
