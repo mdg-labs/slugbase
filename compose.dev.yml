@@ -13,7 +13,25 @@ services:
     # default Postgres port is not mapped anywhere. max_connections is raised
     # from the default of 100 so that several concurrent integration runs
     # (doc 08 section 1.2) and the developer's own processes fit.
-    command: ["postgres", "-c", "port=54329", "-c", "max_connections=300"]
+    #
+    # fsync, synchronous_commit and full_page_writes are off: this cluster holds
+    # only disposable development and test data (every test database is created
+    # from a template and dropped again, and the seed data can be recreated), so
+    # a crash may lose or corrupt it and nothing else is lost. Without them the
+    # DROP DATABASE of each test database does not wait for a checkpoint to
+    # flush to disk (doc 08 section 3.2). Never copy these settings to a
+    # Postgres that holds data worth keeping; if the container or the host
+    # crashes, provision it again (docker compose -f compose.dev.yml down -v,
+    # then pnpm dev:services).
+    command:
+      [
+        "postgres",
+        "-c", "port=54329",
+        "-c", "max_connections=300",
+        "-c", "fsync=off",
+        "-c", "synchronous_commit=off",
+        "-c", "full_page_writes=off",
+      ]
     environment:
       POSTGRES_USER: slugbase
       POSTGRES_PASSWORD: slugbase
