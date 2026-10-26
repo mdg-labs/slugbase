@@ -32,4 +32,16 @@ describe("Tabs", () => {
     expect(screen.getByRole("tab", { name: "Firefox" }).getAttribute("aria-selected")).toBe("true");
     expect(screen.getByText("Firefox steps")).toBeDefined();
   });
+
+  it("renders inactive tab text at full muted-foreground, not a reduced-opacity colour", () => {
+    stubBrowserApis();
+    render(<Browsers />);
+
+    const list = screen.getByRole("tablist", { name: "Browser" });
+    const inactive = screen.getByRole("tab", { name: "Firefox" });
+
+    expect(inactive.getAttribute("aria-selected")).toBe("false");
+    expect(list.className).toContain("text-muted-foreground");
+    expect(list.className).not.toMatch(/text-muted-foreground\/\d+/);
+  });
 });
