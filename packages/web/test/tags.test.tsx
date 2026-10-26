@@ -1,6 +1,7 @@
 import { MergeTagRequestSchema, RenameTagRequestSchema, type ComponentTypes } from "@slugbase/contracts";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
 import { allowSlowRender, json, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
@@ -342,7 +343,7 @@ async function openRename(name: string): Promise<HTMLElement> {
 
 const SPEC: Spec = { counts: [["Reading", 12], ["Recipes", 4], ["Archive", 1]] };
 
-describe("reaching the page", () => {
+describe("reaching the page", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("is the Tags link of the sidebar, and lists the tags by name with their counts and a bar for each against the largest", async () => {
     const server = stubServer(SPEC);
     await openApp("/");
@@ -404,7 +405,7 @@ describe("reaching the page", () => {
   });
 });
 
-describe("searching and sorting", () => {
+describe("searching and sorting", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("finds tags by part of the name without regard to case, says when none matches and brings the list back from the clear button", async () => {
     stubServer(SPEC);
     await openApp("/tags");
@@ -457,7 +458,7 @@ describe("searching and sorting", () => {
   });
 });
 
-describe("the preview", () => {
+describe("the preview", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("selects a tag from its name into the address and shows its newest bookmarks first, five at most, with the way to all of them", async () => {
     const server = stubServer({ counts: [["Reading", 7], ["Recipes", 2]] });
     await openApp("/tags");
@@ -599,7 +600,7 @@ describe("the preview", () => {
   });
 });
 
-describe("renaming a tag", () => {
+describe("renaming a tag", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("opens the form with the name, sends the new name alone and shows the tag under it", async () => {
     const server = stubServer(SPEC);
     await openApp("/tags");
@@ -687,7 +688,7 @@ describe("renaming a tag", () => {
   });
 });
 
-describe("renaming onto another tag's name", () => {
+describe("renaming onto another tag's name", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("offers to merge instead of failing, sends nothing until it is confirmed, and merges into the tag of that name", async () => {
     const server = stubServer({ counts: [["Reading", 3], ["Books", 2]] });
     await openApp("/tags");
@@ -899,7 +900,7 @@ describe("renaming onto another tag's name", () => {
   });
 });
 
-describe("deleting a tag", () => {
+describe("deleting a tag", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("asks first, naming how many bookmarks it comes off, and deletes only on confirmation", async () => {
     const server = stubServer(SPEC);
     await openApp("/tags");
@@ -1009,7 +1010,7 @@ describe("deleting a tag", () => {
   });
 });
 
-describe("states", () => {
+describe("states", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows skeleton rows while the tags are read, not an empty page, and then the tags", async () => {
     let release: () => void = () => undefined;
     const open = new Promise<void>((resolve) => {

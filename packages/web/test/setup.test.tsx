@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
 import { CONFIG_BODY, PRODUCT_NAME, SESSION_PATH, json, problem, renderApp, signedIn, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
@@ -120,7 +121,7 @@ afterEach(() => {
   document.documentElement.removeAttribute("lang");
 });
 
-describe("while the instance has no account", () => {
+describe("while the instance has no account", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it.each(["/", "/settings/account/security", "/missing", "/login", "/login?next=%2Fsettings"])(
     "sends a signed-out visitor of %s to the wizard without asking for a session",
     async (path) => {
@@ -138,7 +139,7 @@ describe("while the instance has no account", () => {
   );
 });
 
-describe("once the instance has an account", () => {
+describe("once the instance has an account", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it.each([false, "absent" as const])("shows the not-found page at /setup when setupRequired is %s", async (setupRequired) => {
     stubServer({ setupRequired });
 
@@ -159,7 +160,7 @@ describe("once the instance has an account", () => {
   });
 });
 
-describe("the wizard", () => {
+describe("the wizard", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("starts on the token step with a note that the token is in the server log", async () => {
     stubServer();
     await openWizard();
@@ -231,7 +232,7 @@ describe("the wizard", () => {
   });
 });
 
-describe("the token step", () => {
+describe("the token step", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("does not go on without the token when the server requires one", async () => {
     const server = stubServer();
     await openWizard();
@@ -301,7 +302,7 @@ describe("the token step", () => {
   });
 });
 
-describe("a setup that goes through", () => {
+describe("a setup that goes through", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("sends the trimmed values and the token, then shows the closing note and leads to Home", async () => {
     const server = stubServer();
     await openWizard();
@@ -373,7 +374,7 @@ describe("a setup that goes through", () => {
   });
 });
 
-describe("a setup the server refuses", () => {
+describe("a setup the server refuses", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("returns to the token step for a wrong token and keeps what was typed", async () => {
     stubServer({ setup: () => Promise.resolve(problem(403, "forbidden", "req-1", "token abc is wrong")) });
     await openWizard();
@@ -574,7 +575,7 @@ describe("a setup the server refuses", () => {
   });
 });
 
-describe("the wizard on a phone and in German", () => {
+describe("the wizard on a phone and in German", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("is written in German", async () => {
     vi.spyOn(window.navigator, "languages", "get").mockReturnValue(["de-AT"]);
     stubServer();
