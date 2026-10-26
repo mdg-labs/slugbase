@@ -324,11 +324,14 @@ function requireListWorkspace(tx: TenantTx, action: string): string {
 /**
  * The tags of a selection as identifiers: the ones named by identifier, and the owner's tags of the names, created where there is none, without repeats.
  * The existing tags were locked by `lockTaggingTags` after the bookmark was, so none of them is gone by now; a name the owner has no tag of creates one here.
+ * Answers `undefined`, with the tags it created undone, when a tag that the insert of a name left (made by another transaction that committed) is deleted by a different transaction before it is read back (`resolveTagNames`).
  */
-async function tagIdsOf(tx: TenantTx, ownerId: string, tagging: BookmarkTagSelection): Promise<string[]> {
+async function tagIdsOf(tx: TenantTx, ownerId: string, tagging: BookmarkTagSelection): Promise<string[] | undefined> {
   const named = await resolveTagNames(tx, ownerId, tagging.names);
-  return distinctIdentifiers([...tagging.ids, ...named]);
+  return named === undefined ? undefined : distinctIdentifiers([...tagging.ids, ...named]);
 }
+
+const CREATION_SAVEPOINT = sql.raw("bookmark_creation");
 
 export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
   const rows = scoped.bind(tx);
@@ -346,6 +349,9 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
       if (!(await ownedTagsExist(tx, bookmark.ownerId, tagging.ids))) {
         return { kind: "tag_not_found" };
       }
+      // A tag that the pre-check above found can still be deleted by the time the tags are locked below, after the place was taken and the bookmark inserted: the
+      // call then undoes everything from here (`ROLLBACK TO SAVEPOINT`, which also releases the locks taken since) and answers `tag_not_found`.
+      await tenantHandle(tx).execute(sql`SAVEPOINT ${CREATION_SAVEPOINT}`);
       const taken = await tenantHandle(tx).execute<TakenRow>(sql`
         SELECT outcome, used FROM public.sys_bookmark_count_take(${tx.workspaceId}::uuid, ${ceiling}::integer)`);
       const row = taken[0];
@@ -380,12 +386,16 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
         throw new Error("a folder of the new bookmark was deleted while the bookmark was created");
       }
       await insertLinks(tx, folderIds, [stored.id]);
-      if (!(await lockTaggingTags(tx, bookmark.ownerId, tagging))) {
-        // A tag that was there a moment ago is gone: the call ends with an error, which rolls the place and the bookmark back with it.
-        throw new Error("a tag of the new bookmark was deleted while the bookmark was created");
+      // A tag that was there a moment ago is gone: the place, the bookmark and whatever the call wrote since the savepoint are undone, and the answer is the one
+      // a tag that was never there gets.
+      const tagIds = (await lockTaggingTags(tx, bookmark.ownerId, tagging)) ? await tagIdsOf(tx, bookmark.ownerId, tagging) : undefined;
+      if (tagIds === undefined) {
+        await tenantHandle(tx).execute(sql`ROLLBACK TO SAVEPOINT ${CREATION_SAVEPOINT}`);
+        await tenantHandle(tx).execute(sql`RELEASE SAVEPOINT ${CREATION_SAVEPOINT}`);
+        return { kind: "tag_not_found" };
       }
-      const tagIds = await tagIdsOf(tx, bookmark.ownerId, tagging);
       await insertTagLinks(tx, stored.id, tagIds);
+      await tenantHandle(tx).execute(sql`RELEASE SAVEPOINT ${CREATION_SAVEPOINT}`);
       for (const job of jobs) {
         await enqueueInTenantTransaction(tx, job);
       }
@@ -445,7 +455,14 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
       }
       const filedBefore = (await foldersOfBookmarks(tx, ownerId, [bookmarkId])).get(bookmarkId) ?? [];
       const carriedBefore = (await tagsOfBookmarks(tx, ownerId, [bookmarkId])).get(bookmarkId) ?? [];
-      const wantedTags = changes.tags === undefined ? undefined : await tagIdsOf(tx, ownerId, changes.tags);
+      let wantedTags: string[] | undefined;
+      if (changes.tags !== undefined) {
+        wantedTags = await tagIdsOf(tx, ownerId, changes.tags);
+        if (wantedTags === undefined) {
+          // A tag of a name was deleted before it was read back; the tags this call created for the names are undone, and nothing else is written yet.
+          return { kind: "tag_not_found" };
+        }
+      }
       const detaching = wantedTags === undefined ? [] : carriedBefore.filter((tag) => !wantedTags.includes(tag.id)).map((tag) => tag.id);
       const attaching = wantedTags === undefined ? [] : wantedTags.filter((id) => !carriedBefore.some((tag) => tag.id === id));
       const wantedFolders = changes.folderIds === undefined ? undefined : distinctIdentifiers(changes.folderIds);

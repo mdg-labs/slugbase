@@ -28,7 +28,9 @@ import { defineScopedRepository } from "./scoped.ts";
 // member holds before the member's tags (that cycle is issue 582's).
 // A tag named by identifier that is deleted or merged away before the tagging locks it is found gone and answered `tag_not_found` (a name it carried is created
 // anew); one that the tagging has locked cannot be deleted under it. Tags named by name are the owner's tag of that name, whatever its case, or a new one,
-// created in the transaction that links it.
+// created in the transaction that links it. A tag that a name was resolved to, which another transaction created and committed, and that a different transaction deletes before the tagging has read it back
+// (`resolveTagNames`), is answered `tag_not_found` as well, with the tags that call created undone. test/tag-lost-during-tagging.integration.test.ts holds these
+// races with the deletion of a tag; none of its tests merges a tag away.
 
 // The registry entry of `bookmark_tags` for the cross-tenant matrix (doc 08 section 3.3): the application role may read, insert (the columns of a link
 // but `workspace_id`, which the helper stamps) and delete links, and the policies keep each to the account's own tag and bookmark. Links are written in
@@ -100,13 +102,16 @@ async function tagsByName(tx: TenantTx, workspaceId: string, ownerId: string, na
   return new Map(found.map((row) => [row.position, row.id]));
 }
 
+const NAME_SAVEPOINT = sql.raw("tag_name_resolve");
+
 /**
  * The identifiers of the tags `ownerId` owns that carry the names of `names` (matched without regard to case), creating a tag with `newId` for each
  * name the owner has none of, in the open transaction. The existing tags were locked by `lockTaggingTags` already; a tag it answers that is new is the
  * transaction's own, and a name a concurrent transaction creates at the same time is the tag that transaction made: the insert leaves it and the read that
- * follows finds and locks it.
+ * follows finds and locks it. Answers `undefined` when a tag that the insert left is gone again by that read (another transaction deleted it after the
+ * transaction that made it committed); the tags this call created are undone then (`ROLLBACK TO SAVEPOINT`), so that a caller which answers `tag_not_found` has written nothing for the names.
  */
-export async function resolveTagNames(tx: TenantTx, ownerId: string, names: readonly BookmarkTagName[]): Promise<string[]> {
+export async function resolveTagNames(tx: TenantTx, ownerId: string, names: readonly BookmarkTagName[]): Promise<string[] | undefined> {
   const workspaceId = requireWorkspace(tx, "tagging bookmarks");
   if (names.length === 0) {
     return [];
@@ -115,16 +120,20 @@ export async function resolveTagNames(tx: TenantTx, ownerId: string, names: read
   const missing = names.filter((_tag, index) => !found.has(index));
   if (missing.length > 0) {
     requireIdentifiers(missing.map((tag) => tag.newId), "creating tags");
+    const handle = tenantHandle(tx);
+    await handle.execute(sql`SAVEPOINT ${NAME_SAVEPOINT}`);
     // The statement names the columns the application role may insert; the query builder would name `created_at` too.
-    await tenantHandle(tx).execute(sql`
+    await handle.execute(sql`
       INSERT INTO ${tags} (id, workspace_id, owner_id, name)
       VALUES ${sql.join(missing.map((tag) => sql`(${tag.newId}::uuid, ${workspaceId}::uuid, ${ownerId}::uuid, ${tag.name})`), sql`, `)}
       ON CONFLICT (workspace_id, owner_id, name) DO NOTHING`);
     found = await tagsByName(tx, workspaceId, ownerId, names);
     if (names.some((_tag, index) => !found.has(index))) {
-      // A tag that was there a moment ago is gone again: the call ends with an error, which rolls everything it wrote back.
-      throw new Error("a tag named for a bookmark was deleted while the bookmark was tagged");
+      await handle.execute(sql`ROLLBACK TO SAVEPOINT ${NAME_SAVEPOINT}`);
+      await handle.execute(sql`RELEASE SAVEPOINT ${NAME_SAVEPOINT}`);
+      return undefined;
     }
+    await handle.execute(sql`RELEASE SAVEPOINT ${NAME_SAVEPOINT}`);
   }
   return distinctIdentifiers([...found.values()]);
 }
