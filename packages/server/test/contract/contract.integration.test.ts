@@ -558,6 +558,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     const sendByFilter = matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: byFilterFixtures, credentialsOf: (principal) => world.credentialsOf(principal) });
     const variants: VariantStatuses[] = [];
     const instanceAdminStatuses: number[] = [];
+    const resolutions: unknown[] = [];
     const mapping = { rowId: "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "createBookmark.slug": "bookmark", "updateBookmark.slug": "bookmark", "checkSlugAvailability.slug": "bookmark", "checkSlugAvailability.bookmarkId": "bookmark", "resolveSlug.slug": "slug", "chooseSlug.slug": "slug", "chooseSlug.bookmarkId": "bookmark", "deleteGoPreference.slug": "slug", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "listBookmarkIds.folderId": "folder", "listBookmarkIds.tag": "tag", "listBookmarkIds.tag[]": "tag", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark", "bulkBookmarks.filter.folderId": "folder", "bulkBookmarks.filter.tag": "tag", "bulkBookmarks.filter.tag[]": "tag", "bulkBookmarks.folderId": "folder", "bulkBookmarks.tagIds[]": "tag", "previewBulkBookmarks.ids[]": "bookmark", "previewBulkBookmarks.filter.hasSlug": "bookmark", "previewBulkBookmarks.filter.folderId": "folder", "previewBulkBookmarks.filter.tag": "tag", "previewBulkBookmarks.filter.tag[]": "tag", "previewBulkBookmarks.tagIds[]": "tag" } as const;
     const request = async (call: ApiCall): Promise<ApiResponse> => {
       // The bulk request and the preview name the identifiers of B in several inputs, and one request cannot carry them all: `ids` and `filter` together are malformed, the
@@ -569,6 +570,9 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
         operationId === "bulkBookmarks" || operationId === "previewBulkBookmarks" ? await sendVariants(call, send, sendByFilter, variants) : await send(call);
       if ("instanceAdmin" in call.principal) {
         instanceAdminStatuses.push(response.status);
+      }
+      if (operationId === "resolveSlug" && response.status === 200) {
+        resolutions.push(response.body);
       }
       return response;
     };
@@ -639,6 +643,9 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     expect(report.attempts).toBe(10 * calls);
     // The four exceptions are the identifiers of B in the `hasSlug` filter of the bookmark list and of the select-all, which the query validation refuses before the instance admin's missing membership is looked at.
     expect(instanceAdminStatuses.toSorted()).toEqual([...Array<number>(calls - 4).fill(404), 422, 422, 422, 422]);
+    // Each of the two slugs of B resolved by the three sessions and the three read-write tokens of A (the other principals are refused before the handler) is none, and names
+    // no other workspace: no member of A belongs to B, so B is not offered, and neither is its name or content.
+    expect(resolutions).toEqual(Array.from({ length: 6 * 2 }, () => ({ result: "none", otherWorkspaces: [] })));
     expect(await contentOfB()).toBe(before);
     // Every invitation the matrix tried to make was refused before anything was written, in A as in B, and the one invitation of B is still its own,
     // pending, with the token hash the seed gave it.

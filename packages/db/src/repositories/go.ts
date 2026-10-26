@@ -1,4 +1,4 @@
-import type { GoAccess, GoBookmarkSummary, GoCandidateSet, GoPreferenceRecord, GoPreferenceStore, GoStore } from "@slugbase/core";
+import type { GoAccess, GoBookmarkSummary, GoCandidateSet, GoPreferenceRecord, GoPreferenceStore, GoStore, GoWorkspace } from "@slugbase/core";
 import { and, asc, eq, sql, type SQL } from "drizzle-orm";
 import { accounts } from "../schema/accounts.ts";
 import { bookmarks } from "../schema/bookmarks.ts";
@@ -14,6 +14,11 @@ import { defineScopedRepository } from "./scoped.ts";
 // `bookmarks` leaves it an index condition of `bookmarks_slug_idx`, and the id, owner, URL, forwarding and archive state the scan reads are in that index, so on a vacuumed table
 // it is an Index Only Scan (test/go-resolution-plan.integration.test.ts plans it on a workspace of 50 000 bookmarks).
 // Titles and hosts are not in the index, so they are read by primary key for the candidates only, afterwards.
+//
+// A slug that resolves to nothing is asked about once more across the account's other workspaces (`otherWorkspaces`), which the tenant policies cannot do, since they show one
+// workspace at a time: the system operation `sys_go_other_workspaces` (src/sql/580-go-other-workspaces.sql) takes the account from the transaction, never from an argument,
+// and answers the identifier and the name of each other workspace of which the account is a member and in which it can read a forwarding, non-archived bookmark with the slug
+// (the owner's own today, as `bookmarkReadableBy` says), and no bookmark.
 //
 // A preference is the account's own: `slug_preferences` has a policy on the workspace and the account of the transaction (src/sql/570-slug-preferences.sql),
 // and every statement below names both. Remembering a choice is one statement that locks the chosen bookmark `FOR KEY SHARE` and inserts the preference
@@ -111,6 +116,13 @@ export function goRepository(tx: TenantTx): GoRepository {
         .from(bookmarks)
         .leftJoin(accounts, eq(accounts.id, bookmarks.ownerId))
         .where(and(eq(bookmarks.workspaceId, workspaceId), sql`${bookmarks.id} = ANY (${uuidArray(ids)}::uuid[])`, bookmarkReadableBy(tx.accountId)));
+    },
+
+    async otherWorkspaces({ slug, accountId }): Promise<readonly GoWorkspace[]> {
+      requireWorkspace(tx, "looking for a slug in other workspaces");
+      requireAccount(tx, accountId, "looks for a slug in other workspaces");
+      const rows = await tenantHandle(tx).execute<{ workspace_id: string; workspace_name: string }>(sql`SELECT workspace_id, workspace_name FROM sys_go_other_workspaces(${slug}::text)`);
+      return rows.map((row) => ({ id: row.workspace_id, name: row.workspace_name }));
     },
 
     async remember({ slug, bookmarkId, accountId }): Promise<boolean> {

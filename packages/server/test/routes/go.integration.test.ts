@@ -4,7 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { createUsageBuffer, type UsageBuffer } from "../../src/usage/buffer.ts";
 import { appUrl } from "../contract/support.ts";
 import { recordingLogger } from "../support.ts";
-import { bearer, HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
+import { ACTIVE_WORKSPACE, bearer, HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
 
 // POST /api/v1/go/resolve and POST /api/v1/go/choose (doc 04 section 10.8, doc 02 sections 6.2 to 6.4, Q25, doc 10 T1, T2 and T12), through the whole
 // chain over the migrated database. The failure scenario: a member of workspace A resolves and chooses a slug that exists only in workspace B, a bookmark
@@ -122,7 +122,7 @@ describe("POST /go/resolve", () => {
       for (const slug of ["", "   ", "-mail", "ma il", "mail/inbox", "mail?x=1", "a".repeat(65), "ä"]) {
         const response = await resolve(world, owner, slug);
         expect(response.status, JSON.stringify(slug)).toBe(200);
-        expect(await response.json(), JSON.stringify(slug)).toEqual({ result: "none" });
+        expect(await response.json(), JSON.stringify(slug)).toEqual({ result: "none", otherWorkspaces: [] });
       }
     },
     TEST_TIMEOUT_MS,
@@ -142,8 +142,95 @@ describe("POST /go/resolve", () => {
       for (const slug of ["only-in-b", "paused", "archived", "private"]) {
         const response = await resolve(world, owner, slug);
         expect(response.status, slug).toBe(200);
-        expect(await response.json(), slug).toEqual({ result: "none" });
+        expect(await response.json(), slug).toEqual({ result: "none", otherWorkspaces: [] });
       }
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "names, on a none, the member's other workspaces where the slug resolves for the member, and not one the member is no member of or where the slug is another member's private bookmark",
+    async () => {
+      const world = harness.serve();
+      const owner = await harness.person(world);
+      const member = await harness.person(world);
+      const stranger = await harness.person(world);
+      // Workspace B, of which the caller is a member, and C, of which the caller is not, and D, of which the caller is a member, hold the slug; D holds it as another member's bookmark.
+      const b = await harness.workspaceOf([{ person: owner, role: "owner" }]);
+      await created(world, owner, "Mail in B", "mail");
+      await harness.workspaceOf([{ person: stranger, role: "owner" }]);
+      await created(world, stranger, "Mail in C", "mail");
+      await harness.workspaceOf([
+        { person: owner, role: "member" },
+        { person: member, role: "owner" },
+      ]);
+      await created(world, member, "Mail in D", "mail");
+      await harness.workspaceOf([{ person: owner, role: "owner" }]);
+
+      const response = await resolve(world, owner, "mail");
+
+      expect(response.status).toBe(200);
+      const body = (await response.json()) as { result: string; otherWorkspaces: { id: string; name: string }[] };
+      expect(body.result).toBe("none");
+      expect(body.otherWorkspaces.map((workspace) => workspace.id)).toEqual([b.workspaceId]);
+      expect(Object.keys(body.otherWorkspaces[0] ?? {}).toSorted()).toEqual(["id", "name"]);
+      expect(JSON.stringify(body)).not.toContain("https://");
+      expect(JSON.stringify(body)).not.toContain("Mail in");
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "names no other workspace to a token, which is bound to its workspace, where a session of the same account names one",
+    async () => {
+      const world = harness.serve();
+      const owner = await harness.person(world);
+      const b = await harness.workspaceOf([{ person: owner, role: "owner" }]);
+      await created(world, owner, "Payroll in B", "payroll");
+      const a = await harness.workspaceOf([{ person: owner, role: "owner" }]);
+      const readWrite = await harness.token(a.workspaceId, owner, "read-write");
+
+      const asSession = (await (await resolve(world, owner, "payroll")).json()) as { result: string; otherWorkspaces: { id: string }[] };
+      expect(asSession.otherWorkspaces.map((workspace) => workspace.id)).toEqual([b.workspaceId]);
+      const asToken = await send(world, "POST", RESOLVE, bearer(readWrite), { slug: "payroll" });
+      expect(asToken.status).toBe(200);
+      expect(await asToken.json()).toEqual({ result: "none", otherWorkspaces: [] });
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "offers a workspace to switch to but never forwards across workspaces, and switching stays the explicit request",
+    async () => {
+      const world = harness.serve();
+      const owner = await harness.person(world);
+      const b = await harness.workspaceOf([{ person: owner, role: "owner" }]);
+      const inB = await created(world, owner, "Mail in B", "mail");
+      await harness.workspaceOf([{ person: owner, role: "owner" }]);
+
+      const offered = (await (await resolve(world, owner, "mail")).json()) as { result: string; otherWorkspaces: { id: string }[] };
+      expect(offered.result).toBe("none");
+      expect(offered.otherWorkspaces.map((workspace) => workspace.id)).toEqual([b.workspaceId]);
+      expect((await choose(world, owner, { slug: "mail", bookmarkId: inB.id })).status).toBe(404);
+
+      expect((await send(world, "PUT", ACTIVE_WORKSPACE, { cookie: owner.cookie }, { workspaceId: b.workspaceId })).status).toBe(204);
+      expect(await (await resolve(world, owner, "mail")).json()).toMatchObject({ result: "single", bookmark: { id: inB.id } });
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "names no other workspace for a resolution that finds a bookmark, nor for a slug outside the grammar",
+    async () => {
+      const world = harness.serve();
+      const owner = await harness.person(world);
+      await harness.workspaceOf([{ person: owner, role: "owner" }]);
+      await created(world, owner, "Mail in B", "mail");
+      await harness.workspaceOf([{ person: owner, role: "owner" }]);
+      const own = await created(world, owner, "Mail in A", "mail");
+
+      expect(await (await resolve(world, owner, "mail")).json()).toEqual({ result: "single", bookmark: { id: own.id, title: "Mail in A", host: "example.com", owner: null, sharedVia: null } });
+      expect(await (await resolve(world, owner, "ma il")).json()).toEqual({ result: "none", otherWorkspaces: [] });
     },
     TEST_TIMEOUT_MS,
   );

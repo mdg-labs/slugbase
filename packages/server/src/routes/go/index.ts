@@ -1,5 +1,5 @@
 import { chooseSlug as chooseSlugOperation, resolveSlug as resolveSlugOperation, type GoResolutionSchema } from "@slugbase/contracts";
-import { chooseSlugBookmark, resolveSlug, type BookmarkUsage, type GoResolution } from "@slugbase/core";
+import { chooseSlugBookmark, resolveInWorkspace, resolveSlug, type BookmarkUsage, type GoResolution } from "@slugbase/core";
 import { goRepository } from "@slugbase/db";
 import type { z } from "zod";
 import type { ChainContext, RouteBinding } from "../../http/chain.ts";
@@ -35,7 +35,7 @@ function tenantOf(context: ChainContext): RequestTenant {
 function bodyOf(resolution: GoResolution): z.input<typeof GoResolutionSchema> {
   switch (resolution.kind) {
     case "none":
-      return { result: "none" };
+      return { result: "none", otherWorkspaces: resolution.otherWorkspaces.map(({ id, name }) => ({ id, name })) };
     case "preferred":
       return { result: "preferred", bookmark: resolution.bookmark };
     case "single":
@@ -49,7 +49,16 @@ export function goRoutes({ usage }: GoRoutesOptions): RouteBinding[] {
   return [
     route(resolveSlugOperation).handle(async ({ body }, context) => {
       const tenant = tenantOf(context);
-      const resolution = await tenant.withTenant((tx) => resolveSlug({ store: goRepository(tx) }, { accountId: tenant.accountId, slug: body.slug }));
+      // A token is bound to its workspace and cannot switch (Q40, doc 04 section 4.2), so a miss for a token names no other workspace and never asks for them.
+      const asksOtherWorkspaces = context.get("principal")?.kind === "session";
+      const resolution = await tenant.withTenant(async (tx): Promise<GoResolution> => {
+        const ask = { accountId: tenant.accountId, slug: body.slug };
+        if (asksOtherWorkspaces) {
+          return resolveSlug({ store: goRepository(tx) }, ask);
+        }
+        const inWorkspace = await resolveInWorkspace({ store: goRepository(tx) }, ask);
+        return inWorkspace.kind === "none" ? { kind: "none", otherWorkspaces: [] } : inWorkspace;
+      });
       return { status: 200, body: bodyOf(resolution) };
     }),
 

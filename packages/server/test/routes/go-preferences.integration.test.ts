@@ -89,7 +89,7 @@ describe("a remembered choice whose bookmark stopped being a candidate", () => {
       const unclaimed = await resolve(world, owner, "mail");
 
       expect(unclaimed.status).toBe(200);
-      expect(await unclaimed.json()).toEqual({ result: "none" });
+      expect(await unclaimed.json()).toEqual({ result: "none", otherWorkspaces: [] });
       expect(await storedSlugs()).toEqual([]);
       const newMail = await created(world, owner, "New mail", "mail");
       expect(await (await resolve(world, owner, "mail")).json()).toMatchObject({ result: "single", bookmark: { id: newMail.id } });
@@ -108,13 +108,13 @@ describe("a remembered choice whose bookmark stopped being a candidate", () => {
 
       expect((await send(world, "PATCH", `${BOOKMARKS}/${first.id}`, { cookie: owner.cookie }, { forwarding: false })).status).toBe(200);
       expect(await storedSlugs()).toEqual(["mail"]);
-      expect(await (await resolve(world, owner, "mail")).json()).toEqual({ result: "none" });
+      expect(await (await resolve(world, owner, "mail")).json()).toEqual({ result: "none", otherWorkspaces: [] });
       expect(await storedSlugs()).toEqual([]);
 
       const second = await created(world, owner, "Second", "inbox");
       await remembered(world, owner, "inbox", second);
       await inDatabase("UPDATE bookmarks SET owner_id = NULL WHERE id = $1", [second.id]);
-      expect(await (await resolve(world, owner, "inbox")).json()).toEqual({ result: "none" });
+      expect(await (await resolve(world, owner, "inbox")).json()).toEqual({ result: "none", otherWorkspaces: [] });
       expect(await storedSlugs()).toEqual([]);
     },
     TEST_TIMEOUT_MS,
@@ -129,7 +129,7 @@ describe("a remembered choice whose bookmark stopped being a candidate", () => {
       await remembered(world, owner, "mail", mail);
       await inDatabase("UPDATE bookmarks SET plan_archived_at = now() WHERE id = $1", [mail.id]);
 
-      expect(await (await resolve(world, owner, "mail")).json()).toEqual({ result: "none" });
+      expect(await (await resolve(world, owner, "mail")).json()).toEqual({ result: "none", otherWorkspaces: [] });
 
       expect(await storedSlugs()).toEqual(["mail"]);
       expect((await (await list(world, owner)).json()) as Listed).toEqual({ items: [], nextCursor: null });

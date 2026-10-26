@@ -631,6 +631,13 @@
       "when": 1793029240542,
       "tag": "20261026154040_add_slug_preference_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 90,
+      "version": "7",
+      "when": 1793046013918,
+      "tag": "20261026202013_add_go_other_workspaces",
+      "breakpoints": true
     }
   ]
 }

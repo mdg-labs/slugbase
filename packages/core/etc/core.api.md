@@ -2462,6 +2462,9 @@ export function generateCredentialToken(): CredentialToken;
 export function generateTotpSecret(): Uint8Array;
 
 // @public
+export const GO_OTHER_WORKSPACES_MAX = 20;
+
+// @public
 export type GoAccess = "owner" | "direct" | "team" | "folder";
 
 // @public
@@ -2550,7 +2553,7 @@ export interface GoNavigateAsk {
 // @public (undocumented)
 export interface GoNavigateDependencies {
     // (undocumented)
-    readonly store: GoStore;
+    readonly store: Pick<GoStore, "candidates" | "summaries" | "forgetStale" | "remember">;
     // (undocumented)
     readonly usage: BookmarkUsage;
 }
@@ -2663,6 +2666,59 @@ export interface GoPreferenceStore {
 
 // @public (undocumented)
 export type GoResolution =
+/** Nothing the member can read has the slug in the workspace (or the slug is not one); `otherWorkspaces` are the member's other workspaces that have it. */
+    {
+    readonly kind: "none";
+    readonly otherWorkspaces: readonly GoWorkspace[];
+} | Exclude<GoWorkspaceResolution, {
+    readonly kind: "none";
+}>;
+
+// @public (undocumented)
+export interface GoResolveAsk {
+    readonly accountId: string;
+    readonly slug: string;
+}
+
+// @public (undocumented)
+export interface GoResolveDependencies {
+    // (undocumented)
+    readonly store: Pick<GoStore, "candidates" | "summaries" | "forgetStale" | "otherWorkspaces">;
+}
+
+// @public (undocumented)
+export interface GoStore {
+    candidates(request: {
+        readonly slug: string;
+        readonly accountId: string;
+    }): Promise<GoCandidateSet>;
+    forgetStale(request: {
+        readonly slug: string;
+        readonly bookmarkId: string;
+        readonly accountId: string;
+    }): Promise<boolean>;
+    otherWorkspaces(request: {
+        readonly slug: string;
+        readonly accountId: string;
+    }): Promise<readonly GoWorkspace[]>;
+    remember(request: {
+        readonly slug: string;
+        readonly bookmarkId: string;
+        readonly accountId: string;
+    }): Promise<boolean>;
+    summaries(ids: readonly string[]): Promise<readonly GoBookmarkSummary[]>;
+}
+
+// @public
+export interface GoWorkspace {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public
+export type GoWorkspaceResolution =
 /** Nothing the member can read has the slug (or the slug is not one). */
     {
     readonly kind: "none";
@@ -2684,34 +2740,9 @@ export type GoResolution =
 };
 
 // @public (undocumented)
-export interface GoResolveAsk {
-    readonly accountId: string;
-    readonly slug: string;
-}
-
-// @public (undocumented)
-export interface GoResolveDependencies {
+export interface GoWorkspaceResolveDependencies {
     // (undocumented)
     readonly store: Pick<GoStore, "candidates" | "summaries" | "forgetStale">;
-}
-
-// @public (undocumented)
-export interface GoStore {
-    candidates(request: {
-        readonly slug: string;
-        readonly accountId: string;
-    }): Promise<GoCandidateSet>;
-    forgetStale(request: {
-        readonly slug: string;
-        readonly bookmarkId: string;
-        readonly accountId: string;
-    }): Promise<boolean>;
-    remember(request: {
-        readonly slug: string;
-        readonly bookmarkId: string;
-        readonly accountId: string;
-    }): Promise<boolean>;
-    summaries(ids: readonly string[]): Promise<readonly GoBookmarkSummary[]>;
 }
 
 // @public
@@ -4461,6 +4492,9 @@ export function resendInvitation(input: InvitationActionDependencies, ask: Invit
 
 // @public
 export function resetInstanceAccountMfa(input: InstanceRecoveryDependencies, ask: InstanceMfaResetAsk): Promise<InstanceMfaResetOutcome>;
+
+// @public
+export function resolveInWorkspace(input: GoWorkspaceResolveDependencies, ask: GoResolveAsk): Promise<GoWorkspaceResolution>;
 
 // @public
 export function resolveSlug(input: GoResolveDependencies, ask: GoResolveAsk): Promise<GoResolution>;
