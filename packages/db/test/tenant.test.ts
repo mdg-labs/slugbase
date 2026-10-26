@@ -97,6 +97,7 @@ describe("the package entry point", () => {
         "instanceRepository",
         "invitationAcceptanceRepository",
         "invitationRepository",
+        "isBookmarkSlugTaken",
         "isFolderNameTaken",
         "isLastOwnerViolation",
         "isTagNameTaken",

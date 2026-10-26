@@ -12,8 +12,10 @@ import { TAG_NAME_MAX_LENGTH } from "./tags.ts";
 // workspace's or unknown is answered 404 and files nothing (doc 02 sections 7.1 and 8.2, Q22). A bookmark is tagged with the caller's own
 // tags in the same way, by `tagIds` and by `tagNames` (a name the caller has no tag of creates one), and the list can be narrowed to the
 // bookmarks that carry every one of several tags (AND, doc 04 section 6.1); a tag that is another member's, another workspace's or unknown is
-// answered 404 and tags nothing (doc 02 sections 7.2 and 8.2, Q22). Every bookmark body carries the caller's own tags and nobody else's. The slug
-// of a bookmark is another operation. A bulk request deletes, pins, unpins, files in a folder (adds to it, moves to it, takes out of it) or tags (adds tags, removes tags) many of the caller's own
+// answered 404 and tags nothing (doc 02 sections 7.2 and 8.2, Q22). Every bookmark body carries the caller's own tags and nobody else's. A creation and a
+// change set, change and clear the slug and the forwarding flag of a bookmark (doc 02 section 6.1): the server trims and lower-cases a slug before it
+// validates it, a slug is unique per owner within the workspace, and forwarding needs a slug. Whether a slug is free is answered by the availability
+// query (doc 04 section 10.6). A bulk request deletes, pins, unpins, files in a folder (adds to it, moves to it, takes out of it) or tags (adds tags, removes tags) many of the caller's own
 // bookmarks at once, named by identifier or by the list's filters, in one transaction; the folder or the tags it acts with are the caller's own, and one that is
 // not is answered 404 with nothing changed (doc 02 section 5.8). The preview of adding tags answers the tag set the bookmarks would carry, without writing. The
 // select-all operation returns the identifiers a filter matches so a client can name them.
@@ -29,6 +31,12 @@ export const BOOKMARK_DESCRIPTION_MAX_LENGTH = 1000;
 
 /** The most folders a creation or a change names for one bookmark. */
 export const BOOKMARK_FOLDER_IDS_MAX = 100;
+
+/** The longest slug, in characters (doc 02 section 6.1). */
+export const BOOKMARK_SLUG_MAX_LENGTH = 64;
+
+/** The grammar of a slug once it is trimmed and lower-cased (doc 02 section 6.1, doc 05 section 2.4): 1 to 64 lower-case letters, digits and hyphens, not starting with a hyphen. There are no reserved words. */
+export const BOOKMARK_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 
 const BookmarkFolderIdsSchema = z.array(z.uuid()).max(BOOKMARK_FOLDER_IDS_MAX);
 
@@ -59,6 +67,16 @@ export const CreateBookmarkRequestSchema = z
       .optional()
       .describe("The bookmark's description, 0 to 1 000 characters; surrounding whitespace is removed and an empty one is stored as none"),
     pinned: z.boolean().optional().describe("Whether the bookmark is pinned; not pinned when left out"),
+    slug: z
+      .string()
+      .optional()
+      .describe(
+        "The bookmark's slug: it is trimmed and lower-cased, then it must be 1 to 64 lower-case letters, digits and hyphens that do not start with a hyphen, or the request is refused with 422 validation_failed on slug; there are no reserved words. A slug the caller already uses in the workspace is refused with 409 slug_taken. The bookmark has no slug when left out",
+      ),
+    forwarding: z
+      .boolean()
+      .optional()
+      .describe("Whether /go forwards to the bookmark by its slug. It needs a slug: true without one is refused with 422 validation_failed on forwarding. Left out, it is true when a slug is given and false otherwise"),
     folderIds: BookmarkFolderIdsSchema.optional().describe(
       "The caller's folders to file the bookmark in, at most 100 identifiers; one named twice counts once. A folder that is another member's, another workspace's or unknown is refused with 404 and nothing is created. Filed in none when left out",
     ),
@@ -90,6 +108,17 @@ export const UpdateBookmarkRequestSchema = z
       .optional()
       .describe("The new description, 0 to 1 000 characters; surrounding whitespace is removed, and an empty one and null clear it. Left out, the description is left as it is"),
     pinned: z.boolean().optional().describe("Pins or unpins the bookmark; left out, the pin is left as it is"),
+    slug: z
+      .string()
+      .nullable()
+      .optional()
+      .describe(
+        "The new slug, trimmed and lower-cased and then held to the grammar of a creation (422 validation_failed on slug otherwise); null clears it. A slug the caller already uses on another bookmark in the workspace is refused with 409 slug_taken. Clearing the slug of a bookmark that forwards is refused with 422 validation_failed on forwarding unless the same patch turns forwarding off. Left out, the slug is left as it is",
+      ),
+    forwarding: z
+      .boolean()
+      .optional()
+      .describe("Turns forwarding on or off; turning it off keeps the slug. True needs a slug, the bookmark's or the patch's, or the request is refused with 422 validation_failed on forwarding. Left out, forwarding is left as it is"),
     folderIds: BookmarkFolderIdsSchema.optional().describe(
       "The caller's folders the bookmark is filed in afterwards, at most 100 identifiers: the list replaces the folders it is in, and an empty list takes it out of all of them. Filing moves no version. A folder that is another member's, another workspace's or unknown is refused with 404 and nothing is changed. Left out, the folders are left as they are",
     ),
@@ -362,6 +391,31 @@ export const BookmarkOpenSchema = z
   })
   .meta({ id: "BookmarkOpen" });
 
+export const SLUG_AVAILABILITY_STATUSES = ["available", "taken_by_me", "invalid"] as const;
+
+export const SlugAvailabilityQuerySchema = z.strictObject({
+  slug: z
+    .string()
+    .describe("The slug to check. It is trimmed and lower-cased before it is judged; one that is empty or outside the grammar answers invalid, not an error"),
+  bookmarkId: z
+    .uuid()
+    .optional()
+    .describe("The caller's bookmark the slug is being set on: that bookmark's own current slug answers available. A bookmark that is another member's, another workspace's or unknown is refused with 404. Left out, the slug is judged for a new bookmark"),
+});
+
+export const SlugAvailabilitySchema = z
+  .strictObject({
+    status: z
+      .enum(SLUG_AVAILABILITY_STATUSES)
+      .describe("available: the caller can use the slug; taken_by_me: the caller already uses it on another bookmark of the workspace; invalid: it is outside the grammar"),
+    othersUseCount: z
+      .number()
+      .int()
+      .min(0)
+      .describe("How many bookmarks of other members of the workspace, and of members who have left it, have the slug and are not plan-archived: a count only, for the collision hint. 0 for an invalid slug"),
+  })
+  .meta({ id: "SlugAvailability" });
+
 export const BookmarkParamsSchema = z.strictObject({
   id: z.uuid().describe("The bookmark's identifier"),
 });
@@ -400,9 +454,11 @@ export const createBookmark = defineOperation({
     404: problemResponse(
       "The request acts in no workspace: the account has none, or the workspace is being deleted; or a folder of folderIds or a tag of tagIds is not one the caller has in it (another member's, another workspace's or unknown), and nothing is created",
     ),
-    409: problemResponse("The Idempotency-Key was used before for another request (idempotency_conflict); nothing is written"),
+    409: problemResponse(
+      "The Idempotency-Key was used before for another request (idempotency_conflict), or the caller already uses the slug on another bookmark of the workspace (slug_taken, errors on slug), also when two requests set it at once; nothing is written",
+    ),
     422: problemResponse(
-      "The body did not pass validation (a missing, empty or over-long URL, title or description, a malformed URL, a folderIds, tagIds or tagNames list of more than 100 or with a malformed identifier, or a tag name that is empty or over 40 characters, or a field the operation does not declare), the URL is not an http or https URL (url_not_allowed), or the workspace already holds as many bookmarks as its bookmarks.max entitlement allows (bookmark_limit_reached; the problem carries limit and used). Nothing is written, and a refused request keeps no key, so a retry with it runs",
+      "The body did not pass validation (a missing, empty or over-long URL, title or description, a malformed URL, a slug outside the grammar, forwarding true without a slug, a folderIds, tagIds or tagNames list of more than 100 or with a malformed identifier, or a tag name that is empty or over 40 characters, or a field the operation does not declare), the URL is not an http or https URL (url_not_allowed), or the workspace already holds as many bookmarks as its bookmarks.max entitlement allows (bookmark_limit_reached; the problem carries limit and used). Nothing is written, and a refused request keeps no key, so a retry with it runs",
     ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse(
@@ -470,7 +526,7 @@ export const updateBookmark = defineOperation({
   request: { params: BookmarkParamsSchema, headers: BookmarkIfMatchHeaderSchema, body: UpdateBookmarkRequestSchema },
   responses: {
     200: jsonResponse(
-      "The caller's bookmark after a JSON Merge Patch of its url, title, description, pinned, folderIds, tagIds and tagNames fields. A change moves the version by one and the ETag is that of the new version; a patch that names the values the bookmark has, in the folders it is already in and with the tags it already has, and an empty one, write nothing and answer with the unchanged version; a patch of folderIds, tagIds or tagNames alone changes the folders or the tags and keeps the version",
+      "The caller's bookmark after a JSON Merge Patch of its url, title, description, pinned, slug, forwarding, folderIds, tagIds and tagNames fields. A change moves the version by one and the ETag is that of the new version; a patch that names the values the bookmark has, in the folders it is already in and with the tags it already has, and an empty one, write nothing and answer with the unchanged version; a patch of folderIds, tagIds or tagNames alone changes the folders or the tags and keeps the version",
       BookmarkSchema,
       { headers: BookmarkEntityTag },
     ),
@@ -480,9 +536,10 @@ export const updateBookmark = defineOperation({
     404: problemResponse(
       "The workspace the request acts in has no bookmark of the caller with this identifier that can be changed: another member's bookmark, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike. A folder of folderIds or a tag of tagIds that is not the caller's (another member's, another workspace's or unknown) is answered alike, and nothing is changed",
     ),
+    409: problemResponse("The caller already uses the slug on another bookmark of the workspace (slug_taken, errors on slug), also when two requests set it at once; nothing is written"),
     412: problemResponse("If-Match names a version other than the bookmark's current one (precondition_failed); the bookmark is unchanged"),
     422: problemResponse(
-      "The identifier or the body did not pass validation (a malformed, empty or over-long URL, a title that is blank or over-long, a description over 1 000 characters, a null title or URL, a folderIds, tagIds or tagNames list of more than 100 or with a malformed identifier, or a tag name that is empty or over 40 characters, or a field the operation does not declare), or the URL is not an http or https URL (url_not_allowed). Nothing is written",
+      "The identifier or the body did not pass validation (a malformed, empty or over-long URL, a title that is blank or over-long, a description over 1 000 characters, a null title or URL, a slug outside the grammar, forwarding true or left on without a slug, a folderIds, tagIds or tagNames list of more than 100 or with a malformed identifier, or a tag name that is empty or over 40 characters, or a field the operation does not declare), or the URL is not an http or https URL (url_not_allowed). Nothing is written",
     ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
@@ -619,6 +676,32 @@ export const previewBulkBookmarks = defineOperation({
     422: problemResponse(
       "The body did not pass validation (an action other than add_tags, neither or both of ids and filter, no identifier or more than 1 000, no tag or more than 100, a malformed identifier, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks",
     ),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const checkSlugAvailability = defineOperation({
+  method: "get",
+  path: "/api/v1/slugs/availability",
+  operationId: "checkSlugAvailability",
+  tag: "bookmarks",
+  summary: "Check whether a slug is free",
+  auth: "member",
+  rate: "read",
+  scope: "read",
+  request: { query: SlugAvailabilityQuerySchema },
+  responses: {
+    200: jsonResponse(
+      "Whether the caller can use the slug in the workspace: available, taken_by_me when another bookmark of the caller's already has it, or invalid when it is outside the grammar, with the number of other bookmarks that have it (a count, never whose). The caller's own bookmark named by bookmarkId is not counted against its own slug",
+      SlugAvailabilitySchema,
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    404: problemResponse(
+      "The request acts in no workspace: the account has none, or the workspace is being deleted; or the workspace has no bookmark of the caller with the identifier bookmarkId (another member's, another workspace's or unknown, answered alike)",
+    ),
+    422: problemResponse("The query did not pass validation (no slug, a bookmarkId that is not an identifier, a parameter the operation does not declare)"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },

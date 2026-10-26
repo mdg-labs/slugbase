@@ -316,6 +316,12 @@ export const BOOKMARK_LIST_TOTAL_CAP = 10000;
 export const BOOKMARK_SELECT_ALL_CAP = 5000;
 
 // @public
+export const BOOKMARK_SLUG_MAX_LENGTH = 64;
+
+// @public
+export const BOOKMARK_SLUG_PATTERN: RegExp;
+
+// @public
 export const BOOKMARK_TAG_FILTER_MAX = 10;
 
 // @public
@@ -708,6 +714,40 @@ export const ChangePasswordRequestSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
+export const checkSlugAvailability: {
+    readonly method: "get";
+    readonly path: "/api/v1/slugs/availability";
+    readonly operationId: "checkSlugAvailability";
+    readonly tag: "bookmarks";
+    readonly summary: "Check whether a slug is free";
+    readonly auth: "member";
+    readonly rate: "read";
+    readonly scope: "read";
+    readonly request: {
+        readonly query: z.ZodObject<{
+            slug: z.ZodString;
+            bookmarkId: z.ZodOptional<z.ZodUUID>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        status: z.ZodEnum<{
+        available: "available";
+        taken_by_me: "taken_by_me";
+        invalid: "invalid";
+        }>;
+        othersUseCount: z.ZodNumber;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
 export const completeOidcSignIn: {
     readonly method: "get";
     readonly path: "/api/v1/auth/oidc/{provider}/callback";
@@ -965,7 +1005,9 @@ export interface ComponentTypes {
         CreateBookmarkRequest: {
             description?: string;
             folderIds?: string[];
+            forwarding?: boolean;
             pinned?: boolean;
+            slug?: string;
             tagIds?: string[];
             tagNames?: string[];
             title: string;
@@ -1354,6 +1396,10 @@ export interface ComponentTypes {
             setupRequired: boolean;
             setupTokenRequired: boolean;
         };
+        SlugAvailability: {
+            othersUseCount: number;
+            status: "available" | "taken_by_me" | "invalid";
+        };
         Tag: {
             bookmarkCount: number;
             createdAt: string;
@@ -1390,7 +1436,9 @@ export interface ComponentTypes {
         UpdateBookmarkRequest: {
             description?: string | null;
             folderIds?: string[];
+            forwarding?: boolean;
             pinned?: boolean;
+            slug?: string | null;
             tagIds?: string[];
             tagNames?: string[];
             title?: string;
@@ -1605,6 +1653,8 @@ export const createBookmark: {
             title: z.ZodString;
             description: z.ZodOptional<z.ZodString>;
             pinned: z.ZodOptional<z.ZodBoolean>;
+            slug: z.ZodOptional<z.ZodString>;
+            forwarding: z.ZodOptional<z.ZodBoolean>;
             folderIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
             tagIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
             tagNames: z.ZodOptional<z.ZodArray<z.ZodString>>;
@@ -1654,6 +1704,8 @@ export const CreateBookmarkRequestSchema: z.ZodObject<{
     title: z.ZodString;
     description: z.ZodOptional<z.ZodString>;
     pinned: z.ZodOptional<z.ZodBoolean>;
+    slug: z.ZodOptional<z.ZodString>;
+    forwarding: z.ZodOptional<z.ZodBoolean>;
     folderIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
     tagIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
     tagNames: z.ZodOptional<z.ZodArray<z.ZodString>>;
@@ -4975,6 +5027,78 @@ export interface OperationTypes {
                 };
             };
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    checkSlugAvailability: {
+        parameters: {
+            query: {
+                slug: string;
+                bookmarkId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["SlugAvailability"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10751,6 +10875,14 @@ export interface OperationTypes {
                     "application/problem+json": ComponentTypes["schemas"]["Problem"];
                 };
             };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
             412: {
                 headers: {
                     [name: string]: unknown;
@@ -12499,6 +12631,23 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/slugs/availability": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["checkSlugAvailability"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/api/v1/tags": {
         parameters: {
             query?: never;
@@ -13764,6 +13913,25 @@ export const SetupStatusSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
+export const SLUG_AVAILABILITY_STATUSES: readonly ["available", "taken_by_me", "invalid"];
+
+// @public (undocumented)
+export const SlugAvailabilityQuerySchema: z.ZodObject<{
+    slug: z.ZodString;
+    bookmarkId: z.ZodOptional<z.ZodUUID>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const SlugAvailabilitySchema: z.ZodObject<{
+    status: z.ZodEnum<{
+        available: "available";
+        taken_by_me: "taken_by_me";
+        invalid: "invalid";
+    }>;
+    othersUseCount: z.ZodNumber;
+}, z.core.$strict>;
+
+// @public (undocumented)
 export const startMfaEnrollment: {
     readonly method: "post";
     readonly path: "/api/v1/me/mfa/enrollment";
@@ -14041,6 +14209,8 @@ export const updateBookmark: {
             title: z.ZodOptional<z.ZodString>;
             description: z.ZodOptional<z.ZodNullable<z.ZodString>>;
             pinned: z.ZodOptional<z.ZodBoolean>;
+            slug: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+            forwarding: z.ZodOptional<z.ZodBoolean>;
             folderIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
             tagIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
             tagNames: z.ZodOptional<z.ZodArray<z.ZodString>>;
@@ -14082,6 +14252,7 @@ export const updateBookmark: {
         readonly 401: ProblemResponse;
         readonly 403: ProblemResponse;
         readonly 404: ProblemResponse;
+        readonly 409: ProblemResponse;
         readonly 412: ProblemResponse;
         readonly 422: ProblemResponse;
         readonly 429: RateLimitedResponse;
@@ -14095,6 +14266,8 @@ export const UpdateBookmarkRequestSchema: z.ZodObject<{
     title: z.ZodOptional<z.ZodString>;
     description: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     pinned: z.ZodOptional<z.ZodBoolean>;
+    slug: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    forwarding: z.ZodOptional<z.ZodBoolean>;
     folderIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
     tagIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
     tagNames: z.ZodOptional<z.ZodArray<z.ZodString>>;

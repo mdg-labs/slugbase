@@ -43,7 +43,7 @@ export { entitlementRepository } from "./repositories/entitlements.ts";
 export type { EntitlementRepository, EntitlementUsage } from "./repositories/entitlements.ts";
 export { instanceRepository } from "./repositories/instance.ts";
 export type { InstanceCounts, InstanceRepository, JobHealth } from "./repositories/instance.ts";
-export { bookmarkArchiveTransaction, bookmarkRepository } from "./repositories/bookmarks.ts";
+export { bookmarkArchiveTransaction, bookmarkRepository, isBookmarkSlugTaken } from "./repositories/bookmarks.ts";
 export type { BookmarkCreation, BookmarkCreationResult, BookmarkRepository } from "./repositories/bookmarks.ts";
 export { isTagNameTaken, tagRepository } from "./repositories/tags.ts";
 export type { TagRepository } from "./repositories/tags.ts";

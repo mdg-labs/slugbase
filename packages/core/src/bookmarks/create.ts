@@ -1,5 +1,6 @@
 import type { EntitlementLimit } from "../entitlements/catalog.ts";
 import type { DomainEvent } from "../events/catalog.ts";
+import { parseSlug } from "../go/slug.ts";
 import { bookmarkTagSelection, type BookmarkTagRef, type BookmarkTagSelection } from "./tagging.ts";
 import type { BookmarkUpdateRequest, BookmarkUpdateResult } from "./update.ts";
 import { normalizeBookmarkUrl, type BookmarkUrlRefusal } from "./url.ts";
@@ -63,6 +64,10 @@ export interface NewBookmark {
   readonly title: string;
   readonly description: string | null;
   readonly pinned: boolean;
+  /** The slug in its normal form, already in the grammar; left out for none. */
+  readonly slug?: string;
+  /** Whether /go forwards to the bookmark: never true without a slug, and false when left out. */
+  readonly forwarding?: boolean;
 }
 
 export interface BookmarkCreationRequest {
@@ -86,13 +91,16 @@ export type BookmarkStoreResult =
   /** One of the folders is not one the owner has in this workspace; nothing is written. */
   | { readonly kind: "folder_not_found" }
   /** One of the tags is not one the owner has in this workspace; nothing is written. */
-  | { readonly kind: "tag_not_found" };
+  | { readonly kind: "tag_not_found" }
+  /** The owner already has another bookmark with the slug in this workspace; nothing is written. */
+  | { readonly kind: "slug_taken" };
 
 export interface BookmarkStore {
   /**
    * Takes one place under `ceiling` from the workspace's bookmark count, inserts the bookmark and queues the events, in
    * the transaction the store is bound to. The count is read under the workspace's row lock and raised in the same
-   * transaction as the insert; nothing is written for `limit_reached`, `unavailable`, `folder_not_found` and `tag_not_found`. The bookmark is filed in the
+   * transaction as the insert; nothing is written for `limit_reached`, `unavailable`, `folder_not_found`, `tag_not_found` and `slug_taken` (a slug the owner has on another bookmark, found
+   * before the first write; two creations that set one slug at once meet at the table's key, and the loser's statement throws the error `isBookmarkSlugTaken` of `@slugbase/db` tells, which ends its transaction). The bookmark is filed in the
    * folders of `request.folderIds` and tagged in the same transaction, and only with folders and tags its owner owns; a name of `request.tags` the
    * owner has no tag of creates one in that transaction.
    */
@@ -126,6 +134,10 @@ export interface BookmarkCreationAsk {
   readonly title: string;
   readonly description: string | undefined;
   readonly pinned: boolean | undefined;
+  /** The slug as the caller wrote it; it is trimmed and lower-cased, then held to the grammar. None when left out. */
+  readonly slug?: string | undefined;
+  /** Whether /go forwards to the bookmark. It needs a slug; when left out it is true if a slug is given and false otherwise. */
+  readonly forwarding?: boolean | undefined;
   /** The folders to file the bookmark in; none when left out. */
   readonly folderIds: readonly string[] | undefined;
   /** The owner's tags to put on the bookmark by identifier, and by name (a name the owner has no tag of creates one); none when left out. Both together name the union. */
@@ -146,7 +158,13 @@ export type BookmarkCreationOutcome =
   /** A folder is not one the account has in this workspace (another member's, another workspace's, or none); nothing was written. */
   | { readonly kind: "folder_not_found" }
   /** A tag is not one the account has in this workspace (another member's, another workspace's, or none); nothing was written. */
-  | { readonly kind: "tag_not_found" };
+  | { readonly kind: "tag_not_found" }
+  /** The slug is outside the grammar once trimmed and lower-cased; nothing was written. */
+  | { readonly kind: "slug_invalid" }
+  /** Forwarding was asked for without a slug; nothing was written. */
+  | { readonly kind: "forwarding_requires_slug" }
+  /** The account already has another bookmark with the slug in this workspace; nothing was written. */
+  | { readonly kind: "slug_taken" };
 
 function checkLength(field: string, value: string, min: number, max: number): void {
   const length = Array.from(value).length;
@@ -157,7 +175,9 @@ function checkLength(field: string, value: string, min: number, max: number): vo
 
 /**
  * Creates the bookmark for `ask.accountId` in the workspace of the transaction and announces `bookmark.created`. The
- * title and the description are the trimmed values the contract passes on; an empty description is stored as none.
+ * title and the description are the trimmed values the contract passes on; an empty description is stored as none. A slug is
+ * trimmed and lower-cased and then held to the grammar before anything is written, and forwarding is true when a slug is given and
+ * the caller says nothing else.
  */
 export async function createBookmark({ store, newId }: BookmarkCreationDependencies, ask: BookmarkCreationAsk): Promise<BookmarkCreationOutcome> {
   const normalized = normalizeBookmarkUrl(ask.url);
@@ -168,6 +188,18 @@ export async function createBookmark({ store, newId }: BookmarkCreationDependenc
   const description = ask.description === undefined || ask.description === "" ? null : ask.description;
   if (description !== null) {
     checkLength("description", description, 1, BOOKMARK_DESCRIPTION_MAX_LENGTH);
+  }
+
+  let slug: string | null = null;
+  if (ask.slug !== undefined) {
+    const parsed = parseSlug(ask.slug);
+    if (parsed === undefined) {
+      return { kind: "slug_invalid" };
+    }
+    slug = parsed;
+  }
+  if (ask.forwarding === true && slug === null) {
+    return { kind: "forwarding_requires_slug" };
   }
 
   const id = newId();
@@ -181,6 +213,7 @@ export async function createBookmark({ store, newId }: BookmarkCreationDependenc
       title: ask.title,
       description,
       pinned: ask.pinned ?? false,
+      ...(slug === null ? {} : { slug, forwarding: ask.forwarding ?? true }),
     },
     ceiling: ask.ceiling,
     folderIds: [...new Set((ask.folderIds ?? []).map((id) => id.toLowerCase()))],

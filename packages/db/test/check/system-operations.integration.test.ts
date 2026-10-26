@@ -112,6 +112,7 @@ describe("the shipped chain", () => {
       "app_member_workspace_counts",
       "workspace_members_check_owner",
       "folders_rename_on_release",
+      "bookmarks_clear_slug_on_release",
       "sys_account_has_password",
       "sys_retention_purge",
       "sys_create_account",

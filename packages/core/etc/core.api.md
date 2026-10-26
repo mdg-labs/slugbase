@@ -1139,7 +1139,10 @@ export interface BookmarkChanges {
     readonly description?: string | null;
     readonly folderIds?: readonly string[];
     // (undocumented)
+    readonly forwarding?: boolean;
+    // (undocumented)
     readonly pinned?: boolean;
+    readonly slug?: string | null;
     readonly tags?: BookmarkTagSelection;
     // (undocumented)
     readonly title?: string;
@@ -1154,8 +1157,10 @@ export interface BookmarkCreationAsk {
     // (undocumented)
     readonly description: string | undefined;
     readonly folderIds: readonly string[] | undefined;
+    readonly forwarding?: boolean | undefined;
     // (undocumented)
     readonly pinned: boolean | undefined;
+    readonly slug?: string | undefined;
     readonly tagIds?: readonly string[] | undefined;
     // (undocumented)
     readonly tagNames?: readonly string[] | undefined;
@@ -1201,6 +1206,18 @@ export type BookmarkCreationOutcome = {
 /** A tag is not one the account has in this workspace (another member's, another workspace's, or none); nothing was written. */
 | {
     readonly kind: "tag_not_found";
+}
+/** The slug is outside the grammar once trimmed and lower-cased; nothing was written. */
+| {
+    readonly kind: "slug_invalid";
+}
+/** Forwarding was asked for without a slug; nothing was written. */
+| {
+    readonly kind: "forwarding_requires_slug";
+}
+/** The account already has another bookmark with the slug in this workspace; nothing was written. */
+| {
+    readonly kind: "slug_taken";
 };
 
 // @public (undocumented)
@@ -1426,8 +1443,10 @@ export interface BookmarkPatch {
     // (undocumented)
     readonly description?: string | null;
     readonly folderIds?: readonly string[];
+    readonly forwarding?: boolean;
     // (undocumented)
     readonly pinned?: boolean;
+    readonly slug?: string | null;
     readonly tagIds?: readonly string[];
     // (undocumented)
     readonly tagNames?: readonly string[];
@@ -1540,6 +1559,10 @@ export type BookmarkStoreResult = {
 /** One of the tags is not one the owner has in this workspace; nothing is written. */
 | {
     readonly kind: "tag_not_found";
+}
+/** The owner already has another bookmark with the slug in this workspace; nothing is written. */
+| {
+    readonly kind: "slug_taken";
 };
 
 // @public (undocumented)
@@ -1601,6 +1624,10 @@ export type BookmarkUpdateOutcome = BookmarkUpdateResult
 | {
     readonly kind: "url_refused";
     readonly reason: BookmarkUrlRefusal;
+}
+/** The new slug is outside the grammar once trimmed and lower-cased; nothing was written. */
+| {
+    readonly kind: "slug_invalid";
 };
 
 // @public (undocumented)
@@ -1632,6 +1659,14 @@ export type BookmarkUpdateResult =
 /** A tag of the selection is not one the owner has in this workspace; nothing was written. */
 | {
     readonly kind: "tag_not_found";
+}
+/** The owner already has another bookmark with the slug in this workspace; nothing was written. */
+| {
+    readonly kind: "slug_taken";
+}
+/** The bookmark would forward without a slug: its slug is cleared while forwarding stays on, or forwarding is turned on without one; nothing was written. */
+| {
+    readonly kind: "forwarding_requires_slug";
 }
 /** The version of the bookmark, read under its lock, is none of the accepted ones; nothing was written. */
 | {
@@ -3579,6 +3614,9 @@ export function isInstanceAuditAction(value: unknown): value is InstanceAuditAct
 export function issueInstanceResetLink(input: InstanceRecoveryDependencies, ask: InstanceResetLinkAsk): Promise<InstanceResetLinkOutcome>;
 
 // @public
+export function isValidSlug(slug: string): boolean;
+
+// @public
 export interface JoiningEntitlements {
     // (undocumented)
     readonly upgradeAvailable: boolean;
@@ -3787,12 +3825,14 @@ export interface NewAccountAcceptance {
 export interface NewBookmark {
     // (undocumented)
     readonly description: string | null;
+    readonly forwarding?: boolean;
     // (undocumented)
     readonly host: string;
     readonly id: string;
     readonly ownerId: string;
     // (undocumented)
     readonly pinned: boolean;
+    readonly slug?: string;
     // (undocumented)
     readonly title: string;
     // (undocumented)
@@ -3851,6 +3891,9 @@ export function normalizeFolderName(name: string): {
 } | {
     readonly refusal: FolderNameRefusal;
 };
+
+// @public
+export function normalizeSlug(input: string): string;
 
 // @public
 export function normalizeTagName(name: string): {
@@ -3972,6 +4015,9 @@ export function parseAuditMetadata<Name extends AuditAction>(name: Name, value: 
 
 // @public
 export function parseDomainEventPayload<Name extends DomainEventName>(name: Name, value: unknown): DomainEventPayload<Name>;
+
+// @public
+export function parseSlug(input: string): string | undefined;
 
 // @public
 export function parseWorkspaceEntitlements(answer: unknown): WorkspaceEntitlementValues;
@@ -4205,6 +4251,49 @@ export interface SessionCookieSpec {
 
 // @public
 export function sessionCookieSpec(appOrigin: string): SessionCookieSpec;
+
+// @public
+export function slugAvailability(input: SlugAvailabilityDependencies, ask: SlugAvailabilityAsk): Promise<SlugAvailabilityOutcome>;
+
+// @public (undocumented)
+export interface SlugAvailabilityAsk {
+    readonly accountId: string;
+    readonly bookmarkId: string | undefined;
+    readonly slug: string;
+}
+
+// @public (undocumented)
+export interface SlugAvailabilityDependencies {
+    // (undocumented)
+    readonly store: SlugAvailabilityStore;
+}
+
+// @public (undocumented)
+export type SlugAvailabilityOutcome = {
+    readonly kind: "checked";
+    readonly status: "available" | "taken_by_me" | "invalid";
+    readonly othersUseCount: number;
+}
+/** `bookmarkId` names no bookmark the account owns: another member's, another workspace's, plan-archived or unknown, which a caller must not tell apart. */
+| {
+    readonly kind: "bookmark_not_found";
+};
+
+// @public (undocumented)
+export interface SlugAvailabilityStore {
+    find: BookmarkStore["find"];
+    slugUse(request: {
+        readonly slug: string;
+        readonly ownerId: string;
+        readonly exceptBookmarkId: string | undefined;
+    }): Promise<SlugUse>;
+}
+
+// @public
+export interface SlugUse {
+    readonly othersUseCount: number;
+    readonly takenByOwner: boolean;
+}
 
 // @public
 export const TAG_LIST_TOTAL_CAP = 10000;

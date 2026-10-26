@@ -1,3 +1,4 @@
+import { parseSlug } from "../go/slug.ts";
 import type { BookmarkRecord, BookmarkStore } from "./create.ts";
 import { BOOKMARK_DESCRIPTION_MAX_LENGTH, BOOKMARK_TITLE_MAX_LENGTH } from "./create.ts";
 import { bookmarkTagSelection, type BookmarkTagSelection } from "./tagging.ts";
@@ -16,6 +17,10 @@ export interface BookmarkPatch {
   readonly title?: string;
   readonly description?: string | null;
   readonly pinned?: boolean;
+  /** The slug as the caller wrote it, or null to clear it. */
+  readonly slug?: string | null;
+  /** Turns forwarding on or off; turning it off keeps the slug. */
+  readonly forwarding?: boolean;
   /** The folders the bookmark is filed in afterwards: they replace the ones it is in, and an empty list takes it out of all of them. */
   readonly folderIds?: readonly string[];
   /** The tags the bookmark carries afterwards, by identifier and by name together: they replace the ones it has, and an empty list takes all of them off. */
@@ -29,6 +34,9 @@ export interface BookmarkChanges {
   readonly title?: string;
   readonly description?: string | null;
   readonly pinned?: boolean;
+  /** The slug in its normal form, already in the grammar, or null to clear it. */
+  readonly slug?: string | null;
+  readonly forwarding?: boolean;
   /** The owner's folders the bookmark is filed in afterwards, without repeats. */
   readonly folderIds?: readonly string[];
   /** The owner's tags the bookmark carries afterwards: they replace the ones it has. */
@@ -53,6 +61,10 @@ export type BookmarkUpdateResult =
   | { readonly kind: "folder_not_found" }
   /** A tag of the selection is not one the owner has in this workspace; nothing was written. */
   | { readonly kind: "tag_not_found" }
+  /** The owner already has another bookmark with the slug in this workspace; nothing was written. */
+  | { readonly kind: "slug_taken" }
+  /** The bookmark would forward without a slug: its slug is cleared while forwarding stays on, or forwarding is turned on without one; nothing was written. */
+  | { readonly kind: "forwarding_requires_slug" }
   /** The version of the bookmark, read under its lock, is none of the accepted ones; nothing was written. */
   | { readonly kind: "stale" }
   /** The caller owns no such bookmark; nothing was written. */
@@ -75,7 +87,9 @@ export interface BookmarkUpdateAsk {
 export type BookmarkUpdateOutcome =
   | BookmarkUpdateResult
   /** The new URL is refused; nothing was written. */
-  | { readonly kind: "url_refused"; readonly reason: BookmarkUrlRefusal };
+  | { readonly kind: "url_refused"; readonly reason: BookmarkUrlRefusal }
+  /** The new slug is outside the grammar once trimmed and lower-cased; nothing was written. */
+  | { readonly kind: "slug_invalid" };
 
 function checkLength(field: string, value: string, min: number, max: number): void {
   const length = Array.from(value).length;
@@ -87,7 +101,8 @@ function checkLength(field: string, value: string, min: number, max: number): vo
 /**
  * Applies the patch to the bookmark `ask.bookmarkId` when `ask.accountId` owns it. The URL is normalised as a creation does and
  * its canonical form and host are derived again; the title and the description are the trimmed values the contract passes on, and
- * an empty description is stored as none.
+ * an empty description is stored as none. A slug is trimmed and lower-cased and then held to the grammar before anything is written; a
+ * bookmark never forwards without a slug, which the store judges against the slug the bookmark has when the patch leaves it out.
  */
 export async function updateBookmark({ store, newId }: BookmarkUpdateDependencies, ask: BookmarkUpdateAsk): Promise<BookmarkUpdateOutcome> {
   const { patch } = ask;
@@ -109,6 +124,20 @@ export async function updateBookmark({ store, newId }: BookmarkUpdateDependencie
       checkLength("description", description, 1, BOOKMARK_DESCRIPTION_MAX_LENGTH);
     }
   }
+  let slug: string | null | undefined;
+  if (patch.slug !== undefined) {
+    if (patch.slug === null) {
+      slug = null;
+    } else {
+      slug = parseSlug(patch.slug);
+      if (slug === undefined) {
+        return { kind: "slug_invalid" };
+      }
+    }
+  }
+  if (patch.forwarding === true && slug === null) {
+    return { kind: "forwarding_requires_slug" };
+  }
   const tags = bookmarkTagSelection(patch.tagIds, patch.tagNames, newId);
   return store.update({
     bookmarkId: ask.bookmarkId,
@@ -118,6 +147,8 @@ export async function updateBookmark({ store, newId }: BookmarkUpdateDependencie
       ...(patch.title === undefined ? {} : { title: patch.title }),
       ...(description === undefined ? {} : { description }),
       ...(patch.pinned === undefined ? {} : { pinned: patch.pinned }),
+      ...(slug === undefined ? {} : { slug }),
+      ...(patch.forwarding === undefined ? {} : { forwarding: patch.forwarding }),
       ...(patch.folderIds === undefined ? {} : { folderIds: [...new Set(patch.folderIds.map((id) => id.toLowerCase()))] }),
       ...(tags === undefined ? {} : { tags }),
     },

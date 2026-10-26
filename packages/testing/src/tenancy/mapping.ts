@@ -38,7 +38,11 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  *
  * - Bookmark identifier: the path parameter `id` of `getBookmark`, `updateBookmark`, `deleteBookmark` and `openBookmark`, the query parameter
  *   `hasSlug` of `listBookmarks` and `listBookmarkIds` and the body inputs `ids[]` and `filter.hasSlug` of `bulkBookmarks` and `previewBulkBookmarks`.
- *   `hasSlug` is a flag, not an identifier, but the classifier selects every name ending in `Slug`, so it is mapped like the others.
+ *   `hasSlug` is a flag, not an identifier, but the classifier selects every name ending in `Slug`, so it is mapped like the others. The same holds for the body input `slug`
+ *   of `createBookmark` and `updateBookmark`, which is the slug the caller gives the bookmark, and for the query parameter `slug` of `checkSlugAvailability`, which is the slug
+ *   the caller asks about: none of the three refers to a row, so each is mapped to a bookmark and is judged together with the inputs of the same call that do refer to one. The query
+ *   parameter `bookmarkId` of `checkSlugAvailability` names the caller's bookmark and takes a bookmark identifier. A bookmark of B in that parameter, in the `folderIds` or `tagIds` of a
+ *   creation or in the path of a change is answered 404 before the slug is looked at, which is what the matrix expects of the call.
  * - Tag identifier: the path parameter `id` of `renameTag`, `mergeTag` and `deleteTag`, the body input `intoTagId` of `mergeTag`, the query parameter `tag` of `listBookmarks` and `listBookmarkIds` (as a single value and as a repeated one), the body input `filter.tag` of `bulkBookmarks` and
  *   `previewBulkBookmarks` (as a single value and as a list) and the body input `tagIds[]` of `createBookmark`, `updateBookmark`, `bulkBookmarks` and `previewBulkBookmarks`. The body input `tagNames[]` of the two is a name, not an identifier, and takes no entry.
  * - Folder identifier: the path parameter `id` of `getFolder`, `updateFolder`, `deleteFolder`, `addFolderBookmarks` and `removeFolderBookmarks`, the query
@@ -56,6 +60,10 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  */
 export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
   "getBookmark.id": "bookmark",
+  "createBookmark.slug": "bookmark",
+  "updateBookmark.slug": "bookmark",
+  "checkSlugAvailability.slug": "bookmark",
+  "checkSlugAvailability.bookmarkId": "bookmark",
   "updateBookmark.id": "bookmark",
   "deleteBookmark.id": "bookmark",
   "openBookmark.id": "bookmark",
@@ -129,6 +137,8 @@ export const REPOSITORY_SAMPLES: RepositorySamples = {
       urlCanonical: "https://example.com/matrix",
       host: "example.com",
       title: "matrix-bookmark-inserted",
+      slug: "matrix-slug",
+      forwarding: true,
     },
     set: { title: "matrix-bookmark-updated" },
   },

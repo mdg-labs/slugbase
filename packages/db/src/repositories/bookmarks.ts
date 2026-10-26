@@ -17,6 +17,7 @@ import {
   type BookmarkUpdateRequest,
   type BookmarkUpdateResult,
   type NewBookmark,
+  type SlugUse,
 } from "@slugbase/core";
 import { and, eq, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
@@ -59,13 +60,35 @@ import { deleteTagLinks, deleteTagLinksMany, insertTagLinks, insertTagLinksMany,
 // `bookmark_tags`, `(bookmark_id, tag_id)`, answers for the bookmark in hand.
 
 // `slugbase_app` may insert only the columns a request gives a new bookmark and update only the columns a change of its own fields
-// writes (src/sql/470-bookmarks.sql): not the slug, forwarding, the archive state, the usage, the owner or the version, so a row
-// it writes is never archived or forwarding and starts unused, and its version is moved by the trigger and by nothing it sends.
+// writes (src/sql/470-bookmarks.sql and 560-bookmark-slugs.sql): the slug and forwarding among them, but not the archive state, the usage, the
+// owner or the version, so a row it writes is never archived and starts unused, and its version is moved by the trigger and by nothing it sends.
+//
+// The slug is unique per owner within the workspace (`bookmarks_owner_slug_key`), and the key is the judge of it. A creation and a change look for
+// another bookmark of the owner with the slug first and answer `slug_taken` without writing; two statements that set one slug at once both pass
+// that look, the second waits for the first's commit and then meets the key, and its statement fails, which ends the transaction it ran in with
+// nothing written: `isBookmarkSlugTaken` tells that failure from any other so the caller answers it as a slug that is taken.
 const scoped = defineScopedRepository("bookmarks", bookmarks, {
   methods: ["select", "insert", "update"],
-  insertColumns: ["id", "ownerId", "url", "urlCanonical", "host", "title", "description", "pinnedAt"],
-  updateColumns: ["url", "urlCanonical", "host", "title", "description", "pinnedAt"],
+  insertColumns: ["id", "ownerId", "url", "urlCanonical", "host", "title", "description", "slug", "forwarding", "pinnedAt"],
+  updateColumns: ["url", "urlCanonical", "host", "title", "description", "slug", "forwarding", "pinnedAt"],
 });
+
+const UNIQUE_VIOLATION = "23505";
+const SLUG_CONSTRAINT = "bookmarks_owner_slug_key";
+const MAX_CAUSE_DEPTH = 4;
+
+/** Whether the error is the database refusing a statement because the owner has a bookmark with that slug already, on the error itself or on one of its causes. */
+export function isBookmarkSlugTaken(error: unknown): boolean {
+  let current: unknown = error;
+  for (let depth = 0; depth < MAX_CAUSE_DEPTH && typeof current === "object" && current !== null; depth += 1) {
+    const { code, constraint_name: constraint, cause } = current as { code?: unknown; constraint_name?: unknown; cause?: unknown };
+    if (code === UNIQUE_VIOLATION && constraint === SLUG_CONSTRAINT) {
+      return true;
+    }
+    current = cause;
+  }
+  return false;
+}
 
 type BookmarkRow = InferSelectModel<typeof bookmarks>;
 
@@ -109,12 +132,14 @@ export type BookmarkCreationResult =
   /** A folder is not one the owner has in the workspace; nothing is written. */
   | { readonly kind: "folder_not_found" }
   /** A tag named by identifier is not one the owner has in the workspace; nothing is written. */
-  | { readonly kind: "tag_not_found" };
+  | { readonly kind: "tag_not_found" }
+  /** The owner already has another bookmark with the slug in the workspace; nothing is written. */
+  | { readonly kind: "slug_taken" };
 
 export interface BookmarkRepository {
   /**
    * Takes one place under the ceiling, inserts the bookmark, files it in the folders and queues the jobs, in the open transaction. Nothing
-   * is written for `limit_reached`, `unavailable`, `folder_not_found` and `tag_not_found`. The bookmark is tagged in the same transaction, and a name
+   * is written for `limit_reached`, `unavailable`, `folder_not_found`, `tag_not_found` and `slug_taken`. The bookmark is tagged in the same transaction, and a name
    * of `tags` that the owner has no tag of creates one. Needs a transaction opened with a workspace.
    */
   create(creation: BookmarkCreation): Promise<BookmarkCreationResult>;
@@ -140,6 +165,12 @@ export interface BookmarkRepository {
    * session; another account is a programming error. Needs a transaction opened with a workspace.
    */
   remove(request: { readonly bookmarkId: string; readonly ownerId: string }): Promise<boolean>;
+  /**
+   * How `slug` is used in the workspace of the transaction: whether a bookmark of `ownerId` other than `exceptBookmarkId` has it, a plan-archived one included
+   * since the key of the table counts it, and how many bookmarks of other owners (ownerless ones included) that are not plan-archived have it. A count and
+   * a flag, never a row. `slug` is in its normal form and `ownerId` is the account of the transaction. Needs a transaction opened with a workspace.
+   */
+  slugUse(request: { readonly slug: string; readonly ownerId: string; readonly exceptBookmarkId: string | undefined }): Promise<SlugUse>;
   /**
    * Deletes the bookmarks of `bookmarkIds` that the account of the transaction owns in the workspace of the transaction, a plan-archived one
    * included, through `sys_bookmark_delete_many`, and answers how many were deleted; the workspace's `bookmark_count` falls once, by those
@@ -379,6 +410,16 @@ function requireAccountOwner(tx: TenantTx, ownerId: string, action: string): voi
   }
 }
 
+/** Whether a bookmark of `ownerId` other than `exceptBookmarkId` has `slug` in the workspace of the transaction, whatever its archive state: the key of the table counts them all. */
+async function ownerHasSlug(tx: TenantTx, workspaceId: string, ownerId: string, slug: string, exceptBookmarkId: string | undefined): Promise<boolean> {
+  const [found] = await tenantHandle(tx)
+    .select({ id: bookmarks.id })
+    .from(bookmarks)
+    .where(and(eq(bookmarks.workspaceId, workspaceId), eq(bookmarks.ownerId, ownerId), eq(bookmarks.slug, slug), exceptBookmarkId === undefined ? undefined : sql`${bookmarks.id} <> ${exceptBookmarkId}::uuid`))
+    .limit(1);
+  return found !== undefined;
+}
+
 const CREATION_SAVEPOINT = sql.raw("bookmark_creation");
 
 export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
@@ -396,6 +437,9 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
       }
       if (!(await ownedTagsExist(tx, bookmark.ownerId, tagging.ids))) {
         return { kind: "tag_not_found" };
+      }
+      if (bookmark.slug !== undefined && (await ownerHasSlug(tx, tx.workspaceId, bookmark.ownerId, bookmark.slug, undefined))) {
+        return { kind: "slug_taken" };
       }
       // A folder or a tag that the pre-checks above found can still be deleted by the time it is locked below, after the place was taken and the bookmark inserted:
       // the call then undoes everything from here (`ROLLBACK TO SAVEPOINT`, which also releases the locks taken since) and answers `folder_not_found` or `tag_not_found`.
@@ -427,6 +471,8 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
         host: bookmark.host,
         title: bookmark.title,
         description: bookmark.description,
+        slug: bookmark.slug ?? null,
+        forwarding: bookmark.forwarding ?? false,
         pinnedAt: bookmark.pinned ? new Date() : null,
       });
       if (!(await lockOwnedFolders(tx, bookmark.ownerId, folderIds))) {
@@ -485,6 +531,14 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
       if (expectedVersions !== undefined && !expectedVersions.includes(current.version)) {
         return { kind: "stale" };
       }
+      // Before the first write: a bookmark never forwards without a slug, whichever of the two the patch changes, and a slug the owner has on another bookmark ends the call.
+      const wantedSlug = changes.slug === undefined ? current.slug : changes.slug;
+      if ((changes.forwarding ?? current.forwarding) && wantedSlug === null) {
+        return { kind: "forwarding_requires_slug" };
+      }
+      if (changes.slug !== undefined && changes.slug !== null && changes.slug !== current.slug && (await ownerHasSlug(tx, tx.workspaceId, ownerId, changes.slug, bookmarkId))) {
+        return { kind: "slug_taken" };
+      }
       // Before the first write: a folder that is not the owner's ends the call with the bookmark as it was.
       if (changes.folderIds !== undefined && !(await lockOwnedFolders(tx, ownerId, changes.folderIds))) {
         return { kind: "folder_not_found" };
@@ -505,6 +559,12 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
       }
       if (changes.description !== undefined && changes.description !== current.description) {
         set.description = changes.description;
+      }
+      if (changes.slug !== undefined && changes.slug !== current.slug) {
+        set.slug = changes.slug;
+      }
+      if (changes.forwarding !== undefined && changes.forwarding !== current.forwarding) {
+        set.forwarding = changes.forwarding;
       }
       if (changes.pinned !== undefined && changes.pinned !== (current.pinnedAt !== null)) {
         set.pinnedAt = changes.pinned ? new Date() : null;
@@ -566,6 +626,22 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
         throw new Error("sys_bookmark_delete did not return exactly one answer");
       }
       return row.deleted;
+    },
+
+    async slugUse({ slug, ownerId, exceptBookmarkId }) {
+      const workspaceId = requireListWorkspace(tx, "reading the use of a slug");
+      requireAccountOwner(tx, ownerId, "reads the use of a slug for");
+      const [row] = await tenantHandle(tx)
+        .select({
+          mine: sql<number>`(count(*) FILTER (WHERE ${bookmarks.ownerId} = ${ownerId}::uuid AND ${bookmarks.id} IS DISTINCT FROM ${exceptBookmarkId ?? null}::uuid))::int`,
+          others: sql<number>`(count(*) FILTER (WHERE ${bookmarks.ownerId} IS DISTINCT FROM ${ownerId}::uuid AND ${bookmarks.planArchivedAt} IS NULL))::int`,
+        })
+        .from(bookmarks)
+        .where(and(eq(bookmarks.workspaceId, workspaceId), eq(bookmarks.slug, slug)));
+      if (row === undefined) {
+        throw new Error("counting the use of a slug returned no row");
+      }
+      return { takenByOwner: row.mine > 0, othersUseCount: row.others };
     },
 
     async removeMany({ bookmarkIds }) {
