@@ -6,7 +6,7 @@ import { useTranslation } from "react-i18next";
 import type { GoCandidate } from "./go.ts";
 import { useGoChoose } from "./use-go-choose.ts";
 
-function useHowShared(): (candidate: GoCandidate) => string {
+export function useHowShared(): (candidate: Pick<GoCandidate, "owner" | "sharedVia">) => string {
   const { t } = useTranslation();
   return ({ owner, sharedVia }) => {
     if (owner === null && sharedVia === null) {

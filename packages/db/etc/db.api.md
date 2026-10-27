@@ -10,6 +10,7 @@ import { BookmarkArchiveTransaction } from '@slugbase/core';
 import { BookmarkFilingMode } from '@slugbase/core';
 import { BookmarkLinkingResult } from '@slugbase/core';
 import { BookmarkListFilter } from '@slugbase/core';
+import { BookmarkListPage } from '@slugbase/core';
 import { BookmarkListRequest } from '@slugbase/core';
 import { BookmarkListRow } from '@slugbase/core';
 import { BookmarkRecord } from '@slugbase/core';
@@ -24,6 +25,7 @@ import type { FolderFilingStore } from '@slugbase/core';
 import type { FolderStore } from '@slugbase/core';
 import type { GoPreferenceStore } from '@slugbase/core';
 import type { GoStore } from '@slugbase/core';
+import type { GoSuggestStore } from '@slugbase/core';
 import { InferInsertModel } from 'drizzle-orm';
 import { InferSelectModel } from 'drizzle-orm';
 import { InstanceAccount } from '@slugbase/core';
@@ -56,6 +58,7 @@ import type { MemberRoleStore } from '@slugbase/core';
 import { NewBookmark } from '@slugbase/core';
 import { PgColumn } from 'drizzle-orm/pg-core';
 import { PgTable } from 'drizzle-orm/pg-core';
+import type { SearchStore } from '@slugbase/core';
 import { SlugUse } from '@slugbase/core';
 import { SQL } from 'drizzle-orm';
 import type { TagStore } from '@slugbase/core';
@@ -344,6 +347,7 @@ export interface BookmarkRepository {
     find(bookmarkId: string): Promise<BookmarkRecord | undefined>;
     ids(filter: BookmarkListFilter, limit: number): Promise<readonly string[]>;
     list(request: BookmarkListRequest): Promise<readonly BookmarkListRow[]>;
+    listWithCount(request: BookmarkListRequest, limit: number): Promise<BookmarkListPage>;
     previewTags(request: {
         readonly bookmarkIds: readonly string[];
         readonly ownerId: string;
@@ -563,7 +567,7 @@ export type FolderRepository = FolderStore & FolderFilingStore;
 export function folderRepository(tx: TenantTx): FolderRepository;
 
 // @public (undocumented)
-export type GoRepository = GoStore & GoPreferenceStore;
+export type GoRepository = GoStore & GoPreferenceStore & GoSuggestStore;
 
 // @public
 export function goRepository(tx: TenantTx): GoRepository;
@@ -1326,6 +1330,12 @@ export interface SealedVerifier {
     // (undocumented)
     readonly keyId: string;
 }
+
+// @public (undocumented)
+export type SearchRepository = SearchStore;
+
+// @public
+export function searchRepository(tx: TenantTx): SearchRepository;
 
 // @public
 export type SecondFactor =

@@ -23,6 +23,20 @@ export const INITIAL_FOCUS_TIMEOUT = 5000;
 
 const POLL_INTERVAL = 25;
 
+// A timer may fire a little before the clock has moved on by the delay it was set for, so a lookup that rejects this close
+// to the end of its timeout, and says it is a timeout, is the lookup's timeout running out. Playwright reports that as a
+// `TimeoutError`, whose name is enough, or as a plain `Error` whose message names the timeout; the elapsed time then tells
+// the timeout apart from the same words in an error that arrived early. An error that does not say it is a timeout is not
+// one however late it arrives, `Target closed` at the end of the wait among them.
+const TIMER_SLACK = 5;
+
+function isTimeout(error: unknown, startedAt: number, timeout: number): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+  return error.name === "TimeoutError" || (/\bTimeout\b/.test(error.message) && performance.now() - startedAt >= timeout - TIMER_SLACK);
+}
+
 function holdsFocus(target: FocusTarget, options?: { timeout: number }): Promise<boolean> {
   return target.evaluate((element) => element === document.activeElement, undefined, options);
 }
@@ -31,7 +45,9 @@ function holdsFocus(target: FocusTarget, options?: { timeout: number }): Promise
  * Waits until the element has the focus, without pressing a key. A dialog moves the focus to its initial target a moment
  * after it is visible; a Tab pressed before that moves the focus from the wrong place and the keyboard steps after it no
  * longer start where they expect, so a journey that opens a dialog and then tabs waits for the initial focus first. The
- * deadline also bounds the wait for the element to exist, so a field that never mounts fails here and names itself.
+ * deadline also bounds the wait for the element to exist, so a field that never mounts fails here and names itself: a
+ * lookup that rejects because the timeout it was given ran out is reported as the missed focus, any other rejection as it is,
+ * however late it arrives.
  */
 export async function waitForInitialFocus(target: FocusTarget, what: string, timeout = INITIAL_FOCUS_TIMEOUT): Promise<void> {
   const deadline = Date.now() + timeout;
@@ -42,10 +58,11 @@ export async function waitForInitialFocus(target: FocusTarget, what: string, tim
       throw missed();
     }
     let focused: boolean;
+    const startedAt = performance.now();
     try {
       focused = await holdsFocus(target, { timeout: remaining });
     } catch (error) {
-      if (Date.now() >= deadline) {
+      if (isTimeout(error, startedAt, remaining)) {
         throw missed(error);
       }
       throw error;

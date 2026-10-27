@@ -330,6 +330,11 @@ export const FIXTURES: ContractFixtures = {
     status: 404,
     foreign: { path: { id: UNKNOWN_FOLDER_ID }, body: { bookmarkIds: [UNKNOWN_BOOKMARK_ID] } },
   },
+  // The search names no identifier of any workspace: it takes a text, and acts on the caller's own bookmarks, folders and tags in the workspace of the request. The text is the one
+  // the rows of workspace B are named after (the matrix seeds bookmarks, a tag and a folder called matrix-...), so a row of B in an answer would show.
+  search: { query: { q: "matrix" } },
+  // The suggestion names no identifier either: it takes the start of a slug. The prefix is the one the slugs of workspace B begin with, so a slug of B in an answer would show.
+  suggestSlugs: { query: { prefix: "matrix" } },
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

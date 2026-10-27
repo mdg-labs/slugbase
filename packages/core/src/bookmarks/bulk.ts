@@ -116,6 +116,8 @@ export type BookmarkBulkTarget =
       readonly folderId?: string | undefined;
       /** The tags the bookmarks must carry, all of them, as the list takes them. */
       readonly tagIds?: readonly string[] | undefined;
+      /** The text the bookmarks must match, as the list takes it. */
+      readonly q?: string | undefined;
     };
 
 export interface BookmarkBulkAsk {
@@ -163,7 +165,7 @@ async function namedBookmarks(store: Pick<BookmarkBulkStore, "ids">, accountId: 
     const named = [...new Set(target.ids.map((id) => id.toLowerCase()))];
     return named.length > BOOKMARK_BULK_IDS_MAX ? { kind: "too_many", limit: BOOKMARK_BULK_IDS_MAX } : { kind: "named", named };
   }
-  const parsed = bookmarkListFilter({ accountId, pinned: target.pinned, hasSlug: target.hasSlug, forwarding: target.forwarding, url: target.url, folderId: target.folderId, tagIds: target.tagIds });
+  const parsed = bookmarkListFilter({ accountId, pinned: target.pinned, hasSlug: target.hasSlug, forwarding: target.forwarding, url: target.url, folderId: target.folderId, tagIds: target.tagIds, q: target.q });
   if (!parsed.ok) {
     return { kind: "url_refused", reason: parsed.reason };
   }

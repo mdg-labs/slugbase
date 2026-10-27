@@ -9,6 +9,7 @@ import type { AllFolders } from "../folders/use-all-folders.ts";
 import type { AllTags } from "../tags/use-all-tags.ts";
 import { FilterChips, type FilterChip } from "./filter-chips.tsx";
 import { BOOKMARK_SORTS, BOOKMARK_TAG_FILTER_MAX, DEFAULT_SORT, hasActiveFilters, type BookmarkListControls, type BookmarkListSearch, type BookmarkSort, type BookmarkView } from "./list-search.ts";
+import { SearchField } from "./search-field.tsx";
 
 export interface BookmarksToolbarProps {
   /** The list's parameters, with the view the address or the account's default settles on. */
@@ -36,8 +37,9 @@ function isSort(value: string): value is BookmarkSort {
  * back from it, so what is shown is what a link would open. The grid and table choice also becomes the account's
  * default view, which applies to a list whose address names none (doc 02 section 2.1). The folder filter is a single
  * choice and the tags filter several, which a bookmark must all carry; a list of either that could not be read says so
- * and can be read again, and is never shown as having none. Whatever narrows the list is also a chip that takes it off.
- * The text filter arrives with its item.
+ * and can be read again, and is never shown as having none. The search field writes its text to the address once the member
+ * has stopped typing, with the history entry replaced, so the back button leaves the list rather than undoing each word.
+ * Whatever narrows the list, the text of the search among it, is also a chip that takes it off.
  */
 export function BookmarksToolbar({ search, controls, folders, tags }: BookmarksToolbarProps): ReactElement {
   const { t } = useTranslation();
@@ -106,6 +108,17 @@ export function BookmarksToolbar({ search, controls, folders, tags }: BookmarksT
     </span>
   );
   const chips: FilterChip[] = [
+    ...(search.q === undefined
+      ? []
+      : [
+          {
+            id: "q",
+            label: t("bookmarks.list.filters.queryChip", { text: search.q }),
+            onRemove: () => {
+              controls.update({ q: undefined });
+            },
+          },
+        ]),
     ...(search.folderId === undefined
       ? []
       : [
@@ -141,6 +154,15 @@ export function BookmarksToolbar({ search, controls, folders, tags }: BookmarksT
   return (
     <section aria-label={t("bookmarks.list.toolbar")} className="flex flex-col gap-4">
       <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
+        <SearchField
+          className="sm:w-64"
+          label={t("bookmarks.list.search.label")}
+          onSearch={(text) => {
+            controls.update({ q: text === "" ? undefined : text }, { replace: true });
+          }}
+          placeholder={t("bookmarks.list.search.placeholder")}
+          value={search.q ?? ""}
+        />
         <SegmentedChoice label={t("bookmarks.list.view.label")} onValueChange={changeView} options={viewOptions} value={search.view} />
         <SegmentedChoice
           label={t("bookmarks.list.scope.label")}

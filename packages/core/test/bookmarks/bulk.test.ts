@@ -243,6 +243,15 @@ describe("bulkBookmarks filing", () => {
     expect(calls.filters[0]?.filter).toEqual({ ownerId: ACCOUNT.toLowerCase(), folderId: FOLDER.toLowerCase(), tagIds: [TAG_A.toLowerCase(), TAG_B.toLowerCase()] });
   });
 
+  it("acts on the bookmarks a filter with a text query matches, and hands the text to the store as the list does", async () => {
+    const { calls, run } = bulking({ matching: [idOf(1), idOf(2)] });
+
+    const outcome = await run("pin", { ...noFilter, q: "  alpha  " });
+
+    expect(outcome).toMatchObject({ kind: "done", requested: 2, affected: 2 });
+    expect(calls.filters[0]?.filter).toMatchObject({ ownerId: ACCOUNT.toLowerCase(), q: "alpha" });
+  });
+
   it("throws when a folder action names no folder, which the contract refuses first", async () => {
     const { calls, run } = bulking();
 
@@ -336,6 +345,15 @@ describe("listBookmarkIds", () => {
     await listBookmarkIds({ store }, { accountId: ACCOUNT, scope: "all", pinned: undefined, hasSlug: undefined, forwarding: undefined, url: undefined, folderId: FOLDER, tagIds: [TAG_B, TAG_A] });
 
     expect(calls.filters[0]?.filter).toMatchObject({ folderId: FOLDER.toLowerCase(), tagIds: [TAG_A.toLowerCase(), TAG_B.toLowerCase()] });
+  });
+
+  it("hands the text query of the list to the store as the list does", async () => {
+    const { calls } = bulking();
+    const store = { ids: (filter: BookmarkListFilter, limit: number) => (calls.filters.push({ filter, limit }), Promise.resolve([])) };
+
+    await listBookmarkIds({ store }, { accountId: ACCOUNT, scope: "all", pinned: undefined, hasSlug: undefined, forwarding: undefined, url: undefined, q: " alpha " });
+
+    expect(calls.filters[0]?.filter).toMatchObject({ q: "alpha" });
   });
 
   it("refuses a url that cannot be a bookmark's", async () => {

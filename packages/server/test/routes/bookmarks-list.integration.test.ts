@@ -271,7 +271,7 @@ describe("listBookmarks", () => {
     const world = harness.serve();
     const { owner } = await setup(world);
 
-    for (const query of ["pinned=yes", "pinned=1", "hasSlug=TRUE", "forwarding=", "sort=newest", "scope=shared_with_me", "folderId=not-an-identifier", "q=docs"]) {
+    for (const query of ["pinned=yes", "pinned=1", "hasSlug=TRUE", "forwarding=", "sort=newest", "scope=shared_with_me", "folderId=not-an-identifier", "search=docs"]) {
       const response = await list(world, owner, query);
       expect(response.status, query).toBe(422);
       expect((await problemOf(response)).code).toBe("validation_failed");
@@ -353,6 +353,102 @@ describe("listBookmarks", () => {
       expect(response.status).toBe(400);
       expect((await problemOf(response)).code).toBe("bad_request");
     }
+  }, TEST_TIMEOUT_MS);
+
+  it("narrows the list to the bookmarks a text matches by title, host, slug and description, in the order asked for and with the total of the matches, and leaves out those no member may read (T1, T2)", async () => {
+    const world = harness.serve();
+    const { owner, member, stranger, shared, other } = await setup(world);
+    await seed(shared.workspaceId, owner, [
+      { title: "Kubernetes handbook", createdAt: "2026-03-01T10:00:00Z" },
+      { title: "Reading list", createdAt: "2026-03-02T10:00:00Z", slug: "kube-list" },
+      { title: "Cooking", createdAt: "2026-03-03T10:00:00Z" },
+      { title: "Kubernetes archived", createdAt: "2026-03-04T10:00:00Z", archived: true },
+      { title: "Another kubernetes", createdAt: "2026-03-05T10:00:00Z" },
+    ]);
+    await seed(shared.workspaceId, member, [{ title: "The member's kubernetes", createdAt: "2026-03-06T10:00:00Z" }]);
+    await seed(other.workspaceId, stranger, [{ title: "The stranger's kubernetes", createdAt: "2026-03-07T10:00:00Z" }]);
+
+    const newest = await listed(world, owner, "q=kube");
+    const alphabetical = await listed(world, owner, `q=${encodeURIComponent("  KUBE ")}&sort=title_asc`);
+
+    expect(titles(newest)).toEqual(["Another kubernetes", "Reading list", "Kubernetes handbook"]);
+    expect(newest.total).toBe(3);
+    expect(newest.nextCursor).toBeNull();
+    expect(titles(alphabetical)).toEqual(["Another kubernetes", "Kubernetes handbook", "Reading list"]);
+    expect(titles(await listed(world, member, "q=kube"))).toEqual(["The member's kubernetes"]);
+    expect(titles(await listed(world, stranger, "q=kube"))).toEqual(["The stranger's kubernetes"]);
+    expect(await listed(world, owner, "q=nothingmatchesthis")).toMatchObject({ items: [], total: 0 });
+  }, TEST_TIMEOUT_MS);
+
+  it("keeps the filters and pages through the matches exactly once with the cursor, whatever the sort", async () => {
+    const world = harness.serve();
+    const { owner, shared } = await setup(world);
+    await seed(
+      shared.workspaceId,
+      owner,
+      Array.from({ length: 14 }, (_, n) => ({ title: n % 3 === 0 ? `Widget ${String(n)}` : `Gadget ${String(n)}`, createdAt: `2026-03-01T10:00:${String(10 + n)}Z`, openCount: n % 4, pinned: n % 2 === 0, slug: n % 3 === 0 ? `widget-${String(n)}` : null })),
+    );
+
+    for (const sort of SORTS) {
+      const pages = await walk(world, owner, `q=widget&sort=${sort}`, 2);
+      expect(pages.map((item) => item.title).sort(), sort).toEqual(["Widget 0", "Widget 12", "Widget 3", "Widget 6", "Widget 9"]);
+    }
+    expect(titles(await listed(world, owner, "q=widget&pinned=true&sort=title_asc"))).toEqual(["Widget 0", "Widget 12", "Widget 6"]);
+    expect(titles(await listed(world, owner, "q=widget&hasSlug=true&pinned=false&sort=title_asc"))).toEqual(["Widget 3", "Widget 9"]);
+    expect((await listed(world, owner, "q=widget&pinned=true")).total).toBe(3);
+  }, TEST_TIMEOUT_MS);
+
+  it("refuses a cursor issued for q=a that is replayed with q=b, with another case of the text or without it, with 400 bad_request, and opens it again for the same text", async () => {
+    const world = harness.serve();
+    const { owner, shared } = await setup(world);
+    await seed(
+      shared.workspaceId,
+      owner,
+      Array.from({ length: 12 }, (_, n) => ({ title: `Alpha ${String(n)}`, createdAt: `2026-03-01T10:00:${String(10 + n)}Z` })),
+    );
+    await seed(
+      shared.workspaceId,
+      owner,
+      Array.from({ length: 12 }, (_, n) => ({ title: `Beta ${String(n)}`, createdAt: `2026-03-02T10:00:${String(10 + n)}Z` })),
+    );
+    const first = await listed(world, owner, "q=alpha&limit=5");
+    const cursor = encodeURIComponent(first.nextCursor ?? "");
+    expect(first.nextCursor).not.toBeNull();
+
+    for (const replay of [`q=beta&limit=5&cursor=${cursor}`, `q=ALPHA&limit=5&cursor=${cursor}`, `limit=5&cursor=${cursor}`]) {
+      const response = await list(world, owner, replay);
+      expect(response.status, replay).toBe(400);
+      expect((await problemOf(response)).code, replay).toBe("bad_request");
+    }
+    const next = await listed(world, owner, `q=alpha&limit=5&cursor=${cursor}`);
+    expect(next.items).toHaveLength(5);
+    expect(next.items.every((item) => item.title.startsWith("Alpha"))).toBe(true);
+    // A cursor issued for a list without a text opens no list with one either.
+    const plain = (await listed(world, owner, "limit=5")).nextCursor ?? "";
+    expect((await list(world, owner, `q=alpha&limit=5&cursor=${encodeURIComponent(plain)}`)).status).toBe(400);
+  }, TEST_TIMEOUT_MS);
+
+  it("lists with a text that holds a NUL or another control character as the search reads it, and a text of nothing else lists nothing, never a 500", async () => {
+    const world = harness.serve();
+    const { owner, shared } = await setup(world);
+    await seed(shared.workspaceId, owner, [{ title: "Kubernetes handbook" }, { title: "Cooking" }]);
+
+    expect(titles(await listed(world, owner, "q=kube%00"))).toEqual(["Kubernetes handbook"]);
+    expect(titles(await listed(world, owner, `q=${encodeURIComponent("\u0007kube\u0000")}`))).toEqual(["Kubernetes handbook"]);
+    expect(await listed(world, owner, "q=a%00b")).toMatchObject({ items: [], total: 0 });
+    expect(await listed(world, owner, `q=${encodeURIComponent("\u0000\u0001")}`)).toMatchObject({ items: [], total: 0 });
+  }, TEST_TIMEOUT_MS);
+
+  it("refuses a text that is empty, blank or over 100 characters, with 422", async () => {
+    const world = harness.serve();
+    const { owner } = await setup(world);
+
+    for (const query of ["q=", `q=${encodeURIComponent("   ")}`, `q=${"a".repeat(101)}`]) {
+      const response = await list(world, owner, query);
+      expect(response.status, query).toBe(422);
+      expect((await problemOf(response)).code, query).toBe("validation_failed");
+    }
+    expect((await list(world, owner, `q=${"a".repeat(100)}`)).status).toBe(200);
   }, TEST_TIMEOUT_MS);
 
   it("refuses the cursor of another list: the cursor of the member list is no bookmark cursor", async () => {

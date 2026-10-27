@@ -4,7 +4,7 @@ import { tsvector } from "./types.ts";
 import { workspaceMembers, workspaces } from "./workspaces.ts";
 
 // `bookmarks` of doc 05 section 2.4. Row-level security, the policies, the privileges of `slugbase_app` and the updated_at
-// trigger live in src/sql/470-bookmarks.sql, and the grants and the departure trigger of the slug in src/sql/560-bookmark-slugs.sql. The list and slug indexes are the ones below; the search index is added with the operation that needs it.
+// trigger live in src/sql/470-bookmarks.sql, and the grants and the departure trigger of the slug in src/sql/560-bookmark-slugs.sql. The list, slug and search indexes are the ones below; the search indexes serve `sys_search` (src/sql/590-search.sql).
 
 // The action of the owner's foreign key. A member who leaves takes the ownership with them and not the bookmark, so only
 // `owner_id` is cleared: the key shares `workspace_id`, which is NOT NULL, and a plain `SET NULL` would clear that too and
@@ -71,6 +71,19 @@ export const bookmarks = pgTable(
     // parenthesis the generator closes. The statements it emits are the ones in the migration (`pnpm db:generate` writes them, `pnpm db:check` finds no drift).
     uniqueIndex("bookmarks_owner_slug_key").on(table.workspaceId, table.ownerId, sql.raw("slug) NULLS NOT DISTINCT WHERE (slug IS NOT NULL")),
     index("bookmarks_slug_idx").on(table.workspaceId, sql.raw("slug) INCLUDE (id, owner_id, url, forwarding, plan_archived_at) WHERE (slug IS NOT NULL")),
+    // The search indexes of doc 05 section 2.4, built non-blocking by the migration that adds them: the full-text index over `search`, and the trigram indexes of the slug, the title and the host
+    // (the host's is what the trigram similarity on title and host needs). `sys_search` reads them as slugbase_system, which bypasses the policy, so the operators `@@`, `<%` and `LIKE` are index conditions.
+    index("bookmarks_search_idx").using("gin", table.workspaceId, table.search),
+    // The title and slug vector alone, which is the expression of the first two weights of `search`: `sys_search` finds every title and slug match through it and ranks them exactly, and fills the
+    // rest of the answer from a bounded window of the host and description matches of `bookmarks_search_idx`.
+    index("bookmarks_title_slug_search_idx").using(
+      "gin",
+      table.workspaceId,
+      sql`(to_tsvector('simple', coalesce(${table.slug}, '')) || to_tsvector('simple', ${table.title}))`,
+    ),
+    index("bookmarks_slug_trgm_idx").using("gin", table.workspaceId, table.slug.op("gin_trgm_ops")),
+    index("bookmarks_title_trgm_idx").using("gin", table.workspaceId, table.title.op("gin_trgm_ops")),
+    index("bookmarks_host_trgm_idx").using("gin", table.workspaceId, table.host.op("gin_trgm_ops")),
     // The list indexes of doc 05 section 2.4: one per sort of `GET /bookmarks`, each ending in `id` as the tiebreak of its keyset.
     index("bookmarks_owner_recent_idx")
       .on(table.workspaceId, table.ownerId, table.createdAt.desc(), table.id.desc())

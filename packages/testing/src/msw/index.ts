@@ -1,4 +1,4 @@
-export { createHandlers, handlerPath, baseFixtures, type CreateHandlersOptions } from "./handlers.js";
+export { createHandlers, createResolverHandlers, handlerPath, baseFixtures, type CreateHandlersOptions, type OperationResolver } from "./handlers.js";
 export { fixtureFor } from "./fixture.js";
 export {
   listOperations,

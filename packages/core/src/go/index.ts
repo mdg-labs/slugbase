@@ -17,3 +17,5 @@ export type {
   GoPreferenceRecord,
   GoPreferenceStore,
 } from "./preferences.ts";
+export { GO_SUGGEST_PREFIX_MAX_LENGTH, suggestSlugs } from "./suggest.ts";
+export type { GoSuggestAsk, GoSuggestDependencies, GoSuggestion, GoSuggestionRecord, GoSuggestStore } from "./suggest.ts";

@@ -67,6 +67,10 @@
         "description": "Gib einem Lesezeichen einen kurzen, privaten Slug und öffne es von überall über /go/. Füge irgendwo auf dieser Seite einen Link ein, um ihn zu speichern, oder lege selbst ein Lesezeichen an."
       },
       "noMatch": "Keine Lesezeichen passen zu diesen Filtern",
+      "search": {
+        "label": "Suche",
+        "placeholder": "Titel, Host, Slug oder Beschreibung"
+      },
       "clearFilters": "Filter zurücksetzen",
       "count": "{shown} von {total} angezeigt",
       "countAtLeast": "{shown} von {total}+ angezeigt",
@@ -83,6 +87,7 @@
         "remove": "Filter entfernen: {label}",
         "folderChip": "Ordner: {name}",
         "folderChipUnknown": "Ordner",
+        "queryChip": "Suche: {text}",
         "folder": {
           "label": "Ordner",
           "placeholder": "Beliebiger Ordner",
@@ -744,6 +749,14 @@
         "title": "Noch keine Slugs",
         "description": "Gib einem Lesezeichen einen kurzen Slug, und go bringt dich direkt hin. Gib go und den Slug in die Adressleiste deines Browsers ein, sobald er eingerichtet ist.",
         "action": "Neues Lesezeichen"
+      },
+      "search": {
+        "label": "Deine Slugs durchsuchen",
+        "placeholder": "Slug, Titel oder Host"
+      },
+      "noMatch": {
+        "title": "Keine Slugs passen zu dieser Suche",
+        "clear": "Suche zurücksetzen"
       },
       "error": {
         "turnOn": "Die Weiterleitung konnte nicht eingeschaltet werden. Sie ist wieder aus.",
@@ -2554,6 +2567,117 @@
       }
     }
   },
+  "palette": {
+    "trigger": "Suchen oder Befehl ausführen…",
+    "title": "Befehlspalette",
+    "description": "Suche ein Lesezeichen oder führe einen Befehl aus. Mit den Pfeiltasten bewegst du dich, mit der Eingabetaste wählst du aus.",
+    "input": "Suchen oder Befehl ausführen",
+    "placeholder": "Suchen oder Befehl ausführen…",
+    "noResults": "Keine Ergebnisse",
+    "count": "{count, plural, one {# Ergebnis} other {# Ergebnisse}}",
+    "close": "Befehlspalette schließen",
+    "loading": "Lesezeichen werden geladen",
+    "loadFailed": "Die Lesezeichen konnten nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "group": {
+      "bookmarks": "Lesezeichen",
+      "folders": "Ordner",
+      "tags": "Tags",
+      "recent": "Zuletzt geöffnet",
+      "pinned": "Angeheftet",
+      "navigation": "Navigation",
+      "actions": "Aktionen",
+      "commands": "Befehle"
+    },
+    "empty": {
+      "title": "Noch keine Lesezeichen zum Anzeigen",
+      "description": "Lesezeichen, die du öffnest oder anheftest, erscheinen hier."
+    },
+    "key": {
+      "alt": "Alt"
+    },
+    "hint": {
+      "navigate": "navigieren",
+      "open": "öffnen",
+      "newTab": "neuer Tab",
+      "edit": "bearbeiten",
+      "close": "schließen"
+    },
+    "workspaces": {
+      "label": "Workspace wechseln",
+      "loading": "Workspaces werden geladen",
+      "loadFailed": "Deine Workspaces konnten nicht geladen werden.",
+      "current": "Aktuell"
+    },
+    "command": {
+      "home": {
+        "name": "Start",
+        "keywords": "home dashboard übersicht"
+      },
+      "bookmarks": {
+        "name": "Lesezeichen",
+        "keywords": "links liste alle bookmarks"
+      },
+      "folders": {
+        "name": "Ordner",
+        "keywords": "gruppen ordnen folders"
+      },
+      "tags": {
+        "name": "Tags",
+        "keywords": "schlagwörter labels"
+      },
+      "forwarding": {
+        "name": "Weiterleitung",
+        "keywords": "go slugs umleitung suchmaschine forwarding"
+      },
+      "settings": {
+        "name": "Einstellungen",
+        "keywords": "konto profil sicherheit settings"
+      },
+      "newBookmark": {
+        "name": "Neues Lesezeichen",
+        "keywords": "hinzufügen erstellen speichern link url"
+      },
+      "newFolder": {
+        "name": "Neuer Ordner",
+        "keywords": "hinzufügen erstellen gruppe"
+      },
+      "switchWorkspace": {
+        "name": "Workspace wechseln",
+        "keywords": "team konto wechseln"
+      },
+      "toggleTheme": {
+        "name": "Design umschalten",
+        "keywords": "dunkel hell modus darstellung theme"
+      },
+      "signOut": {
+        "name": "Abmelden",
+        "keywords": "ausloggen logout beenden"
+      }
+    },
+    "search": {
+      "loading": "Suche läuft",
+      "failed": "Die Suche ist fehlgeschlagen."
+    },
+    "editFailed": "Das Lesezeichen konnte nicht zum Bearbeiten geöffnet werden.",
+    "create": {
+      "url": "Lesezeichen für {url} erstellen",
+      "slug": "Lesezeichen mit dem Slug {slug} erstellen",
+      "blank": "Lesezeichen erstellen"
+    },
+    "go": {
+      "mode": "Go",
+      "open": "Zu /go/{slug} gehen",
+      "empty": {
+        "title": "Zu einem Slug gehen",
+        "description": "Gib nach „go“ einen Slug ein oder füge einen /go/-Link ein und drücke die Eingabetaste."
+      },
+      "suggestions": "Slugs",
+      "suggestionsLoading": "Slugs werden geladen",
+      "suggestionsFailed": "Die Slugs konnten nicht geladen werden.",
+      "resolving": "{slug} wird gesucht"
+    }
+  },
   "shortcuts": {
     "title": "Tastenkürzel",
     "description": "Einzeltasten-Kürzel funktionieren überall außer in Textfeldern und in geöffneten Dialogen, Menüs oder Listenfeldern.",
@@ -2577,6 +2701,8 @@
       "goForwarding": "Zu Weiterleitung gehen",
       "newFolder": "Neuer Ordner (auf der Seite Ordner)",
       "help": "Diese Liste anzeigen",
+      "palette": "Befehlspalette öffnen",
+      "paletteSlash": "Befehlspalette öffnen (auf einer Listenseite)",
       "move": "Fokus zum nächsten oder vorherigen Lesezeichen bewegen",
       "open": "Das fokussierte Lesezeichen öffnen",
       "openNewTab": "Das fokussierte Lesezeichen in einem neuen Tab öffnen",

@@ -505,7 +505,7 @@ function ShortcutProbe(): ReactElement {
   useShortcut({ key: "c" }, () => {
     document.body.dataset["singleKey"] = String(Number(document.body.dataset["singleKey"] ?? "0") + 1);
   });
-  useShortcut({ key: "k", mod: true }, () => {
+  useShortcut({ key: "y", mod: true }, () => {
     document.body.dataset["modified"] = String(Number(document.body.dataset["modified"] ?? "0") + 1);
   });
   return <p>Shortcut probe</p>;
@@ -539,7 +539,7 @@ describe("single-key shortcuts", () => {
       expect(await server.patches()).toEqual([{ singleKeyShortcuts: false }]);
     });
     fireEvent.keyDown(document.body, { key: "c" });
-    fireEvent.keyDown(document.body, { key: "k", ctrlKey: true });
+    fireEvent.keyDown(document.body, { key: "y", ctrlKey: true });
 
     expect(document.body.dataset["singleKey"]).toBeUndefined();
     expect(document.body.dataset["modified"]).toBe("1");

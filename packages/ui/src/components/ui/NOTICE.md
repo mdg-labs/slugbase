@@ -26,6 +26,9 @@ These changes are made after a copy:
   the focus guards.
 - `alert-dialog.tsx`, `sheet.tsx`, `drawer.tsx`: `AlertDialogPopup`, `SheetPopup` and `DrawerPopup` run `keepTabInside` on
   `keydown` the same way, after the caller's own `onKeyDown`.
+- `command.tsx`: the palette's Command (`p-command-1`), composed in the structure coss ui gives it (a Dialog around an inline,
+  always-open Base UI autocomplete with an input, a list, groups, items, shortcut keys and a footer) with the same parts and
+  classes as the other files here. The caller renders and filters the options itself, so the autocomplete takes no `items`.
 
 ## MIT License
 

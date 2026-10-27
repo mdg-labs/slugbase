@@ -188,3 +188,22 @@ export function createHandlers(document: OpenApiDocument, options: CreateHandler
     return BUILDERS[operation.method](`${baseUrl}${handlerPath(operation.path)}`, () => respond());
   });
 }
+
+/** Answers one request of an operation: the mock's reply, which a test may hold back or make depend on the request. */
+export type OperationResolver = (request: Request) => Response | Promise<Response>;
+
+/**
+ * One handler per operation in `resolvers` (operationId to the function that answers its requests), for a test that steers an answer the
+ * generated one cannot give: one that depends on the request or that the test holds back. Put them before the generated handlers, which
+ * answer everything else; an operationId the document does not declare fails here.
+ */
+export function createResolverHandlers(document: OpenApiDocument, resolvers: Readonly<Record<string, OperationResolver>>, baseUrl = ""): HttpHandler[] {
+  const operations = listOperations(document);
+  return Object.entries(resolvers).map(([operationId, resolver]) => {
+    const operation = operations.find((candidate) => candidate.operationId === operationId);
+    if (operation === undefined) {
+      throw new Error(`The document declares no operation ${operationId}`);
+    }
+    return BUILDERS[operation.method](`${baseUrl}${handlerPath(operation.path)}`, ({ request }) => resolver(request));
+  });
+}

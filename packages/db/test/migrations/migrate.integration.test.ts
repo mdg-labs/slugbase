@@ -759,6 +759,121 @@ describe("migrationLevel", () => {
   }, 60_000);
 });
 
+describe("an upgrade from the level before the search migrations", () => {
+  const SEARCH_INDEXES = ["bookmarks_search_idx", "bookmarks_slug_trgm_idx", "bookmarks_title_trgm_idx", "bookmarks_host_trgm_idx"];
+  const WORKSPACE = "0190a000-0000-7000-8000-000000000001";
+  const ACCOUNT = "0190a000-0000-7000-8000-000000000002";
+
+  it("applies them in a session that has not loaded pg_trgm, which the database already has, and the function leaves the threshold as it found it", async () => {
+    const { name, owner } = await createDatabase();
+    await migrate({ url: migratorUrl(name), chains: [] });
+    // Put the database back at the level before the search migrations: no function, no search indexes, and their bookkeeping rows gone. pg_trgm stays installed, as it is on an instance that upgrades.
+    const journal = JSON.parse(readFileSync(join(CE_CHAIN.folder, "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
+    const search = journal.entries.filter((entry) => entry.tag.includes("index_bookmark_search"));
+    expect(search.length).toBeGreaterThan(0);
+    await owner.unsafe("DROP FUNCTION public.sys_search(text, integer)");
+    for (const index of SEARCH_INDEXES) {
+      await owner.unsafe(`DROP INDEX public.${index}`);
+    }
+    await owner.unsafe(`DELETE FROM drizzle.migrations_core WHERE created_at IN (${search.map((entry) => String(entry.when)).join(", ")})`);
+    expect((await owner<{ present: boolean }[]>`SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') AS present`)[0]?.present).toBe(true);
+
+    const result = await migrate({ url: migratorUrl(name), chains: [] });
+
+    expect(result.applied.map((step) => step.tag)).toEqual(search.map((entry) => entry.tag));
+    expect((await indexes(owner, SEARCH_INDEXES)).map((index) => index.valid)).toEqual([true, true, true, true]);
+    const [setting] = await owner.begin(async (tx) => {
+      await tx`SELECT set_config('app.workspace_id', ${WORKSPACE}, true), set_config('app.account_id', ${ACCOUNT}, true)`;
+      await tx`SELECT count(*) FROM sys_search('abcd', 8)`;
+      return tx<{ value: string }[]>`SELECT current_setting('pg_trgm.word_similarity_threshold') AS value`;
+    });
+    expect(setting?.value).toBe("0.6");
+  }, 120_000);
+});
+
+describe("an upgrade from the level before the go suggestion migration", () => {
+  const WORKSPACE = "0190a000-0000-7000-8000-000000000011";
+  const ACCOUNT = "0190a000-0000-7000-8000-000000000012";
+
+  it("creates the system operation in a fresh session, and the function answers in a transaction of the application role", async () => {
+    const { name, owner } = await createDatabase();
+    await migrate({ url: migratorUrl(name), chains: [] });
+    const journal = JSON.parse(readFileSync(join(CE_CHAIN.folder, "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
+    const suggest = journal.entries.filter((entry) => entry.tag.includes("add_go_suggest"));
+    expect(suggest).toHaveLength(1);
+    await owner.unsafe("DROP FUNCTION public.sys_go_suggest(text)");
+    await owner.unsafe(`DELETE FROM drizzle.migrations_core WHERE created_at IN (${suggest.map((entry) => String(entry.when)).join(", ")})`);
+
+    const result = await migrate({ url: migratorUrl(name), chains: [] });
+
+    expect(result.applied.map((step) => step.tag)).toEqual(suggest.map((entry) => entry.tag));
+    const rows = await owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_app`;
+      await tx`SELECT set_config('app.workspace_id', ${WORKSPACE}, true), set_config('app.account_id', ${ACCOUNT}, true)`;
+      return tx`SELECT * FROM sys_go_suggest('abcd')`;
+    });
+    expect(rows).toHaveLength(0);
+  }, 120_000);
+});
+
+describe("an upgrade from the level before the title and slug search index", () => {
+  const WORKSPACE = "0190a000-0000-7000-8000-000000000021";
+  const ACCOUNT = "0190a000-0000-7000-8000-000000000022";
+
+  it("builds the index concurrently and replaces the function in a fresh session, and the function answers in a transaction of the application role", async () => {
+    const { name, owner } = await createDatabase();
+    await migrate({ url: migratorUrl(name), chains: [] });
+    const journal = JSON.parse(readFileSync(join(CE_CHAIN.folder, "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
+    const titleSlug = journal.entries.filter((entry) => entry.tag.includes("index_bookmark_title_slug"));
+    expect(titleSlug).toHaveLength(2);
+    // Put the database back at the level before them: no index, no function, and their bookkeeping rows gone. The search indexes and pg_trgm stay, as they are on an instance that upgrades.
+    await owner.unsafe("DROP FUNCTION public.sys_search(text, integer)");
+    await owner.unsafe("DROP INDEX public.bookmarks_title_slug_search_idx");
+    await owner.unsafe(`DELETE FROM drizzle.migrations_core WHERE created_at IN (${titleSlug.map((entry) => String(entry.when)).join(", ")})`);
+
+    const result = await migrate({ url: migratorUrl(name), chains: [] });
+
+    expect(result.applied.map((step) => step.tag)).toEqual(titleSlug.map((entry) => entry.tag));
+    expect((await indexes(owner, ["bookmarks_title_slug_search_idx"])).map((index) => index.valid)).toEqual([true]);
+    const [definition] = await owner<{ definition: string }[]>`SELECT pg_get_indexdef('public.bookmarks_title_slug_search_idx'::regclass) AS definition`;
+    expect(definition?.definition).toContain("to_tsvector('simple'::regconfig, COALESCE(slug, ''::text)) || to_tsvector('simple'::regconfig, title)");
+    const [setting] = await owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_app`;
+      await tx`SELECT set_config('app.workspace_id', ${WORKSPACE}, true), set_config('app.account_id', ${ACCOUNT}, true)`;
+      await tx`SELECT count(*) FROM sys_search('abcd', 8)`;
+      return tx<{ value: string }[]>`SELECT current_setting('pg_trgm.word_similarity_threshold') AS value`;
+    });
+    expect(setting?.value).toBe("0.6");
+  }, 120_000);
+});
+
+describe("an upgrade from the level before the bookmark match migration", () => {
+  const WORKSPACE = "0190a000-0000-7000-8000-000000000031";
+  const ACCOUNT = "0190a000-0000-7000-8000-000000000032";
+
+  it("creates the system operation in a session that has not loaded pg_trgm, and the function answers in a transaction of the application role and leaves the threshold as it found it", async () => {
+    const { name, owner } = await createDatabase();
+    await migrate({ url: migratorUrl(name), chains: [] });
+    const journal = JSON.parse(readFileSync(join(CE_CHAIN.folder, "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
+    const match = journal.entries.filter((entry) => entry.tag.includes("add_bookmark_match"));
+    expect(match).toHaveLength(1);
+    await owner.unsafe("DROP FUNCTION public.sys_bookmark_match(text)");
+    await owner.unsafe(`DELETE FROM drizzle.migrations_core WHERE created_at IN (${match.map((entry) => String(entry.when)).join(", ")})`);
+    expect((await owner<{ present: boolean }[]>`SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') AS present`)[0]?.present).toBe(true);
+
+    const result = await migrate({ url: migratorUrl(name), chains: [] });
+
+    expect(result.applied.map((step) => step.tag)).toEqual(match.map((entry) => entry.tag));
+    const [setting] = await owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_app`;
+      await tx`SELECT set_config('app.workspace_id', ${WORKSPACE}, true), set_config('app.account_id', ${ACCOUNT}, true)`;
+      await tx`SELECT count(*) FROM sys_bookmark_match('abcd')`;
+      return tx<{ value: string }[]>`SELECT current_setting('pg_trgm.word_similarity_threshold') AS value`;
+    });
+    expect(setting?.value).toBe("0.6");
+  }, 120_000);
+});
+
 describe("errors never carry the connection string or the password (T7)", () => {
   const password = `pw-${randomBytes(6).toString("hex")}`;
 

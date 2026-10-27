@@ -1,3 +1,4 @@
+import { SEARCH_QUERY_MAX_LENGTH } from "@slugbase/contracts";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useMemo } from "react";
 import { useCachedAccount } from "../account/use-cached-account.ts";
@@ -39,6 +40,8 @@ export interface BookmarkListSearch {
   forwarding?: true;
   /** Only bookmarks filed in this folder. */
   folderId?: string;
+  /** Only bookmarks the text matches (their title, host, slug and description), as typed in the search field. */
+  q?: string;
   /** Only bookmarks that carry every one of these tags (AND), by identifier. */
   tag?: readonly string[];
   scope?: Exclude<BookmarkScope, "all">;
@@ -68,6 +71,13 @@ function identifiersOf(value: unknown): readonly string[] {
   return [...new Set(identifiers)].slice(0, BOOKMARK_TAG_FILTER_MAX);
 }
 
+/** The text of the address's `q`: the router reads a text that looks like a number or a boolean as one, which is the text again; blank text and a text over the API's longest are no filter. */
+function queryOf(value: unknown): string | undefined {
+  const text = typeof value === "string" ? value : typeof value === "number" || typeof value === "boolean" ? String(value) : "";
+  const trimmed = text.trim();
+  return trimmed === "" || trimmed.length > SEARCH_QUERY_MAX_LENGTH ? undefined : trimmed;
+}
+
 function pageSizeOf(value: unknown): BookmarkPageSize | undefined {
   const size = typeof value === "string" ? Number(value) : value;
   return BOOKMARK_PAGE_SIZES.find((candidate) => candidate === size);
@@ -88,6 +98,10 @@ export function validateBookmarkListSearch(search: Record<string, unknown>): Boo
   const folderId = identifierOf(search.folderId);
   if (folderId !== undefined) {
     result.folderId = folderId;
+  }
+  const q = queryOf(search.q);
+  if (q !== undefined) {
+    result.q = q;
   }
   const tag = identifiersOf(search.tag);
   if (tag.length > 0) {
@@ -126,7 +140,7 @@ export function pageSizeOfSearch(search: BookmarkListSearch): BookmarkPageSize {
   return search.size ?? (search.view === "table" ? 48 : 24);
 }
 
-/** Whether any filter narrows the list; the sort, the view and the size do not. */
+/** Whether any filter narrows the list, the text of the search among them; the sort, the view and the size do not. */
 export function hasActiveFilters(search: BookmarkListSearch): boolean {
   return (
     search.pinned === true ||
@@ -134,6 +148,7 @@ export function hasActiveFilters(search: BookmarkListSearch): boolean {
     search.forwarding === true ||
     search.scope !== undefined ||
     search.folderId !== undefined ||
+    search.q !== undefined ||
     (search.tag?.length ?? 0) > 0
   );
 }
@@ -145,6 +160,7 @@ export interface BookmarkFilterParams {
   readonly forwarding?: "true";
   readonly scope?: "mine";
   readonly folderId?: string;
+  readonly q?: string;
   readonly tag?: string[];
 }
 
@@ -169,6 +185,7 @@ export function filterParamsOf(search: BookmarkListSearch): BookmarkFilterParams
     ...(search.forwarding === true ? { forwarding: "true" as const } : {}),
     ...(search.scope === undefined ? {} : { scope: search.scope }),
     ...(search.folderId === undefined ? {} : { folderId: search.folderId }),
+    ...(search.q === undefined ? {} : { q: search.q }),
     ...(search.tag === undefined || search.tag.length === 0 ? {} : { tag: [...search.tag] }),
   };
 }
@@ -207,7 +224,7 @@ export function useBookmarkListControls(): BookmarkListControls {
       clearFilters: () => {
         go((previous) => {
           const next = { ...previous };
-          for (const key of ["pinned", "hasSlug", "forwarding", "scope", "folderId", "tag"]) {
+          for (const key of ["pinned", "hasSlug", "forwarding", "scope", "folderId", "q", "tag"]) {
             Reflect.deleteProperty(next, key);
           }
           return next;

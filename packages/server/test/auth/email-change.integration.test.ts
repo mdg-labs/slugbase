@@ -475,6 +475,10 @@ describe("the confirmation and the cancel link", { timeout: TEST_TIMEOUT_MS }, (
     expect(noticeAttempts).toBe(1);
     expect(mail.sent).toEqual([]);
 
+    // The retry policy of `mail.send` holds the retried job back for its retry delay; the test moves it up to now, so
+    // what it waits for is one poll of the worker and the send, not that delay.
+    await database().owner`UPDATE pgboss.job SET start_after = now() WHERE name = 'mail.send' AND state = 'retry'`;
+
     await mailJobsDone(1);
 
     expect(mail.sent.map((message) => [message.template, message.to])).toEqual([

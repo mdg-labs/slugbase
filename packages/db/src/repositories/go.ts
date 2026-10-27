@@ -1,4 +1,4 @@
-import type { GoAccess, GoBookmarkSummary, GoCandidateSet, GoPreferenceRecord, GoPreferenceStore, GoStore, GoWorkspace } from "@slugbase/core";
+import type { GoAccess, GoBookmarkSummary, GoCandidateSet, GoPreferenceRecord, GoPreferenceStore, GoStore, GoSuggestionRecord, GoSuggestStore, GoWorkspace } from "@slugbase/core";
 import { and, asc, eq, sql, type SQL } from "drizzle-orm";
 import { accounts } from "../schema/accounts.ts";
 import { bookmarks } from "../schema/bookmarks.ts";
@@ -20,6 +20,10 @@ import { defineScopedRepository } from "./scoped.ts";
 // and answers the identifier and the name of each other workspace of which the account is a member and in which it can read a forwarding, non-archived bookmark with the slug
 // (the owner's own today, as `bookmarkReadableBy` says), and no bookmark.
 //
+// The suggestions of the palette's `go` mode (`suggest`) are the system operation `sys_go_suggest` (src/sql/600-go-suggest.sql): the bookmarks of the workspace whose slug starts with a
+// prefix, with the candidate rule of the scan above and its access rule (`bookmarkReadableBy`). A prefix is a `LIKE` condition, which is not leakproof, so as `slugbase_app` it could not be an
+// index condition under the policy of `bookmarks`; the operation takes the workspace and the account from the transaction, never from an argument, and this repository passes it the prefix alone.
+//
 // A preference is the account's own: `slug_preferences` has a policy on the workspace and the account of the transaction (src/sql/570-slug-preferences.sql),
 // and every statement below names both. Remembering a choice is one statement that locks the chosen bookmark `FOR KEY SHARE` and inserts the preference
 // only if that bookmark is still a candidate for the account, so a bookmark that was deleted or made unreadable meanwhile is no preference, and a delete of
@@ -39,7 +43,7 @@ defineScopedRepository("slug_preferences", slugPreferences, {
   updateColumns: ["bookmarkId"],
 });
 
-export type GoRepository = GoStore & GoPreferenceStore;
+export type GoRepository = GoStore & GoPreferenceStore & GoSuggestStore;
 
 function requireWorkspace(tx: TenantTx, action: string): string {
   if (tx.workspaceId === undefined) {
@@ -62,6 +66,12 @@ type CandidateRow = {
   access: GoAccess;
   preferred_id: string | null;
 };
+
+/** What `sys_go_suggest` answers, by the name of each column. */
+type SuggestionRow = { id: string; slug: string; title: string; host: string; owner_id: string | null; owner_name: string | null; access: GoAccess };
+
+/** The most suggestions `sys_go_suggest` answers. */
+const SUGGEST_MAX = 10;
 
 /** The columns of the candidates the predicate reads: `c` is the name the statement below gives them. */
 const CANDIDATE: BookmarkRow = { ownerId: sql.raw("c.owner_id") };
@@ -123,6 +133,18 @@ export function goRepository(tx: TenantTx): GoRepository {
       requireAccount(tx, accountId, "looks for a slug in other workspaces");
       const rows = await tenantHandle(tx).execute<{ workspace_id: string; workspace_name: string }>(sql`SELECT workspace_id, workspace_name FROM sys_go_other_workspaces(${slug}::text)`);
       return rows.map((row) => ({ id: row.workspace_id, name: row.workspace_name }));
+    },
+
+    async suggest({ prefix, accountId, limit }): Promise<readonly GoSuggestionRecord[]> {
+      requireWorkspace(tx, "suggesting slugs");
+      requireAccount(tx, accountId, "asks for suggestions");
+      if (!Number.isInteger(limit) || limit < 1 || limit > SUGGEST_MAX) {
+        throw new Error(`suggesting slugs takes a whole limit from 1 to ${String(SUGGEST_MAX)}`);
+      }
+      const rows = await tenantHandle(tx).execute<SuggestionRow>(
+        sql`SELECT id, slug, title, host, owner_id, owner_name, access FROM sys_go_suggest(${prefix}::text) ORDER BY access <> 'owner', slug COLLATE "C", id LIMIT ${limit}::integer`,
+      );
+      return rows.map((row) => ({ bookmarkId: row.id, slug: row.slug, title: row.title, host: row.host, ownerId: row.owner_id, ownerName: row.owner_name, access: row.access }));
     },
 
     async remember({ slug, bookmarkId, accountId }): Promise<boolean> {

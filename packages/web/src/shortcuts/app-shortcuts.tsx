@@ -32,6 +32,8 @@ export function AppShortcuts(): ReactElement {
       id: "app",
       title: t("shortcuts.group.app"),
       shortcuts: [
+        { id: "palette", label: t("shortcuts.item.palette"), keys: [[keys.ctrl, "K"], ["⌘", "K"]] },
+        { id: "paletteSlash", label: t("shortcuts.item.paletteSlash"), keys: [["/"]] },
         { id: "new", label: t("shortcuts.item.newBookmark"), keys: [["C"]] },
         { id: "home", label: t("shortcuts.item.goHome"), keys: [["G", "H"]], sequence: true },
         { id: "bookmarks", label: t("shortcuts.item.goBookmarks"), keys: [["G", "B"]], sequence: true },

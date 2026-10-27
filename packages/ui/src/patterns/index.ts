@@ -9,6 +9,17 @@ export { CardGrid, CardGridItem, type CardGridItemProps, type CardGridProps } fr
 export { CheckboxField, type CheckboxFieldProps } from "./checkbox-field.tsx";
 export { ChoiceCards, type ChoiceCardOption, type ChoiceCardsProps } from "./choice-cards.tsx";
 export { Confirm, type ConfirmProps } from "./confirm.tsx";
+export {
+  CommandPalette,
+  CommandTrigger,
+  type CommandPaletteHint,
+  type CommandPaletteIntent,
+  type CommandPaletteItem,
+  type CommandPaletteNoResultsAction,
+  type CommandPaletteProps,
+  type CommandPaletteSection,
+  type CommandTriggerProps,
+} from "./command-palette.tsx";
 export { ContextActions, type ContextActionsProps } from "./context-actions.tsx";
 export { CopyValue, type CopyValueProps } from "./copy-value.tsx";
 export { DangerZone, type DangerZoneItem, type DangerZoneProps } from "./danger-zone.tsx";
@@ -37,6 +48,7 @@ export { SettingsSection, type SettingsSectionProps } from "./settings-section.t
 export { ShortcutSheet, type ShortcutSheetGroup, type ShortcutSheetItem, type ShortcutSheetProps } from "./shortcut-sheet.tsx";
 export { ShownOnce, type ShownOnceProps } from "./shown-once.tsx";
 export { SidePanel, type SidePanelProps } from "./side-panel.tsx";
+export { SlugChip, type SlugChipProps } from "./slug-chip.tsx";
 export { SlugInput, type SlugInputProps } from "./slug-input.tsx";
 export { StatusBadge, type StatusBadgeProps, type StatusBadgeVariant } from "./status-badge.tsx";
 export { TextareaField, type TextareaFieldProps } from "./textarea-field.tsx";
@@ -51,12 +63,14 @@ export type { Accent, ResolvedTheme } from "../theme/theme-provider.tsx";
 export { ThemeToggle, type ThemeToggleProps } from "./theme-toggle.tsx";
 // The icons the shell and the empty states of the app place; the app takes them from here so the icon library has one home.
 export {
+  ArrowLeftRightIcon,
   BookmarkIcon,
   CompassIcon,
   CopyIcon,
   ExternalLinkIcon,
   FilterXIcon,
   FolderIcon,
+  FolderPlusIcon,
   ForwardIcon,
   HomeIcon,
   InboxIcon,
@@ -70,8 +84,10 @@ export {
   PinOffIcon,
   PlusIcon,
   PowerOffIcon,
+  SearchIcon,
   SettingsIcon,
   ShieldCheckIcon,
+  SunMoonIcon,
   TableIcon,
   TagIcon,
   Trash2Icon,

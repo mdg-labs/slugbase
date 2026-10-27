@@ -1,11 +1,14 @@
 import { clearLock } from "./support/account-preferences.ts";
 import { appOrigin } from "./support/environment.ts";
+import { clearSharedMembers } from "./support/member-shared.ts";
 import { startTlsProxy } from "./support/tls-proxy.ts";
 
 // Runs once before the journeys. It serves the https origin the server is configured with from a TLS
 // proxy in front of the stack (a browser can sign in only there), and clears the lock of the account's
-// preferences that an earlier run may have left. The instance is claimed by the first journey, the
-// first-run setup of tests/first-run.setup.ts, which the other journeys wait for (playwright.config.ts).
+// preferences and the sessions of the shared members that an earlier run may have left (the stack they
+// belong to is gone, and a new stack may draw the same port). The instance is claimed by the first
+// journey, the first-run setup of tests/first-run.setup.ts, which the other journeys wait for
+// (playwright.config.ts).
 
 function required(name: string): string {
   const value = process.env[name];
@@ -29,6 +32,7 @@ export default async function globalSetup(): Promise<() => Promise<void>> {
         });
   try {
     clearLock();
+    clearSharedMembers();
   } catch (error) {
     await stopProxy?.();
     throw error;

@@ -38,6 +38,7 @@ export type {
   BookmarkListDependencies,
   BookmarkListFilter,
   BookmarkListOutcome,
+  BookmarkListPage,
   BookmarkListRequest,
   BookmarkListRow,
   BookmarkListStore,

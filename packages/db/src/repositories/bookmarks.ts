@@ -10,6 +10,7 @@ import {
   type BookmarkTagRef,
   type BookmarkTagSelection,
   type BookmarkListFilter,
+  type BookmarkListPage,
   type BookmarkListRequest,
   type BookmarkListRow,
   type BookmarkRecord,
@@ -229,6 +230,12 @@ export interface BookmarkRepository {
    * the size of the library. Needs a transaction opened with a workspace.
    */
   count(filter: BookmarkListFilter, limit: number): Promise<number>;
+  /**
+   * What `list(request)` answers together with what `count(request.filter, limit)` answers. A filter that is a text query and nothing else
+   * takes both from one call of `sys_bookmark_match`, whose matches are exactly what the filter matches; every other filter is read by
+   * `list` and `count` as they are. Needs a transaction opened with a workspace.
+   */
+  listWithCount(request: BookmarkListRequest, limit: number): Promise<BookmarkListPage>;
 }
 
 /** The bookmark is filed in the folder `folderId`, and the folder is its owner's: a folder of another member matches nothing. */
@@ -247,8 +254,8 @@ function tagged(tagId: string): SQL {
     WHERE ${bookmarkTags.workspaceId} = ${bookmarks.workspaceId} AND ${bookmarkTags.bookmarkId} = ${bookmarks.id} AND ${bookmarkTags.tagId} = ${tagId}::uuid AND ${tags.ownerId} = ${bookmarks.ownerId})`;
 }
 
-/** The predicate of a list and of its count: the workspace, the owner, never a plan-archived bookmark, and the filters given. */
-function listPredicate(workspaceId: string, filter: BookmarkListFilter): SQL {
+/** The predicate of a list and of its count without the text query: the workspace, the owner, never a plan-archived bookmark, and the filters given. */
+function filterPredicate(workspaceId: string, filter: BookmarkListFilter): SQL {
   const predicate = and(
     eq(bookmarks.workspaceId, workspaceId),
     eq(bookmarks.ownerId, filter.ownerId),
@@ -264,6 +271,14 @@ function listPredicate(workspaceId: string, filter: BookmarkListFilter): SQL {
     throw new Error("a list predicate is never empty");
   }
   return predicate;
+}
+
+/** The predicate of a list that has no text query. A filter with one is read by the statements of `matchedPage` and `matchedCount`, which this one never serves. */
+function listPredicate(workspaceId: string, filter: BookmarkListFilter): SQL {
+  if (filter.q !== undefined) {
+    throw new Error("a list with a text query is read through the matches of sys_bookmark_match");
+  }
+  return filterPredicate(workspaceId, filter);
 }
 
 /** The rows after the cursor's place, compared as a row so the index serves the range. A never-opened bookmark is last, after every opened one. */
@@ -314,17 +329,24 @@ interface SortOrder {
   readonly column: SQL;
   readonly key: SQL;
   readonly cast: "timestamptz" | "text" | "bigint";
+  /** The direction of the sort, with the placement of NULL, which the identifier tiebreak follows. */
+  readonly dir: SQL;
   readonly order: SQL;
   readonly direction: "<" | ">";
 }
 
+function sortOrder(column: SQL, key: SQL, cast: SortOrder["cast"], dir: string, direction: SortOrder["direction"]): SortOrder {
+  const placed = sql.raw(dir);
+  return { column, key, cast, dir: placed, order: sql`${column} ${placed}, ${bookmarks.id} ${placed}`, direction };
+}
+
 const SORT_ORDERS: Readonly<Record<BookmarkSort, SortOrder>> = {
-  recent: { column: sql`${bookmarks.createdAt}`, key: sql`${bookmarks.createdAt}::text`, cast: "timestamptz", order: sql`${bookmarks.createdAt} DESC NULLS LAST, ${bookmarks.id} DESC NULLS LAST`, direction: "<" },
-  oldest: { column: sql`${bookmarks.createdAt}`, key: sql`${bookmarks.createdAt}::text`, cast: "timestamptz", order: sql`${bookmarks.createdAt} ASC NULLS FIRST, ${bookmarks.id} ASC NULLS FIRST`, direction: ">" },
-  title_asc: { column: sql`lower(${bookmarks.title})`, key: sql`lower(${bookmarks.title})`, cast: "text", order: sql`lower(${bookmarks.title}) ASC NULLS LAST, ${bookmarks.id} ASC NULLS LAST`, direction: ">" },
-  title_desc: { column: sql`lower(${bookmarks.title})`, key: sql`lower(${bookmarks.title})`, cast: "text", order: sql`lower(${bookmarks.title}) DESC NULLS FIRST, ${bookmarks.id} DESC NULLS FIRST`, direction: "<" },
-  most_used: { column: sql`${bookmarks.openCount}`, key: sql`${bookmarks.openCount}::text`, cast: "bigint", order: sql`${bookmarks.openCount} DESC NULLS LAST, ${bookmarks.id} DESC NULLS LAST`, direction: "<" },
-  recently_opened: { column: sql`${bookmarks.lastOpenedAt}`, key: sql`${bookmarks.lastOpenedAt}::text`, cast: "timestamptz", order: sql`${bookmarks.lastOpenedAt} DESC NULLS LAST, ${bookmarks.id} DESC NULLS LAST`, direction: "<" },
+  recent: sortOrder(sql`${bookmarks.createdAt}`, sql`${bookmarks.createdAt}::text`, "timestamptz", "DESC NULLS LAST", "<"),
+  oldest: sortOrder(sql`${bookmarks.createdAt}`, sql`${bookmarks.createdAt}::text`, "timestamptz", "ASC NULLS FIRST", ">"),
+  title_asc: sortOrder(sql`lower(${bookmarks.title})`, sql`lower(${bookmarks.title})`, "text", "ASC NULLS LAST", ">"),
+  title_desc: sortOrder(sql`lower(${bookmarks.title})`, sql`lower(${bookmarks.title})`, "text", "DESC NULLS FIRST", "<"),
+  most_used: sortOrder(sql`${bookmarks.openCount}`, sql`${bookmarks.openCount}::text`, "bigint", "DESC NULLS LAST", "<"),
+  recently_opened: sortOrder(sql`${bookmarks.lastOpenedAt}`, sql`${bookmarks.lastOpenedAt}::text`, "timestamptz", "DESC NULLS LAST", "<"),
 };
 
 function recordOf(row: BookmarkRecordRow, filed: readonly BookmarkFolderRef[], carried: readonly BookmarkTagRef[]): BookmarkRecord {
@@ -367,6 +389,166 @@ export function countQuery(tx: TenantTx, filter: BookmarkListFilter, limit: numb
   const handle = tenantHandle(tx);
   const capped = handle.select({ one: sql<number>`1`.as("one") }).from(bookmarks).where(listPredicate(workspaceId, filter)).limit(limit).as("capped");
   return handle.select({ total: sql<number>`count(*)::int` }).from(capped);
+}
+
+// A list with a text query (`filter.q`) reads the bookmarks that match through the system operation `sys_bookmark_match` (src/sql/610-bookmark-match.sql): the policy of `bookmarks` is
+// FORCEd and the operators of the search are not leakproof, so as slugbase_app they would never be index conditions. The operation answers the identifiers of the caller's own, not
+// plan-archived matches and nothing else, as one materialised set that the statement below reads once; every other predicate of the list (the filters, the keyset, the owner, the
+// workspace and the archive state) is still the statement's own, and the policy applies to every row it reads.
+//
+// The cost of the page depends on how many bookmarks match, and the statement does not know that before it runs, so it holds both plans and runs the one that is cheap for the
+// count it finds: up to `FEW_MATCHES` (the total a list counts exactly, Q42) the page probes each match by the primary key of `bookmarks` and sorts what survives the other predicates, which reads as many
+// rows as there are matches; above it the page walks the index of its sort in order, as a list without a text does, and tests each row against the set, which reads about as many rows as the page
+// holds divided by the share of the workspace that matches, and at most the workspace. The branch that is not chosen is not run (its one-time filter reads the count). The probe is a lateral subquery
+// that the planner cannot flatten (`OFFSET 0`), so it is always a nested loop over the matches and never a scan of the table; the set is tested in the walk behind a term that the planner cannot fold
+// (`random() < 0`), so that it stays a filter of the walk and does not become a join that drives it. The page is read as identifiers and sort keys, and the rows are read in a second statement by
+// identifier, so the records are made by the code that makes them for a list without a text.
+const FEW_MATCHES = 10_000;
+
+interface MatchedPageRow extends Record<string, unknown> {
+  /** Null in the one row of a page that holds no bookmark, which still carries `matched`. */
+  id: string | null;
+  sort_key: string | null;
+  /** How many bookmarks `sys_bookmark_match` answered, not cut: the same number in every row of a page. */
+  matched: number;
+}
+
+/**
+ * The statement of the page of a list with a text query, exported for the test that plans it: identifiers and sort keys in the order of the sort, each with how many matches the function answered.
+ * A page with no bookmark is one row with a null identifier, so the count comes from the same call of the function. Needs a transaction opened with a workspace.
+ */
+export function matchedPageStatement(tx: TenantTx, { filter, sort, after, limit }: BookmarkListRequest): SQL {
+  const workspaceId = requireListWorkspace(tx, "listing bookmarks");
+  if (filter.q === undefined) {
+    throw new Error("a page of matches needs a text query");
+  }
+  const { column, key, order, dir } = SORT_ORDERS[sort];
+  const predicate = after === undefined ? filterPredicate(workspaceId, filter) : and(filterPredicate(workspaceId, filter), afterPosition(sort, after));
+  const few = sql.raw(String(FEW_MATCHES));
+  return sql`
+    WITH m AS MATERIALIZED (SELECT id FROM sys_bookmark_match(${filter.q}::text)),
+         c AS MATERIALIZED (SELECT count(*) AS n FROM m)
+    SELECT page.id, page.sort_key, c.n::int AS matched FROM c LEFT JOIN (
+      (SELECT probed.id, probed.ord, probed.sort_key FROM m
+       CROSS JOIN LATERAL (SELECT ${bookmarks.id} AS id, ${column} AS ord, ${key} AS sort_key FROM ${bookmarks} WHERE ${bookmarks.id} = m.id AND ${predicate} OFFSET 0) probed
+       WHERE (SELECT n FROM c) <= ${few}
+       ORDER BY probed.ord ${dir}, probed.id ${dir} LIMIT ${limit}::integer)
+      UNION ALL
+      (SELECT ${bookmarks.id} AS id, ${column} AS ord, ${key} AS sort_key FROM ${bookmarks}
+       WHERE ${predicate} AND (${bookmarks.id} IN (SELECT id FROM m) OR random() < 0) AND (SELECT n FROM c) > ${few}
+       ORDER BY ${order} LIMIT ${limit}::integer)
+    ) page ON true
+    ORDER BY page.ord ${dir}, page.id ${dir} LIMIT ${limit}::integer`;
+}
+
+/**
+ * The filter is a text query and nothing else, and the owner is the account of the transaction: the bookmarks it matches are exactly the answer of `sys_bookmark_match`, which
+ * applies the workspace, the account and the plan-archive rule itself, so the answer can be counted without reading the bookmarks. Any other filter narrows the answer by a
+ * predicate of the statement, and an owner other than the account matches nothing, so those are counted by probing.
+ */
+function matchesAreTheAnswer(tx: TenantTx, filter: BookmarkListFilter): boolean {
+  return (
+    filter.q !== undefined &&
+    filter.ownerId.toLowerCase() === tx.accountId.toLowerCase() &&
+    filter.pinned === undefined &&
+    filter.hasSlug === undefined &&
+    filter.forwarding === undefined &&
+    filter.urlCanonical === undefined &&
+    filter.folderId === undefined &&
+    (filter.tagIds ?? []).length === 0
+  );
+}
+
+/**
+ * The statement of the count of a filter with a text query, exported for the test that plans it. Needs a transaction opened with a workspace. A filter that `matchesAreTheAnswer`
+ * counts the answer of the function; any other counts the matches that survive the filter, probing each by the primary key, up to the limit.
+ */
+export function matchedCountStatement(tx: TenantTx, filter: BookmarkListFilter, limit: number): SQL {
+  const workspaceId = requireListWorkspace(tx, "counting bookmarks");
+  if (filter.q === undefined) {
+    throw new Error("a count of matches needs a text query");
+  }
+  if (matchesAreTheAnswer(tx, filter)) {
+    return sql`SELECT least(count(*), ${limit}::integer)::int AS total FROM sys_bookmark_match(${filter.q}::text)`;
+  }
+  return sql`
+    WITH m AS MATERIALIZED (SELECT id FROM sys_bookmark_match(${filter.q}::text))
+    SELECT count(*)::int AS total FROM (
+      SELECT 1 FROM m
+      CROSS JOIN LATERAL (SELECT 1 FROM ${bookmarks} WHERE ${bookmarks.id} = m.id AND ${filterPredicate(workspaceId, filter)} OFFSET 0) probed
+      LIMIT ${limit}::integer) capped`;
+}
+
+/** The page of a list with a text query: the bookmarks of the page, and how many matches the function answered, which an empty page carries too. */
+async function matchedPage(tx: TenantTx, request: BookmarkListRequest): Promise<{ readonly page: readonly { readonly id: string; readonly sort_key: string | null }[]; readonly matched: number }> {
+  const found = await tenantHandle(tx).execute<MatchedPageRow>(matchedPageStatement(tx, request));
+  const matched = found[0]?.matched;
+  if (matched === undefined) {
+    throw new Error("listing bookmarks returned no row");
+  }
+  return { page: found.flatMap(({ id, sort_key }) => (id === null ? [] : [{ id, sort_key }])), matched };
+}
+
+async function matchedCount(tx: TenantTx, filter: BookmarkListFilter, limit: number): Promise<number> {
+  const [row] = await tenantHandle(tx).execute<{ total: number }>(matchedCountStatement(tx, filter, limit));
+  if (row === undefined) {
+    throw new Error("counting bookmarks returned no row");
+  }
+  return row.total;
+}
+
+/** A page of a list with a text query as bookmark records, in the order of its sort, with how many matches the function answered. */
+async function matchedList(tx: TenantTx, request: BookmarkListRequest): Promise<{ readonly rows: readonly BookmarkListRow[]; readonly matched: number }> {
+  const workspaceId = requireListWorkspace(tx, "listing bookmarks");
+  const { page, matched } = await matchedPage(tx, request);
+  const ids = page.map((row) => row.id);
+  if (ids.length === 0) {
+    return { rows: [], matched };
+  }
+  const found = await tenantHandle(tx)
+    .select(RECORD_COLUMNS)
+    .from(bookmarks)
+    .where(and(eq(bookmarks.workspaceId, workspaceId), eq(bookmarks.ownerId, request.filter.ownerId), isNull(bookmarks.planArchivedAt), sql`${bookmarks.id} = ANY (${uuidArray(ids)}::uuid[])`));
+  const rows = new Map(found.map((row) => [row.id, row]));
+  const filed = await foldersOfBookmarks(tx, request.filter.ownerId, ids);
+  const carried = await tagsOfBookmarks(tx, request.filter.ownerId, ids);
+  return {
+    rows: page.flatMap(({ id, sort_key: key }) => {
+      const row = rows.get(id);
+      return row === undefined ? [] : [{ bookmark: recordOf(row, filed.get(id) ?? [], carried.get(id) ?? []), key }];
+    }),
+    matched,
+  };
+}
+
+async function listOf(tx: TenantTx, request: BookmarkListRequest): Promise<readonly BookmarkListRow[]> {
+  if (request.filter.q !== undefined) {
+    return (await matchedList(tx, request)).rows;
+  }
+  const found = await listQuery(tx, request);
+  const filed = await foldersOfBookmarks(tx, request.filter.ownerId, found.map((row) => row.id));
+  const carried = await tagsOfBookmarks(tx, request.filter.ownerId, found.map((row) => row.id));
+  return found.map(({ sortKey, ...row }) => ({ bookmark: recordOf(row, filed.get(row.id) ?? [], carried.get(row.id) ?? []), key: sortKey }));
+}
+
+async function countOf(tx: TenantTx, filter: BookmarkListFilter, limit: number): Promise<number> {
+  if (filter.q !== undefined) {
+    return matchedCount(tx, filter, limit);
+  }
+  const [row] = await countQuery(tx, filter, limit);
+  if (row === undefined) {
+    throw new Error("counting bookmarks returned no row");
+  }
+  return row.total;
+}
+
+async function listWithCountOf(tx: TenantTx, request: BookmarkListRequest, limit: number): Promise<BookmarkListPage> {
+  if (!matchesAreTheAnswer(tx, request.filter)) {
+    const rows = await listOf(tx, request);
+    return { rows, count: await countOf(tx, request.filter, limit) };
+  }
+  const { rows, matched } = await matchedList(tx, request);
+  return { rows, count: Math.min(matched, limit) };
 }
 
 function requireListWorkspace(tx: TenantTx, action: string): string {
@@ -760,6 +942,9 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
 
     async ids(filter, limit) {
       const workspaceId = requireListWorkspace(tx, "listing bookmark identifiers");
+      if (filter.q !== undefined) {
+        return (await matchedPage(tx, { filter, sort: "recent", after: undefined, limit })).page.map((row) => row.id);
+      }
       const found = await tenantHandle(tx)
         .select({ id: bookmarks.id })
         .from(bookmarks)
@@ -786,20 +971,11 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
       return row.changed ?? undefined;
     },
 
-    async list(request) {
-      const found = await listQuery(tx, request);
-      const filed = await foldersOfBookmarks(tx, request.filter.ownerId, found.map((row) => row.id));
-      const carried = await tagsOfBookmarks(tx, request.filter.ownerId, found.map((row) => row.id));
-      return found.map(({ sortKey, ...row }) => ({ bookmark: recordOf(row, filed.get(row.id) ?? [], carried.get(row.id) ?? []), key: sortKey }));
-    },
+    list: (request) => listOf(tx, request),
 
-    async count(filter, limit) {
-      const [row] = await countQuery(tx, filter, limit);
-      if (row === undefined) {
-        throw new Error("counting bookmarks returned no row");
-      }
-      return row.total;
-    },
+    count: (filter, limit) => countOf(tx, filter, limit),
+
+    listWithCount: (request, limit) => listWithCountOf(tx, request, limit),
   };
 }
 

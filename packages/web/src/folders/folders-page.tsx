@@ -7,12 +7,14 @@ import { useTranslation } from "react-i18next";
 import { useFormat } from "../i18n/use-format.ts";
 import { FolderForm, type FolderFormIntent } from "./folder-form.tsx";
 import { FOLDER_SORTS, folderFailureOf, folderListQuery, type Folder, type FolderSort } from "./folders.ts";
-import { useFolderSort } from "./folders-search.ts";
+import { useCreateFolderForm, useFolderSort } from "./folders-search.ts";
 import { FoldersTable } from "./folders-table.tsx";
 import { useDeleteFolder } from "./use-delete-folder.ts";
 
 // The shell's main area has no padding of its own: each page keeps its content off the edges, as the settings and admin layouts do.
 const PAGE_FRAME = "flex w-full min-w-0 flex-col gap-4 p-4 md:p-6";
+
+const CREATE: FolderFormIntent = "create";
 
 const SKELETON_ROWS = ["a", "b", "c", "d"] as const;
 
@@ -28,7 +30,7 @@ interface Editing {
 /**
  * `/folders` (doc 03 section 6): the member's folders under the sort the address holds, each with its icon, colour, name
  * and bookmark count, and the forms that create, rename and restyle a folder and the confirmation that deletes one. `N`
- * opens the form for a new folder. Sharing does not exist yet, so the Mine and Shared with me scopes are not offered.
+ * opens the form for a new folder, as `?create=1` does. Sharing does not exist yet, so the Mine and Shared with me scopes are not offered.
  */
 export function FoldersPage(): ReactElement {
   const { t } = useTranslation();
@@ -36,15 +38,14 @@ export function FoldersPage(): ReactElement {
   const router = useRouter();
   const { sort, setSort } = useFolderSort();
   const query = useInfiniteQuery(folderListQuery(router.options.context.api, sort));
+  const createForm = useCreateFolderForm();
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
   const [deleting, setDeleting] = useState<Folder | undefined>(undefined);
   const remove = useDeleteFolder(() => {
     setDeleting(undefined);
   });
 
-  const startCreate = (): void => {
-    setEditing({ intent: "create" });
-  };
+  const startCreate = createForm.open;
   const startRename = (folder: Folder): void => {
     setEditing({ intent: "rename", folder });
   };
@@ -172,6 +173,7 @@ export function FoldersPage(): ReactElement {
           }}
         />
       )}
+      {createForm.creating ? <FolderForm intent={CREATE} key={CREATE} onClose={createForm.close} /> : null}
       <Confirm
         cancelLabel={t("folders.delete.cancel")}
         confirmLabel={t("folders.delete.confirm")}

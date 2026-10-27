@@ -23,6 +23,9 @@ import { useSignOut } from "../auth/sign-out.ts";
 import { useConfig } from "../config/config-context.tsx";
 import { Slot, useExtensions } from "../extensions/index.ts";
 import { useAllFolders } from "../folders/use-all-folders.ts";
+import { PaletteDialog } from "../palette/palette-dialog.tsx";
+import { PaletteProvider } from "../palette/palette-state.tsx";
+import { PaletteTrigger } from "../palette/palette-trigger.tsx";
 import { AppShortcuts } from "../shortcuts/app-shortcuts.tsx";
 import { docsUrl } from "./docs-url.ts";
 import { EmailUnverifiedBanner, MailNotConfiguredBanner } from "./banners.tsx";
@@ -75,6 +78,7 @@ function AppLayoutShell(): ReactElement {
     <AppShell
       actions={
         <>
+          <PaletteTrigger />
           <NewBookmarkButton />
           <ThemeToggle
             onToggle={(theme) => {
@@ -195,6 +199,7 @@ function AppLayoutShell(): ReactElement {
       {dialog}
       <BookmarkModal />
       <AppShortcuts />
+      <PaletteDialog />
       <OfflineBanner />
       <EmailUnverifiedBanner />
       <MailNotConfiguredBanner />
@@ -211,7 +216,9 @@ function AppLayoutShell(): ReactElement {
 export function AppLayout(): ReactElement {
   return (
     <AccountPreferences>
-      <AppLayoutShell />
+      <PaletteProvider>
+        <AppLayoutShell />
+      </PaletteProvider>
     </AccountPreferences>
   );
 }

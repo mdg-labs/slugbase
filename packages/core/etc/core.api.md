@@ -1131,6 +1131,7 @@ export type BookmarkBulkTarget = {
     readonly url: string | undefined;
     readonly folderId?: string | undefined;
     readonly tagIds?: readonly string[] | undefined;
+    readonly q?: string | undefined;
 };
 
 // @public
@@ -1268,6 +1269,7 @@ export interface BookmarkFilterAsk {
     readonly hasSlug: boolean | undefined;
     // (undocumented)
     readonly pinned: boolean | undefined;
+    readonly q?: string | undefined;
     readonly tagIds?: readonly string[] | undefined;
     readonly url: string | undefined;
 }
@@ -1281,6 +1283,24 @@ export interface BookmarkFolderRef {
     readonly id: string;
     // (undocumented)
     readonly name: string;
+}
+
+// @public (undocumented)
+export interface BookmarkHit {
+    // (undocumented)
+    readonly forwarding: boolean;
+    // (undocumented)
+    readonly host: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly pinned: boolean;
+    // (undocumented)
+    readonly slug: string | null;
+    // (undocumented)
+    readonly title: string;
+    // (undocumented)
+    readonly url: string;
 }
 
 // @public (undocumented)
@@ -1328,6 +1348,7 @@ export interface BookmarkListAsk {
     readonly limit: number;
     // (undocumented)
     readonly pinned: boolean | undefined;
+    readonly q?: string | undefined;
     // (undocumented)
     readonly scope: BookmarkScope;
     // (undocumented)
@@ -1353,6 +1374,7 @@ export interface BookmarkListFilter {
     readonly hasSlug?: boolean | undefined;
     readonly ownerId: string;
     readonly pinned?: boolean | undefined;
+    readonly q?: string | undefined;
     readonly tagIds?: readonly string[] | undefined;
     readonly urlCanonical?: string | undefined;
 }
@@ -1383,6 +1405,14 @@ export type BookmarkListOutcome = {
     readonly reason: BookmarkUrlRefusal;
 };
 
+// @public
+export interface BookmarkListPage {
+    // (undocumented)
+    readonly count: number;
+    // (undocumented)
+    readonly rows: readonly BookmarkListRow[];
+}
+
 // @public (undocumented)
 export interface BookmarkListRequest {
     readonly after: BookmarkPosition | undefined;
@@ -1405,6 +1435,7 @@ export interface BookmarkListRow {
 export interface BookmarkListStore {
     count(filter: BookmarkListFilter, limit: number): Promise<number>;
     list(request: BookmarkListRequest): Promise<readonly BookmarkListRow[]>;
+    listWithCount(request: BookmarkListRequest, limit: number): Promise<BookmarkListPage>;
 }
 
 // @public (undocumented)
@@ -2248,6 +2279,18 @@ export interface FolderFilingStore {
 }
 
 // @public (undocumented)
+export interface FolderHit {
+    // (undocumented)
+    readonly color: number;
+    // (undocumented)
+    readonly icon: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public (undocumented)
 export interface FolderListAsk {
     readonly accountId: string;
     // (undocumented)
@@ -2463,6 +2506,9 @@ export function generateTotpSecret(): Uint8Array;
 
 // @public
 export const GO_OTHER_WORKSPACES_MAX = 20;
+
+// @public
+export const GO_SUGGEST_PREFIX_MAX_LENGTH = 64;
 
 // @public
 export type GoAccess = "owner" | "direct" | "team" | "folder";
@@ -2707,6 +2753,58 @@ export interface GoStore {
         readonly accountId: string;
     }): Promise<boolean>;
     summaries(ids: readonly string[]): Promise<readonly GoBookmarkSummary[]>;
+}
+
+// @public (undocumented)
+export interface GoSuggestAsk {
+    readonly accountId: string;
+    readonly prefix: string;
+}
+
+// @public (undocumented)
+export interface GoSuggestDependencies {
+    // (undocumented)
+    readonly store: GoSuggestStore;
+}
+
+// @public
+export interface GoSuggestion {
+    // (undocumented)
+    readonly bookmarkId: string;
+    // (undocumented)
+    readonly host: string;
+    readonly owner: {
+        readonly accountId: string;
+        readonly displayName: string;
+    } | null;
+    readonly sharedVia: "direct" | "team" | "folder" | null;
+    // (undocumented)
+    readonly slug: string;
+    // (undocumented)
+    readonly title: string;
+}
+
+// @public
+export interface GoSuggestionRecord {
+    readonly access: GoAccess;
+    // (undocumented)
+    readonly bookmarkId: string;
+    readonly host: string;
+    readonly ownerId: string | null;
+    readonly ownerName: string | null;
+    // (undocumented)
+    readonly slug: string;
+    // (undocumented)
+    readonly title: string;
+}
+
+// @public (undocumented)
+export interface GoSuggestStore {
+    suggest(request: {
+        readonly prefix: string;
+        readonly accountId: string;
+        readonly limit: number;
+    }): Promise<readonly GoSuggestionRecord[]>;
 }
 
 // @public
@@ -4189,6 +4287,9 @@ export function normalizeFolderName(name: string): {
 };
 
 // @public
+export function normalizeSearchQuery(query: string): string;
+
+// @public
 export function normalizeSlug(input: string): string;
 
 // @public
@@ -4518,6 +4619,68 @@ export interface SealedSecret {
 }
 
 // @public
+export function search(input: SearchDependencies, ask: SearchAsk): Promise<SearchResult>;
+
+// @public
+export const SEARCH_DEFAULT_LIMITS: Readonly<Record<SearchType, number>>;
+
+// @public
+export const SEARCH_MAX_LIMIT = 20;
+
+// @public
+export const SEARCH_QUERY_MAX_LENGTH = 100;
+
+// @public (undocumented)
+export const SEARCH_TYPES: readonly ["bookmark", "folder", "tag"];
+
+// @public (undocumented)
+export interface SearchAsk {
+    // (undocumented)
+    readonly accountId: string;
+    readonly limit?: number;
+    // (undocumented)
+    readonly query: string;
+    readonly types?: readonly SearchType[];
+}
+
+// @public (undocumented)
+export interface SearchDependencies {
+    // (undocumented)
+    readonly store: SearchStore;
+}
+
+// @public (undocumented)
+export interface SearchResult {
+    // (undocumented)
+    readonly bookmarks: readonly BookmarkHit[];
+    // (undocumented)
+    readonly folders: readonly FolderHit[];
+    // (undocumented)
+    readonly tags: readonly TagHit[];
+}
+
+// @public (undocumented)
+export interface SearchStore {
+    bookmarks(request: {
+        readonly text: string;
+        readonly limit: number;
+    }): Promise<readonly BookmarkHit[]>;
+    folders(request: {
+        readonly accountId: string;
+        readonly text: string;
+        readonly limit: number;
+    }): Promise<readonly FolderHit[]>;
+    tags(request: {
+        readonly accountId: string;
+        readonly text: string;
+        readonly limit: number;
+    }): Promise<readonly TagHit[]>;
+}
+
+// @public (undocumented)
+export type SearchType = (typeof SEARCH_TYPES)[number];
+
+// @public
 export interface SeatEntitlements {
     limit(accountId: string, workspaceId: string, request: object): Promise<number | null>;
 }
@@ -4598,6 +4761,9 @@ export interface SlugUse {
 }
 
 // @public
+export function suggestSlugs(input: GoSuggestDependencies, ask: GoSuggestAsk): Promise<readonly GoSuggestion[]>;
+
+// @public
 export const TAG_LIST_TOTAL_CAP = 10000;
 
 // @public
@@ -4649,6 +4815,14 @@ export interface TagDeletionAsk {
 export interface TagDeletionDependencies {
     // (undocumented)
     readonly store: Pick<TagStore, "remove">;
+}
+
+// @public (undocumented)
+export interface TagHit {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
 }
 
 // @public (undocumented)

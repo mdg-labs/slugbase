@@ -9,6 +9,10 @@ export interface RunSeedScriptOptions {
   readonly path: string;
   /** Values that must not appear in an error message, besides the password of the connection. */
   readonly secrets?: readonly string[];
+  /** How long psql may run; the default is two minutes. */
+  readonly timeoutMs?: number;
+  /** Ends psql, and so the script's transaction, when it aborts; the promise then rejects once psql has gone. */
+  readonly signal?: AbortSignal;
 }
 
 /**
@@ -31,7 +35,7 @@ export function runSeedScript(connection: SeedConnection, script: string, option
         PGAPPNAME: "slugbase-seed",
       },
       stdio: ["pipe", "ignore", "pipe"],
-      timeout: PSQL_TIMEOUT_MS,
+      timeout: options.timeoutMs ?? PSQL_TIMEOUT_MS,
     });
     let stderr = "";
     child.stderr.setEncoding("utf8");
@@ -42,6 +46,10 @@ export function runSeedScript(connection: SeedConnection, script: string, option
       reject(new Error(`could not run psql (it must be on the PATH): ${error.message}`));
     });
     child.on("close", (code) => {
+      if (options.signal?.aborted === true) {
+        reject(new Error("the seed was interrupted"));
+        return;
+      }
       if (code === 0) {
         resolve();
         return;
@@ -54,6 +62,17 @@ export function runSeedScript(connection: SeedConnection, script: string, option
       }
       reject(new Error(`psql exited with ${code === null ? "a signal" : `status ${String(code)}`}: ${message}`));
     });
+    const abort = (): void => {
+      child.kill("SIGTERM");
+    };
+    if (options.signal?.aborted === true) {
+      abort();
+    } else {
+      options.signal?.addEventListener("abort", abort, { once: true });
+      child.once("close", () => {
+        options.signal?.removeEventListener("abort", abort);
+      });
+    }
     child.stdin.on("error", () => undefined);
     child.stdin.end(script);
   });

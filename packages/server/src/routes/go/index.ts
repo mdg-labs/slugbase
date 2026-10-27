@@ -1,5 +1,5 @@
-import { chooseSlug as chooseSlugOperation, resolveSlug as resolveSlugOperation, type GoResolutionSchema } from "@slugbase/contracts";
-import { chooseSlugBookmark, resolveInWorkspace, resolveSlug, type BookmarkUsage, type GoResolution } from "@slugbase/core";
+import { chooseSlug as chooseSlugOperation, resolveSlug as resolveSlugOperation, suggestSlugs as suggestSlugsOperation, type GoResolutionSchema } from "@slugbase/contracts";
+import { chooseSlugBookmark, resolveInWorkspace, resolveSlug, suggestSlugs, type BookmarkUsage, type GoResolution } from "@slugbase/core";
 import { goRepository } from "@slugbase/db";
 import type { z } from "zod";
 import type { ChainContext, RouteBinding } from "../../http/chain.ts";
@@ -7,13 +7,14 @@ import { ProblemError } from "../../http/problem.ts";
 import type { RequestTenant } from "../../http/tenant.ts";
 import { route } from "../register.ts";
 
-// POST /api/v1/go/resolve and POST /api/v1/go/choose (doc 04 section 10.8, doc 02 sections 6.2 to 6.4, doc 05 section 4, Q25, doc 10 T1, T2 and T12). Both
-// act in the workspace the request is bound to and name none (D11), and both are in the `go` rate bucket. The resolution answers what the slug resolves to
+// POST /api/v1/go/resolve, POST /api/v1/go/choose and GET /api/v1/go/suggest (doc 04 section 10.8, doc 02 sections 6.2 to 6.4, doc 05 section 4, Q25, doc 10 T1, T2 and T12). They
+// act in the workspace the request is bound to and name none (D11), and all are in the `go` rate bucket. The resolution answers what the slug resolves to
 // for the caller (a remembered preference, the caller's own bookmark, the one shared bookmark, several shared bookmarks, or none) and names bookmarks
 // without their address. A choice names one of the candidates and answers its address, which is checked again to be an http or https URL; it counts the
 // use in the usage buffer of this process, as an open does, and remembers the choice when the caller asked. A bookmark that is not a current candidate
 // of the slug for the caller (another member's, another workspace's, not forwarding, plan-archived, with another slug or unknown) is `404 slug_not_found`
-// and nothing is remembered or counted.
+// and nothing is remembered or counted. The suggestion lists, for the palette's `go` mode, the slugs that start with a prefix among the bookmarks the resolution could name for the caller
+// (the store applies the same candidate and access rules), at most 10, with no address; it is a read in the `go` bucket and takes the read scope of a token.
 
 const NO_WORKSPACE = "No such resource.";
 const NO_SUCH_SLUG = "No bookmark of yours or shared with you has this slug.";
@@ -60,6 +61,12 @@ export function goRoutes({ usage }: GoRoutesOptions): RouteBinding[] {
         return inWorkspace.kind === "none" ? { kind: "none", otherWorkspaces: [] } : inWorkspace;
       });
       return { status: 200, body: bodyOf(resolution) };
+    }),
+
+    route(suggestSlugsOperation).handle(async ({ query }, context) => {
+      const tenant = tenantOf(context);
+      const suggestions = await tenant.withTenant((tx) => suggestSlugs({ store: goRepository(tx) }, { accountId: tenant.accountId, prefix: query.prefix }));
+      return { status: 200, body: { suggestions: suggestions.map((suggestion) => ({ ...suggestion })) } };
     }),
 
     route(chooseSlugOperation).handle(async ({ body }, context) => {

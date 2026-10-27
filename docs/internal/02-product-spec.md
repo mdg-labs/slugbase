@@ -221,7 +221,7 @@ Set only by downgrade-overflow handling (doc 06) through the archive operation C
 
 The bookmarks list supports, all reflected in the URL search params (doc 03):
 
-- **Filters**: folder (one), tags (any of several, combined with AND), pinned only, scope (`all`, `mine`, `shared-with-me`, `shared-by-me`), has slug, forwarding on, free-text query (title, host, slug, description; the path of the URL is not searched).
+- **Filters**: folder (one), tags (any of several, combined with AND), pinned only, scope (`all`, `mine`, `shared-with-me`, `shared-by-me`), has slug, forwarding on, free-text query (title, host, slug, description; the path of the URL is not searched). The query matches as the search does (§9.1) but does not rank: the list keeps the sort and the keyset of the member's choice, a typo matches only when no bookmark has the words, and "Select all matching" and a bulk action by filter name the same bookmarks as the list.
 - **Sorts**: recently added (default), oldest first, alphabetical (A–Z or Z–A), most used, recently accessed (never-opened last).
 - **Pagination**: keyset-based with "load more" — there are no page numbers and no jumping to a page (Q42). Page sizes 24 / 48 / 96 (grid default 24, table default 48, at most 100 via the API). The count line reads "Showing 48 of 1,234"; the total is exact up to 10 000 and shown as "10,000+" above.
 - **Views**: card grid and table; the choice is remembered per account.
@@ -334,7 +334,7 @@ Workspace admins have **no implicit read** of other members' private content —
 
 ### 9.1 Search
 
-A server search operation matches the query across the member's readable bookmarks (title, host, slug, description), their own folders and own tags, returning at most 8 bookmarks, 4 folders and 4 tags by default, ranked: exact slug match → slug prefix → title/description full-text → trigram similarity on title and host. Full-text uses one `simple`-configuration vector without stemming, and trigrams give prefix and typo tolerance (Q49); queries shorter than three characters fall back to slug and title prefix matching, and query syntax characters are treated as plain text. Debounced in the UI (150 ms). Plan-archived bookmarks never match.
+A server search operation matches the query across the member's readable bookmarks (title, host, slug, description), their own folders and own tags, returning at most 8 bookmarks, 4 folders and 4 tags by default, ranked: exact slug match → slug prefix → title/description full-text → trigram similarity on title and host. Within the full-text tier, the bookmarks whose slug and title together hold every word of the query rank ahead of those whose host or description completes the words (the vector weights slug and title above host and description); all of the former are ranked, and the latter fill the remaining places from a bounded window of matches, so a word that most bookmarks of a large library match does not make the search rank all of them. Full-text uses one `simple`-configuration vector without stemming, and trigrams give prefix and typo tolerance (Q49); queries shorter than three characters fall back to slug and title prefix matching, and query syntax characters are treated as plain text. Debounced in the UI (150 ms). Plan-archived bookmarks never match.
 
 ### 9.2 Command palette
 
@@ -342,8 +342,8 @@ Opened with `⌘K` / `Ctrl K` from anywhere in the app (and `/` on list pages).
 
 - **Empty**: recent and pinned bookmarks, navigation (Home, Bookmarks, Folders, Tags, Forwarding, Settings), actions (New bookmark, New folder, Import, Export, Switch workspace, Toggle theme, Sign out).
 - **Query**: grouped results — Bookmarks, Folders, Tags, Commands — from §9.1 plus command names.
-- **`go` mode**: a query starting with `go ` (or a pasted `/go/<slug>` or full `/go` URL) lists matching slugs as the member types (own first, then shared) and Enter resolves exactly as `/go` does (§6.2), including disambiguation inline and the not-found hint. A path after the slug is not passed through: it resolves as no match, as on the server (Q43). Only a pasted `/go` URL of this deployment's own origin enters the mode.
-- **Modifiers**: Enter opens; `⌘/Ctrl Enter` opens in a new tab; `⌥/Alt Enter` opens the bookmark modal for editing (own bookmarks).
+- **`go` mode**: a query starting with `go ` (in any case), a pasted `/go/<slug>` or a pasted link to `/go/<slug>` on this deployment's own origin enters the mode, marked by a "Go" chip beside the input; a link on any other origin is searched for as text. The palette lists the slugs that start with the text as the member types (own first, then shared) and Enter resolves the slug exactly as `/go` does (§6.2), including disambiguation inline (with "Always use this", §6.4) and the not-found hint with the create action and the member's other workspaces. Whatever follows the slug, a path or a query string, is not passed through and not cut off: it is resolved as typed, which is no match (§6.2 step 5, Q43), and the not-found hint then offers no bookmark to create.
+- **Modifiers**: Enter opens; `⌘/Ctrl Enter` opens in a new tab; `⌥/Alt Enter` opens the bookmark modal for editing (own bookmarks); in `go` mode `⌘/Ctrl Enter` acts as Enter and `⌥/Alt Enter` does nothing, since a slug is not a bookmark to open in a tab or to edit.
 - Fully keyboard-operable; screen-reader announced result counts.
 
 ### 9.3 Dashboard (Home)

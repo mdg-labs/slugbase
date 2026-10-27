@@ -399,6 +399,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/go/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Suggest the slugs that start with a prefix */
+        get: operations["suggestSlugs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/instance/accounts": {
         parameters: {
             query?: never;
@@ -1088,6 +1105,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search my bookmarks, folders and tags */
+        get: operations["search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/session/active-workspace": {
         parameters: {
             query?: never;
@@ -1578,6 +1612,8 @@ export interface components {
             hasSlug?: boolean;
             /** @description true matches pinned bookmarks only and false unpinned ones only; left out, pinning is not filtered on */
             pinned?: boolean;
+            /** @description Narrows the bookmarks to those the search of the palette finds, by their title, host, slug and description (the path of the URL is not searched): every word of it must be the start of a word of one of them, or of the slug, and a typo is matched only when no bookmark has the words. It is plain text, 1 to 100 characters after the whitespace around it is removed, and `&`, `|`, `!`, `:`, `*`, `%`, `_`, quotes and backslashes are never operators or wildcards. A text of fewer than three characters matches the start of the slug or of the title only. The sort, the keyset and the filters are kept, so the bookmarks are not ranked by relevance. Left out, the text does not filter */
+            q?: string;
             /**
              * @description Whose bookmarks are matched. Only the caller's own bookmarks exist until sharing arrives, so both name the same bookmarks today; mine when left out
              * @enum {string}
@@ -2049,6 +2085,35 @@ export interface components {
              * @constant
              */
             result: "multiple";
+        };
+        GoSuggestion: {
+            /**
+             * Format: uuid
+             * @description The bookmark's identifier
+             */
+            bookmarkId: string;
+            /** @description The host of the bookmark's destination, never the whole address */
+            host: string;
+            /** @description Who owns a bookmark that is shared with the caller; null for the caller's own bookmark and for one whose owner has left the workspace */
+            owner: {
+                /**
+                 * Format: uuid
+                 * @description The owner's account
+                 */
+                accountId: string;
+                /** @description The owner's display name, as a member of the workspace sees it */
+                displayName: string;
+            } | null;
+            /** @description How the bookmark is shared with the caller: directly, through a team or through a shared folder; null for the caller's own bookmark */
+            sharedVia: ("direct" | "team" | "folder") | null;
+            /** @description The bookmark's slug, which starts with the prefix */
+            slug: string;
+            /** @description The bookmark's title */
+            title: string;
+        };
+        GoSuggestions: {
+            /** @description The slugs that start with the prefix, at most 10: the caller's own first, then in the order of their slugs */
+            suggestions: components["schemas"]["GoSuggestion"][];
         };
         GoWorkspace: {
             /**
@@ -2600,6 +2665,55 @@ export interface components {
              * @enum {string}
              */
             next: "done" | "mfa";
+        };
+        SearchBookmark: {
+            /** @description Whether /go forwards to the bookmark by its slug */
+            forwarding: boolean;
+            /** @description The host name of the URL, lower case and in punycode */
+            host: string;
+            /**
+             * Format: uuid
+             * @description The bookmark's identifier
+             */
+            id: string;
+            /** @description Whether the bookmark is pinned */
+            pinned: boolean;
+            /** @description The bookmark's slug, null when it has none */
+            slug: string | null;
+            /** @description The bookmark's title */
+            title: string;
+            /** @description The URL as stored: normalised, and always http or https */
+            url: string;
+        };
+        SearchFolder: {
+            /** @description The folder's colour, 1 to 8: the number of the --folder-N theme token */
+            color: number;
+            /** @description The folder's icon: a lucide icon name from the list the folder operations publish */
+            icon: string;
+            /**
+             * Format: uuid
+             * @description The folder's identifier
+             */
+            id: string;
+            /** @description The folder's name, in the case it was entered in */
+            name: string;
+        };
+        SearchResults: {
+            /** @description The caller's bookmarks that match, best first: an exact slug, then a slug prefix, then full text, then trigram similarity; plan-archived bookmarks never match */
+            bookmarks: components["schemas"]["SearchBookmark"][];
+            /** @description The caller's own folders whose name contains the text, an exact name first, then a name that starts with it, then the rest; another member's folders are never in it */
+            folders: components["schemas"]["SearchFolder"][];
+            /** @description The caller's own tags whose name contains the text, in the order of the folders; another member's tags are never in it */
+            tags: components["schemas"]["SearchTag"][];
+        };
+        SearchTag: {
+            /**
+             * Format: uuid
+             * @description The tag's identifier
+             */
+            id: string;
+            /** @description The tag's name, in the case it was entered in */
+            name: string;
         };
         Session: {
             /**
@@ -3690,6 +3804,7 @@ export interface operations {
                 pinned?: "true" | "false";
                 hasSlug?: "true" | "false";
                 forwarding?: "true" | "false";
+                q?: string;
                 url?: string;
                 folderId?: string;
                 tag?: string | string[];
@@ -3739,7 +3854,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The query did not pass validation (an unknown parameter or sort, a boolean other than true or false, a folderId or a tag that is not an identifier, more than 10 tags, a limit outside 1 to 100), or the url is not a URL a bookmark can have */
+            /** @description The query did not pass validation (an unknown parameter or sort, a boolean other than true or false, a folderId or a tag that is not an identifier, more than 10 tags, a q that is empty or over 100 characters, a limit outside 1 to 100), or the url is not a URL a bookmark can have */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3929,7 +4044,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation (an unknown action, neither or both of ids and filter, no identifier or more than 1 000, a malformed identifier, a folder action without folderId or a tag action without tagIds, a folderId or tagIds on an action that takes none, more than 100 tags, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks. Nothing is written */
+            /** @description The body did not pass validation (an unknown action, neither or both of ids and filter, no identifier or more than 1 000, a malformed identifier, a folder action without folderId or a tag action without tagIds, a folderId or tagIds on an action that takes none, more than 100 tags, a filter q that is empty or over 100 characters, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks. Nothing is written */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4018,7 +4133,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation (an action other than add_tags, neither or both of ids and filter, no identifier or more than 1 000, no tag or more than 100, a malformed identifier, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks */
+            /** @description The body did not pass validation (an action other than add_tags, neither or both of ids and filter, no identifier or more than 1 000, no tag or more than 100, a malformed identifier, a filter q that is empty or over 100 characters, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4056,6 +4171,7 @@ export interface operations {
                 pinned?: "true" | "false";
                 hasSlug?: "true" | "false";
                 forwarding?: "true" | "false";
+                q?: string;
                 url?: string;
                 folderId?: string;
                 tag?: string | string[];
@@ -4102,7 +4218,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The query did not pass validation (an unknown parameter, a boolean other than true or false, a malformed folderId or tag, more than 10 tags), or the url is not a URL a bookmark can have */
+            /** @description The query did not pass validation (an unknown parameter, a boolean other than true or false, a malformed folderId or tag, more than 10 tags, a q that is empty or over 100 characters), or the url is not a URL a bookmark can have */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5370,6 +5486,75 @@ export interface operations {
                 };
             };
             /** @description The body did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    suggestSlugs: {
+        parameters: {
+            query: {
+                prefix: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description At most 10 bookmarks of the workspace whose slug starts with the prefix, that forward, are not plan-archived and that the caller can read, for the palette's go mode: the caller's own first and then in the order of their slugs. A bookmark that `POST /go/resolve` would not name for the caller (another member's that is not shared with the caller, one of another workspace, one that does not forward and an archived one) is never suggested, and a suggestion names no address. An empty prefix, and one that no slug can start with, give an empty list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoSuggestions"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The query did not pass validation (a missing or over-long prefix, or an unknown parameter) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -9360,6 +9545,77 @@ export interface operations {
             };
             /** @description The reference documents are disabled on this server */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    search: {
+        parameters: {
+            query: {
+                q: string;
+                types?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The matches grouped by type, each group at most `limit` long (8 bookmarks, 4 folders and 4 tags by default); a type that was not asked for, and a text that matches nothing, give empty lists */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResults"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The query did not pass validation (a missing, blank or over-long q, a types list with a value other than bookmark, folder and tag, a limit outside 1 to 20, or an unknown parameter) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

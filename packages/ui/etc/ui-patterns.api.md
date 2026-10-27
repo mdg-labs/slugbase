@@ -4,6 +4,7 @@
 
 ```ts
 
+import { ArrowLeftRightIcon } from 'lucide-react';
 import { BookmarkIcon } from 'lucide-react';
 import { ChangeEventHandler } from 'react';
 import type { ClipboardEvent as ClipboardEvent_2 } from 'react';
@@ -13,6 +14,7 @@ import { ExternalLinkIcon } from 'lucide-react';
 import { FilterXIcon } from 'lucide-react';
 import type { FocusEvent as FocusEvent_2 } from 'react';
 import { FolderIcon } from 'lucide-react';
+import { FolderPlusIcon } from 'lucide-react';
 import { ForwardIcon } from 'lucide-react';
 import { HomeIcon } from 'lucide-react';
 import { InboxIcon } from 'lucide-react';
@@ -30,8 +32,11 @@ import { PowerOffIcon } from 'lucide-react';
 import { ReactElement } from 'react';
 import { ReactNode } from 'react';
 import { Ref } from 'react';
+import { RefObject } from 'react';
+import { SearchIcon } from 'lucide-react';
 import { SettingsIcon } from 'lucide-react';
 import { ShieldCheckIcon } from 'lucide-react';
+import { SunMoonIcon } from 'lucide-react';
 import { TableIcon } from 'lucide-react';
 import { TagIcon } from 'lucide-react';
 import { Trash2Icon } from 'lucide-react';
@@ -121,6 +126,8 @@ export interface AppShellProps {
     productName: string;
     workspaceSwitcher?: WorkspaceSwitcherProps;
 }
+
+export { ArrowLeftRightIcon }
 
 // @public
 export function AuthCard(input: AuthCardProps): ReactElement;
@@ -294,6 +301,109 @@ export interface ChoiceCardsProps {
     value: string;
 }
 
+// @public
+export function CommandPalette(input: CommandPaletteProps): ReactElement;
+
+// @public (undocumented)
+export interface CommandPaletteHint {
+    // (undocumented)
+    id: string;
+    keys: readonly string[];
+    // (undocumented)
+    label: string;
+}
+
+// @public
+export type CommandPaletteIntent = "open" | "newTab" | "edit";
+
+// @public (undocumented)
+export interface CommandPaletteItem {
+    checked?: boolean;
+    detail?: ReactNode;
+    icon?: ReactNode;
+    id: string;
+    keywords?: string;
+    // (undocumented)
+    label: string;
+    // (undocumented)
+    onSelect: (intent: CommandPaletteIntent) => void;
+    shortcut?: readonly string[];
+}
+
+// @public
+export interface CommandPaletteNoResultsAction {
+    icon?: ReactNode;
+    // (undocumented)
+    label: string;
+    // (undocumented)
+    onSelect: () => void;
+}
+
+// @public (undocumented)
+export interface CommandPaletteProps {
+    announce: (count: number) => string;
+    closeLabel: string;
+    // (undocumented)
+    description?: string;
+    finalFocus?: RefObject<HTMLElement | null> | (() => HTMLElement | boolean | null);
+    // (undocumented)
+    footerHints: readonly CommandPaletteHint[];
+    // (undocumented)
+    inputLabel: string;
+    modeLabel?: string;
+    noResults: string;
+    noResultsAction?: CommandPaletteNoResultsAction;
+    // (undocumented)
+    onOpenChange: (open: boolean) => void;
+    onQueryChange?: (query: string) => void;
+    // (undocumented)
+    open: boolean;
+    page?: {
+        label: string;
+        onBack: () => void;
+    };
+    // (undocumented)
+    placeholder: string;
+    sections: readonly CommandPaletteSection[];
+    title: string;
+}
+
+// @public (undocumented)
+export interface CommandPaletteSection {
+    error?: {
+        message: string;
+        retryLabel: string;
+        onRetry: () => void;
+    };
+    // (undocumented)
+    id: string;
+    // (undocumented)
+    items?: readonly CommandPaletteItem[];
+    loadingLabel?: string;
+    notice?: {
+        title: string;
+        description?: string;
+        icon?: ReactNode;
+    };
+    prefiltered?: boolean;
+    state?: "ready" | "loading" | "error" | "empty";
+    // (undocumented)
+    title?: string;
+}
+
+// @public
+export function CommandTrigger(input: CommandTriggerProps): ReactElement;
+
+// @public (undocumented)
+export interface CommandTriggerProps {
+    label: string;
+    // (undocumented)
+    onClick: () => void;
+    // (undocumented)
+    ref?: Ref<HTMLButtonElement>;
+    shortcut: readonly string[];
+}
+
 export { CompassIcon }
 
 // @public
@@ -465,6 +575,8 @@ export { FilterXIcon }
 export const FOLDER_ICON_COMPONENTS: Readonly<Record<string, LucideIcon>>;
 
 export { FolderIcon }
+
+export { FolderPlusIcon }
 
 // @public
 export function FormField(input: FormFieldProps): ReactElement;
@@ -693,6 +805,8 @@ export interface RowActionsProps {
     actions: readonly RowAction[];
     label: string;
 }
+
+export { SearchIcon }
 
 // @public
 export function SecretInput(input: SecretInputProps): ReactElement;
@@ -944,6 +1058,16 @@ export interface SidePanelProps {
 }
 
 // @public
+export function SlugChip(input: SlugChipProps): ReactElement;
+
+// @public (undocumented)
+export interface SlugChipProps {
+    // (undocumented)
+    className?: string;
+    slug: string;
+}
+
+// @public
 export function SlugInput(input: SlugInputProps): ReactElement;
 
 // @public (undocumented)
@@ -973,6 +1097,8 @@ export interface StatusBadgeProps {
 
 // @public (undocumented)
 export type StatusBadgeVariant = "info" | "neutral" | "success" | "warning" | "error";
+
+export { SunMoonIcon }
 
 export { TableIcon }
 

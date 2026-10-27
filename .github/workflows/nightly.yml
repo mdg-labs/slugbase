@@ -1,0 +1,138 @@
+name: Nightly
+
+# The scheduled checks of doc 08 section 5.3 and 6.2 that no developer's gate waits for. Today that is the performance budgets: the
+# built server and k6 (scripts/perf/run.mjs) against a database that the test harness made and filled with the large instance
+# (50 000 bookmarks in one workspace, 2 000 further workspaces), with PostgreSQL on the same runner. It runs every week and on
+# a pull request to `main`, which is the promotion. A budget that is exceeded opens an issue (or adds to the one that is open)
+# and does not fail the job; only a run that could not measure fails it. The job holds the workflow token with `issues: write`
+# and nothing else, references no secret, and the workflow never runs on pull_request_target (doc 10 T16).
+
+on:
+  schedule:
+    - cron: "17 3 * * 1"
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  TURBO_TELEMETRY_DISABLED: "1"
+
+jobs:
+  performance:
+    name: performance budgets
+    # A pull request from a fork gets a read-only token and cannot open an issue.
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      issues: write
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: slugbase_ci
+          POSTGRES_PASSWORD: slugbase_ci
+          POSTGRES_DB: postgres
+        ports:
+          - 127.0.0.1:5432:5432
+        options: >-
+          --health-cmd "pg_isready -U slugbase_ci -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+      - uses: ./.github/actions/setup
+        with:
+          turbo-cache-key: nightly
+      # The seed writes through psql (packages/testing/src/seed/run.ts), which the runner image carries.
+      - name: Check the tools the run needs
+        run: |
+          set -euo pipefail
+          command -v psql
+          docker version --format '{{.Server.Version}}'
+      - name: Build the server and the seed
+        run: pnpm turbo run build --filter=slugbase --filter=@slugbase/testing
+      - name: Pull k6
+        run: docker pull "$(sed -n 's/^const K6_IMAGE = "\(.*\)";$/\1/p' scripts/perf/run.mjs)"
+      # Exit status 10 is a budget that was exceeded: the result is reported below and the job goes on. Any other
+      # status is a run that could not measure, and fails the job.
+      - name: Measure the budgets
+        id: measure
+        env:
+          SLUGBASE_TEST_PG_URL: postgres://slugbase_ci:slugbase_ci@127.0.0.1:5432/postgres
+        run: |
+          set +e
+          node scripts/perf/run.mjs --out perf-results
+          status=$?
+          set -e
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          if [ "$status" -ne 0 ] && [ "$status" -ne 10 ]; then
+            exit "$status"
+          fi
+      - name: Report the result
+        if: ${{ always() && hashFiles('perf-results/result.json') != '' }}
+        run: |
+          set -euo pipefail
+          {
+            echo "### Performance budgets"
+            echo
+            jq -r '"Database: \(.database.bookmarks) bookmarks, \(.database.workspaces) workspaces, the largest with \(.database.largestWorkspace). Load: \(.rate) requests a second for \(.durationSeconds) s per scenario."' perf-results/result.json
+            echo
+            echo "| Scenario | p95 server time | Budget | |"
+            echo "|---|---|---|---|"
+            jq -r '.budgets[] | "| \(.name) | \(.p95Ms) ms | \(.limitMs) ms | \(if .ok then "ok" else "exceeded" end) |"' perf-results/result.json
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Open an issue for an exceeded budget
+        if: ${{ steps.measure.outputs.status == '10' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REPOSITORY: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          exceeded="$(jq -r '[.budgets[] | select(.ok | not) | .name] | join(", ")' perf-results/result.json)"
+          {
+            echo "The performance run exceeded a budget of doc 08 section 5.3 (${exceeded}) on \`${EVENT}\` at \`${REF}\`."
+            echo
+            echo "| Scenario | p95 server time | Budget | |"
+            echo "|---|---|---|---|"
+            jq -r '.budgets[] | "| \(.name) | \(.p95Ms) ms | \(.limitMs) ms | \(if .ok then "ok" else "exceeded" end) |"' perf-results/result.json
+            echo
+            echo "Run: ${RUN_URL}"
+            echo
+            echo "The k6 output and the result are in the \`perf-results\` artifact of the run. A \`/go\` p95 above its budget is risk R3 (doc 12 section 5): name the plan or the policy shape that costs the time."
+          } > issue-body.md
+          open="$(gh issue list --repo "$REPOSITORY" --state open --search 'in:title "Performance budget exceeded"' --json number --jq '.[0].number // empty')"
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --repo "$REPOSITORY" --body-file issue-body.md
+          else
+            gh issue create --repo "$REPOSITORY" --title "Performance budget exceeded: ${exceeded}" --label "area:ci" --body-file issue-body.md
+          fi
+      - name: Upload the result
+        if: ${{ always() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: perf-results
+          path: perf-results/
+          if-no-files-found: ignore
+          retention-days: 30

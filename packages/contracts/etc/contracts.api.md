@@ -345,6 +345,7 @@ export const BookmarkFilterSchema: z.ZodObject<{
     pinned: z.ZodOptional<z.ZodBoolean>;
     hasSlug: z.ZodOptional<z.ZodBoolean>;
     forwarding: z.ZodOptional<z.ZodBoolean>;
+    q: z.ZodOptional<z.ZodString>;
     url: z.ZodOptional<z.ZodString>;
     folderId: z.ZodOptional<z.ZodUUID>;
     tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
@@ -365,11 +366,13 @@ export const BookmarkIdsQuerySchema: z.ZodObject<{
         mine: "mine";
     }>>;
     url: z.ZodOptional<z.ZodString>;
-    pinned: z.ZodOptional<z.ZodEnum<{
+    tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
+    q: z.ZodOptional<z.ZodString>;
+    forwarding: z.ZodOptional<z.ZodEnum<{
         true: "true";
         false: "false";
     }>>;
-    forwarding: z.ZodOptional<z.ZodEnum<{
+    pinned: z.ZodOptional<z.ZodEnum<{
         true: "true";
         false: "false";
     }>>;
@@ -378,7 +381,6 @@ export const BookmarkIdsQuerySchema: z.ZodObject<{
         false: "false";
     }>>;
     folderId: z.ZodOptional<z.ZodUUID>;
-    tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -519,6 +521,7 @@ export const bulkBookmarks: {
                 pinned: z.ZodOptional<z.ZodBoolean>;
                 hasSlug: z.ZodOptional<z.ZodBoolean>;
                 forwarding: z.ZodOptional<z.ZodBoolean>;
+                q: z.ZodOptional<z.ZodString>;
                 url: z.ZodOptional<z.ZodString>;
                 folderId: z.ZodOptional<z.ZodUUID>;
                 tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
@@ -559,6 +562,7 @@ export const BulkBookmarksPreviewRequestSchema: z.ZodObject<{
         pinned: z.ZodOptional<z.ZodBoolean>;
         hasSlug: z.ZodOptional<z.ZodBoolean>;
         forwarding: z.ZodOptional<z.ZodBoolean>;
+        q: z.ZodOptional<z.ZodString>;
         url: z.ZodOptional<z.ZodString>;
         folderId: z.ZodOptional<z.ZodUUID>;
         tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
@@ -604,6 +608,7 @@ export const BulkBookmarksRequestSchema: z.ZodObject<{
         pinned: z.ZodOptional<z.ZodBoolean>;
         hasSlug: z.ZodOptional<z.ZodBoolean>;
         forwarding: z.ZodOptional<z.ZodBoolean>;
+        q: z.ZodOptional<z.ZodString>;
         url: z.ZodOptional<z.ZodString>;
         folderId: z.ZodOptional<z.ZodUUID>;
         tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
@@ -949,6 +954,7 @@ export interface ComponentTypes {
             forwarding?: boolean;
             hasSlug?: boolean;
             pinned?: boolean;
+            q?: string;
             scope?: "all" | "mine";
             tag?: string | string[];
             url?: string;
@@ -1174,6 +1180,20 @@ export interface ComponentTypes {
         } | {
             candidates: ComponentTypes["schemas"]["GoCandidate"][];
             result: "multiple";
+        };
+        GoSuggestion: {
+            bookmarkId: string;
+            host: string;
+            owner: {
+                accountId: string;
+                displayName: string;
+            } | null;
+            sharedVia: ("direct" | "team" | "folder") | null;
+            slug: string;
+            title: string;
+        };
+        GoSuggestions: {
+            suggestions: ComponentTypes["schemas"]["GoSuggestion"][];
         };
         GoWorkspace: {
             id: string;
@@ -1441,6 +1461,30 @@ export interface ComponentTypes {
         };
         ResetPasswordResult: {
             next: "done" | "mfa";
+        };
+        SearchBookmark: {
+            forwarding: boolean;
+            host: string;
+            id: string;
+            pinned: boolean;
+            slug: string | null;
+            title: string;
+            url: string;
+        };
+        SearchFolder: {
+            color: number;
+            icon: string;
+            id: string;
+            name: string;
+        };
+        SearchResults: {
+            bookmarks: ComponentTypes["schemas"]["SearchBookmark"][];
+            folders: ComponentTypes["schemas"]["SearchFolder"][];
+            tags: ComponentTypes["schemas"]["SearchTag"][];
+        };
+        SearchTag: {
+            id: string;
+            name: string;
         };
         Session: {
             createdAt: string;
@@ -1820,9 +1864,9 @@ export const createFolder: {
                 map: "map";
                 target: "target";
                 code: "code";
-                tag: "tag";
-                folder: "folder";
                 bookmark: "bookmark";
+                folder: "folder";
+                tag: "tag";
                 "folder-open": "folder-open";
                 "folder-heart": "folder-heart";
                 "folder-code": "folder-code";
@@ -1911,9 +1955,9 @@ export const CreateFolderRequestSchema: z.ZodObject<{
         map: "map";
         target: "target";
         code: "code";
-        tag: "tag";
-        folder: "folder";
         bookmark: "bookmark";
+        folder: "folder";
+        tag: "tag";
         "folder-open": "folder-open";
         "folder-heart": "folder-heart";
         "folder-code": "folder-code";
@@ -3183,6 +3227,9 @@ export const GO_RESOLUTIONS: readonly ["none", "preferred", "single", "multiple"
 // @public (undocumented)
 export const GO_SHARED_VIA: readonly ["direct", "team", "folder"];
 
+// @public
+export const GO_SUGGEST_MAX = 10;
+
 // @public (undocumented)
 export const GoCandidateSchema: z.ZodObject<{
     id: z.ZodUUID;
@@ -3193,9 +3240,9 @@ export const GoCandidateSchema: z.ZodObject<{
         displayName: z.ZodString;
     }, z.core.$strict>>;
     sharedVia: z.ZodNullable<z.ZodEnum<{
+        folder: "folder";
         direct: "direct";
         team: "team";
-        folder: "folder";
     }>>;
 }, z.core.$strict>;
 
@@ -3261,9 +3308,9 @@ export const GoResolutionSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
             displayName: z.ZodString;
         }, z.core.$strict>>;
         sharedVia: z.ZodNullable<z.ZodEnum<{
+            folder: "folder";
             direct: "direct";
             team: "team";
-            folder: "folder";
         }>>;
     }, z.core.$strict>;
 }, z.core.$strict>, z.ZodObject<{
@@ -3277,9 +3324,9 @@ export const GoResolutionSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
             displayName: z.ZodString;
         }, z.core.$strict>>;
         sharedVia: z.ZodNullable<z.ZodEnum<{
+            folder: "folder";
             direct: "direct";
             team: "team";
-            folder: "folder";
         }>>;
     }, z.core.$strict>;
 }, z.core.$strict>, z.ZodObject<{
@@ -3293,9 +3340,9 @@ export const GoResolutionSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
             displayName: z.ZodString;
         }, z.core.$strict>>;
         sharedVia: z.ZodNullable<z.ZodEnum<{
+            folder: "folder";
             direct: "direct";
             team: "team";
-            folder: "folder";
         }>>;
     }, z.core.$strict>>;
 }, z.core.$strict>], "result">;
@@ -3303,6 +3350,47 @@ export const GoResolutionSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
 // @public (undocumented)
 export const GoSlugRequestSchema: z.ZodObject<{
     slug: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const GoSuggestionSchema: z.ZodObject<{
+    slug: z.ZodString;
+    bookmarkId: z.ZodUUID;
+    title: z.ZodString;
+    host: z.ZodString;
+    owner: z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+    }, z.core.$strict>>;
+    sharedVia: z.ZodNullable<z.ZodEnum<{
+        folder: "folder";
+        direct: "direct";
+        team: "team";
+    }>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const GoSuggestionsSchema: z.ZodObject<{
+    suggestions: z.ZodArray<z.ZodObject<{
+        slug: z.ZodString;
+        bookmarkId: z.ZodUUID;
+        title: z.ZodString;
+        host: z.ZodString;
+        owner: z.ZodNullable<z.ZodObject<{
+            accountId: z.ZodUUID;
+            displayName: z.ZodString;
+        }, z.core.$strict>>;
+        sharedVia: z.ZodNullable<z.ZodEnum<{
+            folder: "folder";
+            direct: "direct";
+            team: "team";
+        }>>;
+    }, z.core.$strict>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const GoSuggestQuerySchema: z.ZodObject<{
+    prefix: z.ZodString;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -3876,11 +3964,13 @@ export const listBookmarkIds: {
                 mine: "mine";
             }>>;
             url: z.ZodOptional<z.ZodString>;
-            pinned: z.ZodOptional<z.ZodEnum<{
+            tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
+            q: z.ZodOptional<z.ZodString>;
+            forwarding: z.ZodOptional<z.ZodEnum<{
                 true: "true";
                 false: "false";
             }>>;
-            forwarding: z.ZodOptional<z.ZodEnum<{
+            pinned: z.ZodOptional<z.ZodEnum<{
                 true: "true";
                 false: "false";
             }>>;
@@ -3889,7 +3979,6 @@ export const listBookmarkIds: {
                 false: "false";
             }>>;
             folderId: z.ZodOptional<z.ZodUUID>;
-            tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
         }, z.core.$strict>;
     };
     readonly responses: {
@@ -3934,6 +4023,7 @@ export const listBookmarks: {
                 true: "true";
                 false: "false";
             }>>;
+            q: z.ZodOptional<z.ZodString>;
             url: z.ZodOptional<z.ZodString>;
             folderId: z.ZodOptional<z.ZodUUID>;
             tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
@@ -4008,6 +4098,7 @@ export const ListBookmarksQuerySchema: z.ZodObject<{
         true: "true";
         false: "false";
     }>>;
+    q: z.ZodOptional<z.ZodString>;
     url: z.ZodOptional<z.ZodString>;
     folderId: z.ZodOptional<z.ZodUUID>;
     tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
@@ -8386,6 +8477,7 @@ export interface OperationTypes {
                 pinned?: "true" | "false";
                 hasSlug?: "true" | "false";
                 forwarding?: "true" | "false";
+                q?: string;
                 url?: string;
                 folderId?: string;
                 tag?: string | string[];
@@ -8463,6 +8555,7 @@ export interface OperationTypes {
                 pinned?: "true" | "false";
                 hasSlug?: "true" | "false";
                 forwarding?: "true" | "false";
+                q?: string;
                 url?: string;
                 folderId?: string;
                 tag?: string | string[];
@@ -10984,6 +11077,71 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    search: {
+        parameters: {
+            query: {
+                q: string;
+                types?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["SearchResults"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     sendInstanceTestMail: {
         parameters: {
             query?: never;
@@ -11223,6 +11381,69 @@ export interface OperationTypes {
                 };
             };
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    suggestSlugs: {
+        parameters: {
+            query: {
+                prefix: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["GoSuggestions"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12575,6 +12796,23 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/go/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["suggestSlugs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/api/v1/instance/accounts": {
         parameters: {
             query?: never;
@@ -13255,6 +13493,23 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/api/v1/session/active-workspace": {
         parameters: {
             query?: never;
@@ -13550,6 +13805,7 @@ export const previewBulkBookmarks: {
                 pinned: z.ZodOptional<z.ZodBoolean>;
                 hasSlug: z.ZodOptional<z.ZodBoolean>;
                 forwarding: z.ZodOptional<z.ZodBoolean>;
+                q: z.ZodOptional<z.ZodString>;
                 url: z.ZodOptional<z.ZodString>;
                 folderId: z.ZodOptional<z.ZodUUID>;
                 tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
@@ -14385,9 +14641,9 @@ export const resolveSlug: {
         displayName: z.ZodString;
         }, z.core.$strict>>;
         sharedVia: z.ZodNullable<z.ZodEnum<{
+        folder: "folder";
         direct: "direct";
         team: "team";
-        folder: "folder";
         }>>;
         }, z.core.$strict>;
         }, z.core.$strict>, z.ZodObject<{
@@ -14401,9 +14657,9 @@ export const resolveSlug: {
         displayName: z.ZodString;
         }, z.core.$strict>>;
         sharedVia: z.ZodNullable<z.ZodEnum<{
+        folder: "folder";
         direct: "direct";
         team: "team";
-        folder: "folder";
         }>>;
         }, z.core.$strict>;
         }, z.core.$strict>, z.ZodObject<{
@@ -14417,9 +14673,9 @@ export const resolveSlug: {
         displayName: z.ZodString;
         }, z.core.$strict>>;
         sharedVia: z.ZodNullable<z.ZodEnum<{
+        folder: "folder";
         direct: "direct";
         team: "team";
-        folder: "folder";
         }>>;
         }, z.core.$strict>>;
         }, z.core.$strict>], "result">, Readonly<Record<string, ResponseHeader>>>;
@@ -14562,6 +14818,124 @@ export const RevokeSessionsQuerySchema: z.ZodObject<{
         true: "true";
         false: "false";
     }>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const search: {
+    readonly method: "get";
+    readonly path: "/api/v1/search";
+    readonly operationId: "search";
+    readonly tag: "search";
+    readonly summary: "Search my bookmarks, folders and tags";
+    readonly auth: "member";
+    readonly rate: "read";
+    readonly scope: "read";
+    readonly request: {
+        readonly query: z.ZodObject<{
+            q: z.ZodString;
+            types: z.ZodOptional<z.ZodString>;
+            limit: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        bookmarks: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        title: z.ZodString;
+        url: z.ZodString;
+        host: z.ZodString;
+        slug: z.ZodNullable<z.ZodString>;
+        forwarding: z.ZodBoolean;
+        pinned: z.ZodBoolean;
+        }, z.core.$strict>>;
+        folders: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        icon: z.ZodString;
+        color: z.ZodNumber;
+        }, z.core.$strict>>;
+        tags: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        }, z.core.$strict>>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 401: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public
+export const SEARCH_DEFAULT_LIMITS: {
+    readonly bookmark: 8;
+    readonly folder: 4;
+    readonly tag: 4;
+};
+
+// @public
+export const SEARCH_MAX_LIMIT = 20;
+
+// @public
+export const SEARCH_QUERY_MAX_LENGTH = 100;
+
+// @public
+export const SEARCH_TYPES: readonly ["bookmark", "folder", "tag"];
+
+// @public (undocumented)
+export const SearchBookmarkSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    title: z.ZodString;
+    url: z.ZodString;
+    host: z.ZodString;
+    slug: z.ZodNullable<z.ZodString>;
+    forwarding: z.ZodBoolean;
+    pinned: z.ZodBoolean;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const SearchFolderSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    name: z.ZodString;
+    icon: z.ZodString;
+    color: z.ZodNumber;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const SearchQuerySchema: z.ZodObject<{
+    q: z.ZodString;
+    types: z.ZodOptional<z.ZodString>;
+    limit: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const SearchResultsSchema: z.ZodObject<{
+    bookmarks: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        title: z.ZodString;
+        url: z.ZodString;
+        host: z.ZodString;
+        slug: z.ZodNullable<z.ZodString>;
+        forwarding: z.ZodBoolean;
+        pinned: z.ZodBoolean;
+    }, z.core.$strict>>;
+    folders: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        icon: z.ZodString;
+        color: z.ZodNumber;
+    }, z.core.$strict>>;
+    tags: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+    }, z.core.$strict>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const SearchTagSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    name: z.ZodString;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -14749,6 +15123,47 @@ export const startOidcSignIn: {
         }>;
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const suggestSlugs: {
+    readonly method: "get";
+    readonly path: "/api/v1/go/suggest";
+    readonly operationId: "suggestSlugs";
+    readonly tag: "go";
+    readonly summary: "Suggest the slugs that start with a prefix";
+    readonly auth: "member";
+    readonly rate: "go";
+    readonly scope: "read";
+    readonly request: {
+        readonly query: z.ZodObject<{
+            prefix: z.ZodString;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        suggestions: z.ZodArray<z.ZodObject<{
+        slug: z.ZodString;
+        bookmarkId: z.ZodUUID;
+        title: z.ZodString;
+        host: z.ZodString;
+        owner: z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        }, z.core.$strict>>;
+        sharedVia: z.ZodNullable<z.ZodEnum<{
+        folder: "folder";
+        direct: "direct";
+        team: "team";
+        }>>;
+        }, z.core.$strict>>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 401: ProblemResponse;
+        readonly 404: ProblemResponse;
         readonly 422: ProblemResponse;
         readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
@@ -15052,9 +15467,9 @@ export const updateFolder: {
                 map: "map";
                 target: "target";
                 code: "code";
-                tag: "tag";
-                folder: "folder";
                 bookmark: "bookmark";
+                folder: "folder";
+                tag: "tag";
                 "folder-open": "folder-open";
                 "folder-heart": "folder-heart";
                 "folder-code": "folder-code";
@@ -15149,9 +15564,9 @@ export const UpdateFolderRequestSchema: z.ZodObject<{
         map: "map";
         target: "target";
         code: "code";
-        tag: "tag";
-        folder: "folder";
         bookmark: "bookmark";
+        folder: "folder";
+        tag: "tag";
         "folder-open": "folder-open";
         "folder-heart": "folder-heart";
         "folder-code": "folder-code";

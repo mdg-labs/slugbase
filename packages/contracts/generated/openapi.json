@@ -557,6 +557,12 @@
             "description": "true matches pinned bookmarks only and false unpinned ones only; left out, pinning is not filtered on",
             "type": "boolean"
           },
+          "q": {
+            "description": "Narrows the bookmarks to those the search of the palette finds, by their title, host, slug and description (the path of the URL is not searched): every word of it must be the start of a word of one of them, or of the slug, and a typo is matched only when no bookmark has the words. It is plain text, 1 to 100 characters after the whitespace around it is removed, and `&`, `|`, `!`, `:`, `*`, `%`, `_`, quotes and backslashes are never operators or wildcards. A text of fewer than three characters matches the start of the slug or of the title only. The sort, the keyset and the filters are kept, so the bookmarks are not ranked by relevance. Left out, the text does not filter",
+            "maxLength": 100,
+            "minLength": 1,
+            "type": "string"
+          },
           "scope": {
             "description": "Whose bookmarks are matched. Only the caller's own bookmarks exist until sharing arrives, so both name the same bookmarks today; mine when left out",
             "enum": [
@@ -2039,6 +2045,99 @@
             "type": "object"
           }
         ]
+      },
+      "GoSuggestion": {
+        "additionalProperties": false,
+        "properties": {
+          "bookmarkId": {
+            "description": "The bookmark's identifier",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "host": {
+            "description": "The host of the bookmark's destination, never the whole address",
+            "type": "string"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "accountId": {
+                    "description": "The owner's account",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "description": "The owner's display name, as a member of the workspace sees it",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "accountId",
+                  "displayName"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who owns a bookmark that is shared with the caller; null for the caller's own bookmark and for one whose owner has left the workspace"
+          },
+          "sharedVia": {
+            "anyOf": [
+              {
+                "enum": [
+                  "direct",
+                  "team",
+                  "folder"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How the bookmark is shared with the caller: directly, through a team or through a shared folder; null for the caller's own bookmark"
+          },
+          "slug": {
+            "description": "The bookmark's slug, which starts with the prefix",
+            "type": "string"
+          },
+          "title": {
+            "description": "The bookmark's title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "slug",
+          "bookmarkId",
+          "title",
+          "host",
+          "owner",
+          "sharedVia"
+        ],
+        "type": "object"
+      },
+      "GoSuggestions": {
+        "additionalProperties": false,
+        "properties": {
+          "suggestions": {
+            "description": "The slugs that start with the prefix, at most 10: the caller's own first, then in the order of their slugs",
+            "items": {
+              "$ref": "#/components/schemas/GoSuggestion"
+            },
+            "maxItems": 10,
+            "type": "array"
+          }
+        },
+        "required": [
+          "suggestions"
+        ],
+        "type": "object"
       },
       "GoWorkspace": {
         "additionalProperties": false,
@@ -3583,6 +3682,138 @@
         },
         "required": [
           "next"
+        ],
+        "type": "object"
+      },
+      "SearchBookmark": {
+        "additionalProperties": false,
+        "properties": {
+          "forwarding": {
+            "description": "Whether /go forwards to the bookmark by its slug",
+            "type": "boolean"
+          },
+          "host": {
+            "description": "The host name of the URL, lower case and in punycode",
+            "type": "string"
+          },
+          "id": {
+            "description": "The bookmark's identifier",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "pinned": {
+            "description": "Whether the bookmark is pinned",
+            "type": "boolean"
+          },
+          "slug": {
+            "description": "The bookmark's slug, null when it has none",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "title": {
+            "description": "The bookmark's title",
+            "type": "string"
+          },
+          "url": {
+            "description": "The URL as stored: normalised, and always http or https",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "url",
+          "host",
+          "slug",
+          "forwarding",
+          "pinned"
+        ],
+        "type": "object"
+      },
+      "SearchFolder": {
+        "additionalProperties": false,
+        "properties": {
+          "color": {
+            "description": "The folder's colour, 1 to 8: the number of the --folder-N theme token",
+            "maximum": 8,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "icon": {
+            "description": "The folder's icon: a lucide icon name from the list the folder operations publish",
+            "type": "string"
+          },
+          "id": {
+            "description": "The folder's identifier",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "name": {
+            "description": "The folder's name, in the case it was entered in",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "icon",
+          "color"
+        ],
+        "type": "object"
+      },
+      "SearchResults": {
+        "additionalProperties": false,
+        "properties": {
+          "bookmarks": {
+            "description": "The caller's bookmarks that match, best first: an exact slug, then a slug prefix, then full text, then trigram similarity; plan-archived bookmarks never match",
+            "items": {
+              "$ref": "#/components/schemas/SearchBookmark"
+            },
+            "type": "array"
+          },
+          "folders": {
+            "description": "The caller's own folders whose name contains the text, an exact name first, then a name that starts with it, then the rest; another member's folders are never in it",
+            "items": {
+              "$ref": "#/components/schemas/SearchFolder"
+            },
+            "type": "array"
+          },
+          "tags": {
+            "description": "The caller's own tags whose name contains the text, in the order of the folders; another member's tags are never in it",
+            "items": {
+              "$ref": "#/components/schemas/SearchTag"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "bookmarks",
+          "folders",
+          "tags"
+        ],
+        "type": "object"
+      },
+      "SearchTag": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "The tag's identifier",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "name": {
+            "description": "The tag's name, in the case it was entered in",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
         ],
         "type": "object"
       },
@@ -5605,6 +5836,17 @@
           },
           {
             "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "description": "Narrows the bookmarks to those the search of the palette finds, by their title, host, slug and description (the path of the URL is not searched): every word of it must be the start of a word of one of them, or of the slug, and a typo is matched only when no bookmark has the words. It is plain text, 1 to 100 characters after the whitespace around it is removed, and `&`, `|`, `!`, `:`, `*`, `%`, `_`, quotes and backslashes are never operators or wildcards. A text of fewer than three characters matches the start of the slug or of the title only. The sort, the keyset and the filters are kept, so the bookmarks are not ranked by relevance. Left out, the text does not filter",
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
             "name": "url",
             "required": false,
             "schema": {
@@ -5684,7 +5926,7 @@
             "name": "cursor",
             "required": false,
             "schema": {
-              "description": "The `nextCursor` of the previous page. It is valid only with the scope, filters and sort it was issued for, for the account and workspace that received it; any other cursor is refused with 400",
+              "description": "The `nextCursor` of the previous page. It is valid only with the scope, filters (the text query among them) and sort it was issued for, for the account and workspace that received it; any other cursor is refused with 400",
               "maxLength": 4096,
               "minLength": 1,
               "type": "string"
@@ -5740,7 +5982,7 @@
                 }
               }
             },
-            "description": "The query did not pass validation (an unknown parameter or sort, a boolean other than true or false, a folderId or a tag that is not an identifier, more than 10 tags, a limit outside 1 to 100), or the url is not a URL a bookmark can have"
+            "description": "The query did not pass validation (an unknown parameter or sort, a boolean other than true or false, a folderId or a tag that is not an identifier, more than 10 tags, a q that is empty or over 100 characters, a limit outside 1 to 100), or the url is not a URL a bookmark can have"
           },
           "429": {
             "content": {
@@ -5991,7 +6233,7 @@
                 }
               }
             },
-            "description": "The body did not pass validation (an unknown action, neither or both of ids and filter, no identifier or more than 1 000, a malformed identifier, a folder action without folderId or a tag action without tagIds, a folderId or tagIds on an action that takes none, more than 100 tags, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks. Nothing is written"
+            "description": "The body did not pass validation (an unknown action, neither or both of ids and filter, no identifier or more than 1 000, a malformed identifier, a folder action without folderId or a tag action without tagIds, a folderId or tagIds on an action that takes none, more than 100 tags, a filter q that is empty or over 100 characters, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks. Nothing is written"
           },
           "429": {
             "content": {
@@ -6106,7 +6348,7 @@
                 }
               }
             },
-            "description": "The body did not pass validation (an action other than add_tags, neither or both of ids and filter, no identifier or more than 1 000, no tag or more than 100, a malformed identifier, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks"
+            "description": "The body did not pass validation (an action other than add_tags, neither or both of ids and filter, no identifier or more than 1 000, no tag or more than 100, a malformed identifier, a filter q that is empty or over 100 characters, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks"
           },
           "429": {
             "content": {
@@ -6208,6 +6450,17 @@
           },
           {
             "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "description": "Narrows the bookmarks to those the search of the palette finds, by their title, host, slug and description (the path of the URL is not searched): every word of it must be the start of a word of one of them, or of the slug, and a typo is matched only when no bookmark has the words. It is plain text, 1 to 100 characters after the whitespace around it is removed, and `&`, `|`, `!`, `:`, `*`, `%`, `_`, quotes and backslashes are never operators or wildcards. A text of fewer than three characters matches the start of the slug or of the title only. The sort, the keyset and the filters are kept, so the bookmarks are not ranked by relevance. Left out, the text does not filter",
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
             "name": "url",
             "required": false,
             "schema": {
@@ -6302,7 +6555,7 @@
                 }
               }
             },
-            "description": "The query did not pass validation (an unknown parameter, a boolean other than true or false, a malformed folderId or tag, more than 10 tags), or the url is not a URL a bookmark can have"
+            "description": "The query did not pass validation (an unknown parameter, a boolean other than true or false, a malformed folderId or tag, more than 10 tags, a q that is empty or over 100 characters), or the url is not a URL a bookmark can have"
           },
           "429": {
             "content": {
@@ -8142,6 +8395,103 @@
         "x-slugbase-auth": "member",
         "x-slugbase-rate": "go",
         "x-slugbase-scope": "write"
+      }
+    },
+    "/api/v1/go/suggest": {
+      "get": {
+        "operationId": "suggestSlugs",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "prefix",
+            "required": true,
+            "schema": {
+              "description": "The start of the slugs to suggest. It is trimmed and lower-cased before it is judged and is plain text: `%`, `_` and `\\` are never wildcards, so a prefix that is empty, longer than a slug (64 characters) or outside the slug grammar suggests nothing, not an error",
+              "maxLength": 100,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GoSuggestions"
+                }
+              }
+            },
+            "description": "At most 10 bookmarks of the workspace whose slug starts with the prefix, that forward, are not plan-archived and that the caller can read, for the palette's go mode: the caller's own first and then in the order of their slugs. A bookmark that `POST /go/resolve` would not name for the caller (another member's that is not shared with the caller, one of another workspace, one that does not forward and an archived one) is never suggested, and a suggestion names no address. An empty prefix, and one that no slug can start with, give an empty list"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace: the account has none, or the workspace is being deleted"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The query did not pass validation (a missing or over-long prefix, or an unknown parameter)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Suggest the slugs that start with a prefix",
+        "tags": [
+          "go"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-rate": "go",
+        "x-slugbase-scope": "read"
       }
     },
     "/api/v1/instance/accounts": {
@@ -13387,6 +13737,125 @@
         "x-slugbase-rate": "public"
       }
     },
+    "/api/v1/search": {
+      "get": {
+        "operationId": "search",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "description": "The text to search for, 1 to 100 characters after the whitespace around it is removed. It is plain text: `&`, `|`, `!`, `:`, `*`, `%`, `_`, quotes and backslashes are never operators or wildcards. A text of fewer than three characters matches a bookmark by the start of its slug or its title only; a folder or a tag still matches it anywhere in its name",
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "types",
+            "required": false,
+            "schema": {
+              "description": "The types to search, a comma-separated list of bookmark, folder and tag. A type that is left out comes back as an empty list. All three when the parameter is left out",
+              "pattern": "^(?:bookmark|folder|tag)(?:,(?:bookmark|folder|tag))*$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "description": "The most results of each type to return, at most 20. Left out, a search returns 8 bookmarks, 4 folders and 4 tags",
+              "maximum": 20,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResults"
+                }
+              }
+            },
+            "description": "The matches grouped by type, each group at most `limit` long (8 bookmarks, 4 folders and 4 tags by default); a type that was not asked for, and a text that matches nothing, give empty lists"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace: the account has none, or the workspace is being deleted"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The query did not pass validation (a missing, blank or over-long q, a types list with a value other than bookmark, folder and tag, a limit outside 1 to 20, or an unknown parameter)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Search my bookmarks, folders and tags",
+        "tags": [
+          "search"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-rate": "read",
+        "x-slugbase-scope": "read"
+      }
+    },
     "/api/v1/session/active-workspace": {
       "put": {
         "operationId": "setActiveWorkspace",
@@ -15612,6 +16081,9 @@
     },
     {
       "name": "meta"
+    },
+    {
+      "name": "search"
     },
     {
       "name": "setup"
