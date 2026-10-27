@@ -2495,6 +2495,9 @@ export function generateTotpSecret(): Uint8Array;
 export const GO_OTHER_WORKSPACES_MAX = 20;
 
 // @public
+export const GO_SUGGEST_PREFIX_MAX_LENGTH = 64;
+
+// @public
 export type GoAccess = "owner" | "direct" | "team" | "folder";
 
 // @public
@@ -2737,6 +2740,58 @@ export interface GoStore {
         readonly accountId: string;
     }): Promise<boolean>;
     summaries(ids: readonly string[]): Promise<readonly GoBookmarkSummary[]>;
+}
+
+// @public (undocumented)
+export interface GoSuggestAsk {
+    readonly accountId: string;
+    readonly prefix: string;
+}
+
+// @public (undocumented)
+export interface GoSuggestDependencies {
+    // (undocumented)
+    readonly store: GoSuggestStore;
+}
+
+// @public
+export interface GoSuggestion {
+    // (undocumented)
+    readonly bookmarkId: string;
+    // (undocumented)
+    readonly host: string;
+    readonly owner: {
+        readonly accountId: string;
+        readonly displayName: string;
+    } | null;
+    readonly sharedVia: "direct" | "team" | "folder" | null;
+    // (undocumented)
+    readonly slug: string;
+    // (undocumented)
+    readonly title: string;
+}
+
+// @public
+export interface GoSuggestionRecord {
+    readonly access: GoAccess;
+    // (undocumented)
+    readonly bookmarkId: string;
+    readonly host: string;
+    readonly ownerId: string | null;
+    readonly ownerName: string | null;
+    // (undocumented)
+    readonly slug: string;
+    // (undocumented)
+    readonly title: string;
+}
+
+// @public (undocumented)
+export interface GoSuggestStore {
+    suggest(request: {
+        readonly prefix: string;
+        readonly accountId: string;
+        readonly limit: number;
+    }): Promise<readonly GoSuggestionRecord[]>;
 }
 
 // @public
@@ -4691,6 +4746,9 @@ export interface SlugUse {
     readonly othersUseCount: number;
     readonly takenByOwner: boolean;
 }
+
+// @public
+export function suggestSlugs(input: GoSuggestDependencies, ask: GoSuggestAsk): Promise<readonly GoSuggestion[]>;
 
 // @public
 export const TAG_LIST_TOTAL_CAP = 10000;

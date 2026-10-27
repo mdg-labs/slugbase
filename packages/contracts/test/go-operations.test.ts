@@ -3,9 +3,12 @@ import {
   GoChooseRequestSchema,
   GoResolutionSchema,
   GoSlugRequestSchema,
+  GoSuggestQuerySchema,
+  GoSuggestionsSchema,
   chooseSlug,
   operations,
   resolveSlug,
+  suggestSlugs,
 } from "../src/index.ts";
 
 // The go operations of doc 04 section 10.8: how a slug resolves for a member and how a member picks one of its candidates. Both are in the go rate
@@ -72,5 +75,35 @@ describe("the resolution", () => {
   it("names a bookmark by identifier, title, host, owner and how it is shared, and never an address", () => {
     expect(GoResolutionSchema.safeParse({ result: "single", bookmark: { ...CANDIDATE, url: "https://mail.example.com/" } }).success).toBe(false);
     expect(GoResolutionSchema.safeParse({ result: "single", bookmark: { ...CANDIDATE, sharedVia: "link" } }).success).toBe(false);
+  });
+});
+
+describe("the suggestions", () => {
+  const SUGGESTION = { slug: "mail", bookmarkId: UUID, title: "Mail", host: "mail.example.com", owner: null, sharedVia: null };
+
+  it("are GET /api/v1/go/suggest, a member's operation of the go bucket that a token may read", () => {
+    expect(suggestSlugs).toMatchObject({ method: "get", path: "/api/v1/go/suggest", operationId: "suggestSlugs", tag: "go", auth: "member", rate: "go", scope: "read" });
+    expect(operations).toContain(suggestSlugs);
+    expect(Object.keys(suggestSlugs.responses).map(Number)).toEqual(expect.arrayContaining([200, 401, 404, 422, 429, 503]));
+  });
+
+  it("take a prefix of any text, which the server judges, an empty one included, and nothing else", () => {
+    expect(GoSuggestQuerySchema.safeParse({ prefix: "ma" }).success).toBe(true);
+    expect(GoSuggestQuerySchema.safeParse({ prefix: "" }).success).toBe(true);
+    expect(GoSuggestQuerySchema.safeParse({ prefix: "100%_\\" }).success).toBe(true);
+    expect(GoSuggestQuerySchema.safeParse({}).success).toBe(false);
+    expect(GoSuggestQuerySchema.safeParse({ prefix: "a".repeat(101) }).success).toBe(false);
+    expect(GoSuggestQuerySchema.safeParse({ prefix: "ma", limit: 5 }).success).toBe(false);
+  });
+
+  it("answer at most ten suggestions, each with exactly its fields and never an address", () => {
+    expect(GoSuggestionsSchema.safeParse({ suggestions: [] }).success).toBe(true);
+    expect(GoSuggestionsSchema.safeParse({ suggestions: Array.from({ length: 10 }, () => SUGGESTION) }).success).toBe(true);
+    expect(GoSuggestionsSchema.safeParse({ suggestions: Array.from({ length: 11 }, () => SUGGESTION) }).success).toBe(false);
+    expect(GoSuggestionsSchema.safeParse({ suggestions: [{ ...SUGGESTION, owner: { accountId: UUID, displayName: "Ann" }, sharedVia: "team" }] }).success).toBe(true);
+    expect(GoSuggestionsSchema.safeParse({ suggestions: [{ ...SUGGESTION, url: "https://mail.example.com/" }] }).success).toBe(false);
+    expect(GoSuggestionsSchema.safeParse({ suggestions: [{ ...SUGGESTION, sharedVia: "link" }] }).success).toBe(false);
+    expect(GoSuggestionsSchema.safeParse({ suggestions: [{ slug: "mail" }] }).success).toBe(false);
+    expect(GoSuggestionsSchema.safeParse([SUGGESTION]).success).toBe(false);
   });
 });

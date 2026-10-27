@@ -1175,6 +1175,20 @@ export interface ComponentTypes {
             candidates: ComponentTypes["schemas"]["GoCandidate"][];
             result: "multiple";
         };
+        GoSuggestion: {
+            bookmarkId: string;
+            host: string;
+            owner: {
+                accountId: string;
+                displayName: string;
+            } | null;
+            sharedVia: ("direct" | "team" | "folder") | null;
+            slug: string;
+            title: string;
+        };
+        GoSuggestions: {
+            suggestions: ComponentTypes["schemas"]["GoSuggestion"][];
+        };
         GoWorkspace: {
             id: string;
             name: string;
@@ -3207,6 +3221,9 @@ export const GO_RESOLUTIONS: readonly ["none", "preferred", "single", "multiple"
 // @public (undocumented)
 export const GO_SHARED_VIA: readonly ["direct", "team", "folder"];
 
+// @public
+export const GO_SUGGEST_MAX = 10;
+
 // @public (undocumented)
 export const GoCandidateSchema: z.ZodObject<{
     id: z.ZodUUID;
@@ -3327,6 +3344,47 @@ export const GoResolutionSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
 // @public (undocumented)
 export const GoSlugRequestSchema: z.ZodObject<{
     slug: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const GoSuggestionSchema: z.ZodObject<{
+    slug: z.ZodString;
+    bookmarkId: z.ZodUUID;
+    title: z.ZodString;
+    host: z.ZodString;
+    owner: z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+    }, z.core.$strict>>;
+    sharedVia: z.ZodNullable<z.ZodEnum<{
+        direct: "direct";
+        team: "team";
+        folder: "folder";
+    }>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const GoSuggestionsSchema: z.ZodObject<{
+    suggestions: z.ZodArray<z.ZodObject<{
+        slug: z.ZodString;
+        bookmarkId: z.ZodUUID;
+        title: z.ZodString;
+        host: z.ZodString;
+        owner: z.ZodNullable<z.ZodObject<{
+            accountId: z.ZodUUID;
+            displayName: z.ZodString;
+        }, z.core.$strict>>;
+        sharedVia: z.ZodNullable<z.ZodEnum<{
+            direct: "direct";
+            team: "team";
+            folder: "folder";
+        }>>;
+    }, z.core.$strict>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const GoSuggestQuerySchema: z.ZodObject<{
+    prefix: z.ZodString;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -11347,6 +11405,69 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    suggestSlugs: {
+        parameters: {
+            query: {
+                prefix: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["GoSuggestions"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     transferWorkspaceOwnership: {
         parameters: {
             query?: never;
@@ -12657,6 +12778,23 @@ export interface paths {
         get?: never;
         put?: never;
         post: OperationTypes["resolveSlug"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/go/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["suggestSlugs"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -14973,6 +15111,47 @@ export const startOidcSignIn: {
         }>;
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const suggestSlugs: {
+    readonly method: "get";
+    readonly path: "/api/v1/go/suggest";
+    readonly operationId: "suggestSlugs";
+    readonly tag: "go";
+    readonly summary: "Suggest the slugs that start with a prefix";
+    readonly auth: "member";
+    readonly rate: "go";
+    readonly scope: "read";
+    readonly request: {
+        readonly query: z.ZodObject<{
+            prefix: z.ZodString;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        suggestions: z.ZodArray<z.ZodObject<{
+        slug: z.ZodString;
+        bookmarkId: z.ZodUUID;
+        title: z.ZodString;
+        host: z.ZodString;
+        owner: z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        }, z.core.$strict>>;
+        sharedVia: z.ZodNullable<z.ZodEnum<{
+        direct: "direct";
+        team: "team";
+        folder: "folder";
+        }>>;
+        }, z.core.$strict>>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 401: ProblemResponse;
+        readonly 404: ProblemResponse;
         readonly 422: ProblemResponse;
         readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;

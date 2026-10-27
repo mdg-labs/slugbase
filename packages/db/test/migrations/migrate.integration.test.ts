@@ -791,6 +791,31 @@ describe("an upgrade from the level before the search migrations", () => {
   }, 120_000);
 });
 
+describe("an upgrade from the level before the go suggestion migration", () => {
+  const WORKSPACE = "0190a000-0000-7000-8000-000000000011";
+  const ACCOUNT = "0190a000-0000-7000-8000-000000000012";
+
+  it("creates the system operation in a fresh session, and the function answers in a transaction of the application role", async () => {
+    const { name, owner } = await createDatabase();
+    await migrate({ url: migratorUrl(name), chains: [] });
+    const journal = JSON.parse(readFileSync(join(CE_CHAIN.folder, "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
+    const suggest = journal.entries.filter((entry) => entry.tag.includes("add_go_suggest"));
+    expect(suggest).toHaveLength(1);
+    await owner.unsafe("DROP FUNCTION public.sys_go_suggest(text)");
+    await owner.unsafe(`DELETE FROM drizzle.migrations_core WHERE created_at IN (${suggest.map((entry) => String(entry.when)).join(", ")})`);
+
+    const result = await migrate({ url: migratorUrl(name), chains: [] });
+
+    expect(result.applied.map((step) => step.tag)).toEqual(suggest.map((entry) => entry.tag));
+    const rows = await owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_app`;
+      await tx`SELECT set_config('app.workspace_id', ${WORKSPACE}, true), set_config('app.account_id', ${ACCOUNT}, true)`;
+      return tx`SELECT * FROM sys_go_suggest('abcd')`;
+    });
+    expect(rows).toHaveLength(0);
+  }, 120_000);
+});
+
 describe("errors never carry the connection string or the password (T7)", () => {
   const password = `pw-${randomBytes(6).toString("hex")}`;
 

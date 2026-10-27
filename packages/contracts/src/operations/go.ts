@@ -14,6 +14,47 @@ export const GO_RESOLUTIONS = ["none", "preferred", "single", "multiple"] as con
 
 export const GO_SHARED_VIA = ["direct", "team", "folder"] as const;
 
+/** The most suggestions `GET /go/suggest` returns. */
+export const GO_SUGGEST_MAX = 10;
+
+export const GoSuggestQuerySchema = z.strictObject({
+  prefix: z
+    .string()
+    .max(100)
+    .describe(
+      "The start of the slugs to suggest. It is trimmed and lower-cased before it is judged and is plain text: `%`, `_` and `\\` are never wildcards, so a prefix that is empty, longer than a slug (64 characters) or outside the slug grammar suggests nothing, not an error",
+    ),
+});
+
+export const GoSuggestionSchema = z
+  .strictObject({
+    slug: z.string().describe("The bookmark's slug, which starts with the prefix"),
+    bookmarkId: z.uuid().describe("The bookmark's identifier"),
+    title: z.string().describe("The bookmark's title"),
+    host: z.string().describe("The host of the bookmark's destination, never the whole address"),
+    owner: z
+      .strictObject({
+        accountId: z.uuid().describe("The owner's account"),
+        displayName: z.string().describe("The owner's display name, as a member of the workspace sees it"),
+      })
+      .nullable()
+      .describe("Who owns a bookmark that is shared with the caller; null for the caller's own bookmark and for one whose owner has left the workspace"),
+    sharedVia: z
+      .enum(GO_SHARED_VIA)
+      .nullable()
+      .describe("How the bookmark is shared with the caller: directly, through a team or through a shared folder; null for the caller's own bookmark"),
+  })
+  .meta({ id: "GoSuggestion" });
+
+export const GoSuggestionsSchema = z
+  .strictObject({
+    suggestions: z
+      .array(GoSuggestionSchema)
+      .max(GO_SUGGEST_MAX)
+      .describe("The slugs that start with the prefix, at most 10: the caller's own first, then in the order of their slugs"),
+  })
+  .meta({ id: "GoSuggestions" });
+
 export const GoSlugRequestSchema = z.strictObject({
   slug: z
     .string()
@@ -136,6 +177,29 @@ export const chooseSlug = defineOperation({
       "The slug has no such bookmark among its current candidates for the caller (slug_not_found): another member's bookmark that is not shared with the caller, a bookmark of another workspace, one that does not forward, a plan-archived one, one with another slug, an unknown identifier and a slug outside the grammar are answered alike, and nothing is remembered or counted; or the request acts in no workspace",
     ),
     422: problemResponse("The body did not pass validation, or the stored URL is not an http or https URL (url_not_allowed); nothing is remembered or counted"),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const suggestSlugs = defineOperation({
+  method: "get",
+  path: "/api/v1/go/suggest",
+  operationId: "suggestSlugs",
+  tag: "go",
+  summary: "Suggest the slugs that start with a prefix",
+  auth: "member",
+  rate: "go",
+  scope: "read",
+  request: { query: GoSuggestQuerySchema },
+  responses: {
+    200: jsonResponse(
+      "At most 10 bookmarks of the workspace whose slug starts with the prefix, that forward, are not plan-archived and that the caller can read, for the palette's go mode: the caller's own first and then in the order of their slugs. A bookmark that `POST /go/resolve` would not name for the caller (another member's that is not shared with the caller, one of another workspace, one that does not forward and an archived one) is never suggested, and a suggestion names no address. An empty prefix, and one that no slug can start with, give an empty list",
+      GoSuggestionsSchema,
+    ),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),
+    422: problemResponse("The query did not pass validation (a missing or over-long prefix, or an unknown parameter)"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },

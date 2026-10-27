@@ -399,6 +399,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/go/suggest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Suggest the slugs that start with a prefix */
+        get: operations["suggestSlugs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/instance/accounts": {
         parameters: {
             query?: never;
@@ -2066,6 +2083,35 @@ export interface components {
              * @constant
              */
             result: "multiple";
+        };
+        GoSuggestion: {
+            /**
+             * Format: uuid
+             * @description The bookmark's identifier
+             */
+            bookmarkId: string;
+            /** @description The host of the bookmark's destination, never the whole address */
+            host: string;
+            /** @description Who owns a bookmark that is shared with the caller; null for the caller's own bookmark and for one whose owner has left the workspace */
+            owner: {
+                /**
+                 * Format: uuid
+                 * @description The owner's account
+                 */
+                accountId: string;
+                /** @description The owner's display name, as a member of the workspace sees it */
+                displayName: string;
+            } | null;
+            /** @description How the bookmark is shared with the caller: directly, through a team or through a shared folder; null for the caller's own bookmark */
+            sharedVia: ("direct" | "team" | "folder") | null;
+            /** @description The bookmark's slug, which starts with the prefix */
+            slug: string;
+            /** @description The bookmark's title */
+            title: string;
+        };
+        GoSuggestions: {
+            /** @description The slugs that start with the prefix, at most 10: the caller's own first, then in the order of their slugs */
+            suggestions: components["schemas"]["GoSuggestion"][];
         };
         GoWorkspace: {
             /**
@@ -5436,6 +5482,75 @@ export interface operations {
                 };
             };
             /** @description The body did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    suggestSlugs: {
+        parameters: {
+            query: {
+                prefix: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description At most 10 bookmarks of the workspace whose slug starts with the prefix, that forward, are not plan-archived and that the caller can read, for the palette's go mode: the caller's own first and then in the order of their slugs. A bookmark that `POST /go/resolve` would not name for the caller (another member's that is not shared with the caller, one of another workspace, one that does not forward and an archived one) is never suggested, and a suggestion names no address. An empty prefix, and one that no slug can start with, give an empty list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GoSuggestions"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The query did not pass validation (a missing or over-long prefix, or an unknown parameter) */
             422: {
                 headers: {
                     [name: string]: unknown;

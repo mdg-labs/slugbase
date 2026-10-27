@@ -111,6 +111,7 @@ export const systemOperations: readonly string[] = [
   "sys_flush_open_counts",
   "sys_go_other_workspaces",
   "sys_search",
+  "sys_go_suggest",
 ];
 
 /**

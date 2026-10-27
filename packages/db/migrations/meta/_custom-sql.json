@@ -1,4 +1,4 @@
 {
-  "sha256": "e880ccc50e863135a4d89d1c9d173774db3289e7475c1c966be184ad71c9495d",
-  "migration": "20261027102232_index_bookmark_search"
+  "sha256": "1fcaa6cb5ab626a35704a4f605308f865c084d18f1af06db585e57d9a5ef4268",
+  "migration": "20261027111355_add_go_suggest"
 }

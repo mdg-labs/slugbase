@@ -24,6 +24,7 @@ import type { FolderFilingStore } from '@slugbase/core';
 import type { FolderStore } from '@slugbase/core';
 import type { GoPreferenceStore } from '@slugbase/core';
 import type { GoStore } from '@slugbase/core';
+import type { GoSuggestStore } from '@slugbase/core';
 import { InferInsertModel } from 'drizzle-orm';
 import { InferSelectModel } from 'drizzle-orm';
 import { InstanceAccount } from '@slugbase/core';
@@ -564,7 +565,7 @@ export type FolderRepository = FolderStore & FolderFilingStore;
 export function folderRepository(tx: TenantTx): FolderRepository;
 
 // @public (undocumented)
-export type GoRepository = GoStore & GoPreferenceStore;
+export type GoRepository = GoStore & GoPreferenceStore & GoSuggestStore;
 
 // @public
 export function goRepository(tx: TenantTx): GoRepository;

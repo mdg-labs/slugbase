@@ -194,6 +194,7 @@ describe("the shipped chain", () => {
       "sys_flush_open_counts",
       "sys_go_other_workspaces",
       "sys_search",
+      "sys_go_suggest",
     ]);
     expect(internalSystemOperations).toEqual(["sys_create_workspace"]);
     expect(internalSystemOperations.every((name) => systemOperations.includes(name))).toBe(true);
