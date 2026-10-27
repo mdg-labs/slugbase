@@ -41,6 +41,8 @@ a second, for `--duration` seconds each):
 - `search`: `GET /api/v1/search` for terms found in titles, slugs, tags and folders.
 
 The thresholds are on `http_req_waiting`, k6's time to the first byte, which is the server time. Every list shape has a threshold of its own, so a
-regression names the sort and the page. The server runs with its rate limits raised to the highest value, so that the run measures the server
+regression names the sort and the page. `budgets.js` holds the sorts, the pages and the limits once: `scenarios.js` makes the thresholds from it and
+`run.mjs` reports every one of them, so a threshold that is crossed is always an exceeded budget (exit status 10); only a failed `checks`
+threshold, a response that was not what a scenario asked for, ends the run as failed. The server runs with its rate limits raised to the highest value, so that the run measures the server
 and not its limiter; a token is still taken on every request. It runs with `NODE_ENV=development` because the harness's databases use the
 development role passwords that production refuses.

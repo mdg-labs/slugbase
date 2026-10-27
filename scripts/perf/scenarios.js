@@ -5,6 +5,7 @@
 // k6 waits for the first byte of the answer (http_req_waiting): /go p95 under 30 ms, list and search p95 under 100 ms.
 import http from "k6/http";
 import { check, fail } from "k6";
+import { PAGES, SORTS, budgetThresholds } from "./budgets.js";
 
 const BASE_URL = __ENV.BASE_URL;
 const ORIGIN = __ENV.APP_ORIGIN;
@@ -16,9 +17,6 @@ const GAP_SECONDS = 5;
 // A page of 48 is the default of the API and of the web app; the deep page is the 400th of them, row 19 152 of 50 000.
 const PAGE_SIZE = 48;
 const DEEP_PAGE = Number(__ENV.DEEP_PAGE || 400);
-const SORTS = ["recent", "oldest", "title_asc", "title_desc", "most_used", "recently_opened"];
-const PAGES = ["first", "deep"];
-const BUDGETS_MS = { go: 30, list: 100, search: 100 };
 
 const fixtures = JSON.parse(open("/data/fixtures.json"));
 
@@ -42,15 +40,8 @@ function scenario(index, exec, tags) {
 const thresholds = {
   // A request that did not answer as asked would be fast and wrong.
   checks: ["rate==1"],
-  "http_req_waiting{kind:go}": [`p(95)<${BUDGETS_MS.go}`],
-  "http_req_waiting{kind:list}": [`p(95)<${BUDGETS_MS.list}`],
-  "http_req_waiting{kind:search}": [`p(95)<${BUDGETS_MS.search}`],
+  ...budgetThresholds(),
 };
-for (const sort of SORTS) {
-  for (const page of PAGES) {
-    thresholds[`http_req_waiting{kind:list,sort:${sort},page:${page}}`] = [`p(95)<${BUDGETS_MS.list}`];
-  }
-}
 
 export const options = {
   setupTimeout: "600s",

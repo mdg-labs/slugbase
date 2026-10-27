@@ -16,6 +16,7 @@ import { createServer } from "node:net";
 import { constants, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
+import { budgets as budgetList } from "./budgets.js";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 // The k6 image is pinned by tag and by digest, so a re-run measures the same tool.
@@ -27,11 +28,8 @@ const DEFAULT_SERVER_URL = "postgres://slugbase:slugbase@127.0.0.1:54329/slugbas
 // The limits are raised so that the measurement is of the server and not of its rate limiter answering 429; a token is still taken on
 // every request.
 const UNLIMITED = "9999999/sec";
-const BUDGETS = [
-  { name: "go", metric: "http_req_waiting{kind:go}", limitMs: 30 },
-  { name: "list", metric: "http_req_waiting{kind:list}", limitMs: 100 },
-  { name: "search", metric: "http_req_waiting{kind:search}", limitMs: 100 },
-];
+// Every budget the scenarios put a threshold on (budgets.js), so that k6 ending with 99 is explained by an entry that is not ok.
+const BUDGETS = budgetList();
 
 const { values: args } = parseArgs({
   options: {
