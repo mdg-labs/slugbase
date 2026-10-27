@@ -49,4 +49,22 @@ describe("keepTabInside", () => {
     expect(fireEvent.keyDown(summary, { key: "Tab" })).toBe(true);
     expect(document.activeElement).toBe(summary);
   });
+
+  it("wraps between the stops the browser reaches first and last when a positive tabindex reorders them", () => {
+    render(
+      <Popup>
+        <button type="button">Cancel</button>
+        <button type="button">Save</button>
+        <input aria-label="Name" tabIndex={1} />
+      </Popup>,
+    );
+    const name = screen.getByLabelText("Name");
+    const save = screen.getByRole("button", { name: "Save" });
+    name.focus();
+
+    expect(fireEvent.keyDown(name, { key: "Tab", shiftKey: true })).toBe(false);
+    expect(document.activeElement).toBe(save);
+    expect(fireEvent.keyDown(save, { key: "Tab" })).toBe(false);
+    expect(document.activeElement).toBe(name);
+  });
 });

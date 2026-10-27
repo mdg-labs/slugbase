@@ -35,7 +35,12 @@ function sameGroup(a: HTMLInputElement, b: HTMLInputElement): boolean {
   return a.name === b.name && a.form === b.form;
 }
 
-/** The elements of a container that Tab stops on, in document order; a radio group is one stop, as the browser makes it. */
+/** The browser's Tab order: a positive tabindex first, by its value, then the rest, each in document order. */
+function tabOrder(element: HTMLElement): number {
+  return element.tabIndex > 0 ? element.tabIndex : Number.MAX_SAFE_INTEGER;
+}
+
+/** The elements of a container that Tab stops on, in Tab order; a radio group is one stop, as the browser makes it. */
 function tabStops(container: HTMLElement): HTMLElement[] {
   const candidates = Array.from(container.querySelectorAll<HTMLElement>(CANDIDATES)).filter(
     (element) =>
@@ -45,13 +50,15 @@ function tabStops(container: HTMLElement): HTMLElement[] {
       !(element instanceof HTMLInputElement && element.type === "hidden") &&
       !isHidden(element, container),
   );
-  return candidates.filter((element) => {
-    if (!isRadio(element)) {
-      return true;
-    }
-    const group = candidates.filter((other): other is HTMLInputElement => isRadio(other) && sameGroup(other, element));
-    return (group.find((radio) => radio.checked) ?? group[0]) === element;
-  });
+  return candidates
+    .filter((element) => {
+      if (!isRadio(element)) {
+        return true;
+      }
+      const group = candidates.filter((other): other is HTMLInputElement => isRadio(other) && sameGroup(other, element));
+      return (group.find((radio) => radio.checked) ?? group[0]) === element;
+    })
+    .sort((a, b) => tabOrder(a) - tabOrder(b));
 }
 
 /**
