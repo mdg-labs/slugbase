@@ -44,9 +44,44 @@
     }
   },
   "home": {
+    "title": "Willkommen bei {name}",
+    "tagline": "Lesezeichen mit kurzen, privaten Slugs.",
+    "loading": "Startseite wird geladen",
+    "loadFailed": {
+      "title": "Die Startseite konnte nicht geladen werden",
+      "description": "Versuche es gleich noch einmal."
+    },
+    "refreshFailed": "Die Startseite konnte nicht aktualisiert werden und ist möglicherweise veraltet.",
+    "retry": "Erneut versuchen",
+    "search": {
+      "label": "Lesezeichen, Ordner und Tags durchsuchen"
+    },
+    "counts": {
+      "label": "Gesamtzahlen",
+      "bookmarks": "Lesezeichen",
+      "folders": "Ordner",
+      "tags": "Tags",
+      "sharedWithYou": "Mit dir geteilt"
+    },
+    "quickAccess": {
+      "title": "Schnellzugriff",
+      "label": "Am häufigsten genutzte Slugs",
+      "empty": "Hier erscheinen die Lesezeichen mit Slug, die du am häufigsten öffnest."
+    },
+    "pinned": {
+      "title": "Angeheftet",
+      "label": "Angeheftete Lesezeichen",
+      "viewAll": "Alle anzeigen →",
+      "empty": "Hefte ein Lesezeichen an, um es hier zu behalten."
+    },
+    "tags": {
+      "title": "Häufigste Tags",
+      "empty": "Hier erscheinen die Tags, die du Lesezeichen gibst."
+    },
     "empty": {
-      "title": "Willkommen bei {name}",
-      "description": "Lesezeichen mit kurzen, privaten Slugs."
+      "title": "Speichere dein erstes Lesezeichen",
+      "description": "Gib einem Lesezeichen einen kurzen, privaten Slug und öffne es von überall über /go/.",
+      "forwarding": "Browser einrichten"
     }
   },
   "bookmarks": {

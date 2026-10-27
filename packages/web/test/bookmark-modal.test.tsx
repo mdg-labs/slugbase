@@ -143,7 +143,8 @@ describe("creating a bookmark", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("opens from the New bookmark button of the top bar, saves the address and the title, and closes", async () => {
     use({ fixtures: { createBookmark: BOOKMARK } });
     await openApp("/");
-    await press(await screen.findByRole("button", { name: "New bookmark" }));
+    // The Home screen of an empty workspace offers the same button in its empty state.
+    await press(within(await screen.findByRole("banner")).getByRole("button", { name: "New bookmark" }));
     const dialog = await screen.findByRole("dialog", { name: "New bookmark" });
     expect(window.location.search).toBe("?new=1");
 

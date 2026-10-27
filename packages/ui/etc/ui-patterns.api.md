@@ -806,6 +806,19 @@ export interface RowActionsProps {
     label: string;
 }
 
+// @public
+export function SearchEntry(input: SearchEntryProps): ReactElement;
+
+// @public (undocumented)
+export interface SearchEntryProps {
+    label: string;
+    // (undocumented)
+    onClick: () => void;
+    // (undocumented)
+    ref?: Ref<HTMLButtonElement>;
+    shortcut: readonly string[];
+}
+
 export { SearchIcon }
 
 // @public
@@ -1105,6 +1118,18 @@ export { TableIcon }
 export { TagIcon }
 
 // @public
+export function TagLink(input: TagLinkProps): ReactElement;
+
+// @public (undocumented)
+export interface TagLinkProps {
+    // (undocumented)
+    className?: string;
+    count: string;
+    link: ReactElement;
+    name: string;
+}
+
+// @public
 export function TextareaField(input: TextareaFieldProps): ReactElement;
 
 // @public (undocumented)
@@ -1134,6 +1159,29 @@ export interface ThemeToggleProps {
     onToggle?: (next: ResolvedTheme) => void;
     switchToDark: string;
     switchToLight: string;
+}
+
+// @public
+export function TileGrid(input: TileGridProps): ReactElement;
+
+// @public (undocumented)
+export interface TileGridProps {
+    children: ReactNode;
+    label: string;
+}
+
+// @public
+export function TileLink(input: TileLinkProps): ReactElement;
+
+// @public (undocumented)
+export interface TileLinkProps {
+    children?: ReactNode;
+    hint?: string;
+    href?: string;
+    monogram: string;
+    onOpen?: () => void;
+    subtitle?: string;
+    title: string;
 }
 
 // @public

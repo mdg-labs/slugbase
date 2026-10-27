@@ -54,8 +54,9 @@ describe("the mounted slots without extensions", () => {
 
     await screen.findByRole("main");
     const main = screen.getByRole("main");
-    expect(main.firstElementChild?.getAttribute("data-slot")).toBe("empty");
     expect(main.children).toHaveLength(1);
+    // With no extension dashboard.top adds nothing: the page opens with its heading.
+    expect(main.firstElementChild?.firstElementChild?.querySelector("h1")).not.toBeNull();
     const footer = container.querySelector("[data-slot='sidebar-footer']");
     expect(footer?.children).toHaveLength(1);
     expect(footer?.firstElementChild?.getAttribute("data-slot")).toBe("sidebar-menu");

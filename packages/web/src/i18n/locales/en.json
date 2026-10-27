@@ -44,9 +44,44 @@
     }
   },
   "home": {
+    "title": "Welcome to {name}",
+    "tagline": "Bookmarks with short, private slugs.",
+    "loading": "Loading your home screen",
+    "loadFailed": {
+      "title": "The home screen could not be loaded",
+      "description": "Try again in a moment."
+    },
+    "refreshFailed": "The home screen could not be refreshed, so it may be out of date.",
+    "retry": "Try again",
+    "search": {
+      "label": "Search bookmarks, folders and tags"
+    },
+    "counts": {
+      "label": "Totals",
+      "bookmarks": "Bookmarks",
+      "folders": "Folders",
+      "tags": "Tags",
+      "sharedWithYou": "Shared with you"
+    },
+    "quickAccess": {
+      "title": "Quick access",
+      "label": "Most used slugs",
+      "empty": "The bookmarks with a slug that you open most appear here."
+    },
+    "pinned": {
+      "title": "Pinned",
+      "label": "Pinned bookmarks",
+      "viewAll": "View all →",
+      "empty": "Pin a bookmark to keep it here."
+    },
+    "tags": {
+      "title": "Most used tags",
+      "empty": "The tags you put on bookmarks appear here."
+    },
     "empty": {
-      "title": "Welcome to {name}",
-      "description": "Bookmarks with short, private slugs."
+      "title": "Save your first bookmark",
+      "description": "Give a bookmark a short, private slug and open it from anywhere through /go/.",
+      "forwarding": "Set up your browser"
     }
   },
   "bookmarks": {
