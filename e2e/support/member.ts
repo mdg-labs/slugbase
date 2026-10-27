@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { expect, type APIResponse, type PlaywrightWorkerArgs } from "@playwright/test";
 import { appOrigin, STORAGE_STATE } from "./environment.ts";
 import { invitationLink, waitForMail } from "./mailpit.ts";
+import { READY_TIMEOUT_MS } from "./member-shared.ts";
 
 // A member of the journeys' own. The owner of the instance signed in with a password nobody keeps, and the journeys that read the
 // owner's language or theme queue for the lock of the account's preferences (support/account-preferences.ts), so a journey that does not
@@ -16,8 +17,6 @@ type Playwright = PlaywrightWorkerArgs["playwright"];
 
 const NO_SESSION = { cookies: [], origins: [] };
 
-/** How long a journey waits for the one that accepts the invitation to keep the session. */
-const READY_TIMEOUT_MS = 60_000;
 const POLL_MS = 100;
 
 async function expectStatus(response: APIResponse, status: number, what: string): Promise<void> {

@@ -7,6 +7,7 @@ import { appOrigin } from "../support/environment.ts";
 import { WORKSPACE_NAME } from "../support/instance.ts";
 import { tabTo, waitForInitialFocus } from "../support/keyboard.ts";
 import { ensureSharedMember, sharedMemberState } from "../support/member.ts";
+import { SHARED_MEMBER_HOOK_TIMEOUT_MS } from "../support/member-shared.ts";
 import { expectHighlighted, openPaletteWithShortcut, paletteDialog, paletteGroup, paletteInput } from "../support/palette.ts";
 import { expect, test } from "../support/test.ts";
 
@@ -102,6 +103,8 @@ for (const { name, viewport } of [
       playwright.request.newContext({ baseURL: appOrigin(), ignoreHTTPSErrors: true, storageState: sharedMemberState("palette") });
 
     test.beforeAll(async ({ playwright }) => {
+      // The hook provisions the member or waits for the journey that does, which takes longer than the 30 seconds of the default timeout.
+      test.setTimeout(SHARED_MEMBER_HOOK_TIMEOUT_MS);
       destination = await startDestination();
       await ensureSharedMember(playwright, "palette");
       const member = await asMember(playwright);

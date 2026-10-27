@@ -2,7 +2,8 @@
 // e2e/with-stack.sh): every mail of the server and the worker lands there, whoever it is addressed to.
 
 const POLL_MS = 500;
-const WAIT_MS = 30_000;
+/** How long `waitForMail` waits for a mail to reach Mailpit. */
+export const MAIL_WAIT_MS = 30_000;
 
 export interface Mail {
   readonly subject: string;
@@ -56,19 +57,19 @@ async function mailOf(base: string, id: string): Promise<Mail> {
 }
 
 /**
- * Waits for the first mail addressed to `address`, at most 30 seconds, and returns the newest one. A
+ * Waits for the first mail addressed to `address`, at most `MAIL_WAIT_MS`, and returns the newest one. A
  * journey uses an address of its own, so the mail found is the one it caused; none arriving is an error,
  * not an empty result.
  */
 export async function waitForMail(address: string, base: string = mailpitUrl()): Promise<Mail> {
-  const deadline = Date.now() + WAIT_MS;
+  const deadline = Date.now() + MAIL_WAIT_MS;
   for (;;) {
     const [newest] = await idsOf(base, address);
     if (newest !== undefined) {
       return mailOf(base, newest);
     }
     if (Date.now() >= deadline) {
-      throw new Error(`no mail for ${address} reached Mailpit within ${String(WAIT_MS / 1000)} seconds`);
+      throw new Error(`no mail for ${address} reached Mailpit within ${String(MAIL_WAIT_MS / 1000)} seconds`);
     }
     await new Promise((resolve) => setTimeout(resolve, POLL_MS));
   }
