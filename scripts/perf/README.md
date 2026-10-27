@@ -26,7 +26,8 @@ The exit status is 0 when every budget holds, 10 when one is exceeded and 1 when
 instance admin owns eight in ten), 2 000 further workspaces with an owner and ten bookmarks each. About 12 % of the rows have a slug (85 % of
 those forward), 40 % are tagged and 35 % filed in a folder. `packages/testing/src/seed/perf.ts` writes it. The seed takes the handle of a
 database that the test harness created and nothing else, so it cannot be pointed at another database: it refuses any name other than
-`test_` and 16 hex digits, a server that is not on this machine, a handle that is not connected to the database it names, and a database
+`test_` and 16 hex digits, a server that is neither on this machine (a loopback host) nor the host of the server the harness is
+configured with (`SLUGBASE_TEST_PG_URL`, which CI reaches by its service name), a handle that is not connected to the database it names, and a database
 that already has an account. It then runs `VACUUM (ANALYZE)` so that the planner knows the data.
 
 ## The scenarios

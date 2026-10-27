@@ -164,6 +164,7 @@ async function main() {
   const started = Date.now();
   const prepared = preparePerfInstance({
     serverUrl,
+    harnessUrl: process.env.SLUGBASE_TEST_PG_URL,
     path: process.env.PATH ?? "",
     signal: abort.signal,
     ...(args.bookmarks === undefined ? {} : { bookmarks: Number(args.bookmarks) }),

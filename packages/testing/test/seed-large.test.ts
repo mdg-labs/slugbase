@@ -125,17 +125,35 @@ describe("the guard of the large instance", () => {
   });
 
   it.each(["postgres://u:p@db.example.com:5432/postgres", "postgres://u:p@10.0.0.5/postgres", "postgres://u:p@127.0.0.1.example.com/postgres", "https://127.0.0.1/", "not a url"])(
-    "refuses the server %j",
+    "refuses the server %j when the harness names no server",
     (url) => {
-      expect(() => perfServer(url, "")).toThrow(PerfSeedError);
+      expect(() => perfServer(url, "", "")).toThrow(PerfSeedError);
     },
   );
+
+  it.each([
+    ["postgres://u:p@db.example.com:5432/postgres", "postgres://u:p@postgres:5432/postgres"],
+    ["postgres://u:p@postgres/postgres", "postgres://u:p@db.example.com/postgres"],
+    ["postgres://u:p@10.0.0.5/postgres", "not a url"],
+    ["postgres://u:p@db.example.com/postgres", "https://db.example.com/"],
+    ["postgres://u:p@postgres.example.com/postgres", "postgres://u:p@postgres/postgres"],
+  ])("refuses the server %j when the harness names another host, %j", (url, harness) => {
+    expect(() => perfServer(url, "", harness)).toThrow(PerfSeedError);
+  });
 
   it.each([
     ["postgres://u:p@127.0.0.1:54329/postgres", { host: "127.0.0.1", port: 54329 }],
     ["postgres://u:p@localhost/postgres", { host: "localhost", port: 5432 }],
     ["postgresql://u:p@[::1]:6543/postgres", { host: "::1", port: 6543 }],
   ])("accepts the local server %j", (url, expected) => {
-    expect(perfServer(url, "/usr/bin")).toEqual({ ...expected, path: "/usr/bin" });
+    expect(perfServer(url, "/usr/bin", "")).toEqual({ ...expected, path: "/usr/bin" });
+    expect(perfServer(url, "/usr/bin", "postgres://u:p@postgres/postgres")).toEqual({ ...expected, path: "/usr/bin" });
+  });
+
+  it.each([
+    ["postgres://u:p@postgres:5432/postgres", "postgres://u:p@postgres:5432/postgres", { host: "postgres", port: 5432 }],
+    ["postgresql://u:p@db.example.com/postgres", "postgres://x:y@DB.example.com:6000/other", { host: "db.example.com", port: 5432 }],
+  ])("accepts the server %j that the harness is configured with, %j", (url, harness, expected) => {
+    expect(perfServer(url, "/usr/bin", harness)).toEqual({ ...expected, path: "/usr/bin" });
   });
 });

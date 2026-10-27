@@ -9,7 +9,8 @@ const HOOK_TIMEOUT_MS = 300_000;
 const MAX_STOP_MS = 10_000;
 const PASSWORD_HASH = "$argon2id$v=19$m=19456,t=2,p=1$c2FsdHNhbHRzYWx0$c3RhbmQtaW4taGFzaC1mb3ItdGVzdHMtb25seS0wMDAwMDAwMDAw";
 
-const server = perfServer(process.env["SLUGBASE_TEST_PG_URL"] ?? "postgres://slugbase:slugbase@127.0.0.1:54329/slugbase_dev", process.env["PATH"] ?? "");
+const harnessUrl = process.env["SLUGBASE_TEST_PG_URL"];
+const server = perfServer(harnessUrl ?? "postgres://slugbase:slugbase@127.0.0.1:54329/slugbase_dev", process.env["PATH"] ?? "", harnessUrl);
 const instance = buildLargeInstance({ bookmarks: 600, workspaces: 6 });
 const [large] = instance.workspaces;
 const admin = instance.accounts.find((account) => account.email === instance.fixtures.email);
@@ -77,6 +78,7 @@ describe("seeding the large instance into a harness database", () => {
     const prepared = preparePerfInstance({
       serverUrl: process.env["SLUGBASE_TEST_PG_URL"] ?? "postgres://slugbase:slugbase@127.0.0.1:54329/slugbase_dev",
       path: process.env["PATH"] ?? "",
+      harnessUrl,
       bookmarks: 40_000,
       workspaces: 200,
       signal: abort.signal,

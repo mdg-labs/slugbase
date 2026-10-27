@@ -8,7 +8,8 @@ import { runSeedScript } from "./run.ts";
 // The large instance of the performance suite (doc 08 section 5.3) in a database of its own. The database is created here, by
 // the test harness (doc 08 section 3.2), and the seed takes the harness's handle and nothing else: there is no address to give it,
 // so it cannot be pointed at a development, staging or production database. It checks the handle's name against the harness's
-// own pattern and that the connection it holds is to that database, and it writes only into an empty one.
+// own pattern and that the connection it holds is to that database, and it writes only into an empty one. The server is on this
+// machine or is the one the harness is configured with (`SLUGBASE_TEST_PG_URL`), which CI reaches by its service name.
 
 /** The name pattern of a database the harness clones for a test (`TEST_NAME` in `@slugbase/db/testing`). */
 const HARNESS_DATABASE = /^test_[0-9a-f]{16}$/;
@@ -39,8 +40,25 @@ export interface PerfServer {
   readonly path: string;
 }
 
-/** The server the harness builds databases on; it must be on this machine. */
-export function perfServer(serverUrl: string, path: string): PerfServer {
+/** The host of the server the test harness is configured with, or undefined when none is configured or it does not parse. */
+function harnessHost(harnessUrl: string | undefined): string | undefined {
+  if (harnessUrl === undefined || harnessUrl === "") {
+    return undefined;
+  }
+  try {
+    const url = new URL(harnessUrl);
+    return url.protocol === "postgres:" || url.protocol === "postgresql:" ? url.hostname.toLowerCase() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The server the harness builds databases on. Its host must be a loopback address or the host of the server the harness itself is
+ * configured with (`harnessUrl`, the value of `SLUGBASE_TEST_PG_URL` when it is set): CI reaches its Postgres service by the service
+ * name. A host that is neither is refused, whatever else is configured.
+ */
+export function perfServer(serverUrl: string, path: string, harnessUrl: string | undefined): PerfServer {
   let url: URL;
   try {
     url = new URL(serverUrl);
@@ -50,8 +68,8 @@ export function perfServer(serverUrl: string, path: string): PerfServer {
   if (url.protocol !== "postgres:" && url.protocol !== "postgresql:") {
     throw new PerfSeedError("the server URL is not a PostgreSQL connection URL");
   }
-  if (!LOOPBACK_HOSTS.includes(url.hostname)) {
-    throw new PerfSeedError(`the performance suite runs against a server on this machine, not ${url.hostname}`);
+  if (!LOOPBACK_HOSTS.includes(url.hostname) && url.hostname.toLowerCase() !== harnessHost(harnessUrl)) {
+    throw new PerfSeedError(`the performance suite runs against a server on this machine or the one the test harness is configured with, not ${url.hostname}`);
   }
   return { host: url.hostname.replace(/^\[|\]$/gu, ""), port: url.port === "" ? 5432 : Number(url.port), path };
 }
@@ -127,6 +145,8 @@ export interface PrepareOptions extends LargeInstanceOptions {
   readonly serverUrl: string;
   /** The PATH to find `psql` on. */
   readonly path: string;
+  /** `SLUGBASE_TEST_PG_URL`, when it is set: a host other than loopback is accepted only when it is this URL's host. */
+  readonly harnessUrl: string | undefined;
   /** Aborting it ends the seeding and drops the database; the call then rejects. */
   readonly signal?: AbortSignal;
   /** Called with the name of the database once it exists, before anything is seeded into it. */
@@ -135,7 +155,7 @@ export interface PrepareOptions extends LargeInstanceOptions {
 
 /** Creates a harness database, seeds the large instance into it and returns what the server and the scenarios need. */
 export async function preparePerfInstance(options: PrepareOptions): Promise<PerfInstance> {
-  const server = perfServer(options.serverUrl, options.path);
+  const server = perfServer(options.serverUrl, options.path, options.harnessUrl);
   const instance = buildLargeInstance(options);
   const password = randomBytes(18).toString("base64url");
   const database = await createTestDatabase({ serverUrl: options.serverUrl });
