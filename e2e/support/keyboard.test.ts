@@ -133,4 +133,18 @@ void describe("the keyboard steps of the journeys", () => {
     const target: FocusTarget = { evaluate: () => Promise.reject(broken) };
     await assert.rejects(waitForInitialFocus(target, "the URL field", 100), (error: unknown) => error === broken);
   });
+
+  // A lookup that fails for another reason just as the timeout it was given runs out is not that timeout.
+  void it("the wait rethrows a lookup error that is not its timeout as it is when it arrives as the timeout runs out", async () => {
+    const broken = new Error("locator.evaluate: Target closed");
+    const target: FocusTarget = {
+      evaluate: (_pageFunction, _arg, options) =>
+        new Promise<boolean>((_resolve, reject) => {
+          setTimeout(() => {
+            reject(broken);
+          }, options?.timeout);
+        }),
+    };
+    await assert.rejects(waitForInitialFocus(target, "the URL field", 100), (error: unknown) => error === broken);
+  });
 });
