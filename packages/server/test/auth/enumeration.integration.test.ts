@@ -14,6 +14,7 @@ import { CREDENTIAL_ENV, requestFlows, type RequestFlow } from "./credential-flo
 import {
   attemptLogin,
   freshSessionCookie,
+  latencyCalls,
   medianLatencyRatio,
   seedAccount,
   serveAuth,
@@ -200,6 +201,8 @@ describe("POST /api/v1/auth/login (T8)", () => {
 // one that has an unverified account and one that has none (doc 04 section 10.2, doc 02 section 2.3): the status,
 // the headers and the body agree, each path queues the one mail job, and none is faster than another. What the
 // worker then sends, and to whom, is its decision and not visible to the requester.
+const EMAIL_LIMIT_KEY = /^[0-9a-f]{64}$/;
+
 describe("the requests for an emailed link (T8)", () => {
   const mail = new InMemoryMail();
   let tag = 0;
@@ -247,6 +250,29 @@ describe("the requests for an emailed link (T8)", () => {
     ];
   }
 
+  /** `count` addresses of each kind that has a lookup outcome of its own, every one with its own account or undo link. */
+  async function latencyTargets(count: number): Promise<readonly { readonly name: string; readonly addresses: readonly string[] }[]> {
+    tag += 1;
+    const suffix = String(tag);
+    const indexes = Array.from({ length: count }, (_unused, index) => String(index));
+    const [verified, unverified, reserved] = await Promise.all([
+      Promise.all(indexes.map(async (index) => (await seedAccount(database(), { emailVerified: true, email: `latency.verified.${suffix}.${index}@example.test` })).email)),
+      Promise.all(indexes.map(async (index) => (await seedAccount(database(), { email: `latency.unverified.${suffix}.${index}@example.test` })).email)),
+      Promise.all(
+        indexes.map(async (index) => {
+          const address = `latency.reserved.${suffix}.${index}@example.test`;
+          await reserve(address, `latency.moved.${suffix}.${index}@example.test`);
+          return address;
+        }),
+      ),
+    ]);
+    return [
+      { name: "an address with a verified account", addresses: verified },
+      { name: "an address with an unverified account", addresses: unverified },
+      { name: "an address reserved by a live undo link", addresses: reserved },
+    ];
+  }
+
   /** The session the flow that needs one is asked with: an account of its own, signed in and re-authenticated. */
   async function sessionFor(world: AuthWorld, flow: RequestFlow): Promise<string | undefined> {
     if (!flow.authenticated) {
@@ -286,7 +312,10 @@ describe("the requests for an emailed link (T8)", () => {
       async () => {
         const world = serveAuth(database(), store, { env: { ...CREDENTIAL_ENV, RATE_LIMIT_REGISTER_IP: "1000/hour" }, mail });
         const cookie = await sessionFor(world, flow);
-        const [verified, , unverified, , , , reserved] = await targets();
+        const calls = latencyCalls();
+        const kinds = await latencyTargets(calls);
+        // Every call names an address of its own, on the reference side and on the probe side: the per-address limit
+        // makes a bucket on an address's first use, and a side that repeats an address would not pay that again.
         let unknown = 0;
         const reference = () => {
           unknown += 1;
@@ -294,10 +323,26 @@ describe("the requests for an emailed link (T8)", () => {
         };
         // A path that skipped the account lookup or the hashing would answer in a small fraction of the time: the
         // bounds are far wider than the noise of a loaded runner, and the ratio is a median over many back-to-back pairs.
-        for (const known of [verified, unverified, reserved]) {
-          const ratio = await medianLatencyRatio(reference, () => flow.call(world, known?.email ?? "", {}, cookie));
-          expect(ratio, known?.name).toBeGreaterThan(0.5);
-          expect(ratio, known?.name).toBeLessThan(2);
+        for (const { name, addresses } of kinds) {
+          const taken = world.limiter.takes.length;
+          let drawn = 0;
+          const probe = () => {
+            const address = addresses[drawn];
+            drawn += 1;
+            if (address === undefined) {
+              throw new Error(`the latency probe for ${name} ran out of addresses`);
+            }
+            return flow.call(world, address, {}, cookie);
+          };
+          const ratio = await medianLatencyRatio(reference, probe);
+          const keys = world.limiter.takes.slice(taken).map((take) => take.key).filter((key) => EMAIL_LIMIT_KEY.test(key));
+          expect(drawn, name).toBe(calls);
+          expect(new Set(keys).size, name).toBe(keys.length);
+          if (flow.bucket === "reset") {
+            expect(keys, name).toHaveLength(2 * calls);
+          }
+          expect(ratio, name).toBeGreaterThan(0.5);
+          expect(ratio, name).toBeLessThan(2);
         }
       },
     );
