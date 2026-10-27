@@ -1,7 +1,8 @@
 import { BOOKMARK_SORTS, type BookmarkListRequest, type BookmarkPosition, type BookmarkSort } from "@slugbase/core";
 import { PgDialect } from "drizzle-orm/pg-core";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { bookmarkRepository } from "../src/index.ts";
+import { tenantHandle } from "../src/tenant.ts";
 import { matchedCountStatement, matchedPageStatement } from "../src/repositories/bookmarks.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
@@ -248,6 +249,7 @@ function held(nodes: readonly PlanNode[], predicate: (node: PlanNode) => boolean
 }
 
 const isProbe = (node: PlanNode): boolean => node["Index Name"] === "bookmarks_pkey";
+const isIndexedRead = (node: PlanNode): boolean => node["Relation Name"] === "bookmarks" && node["Index Name"] !== undefined;
 const walksIndex = (sort: BookmarkSort) => (node: PlanNode): boolean => node["Index Name"] === INDEX_OF[sort];
 
 async function positionAfter(text: string, sort: BookmarkSort, rows: number): Promise<BookmarkPosition> {
@@ -310,15 +312,93 @@ describe.each(BOOKMARK_SORTS)("the page of the list sorted by %s on a workspace 
 });
 
 describe("the count of the list with a text on a workspace of 50 000 bookmarks", () => {
-  it.each([...FEW, ...MANY])("calls the function once, probes the primary key for the matches it counts and stops at the cap (%s)", async (text) => {
+  it.each([...FEW, ...MANY])("calls the function once and counts what it answers, probing no bookmark, for a text and nothing else (%s)", async (text) => {
     const statement = await inTenant((tx) => Promise.resolve(planned(matchedCountStatement(tx, { ownerId: accountId, q: text }, 10_001))));
 
     const nodes = await analyse(statement);
 
     expect(nodes.filter((node) => node["Node Type"] === "Seq Scan").map((node) => node["Relation Name"])).not.toContain("bookmarks");
     expect(held(nodes, (node) => node["Function Name"] === "sys_bookmark_match")).toHaveLength(1);
-    expect(held(nodes, isProbe)).toHaveLength(1);
-    expect(nodes.map((node) => node["Node Type"])).toContain("Limit");
+    expect(held(nodes, (node) => node["Relation Name"] === "bookmarks")).toEqual([]);
+    expect(held(nodes, isProbe)).toEqual([]);
+  });
+
+  it.each([
+    { name: "with a slug", filter: { hasSlug: true }, probe: isProbe },
+    { name: "pinned", filter: { pinned: true }, probe: isProbe },
+    // An owner with no bookmark has no row for the planner to expect, so it may read the probe through any index of `bookmarks`, never a scan of the table.
+    { name: "of another owner", filter: { ownerId: "00000000-0000-7000-8000-00000000ffff" }, probe: isIndexedRead },
+  ])("calls the function once, probes the matches it counts through an index of bookmarks and stops at the cap, for a text and a filter that narrows it ($name)", async ({ filter, probe }) => {
+    for (const text of [...FEW, ...MANY]) {
+      const statement = await inTenant((tx) => Promise.resolve(planned(matchedCountStatement(tx, { ownerId: accountId, q: text, ...filter }, 10_001))));
+
+      const nodes = await analyse(statement);
+
+      expect(nodes.filter((node) => node["Node Type"] === "Seq Scan").map((node) => node["Relation Name"]), text).not.toContain("bookmarks");
+      expect(held(nodes, (node) => node["Function Name"] === "sys_bookmark_match"), text).toHaveLength(1);
+      expect(held(nodes, probe), text).toHaveLength(1);
+      expect(nodes.map((node) => node["Node Type"]), text).toContain("Limit");
+    }
+  });
+});
+
+// ---- the page and its count of one request ----
+
+/** Runs `work` in a tenant transaction and answers what it returned with how many statements it ran that call `sys_bookmark_match`. */
+async function functionCallsOf<T>(work: (repository: ReturnType<typeof bookmarkRepository>) => Promise<T>): Promise<{ result: T; calls: number }> {
+  return inTenant(async (tx) => {
+    const handle = tenantHandle(tx);
+    const execute = handle.execute.bind(handle);
+    const statements: string[] = [];
+    const spy = vi.spyOn(handle, "execute").mockImplementation(((query: Parameters<typeof handle.execute>[0]) => {
+      statements.push(typeof query === "string" ? query : planned(query as Parameters<typeof planned>[0]).sql);
+      return execute(query);
+    }) as typeof handle.execute);
+    try {
+      const result = await work(bookmarkRepository(tx));
+      return { result, calls: statements.filter((statement) => statement.includes("sys_bookmark_match(")).length };
+    } finally {
+      spy.mockRestore();
+    }
+  });
+}
+
+describe("the page of the list with a text and its count, read together on a workspace of 50 000 bookmarks", () => {
+  it.each([...FEW, ...MANY])("calls the function once for a text and nothing else, and answers what the page and the count answer apart (%s)", async (text) => {
+    const filter = { ownerId: accountId, q: text };
+    const request: BookmarkListRequest = { filter, sort: "recent", after: undefined, limit: PAGE + 1 };
+
+    const together = await functionCallsOf((repository) => repository.listWithCount(request, 10_001));
+    const apart = await inTenant(async (tx) => ({ rows: await bookmarkRepository(tx).list(request), count: await bookmarkRepository(tx).count(filter, 10_001) }));
+
+    expect(together.calls).toBe(1);
+    expect(together.result).toEqual(apart);
+  });
+
+  it("counts an empty page with the one call of the function too: a page after the last match and the page of a text nothing matches", async () => {
+    const nothing = await functionCallsOf((repository) => repository.listWithCount({ filter: { ownerId: accountId, q: "zzzq" }, sort: "recent", after: undefined, limit: PAGE + 1 }, 10_001));
+    expect(nothing).toEqual({ result: { rows: [], count: 0 }, calls: 1 });
+
+    const last = await inTenant((tx) => bookmarkRepository(tx).list({ filter: { ownerId: accountId, q: "gh" }, sort: "recent", after: undefined, limit: 1000 }));
+    const end = last.at(-1);
+    const request: BookmarkListRequest = { filter: { ownerId: accountId, q: "gh" }, sort: "recent", after: end === undefined ? undefined : { key: end.key, id: end.bookmark.id }, limit: PAGE + 1 };
+
+    const { result, calls } = await functionCallsOf((repository) => repository.listWithCount(request, 10_001));
+
+    expect(result).toEqual({ rows: [], count: last.length });
+    expect(calls).toBe(1);
+  });
+
+  it.each([{ hasSlug: true }, { pinned: true }])("reads the page and the count of a text with a filter that narrows it as they are read apart, one call of the function for each (%j)", async (narrow) => {
+    const filter = { ownerId: accountId, q: "docs", ...narrow };
+    const request: BookmarkListRequest = { filter, sort: "recent", after: undefined, limit: PAGE + 1 };
+
+    const together = await functionCallsOf((repository) => repository.listWithCount(request, 10_001));
+    const apart = await inTenant(async (tx) => ({ rows: await bookmarkRepository(tx).list(request), count: await bookmarkRepository(tx).count(filter, 10_001) }));
+
+    expect(together.calls).toBe(2);
+    expect(together.result).toEqual(apart);
+    expect(together.result.count).toBeGreaterThan(0);
   });
 });
 
@@ -384,8 +464,7 @@ describe("the time of the list with a text on a workspace of 50 000 bookmarks", 
     const elapsed = await inTenant(async (tx) => {
       const repository = bookmarkRepository(tx);
       return median(async () => {
-        await repository.list({ filter: { ownerId: accountId, q: text }, sort: "recent", after: undefined, limit: PAGE });
-        await repository.count({ ownerId: accountId, q: text }, 10_001);
+        await repository.listWithCount({ filter: { ownerId: accountId, q: text }, sort: "recent", after: undefined, limit: PAGE }, 10_001);
       });
     });
 
@@ -396,8 +475,7 @@ describe("the time of the list with a text on a workspace of 50 000 bookmarks", 
     const elapsed = await inTenant(async (tx) => {
       const repository = bookmarkRepository(tx);
       return median(async () => {
-        await repository.list({ filter: { ownerId: accountId, q: "www" }, sort, after: undefined, limit: PAGE });
-        await repository.count({ ownerId: accountId, q: "www" }, 10_001);
+        await repository.listWithCount({ filter: { ownerId: accountId, q: "www" }, sort, after: undefined, limit: PAGE }, 10_001);
       });
     });
 

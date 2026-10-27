@@ -56,11 +56,19 @@ export interface BookmarkListRequest {
   readonly limit: number;
 }
 
+/** A page of a list together with how many bookmarks its filter matches, at most the limit the page was asked with. */
+export interface BookmarkListPage {
+  readonly rows: readonly BookmarkListRow[];
+  readonly count: number;
+}
+
 export interface BookmarkListStore {
   /** The next `request.limit` bookmarks of the workspace of the transaction in the order of `request.sort`, plan-archived ones never. */
   list(request: BookmarkListRequest): Promise<readonly BookmarkListRow[]>;
   /** How many bookmarks the filter matches, but at most `limit`. */
   count(filter: BookmarkListFilter, limit: number): Promise<number>;
+  /** What `list(request)` answers and what `count(request.filter, limit)` answers, read together so that a store can share the work of the two. */
+  listWithCount(request: BookmarkListRequest, limit: number): Promise<BookmarkListPage>;
 }
 
 /** Signs and opens cursors; a cursor opens only for the `scope` it was sealed with. */
@@ -173,10 +181,9 @@ export async function listBookmarks({ store, cursors }: BookmarkListDependencies
     }
   }
   // One more than the page, to know whether another page follows.
-  const fetched = await store.list({ filter, sort: ask.sort, after, limit: ask.limit + 1 });
+  const { rows: fetched, count: counted } = await store.listWithCount({ filter, sort: ask.sort, after, limit: ask.limit + 1 }, BOOKMARK_LIST_TOTAL_CAP + 1);
   const rows = fetched.slice(0, ask.limit);
   const last = rows.at(-1);
-  const counted = await store.count(filter, BOOKMARK_LIST_TOTAL_CAP + 1);
   return {
     kind: "listed",
     items: rows.map((row) => row.bookmark),

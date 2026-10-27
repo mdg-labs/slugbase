@@ -10,6 +10,7 @@ import { BookmarkArchiveTransaction } from '@slugbase/core';
 import { BookmarkFilingMode } from '@slugbase/core';
 import { BookmarkLinkingResult } from '@slugbase/core';
 import { BookmarkListFilter } from '@slugbase/core';
+import { BookmarkListPage } from '@slugbase/core';
 import { BookmarkListRequest } from '@slugbase/core';
 import { BookmarkListRow } from '@slugbase/core';
 import { BookmarkRecord } from '@slugbase/core';
@@ -346,6 +347,7 @@ export interface BookmarkRepository {
     find(bookmarkId: string): Promise<BookmarkRecord | undefined>;
     ids(filter: BookmarkListFilter, limit: number): Promise<readonly string[]>;
     list(request: BookmarkListRequest): Promise<readonly BookmarkListRow[]>;
+    listWithCount(request: BookmarkListRequest, limit: number): Promise<BookmarkListPage>;
     previewTags(request: {
         readonly bookmarkIds: readonly string[];
         readonly ownerId: string;

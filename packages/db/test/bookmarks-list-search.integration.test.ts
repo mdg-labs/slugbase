@@ -253,6 +253,74 @@ describe("the count and the identifiers of a list with a text", () => {
   });
 });
 
+describe("the page and the count of a list with a text, read together", () => {
+  const request = (filter: BookmarkListFilter, limit: number, after?: BookmarkPosition) => ({ filter, sort: "recent" as const, after, limit });
+
+  it("answer what the page and the count answer apart, for a text alone, whether the matches are few or many, and at the cap", async () => {
+    const cases = [
+      { tenant: { accountId: world.alice, workspaceId: world.few }, q: "widget", cap: 1000, expected: 40 },
+      { tenant: { accountId: world.alice, workspaceId: world.few }, q: "widget", cap: 7, expected: 7 },
+      { tenant: { accountId: world.alice, workspaceId: world.few }, q: "zzzqqq", cap: 1000, expected: 0 },
+      { tenant: { accountId: world.alice, workspaceId: world.many }, q: "gizmo", cap: 20_000, expected: MANY },
+      { tenant: { accountId: world.alice, workspaceId: world.many }, q: "gizmo", cap: 10_001, expected: 10_001 },
+    ];
+    for (const { tenant, q, cap, expected } of cases) {
+      const filter = { ownerId: world.alice, q };
+      const together = await inTenant(tenant, (tx) => bookmarkRepository(tx).listWithCount(request(filter, 5), cap));
+
+      expect(together.count, `${q} ${String(cap)}`).toBe(expected);
+      expect(together.rows).toEqual(await inTenant(tenant, (tx) => bookmarkRepository(tx).list(request(filter, 5))));
+      expect(together.count).toBe(await inTenant(tenant, (tx) => bookmarkRepository(tx).count(filter, cap)));
+    }
+  });
+
+  it("count the matches of a page that resumes after a place, and of one that starts after the last match", async () => {
+    const tenant = { accountId: world.alice, workspaceId: world.few };
+    const filter = { ownerId: world.alice, q: "widget" };
+    const all = await inTenant(tenant, (tx) => bookmarkRepository(tx).list(request(filter, 100)));
+    const place = (index: number): BookmarkPosition => ({ key: all[index]?.key ?? null, id: all[index]?.bookmark.id ?? "" });
+
+    const middle = await inTenant(tenant, (tx) => bookmarkRepository(tx).listWithCount(request(filter, 5, place(9)), 1000));
+    const end = await inTenant(tenant, (tx) => bookmarkRepository(tx).listWithCount(request(filter, 5, place(39)), 1000));
+
+    expect(middle.rows.map((row) => row.bookmark.id)).toEqual(all.slice(10, 15).map((row) => row.bookmark.id));
+    expect(middle.count).toBe(40);
+    expect(end).toEqual({ rows: [], count: 40 });
+  });
+
+  it.each([
+    { name: "with a slug", filter: { hasSlug: true } },
+    { name: "pinned", filter: { pinned: true } },
+    { name: "forwarding", filter: { forwarding: true } },
+    { name: "filed in a folder", filter: () => ({ folderId: world.folderId }) },
+    { name: "carrying a tag", filter: () => ({ tagIds: [world.tagId] }) },
+  ] as const)("count only the matches that are $name when the text has a filter beside it", async ({ filter }) => {
+    const tenant = { accountId: world.alice, workspaceId: world.few };
+    const narrow = { ownerId: world.alice, q: "widget", ...(typeof filter === "function" ? filter() : filter) };
+    const apart = await inTenant(tenant, (tx) => bookmarkRepository(tx).count(narrow, 1000));
+
+    const together = await inTenant(tenant, (tx) => bookmarkRepository(tx).listWithCount(request(narrow, 100), 1000));
+
+    expect(apart).toBeGreaterThan(0);
+    expect(apart).toBeLessThan(40);
+    expect(together.count).toBe(apart);
+    expect(together.rows).toHaveLength(apart);
+  });
+
+  it("count the matches of the account of the transaction only, whoever the filter names as the owner, and none for a blank text", async () => {
+    const asAlice = { accountId: world.alice, workspaceId: world.few };
+
+    expect(await inTenant(asAlice, (tx) => bookmarkRepository(tx).listWithCount(request({ ownerId: world.bob, q: "widget" }, 10), 100))).toEqual({ rows: [], count: 0 });
+    expect(await inTenant(asAlice, (tx) => bookmarkRepository(tx).listWithCount(request({ ownerId: world.alice.toUpperCase(), q: "widget" }, 10), 100))).toMatchObject({ count: 40 });
+    expect(await inTenant(asAlice, (tx) => bookmarkRepository(tx).listWithCount(request({ ownerId: world.alice, q: "  " }, 10), 100))).toEqual({ rows: [], count: 0 });
+    expect(await inTenant({ accountId: world.bob, workspaceId: world.few }, (tx) => bookmarkRepository(tx).listWithCount(request({ ownerId: world.bob, q: "widget" }, 10), 100))).toMatchObject({ count: 1 });
+  });
+
+  it("refuse to read in a transaction opened without a workspace", async () => {
+    await expect(inTenant({ accountId: world.alice }, (tx) => bookmarkRepository(tx).listWithCount(request({ ownerId: world.alice, q: "widget" }, 1), 10))).rejects.toBeInstanceOf(TenantContextError);
+  });
+});
+
 describe("the bookmarks no list of a member may hold (T1, T2)", () => {
   it.each([
     { name: "few", workspace: () => world.few, text: "widget", word: "Widget", total: 40 },

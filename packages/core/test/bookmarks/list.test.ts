@@ -30,17 +30,25 @@ function cursors() {
 function store(rows: readonly BookmarkListRow[], count = rows.length) {
   const lists: BookmarkListRequest[] = [];
   const counts: { filter: BookmarkListRequest["filter"]; limit: number }[] = [];
+  const separate: string[] = [];
   const port: BookmarkListStore = {
     list(request) {
+      separate.push("list");
       lists.push(request);
       return Promise.resolve(rows.slice(0, request.limit));
     },
     count(filter, limit) {
+      separate.push("count");
       counts.push({ filter, limit });
       return Promise.resolve(Math.min(count, limit));
     },
+    listWithCount(request, limit) {
+      lists.push(request);
+      counts.push({ filter: request.filter, limit });
+      return Promise.resolve({ rows: rows.slice(0, request.limit), count: Math.min(count, limit) });
+    },
   };
-  return { port, lists, counts };
+  return { port, lists, counts, separate };
 }
 
 function ask(overrides: Partial<BookmarkListAsk> = {}): BookmarkListAsk {
@@ -201,6 +209,17 @@ describe("listBookmarks", () => {
     expect(await listBookmarks({ store: port, cursors: cursors().codec }, ask({ url }))).toEqual({ kind: "url_refused", reason });
     expect(lists).toEqual([]);
     expect(counts).toEqual([]);
+  });
+
+  it("reads the page and its count with one call of the store, so that the store can share the work of the two", async () => {
+    const { port, lists, counts, separate } = store(ROWS);
+
+    const listed = await listBookmarks({ store: port, cursors: cursors().codec }, ask({ q: " alpha " }));
+
+    expect(listed).toMatchObject({ kind: "listed", total: 3 });
+    expect(separate).toEqual([]);
+    expect(lists).toHaveLength(1);
+    expect(counts).toEqual([{ filter: lists[0]?.filter, limit: 10_001 }]);
   });
 
   it("gives the exact total up to the cap and null above it, counting no further than one past the cap", async () => {

@@ -1405,6 +1405,14 @@ export type BookmarkListOutcome = {
     readonly reason: BookmarkUrlRefusal;
 };
 
+// @public
+export interface BookmarkListPage {
+    // (undocumented)
+    readonly count: number;
+    // (undocumented)
+    readonly rows: readonly BookmarkListRow[];
+}
+
 // @public (undocumented)
 export interface BookmarkListRequest {
     readonly after: BookmarkPosition | undefined;
@@ -1427,6 +1435,7 @@ export interface BookmarkListRow {
 export interface BookmarkListStore {
     count(filter: BookmarkListFilter, limit: number): Promise<number>;
     list(request: BookmarkListRequest): Promise<readonly BookmarkListRow[]>;
+    listWithCount(request: BookmarkListRequest, limit: number): Promise<BookmarkListPage>;
 }
 
 // @public (undocumented)

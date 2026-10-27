@@ -174,7 +174,7 @@ function bulkStoreOf(tx: TenantTx): BookmarkBulkStore {
 /** The list store over the repository of the open transaction. */
 function listStoreOf(tx: TenantTx): BookmarkListStore {
   const repository = bookmarkRepository(tx);
-  return { list: (request) => repository.list(request), count: (filter, limit) => repository.count(filter, limit) };
+  return { list: (request) => repository.list(request), count: (filter, limit) => repository.count(filter, limit), listWithCount: (request, limit) => repository.listWithCount(request, limit) };
 }
 
 function bookmarkCursors(secret: string): BookmarkCursors {
