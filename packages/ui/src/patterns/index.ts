@@ -9,6 +9,16 @@ export { CardGrid, CardGridItem, type CardGridItemProps, type CardGridProps } fr
 export { CheckboxField, type CheckboxFieldProps } from "./checkbox-field.tsx";
 export { ChoiceCards, type ChoiceCardOption, type ChoiceCardsProps } from "./choice-cards.tsx";
 export { Confirm, type ConfirmProps } from "./confirm.tsx";
+export {
+  CommandPalette,
+  CommandTrigger,
+  type CommandPaletteHint,
+  type CommandPaletteIntent,
+  type CommandPaletteItem,
+  type CommandPaletteProps,
+  type CommandPaletteSection,
+  type CommandTriggerProps,
+} from "./command-palette.tsx";
 export { ContextActions, type ContextActionsProps } from "./context-actions.tsx";
 export { CopyValue, type CopyValueProps } from "./copy-value.tsx";
 export { DangerZone, type DangerZoneItem, type DangerZoneProps } from "./danger-zone.tsx";
@@ -51,12 +61,14 @@ export type { Accent, ResolvedTheme } from "../theme/theme-provider.tsx";
 export { ThemeToggle, type ThemeToggleProps } from "./theme-toggle.tsx";
 // The icons the shell and the empty states of the app place; the app takes them from here so the icon library has one home.
 export {
+  ArrowLeftRightIcon,
   BookmarkIcon,
   CompassIcon,
   CopyIcon,
   ExternalLinkIcon,
   FilterXIcon,
   FolderIcon,
+  FolderPlusIcon,
   ForwardIcon,
   HomeIcon,
   InboxIcon,
@@ -70,8 +82,10 @@ export {
   PinOffIcon,
   PlusIcon,
   PowerOffIcon,
+  SearchIcon,
   SettingsIcon,
   ShieldCheckIcon,
+  SunMoonIcon,
   TableIcon,
   TagIcon,
   Trash2Icon,

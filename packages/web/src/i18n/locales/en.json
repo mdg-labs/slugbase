@@ -2554,6 +2554,91 @@
       }
     }
   },
+  "palette": {
+    "trigger": "Search or run a command…",
+    "title": "Command palette",
+    "description": "Search for a bookmark or run a command. Use the arrow keys to move and Enter to choose.",
+    "input": "Search or run a command",
+    "placeholder": "Search or run a command…",
+    "noResults": "No results",
+    "count": "{count, plural, one {# result} other {# results}}",
+    "close": "Close the command palette",
+    "loading": "Loading bookmarks",
+    "loadFailed": "The bookmarks could not be loaded.",
+    "retry": "Try again",
+    "group": {
+      "recent": "Recent",
+      "pinned": "Pinned",
+      "navigation": "Navigation",
+      "actions": "Actions"
+    },
+    "empty": {
+      "title": "No bookmarks to show yet",
+      "description": "Bookmarks you open and bookmarks you pin appear here."
+    },
+    "key": {
+      "alt": "Alt"
+    },
+    "hint": {
+      "navigate": "navigate",
+      "open": "open",
+      "newTab": "new tab",
+      "edit": "edit",
+      "close": "close"
+    },
+    "workspaces": {
+      "label": "Switch workspace",
+      "loading": "Loading workspaces",
+      "loadFailed": "Your workspaces could not be loaded.",
+      "current": "Current"
+    },
+    "command": {
+      "home": {
+        "name": "Home",
+        "keywords": "start dashboard overview"
+      },
+      "bookmarks": {
+        "name": "Bookmarks",
+        "keywords": "links list all"
+      },
+      "folders": {
+        "name": "Folders",
+        "keywords": "organise group"
+      },
+      "tags": {
+        "name": "Tags",
+        "keywords": "labels"
+      },
+      "forwarding": {
+        "name": "Forwarding",
+        "keywords": "go slugs redirect search engine"
+      },
+      "settings": {
+        "name": "Settings",
+        "keywords": "account preferences profile security"
+      },
+      "newBookmark": {
+        "name": "New bookmark",
+        "keywords": "add create save link url"
+      },
+      "newFolder": {
+        "name": "New folder",
+        "keywords": "add create group"
+      },
+      "switchWorkspace": {
+        "name": "Switch workspace",
+        "keywords": "change team account"
+      },
+      "toggleTheme": {
+        "name": "Toggle theme",
+        "keywords": "dark light mode appearance"
+      },
+      "signOut": {
+        "name": "Sign out",
+        "keywords": "log out logout leave"
+      }
+    }
+  },
   "shortcuts": {
     "title": "Keyboard shortcuts",
     "description": "Single-key shortcuts work anywhere except in a text field or inside an open dialog, menu or list box.",
@@ -2577,6 +2662,8 @@
       "goForwarding": "Go to Forwarding",
       "newFolder": "New folder (on the Folders page)",
       "help": "Show this list",
+      "palette": "Open the command palette",
+      "paletteSlash": "Open the command palette (on a list page)",
       "move": "Move focus to the next or previous bookmark",
       "open": "Open the focused bookmark",
       "openNewTab": "Open the focused bookmark in a new tab",
