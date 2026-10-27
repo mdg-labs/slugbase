@@ -1131,6 +1131,7 @@ export type BookmarkBulkTarget = {
     readonly url: string | undefined;
     readonly folderId?: string | undefined;
     readonly tagIds?: readonly string[] | undefined;
+    readonly q?: string | undefined;
 };
 
 // @public
@@ -1268,6 +1269,7 @@ export interface BookmarkFilterAsk {
     readonly hasSlug: boolean | undefined;
     // (undocumented)
     readonly pinned: boolean | undefined;
+    readonly q?: string | undefined;
     readonly tagIds?: readonly string[] | undefined;
     readonly url: string | undefined;
 }
@@ -1346,6 +1348,7 @@ export interface BookmarkListAsk {
     readonly limit: number;
     // (undocumented)
     readonly pinned: boolean | undefined;
+    readonly q?: string | undefined;
     // (undocumented)
     readonly scope: BookmarkScope;
     // (undocumented)
@@ -1371,6 +1374,7 @@ export interface BookmarkListFilter {
     readonly hasSlug?: boolean | undefined;
     readonly ownerId: string;
     readonly pinned?: boolean | undefined;
+    readonly q?: string | undefined;
     readonly tagIds?: readonly string[] | undefined;
     readonly urlCanonical?: string | undefined;
 }

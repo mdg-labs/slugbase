@@ -847,6 +847,33 @@ describe("an upgrade from the level before the title and slug search index", () 
   }, 120_000);
 });
 
+describe("an upgrade from the level before the bookmark match migration", () => {
+  const WORKSPACE = "0190a000-0000-7000-8000-000000000031";
+  const ACCOUNT = "0190a000-0000-7000-8000-000000000032";
+
+  it("creates the system operation in a session that has not loaded pg_trgm, and the function answers in a transaction of the application role and leaves the threshold as it found it", async () => {
+    const { name, owner } = await createDatabase();
+    await migrate({ url: migratorUrl(name), chains: [] });
+    const journal = JSON.parse(readFileSync(join(CE_CHAIN.folder, "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
+    const match = journal.entries.filter((entry) => entry.tag.includes("add_bookmark_match"));
+    expect(match).toHaveLength(1);
+    await owner.unsafe("DROP FUNCTION public.sys_bookmark_match(text)");
+    await owner.unsafe(`DELETE FROM drizzle.migrations_core WHERE created_at IN (${match.map((entry) => String(entry.when)).join(", ")})`);
+    expect((await owner<{ present: boolean }[]>`SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm') AS present`)[0]?.present).toBe(true);
+
+    const result = await migrate({ url: migratorUrl(name), chains: [] });
+
+    expect(result.applied.map((step) => step.tag)).toEqual(match.map((entry) => entry.tag));
+    const [setting] = await owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_app`;
+      await tx`SELECT set_config('app.workspace_id', ${WORKSPACE}, true), set_config('app.account_id', ${ACCOUNT}, true)`;
+      await tx`SELECT count(*) FROM sys_bookmark_match('abcd')`;
+      return tx<{ value: string }[]>`SELECT current_setting('pg_trgm.word_similarity_threshold') AS value`;
+    });
+    expect(setting?.value).toBe("0.6");
+  }, 120_000);
+});
+
 describe("errors never carry the connection string or the password (T7)", () => {
   const password = `pw-${randomBytes(6).toString("hex")}`;
 

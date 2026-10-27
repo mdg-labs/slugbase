@@ -43,7 +43,8 @@ import { acceptedVersions, entityTagOf } from "../workspaces/if-match.ts";
 // repeats.
 //
 // GET /api/v1/bookmarks lists the caller's own bookmarks (doc 04 sections 6.1 and 10.6, doc 02 section 5.7): the filters `pinned`, `hasSlug`,
-// `forwarding` and `url` (the canonical form of the value, for the duplicate warning), six sorts with the identifier as tiebreak, and a page
+// `forwarding`, `url` (the canonical form of the value, for the duplicate warning) and `q` (the text of the search of doc 02 section 9.1, read through
+// the system operation `sys_bookmark_match`, which the sort and the cursor leave as they are), six sorts with the identifier as tiebreak, and a page
 // of at most 100 that the `nextCursor` resumes. The cursor is the sort key and identifier of the last item, signed with a subkey derived
 // from the session secret for this list, over the account, the workspace, the filters and the sort it was issued for: a forged, altered or
 // mismatched cursor is `400 bad_request`. `total` counts the filter's matches up to 10 000 and is null above, with `totalAtLeast`. A
@@ -210,6 +211,7 @@ function bulkTargetOf(body: { readonly ids?: readonly string[] | undefined; read
     url: filter?.url,
     folderId: filter?.folderId,
     tagIds: tagIdsOf(filter?.tag),
+    q: filter?.q,
   } as const;
 }
 
@@ -304,6 +306,7 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage }: BookmarkRo
             url: query.url,
             folderId: query.folderId,
             tagIds: tagIdsOf(query.tag),
+            q: query.q,
             sort: query.sort,
             limit: query.limit,
             cursor: query.cursor,
@@ -342,6 +345,7 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage }: BookmarkRo
             url: query.url,
             folderId: query.folderId,
             tagIds: tagIdsOf(query.tag),
+            q: query.q,
           },
         ),
       );

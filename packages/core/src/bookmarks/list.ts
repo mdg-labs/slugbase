@@ -32,6 +32,8 @@ export interface BookmarkListFilter {
   readonly folderId?: string | undefined;
   /** The tags the bookmark must carry, all of them (AND), as identifiers without repeats in a stable order. A tag the member does not own matches nothing. */
   readonly tagIds?: readonly string[] | undefined;
+  /** The text the bookmark must match: its slug, title, host and description, as the search of doc 02 section 9.1 matches them. A blank text matches no bookmark, so a filter that has lost its text never widens a list or a bulk action. */
+  readonly q?: string | undefined;
 }
 
 /** The place after which a page resumes: the sort key of the last item as the database prints it (null for a bookmark never opened) and its identifier. */
@@ -87,6 +89,8 @@ export interface BookmarkListAsk {
   readonly folderId?: string | undefined;
   /** The list is narrowed to the bookmarks that carry every one of these tags of the member's; an empty page when one is not the member's. */
   readonly tagIds?: readonly string[] | undefined;
+  /** The list is narrowed to the bookmarks that match this text, without the whitespace around it; a blank text matches nothing (the contract refuses one). */
+  readonly q?: string | undefined;
   readonly sort: BookmarkSort;
   /** 1 to 100. */
   readonly limit: number;
@@ -108,7 +112,7 @@ export type BookmarkListOutcome =
 
 /** What a cursor is bound to: the list it was issued for, written so that no two different lists share a scope. */
 function cursorScope(ask: BookmarkListAsk, filter: BookmarkListFilter): string {
-  return JSON.stringify([ask.workspaceId.toLowerCase(), ask.accountId.toLowerCase(), ask.scope, ask.sort, filter.pinned ?? null, filter.hasSlug ?? null, filter.forwarding ?? null, filter.urlCanonical ?? null, filter.folderId ?? null, filter.tagIds ?? []]);
+  return JSON.stringify([ask.workspaceId.toLowerCase(), ask.accountId.toLowerCase(), ask.scope, ask.sort, filter.pinned ?? null, filter.hasSlug ?? null, filter.forwarding ?? null, filter.urlCanonical ?? null, filter.folderId ?? null, filter.tagIds ?? [], filter.q ?? null]);
 }
 
 /** The filters a list, a select-all and a bulk request take, as the caller typed them. */
@@ -124,6 +128,8 @@ export interface BookmarkFilterAsk {
   readonly folderId?: string | undefined;
   /** The match is narrowed to the bookmarks that carry every one of these tags of the member's. */
   readonly tagIds?: readonly string[] | undefined;
+  /** The match is narrowed to the bookmarks that match this text, without the whitespace around it; a blank text matches nothing (the contract refuses one). */
+  readonly q?: string | undefined;
 }
 
 /** The store's filter for `ask`, or the reason its `url` cannot be a bookmark's URL. */
@@ -136,7 +142,19 @@ export function bookmarkListFilter(ask: BookmarkFilterAsk): { readonly ok: true;
     }
     urlCanonical = normalized.value.canonical;
   }
-  return { ok: true, filter: { ownerId: ask.accountId, pinned: ask.pinned, hasSlug: ask.hasSlug, forwarding: ask.forwarding, urlCanonical, folderId: ask.folderId === undefined ? undefined : ask.folderId.toLowerCase(), tagIds: ask.tagIds === undefined ? undefined : [...new Set(ask.tagIds.map((id) => id.toLowerCase()))].sort() } };
+  return {
+    ok: true,
+    filter: {
+      ownerId: ask.accountId,
+      pinned: ask.pinned,
+      hasSlug: ask.hasSlug,
+      forwarding: ask.forwarding,
+      urlCanonical,
+      folderId: ask.folderId === undefined ? undefined : ask.folderId.toLowerCase(),
+      tagIds: ask.tagIds === undefined ? undefined : [...new Set(ask.tagIds.map((id) => id.toLowerCase()))].sort(),
+      q: ask.q?.trim(),
+    },
+  };
 }
 
 /** One page of `ask.accountId`'s bookmarks in the workspace of the transaction, with the cursor of the next and the capped total. */

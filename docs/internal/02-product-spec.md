@@ -221,7 +221,7 @@ Set only by downgrade-overflow handling (doc 06) through the archive operation C
 
 The bookmarks list supports, all reflected in the URL search params (doc 03):
 
-- **Filters**: folder (one), tags (any of several, combined with AND), pinned only, scope (`all`, `mine`, `shared-with-me`, `shared-by-me`), has slug, forwarding on, free-text query (title, host, slug, description; the path of the URL is not searched).
+- **Filters**: folder (one), tags (any of several, combined with AND), pinned only, scope (`all`, `mine`, `shared-with-me`, `shared-by-me`), has slug, forwarding on, free-text query (title, host, slug, description; the path of the URL is not searched). The query matches as the search does (§9.1) but does not rank: the list keeps the sort and the keyset of the member's choice, a typo matches only when no bookmark has the words, and "Select all matching" and a bulk action by filter name the same bookmarks as the list.
 - **Sorts**: recently added (default), oldest first, alphabetical (A–Z or Z–A), most used, recently accessed (never-opened last).
 - **Pagination**: keyset-based with "load more" — there are no page numbers and no jumping to a page (Q42). Page sizes 24 / 48 / 96 (grid default 24, table default 48, at most 100 via the API). The count line reads "Showing 48 of 1,234"; the total is exact up to 10 000 and shown as "10,000+" above.
 - **Views**: card grid and table; the choice is remembered per account.

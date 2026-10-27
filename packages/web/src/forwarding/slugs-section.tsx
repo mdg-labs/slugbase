@@ -1,11 +1,12 @@
 import { Button, Skeleton, Switch } from "@slugbase/ui";
-import { Banner, DataTable, EmptyState, ForwardIcon, Loading, LoadMore, PencilIcon, PlusIcon, PowerOffIcon, CopyIcon, RowActions, SettingsSection, feedbackToast, type DataTableColumn, type RowAction } from "@slugbase/ui/patterns";
+import { Banner, DataTable, EmptyState, FilterXIcon, ForwardIcon, Loading, LoadMore, PencilIcon, PlusIcon, PowerOffIcon, CopyIcon, RowActions, SettingsSection, feedbackToast, type DataTableColumn, type RowAction } from "@slugbase/ui/patterns";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import type { ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { useBookmarkModal } from "../bookmarks/modal-search.ts";
 import { bookmarkListQuery, type Bookmark } from "../bookmarks/bookmarks.ts";
+import { SearchField } from "../bookmarks/search-field.tsx";
 import { useConfig } from "../config/config-context.tsx";
 import { useFormat } from "../i18n/use-format.ts";
 import { SLUG_LIST_PARAMS, goAddress } from "./forwarding.ts";
@@ -95,7 +96,8 @@ function SlugsTable({ bookmarks, ...handlers }: RowHandlers & { readonly bookmar
 /**
  * "Your slugs" (doc 03 section 8): the member's own bookmarks that have a slug, with the forwarding Switch of each, which saves
  * at once and is put back with a toast when the server refuses. A row's actions are Edit (the bookmark modal), Copy address and
- * Turn off forwarding.
+ * Turn off forwarding. A search field above the table narrows it to the slugs whose bookmark the text matches, with the same
+ * request as the list of bookmarks makes; the text is the page's own and is not kept in the address.
  */
 export function SlugsSection(): ReactElement {
   const { t } = useTranslation();
@@ -105,7 +107,8 @@ export function SlugsSection(): ReactElement {
   const modal = useBookmarkModal();
   const { setForwarding } = useSetForwarding();
   const pending = usePendingForwarding();
-  const query = useInfiniteQuery(bookmarkListQuery(router.options.context.api, SLUG_LIST_PARAMS));
+  const [text, setText] = useState("");
+  const query = useInfiniteQuery(bookmarkListQuery(router.options.context.api, text === "" ? SLUG_LIST_PARAMS : { ...SLUG_LIST_PARAMS, q: text }));
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];
   const lastPage = query.data?.pages.at(-1);
 
@@ -148,6 +151,25 @@ export function SlugsSection(): ReactElement {
     );
   } else if (query.data === undefined) {
     body = <Banner action={retry} title={t("forwarding.slugs.loadFailed")} variant="error" />;
+  } else if (items.length === 0 && !query.hasNextPage && text !== "") {
+    body = (
+      <EmptyState
+        actions={
+          <Button
+            onClick={() => {
+              setText("");
+            }}
+            variant="outline"
+          >
+            <FilterXIcon aria-hidden="true" />
+            {t("forwarding.slugs.noMatch.clear")}
+          </Button>
+        }
+        headingLevel={3}
+        icon={<FilterXIcon aria-hidden="true" />}
+        title={t("forwarding.slugs.noMatch.title")}
+      />
+    );
   } else if (items.length === 0 && !query.hasNextPage) {
     body = (
       <EmptyState
@@ -204,7 +226,10 @@ export function SlugsSection(): ReactElement {
 
   return (
     <SettingsSection description={t("forwarding.slugs.description")} title={t("forwarding.slugs.title")}>
-      <div className="flex flex-col gap-4">{body}</div>
+      <div className="flex flex-col gap-4">
+        <SearchField className="sm:max-w-xs" label={t("forwarding.slugs.search.label")} onSearch={setText} placeholder={t("forwarding.slugs.search.placeholder")} value={text} />
+        {body}
+      </div>
     </SettingsSection>
   );
 }

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
+import { SEARCH_QUERY_MAX_LENGTH } from "./search.ts";
 import { TAG_NAME_MAX_LENGTH } from "./tags.ts";
 
 // The bookmarks tag of doc 04 section 10.6: the operations that create a bookmark, read it back, change it and delete it. They
@@ -18,7 +19,8 @@ import { TAG_NAME_MAX_LENGTH } from "./tags.ts";
 // query (doc 04 section 10.6). A bulk request deletes, pins, unpins, files in a folder (adds to it, moves to it, takes out of it) or tags (adds tags, removes tags) many of the caller's own
 // bookmarks at once, named by identifier or by the list's filters, in one transaction; the folder or the tags it acts with are the caller's own, and one that is
 // not is answered 404 with nothing changed (doc 02 section 5.8). The preview of adding tags answers the tag set the bookmarks would carry, without writing. The
-// select-all operation returns the identifiers a filter matches so a client can name them.
+// select-all operation returns the identifiers a filter matches so a client can name them. The text query `q` narrows the list, the select-all and a bulk request by filter to the bookmarks the
+// search of doc 02 section 9.1 finds by their title, host, slug and description (never the path of the URL), in the order the list is asked for and not by relevance; it is plain text.
 
 /** The longest bookmark URL, in characters (doc 02 section 5.1). */
 export const BOOKMARK_URL_MAX_LENGTH = 2048;
@@ -187,11 +189,22 @@ export const BookmarkSortSchema = z.enum(["recent", "oldest", "title_asc", "titl
 
 const QueryBooleanSchema = z.enum(["true", "false"]);
 
+/** The text query of the list and of the filters that name its bookmarks: plain text, 1 to 100 characters after the whitespace around it is removed. */
+const BookmarkTextQuerySchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(SEARCH_QUERY_MAX_LENGTH)
+  .describe(
+    "Narrows the bookmarks to those the search of the palette finds, by their title, host, slug and description (the path of the URL is not searched): every word of it must be the start of a word of one of them, or of the slug, and a typo is matched only when no bookmark has the words. It is plain text, 1 to 100 characters after the whitespace around it is removed, and `&`, `|`, `!`, `:`, `*`, `%`, `_`, quotes and backslashes are never operators or wildcards. A text of fewer than three characters matches the start of the slug or of the title only. The sort, the keyset and the filters are kept, so the bookmarks are not ranked by relevance. Left out, the text does not filter",
+  );
+
 export const ListBookmarksQuerySchema = z.strictObject({
   scope: z.enum(["all", "mine"]).default("all").describe("Whose bookmarks are listed. Only the caller's own bookmarks exist until sharing arrives, so both name the same bookmarks today"),
   pinned: QueryBooleanSchema.optional().describe("true lists pinned bookmarks only and false unpinned ones only; left out, pinning is not filtered on"),
   hasSlug: QueryBooleanSchema.optional().describe("true lists bookmarks with a slug only and false those without one; left out, slugs are not filtered on"),
   forwarding: QueryBooleanSchema.optional().describe("true lists the bookmarks /go forwards to only and false those it does not; left out, forwarding is not filtered on"),
+  q: BookmarkTextQuerySchema.optional(),
   url: z
     .string()
     .min(1)
@@ -219,7 +232,7 @@ export const ListBookmarksQuerySchema = z.strictObject({
     .min(1)
     .max(BOOKMARK_CURSOR_MAX_LENGTH)
     .optional()
-    .describe("The `nextCursor` of the previous page. It is valid only with the scope, filters and sort it was issued for, for the account and workspace that received it; any other cursor is refused with 400"),
+    .describe("The `nextCursor` of the previous page. It is valid only with the scope, filters (the text query among them) and sort it was issued for, for the account and workspace that received it; any other cursor is refused with 400"),
 });
 
 export const BookmarkListSchema = z
@@ -261,6 +274,7 @@ export const BookmarkFilterSchema = z
     pinned: z.boolean().optional().describe("true matches pinned bookmarks only and false unpinned ones only; left out, pinning is not filtered on"),
     hasSlug: z.boolean().optional().describe("true matches bookmarks with a slug only and false those without one; left out, slugs are not filtered on"),
     forwarding: z.boolean().optional().describe("true matches the bookmarks /go forwards to only and false those it does not; left out, forwarding is not filtered on"),
+    q: BookmarkTextQuerySchema.optional(),
     url: z
       .string()
       .min(1)
@@ -485,7 +499,7 @@ export const listBookmarks = defineOperation({
     400: problemResponse("The request was malformed, or the cursor is not one this account was issued for this workspace, these filters and this sort (bad_request)"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),
-    422: problemResponse("The query did not pass validation (an unknown parameter or sort, a boolean other than true or false, a folderId or a tag that is not an identifier, more than 10 tags, a limit outside 1 to 100), or the url is not a URL a bookmark can have"),
+    422: problemResponse("The query did not pass validation (an unknown parameter or sort, a boolean other than true or false, a folderId or a tag that is not an identifier, more than 10 tags, a q that is empty or over 100 characters, a limit outside 1 to 100), or the url is not a URL a bookmark can have"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },
@@ -617,7 +631,7 @@ export const listBookmarkIds = defineOperation({
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),
-    422: problemResponse("The query did not pass validation (an unknown parameter, a boolean other than true or false, a malformed folderId or tag, more than 10 tags), or the url is not a URL a bookmark can have"),
+    422: problemResponse("The query did not pass validation (an unknown parameter, a boolean other than true or false, a malformed folderId or tag, more than 10 tags, a q that is empty or over 100 characters), or the url is not a URL a bookmark can have"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },
@@ -645,7 +659,7 @@ export const bulkBookmarks = defineOperation({
       "The request acts in no workspace: the account has none, or the workspace is being deleted; or the folder of a folder action or a tag of a tag action is not one the caller has in it (another member's, another workspace's or unknown), and nothing is changed",
     ),
     422: problemResponse(
-      "The body did not pass validation (an unknown action, neither or both of ids and filter, no identifier or more than 1 000, a malformed identifier, a folder action without folderId or a tag action without tagIds, a folderId or tagIds on an action that takes none, more than 100 tags, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks. Nothing is written",
+      "The body did not pass validation (an unknown action, neither or both of ids and filter, no identifier or more than 1 000, a malformed identifier, a folder action without folderId or a tag action without tagIds, a folderId or tagIds on an action that takes none, more than 100 tags, a filter q that is empty or over 100 characters, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks. Nothing is written",
     ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
@@ -674,7 +688,7 @@ export const previewBulkBookmarks = defineOperation({
       "The request acts in no workspace: the account has none, or the workspace is being deleted; or a tag of tagIds is not one the caller has in it (another member's, another workspace's or unknown)",
     ),
     422: problemResponse(
-      "The body did not pass validation (an action other than add_tags, neither or both of ids and filter, no identifier or more than 1 000, no tag or more than 100, a malformed identifier, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks",
+      "The body did not pass validation (an action other than add_tags, neither or both of ids and filter, no identifier or more than 1 000, no tag or more than 100, a malformed identifier, a filter q that is empty or over 100 characters, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks",
     ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),

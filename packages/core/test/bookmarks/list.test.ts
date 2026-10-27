@@ -122,6 +122,7 @@ describe("listBookmarks", () => {
     ["another filter on slugs", { hasSlug: true }],
     ["another filter on forwarding", { forwarding: false }],
     ["another URL", { url: "https://example.com/other" }],
+    ["a text query", { q: "alpha" }],
     ["another account", { accountId: "0192f3a0-bbbb-7000-8000-000000000002" }],
     ["another workspace", { workspaceId: "0192f3a0-aaaa-7000-8000-000000000002" }],
   ])("refuses, reading nothing, a cursor issued for the list without %s", async (_name, change) => {
@@ -135,6 +136,38 @@ describe("listBookmarks", () => {
     expect(await listBookmarks({ store: port, cursors: codec }, ask({ cursor, ...change }))).toEqual({ kind: "bad_cursor" });
     expect(lists).toEqual([]);
     expect(counts).toEqual([]);
+  });
+
+  it("hands the store the text query without the whitespace around it, and a blank one as it is, so that it never widens the list", async () => {
+    const { port, lists, counts } = store(ROWS);
+    const { codec } = cursors();
+
+    await listBookmarks({ store: port, cursors: codec }, ask({ q: "  alpha beta  " }));
+    await listBookmarks({ store: port, cursors: codec }, ask({ q: "   " }));
+
+    expect(lists[0]?.filter.q).toBe("alpha beta");
+    expect(counts[0]?.filter.q).toBe("alpha beta");
+    expect(lists[1]?.filter.q).toBe("");
+    expect(counts[1]?.filter.q).toBe("");
+  });
+
+  it("seals the cursor for the text query it was issued for alone, so a cursor of q=a replayed with q=b or without a text is refused and nothing is read", async () => {
+    const { port, lists, counts } = store(ROWS);
+    const { codec } = cursors();
+    const first = await listBookmarks({ store: port, cursors: codec }, ask({ q: "a" }));
+    const cursor = first.kind === "listed" ? (first.nextCursor ?? "") : "";
+    expect(cursor).not.toBe("");
+    lists.length = 0;
+    counts.length = 0;
+
+    expect(await listBookmarks({ store: port, cursors: codec }, ask({ q: "b", cursor }))).toEqual({ kind: "bad_cursor" });
+    expect(await listBookmarks({ store: port, cursors: codec }, ask({ cursor }))).toEqual({ kind: "bad_cursor" });
+    expect(await listBookmarks({ store: port, cursors: codec }, ask({ q: "A", cursor }))).toEqual({ kind: "bad_cursor" });
+    expect(lists).toEqual([]);
+    expect(counts).toEqual([]);
+    // The same text, whitespace around it aside, is the same list.
+    expect(await listBookmarks({ store: port, cursors: codec }, ask({ q: " a ", cursor }))).toMatchObject({ kind: "listed" });
+    expect(lists[0]?.after).toEqual({ key: "key-b", id: "b" });
   });
 
   it("opens a cursor again for the same list written with the same filters, whatever case the identifiers are in", async () => {

@@ -112,6 +112,7 @@ export const systemOperations: readonly string[] = [
   "sys_go_other_workspaces",
   "sys_search",
   "sys_go_suggest",
+  "sys_bookmark_match",
 ];
 
 /**

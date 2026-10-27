@@ -67,6 +67,10 @@
         "description": "Gib einem Lesezeichen einen kurzen, privaten Slug und öffne es von überall über /go/. Füge irgendwo auf dieser Seite einen Link ein, um ihn zu speichern, oder lege selbst ein Lesezeichen an."
       },
       "noMatch": "Keine Lesezeichen passen zu diesen Filtern",
+      "search": {
+        "label": "Suche",
+        "placeholder": "Titel, Host, Slug oder Beschreibung"
+      },
       "clearFilters": "Filter zurücksetzen",
       "count": "{shown} von {total} angezeigt",
       "countAtLeast": "{shown} von {total}+ angezeigt",
@@ -83,6 +87,7 @@
         "remove": "Filter entfernen: {label}",
         "folderChip": "Ordner: {name}",
         "folderChipUnknown": "Ordner",
+        "queryChip": "Suche: {text}",
         "folder": {
           "label": "Ordner",
           "placeholder": "Beliebiger Ordner",
@@ -744,6 +749,14 @@
         "title": "Noch keine Slugs",
         "description": "Gib einem Lesezeichen einen kurzen Slug, und go bringt dich direkt hin. Gib go und den Slug in die Adressleiste deines Browsers ein, sobald er eingerichtet ist.",
         "action": "Neues Lesezeichen"
+      },
+      "search": {
+        "label": "Deine Slugs durchsuchen",
+        "placeholder": "Slug, Titel oder Host"
+      },
+      "noMatch": {
+        "title": "Keine Slugs passen zu dieser Suche",
+        "clear": "Suche zurücksetzen"
       },
       "error": {
         "turnOn": "Die Weiterleitung konnte nicht eingeschaltet werden. Sie ist wieder aus.",

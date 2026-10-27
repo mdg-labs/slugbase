@@ -67,6 +67,10 @@
         "description": "Give a bookmark a short, private slug and open it from anywhere through /go/. Paste a link anywhere on this page to save it, or create a bookmark yourself."
       },
       "noMatch": "No bookmarks match these filters",
+      "search": {
+        "label": "Search",
+        "placeholder": "Title, host, slug or description"
+      },
       "clearFilters": "Clear filters",
       "count": "Showing {shown} of {total}",
       "countAtLeast": "Showing {shown} of {total}+",
@@ -83,6 +87,7 @@
         "remove": "Remove filter: {label}",
         "folderChip": "Folder: {name}",
         "folderChipUnknown": "Folder",
+        "queryChip": "Search: {text}",
         "folder": {
           "label": "Folder",
           "placeholder": "Any folder",
@@ -744,6 +749,14 @@
         "title": "No slugs yet",
         "description": "Give a bookmark a short slug and go takes you straight to it. Type go and the slug into your browser’s address bar once it is set up.",
         "action": "New bookmark"
+      },
+      "search": {
+        "label": "Search your slugs",
+        "placeholder": "Slug, title or host"
+      },
+      "noMatch": {
+        "title": "No slugs match this search",
+        "clear": "Clear search"
       },
       "error": {
         "turnOn": "Forwarding could not be turned on. It is off again.",

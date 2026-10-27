@@ -556,12 +556,16 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
       bulkBookmarks: { body: { action: "pin", filter: {} }, status: 200, foreign: { body: { action: "pin", filter: {} } } },
       previewBulkBookmarks: { body: { action: "add_tags", filter: {}, tagIds: [UNKNOWN_TAG_ID] }, status: 404, foreign: { body: { action: "add_tags", filter: {}, tagIds: [UNKNOWN_TAG_ID] } } },
     };
+    const byTextFixtures: ContractFixtures = { ...FIXTURES, listBookmarks: { query: { q: "matrix" } }, listBookmarkIds: { query: { q: "matrix" } } };
+    const sendByText = matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: byTextFixtures, credentialsOf: (principal) => world.credentialsOf(principal) });
     const sendByFilter = matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: byFilterFixtures, credentialsOf: (principal) => world.credentialsOf(principal) });
     const variants: VariantStatuses[] = [];
     const instanceAdminStatuses: number[] = [];
     const resolutions: unknown[] = [];
     const searches: unknown[] = [];
     const suggestions: unknown[] = [];
+    const listings: unknown[] = [];
+    const selections: unknown[] = [];
     const mapping = { rowId: "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "createBookmark.slug": "bookmark", "updateBookmark.slug": "bookmark", "checkSlugAvailability.slug": "bookmark", "checkSlugAvailability.bookmarkId": "bookmark", "resolveSlug.slug": "slug", "chooseSlug.slug": "slug", "chooseSlug.bookmarkId": "bookmark", "deleteGoPreference.slug": "slug", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "listBookmarkIds.folderId": "folder", "listBookmarkIds.tag": "tag", "listBookmarkIds.tag[]": "tag", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark", "bulkBookmarks.filter.folderId": "folder", "bulkBookmarks.filter.tag": "tag", "bulkBookmarks.filter.tag[]": "tag", "bulkBookmarks.folderId": "folder", "bulkBookmarks.tagIds[]": "tag", "previewBulkBookmarks.ids[]": "bookmark", "previewBulkBookmarks.filter.hasSlug": "bookmark", "previewBulkBookmarks.filter.folderId": "folder", "previewBulkBookmarks.filter.tag": "tag", "previewBulkBookmarks.filter.tag[]": "tag", "previewBulkBookmarks.tagIds[]": "tag" } as const;
     const request = async (call: ApiCall): Promise<ApiResponse> => {
       // The bulk request and the preview name the identifiers of B in several inputs, and one request cannot carry them all: `ids` and `filter` together are malformed, the
@@ -582,6 +586,14 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
       }
       if (operationId === "suggestSlugs" && response.status === 200) {
         suggestions.push(response.body);
+      }
+      if (operationId === "listBookmarks" || operationId === "listBookmarkIds") {
+        // The `hasSlug` of the two is a boolean, and the identifier of B the matrix puts in it is refused before any bookmark is looked at, so the call is sent a second time as the same principal with the text
+        // that every row of B is named after, which reaches the handler and is judged for the names of B in its answer.
+        const asked = await sendByText({ ...call, url: call.operation.path, query: {}, body: undefined });
+        if (asked.status === 200) {
+          (operationId === "listBookmarks" ? listings : selections).push(asked.body);
+        }
       }
       return response;
     };
@@ -662,6 +674,10 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     expect(searches).toEqual(Array.from({ length: 9 }, () => ({ bookmarks: [], folders: [], tags: [] })));
     // And the same nine principals asked for the slugs that start with the prefix the two slugs of B begin with: neither comes back, nor does any bookmark or any address of B.
     expect(suggestions).toEqual(Array.from({ length: 9 }, () => ({ suggestions: [] })));
+    // The three sessions and the six tokens of A (a token that may only read can list) asked the bookmark list and the select-all for the text that every row of B is named after, once for each of the two
+    // bookmarks of B the matrix names: no bookmark of B comes back, and the matrix of A holds nothing that matches.
+    expect(listings).toEqual(Array.from({ length: 9 * 2 }, () => ({ items: [], nextCursor: null, total: 0 })));
+    expect(selections).toEqual(Array.from({ length: 9 * 2 }, () => ({ ids: [], truncated: false })));
     expect(await contentOfB()).toBe(before);
     // Every invitation the matrix tried to make was refused before anything was written, in A as in B, and the one invitation of B is still its own,
     // pending, with the token hash the seed gave it.

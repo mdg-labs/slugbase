@@ -345,6 +345,7 @@ export const BookmarkFilterSchema: z.ZodObject<{
     pinned: z.ZodOptional<z.ZodBoolean>;
     hasSlug: z.ZodOptional<z.ZodBoolean>;
     forwarding: z.ZodOptional<z.ZodBoolean>;
+    q: z.ZodOptional<z.ZodString>;
     url: z.ZodOptional<z.ZodString>;
     folderId: z.ZodOptional<z.ZodUUID>;
     tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
@@ -365,11 +366,13 @@ export const BookmarkIdsQuerySchema: z.ZodObject<{
         mine: "mine";
     }>>;
     url: z.ZodOptional<z.ZodString>;
-    pinned: z.ZodOptional<z.ZodEnum<{
+    tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
+    q: z.ZodOptional<z.ZodString>;
+    forwarding: z.ZodOptional<z.ZodEnum<{
         true: "true";
         false: "false";
     }>>;
-    forwarding: z.ZodOptional<z.ZodEnum<{
+    pinned: z.ZodOptional<z.ZodEnum<{
         true: "true";
         false: "false";
     }>>;
@@ -378,7 +381,6 @@ export const BookmarkIdsQuerySchema: z.ZodObject<{
         false: "false";
     }>>;
     folderId: z.ZodOptional<z.ZodUUID>;
-    tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -519,6 +521,7 @@ export const bulkBookmarks: {
                 pinned: z.ZodOptional<z.ZodBoolean>;
                 hasSlug: z.ZodOptional<z.ZodBoolean>;
                 forwarding: z.ZodOptional<z.ZodBoolean>;
+                q: z.ZodOptional<z.ZodString>;
                 url: z.ZodOptional<z.ZodString>;
                 folderId: z.ZodOptional<z.ZodUUID>;
                 tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
@@ -559,6 +562,7 @@ export const BulkBookmarksPreviewRequestSchema: z.ZodObject<{
         pinned: z.ZodOptional<z.ZodBoolean>;
         hasSlug: z.ZodOptional<z.ZodBoolean>;
         forwarding: z.ZodOptional<z.ZodBoolean>;
+        q: z.ZodOptional<z.ZodString>;
         url: z.ZodOptional<z.ZodString>;
         folderId: z.ZodOptional<z.ZodUUID>;
         tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
@@ -604,6 +608,7 @@ export const BulkBookmarksRequestSchema: z.ZodObject<{
         pinned: z.ZodOptional<z.ZodBoolean>;
         hasSlug: z.ZodOptional<z.ZodBoolean>;
         forwarding: z.ZodOptional<z.ZodBoolean>;
+        q: z.ZodOptional<z.ZodString>;
         url: z.ZodOptional<z.ZodString>;
         folderId: z.ZodOptional<z.ZodUUID>;
         tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
@@ -949,6 +954,7 @@ export interface ComponentTypes {
             forwarding?: boolean;
             hasSlug?: boolean;
             pinned?: boolean;
+            q?: string;
             scope?: "all" | "mine";
             tag?: string | string[];
             url?: string;
@@ -1858,9 +1864,9 @@ export const createFolder: {
                 map: "map";
                 target: "target";
                 code: "code";
-                tag: "tag";
-                folder: "folder";
                 bookmark: "bookmark";
+                folder: "folder";
+                tag: "tag";
                 "folder-open": "folder-open";
                 "folder-heart": "folder-heart";
                 "folder-code": "folder-code";
@@ -1949,9 +1955,9 @@ export const CreateFolderRequestSchema: z.ZodObject<{
         map: "map";
         target: "target";
         code: "code";
-        tag: "tag";
-        folder: "folder";
         bookmark: "bookmark";
+        folder: "folder";
+        tag: "tag";
         "folder-open": "folder-open";
         "folder-heart": "folder-heart";
         "folder-code": "folder-code";
@@ -3234,9 +3240,9 @@ export const GoCandidateSchema: z.ZodObject<{
         displayName: z.ZodString;
     }, z.core.$strict>>;
     sharedVia: z.ZodNullable<z.ZodEnum<{
+        folder: "folder";
         direct: "direct";
         team: "team";
-        folder: "folder";
     }>>;
 }, z.core.$strict>;
 
@@ -3302,9 +3308,9 @@ export const GoResolutionSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
             displayName: z.ZodString;
         }, z.core.$strict>>;
         sharedVia: z.ZodNullable<z.ZodEnum<{
+            folder: "folder";
             direct: "direct";
             team: "team";
-            folder: "folder";
         }>>;
     }, z.core.$strict>;
 }, z.core.$strict>, z.ZodObject<{
@@ -3318,9 +3324,9 @@ export const GoResolutionSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
             displayName: z.ZodString;
         }, z.core.$strict>>;
         sharedVia: z.ZodNullable<z.ZodEnum<{
+            folder: "folder";
             direct: "direct";
             team: "team";
-            folder: "folder";
         }>>;
     }, z.core.$strict>;
 }, z.core.$strict>, z.ZodObject<{
@@ -3334,9 +3340,9 @@ export const GoResolutionSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
             displayName: z.ZodString;
         }, z.core.$strict>>;
         sharedVia: z.ZodNullable<z.ZodEnum<{
+            folder: "folder";
             direct: "direct";
             team: "team";
-            folder: "folder";
         }>>;
     }, z.core.$strict>>;
 }, z.core.$strict>], "result">;
@@ -3357,9 +3363,9 @@ export const GoSuggestionSchema: z.ZodObject<{
         displayName: z.ZodString;
     }, z.core.$strict>>;
     sharedVia: z.ZodNullable<z.ZodEnum<{
+        folder: "folder";
         direct: "direct";
         team: "team";
-        folder: "folder";
     }>>;
 }, z.core.$strict>;
 
@@ -3375,9 +3381,9 @@ export const GoSuggestionsSchema: z.ZodObject<{
             displayName: z.ZodString;
         }, z.core.$strict>>;
         sharedVia: z.ZodNullable<z.ZodEnum<{
+            folder: "folder";
             direct: "direct";
             team: "team";
-            folder: "folder";
         }>>;
     }, z.core.$strict>>;
 }, z.core.$strict>;
@@ -3958,11 +3964,13 @@ export const listBookmarkIds: {
                 mine: "mine";
             }>>;
             url: z.ZodOptional<z.ZodString>;
-            pinned: z.ZodOptional<z.ZodEnum<{
+            tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
+            q: z.ZodOptional<z.ZodString>;
+            forwarding: z.ZodOptional<z.ZodEnum<{
                 true: "true";
                 false: "false";
             }>>;
-            forwarding: z.ZodOptional<z.ZodEnum<{
+            pinned: z.ZodOptional<z.ZodEnum<{
                 true: "true";
                 false: "false";
             }>>;
@@ -3971,7 +3979,6 @@ export const listBookmarkIds: {
                 false: "false";
             }>>;
             folderId: z.ZodOptional<z.ZodUUID>;
-            tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
         }, z.core.$strict>;
     };
     readonly responses: {
@@ -4016,6 +4023,7 @@ export const listBookmarks: {
                 true: "true";
                 false: "false";
             }>>;
+            q: z.ZodOptional<z.ZodString>;
             url: z.ZodOptional<z.ZodString>;
             folderId: z.ZodOptional<z.ZodUUID>;
             tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
@@ -4090,6 +4098,7 @@ export const ListBookmarksQuerySchema: z.ZodObject<{
         true: "true";
         false: "false";
     }>>;
+    q: z.ZodOptional<z.ZodString>;
     url: z.ZodOptional<z.ZodString>;
     folderId: z.ZodOptional<z.ZodUUID>;
     tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
@@ -8468,6 +8477,7 @@ export interface OperationTypes {
                 pinned?: "true" | "false";
                 hasSlug?: "true" | "false";
                 forwarding?: "true" | "false";
+                q?: string;
                 url?: string;
                 folderId?: string;
                 tag?: string | string[];
@@ -8545,6 +8555,7 @@ export interface OperationTypes {
                 pinned?: "true" | "false";
                 hasSlug?: "true" | "false";
                 forwarding?: "true" | "false";
+                q?: string;
                 url?: string;
                 folderId?: string;
                 tag?: string | string[];
@@ -13794,6 +13805,7 @@ export const previewBulkBookmarks: {
                 pinned: z.ZodOptional<z.ZodBoolean>;
                 hasSlug: z.ZodOptional<z.ZodBoolean>;
                 forwarding: z.ZodOptional<z.ZodBoolean>;
+                q: z.ZodOptional<z.ZodString>;
                 url: z.ZodOptional<z.ZodString>;
                 folderId: z.ZodOptional<z.ZodUUID>;
                 tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
@@ -14629,9 +14641,9 @@ export const resolveSlug: {
         displayName: z.ZodString;
         }, z.core.$strict>>;
         sharedVia: z.ZodNullable<z.ZodEnum<{
+        folder: "folder";
         direct: "direct";
         team: "team";
-        folder: "folder";
         }>>;
         }, z.core.$strict>;
         }, z.core.$strict>, z.ZodObject<{
@@ -14645,9 +14657,9 @@ export const resolveSlug: {
         displayName: z.ZodString;
         }, z.core.$strict>>;
         sharedVia: z.ZodNullable<z.ZodEnum<{
+        folder: "folder";
         direct: "direct";
         team: "team";
-        folder: "folder";
         }>>;
         }, z.core.$strict>;
         }, z.core.$strict>, z.ZodObject<{
@@ -14661,9 +14673,9 @@ export const resolveSlug: {
         displayName: z.ZodString;
         }, z.core.$strict>>;
         sharedVia: z.ZodNullable<z.ZodEnum<{
+        folder: "folder";
         direct: "direct";
         team: "team";
-        folder: "folder";
         }>>;
         }, z.core.$strict>>;
         }, z.core.$strict>], "result">, Readonly<Record<string, ResponseHeader>>>;
@@ -15144,9 +15156,9 @@ export const suggestSlugs: {
         displayName: z.ZodString;
         }, z.core.$strict>>;
         sharedVia: z.ZodNullable<z.ZodEnum<{
+        folder: "folder";
         direct: "direct";
         team: "team";
-        folder: "folder";
         }>>;
         }, z.core.$strict>>;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
@@ -15455,9 +15467,9 @@ export const updateFolder: {
                 map: "map";
                 target: "target";
                 code: "code";
-                tag: "tag";
-                folder: "folder";
                 bookmark: "bookmark";
+                folder: "folder";
+                tag: "tag";
                 "folder-open": "folder-open";
                 "folder-heart": "folder-heart";
                 "folder-code": "folder-code";
@@ -15552,9 +15564,9 @@ export const UpdateFolderRequestSchema: z.ZodObject<{
         map: "map";
         target: "target";
         code: "code";
-        tag: "tag";
-        folder: "folder";
         bookmark: "bookmark";
+        folder: "folder";
+        tag: "tag";
         "folder-open": "folder-open";
         "folder-heart": "folder-heart";
         "folder-code": "folder-code";
