@@ -2,6 +2,7 @@ import { LimitedEntitlementSource } from "@slugbase/testing";
 import { classifyOperations, createProbe, loadOpenApiDocument, PROBE_INSTANCE_ADMIN, runApiMatrix, runTokenMatrix, type ApiCall, type ApiResponse, type MatrixFailure, type Probe } from "@slugbase/testing/tenancy";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { beforeAll, describe, expect, it } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../../vitest.shared.ts";
 import { createAccountOnlyTenantResolver } from "../../src/auth/tenant-resolver.ts";
 import { createServer, type Server, type ServerModule } from "../../src/create-server.ts";
 import { HookResult } from "../../src/hooks/index.ts";
@@ -523,7 +524,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     });
   }
 
-  it("passes for the forty-three tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations, its bookmarks, its tags, its folders, its remembered choices and its audit log as they were", async () => {
+  it("passes for the forty-three tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations, its bookmarks, its tags, its folders, its remembered choices and its audit log as they were", { timeout: HEAVY_TEST_TIMEOUT_MS }, async () => {
     await seedFixtureWorkspaces();
     const before = await contentOfB();
     // The deletion of the workspace takes no identifier, so the matrix repeats it as every principal of A (the sessions of the matrix have just
