@@ -30,6 +30,7 @@ existing line by adding its PR number.
 - **uniqueness by raw string** — a duplicate check compares raw strings that the consumer normalises (a router path with and without a trailing slash), so two entries the consumer treats as one pass and one shadows the other — PR 422
 
 - **runtime floor** — code relies on a runtime API newer than the declared engine floor (`import.meta.main` under `engines` `>=24.0.0`), so a permitted runtime silently skips the code it guards — PR 409
+- **copied threshold list** — a runner classifies a tool's exit status against its own copy of the thresholds the tool enforces, the copy misses some, so a crossed threshold reads as a failed run instead of a regression — PR 622
 
 ## Design docs
 
@@ -70,6 +71,7 @@ existing line by adding its PR number.
 ## Input handling
 
 - **quadratic regex** — a regular expression with an end-anchored repetition (a trim's `[\s]+$` branch) runs on input whose length the function itself does not bound, relying on a caller's cap, so a long run of the repeated character followed by another one takes quadratic time — PR 558
+- **sibling path skips the cleanup** — one of several entry points that take the same text (a list filter beside the search) applies a weaker cleanup than the others, so a character the database refuses (NUL) reaches it and the request answers 500 — PR 622
 
 ## Shared helpers
 
@@ -89,6 +91,10 @@ existing line by adding its PR number.
 - **wait on a promise that may never settle** — a test helper awaits a completion promise of every object of a kind (an animation's `finished`) without filtering out the states in which it never settles on its own (paused, idle), so one such object blocks the helper until the test times out — PR 524
 - **deadline checked only between polls** — a polling helper checks its own deadline between calls while each call auto-waits on its own (a Playwright locator action waiting for its element), so a missing element holds one call until the test's timeout and the helper's bound and named error never fire — PR 602
 - **unescaped literal in a pattern** — a test builds a `RegExp` from a literal value (an origin, a hostname) without escaping it, so each `.` matches any character and the assertion accepts look-alike values — PR 529
+- **fixed sleep as a bound** — a test sleeps a fixed delay and then asserts that something has happened, so a loaded runner that takes longer fails it; a positive outcome is awaited by polling it — PR 622
+- **timeout told by timing alone** — an error classifier treats any rejection that arrives near a deadline as that deadline's timeout without reading the error, so an unrelated late failure (`Target closed`) is reported as the timeout — PR 622
+- **hook shorter than its waits** — a test hook calls a helper whose own deadlines (a mail wait, a wait on another worker) exceed the hook's default timeout, so the hook dies first and leaves shared coordination files half-written — PR 622
+- **cross-run state keyed by a reusable value** — state a test run keeps on disk is keyed by a value a later run can draw again (a random free port) instead of being cleared at the start of each run, so a later run reads a session of a stack that is gone — PR 622
 
 ## Web UI
 
