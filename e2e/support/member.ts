@@ -1,10 +1,10 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname } from "node:path";
 import { expect, type APIResponse, type PlaywrightWorkerArgs } from "@playwright/test";
 import { appOrigin, STORAGE_STATE } from "./environment.ts";
 import { invitationLink, waitForMail } from "./mailpit.ts";
-import { READY_TIMEOUT_MS } from "./member-shared.ts";
+import { READY_TIMEOUT_MS, sharedMemberState } from "./member-shared.ts";
 
 // A member of the journeys' own. The owner of the instance signed in with a password nobody keeps, and the journeys that read the
 // owner's language or theme queue for the lock of the account's preferences (support/account-preferences.ts), so a journey that does not
@@ -57,14 +57,6 @@ async function provisionMember(playwright: Playwright, name: string, token: stri
 
 function isAlreadyThere(error: unknown): boolean {
   return error instanceof Error && "code" in error && error.code === "EEXIST";
-}
-
-/**
- * Where the session of the shared member `name` is kept for this run of the stack: the origin the server is configured with has a port
- * of its own for every run, so a session an earlier run left is never read.
- */
-export function sharedMemberState(name: string): string {
-  return join(dirname(STORAGE_STATE), `${name}-${new URL(appOrigin()).port}.json`);
 }
 
 /**

@@ -6,8 +6,8 @@ import { DESTINATION_HEADING, startDestination, type Destination } from "../supp
 import { appOrigin } from "../support/environment.ts";
 import { WORKSPACE_NAME } from "../support/instance.ts";
 import { tabTo, waitForInitialFocus } from "../support/keyboard.ts";
-import { ensureSharedMember, sharedMemberState } from "../support/member.ts";
-import { SHARED_MEMBER_HOOK_TIMEOUT_MS } from "../support/member-shared.ts";
+import { ensureSharedMember } from "../support/member.ts";
+import { SHARED_MEMBER_HOOK_TIMEOUT_MS, sharedMemberState } from "../support/member-shared.ts";
 import { expectHighlighted, openPaletteWithShortcut, paletteDialog, paletteGroup, paletteInput } from "../support/palette.ts";
 import { expect, test } from "../support/test.ts";
 
