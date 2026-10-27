@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createServer as createHttpServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { request as httpsRequest } from "node:https";
 import { createServer as createNetServer } from "node:net";
+import { connect as tlsConnect } from "node:tls";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, before, describe, it } from "node:test";
@@ -138,5 +139,41 @@ void describe("startTlsProxy", () => {
       "the proxy to answer the next request",
     );
     assert.equal(body, "ok");
+  });
+
+  void it("keeps an idle connection open past Node's default keep-alive timeout, so a client can reuse it", async () => {
+    const socket = tlsConnect({ host: "127.0.0.1", port: proxyPort, ca: readFileSync(certFile) });
+    let received = "";
+    let closed = false;
+    socket.on("data", (chunk: Buffer) => {
+      received += chunk.toString("utf8");
+    });
+    socket.on("error", () => undefined);
+    socket.on("close", () => {
+      closed = true;
+    });
+    const requestOverSocket = async (): Promise<string> => {
+      received = "";
+      socket.write(`GET ${NEXT} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive\r\n\r\n`);
+      const deadline = Date.now() + 5000;
+      while (!received.endsWith("\r\n\r\nok")) {
+        if (closed || Date.now() > deadline) {
+          throw new Error(`no complete answer; connection closed: ${String(closed)}`);
+        }
+        await new Promise<void>((resolve) => setTimeout(resolve, 20));
+      }
+      return received;
+    };
+    try {
+      await within(new Promise<void>((resolve) => socket.once("secureConnect", resolve)), "the TLS handshake");
+      assert.match(await requestOverSocket(), /^HTTP\/1\.1 200/);
+
+      // Node closes an idle connection after keepAliveTimeout (5 s by default) plus a 1 s buffer; wait just past that.
+      await new Promise<void>((resolve) => setTimeout(resolve, 6500));
+      assert.equal(closed, false, "the proxy closed an idle connection a client may still reuse");
+      assert.match(await requestOverSocket(), /^HTTP\/1\.1 200/);
+    } finally {
+      socket.destroy();
+    }
   });
 });

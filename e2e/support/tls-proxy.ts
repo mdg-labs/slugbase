@@ -17,6 +17,11 @@ export interface TlsProxyOptions {
  * origin the server is configured with (its session cookie is Secure and it refuses a
  * mutation from any other origin). The request is forwarded as it is, headers
  * included; nothing is added or taken out. Returns a function that stops the proxy.
+ *
+ * Playwright's request contexts keep their sockets open between requests with no idle limit. A server
+ * that closes an idle socket after a timeout (Node's default is 5 s) can do so just as a client writes
+ * the next request on it, which the client sees as `socket hang up (ECONNRESET)`. The proxy therefore
+ * never times out an idle connection; the stop function closes them all.
  */
 export async function startTlsProxy({ port, upstream, keyFile, certFile }: TlsProxyOptions): Promise<() => Promise<void>> {
   const server = createServer({ key: readFileSync(keyFile), cert: readFileSync(certFile) }, (incoming, outgoing) => {
@@ -51,6 +56,7 @@ export async function startTlsProxy({ port, upstream, keyFile, certFile }: TlsPr
     });
     pipeline(incoming, forwarded, () => undefined);
   });
+  server.keepAliveTimeout = 0;
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
     server.listen(port, "127.0.0.1", () => {
