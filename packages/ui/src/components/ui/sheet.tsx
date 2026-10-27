@@ -5,6 +5,7 @@ import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { XIcon } from "lucide-react";
 import type React from "react";
+import { keepTabInside } from "../../lib/keep-tab-inside.ts";
 import { cn } from "../../lib/utils.ts";
 import { Button } from "./button.tsx";
 import { ScrollArea } from "./scroll-area.tsx";
@@ -75,6 +76,7 @@ export function SheetPopup({
   variant = "default",
   closeProps,
   portalProps,
+  onKeyDown,
   ...props
 }: SheetPrimitive.Popup.Props & {
   showCloseButton?: boolean;
@@ -104,6 +106,10 @@ export function SheetPopup({
           )}
           data-slot="sheet-popup"
           {...props}
+          onKeyDown={(event) => {
+            onKeyDown?.(event);
+            keepTabInside(event);
+          }}
         >
           {children}
           {showCloseButton && (

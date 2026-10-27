@@ -24,7 +24,7 @@ existing line by adding its PR number.
 - **two clocks** — a freshness check compares an instant stamped by one host's clock (the database) with one read from another (the application) and allows no difference, so a session stamped a moment ago reads as in the future and is refused — PR 462
 - **repeat erases the record** — a fail-closed lint records an object's prior state each time a statement names it, so a repeat that is valid SQL (a second `DROP … IF EXISTS`) overwrites the record with "unknown" and the later comparison and end-of-file check skip it — PR 506
 - **new branch skips the gate** — a handler gates some branches of a state-changing request with a cross-site check (Fetch Metadata) and a newly added branch that also changes state (an OIDC start intent that accepts an invitation) is left out, so a hostile page can drive that branch — PR 520
-- **one scheme for many** — a check for a script address (in a guard or a test's injection detector) matches `javascript:` only, so `vbscript:` and `data:` addresses pass — PR 577
+- **one scheme for many** — a check for a script address (in a guard or a test's injection detector) matches `javascript:` only, so `vbscript:` and `data:` addresses pass — PR 577, 612
 - **floating image** — a rig meant for repeatable measurement pulls a floating tag (`latest`), so a re-run can measure a different build than the recorded baseline — PR 381
 
 - **uniqueness by raw string** — a duplicate check compares raw strings that the consumer normalises (a router path with and without a trailing slash), so two entries the consumer treats as one pass and one shadows the other — PR 422
@@ -65,6 +65,7 @@ existing line by adding its PR number.
 
 - **refreshed only on refusal** — a client cache of a server-decided grant (the entitlements behind a UI gate) never goes stale and is refreshed only when the client itself is refused, so a grant made elsewhere (another tab, an upgrade) leaves the gate closed until a reload — PR 541
 - **absence read from a cache** — a client concludes from a cached list that a thing does not exist (a folder named in the address) and acts on it (clears the filter, says it is gone), though the list may predate the thing (made on another device), so a valid choice is thrown away — PR 587
+- **unload request not kept alive** — a request sent from a page-leave path (`pagehide`, an unmount) omits `keepalive`, so the browser may cancel it as the page goes and the deferred write never happens — PR 612
 
 ## Input handling
 
@@ -96,3 +97,5 @@ existing line by adding its PR number.
 - **data loaded for every viewer** — a component loads a whole paged list (walking every page) for every role, although it reads the result only for one role, so other viewers make every request for nothing — PR 510
 - **sibling page skips the shared reaction** — one page of a group omits a hook its siblings all call on a failed request (re-reading the account after a 403), so on that page alone a lost permission shows a retry that keeps failing instead of the access page — PR 532
 - **word-for-word state label** — a short toggle label ("Forwarding on") is translated word for word, and in the target language the particle reads as a direction ("Weiterleitung an", forwarding to …) rather than a state; a label naming a state uses that language's state adjective — PR 569
+- **reachability by computed style** — a helper that lists the controls Tab reaches judges them by computed `display` and `visibility` and takes document order, so a control the browser skips without either (inside a closed `<details>`) or orders differently (a positive `tabindex`) becomes the first or last stop and the trap misses the real one — PR 612
+- **secure-context API presumed** — code calls a browser API that exists only in a secure context (`navigator.clipboard`) without allowing for its absence, so on an instance served over http it throws before any feedback — PR 612

@@ -2020,6 +2020,8 @@ export interface components {
             nextCursor: string | null;
         };
         GoResolution: {
+            /** @description The caller's other workspaces in which the caller can read a forwarding, not plan-archived bookmark with the slug, in the order of their names, at most 20; empty when there is none, for a slug outside the grammar and always for a request made with an API token, which is bound to its workspace and cannot switch. Naming one forwards nowhere: switching to it is the caller's own request */
+            otherWorkspaces: components["schemas"]["GoWorkspace"][];
             /**
              * @description Nothing the caller can read has the slug in the workspace, or the slug is not one
              * @constant
@@ -2047,6 +2049,15 @@ export interface components {
              * @constant
              */
             result: "multiple";
+        };
+        GoWorkspace: {
+            /**
+             * Format: uuid
+             * @description The workspace's identifier, which `PUT /session/active-workspace` takes to switch to it
+             */
+            id: string;
+            /** @description The workspace's name */
+            name: string;
         };
         HealthStatus: {
             /** @constant */
@@ -5313,7 +5324,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description What the slug resolves to for the caller in the workspace, in the order of Q25: the bookmark the caller remembered for it if it is still a candidate (preferred), the caller's own bookmark (single), the one bookmark shared with the caller (single), several bookmarks shared with the caller (multiple), or none. A slug that nothing the caller can read has is none, whoever else has it and in whichever workspace; the answer names no address and counts no use */
+            /** @description What the slug resolves to for the caller in the workspace, in the order of Q25: the bookmark the caller remembered for it if it is still a candidate (preferred), the caller's own bookmark (single), the one bookmark shared with the caller (single), several bookmarks shared with the caller (multiple), or none. A slug that nothing the caller can read has in the workspace is none, whoever else has it; a none names, in otherWorkspaces, the caller's other workspaces in which the caller can read a bookmark with the slug, and nothing of any other workspace (a session only: a token's none names none). The answer names no address and counts no use */
             200: {
                 headers: {
                     [name: string]: unknown;

@@ -358,7 +358,7 @@ export function installChain(
     securityHeaders.apply(context);
   };
 
-  app.all("*", async (context) => {
+  const serve = async (context: Context<ChainEnv, string>): Promise<Response> => {
     let reached = -1;
     const dispatch = async (index: number): Promise<void> => {
       if (index <= reached) {
@@ -396,7 +396,12 @@ export function installChain(
     }
     requestContext.finish(context);
     return context.res;
-  });
+  };
+
+  // The router's `*` is the pattern `.*`, which does not match a decoded line break (`\n`, `\r`, U+2028, U+2029), so
+  // the framework answers such a path with its own bare 404 before `serve` runs. Its not-found handler is the same chain.
+  app.all("*", serve);
+  app.notFound(serve);
 
   return [...requestStages.map((stage) => stage.name), handler.name, ...responseStages.map((stage) => stage.name)];
 }

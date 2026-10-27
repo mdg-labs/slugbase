@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { hashKey, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { ME_QUERY_KEY, withAccount, type Account, type Me, type PreferenceChanges } from "./me.ts";
 
@@ -27,8 +27,31 @@ function savesOf(queryClient: QueryClient): Saves {
   if (state === undefined) {
     state = { confirmed: undefined, pending: [] };
     saves.set(queryClient, state);
+    keepPendingShown(queryClient, state);
   }
   return state;
+}
+
+/**
+ * An account the cache receives from a read (a refetch on focus, a late observer, an invalidation) is what
+ * the server held when it answered, so while saves are pending it becomes the confirmed account and the
+ * pending changes are laid over it again. Writes made by the saves themselves are manual and left alone.
+ */
+function keepPendingShown(queryClient: QueryClient, state: Saves): void {
+  queryClient.getQueryCache().subscribe((event) => {
+    if (event.type !== "updated" || event.action.type !== "success" || event.action.manual === true) {
+      return;
+    }
+    if (state.pending.length === 0 || event.query.queryHash !== hashKey(ME_QUERY_KEY)) {
+      return;
+    }
+    const read = (event.action.data as Me | undefined)?.account;
+    if (read === undefined) {
+      return;
+    }
+    state.confirmed = read;
+    show(queryClient, state);
+  });
 }
 
 /** `base` with its preference fields set to the confirmed account's with every change still pending laid over. */

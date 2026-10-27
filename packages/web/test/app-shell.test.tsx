@@ -44,7 +44,7 @@ describe("the app shell around the Home route", () => {
     expect(within(main).getByText("Bookmarks with short, private slugs.")).toBeTruthy();
   });
 
-  it("lists Home, Bookmarks, Folders and Tags, marks Home as the current page and shows the product name beside the mark", async () => {
+  it("lists Home, Bookmarks, Folders, Tags and Forwarding, marks Home as the current page and shows the product name beside the mark", async () => {
     stubConfig();
     const App = createWebApp({ extensions: [] });
 
@@ -52,7 +52,7 @@ describe("the app shell around the Home route", () => {
 
     const nav = await screen.findByRole("navigation", { name: "Main navigation" });
     const links = within(nav).getAllByRole("link");
-    expect(links.map((link) => link.textContent)).toEqual(["Home", "Bookmarks", "Folders", "Tags"]);
+    expect(links.map((link) => link.textContent)).toEqual(["Home", "Bookmarks", "Folders", "Tags", "Forwarding"]);
     expect(links[0]?.getAttribute("href")).toBe("/");
     expect(links[1]?.getAttribute("href")).toBe("/bookmarks");
     expect(links[2]?.getAttribute("href")).toBe("/folders");

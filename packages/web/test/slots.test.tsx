@@ -81,10 +81,10 @@ describe("a fixture extension", () => {
 
     const nav = await screen.findByRole("navigation", { name: "Main navigation" });
     const links = within(nav).getAllByRole("link");
-    expect(links.map((link) => link.textContent)).toEqual(["Home", "Bookmarks", "Folders", "Tags", "Plan & billing"]);
-    expect(links[4]?.getAttribute("href")).toBe("/settings/billing");
+    expect(links.map((link) => link.textContent)).toEqual(["Home", "Bookmarks", "Folders", "Tags", "Forwarding", "Plan & billing"]);
+    expect(links[5]?.getAttribute("href")).toBe("/settings/billing");
 
-    fireEvent.click(links[4] as HTMLElement);
+    fireEvent.click(links[5] as HTMLElement);
 
     const main = await screen.findByRole("heading", { name: "Fixture billing page" });
     expect(screen.getByRole("main").contains(main)).toBe(true);
@@ -124,7 +124,7 @@ describe("a fixture extension", () => {
     await renderApp(<App />);
 
     const nav = await screen.findByRole("navigation", { name: "Main navigation" });
-    expect(within(nav).getAllByRole("link").map((link) => link.textContent)).toEqual(["Home", "Bookmarks", "Folders", "Tags"]);
+    expect(within(nav).getAllByRole("link").map((link) => link.textContent)).toEqual(["Home", "Bookmarks", "Folders", "Tags", "Forwarding"]);
   });
 
   it("is refused before anything is requested when its page takes a path of the app", () => {

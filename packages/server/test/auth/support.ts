@@ -226,17 +226,28 @@ export async function workspaceChecksum(database: TestDatabase, workspaceId: str
   return digest;
 }
 
+export const LATENCY_ROUNDS = 21;
+
+/** How many times `medianLatencyRatio` calls each side: once unmeasured to warm up, then once per round. */
+export function latencyCalls(rounds = LATENCY_ROUNDS): number {
+  return rounds + 1;
+}
+
 /**
  * How many times longer `probe` takes than `reference`, as the median over
  * `rounds` of the per-round ratio. Each round times both back to back, and the
  * order alternates, so a burst of load on a shared runner lands on both sides of
  * a round and a single slow round moves one ratio of the many, not the median.
- * Both run once first, unmeasured, to warm caches and lazily made state.
+ * Both run once first, unmeasured, to warm caches and lazily made state. A
+ * target with state made on its first use (an address has a limit bucket) costs
+ * more the first time: a side that repeats one pays that once, a side that
+ * draws a new one on every call pays it every time, so both sides draw
+ * `latencyCalls` targets of their own when the target has such state.
  */
 export async function medianLatencyRatio(
   reference: () => Promise<unknown>,
   probe: () => Promise<unknown>,
-  rounds = 21,
+  rounds = LATENCY_ROUNDS,
 ): Promise<number> {
   const timed = async (run: () => Promise<unknown>): Promise<number> => {
     const started = performance.now();

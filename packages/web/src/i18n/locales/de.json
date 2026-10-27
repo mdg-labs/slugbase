@@ -11,6 +11,7 @@
     "bookmarks": "Lesezeichen",
     "folders": "Ordner",
     "tags": "Tags",
+    "forwarding": "Weiterleitung",
     "helpAndDocs": "Hilfe & Doku",
     "switchToDark": "Zum dunklen Design wechseln",
     "switchToLight": "Zum hellen Design wechseln",
@@ -657,6 +658,172 @@
       "error": {
         "notFound": "Diesen Tag gibt es nicht mehr."
       }
+    }
+  },
+  "forwarding": {
+    "page": {
+      "title": "Weiterleitung"
+    },
+    "setup": {
+      "title": "Browser einrichten",
+      "description": "Füge SlugBase deinem Browser als Suchmaschine mit einem Kürzel hinzu. Danach bringen dich das Kürzel und ein Slug in der Adressleiste direkt zum Lesezeichen.",
+      "address": {
+        "label": "Adresse der Suchmaschine",
+        "copy": "Adresse der Suchmaschine kopieren"
+      },
+      "keyword": {
+        "label": "Kürzel",
+        "copy": "Kürzel kopieren"
+      },
+      "copied": "In die Zwischenablage kopiert",
+      "browsers": "Browser",
+      "browser": {
+        "chrome": {
+          "name": "Chrome",
+          "open": "Öffne die Einstellungen, dann Suchmaschine, dann Suchmaschinen und Websitesuche verwalten.",
+          "add": "Wähle unter Websitesuche Hinzufügen.",
+          "fill": "Gib {name} als Namen und {keyword} als Kürzel ein und füge {address} als URL ein.",
+          "save": "Wähle Hinzufügen, um sie zu speichern."
+        },
+        "firefox": {
+          "name": "Firefox",
+          "open": "Öffne die Einstellungen und wähle Suche.",
+          "add": "Wähle unter Suchkürzel Hinzufügen.",
+          "fill": "Gib {name} als Namen ein, füge {address} als URL ein und gib {keyword} als Alias ein.",
+          "save": "Speichere die Suchmaschine."
+        },
+        "safari": {
+          "name": "Safari",
+          "limit": "Safari hat keine Einstellung für eine eigene Suchmaschine.",
+          "extension": "Installiere eine Safari-Erweiterung, die eigene Suchmaschinen hinzufügt.",
+          "fill": "Füge in der Erweiterung {name} mit der Adresse {address} und dem Kürzel {keyword} hinzu."
+        },
+        "edge": {
+          "name": "Edge",
+          "open": "Öffne die Einstellungen, dann Datenschutz, Suche und Dienste, dann Adressleiste und Suche.",
+          "add": "Wähle Suchmaschinen verwalten, dann Hinzufügen.",
+          "fill": "Gib {name} als Suchmaschine und {keyword} als Kürzel ein und füge {address} als URL ein.",
+          "save": "Wähle Hinzufügen, um sie zu speichern."
+        }
+      },
+      "test": {
+        "link": "Ausprobieren: go/{slug} öffnen",
+        "own": "Öffnet go/{slug} in einem neuen Tab. Sobald die Suchmaschine eingerichtet ist, gib {keyword} {slug} in die Adressleiste ein.",
+        "sample": "Du hast noch keinen Slug, der weiterleitet, daher öffnet das eine Beispieladresse. SlugBase antwortet, dass kein Lesezeichen diesen Slug hat, und bietet an, eines anzulegen."
+      }
+    },
+    "slugs": {
+      "title": "Deine Slugs",
+      "description": "Deine Lesezeichen mit einem Slug. Die Weiterleitung entscheidet, ob dich der Slug bei go zum Lesezeichen bringt.",
+      "label": "Deine Slugs",
+      "loading": "Deine Slugs werden geladen",
+      "loadFailed": "Deine Slugs konnten nicht geladen werden.",
+      "loadMoreFailed": "Weitere Slugs konnten nicht geladen werden.",
+      "refreshFailed": "Die Slugs konnten nicht aktualisiert werden.",
+      "retry": "Erneut versuchen",
+      "loadMore": "Mehr laden",
+      "count": "{shown} von {total} angezeigt",
+      "countAtLeast": "{shown} von {total}+ angezeigt",
+      "table": {
+        "slug": "Slug",
+        "host": "Ziel",
+        "forwarding": "Weiterleitung",
+        "opens": "Aufrufe",
+        "lastOpened": "Zuletzt geöffnet",
+        "never": "Nie",
+        "actions": "Aktionen"
+      },
+      "switch": "Weiterleitung für {slug}",
+      "actionsFor": "Aktionen für {slug}",
+      "edit": "Bearbeiten",
+      "copy": "Adresse kopieren",
+      "turnOff": "Weiterleitung ausschalten",
+      "copied": "{address} kopiert",
+      "copyFailed": "Die Adresse konnte nicht kopiert werden. Markiere sie und kopiere sie von Hand.",
+      "empty": {
+        "title": "Noch keine Slugs",
+        "description": "Gib einem Lesezeichen einen kurzen Slug, und go bringt dich direkt hin. Gib go und den Slug in die Adressleiste deines Browsers ein, sobald er eingerichtet ist.",
+        "action": "Neues Lesezeichen"
+      },
+      "error": {
+        "turnOn": "Die Weiterleitung konnte nicht eingeschaltet werden. Sie ist wieder aus.",
+        "turnOff": "Die Weiterleitung konnte nicht ausgeschaltet werden. Sie ist wieder an.",
+        "changedElsewhere": "Dieses Lesezeichen wurde anderswo geändert, daher blieb die Weiterleitung unverändert. Die Liste ist wieder aktuell.",
+        "notFound": "Dieses Lesezeichen gibt es nicht mehr."
+      }
+    },
+    "choices": {
+      "title": "Gemerkte Auswahl",
+      "description": "Wenn mehrere Lesezeichen denselben Slug haben, schickt dich go zu dem, das du immer verwenden wolltest.",
+      "label": "Gemerkte Auswahl",
+      "loading": "Deine gemerkte Auswahl wird geladen",
+      "loadFailed": "Deine gemerkte Auswahl konnte nicht geladen werden.",
+      "loadMoreFailed": "Weitere gemerkte Auswahl konnte nicht geladen werden.",
+      "refreshFailed": "Die gemerkte Auswahl konnte nicht aktualisiert werden.",
+      "retry": "Erneut versuchen",
+      "loadMore": "Mehr laden",
+      "count": "{shown} angezeigt",
+      "table": {
+        "slug": "Slug",
+        "bookmark": "Lesezeichen",
+        "host": "Ziel",
+        "owner": "Besitzer",
+        "actions": "Aktionen"
+      },
+      "you": "Du",
+      "remove": "Entfernen",
+      "removeFor": "Gemerkte Auswahl für {slug} entfernen",
+      "removed": "Auswahl für {slug} vergessen.",
+      "undo": "Rückgängig",
+      "restored": "Auswahl für {slug} wieder gemerkt.",
+      "empty": {
+        "title": "Noch nichts gemerkt",
+        "description": "Passt ein Slug auf mehrere Lesezeichen und entscheidest du dich, immer eines davon zu verwenden, erscheint die Auswahl hier."
+      },
+      "error": {
+        "remove": "Die gemerkte Auswahl konnte nicht entfernt werden.",
+        "notFound": "Diese Auswahl ist schon weg."
+      }
+    }
+  },
+  "go": {
+    "retry": "Erneut versuchen",
+    "loadFailed": {
+      "title": "Dieser Slug konnte nicht nachgeschlagen werden",
+      "description": "Prüfe deine Verbindung und versuche es erneut."
+    },
+    "forward": {
+      "opening": "{title} wird geöffnet",
+      "failed": {
+        "title": "Das Lesezeichen konnte nicht geöffnet werden",
+        "description": "Versuche es erneut. Falls das weiter auftritt, hat sich das Lesezeichen möglicherweise geändert."
+      }
+    },
+    "choose": {
+      "title": "go/{slug} passt zu {count, plural, one {# Lesezeichen} other {# Lesezeichen}}",
+      "description": "Mehrere mit dir geteilte Lesezeichen haben diesen Slug. Wähle das, das du meinst.",
+      "label": "Lesezeichen mit diesem Slug",
+      "always": "Immer dieses für {slug} verwenden",
+      "manage": "Gemerkte Auswahl verwalten →",
+      "yours": "Dein Lesezeichen",
+      "shared": "Mit dir geteilt",
+      "sharedBy": "Geteilt von {owner}",
+      "via": {
+        "direct": "direkt",
+        "team": "über ein Team",
+        "folder": "über einen geteilten Ordner"
+      },
+      "failed": {
+        "title": "Dieses Lesezeichen konnte nicht geöffnet werden",
+        "description": "Die Lesezeichen mit diesem Slug haben sich möglicherweise geändert. Lade sie neu und wähle noch einmal."
+      }
+    },
+    "notFound": {
+      "title": "Kein Lesezeichen hat den Slug {slug} in {workspace}.",
+      "thisWorkspace": "diesem Workspace",
+      "description": "Prüfe die Schreibweise oder lege selbst ein Lesezeichen mit diesem Slug an.",
+      "create": "Lesezeichen mit diesem Slug anlegen",
+      "switch": "Gefunden in: {workspace} — wechseln und fortfahren"
     }
   },
   "admin": {
@@ -2407,6 +2574,7 @@
       "goBookmarks": "Zu Lesezeichen gehen",
       "goFolders": "Zu Ordnern gehen",
       "goTags": "Zu Tags gehen",
+      "goForwarding": "Zu Weiterleitung gehen",
       "newFolder": "Neuer Ordner (auf der Seite Ordner)",
       "help": "Diese Liste anzeigen",
       "move": "Fokus zum nächsten oder vorherigen Lesezeichen bewegen",

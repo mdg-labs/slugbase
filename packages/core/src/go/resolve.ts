@@ -7,6 +7,10 @@ import { parseSlug } from "./slug.ts";
 // the member picks from. Nothing is found for a slug outside the grammar, and a bookmark the member cannot read is never named, so a slug that exists only in
 // another workspace, or only as another member's private bookmark, resolves to nothing. A remembered choice that is no candidate is ignored, and the store forgets
 // it when its bookmark has changed its slug, stopped forwarding or can no longer be read by the member (doc 02 section 6.4).
+//
+// A slug that resolves to nothing in the workspace is looked up once more across the member's other workspaces (doc 02 section 6.2 step 3.5, Q26), so the not-found page
+// can offer to switch to one of them. Only this miss pays for that lookup, and it names workspaces (identifier and name, at most 20) of which the member already is a member
+// and in which the member can read a forwarding, non-archived bookmark with the slug; it never forwards across workspaces, which stays the member's explicit switch.
 
 /** How the member can read a candidate: as its owner, or through a direct share, a team's share or a shared folder. */
 export type GoAccess = "owner" | "direct" | "team" | "folder";
@@ -38,11 +42,25 @@ export interface GoBookmarkSummary {
   readonly ownerName: string | null;
 }
 
+/** A workspace the member belongs to, named on a miss. */
+export interface GoWorkspace {
+  readonly id: string;
+  readonly name: string;
+}
+
+/** The most other workspaces a miss names. */
+export const GO_OTHER_WORKSPACES_MAX = 20;
+
 export interface GoStore {
   /** The candidates of `slug` (normalised) for `accountId` in the workspace of the transaction, and the member's remembered choice for it. */
   candidates(request: { readonly slug: string; readonly accountId: string }): Promise<GoCandidateSet>;
   /** The summaries of the bookmarks of `ids` that the member can read, in no particular order. */
   summaries(ids: readonly string[]): Promise<readonly GoBookmarkSummary[]>;
+  /**
+   * The workspaces other than the one of the transaction of which the account is a member and in which it can read a forwarding, non-archived bookmark with `slug`
+   * (normalised), in the order of their names, at most `GO_OTHER_WORKSPACES_MAX`. It names no bookmark.
+   */
+  otherWorkspaces(request: { readonly slug: string; readonly accountId: string }): Promise<readonly GoWorkspace[]>;
   /**
    * Remembers `bookmarkId` as the member's choice for `slug`, replacing an earlier one, and answers whether it did. It answers false, writing nothing, when the
    * bookmark is no longer a candidate of the slug for the member, so a preference never names a bookmark that cannot be resolved to.
@@ -67,7 +85,8 @@ export interface GoChoice {
   readonly sharedVia: "direct" | "team" | "folder" | null;
 }
 
-export type GoResolution =
+/** What the slug resolves to in the workspace of the transaction, before the other workspaces of the member are asked about a miss. */
+export type GoWorkspaceResolution =
   /** Nothing the member can read has the slug (or the slug is not one). */
   | { readonly kind: "none" }
   /** The member's remembered choice, which is still a candidate. */
@@ -77,8 +96,17 @@ export type GoResolution =
   /** Several bookmarks shared with the member and none of their own, for the member to choose from, in the order of their titles. */
   | { readonly kind: "multiple"; readonly candidates: readonly GoChoice[] };
 
-export interface GoResolveDependencies {
+export type GoResolution =
+  /** Nothing the member can read has the slug in the workspace (or the slug is not one); `otherWorkspaces` are the member's other workspaces that have it. */
+  | { readonly kind: "none"; readonly otherWorkspaces: readonly GoWorkspace[] }
+  | Exclude<GoWorkspaceResolution, { readonly kind: "none" }>;
+
+export interface GoWorkspaceResolveDependencies {
   readonly store: Pick<GoStore, "candidates" | "summaries" | "forgetStale">;
+}
+
+export interface GoResolveDependencies {
+  readonly store: Pick<GoStore, "candidates" | "summaries" | "forgetStale" | "otherWorkspaces">;
 }
 
 export interface GoResolveAsk {
@@ -111,8 +139,8 @@ async function forgetUnlessCandidate(store: Pick<GoStore, "forgetStale">, ask: {
   }
 }
 
-/** The candidates of `slug` for the account, among those that still exist, in the order of Q25. */
-export async function resolveSlug({ store }: GoResolveDependencies, ask: GoResolveAsk): Promise<GoResolution> {
+/** The candidates of `slug` for the account in the workspace of the transaction, among those that still exist, in the order of Q25. */
+export async function resolveInWorkspace({ store }: GoWorkspaceResolveDependencies, ask: GoResolveAsk): Promise<GoWorkspaceResolution> {
   const accountId = ask.accountId.toLowerCase();
   const slug = parseSlug(ask.slug);
   if (slug === undefined) {
@@ -145,4 +173,18 @@ export async function resolveSlug({ store }: GoResolveDependencies, ask: GoResol
     return { kind: "none" };
   }
   return others.length === 0 ? { kind: "single", bookmark: only } : { kind: "multiple", candidates: shared.sort(byTitle) };
+}
+
+/** What `slug` resolves to for the account in the workspace of the transaction and, when it resolves to nothing there, in which other workspaces of the account it would. */
+export async function resolveSlug({ store }: GoResolveDependencies, ask: GoResolveAsk): Promise<GoResolution> {
+  const resolution = await resolveInWorkspace({ store }, ask);
+  if (resolution.kind !== "none") {
+    return resolution;
+  }
+  const slug = parseSlug(ask.slug);
+  if (slug === undefined) {
+    return { kind: "none", otherWorkspaces: [] };
+  }
+  const otherWorkspaces = await store.otherWorkspaces({ slug, accountId: ask.accountId.toLowerCase() });
+  return { kind: "none", otherWorkspaces: otherWorkspaces.slice(0, GO_OTHER_WORKSPACES_MAX) };
 }

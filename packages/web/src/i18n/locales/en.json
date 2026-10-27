@@ -11,6 +11,7 @@
     "bookmarks": "Bookmarks",
     "folders": "Folders",
     "tags": "Tags",
+    "forwarding": "Forwarding",
     "helpAndDocs": "Help & docs",
     "switchToDark": "Switch to dark theme",
     "switchToLight": "Switch to light theme",
@@ -657,6 +658,172 @@
       "error": {
         "notFound": "This tag no longer exists."
       }
+    }
+  },
+  "forwarding": {
+    "page": {
+      "title": "Forwarding"
+    },
+    "setup": {
+      "title": "Set up your browser",
+      "description": "Add SlugBase to your browser as a search engine with a keyword. Then the keyword and a slug in the address bar take you straight to the bookmark.",
+      "address": {
+        "label": "Search engine address",
+        "copy": "Copy the search engine address"
+      },
+      "keyword": {
+        "label": "Keyword",
+        "copy": "Copy the keyword"
+      },
+      "copied": "Copied to the clipboard",
+      "browsers": "Browser",
+      "browser": {
+        "chrome": {
+          "name": "Chrome",
+          "open": "Open Settings, then Search engine, then Manage search engines and site search.",
+          "add": "Under Site search, choose Add.",
+          "fill": "Enter {name} as the name and {keyword} as the shortcut, and paste {address} as the URL.",
+          "save": "Choose Add to save it."
+        },
+        "firefox": {
+          "name": "Firefox",
+          "open": "Open Settings and choose Search.",
+          "add": "Under Search Shortcuts, choose Add.",
+          "fill": "Enter {name} as the name, paste {address} as the URL and enter {keyword} as the alias.",
+          "save": "Save the search engine."
+        },
+        "safari": {
+          "name": "Safari",
+          "limit": "Safari has no setting for a custom search engine.",
+          "extension": "Install a Safari extension that adds custom search engines.",
+          "fill": "In the extension, add {name} with the address {address} and the keyword {keyword}."
+        },
+        "edge": {
+          "name": "Edge",
+          "open": "Open Settings, then Privacy, search, and services, then Address bar and search.",
+          "add": "Choose Manage search engines, then Add.",
+          "fill": "Enter {name} as the search engine and {keyword} as the shortcut, and paste {address} as the URL.",
+          "save": "Choose Add to save it."
+        }
+      },
+      "test": {
+        "link": "Test it: open go/{slug}",
+        "own": "Opens go/{slug} in a new tab. Once the search engine is set up, type {keyword} {slug} in the address bar.",
+        "sample": "You have no slug that forwards yet, so this opens a sample address. SlugBase answers that no bookmark has that slug and offers to create one."
+      }
+    },
+    "slugs": {
+      "title": "Your slugs",
+      "description": "The bookmarks of yours that have a slug. Forwarding decides whether the slug takes you to the bookmark when you go to it.",
+      "label": "Your slugs",
+      "loading": "Loading your slugs",
+      "loadFailed": "Your slugs could not be loaded.",
+      "loadMoreFailed": "More slugs could not be loaded.",
+      "refreshFailed": "The slugs could not be refreshed.",
+      "retry": "Try again",
+      "loadMore": "Load more",
+      "count": "Showing {shown} of {total}",
+      "countAtLeast": "Showing {shown} of {total}+",
+      "table": {
+        "slug": "Slug",
+        "host": "Destination",
+        "forwarding": "Forwarding",
+        "opens": "Opens",
+        "lastOpened": "Last opened",
+        "never": "Never",
+        "actions": "Actions"
+      },
+      "switch": "Forwarding for {slug}",
+      "actionsFor": "Actions for {slug}",
+      "edit": "Edit",
+      "copy": "Copy address",
+      "turnOff": "Turn off forwarding",
+      "copied": "Copied {address}",
+      "copyFailed": "The address could not be copied. Select it and copy it by hand.",
+      "empty": {
+        "title": "No slugs yet",
+        "description": "Give a bookmark a short slug and go takes you straight to it. Type go and the slug into your browser’s address bar once it is set up.",
+        "action": "New bookmark"
+      },
+      "error": {
+        "turnOn": "Forwarding could not be turned on. It is off again.",
+        "turnOff": "Forwarding could not be turned off. It is on again.",
+        "changedElsewhere": "This bookmark was changed elsewhere, so forwarding was not changed. The list is up to date again.",
+        "notFound": "This bookmark no longer exists."
+      }
+    },
+    "choices": {
+      "title": "Remembered choices",
+      "description": "When several bookmarks share a slug, go sends you to the one you chose to always use.",
+      "label": "Remembered choices",
+      "loading": "Loading your remembered choices",
+      "loadFailed": "Your remembered choices could not be loaded.",
+      "loadMoreFailed": "More remembered choices could not be loaded.",
+      "refreshFailed": "The remembered choices could not be refreshed.",
+      "retry": "Try again",
+      "loadMore": "Load more",
+      "count": "Showing {shown}",
+      "table": {
+        "slug": "Slug",
+        "bookmark": "Bookmark",
+        "host": "Destination",
+        "owner": "Owner",
+        "actions": "Actions"
+      },
+      "you": "You",
+      "remove": "Remove",
+      "removeFor": "Remove the remembered choice for {slug}",
+      "removed": "Forgot your choice for {slug}.",
+      "undo": "Undo",
+      "restored": "Remembered your choice for {slug} again.",
+      "empty": {
+        "title": "Nothing remembered yet",
+        "description": "When a slug matches several bookmarks and you choose to always use one of them, the choice shows up here."
+      },
+      "error": {
+        "remove": "The remembered choice could not be removed.",
+        "notFound": "That choice is already gone."
+      }
+    }
+  },
+  "go": {
+    "retry": "Try again",
+    "loadFailed": {
+      "title": "This slug could not be looked up",
+      "description": "Check your connection and try again."
+    },
+    "forward": {
+      "opening": "Opening {title}",
+      "failed": {
+        "title": "The bookmark could not be opened",
+        "description": "Try again. If this continues, the bookmark may have changed."
+      }
+    },
+    "choose": {
+      "title": "go/{slug} matches {count, plural, one {# bookmark} other {# bookmarks}}",
+      "description": "Several bookmarks shared with you have this slug. Choose the one you mean.",
+      "label": "Bookmarks with this slug",
+      "always": "Always use this for {slug}",
+      "manage": "Manage remembered choices →",
+      "yours": "Your bookmark",
+      "shared": "Shared with you",
+      "sharedBy": "Shared by {owner}",
+      "via": {
+        "direct": "directly",
+        "team": "through a team",
+        "folder": "through a shared folder"
+      },
+      "failed": {
+        "title": "That bookmark could not be opened",
+        "description": "The bookmarks with this slug may have changed. Load them again and choose once more."
+      }
+    },
+    "notFound": {
+      "title": "No bookmark has the slug {slug} in {workspace}.",
+      "thisWorkspace": "this workspace",
+      "description": "Check the spelling, or create a bookmark with this slug yourself.",
+      "create": "Create a bookmark with this slug",
+      "switch": "Found in: {workspace} — switch and continue"
     }
   },
   "admin": {
@@ -2407,6 +2574,7 @@
       "goBookmarks": "Go to Bookmarks",
       "goFolders": "Go to Folders",
       "goTags": "Go to Tags",
+      "goForwarding": "Go to Forwarding",
       "newFolder": "New folder (on the Folders page)",
       "help": "Show this list",
       "move": "Move focus to the next or previous bookmark",

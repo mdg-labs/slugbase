@@ -1,6 +1,7 @@
 import type { ComponentTypes } from "@slugbase/contracts";
 import { ACCENT_PRESETS } from "@slugbase/contracts";
 import { ACCENTS, useShortcut } from "@slugbase/ui";
+import { focusManager, notifyManager } from "@tanstack/react-query";
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -29,7 +30,12 @@ function me(account: Account): ComponentTypes["schemas"]["Me"] {
 }
 
 /** A server with a signed-in account that applies each update to the account it holds, as the real one does. */
-function stubServer({ account: initial = ACCOUNT, ai = false, patch }: { account?: Account; ai?: boolean; patch?: Transport } = {}): Server {
+function stubServer({
+  account: initial = ACCOUNT,
+  ai = false,
+  patch,
+  read,
+}: { account?: Account; ai?: boolean; patch?: Transport; read?: Transport } = {}): Server {
   let account = initial;
   const received: Request[] = [];
   const fetch = vi.fn<Transport>(async (request) => {
@@ -41,7 +47,7 @@ function stubServer({ account: initial = ACCOUNT, ai = false, patch }: { account
       return signedIn(request);
     }
     if (request.method === "GET") {
-      return json(me(account));
+      return read === undefined ? json(me(account)) : read(request);
     }
     received.push(request.clone());
     if (patch !== undefined) {
@@ -174,9 +180,11 @@ describe("theme and accent", () => {
 
     await choose("Dark");
 
-    expect(rootClasses()).toEqual(["dark"]);
-    expect(screen.getByRole("radio", { name: "Dark" }).getAttribute("aria-checked")).toBe("true");
-    expect(screen.getByRole("status").textContent).toBe("Saving…");
+    await waitFor(() => {
+      expect(rootClasses()).toEqual(["dark"]);
+      expect(screen.getByRole("radio", { name: "Dark" }).getAttribute("aria-checked")).toBe("true");
+      expect(screen.getByRole("status").textContent).toBe("Saving…");
+    });
     expect(await server.patches()).toEqual([{ theme: "dark" }]);
 
     await act(async () => {
@@ -187,6 +195,74 @@ describe("theme and accent", () => {
       expect(screen.getByRole("status").textContent).toBe("All changes saved");
     });
     expect(rootClasses()).toEqual(["dark"]);
+  });
+
+  it("show the chosen theme in the radio in the same render that sets the root class, before any query observer is told", async () => {
+    stubServer({ patch: () => new Promise<Response>(() => undefined) });
+    await openPreferences();
+
+    // Query observers are told of a cache change in a later task; nothing else may be needed to show the choice.
+    const told: (() => void)[] = [];
+    notifyManager.setScheduler((callback) => told.push(callback));
+    try {
+      await choose("Dark");
+
+      expect(rootClasses()).toEqual(["dark"]);
+      expect(screen.getByRole("radio", { name: "Dark" }).getAttribute("aria-checked")).toBe("true");
+    } finally {
+      notifyManager.setScheduler((callback) => setTimeout(callback, 0));
+      await act(async () => {
+        told.forEach((callback) => {
+          callback();
+        });
+        await Promise.resolve();
+      });
+    }
+  });
+
+  it("keep the chosen theme shown when the account is read again while the change is being saved", async () => {
+    let release: (response: Response) => void = () => undefined;
+    let reads = 0;
+    const server = stubServer({
+      patch: () => new Promise<Response>((resolve) => (release = resolve)),
+      read: () => {
+        reads += 1;
+        return Promise.resolve(json(me(ACCOUNT)));
+      },
+    });
+    await openPreferences();
+    await choose("Dark");
+    await waitFor(() => {
+      expect(screen.getByRole("status").textContent).toBe("Saving…");
+    });
+    const readsBefore = reads;
+
+    // The window regains focus while the save is open: the stale account is read and answers with the old theme.
+    await act(async () => {
+      focusManager.setFocused(false);
+      focusManager.setFocused(true);
+      await Promise.resolve();
+    });
+    focusManager.setFocused(undefined);
+    await waitFor(() => {
+      expect(reads).toBeGreaterThan(readsBefore);
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+
+    expect(screen.getByRole("radio", { name: "Dark" }).getAttribute("aria-checked")).toBe("true");
+    expect(rootClasses()).toEqual(["dark"]);
+
+    await act(async () => {
+      release(json({ ...ACCOUNT, theme: "dark" }));
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("status").textContent).toBe("All changes saved");
+    });
+    expect(screen.getByRole("radio", { name: "Dark" }).getAttribute("aria-checked")).toBe("true");
+    expect(server.account().theme).toBe("system");
   });
 
   it("apply the accent as data-accent and send it", async () => {

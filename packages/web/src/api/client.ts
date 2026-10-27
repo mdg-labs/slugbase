@@ -140,6 +140,17 @@ function endsSession(request: Request, response: Response, problem: ProblemField
 const JSON_CONTENT_TYPE = "application/json";
 
 /**
+ * Whether a request carries no bytes. `Request.body` is `null` for such a request in Chromium and WebKit, but a
+ * stream that yields nothing in Firefox, so a body that is present is read from a copy to tell the two apart.
+ */
+async function carriesNoBody(request: Request): Promise<boolean> {
+  if (request.body === null) {
+    return true;
+  }
+  return (await request.clone().arrayBuffer()).byteLength === 0;
+}
+
+/**
  * The server refuses a cookie-authenticated mutation that does not declare `application/json` (a cross-site
  * rule, doc 10 T3), and openapi-fetch declares nothing for a request without a body. This declares it for such a
  * request in one place, so a call such as the sign-out needs no header of its own. A request with a body keeps
@@ -148,8 +159,13 @@ const JSON_CONTENT_TYPE = "application/json";
  */
 function createBodylessMutationMiddleware(): Middleware {
   return {
-    onRequest({ request }) {
-      if (request.method !== "GET" && request.method !== "HEAD" && request.body === null && !request.headers.has("Content-Type")) {
+    async onRequest({ request }) {
+      if (
+        request.method !== "GET" &&
+        request.method !== "HEAD" &&
+        !request.headers.has("Content-Type") &&
+        (await carriesNoBody(request))
+      ) {
         request.headers.set("Content-Type", JSON_CONTENT_TYPE);
       }
       return undefined;

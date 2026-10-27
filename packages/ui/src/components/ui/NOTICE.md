@@ -21,6 +21,11 @@ These changes are made after a copy:
   without the API; `Sidebar` takes `mobileLabels` (`title`, `description`, `close`) for the drawer texts,
   `SidebarTrigger` and `SidebarRail` take `label`, each defaulting to the English text upstream ships, so the
   app shell can render them from its catalogs.
+- `dialog.tsx`: `DialogPopup` runs `keepTabInside` (`src/lib/keep-tab-inside.ts`) on `keydown`, after the caller's own
+  `onKeyDown`, so Tab and Shift+Tab wrap inside the dialog the moment they are pressed and not a frame later through
+  the focus guards.
+- `alert-dialog.tsx`, `sheet.tsx`, `drawer.tsx`: `AlertDialogPopup`, `SheetPopup` and `DrawerPopup` run `keepTabInside` on
+  `keydown` the same way, after the caller's own `onKeyDown`.
 
 ## MIT License
 

@@ -137,3 +137,46 @@ describe("the candidates on a workspace of 50 000 bookmarks", () => {
     }
   });
 });
+
+describe("the lookup of other workspaces for a member of 1 501 workspaces beside a workspace of 50 000 bookmarks", () => {
+  // The body of the system operation, planned with the slug bound as a constant and the settings of `withTenant`, as slugbase_system, which the function runs as: the member of
+  // the 1 500 small workspaces is asked about a slug that each of them has, then about one that none has.
+  async function planOfLookup(slug: string): Promise<PlanNode[]> {
+    const [row] = await db.owner<{ prosrc: string }[]>`SELECT prosrc FROM pg_proc WHERE oid = 'public.sys_go_other_workspaces(text)'::regprocedure`;
+    if (row === undefined) {
+      throw new Error("the system operation is not defined");
+    }
+    const body = row.prosrc.replaceAll("p_slug", `'${slug}'::text`);
+    const plan = await asSystem(db, async (tx) => {
+      await tx`SELECT set_config('app.account_id', ${accountId}, true), set_config('app.workspace_id', ${workspaceId}, true)`;
+      const rows = await tx.unsafe<{ "QUERY PLAN": { Plan: PlanNode }[] }[]>(`EXPLAIN (FORMAT JSON) ${body}`);
+      return rows[0]?.["QUERY PLAN"][0]?.Plan;
+    });
+    if (plan === undefined) {
+      throw new Error("EXPLAIN returned no plan");
+    }
+    return nodesOf(plan);
+  }
+
+  it.each(["mail", "nowhere"])("probes bookmarks_slug_idx by the workspace and the slug for each workspace of the member, and scans no bookmarks (slug %s)", async (slug) => {
+    const nodes = await planOfLookup(slug);
+
+    expect(nodes.filter((node) => node["Node Type"] === "Seq Scan").map((node) => node["Relation Name"])).not.toContain("bookmarks");
+    const probes = nodes.filter((node) => node["Relation Name"] === "bookmarks");
+    expect(probes.map((node) => node["Index Name"])).toEqual(["bookmarks_slug_idx"]);
+    expect(probes[0]?.["Index Cond"]).toContain(`slug = '${slug}'::text`);
+    expect(probes[0]?.["Index Cond"]).toContain("workspace_id");
+  });
+
+  it("names the 20 first of the member's small workspaces by name for a slug each of them has", async () => {
+    const named = await inTenant((tx) => goRepository(tx).otherWorkspaces({ slug: "mail", accountId }));
+
+    expect(named).toHaveLength(20);
+    expect(named.map((entry) => entry.name)).toEqual(
+      Array.from({ length: SMALL_WORKSPACES }, (_, index) => `Small ${String(index + 1)}`)
+        .toSorted()
+        .slice(0, 20),
+    );
+    expect(await inTenant((tx) => goRepository(tx).otherWorkspaces({ slug: "nowhere", accountId }))).toEqual([]);
+  });
+});

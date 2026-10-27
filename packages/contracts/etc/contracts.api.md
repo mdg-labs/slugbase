@@ -1163,6 +1163,7 @@ export interface ComponentTypes {
             nextCursor: string | null;
         };
         GoResolution: {
+            otherWorkspaces: ComponentTypes["schemas"]["GoWorkspace"][];
             result: "none";
         } | {
             bookmark: ComponentTypes["schemas"]["GoCandidate"];
@@ -1173,6 +1174,10 @@ export interface ComponentTypes {
         } | {
             candidates: ComponentTypes["schemas"]["GoCandidate"][];
             result: "multiple";
+        };
+        GoWorkspace: {
+            id: string;
+            name: string;
         };
         HealthStatus: {
             status: "ok";
@@ -3241,6 +3246,10 @@ export const GoPreferenceSchema: z.ZodObject<{
 // @public (undocumented)
 export const GoResolutionSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
     result: z.ZodLiteral<"none">;
+    otherWorkspaces: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+    }, z.core.$strict>>;
 }, z.core.$strict>, z.ZodObject<{
     result: z.ZodLiteral<"preferred">;
     bookmark: z.ZodObject<{
@@ -3294,6 +3303,12 @@ export const GoResolutionSchema: z.ZodDiscriminatedUnion<[z.ZodObject<{
 // @public (undocumented)
 export const GoSlugRequestSchema: z.ZodObject<{
     slug: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const GoWorkspaceSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    name: z.ZodString;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -14355,6 +14370,10 @@ export const resolveSlug: {
     readonly responses: {
         readonly 200: JsonResponse<z.ZodDiscriminatedUnion<[z.ZodObject<{
         result: z.ZodLiteral<"none">;
+        otherWorkspaces: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        }, z.core.$strict>>;
         }, z.core.$strict>, z.ZodObject<{
         result: z.ZodLiteral<"preferred">;
         bookmark: z.ZodObject<{

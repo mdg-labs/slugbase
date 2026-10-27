@@ -71,3 +71,47 @@ describe("SidePanel", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 });
+
+describe("SidePanel keyboard trap", () => {
+  function Panel(): ReactElement {
+    return (
+      <SidePanel closeLabel="Close preview" onOpenChange={() => undefined} open title="Newest in reading">
+        <button type="button">Open all</button>
+      </SidePanel>
+    );
+  }
+
+  it("moves Tab from the last stop to the first, before the browser moves the focus", async () => {
+    render(<Panel />);
+    await screen.findByRole("dialog");
+    const last = screen.getByRole("button", { name: "Close preview" });
+    last.focus();
+
+    const proceeded = fireEvent.keyDown(last, { key: "Tab" });
+
+    expect(proceeded).toBe(false);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Open all" }));
+  });
+
+  it("moves Shift+Tab from the first stop to the last", async () => {
+    render(<Panel />);
+    await screen.findByRole("dialog");
+    const first = screen.getByRole("button", { name: "Open all" });
+    first.focus();
+
+    const proceeded = fireEvent.keyDown(first, { key: "Tab", shiftKey: true });
+
+    expect(proceeded).toBe(false);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Close preview" }));
+  });
+
+  it("leaves a Tab between the two stops to the browser", async () => {
+    render(<Panel />);
+    await screen.findByRole("dialog");
+    const first = screen.getByRole("button", { name: "Open all" });
+    first.focus();
+
+    expect(fireEvent.keyDown(first, { key: "Tab" })).toBe(true);
+    expect(document.activeElement).toBe(first);
+  });
+});

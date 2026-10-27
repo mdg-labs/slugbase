@@ -48,14 +48,25 @@ describe("the request bodies", () => {
 
 describe("the resolution", () => {
   it("is none, preferred, single or multiple, each with exactly its fields", () => {
-    expect(GoResolutionSchema.safeParse({ result: "none" }).success).toBe(true);
+    expect(GoResolutionSchema.safeParse({ result: "none", otherWorkspaces: [] }).success).toBe(true);
     expect(GoResolutionSchema.safeParse({ result: "preferred", bookmark: CANDIDATE }).success).toBe(true);
     expect(GoResolutionSchema.safeParse({ result: "single", bookmark: CANDIDATE }).success).toBe(true);
     expect(GoResolutionSchema.safeParse({ result: "multiple", candidates: [CANDIDATE, { ...CANDIDATE, id: UUID.replace("b1", "b2"), owner: { accountId: UUID, displayName: "Ann" }, sharedVia: "team" }] }).success).toBe(true);
-    expect(GoResolutionSchema.safeParse({ result: "none", bookmark: CANDIDATE }).success).toBe(false);
+    expect(GoResolutionSchema.safeParse({ result: "none", otherWorkspaces: [], bookmark: CANDIDATE }).success).toBe(false);
     expect(GoResolutionSchema.safeParse({ result: "single" }).success).toBe(false);
     expect(GoResolutionSchema.safeParse({ result: "multiple", candidates: [CANDIDATE] }).success).toBe(false);
     expect(GoResolutionSchema.safeParse({ result: "other" }).success).toBe(false);
+  });
+
+  it("names the other workspaces of a none by identifier and name, at most twenty, and nothing else of them", () => {
+    const workspace = { id: UUID, name: "Work" };
+    expect(GoResolutionSchema.safeParse({ result: "none", otherWorkspaces: [workspace] }).success).toBe(true);
+    expect(GoResolutionSchema.safeParse({ result: "none", otherWorkspaces: Array.from({ length: 20 }, () => workspace) }).success).toBe(true);
+    expect(GoResolutionSchema.safeParse({ result: "none", otherWorkspaces: Array.from({ length: 21 }, () => workspace) }).success).toBe(false);
+    expect(GoResolutionSchema.safeParse({ result: "none" }).success).toBe(false);
+    expect(GoResolutionSchema.safeParse({ result: "none", otherWorkspaces: [{ ...workspace, role: "owner" }] }).success).toBe(false);
+    expect(GoResolutionSchema.safeParse({ result: "none", otherWorkspaces: [{ id: "work", name: "Work" }] }).success).toBe(false);
+    expect(GoResolutionSchema.safeParse({ result: "single", bookmark: CANDIDATE, otherWorkspaces: [workspace] }).success).toBe(false);
   });
 
   it("names a bookmark by identifier, title, host, owner and how it is shared, and never an address", () => {

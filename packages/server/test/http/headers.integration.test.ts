@@ -65,6 +65,7 @@ const routes: ServerModule = {
 interface Answer {
   readonly status: number;
   readonly headers: Headers;
+  readonly body: string;
 }
 
 function get(port: number, path: string, headers: Record<string, string> = {}): Promise<Answer> {
@@ -74,14 +75,14 @@ function get(port: number, path: string, headers: Record<string, string> = {}): 
     socket.on("data", (chunk: Buffer) => chunks.push(chunk));
     socket.on("error", reject);
     socket.on("close", () => {
-      const head = Buffer.concat(chunks).toString("utf8").split("\r\n\r\n")[0] ?? "";
+      const [head = "", ...rest] = Buffer.concat(chunks).toString("utf8").split("\r\n\r\n");
       const [statusLine = "", ...lines] = head.split("\r\n");
       const parsed = new Headers();
       for (const line of lines) {
         const separator = line.indexOf(":");
         parsed.append(line.slice(0, separator), line.slice(separator + 1).trim());
       }
-      resolve({ status: Number(statusLine.split(" ")[1]), headers: parsed });
+      resolve({ status: Number(statusLine.split(" ")[1]), headers: parsed, body: rest.join("\r\n\r\n") });
     });
     const lines = Object.entries(headers).map(([name, value]) => `${name}: ${value}\r\n`);
     socket.write(`GET ${path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n${lines.join("")}\r\n`);
@@ -94,14 +95,18 @@ afterEach(async () => {
   await Promise.all(running.splice(0).map((server) => server.shutdown()));
 });
 
-async function listen(env: Record<string, string | undefined> = {}, ports: Adapters = adapters()): Promise<number> {
+async function listen(
+  env: Record<string, string | undefined> = {},
+  ports: Adapters = adapters(),
+  logger: ReturnType<typeof recordingLogger> = recordingLogger(),
+): Promise<number> {
   const server = createServer({
     config: serverConfig({ NODE_ENV: "test", DATABASE_URL: appUrl(), ...env }),
     adapters: ports,
     modules: [routes],
     openApiDocument: documentOf([routes]),
     migrations: [],
-    logger: recordingLogger(),
+    logger,
     database: fakeDatabase(),
   });
   const started = await server.start({ port: 0 });
@@ -234,6 +239,38 @@ describe("the security headers of a path sent encoded", () => {
     const api = await get(port, "/%61pi/v1/ping");
     expect(api.status).toBe(200);
     expect(api.headers.get("cache-control")).toBe(NO_STORE);
+  });
+});
+
+describe("a path with a control character", () => {
+  it.each(["/x%0ay", "/api/v1/%0a", "/x%0d%0ay", "/x%e2%80%a8y", "/x%00y", "/x%1by", "/x%7fy"])(
+    "is answered by the chain: %s carries the security headers, one request line and a 404 problem",
+    async (path) => {
+      const logger = recordingLogger();
+      const port = await listen({}, adapters(), logger);
+      const answer = await get(port, path);
+      expect(answer.status).toBe(404);
+      expect(answer.headers.get("content-type")).toBe("application/problem+json");
+      expectSecurityHeaders(answer.headers, { https: true });
+      expect(answer.headers.get("cache-control")).toBe(NO_STORE);
+      expect(answer.headers.get("x-request-id")).not.toBeNull();
+      expect(JSON.parse(answer.body)).toMatchObject({ status: 404 });
+      expect(logger.requests).toHaveLength(1);
+      expect(logger.requests[0]?.fields).toMatchObject({ route: "unmatched", status: 404 });
+    },
+  );
+
+  it("reaches the /go route a line break in the slug belongs to: the chain's headers and request line on its sign-in redirect", async () => {
+    const logger = recordingLogger();
+    const port = await listen({}, adapters(), logger);
+    const answer = await get(port, "/go/%0d%0a");
+    expect(answer.status).toBe(302);
+    expect(answer.headers.get("location")).toBe("/login");
+    expectSecurityHeaders(answer.headers, { https: true });
+    expect(answer.headers.get("referrer-policy")).toBe("no-referrer");
+    expect(answer.headers.get("cache-control")).toBe(NO_STORE);
+    expect(logger.requests).toHaveLength(1);
+    expect(logger.requests[0]?.fields).toMatchObject({ route: "/go/{slug}", status: 302 });
   });
 });
 

@@ -37,6 +37,7 @@ export function AppShortcuts(): ReactElement {
         { id: "bookmarks", label: t("shortcuts.item.goBookmarks"), keys: [["G", "B"]], sequence: true },
         { id: "folders", label: t("shortcuts.item.goFolders"), keys: [["G", "F"]], sequence: true },
         { id: "tags", label: t("shortcuts.item.goTags"), keys: [["G", "T"]], sequence: true },
+        { id: "forwarding", label: t("shortcuts.item.goForwarding"), keys: [["G", "W"]], sequence: true },
         { id: "newFolder", label: t("shortcuts.item.newFolder"), keys: [["N"]] },
         { id: "help", label: t("shortcuts.item.help"), keys: [["?"]] },
       ],

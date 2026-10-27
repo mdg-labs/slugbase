@@ -8,10 +8,12 @@ import { BookmarkIcon } from 'lucide-react';
 import { ChangeEventHandler } from 'react';
 import type { ClipboardEvent as ClipboardEvent_2 } from 'react';
 import { CompassIcon } from 'lucide-react';
+import { CopyIcon } from 'lucide-react';
 import { ExternalLinkIcon } from 'lucide-react';
 import { FilterXIcon } from 'lucide-react';
 import type { FocusEvent as FocusEvent_2 } from 'react';
 import { FolderIcon } from 'lucide-react';
+import { ForwardIcon } from 'lucide-react';
 import { HomeIcon } from 'lucide-react';
 import { InboxIcon } from 'lucide-react';
 import { LayoutGridIcon } from 'lucide-react';
@@ -24,6 +26,7 @@ import { PencilIcon } from 'lucide-react';
 import { PinIcon } from 'lucide-react';
 import { PinOffIcon } from 'lucide-react';
 import { PlusIcon } from 'lucide-react';
+import { PowerOffIcon } from 'lucide-react';
 import { ReactElement } from 'react';
 import { ReactNode } from 'react';
 import { Ref } from 'react';
@@ -325,6 +328,8 @@ export interface ContextActionsProps {
     label: string;
 }
 
+export { CopyIcon }
+
 // @public
 export function CopyValue(input: CopyValueProps): ReactElement;
 
@@ -493,6 +498,8 @@ export interface FormOverlayProps {
     title: ReactNode;
 }
 
+export { ForwardIcon }
+
 export { HomeIcon }
 
 export { InboxIcon }
@@ -658,6 +665,8 @@ export { PinIcon }
 export { PinOffIcon }
 
 export { PlusIcon }
+
+export { PowerOffIcon }
 
 // @public (undocumented)
 export type ResolvedTheme = "light" | "dark";

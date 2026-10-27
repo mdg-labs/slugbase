@@ -1,17 +1,17 @@
 import type { BookmarkUsage } from "../bookmarks/open.ts";
 import { chooseSlugBookmark } from "./choose.ts";
-import { resolveSlug, type GoStore } from "./resolve.ts";
+import { resolveInWorkspace, type GoStore } from "./resolve.ts";
 import { parseSlug } from "./slug.ts";
 
 // What a browser navigation to `/go/<slug>` is answered with (doc 02 section 6.2, doc 04 section 9.3, doc 10 T1, T2 and T12): the resolution of the slug for the
-// member in the order of Q25, and, when it names one bookmark (a remembered choice, the member's own bookmark or the one shared with them), the address to forward
+// member in the workspace, in the order of Q25, and, when it names one bookmark (a remembered choice, the member's own bookmark or the one shared with them), the address to forward
 // to, which is the choice of that bookmark and so is judged again as a current candidate, checked again to be an `http` or `https` URL and counted as one use in
-// the usage buffer. The resolution forgets the member's remembered choice for the slug when it is no candidate any more (`resolveSlug`), which is the only write of a navigation besides the
+// the usage buffer. The resolution forgets the member's remembered choice for the slug when it is no candidate any more (`resolveInWorkspace`), which is the only write of a navigation besides the
 // use. Several shared bookmarks are left to the member to choose from. Nothing that resolves to a bookmark whose address cannot be forwarded to is
 // told apart from a slug that resolves to nothing: both are `not_found`, and nothing is counted.
 
 export interface GoNavigateDependencies {
-  readonly store: GoStore;
+  readonly store: Pick<GoStore, "candidates" | "summaries" | "forgetStale" | "remember">;
   readonly usage: BookmarkUsage;
 }
 
@@ -35,7 +35,7 @@ export async function navigateToSlug({ store, usage }: GoNavigateDependencies, a
   if (slug === undefined) {
     return { kind: "not_found" };
   }
-  const resolution = await resolveSlug({ store }, { accountId: ask.accountId, slug });
+  const resolution = await resolveInWorkspace({ store }, { accountId: ask.accountId, slug });
   switch (resolution.kind) {
     case "none":
       return { kind: "not_found" };

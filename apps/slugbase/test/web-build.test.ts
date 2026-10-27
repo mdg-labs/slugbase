@@ -38,6 +38,10 @@ describe("the built index.html", () => {
     expect(html).not.toMatch(/\son[a-z]+\s*=/i);
   });
 
+  it("links the OpenSearch description, so a browser can offer SlugBase as a search engine", () => {
+    expect(html).toMatch(/<link\b[^>]*\brel="search"[^>]*\btype="application\/opensearchdescription\+xml"[^>]*\bhref="\/opensearch\.xml"/);
+  });
+
   it("references the bundle and the stylesheet by content-hashed names", () => {
     expect(html).toMatch(/src="\/assets\/index-[\w-]{8}\.js"/);
     expect(html).toMatch(/href="\/assets\/index-[\w-]{8}\.css"/);
@@ -90,6 +94,15 @@ describe("served by the server", () => {
       expect(response.headers.get("content-type")).toMatch(type);
       expect(response.headers.get("cache-control")).toBe("public, max-age=31536000, immutable");
     }
+  });
+
+  it("answers /opensearch.xml with the description the page links, from the configured origin and without a session", async () => {
+    const response = await get("/opensearch.xml", { host: "evil.example", "x-forwarded-host": "evil.example" });
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toMatch(/^application\/opensearchdescription\+xml/);
+    const body = await response.text();
+    expect(body).toContain('template="https://bookmarks.example.com/go/{searchTerms}"');
+    expect(body).not.toContain("evil.example");
   });
 
   it("answers /api/config next to the app, with the product name the page shows", async () => {

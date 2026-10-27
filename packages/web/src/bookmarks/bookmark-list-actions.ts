@@ -34,7 +34,7 @@ interface PinRequest {
 }
 
 /** Changes the bookmark `id` wherever a loaded list holds it. */
-function patchLists(queryClient: QueryClient, id: string, change: (bookmark: Bookmark) => Bookmark): void {
+export function patchLists(queryClient: QueryClient, id: string, change: (bookmark: Bookmark) => Bookmark): void {
   queryClient.setQueriesData<InfiniteData<BookmarkPage>>({ queryKey: BOOKMARK_LISTS_QUERY_KEY }, (data) =>
     data === undefined
       ? data
