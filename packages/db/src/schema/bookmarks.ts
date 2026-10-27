@@ -74,6 +74,13 @@ export const bookmarks = pgTable(
     // The search indexes of doc 05 section 2.4, built non-blocking by the migration that adds them: the full-text index over `search`, and the trigram indexes of the slug, the title and the host
     // (the host's is what the trigram similarity on title and host needs). `sys_search` reads them as slugbase_system, which bypasses the policy, so the operators `@@`, `<%` and `LIKE` are index conditions.
     index("bookmarks_search_idx").using("gin", table.workspaceId, table.search),
+    // The title and slug vector alone, which is the expression of the first two weights of `search`: `sys_search` finds every title and slug match through it and ranks them exactly, and fills the
+    // rest of the answer from a bounded window of the host and description matches of `bookmarks_search_idx`.
+    index("bookmarks_title_slug_search_idx").using(
+      "gin",
+      table.workspaceId,
+      sql`(to_tsvector('simple', coalesce(${table.slug}, '')) || to_tsvector('simple', ${table.title}))`,
+    ),
     index("bookmarks_slug_trgm_idx").using("gin", table.workspaceId, table.slug.op("gin_trgm_ops")),
     index("bookmarks_title_trgm_idx").using("gin", table.workspaceId, table.title.op("gin_trgm_ops")),
     index("bookmarks_host_trgm_idx").using("gin", table.workspaceId, table.host.op("gin_trgm_ops")),

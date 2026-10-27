@@ -191,7 +191,7 @@ Playwright against the **built image**, never against `pnpm dev`, so what is tes
 
 ### 5.3 Performance budgets
 
-A scheduled job (weekly, and before a production promotion) runs `k6` against the image with a seeded large instance (50 000 bookmarks in one workspace, 2 000 workspaces): `/go` p95 < 30 ms server time, list and search p95 < 100 ms (doc 01 §9.3), with Postgres on the same runner. Regressions open an issue rather than failing a developer's gate.
+A scheduled job (weekly, and before a production promotion) runs `k6` against the image with a seeded large instance (50 000 bookmarks in one workspace, 2 000 workspaces): `/go` p95 < 30 ms server time, list and search p95 < 100 ms (doc 01 §9.3), with Postgres on the same runner. The search budget holds because a search ranks the bookmarks whose slug and title hold every word of the query (all of them, through their own GIN index) and takes the bookmarks whose host or description completes the words from a bounded window to fill the remaining places: title and slug matches rank ahead of host- and description-only matches, and a word that matches most of a large library is not ranked in full (doc 02 §9.1, doc 05 §3.3). The integration suite measures the same budget on a 50 000-bookmark workspace in `packages/db/test/search-plan.integration.test.ts`, a vitest project of its own (`integration-quiet`) that the root `pnpm test:integration` runs by itself, after the integration suites of every package have finished, so that no other database-heavy file shares the machine with its timings. Regressions open an issue rather than failing a developer's gate.
 
 ### 5.4 Migration timing
 

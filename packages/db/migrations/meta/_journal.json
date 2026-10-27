@@ -680,6 +680,20 @@
       "when": 1793099635652,
       "tag": "20261027111355_add_go_suggest",
       "breakpoints": true
+    },
+    {
+      "idx": 97,
+      "version": "7",
+      "when": 1793103109695,
+      "tag": "20261027121149_index_bookmark_title_slug",
+      "breakpoints": true
+    },
+    {
+      "idx": 98,
+      "version": "7",
+      "when": 1793103109696,
+      "tag": "20261027121150_index_bookmark_title_slug",
+      "breakpoints": true
     }
   ]
 }

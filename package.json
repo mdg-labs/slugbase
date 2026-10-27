@@ -17,7 +17,7 @@
     "lint:workflow-triggers": "bash scripts/check-workflow-triggers.test.sh && bash scripts/check-workflow-triggers.sh",
     "typecheck": "turbo run typecheck",
     "test:unit": "turbo run test:unit",
-    "test:integration": "turbo run test:integration",
+    "test:integration": "sh -c 'turbo run test:integration \"$@\" && pnpm --filter @slugbase/db run test:integration:quiet' sh",
     "contracts:check": "turbo run contracts:check --continue",
     "db:check": "turbo run db:check",
     "i18n:check": "turbo run i18n:check",

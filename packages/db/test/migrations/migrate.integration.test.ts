@@ -816,6 +816,37 @@ describe("an upgrade from the level before the go suggestion migration", () => {
   }, 120_000);
 });
 
+describe("an upgrade from the level before the title and slug search index", () => {
+  const WORKSPACE = "0190a000-0000-7000-8000-000000000021";
+  const ACCOUNT = "0190a000-0000-7000-8000-000000000022";
+
+  it("builds the index concurrently and replaces the function in a fresh session, and the function answers in a transaction of the application role", async () => {
+    const { name, owner } = await createDatabase();
+    await migrate({ url: migratorUrl(name), chains: [] });
+    const journal = JSON.parse(readFileSync(join(CE_CHAIN.folder, "meta", "_journal.json"), "utf8")) as { entries: { tag: string; when: number }[] };
+    const titleSlug = journal.entries.filter((entry) => entry.tag.includes("index_bookmark_title_slug"));
+    expect(titleSlug).toHaveLength(2);
+    // Put the database back at the level before them: no index, no function, and their bookkeeping rows gone. The search indexes and pg_trgm stay, as they are on an instance that upgrades.
+    await owner.unsafe("DROP FUNCTION public.sys_search(text, integer)");
+    await owner.unsafe("DROP INDEX public.bookmarks_title_slug_search_idx");
+    await owner.unsafe(`DELETE FROM drizzle.migrations_core WHERE created_at IN (${titleSlug.map((entry) => String(entry.when)).join(", ")})`);
+
+    const result = await migrate({ url: migratorUrl(name), chains: [] });
+
+    expect(result.applied.map((step) => step.tag)).toEqual(titleSlug.map((entry) => entry.tag));
+    expect((await indexes(owner, ["bookmarks_title_slug_search_idx"])).map((index) => index.valid)).toEqual([true]);
+    const [definition] = await owner<{ definition: string }[]>`SELECT pg_get_indexdef('public.bookmarks_title_slug_search_idx'::regclass) AS definition`;
+    expect(definition?.definition).toContain("to_tsvector('simple'::regconfig, COALESCE(slug, ''::text)) || to_tsvector('simple'::regconfig, title)");
+    const [setting] = await owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_app`;
+      await tx`SELECT set_config('app.workspace_id', ${WORKSPACE}, true), set_config('app.account_id', ${ACCOUNT}, true)`;
+      await tx`SELECT count(*) FROM sys_search('abcd', 8)`;
+      return tx<{ value: string }[]>`SELECT current_setting('pg_trgm.word_similarity_threshold') AS value`;
+    });
+    expect(setting?.value).toBe("0.6");
+  }, 120_000);
+});
+
 describe("errors never carry the connection string or the password (T7)", () => {
   const password = `pw-${randomBytes(6).toString("hex")}`;
 

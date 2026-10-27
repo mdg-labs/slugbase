@@ -143,6 +143,46 @@ describe("the bookmarks of a search", () => {
     expect(await found(w, me, "beta alpha")).toEqual([both, one]);
   });
 
+  it("put the bookmarks whose title or slug hold every word before those whose host or description do, and find one whose words are split between them", async () => {
+    const me = await account();
+    const w = await workspace([me]);
+    const inDescription = await bookmark(w, me, { title: "Reading list", description: "pelican migration notes" });
+    const onHost = await bookmark(w, me, { title: "Docs", host: "pelican.example.com", description: "migration" });
+    const split = await bookmark(w, me, { title: "Pelican facts", description: "migration of birds" });
+    const inTitle = await bookmark(w, me, { title: "Pelican migration atlas", host: "atlas.example.com" });
+    const inSlug = await bookmark(w, me, { title: "Birds", slug: "pelican-migration" });
+
+    const ids = await found(w, me, "pelican migration");
+
+    expect(ids).toHaveLength(5);
+    expect(ids.slice(0, 2).sort()).toEqual([inSlug, inTitle].sort());
+    expect(ids.slice(2).sort()).toEqual([inDescription, onHost, split].sort());
+  });
+
+  it("fill the answer with host and description matches only where the title and slug matches leave room, from a bounded window of them", async () => {
+    const me = await account();
+    const w = await workspace([me]);
+    const inTitle = await bookmark(w, me, { title: "Cormorant field guide" });
+    for (let n = 0; n < 350; n += 1) {
+      await bookmark(w, me, { title: `Bird ${String(n).padStart(3, "0")}`, host: "cormorant.example.com" });
+    }
+
+    const few = await found(w, me, "cormorant", 8);
+    expect(few).toHaveLength(8);
+    expect(few[0]).toBe(inTitle);
+    const all = await found(w, me, "cormorant", 20);
+    expect(all).toHaveLength(20);
+    expect(all[0]).toBe(inTitle);
+
+    const titles = [inTitle];
+    for (let n = 0; n < 12; n += 1) {
+      titles.push(await bookmark(w, me, { title: `Cormorant ${String(n).padStart(2, "0")}` }));
+    }
+    const full = await found(w, me, "cormorant", 8);
+    expect(full).toHaveLength(8);
+    expect(titles).toEqual(expect.arrayContaining(full));
+  });
+
   it("fall back to the slug and the title prefix for a query of fewer than three characters", async () => {
     const me = await account();
     const w = await workspace([me]);
@@ -246,6 +286,45 @@ describe("the bookmarks of a search", () => {
 
       expect(await found(w, me, text)).toEqual([mine]);
     });
+  });
+
+  // The host and description branch of the long form: a bookmark that no member may read whose title and slug do not hold the query, so only the window of host and description matches can return it.
+  describe.each([
+    { kind: "another member's", owner: "other", archived: false },
+    { kind: "the caller's own plan-archived", owner: "me", archived: true },
+    { kind: "another member's plan-archived", owner: "other", archived: true },
+    { kind: "an ownerless", owner: "nobody", archived: false },
+  ] as const)("in the long form for $kind bookmark", ({ owner, archived }) => {
+    it.each([
+      { where: "host", host: "ptarmigan.example.com", description: null },
+      { where: "description", host: "example.com", description: "about the ptarmigan" },
+    ])("is not returned from the host and description branch when only its $where holds the query (T1, T2)", async ({ host, description }) => {
+      const me = await account();
+      const other = await account();
+      const w = await workspace([me, other]);
+      const owners = { me, other, nobody: null };
+      await bookmark(w, owners[owner], { title: "Untitled", host, description, archived });
+      const mine = await bookmark(w, me, { title: "Notes", host, description });
+
+      expect(await found(w, me, "ptarmigan")).toEqual([mine]);
+    });
+  });
+
+  // Each branch is cut to the limit before the answer is joined to the bookmarks of the workspace, so a branch without the workspace predicate would spend its places on the caller's better
+  // matches in another workspace and the answer would lose the match that belongs here. One member of two workspaces, a limit of one, and the better match in the other workspace.
+  it.each([
+    { branch: "title and slug", text: "heron", here: { title: "Heron marsh" }, elsewhere: { title: "Heron" } },
+    { branch: "host and description", text: "egret", here: { title: "Zzz", host: "egret.example.com" }, elsewhere: { title: "Aaa", host: "egret.example.com" } },
+    { branch: "exact slug", text: "ibis", here: { title: "Zzz", slug: "ibis" }, elsewhere: { title: "Aaa", slug: "ibis" } },
+    { branch: "slug prefix", text: "stork", here: { title: "Zzz", slug: "stork-here" }, elsewhere: { title: "Aaa", slug: "stork-there" } },
+  ] as const)("takes the candidates of the $branch branch from the active workspace alone, whatever the member has in another one (T2)", async ({ text, here, elsewhere }) => {
+    const me = await account();
+    const w = await workspace([me]);
+    const elsewhereWorkspace = await workspace([me]);
+    const mine = await bookmark(w, me, here);
+    await bookmark(elsewhereWorkspace, me, elsewhere);
+
+    expect(await found(w, me, text, 1)).toEqual([mine]);
   });
 
   it("cap each answer at the limit and at twenty whatever limit is asked", async () => {
