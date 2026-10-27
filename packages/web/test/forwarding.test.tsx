@@ -58,6 +58,7 @@ interface Call {
   readonly path: string;
   readonly params: URLSearchParams;
   readonly ifMatch: string | null;
+  readonly keepalive: boolean;
   readonly body: unknown;
 }
 
@@ -98,7 +99,7 @@ function stubServer(world: World, answers: Answers = {}): Server {
         const url = new URL(other.url);
         const text = other.method === "GET" || other.method === "DELETE" ? "" : await other.clone().text();
         const body: unknown = text === "" ? undefined : JSON.parse(text);
-        const call: Call = { method: other.method, path: url.pathname, params: url.searchParams, ifMatch: other.headers.get("If-Match"), body };
+        const call: Call = { method: other.method, path: url.pathname, params: url.searchParams, ifMatch: other.headers.get("If-Match"), keepalive: other.keepalive, body };
         if (url.pathname === "/api/v1/folders" || url.pathname === "/api/v1/tags") {
           return json({ items: [], nextCursor: null, total: 0 });
         }
@@ -539,6 +540,7 @@ describe("remembered choices", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await waitFor(() => {
       expect(server.to("DELETE", `${PREFERENCES}/wiki`)).toHaveLength(1);
     });
+    expect(server.to("DELETE", `${PREFERENCES}/wiki`)[0]?.keepalive, "the removal outlives the page").toBe(true);
   });
 
   it("forgets the choice at once when the member leaves the page before the toast closes", async () => {

@@ -35,7 +35,8 @@ export function goPreferencesQuery(api: ApiClient) {
 
 /** Forgets the caller's remembered choice for `slug`; the bookmark stays. */
 export async function deleteGoPreference(api: ApiClient, slug: string): Promise<void> {
-  const { response, error } = await api.DELETE("/api/v1/me/go-preferences/{slug}", { params: { path: { slug } } });
+  // Sent when the toast closes, which can be while the page is being left: the request is kept alive past it.
+  const { response, error } = await api.DELETE("/api/v1/me/go-preferences/{slug}", { params: { path: { slug } }, keepalive: true });
   if (!response.ok) {
     throw new Error("The removal of the remembered choice did not answer with a problem document", { cause: error });
   }
