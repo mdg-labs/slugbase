@@ -318,6 +318,7 @@ export type CommandPaletteIntent = "open" | "newTab" | "edit";
 
 // @public (undocumented)
 export interface CommandPaletteItem {
+    checked?: boolean;
     detail?: ReactNode;
     icon?: ReactNode;
     id: string;
@@ -349,6 +350,7 @@ export interface CommandPaletteProps {
     footerHints: readonly CommandPaletteHint[];
     // (undocumented)
     inputLabel: string;
+    modeLabel?: string;
     noResults: string;
     noResultsAction?: CommandPaletteNoResultsAction;
     // (undocumented)

@@ -342,8 +342,8 @@ Opened with `⌘K` / `Ctrl K` from anywhere in the app (and `/` on list pages).
 
 - **Empty**: recent and pinned bookmarks, navigation (Home, Bookmarks, Folders, Tags, Forwarding, Settings), actions (New bookmark, New folder, Import, Export, Switch workspace, Toggle theme, Sign out).
 - **Query**: grouped results — Bookmarks, Folders, Tags, Commands — from §9.1 plus command names.
-- **`go` mode**: a query starting with `go ` (or a pasted `/go/<slug>` or full `/go` URL) lists matching slugs as the member types (own first, then shared) and Enter resolves exactly as `/go` does (§6.2), including disambiguation inline and the not-found hint. A path after the slug is not passed through: it resolves as no match, as on the server (Q43). Only a pasted `/go` URL of this deployment's own origin enters the mode.
-- **Modifiers**: Enter opens; `⌘/Ctrl Enter` opens in a new tab; `⌥/Alt Enter` opens the bookmark modal for editing (own bookmarks).
+- **`go` mode**: a query starting with `go ` (in any case), a pasted `/go/<slug>` or a pasted link to `/go/<slug>` on this deployment's own origin enters the mode, marked by a "Go" chip beside the input; a link on any other origin is searched for as text. The palette lists the slugs that start with the text as the member types (own first, then shared) and Enter resolves the slug exactly as `/go` does (§6.2), including disambiguation inline (with "Always use this", §6.4) and the not-found hint with the create action and the member's other workspaces. Whatever follows the slug, a path or a query string, is not passed through and not cut off: it is resolved as typed, which is no match (§6.2 step 5, Q43), and the not-found hint then offers no bookmark to create.
+- **Modifiers**: Enter opens; `⌘/Ctrl Enter` opens in a new tab; `⌥/Alt Enter` opens the bookmark modal for editing (own bookmarks); in `go` mode `⌘/Ctrl Enter` acts as Enter and `⌥/Alt Enter` does nothing, since a slug is not a bookmark to open in a tab or to edit.
 - Fully keyboard-operable; screen-reader announced result counts.
 
 ### 9.3 Dashboard (Home)

@@ -73,14 +73,30 @@ const FOUND: readonly CommandPaletteSection[] = [
 
 const CREATE: CommandPaletteNoResultsAction = { label: "Create a bookmark with the slug zzz", icon: <PlusIcon aria-hidden="true" />, onSelect: () => undefined };
 
+// Go mode: the mode chip beside the input, and a checkbox item that choosing toggles.
+const GO: readonly CommandPaletteSection[] = [
+  {
+    id: "candidates",
+    title: "go/docs matches 2 bookmarks",
+    prefiltered: true,
+    items: [
+      { id: "one", label: "Team handbook", detail: "docs.example.org · Shared by Grace Hopper", icon: <BookmarkIcon aria-hidden="true" />, onSelect: () => undefined },
+      { id: "two", label: "Docs", detail: "wiki.example.org · Shared by Ada Lovelace", icon: <BookmarkIcon aria-hidden="true" />, onSelect: () => undefined },
+      { id: "always", label: "Always use this for docs", checked: true, onSelect: () => undefined },
+    ],
+  },
+];
+
 function Palette({
   sections,
   initiallyOpen = false,
   noResultsAction,
+  modeLabel,
 }: {
   sections: readonly CommandPaletteSection[];
   initiallyOpen?: boolean;
   noResultsAction?: CommandPaletteNoResultsAction;
+  modeLabel?: string;
 }): React.ReactElement {
   const [open, setOpen] = useState(initiallyOpen);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -102,6 +118,7 @@ function Palette({
         inputLabel="Search or run a command"
         noResults="No results"
         {...(noResultsAction === undefined ? {} : { noResultsAction })}
+        {...(modeLabel === undefined ? {} : { modeLabel })}
         onOpenChange={setOpen}
         open={open}
         placeholder="Search or run a command…"
@@ -126,3 +143,5 @@ export const Found = (): React.ReactElement => <Palette initiallyOpen sections={
 
 /** Type a query that matches nothing, such as "zzz", to see the offer under "No results". */
 export const NoResultsOffer = (): React.ReactElement => <Palette initiallyOpen noResultsAction={CREATE} sections={READY} />;
+
+export const GoMode = (): React.ReactElement => <Palette initiallyOpen modeLabel="Go" sections={GO} />;

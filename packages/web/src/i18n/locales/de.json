@@ -2651,6 +2651,18 @@
       "url": "Lesezeichen für {url} erstellen",
       "slug": "Lesezeichen mit dem Slug {slug} erstellen",
       "blank": "Lesezeichen erstellen"
+    },
+    "go": {
+      "mode": "Go",
+      "open": "Zu /go/{slug} gehen",
+      "empty": {
+        "title": "Zu einem Slug gehen",
+        "description": "Gib nach „go“ einen Slug ein oder füge einen /go/-Link ein und drücke die Eingabetaste."
+      },
+      "suggestions": "Slugs",
+      "suggestionsLoading": "Slugs werden geladen",
+      "suggestionsFailed": "Die Slugs konnten nicht geladen werden.",
+      "resolving": "{slug} wird gesucht"
     }
   },
   "shortcuts": {

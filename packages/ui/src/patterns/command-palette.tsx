@@ -1,4 +1,4 @@
-import { SearchIcon, XIcon } from "lucide-react";
+import { CheckIcon, SearchIcon, XIcon } from "lucide-react";
 import { useState, type KeyboardEvent, type MouseEvent, type ReactElement, type ReactNode, type Ref, type RefObject } from "react";
 import { Button } from "../components/ui/button.tsx";
 import {
@@ -34,6 +34,8 @@ export interface CommandPaletteItem {
   detail?: ReactNode;
   /** The keys of the item's own shortcut, shown at the end of the row. */
   shortcut?: readonly string[];
+  /** Makes the item a checkbox that choosing it toggles: whether it is checked. The palette stays open; the app flips the state in `onSelect`. */
+  checked?: boolean;
   onSelect: (intent: CommandPaletteIntent) => void;
 }
 
@@ -92,6 +94,8 @@ export interface CommandPaletteProps {
   closeLabel: string;
   /** Called with the query as it changes. */
   onQueryChange?: (query: string) => void;
+  /** The mode the query has put the palette in (for example `Go`): its name beside the input, while the query keeps what was typed. */
+  modeLabel?: string;
   /** A page below the first: its name beside the input, and the way back, which Backspace in an empty input takes. */
   page?: { label: string; onBack: () => void };
   /** Where focus goes when the palette closes. */
@@ -142,6 +146,7 @@ export function CommandPalette({
   footerHints,
   closeLabel,
   onQueryChange,
+  modeLabel,
   page,
   finalFocus,
 }: CommandPaletteProps): ReactElement {
@@ -158,6 +163,7 @@ export function CommandPalette({
           inputLabel={inputLabel}
           noResults={noResults}
           noResultsAction={noResultsAction}
+          modeLabel={modeLabel}
           onQueryChange={onQueryChange}
           page={page}
           placeholder={placeholder}
@@ -170,10 +176,10 @@ export function CommandPalette({
 
 type BodyProps = Pick<
   CommandPaletteProps,
-  "announce" | "closeLabel" | "footerHints" | "inputLabel" | "noResults" | "noResultsAction" | "onQueryChange" | "page" | "placeholder" | "sections"
+  "announce" | "closeLabel" | "footerHints" | "inputLabel" | "modeLabel" | "noResults" | "noResultsAction" | "onQueryChange" | "page" | "placeholder" | "sections"
 >;
 
-function PaletteBody({ announce, closeLabel, footerHints, inputLabel, noResults, noResultsAction, onQueryChange, page, placeholder, sections }: BodyProps): ReactElement {
+function PaletteBody({ announce, closeLabel, footerHints, inputLabel, modeLabel, noResults, noResultsAction, onQueryChange, page, placeholder, sections }: BodyProps): ReactElement {
   const [query, setQuery] = useState("");
   const terms = fold(query).split(/\s+/).filter((term) => term !== "");
 
@@ -228,7 +234,7 @@ function PaletteBody({ announce, closeLabel, footerHints, inputLabel, noResults,
           <CommandInput
             aria-label={inputLabel}
             placeholder={placeholder}
-            startAddon={page === undefined ? null : <Kbd className="h-6 shrink-0 px-2 text-foreground">{page.label}</Kbd>}
+            startAddon={page === undefined && modeLabel === undefined ? null : <Kbd className="h-6 shrink-0 px-2 text-foreground">{page?.label ?? modeLabel}</Kbd>}
           />
           <DialogClose aria-label={closeLabel} render={<Button className="me-2 sm:hidden" size="icon" variant="ghost" />}>
             <XIcon aria-hidden="true" />
@@ -283,11 +289,22 @@ function PaletteBody({ announce, closeLabel, footerHints, inputLabel, noResults,
                   <CommandItem
                     data-item-key={`${section.id}:${item.id}`}
                     key={item.id}
+                    {...(item.checked === undefined ? {} : { "aria-checked": item.checked })}
                     onClick={(event: MouseEvent<HTMLDivElement>) => {
                       item.onSelect(intentOf(event));
                     }}
                     value={`${section.id}:${item.id}`}
                   >
+                    {item.checked === undefined ? null : (
+                      <span
+                        aria-hidden="true"
+                        className="flex size-4 shrink-0 items-center justify-center rounded-sm border border-input bg-background text-primary-foreground data-checked:border-primary data-checked:bg-primary"
+                        data-checked={item.checked ? "" : undefined}
+                        data-slot="command-palette-checkbox"
+                      >
+                        {item.checked ? <CheckIcon className="size-3" /> : null}
+                      </span>
+                    )}
                     {item.icon}
                     <span className="truncate">{item.label}</span>
                     {item.detail === undefined ? null : <span className="min-w-0 truncate text-muted-foreground text-xs">{item.detail}</span>}

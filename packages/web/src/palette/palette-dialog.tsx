@@ -29,6 +29,7 @@ import { useSwitchFailureMessage, useWorkspaceSwitch, workspacesQuery } from "..
 import { useCommands, type CommandGroupId, type PaletteContext } from "./commands.ts";
 import { paletteBookmarksQuery } from "./palette-bookmarks.ts";
 import { createOfferOf, paletteModeOf } from "./palette-query.ts";
+import { usePaletteGo } from "./palette-go.tsx";
 import { usePaletteSearch, type SearchBookmark } from "./palette-search.ts";
 import { usePaletteState } from "./palette-state.tsx";
 import { isApplePlatform } from "./platform.ts";
@@ -67,6 +68,20 @@ export function PaletteDialog(): ReactElement {
 
   const mode = page === "root" ? paletteModeOf(query) : { kind: "browse" as const };
   const search = usePaletteSearch(api, mode.kind === "search" ? mode.text : undefined);
+  const activeWorkspaceId = me.data?.activeWorkspaceId;
+  const workspaceName = me.data?.memberships.find((membership) => membership.workspaceId === activeWorkspaceId)?.name;
+  const go = usePaletteGo({
+    api,
+    slug: mode.kind === "go" ? mode.slug : undefined,
+    close: () => {
+      close();
+    },
+    canSaveBookmarks,
+    createWithSlug: (slug) => {
+      openNewWithSlug(slug);
+    },
+    workspaceName,
+  });
 
   // The input starts empty on every page and every time the palette opens.
   const setPage = (next: Page): void => {
@@ -75,8 +90,17 @@ export function PaletteDialog(): ReactElement {
   };
 
   const close = (): void => {
+    go.reset();
     setOpen(false);
     setPage("root");
+  };
+
+  const openNewWithSlug = (slug: string): void => {
+    // The bookmark modal reads the slug to prefill from the address (doc 02 section 5.2).
+    void router.navigate({
+      to: ".",
+      search: (previous) => ({ ...previous, new: 1 as const, slug, url: undefined, bookmark: undefined }),
+    });
   };
 
   const context: PaletteContext = {
@@ -261,11 +285,7 @@ export function PaletteDialog(): ReactElement {
       onSelect: () => {
         close();
         if (offer.kind === "slug") {
-          // The bookmark modal reads the slug to prefill from the address (doc 02 section 5.2).
-          void router.navigate({
-            to: ".",
-            search: (previous) => ({ ...previous, new: 1 as const, slug: offer.slug, url: undefined, bookmark: undefined }),
-          });
+          openNewWithSlug(offer.slug);
         } else {
           modal.openNew(offer.kind === "url" ? offer.url : undefined);
         }
@@ -298,6 +318,8 @@ export function PaletteDialog(): ReactElement {
             })),
           },
     ];
+  } else if (mode.kind === "go") {
+    sections = [...go.sections];
   } else if (mode.kind === "search") {
     sections = searchSections();
   } else {
@@ -314,11 +336,16 @@ export function PaletteDialog(): ReactElement {
   const apple = isApplePlatform();
   const keys = { enter: "↵", newTab: apple ? "⌘" : t("shortcuts.key.ctrl"), edit: apple ? "⌥" : t("palette.key.alt") };
 
+  const goMode = page === "root" && mode.kind === "go";
   const hints: readonly CommandPaletteHint[] = [
     { id: "navigate", keys: ["↑", "↓"], label: t("palette.hint.navigate") },
     { id: "open", keys: [keys.enter], label: t("palette.hint.open") },
-    { id: "newTab", keys: [keys.newTab, keys.enter], label: t("palette.hint.newTab") },
-    { id: "edit", keys: [keys.edit, keys.enter], label: t("palette.hint.edit") },
+    ...(goMode
+      ? []
+      : [
+          { id: "newTab", keys: [keys.newTab, keys.enter], label: t("palette.hint.newTab") },
+          { id: "edit", keys: [keys.edit, keys.enter], label: t("palette.hint.edit") },
+        ]),
     { id: "close", keys: [t("shortcuts.key.esc")], label: t("palette.hint.close") },
   ];
   const workspacePage =
@@ -348,7 +375,11 @@ export function PaletteDialog(): ReactElement {
           close();
         }
       }}
-      onQueryChange={setQuery}
+      {...(goMode ? { modeLabel: t("palette.go.mode") } : {})}
+      onQueryChange={(next) => {
+        go.reset();
+        setQuery(next);
+      }}
       open={open}
       {...(workspacePage === undefined ? {} : { page: workspacePage })}
       placeholder={t("palette.placeholder")}

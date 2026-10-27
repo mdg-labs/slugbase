@@ -2651,6 +2651,18 @@
       "url": "Create a bookmark for {url}",
       "slug": "Create a bookmark with the slug {slug}",
       "blank": "Create a bookmark"
+    },
+    "go": {
+      "mode": "Go",
+      "open": "Go to /go/{slug}",
+      "empty": {
+        "title": "Go to a slug",
+        "description": "Type a slug after “go”, or paste a /go/ link, and press Enter."
+      },
+      "suggestions": "Slugs",
+      "suggestionsLoading": "Loading slugs",
+      "suggestionsFailed": "The slugs could not be loaded.",
+      "resolving": "Looking up {slug}"
     }
   },
   "shortcuts": {

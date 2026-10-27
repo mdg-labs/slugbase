@@ -7,16 +7,51 @@ export const PALETTE_SEARCH_DELAY_MS = 150;
 
 /**
  * What the palette does with the text in its input. Every mode the palette has is read from the query here, so a mode added to it
- * (`go`) branches from this one place.
+ * branches from this one place.
  */
 export type PaletteMode =
   | { readonly kind: "browse" }
   /** The query is searched for: bookmarks, folders and tags on the server, commands in the browser. */
-  | { readonly kind: "search"; readonly text: string };
+  | { readonly kind: "search"; readonly text: string }
+  /** The query asks to go to a slug (doc 02 section 9.2). `slug` is everything after `go ` or `/go/`, which may be empty or not a slug at all. */
+  | { readonly kind: "go"; readonly slug: string };
 
-export function paletteModeOf(query: string): PaletteMode {
+const GO_PATH = "/go/";
+
+/** The text after `/go/` in a pasted link of this deployment's own origin, or of no origin at all; undefined for any other text. */
+function pastedGoSlug(text: string, origin: string): string | undefined {
+  const pasted = /^https?:\/\//i.test(text) || text.startsWith(GO_PATH);
+  if (!pasted || !URL.canParse(text, origin)) {
+    return undefined;
+  }
+  const url = new URL(text, origin);
+  if (url.origin !== origin || !url.pathname.startsWith(GO_PATH)) {
+    return undefined;
+  }
+  let path = url.pathname.slice(GO_PATH.length);
+  try {
+    path = decodeURIComponent(path);
+  } catch {
+    // A path that is not valid percent-encoding is kept as it is; it is no slug either way.
+  }
+  return `${path}${url.search}`;
+}
+
+/**
+ * `go ` in any case, a pasted `/go/<slug>` and a pasted link to `/go/<slug>` on `origin` enter go mode. A link on any other origin is
+ * only text to search for. A path or query after the slug stays in `slug`, so the server judges it as it does for `/go` (Q43).
+ */
+export function paletteModeOf(query: string, origin: string = globalThis.location.origin): PaletteMode {
   const text = query.trim();
-  return text === "" ? { kind: "browse" } : { kind: "search", text };
+  if (text === "") {
+    return { kind: "browse" };
+  }
+  const lead = query.trimStart();
+  if (/^go\s/i.test(lead)) {
+    return { kind: "go", slug: lead.slice(2).trim().toLowerCase() };
+  }
+  const pasted = pastedGoSlug(text, origin);
+  return pasted === undefined ? { kind: "search", text } : { kind: "go", slug: pasted.trim().toLowerCase() };
 }
 
 /** What "No results" offers to create: a bookmark for an address, one with a slug, or a blank one. */
