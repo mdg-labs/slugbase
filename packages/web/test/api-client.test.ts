@@ -72,6 +72,27 @@ describe("the API client", () => {
       expect(request.headers.get("Content-Type")).toBe("application/json");
     });
 
+    it("declares it where the engine gives an empty request a body stream, as Firefox does", async () => {
+      const PlatformRequest = globalThis.Request;
+      class StreamBodyRequest extends PlatformRequest {
+        override get body(): ReadableStream<Uint8Array<ArrayBuffer>> | null {
+          return new ReadableStream<Uint8Array<ArrayBuffer>>({
+            start(controller) {
+              controller.close();
+            },
+          });
+        }
+      }
+      vi.stubGlobal("Request", StreamBodyRequest);
+      try {
+        const request = await sentRequest((api) => api.DELETE("/api/v1/me/sessions"));
+
+        expect(request.headers.get("Content-Type")).toBe("application/json");
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
     it("keeps the type a call set itself", async () => {
       const request = await sentRequest((api) =>
         api.POST("/api/v1/auth/logout", { headers: { "Content-Type": "application/json; charset=utf-8" } }),
