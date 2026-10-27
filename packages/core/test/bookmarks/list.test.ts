@@ -159,6 +159,23 @@ describe("listBookmarks", () => {
     expect(counts[1]?.filter.q).toBe("");
   });
 
+  it("hands the store the text query as the search normalises it, with the control characters the database refuses taken out, one that only holds them as a blank text, and none as none", async () => {
+    const { port, lists, counts } = store(ROWS);
+    const { codec } = cursors();
+
+    await listBookmarks({ store: port, cursors: codec }, ask({ q: "a\u0000b\t\u0007c\u200bd  e" }));
+    await listBookmarks({ store: port, cursors: codec }, ask({ q: "\u0000\u0001 \u0000" }));
+    await listBookmarks({ store: port, cursors: codec }, ask({ q: "x".repeat(150) }));
+    await listBookmarks({ store: port, cursors: codec }, ask());
+
+    expect(lists[0]?.filter.q).toBe("a b c d e");
+    expect(counts[0]?.filter.q).toBe("a b c d e");
+    expect(lists[1]?.filter.q).toBe("");
+    expect(counts[1]?.filter.q).toBe("");
+    expect(lists[2]?.filter.q).toBe("x".repeat(100));
+    expect(lists[3]?.filter.q).toBeUndefined();
+  });
+
   it("seals the cursor for the text query it was issued for alone, so a cursor of q=a replayed with q=b or without a text is refused and nothing is read", async () => {
     const { port, lists, counts } = store(ROWS);
     const { codec } = cursors();

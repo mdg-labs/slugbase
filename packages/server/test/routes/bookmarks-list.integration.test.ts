@@ -428,6 +428,17 @@ describe("listBookmarks", () => {
     expect((await list(world, owner, `q=alpha&limit=5&cursor=${encodeURIComponent(plain)}`)).status).toBe(400);
   }, TEST_TIMEOUT_MS);
 
+  it("lists with a text that holds a NUL or another control character as the search reads it, and a text of nothing else lists nothing, never a 500", async () => {
+    const world = harness.serve();
+    const { owner, shared } = await setup(world);
+    await seed(shared.workspaceId, owner, [{ title: "Kubernetes handbook" }, { title: "Cooking" }]);
+
+    expect(titles(await listed(world, owner, "q=kube%00"))).toEqual(["Kubernetes handbook"]);
+    expect(titles(await listed(world, owner, `q=${encodeURIComponent("\u0007kube\u0000")}`))).toEqual(["Kubernetes handbook"]);
+    expect(await listed(world, owner, "q=a%00b")).toMatchObject({ items: [], total: 0 });
+    expect(await listed(world, owner, `q=${encodeURIComponent("\u0000\u0001")}`)).toMatchObject({ items: [], total: 0 });
+  }, TEST_TIMEOUT_MS);
+
   it("refuses a text that is empty, blank or over 100 characters, with 422", async () => {
     const world = harness.serve();
     const { owner } = await setup(world);

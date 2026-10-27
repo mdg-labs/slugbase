@@ -1,3 +1,4 @@
+import { normalizeSearchQuery } from "../search/search.ts";
 import type { BookmarkRecord } from "./create.ts";
 import { normalizeBookmarkUrl, type BookmarkUrlRefusal } from "./url.ts";
 
@@ -32,7 +33,7 @@ export interface BookmarkListFilter {
   readonly folderId?: string | undefined;
   /** The tags the bookmark must carry, all of them (AND), as identifiers without repeats in a stable order. A tag the member does not own matches nothing. */
   readonly tagIds?: readonly string[] | undefined;
-  /** The text the bookmark must match: its slug, title, host and description, as the search of doc 02 section 9.1 matches them. A blank text matches no bookmark, so a filter that has lost its text never widens a list or a bulk action. */
+  /** The text the bookmark must match: its slug, title, host and description, as the search of doc 02 section 9.1 matches them. The text is normalised as the search normalises its query (control characters, which the database refuses, taken out as white space, runs of white space made one, the length capped), so the list and the search agree on what a query finds. A blank text, and one left blank by that, matches no bookmark, so a filter that has lost its text never widens a list or a bulk action. */
   readonly q?: string | undefined;
 }
 
@@ -160,7 +161,7 @@ export function bookmarkListFilter(ask: BookmarkFilterAsk): { readonly ok: true;
       urlCanonical,
       folderId: ask.folderId === undefined ? undefined : ask.folderId.toLowerCase(),
       tagIds: ask.tagIds === undefined ? undefined : [...new Set(ask.tagIds.map((id) => id.toLowerCase()))].sort(),
-      q: ask.q?.trim(),
+      q: ask.q === undefined ? undefined : normalizeSearchQuery(ask.q),
     },
   };
 }

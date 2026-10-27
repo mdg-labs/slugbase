@@ -86,6 +86,32 @@ describe("the select-all with a text query", () => {
   }, TEST_TIMEOUT_MS);
 });
 
+describe("the select-all and the bulk request with a text that holds a control character", () => {
+  it("reads the text as the search reads it, so a NUL is white space and a text of nothing else matches nothing, never a 500", async () => {
+    const world = harness.serve({ env: relaxed });
+    const { owner, shared } = await setup(world);
+    const widgets = await seed(shared.workspaceId, owner, "Widget notes", 2);
+    await seed(shared.workspaceId, owner, "Gadget notes", 3);
+
+    const found = await send(world, "GET", `${BOOKMARKS}/ids?q=widget%00`, { cookie: owner.cookie });
+    const none = await send(world, "GET", `${BOOKMARKS}/ids?q=${encodeURIComponent("\u0000\u0001")}`, { cookie: owner.cookie });
+    const inside = await send(world, "GET", `${BOOKMARKS}/ids?q=wid%00get`, { cookie: owner.cookie });
+    const pinned = await send(world, "POST", `${BOOKMARKS}/bulk`, { cookie: owner.cookie }, { action: "pin", filter: { q: "widget\u0000" } });
+    const nothing = await send(world, "POST", `${BOOKMARKS}/bulk`, { cookie: owner.cookie }, { action: "delete", filter: { q: "\u0000\u0001" } });
+
+    expect(found.status).toBe(200);
+    expect(((await found.json()) as { ids: string[] }).ids.toSorted()).toEqual(widgets.toSorted());
+    expect(none.status).toBe(200);
+    expect(await none.json()).toMatchObject({ ids: [] });
+    expect(inside.status).toBe(200);
+    expect(pinned.status).toBe(200);
+    expect(await pinned.json()).toMatchObject({ requested: 2, affected: 2 });
+    expect(nothing.status).toBe(200);
+    expect(await nothing.json()).toMatchObject({ requested: 0, affected: 0 });
+    expect(await idsOfWorkspace(shared.workspaceId)).toHaveLength(5);
+  }, TEST_TIMEOUT_MS);
+});
+
 describe("the bulk request by filter with a text query", () => {
   it("deletes the bookmarks the text matches among the caller's own and nothing else", async () => {
     const world = harness.serve({ env: relaxed });
