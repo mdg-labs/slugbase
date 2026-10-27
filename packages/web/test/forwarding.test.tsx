@@ -445,6 +445,18 @@ describe("the actions of a row", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(screen.queryByText("Copied http://localhost:3000/go/docs")).toBeNull();
     Reflect.deleteProperty(window.navigator, "clipboard");
   });
+
+  it("says the address could not be copied on a page without a clipboard", async () => {
+    stubServer(worldOf());
+    Object.defineProperty(window.navigator, "clipboard", { configurable: true, value: undefined });
+    await openApp("/forwarding");
+    await screen.findByRole("table", { name: "Your slugs" });
+
+    await chooseAction("mail", "Copy address");
+
+    expect((await screen.findAllByText("The address could not be copied. Select it and copy it by hand.")).length).toBeGreaterThan(0);
+    Reflect.deleteProperty(window.navigator, "clipboard");
+  });
 });
 
 /** Lets the toast that offers the undo of a removal run out, the way its timer would. */

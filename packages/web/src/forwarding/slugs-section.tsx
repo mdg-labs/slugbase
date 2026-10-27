@@ -111,14 +111,16 @@ export function SlugsSection(): ReactElement {
 
   const copy = (bookmark: Bookmark): void => {
     const address = goAddress(origin, bookmark.slug ?? "");
-    globalThis.navigator.clipboard.writeText(address).then(
-      () => {
-        feedbackToast.success(t("forwarding.slugs.copied", { address }));
-      },
-      () => {
+    // The clipboard is missing on a page that is not a secure context, such as an instance served over http.
+    void (async () => {
+      try {
+        await globalThis.navigator.clipboard.writeText(address);
+      } catch {
         feedbackToast.error(t("forwarding.slugs.copyFailed"));
-      },
-    );
+        return;
+      }
+      feedbackToast.success(t("forwarding.slugs.copied", { address }));
+    })();
   };
   const retry = (
     <Button
