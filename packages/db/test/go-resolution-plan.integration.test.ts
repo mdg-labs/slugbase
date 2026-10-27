@@ -14,10 +14,30 @@ import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 // Index Scan that fetches heap rows.
 
 const HOOK_TIMEOUT_MS = 300_000;
+const VACUUM_ATTEMPTS = 20;
+const VACUUM_RETRY_DELAY_MS = 250;
 const BOOKMARKS = 50_000;
 const SMALL_WORKSPACES = 1_500;
 
 let db: TestDatabase;
+
+/**
+ * Vacuums the table until the visibility map marks every page all-visible. One VACUUM of a fixture just inserted may mark only some of its pages or none (measured: none
+ * of the 1 660 pages of `bookmarks` in some runs, all of them in others, and a second vacuum marked them all). With none marked, the planner prices an Index Only Scan of
+ * `bookmarks_slug_idx` by a heap fetch for each index entry it expects, and for a slug that many workspaces share (`mail`) it reads `bookmarks_owner_slug_key` through a
+ * bitmap scan instead, so the plan this suite asserts would depend on that race of the fixture.
+ */
+async function vacuumUntilAllVisible(table: "bookmarks" | "slug_preferences"): Promise<void> {
+  for (let attempt = 1; attempt <= VACUUM_ATTEMPTS; attempt += 1) {
+    await db.owner.unsafe(`VACUUM (ANALYZE) ${table}`);
+    const [row] = await db.owner<{ pages: number; visible: number }[]>`SELECT relpages AS pages, relallvisible AS visible FROM pg_class WHERE oid = ${table}::regclass`;
+    if (row !== undefined && row.visible >= row.pages) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, VACUUM_RETRY_DELAY_MS));
+  }
+  throw new Error(`the visibility map of ${table} does not cover every page after ${String(VACUUM_ATTEMPTS)} vacuums`);
+}
 let accountId: string;
 let otherId: string;
 let workspaceId: string;
@@ -62,8 +82,8 @@ beforeAll(async () => {
     SELECT ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid, ${accountId}, 'mail', ('00000001-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid
     FROM generate_series(1, ${SMALL_WORKSPACES}) AS n`);
   // A running instance has had its tables vacuumed, so an Index Only Scan reads no heap pages: the visibility map is part of the fixture.
-  await db.owner.unsafe("VACUUM (ANALYZE) bookmarks");
-  await db.owner.unsafe("VACUUM (ANALYZE) slug_preferences");
+  await vacuumUntilAllVisible("bookmarks");
+  await vacuumUntilAllVisible("slug_preferences");
 }, HOOK_TIMEOUT_MS);
 
 afterAll(async () => {
