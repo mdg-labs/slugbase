@@ -52,8 +52,8 @@ export function PaletteDialog(): ReactElement {
   };
 
   const context: PaletteContext = {
-    navigate: (to) => {
-      void router.navigate({ to });
+    navigate: (options) => {
+      void router.navigate(options);
     },
     openNewBookmark: () => {
       modal.openNew();

@@ -15,7 +15,7 @@ export const DEFAULT_COMMANDS: readonly PaletteCommand[] = [
     icon: <HomeIcon aria-hidden="true" />,
     shortcut: ["G", "H"],
     run: ({ navigate }) => {
-      navigate("/");
+      navigate({ to: "/" });
     },
   },
   {
@@ -27,7 +27,7 @@ export const DEFAULT_COMMANDS: readonly PaletteCommand[] = [
     icon: <BookmarkIcon aria-hidden="true" />,
     shortcut: ["G", "B"],
     run: ({ navigate }) => {
-      navigate("/bookmarks");
+      navigate({ to: "/bookmarks" });
     },
   },
   {
@@ -39,7 +39,7 @@ export const DEFAULT_COMMANDS: readonly PaletteCommand[] = [
     icon: <FolderIcon aria-hidden="true" />,
     shortcut: ["G", "F"],
     run: ({ navigate }) => {
-      navigate("/folders");
+      navigate({ to: "/folders" });
     },
   },
   {
@@ -51,7 +51,7 @@ export const DEFAULT_COMMANDS: readonly PaletteCommand[] = [
     icon: <TagIcon aria-hidden="true" />,
     shortcut: ["G", "T"],
     run: ({ navigate }) => {
-      navigate("/tags");
+      navigate({ to: "/tags" });
     },
   },
   {
@@ -63,7 +63,7 @@ export const DEFAULT_COMMANDS: readonly PaletteCommand[] = [
     icon: <ForwardIcon aria-hidden="true" />,
     shortcut: ["G", "W"],
     run: ({ navigate }) => {
-      navigate("/forwarding");
+      navigate({ to: "/forwarding" });
     },
   },
   {
@@ -74,7 +74,7 @@ export const DEFAULT_COMMANDS: readonly PaletteCommand[] = [
     keywords: (t) => t("palette.command.settings.keywords"),
     icon: <SettingsIcon aria-hidden="true" />,
     run: ({ navigate }) => {
-      navigate("/settings/account");
+      navigate({ to: "/settings/account" });
     },
   },
   {
@@ -98,7 +98,7 @@ export const DEFAULT_COMMANDS: readonly PaletteCommand[] = [
     keywords: (t) => t("palette.command.newFolder.keywords"),
     icon: <FolderPlusIcon aria-hidden="true" />,
     run: ({ navigate }) => {
-      navigate("/folders");
+      navigate({ to: "/folders", search: { create: 1 } });
     },
   },
   {

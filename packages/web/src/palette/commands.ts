@@ -1,4 +1,4 @@
-import type { LinkProps } from "@tanstack/react-router";
+import type { NavigateOptions } from "@tanstack/react-router";
 import type { TFunction } from "i18next";
 import { useSyncExternalStore, type ReactElement } from "react";
 
@@ -7,8 +7,8 @@ export type CommandGroupId = "navigation" | "actions";
 
 /** What a command can do, and what it can tell about where it runs. */
 export interface PaletteContext {
-  /** Goes to a page of the app. */
-  readonly navigate: (to: LinkProps["to"]) => void;
+  /** Goes to a page of the app, with the search parameters that page declares. */
+  readonly navigate: (options: NavigateOptions) => void;
   /** Opens the bookmark modal over the current page. */
   readonly openNewBookmark: () => void;
   /** Whether the account acts in a workspace to save bookmarks to. */

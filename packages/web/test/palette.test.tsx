@@ -508,6 +508,25 @@ describe("choosing an item", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(modal.contains(document.activeElement)).toBe(true);
   });
 
+  it("opens the create-folder form for New folder and leaves focus in its name field", async () => {
+    serve({ intercept: (request) => (new URL(request.url).pathname === "/api/v1/folders" ? json({ items: [], nextCursor: null, total: 0 }) : undefined) });
+    await openApp();
+    const dialog = await openPalette();
+
+    await click(await within(dialog).findByRole("option", { name: /New folder/ }));
+
+    const form = await screen.findByRole("dialog", { name: "New folder" });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Command palette" })).toBeNull();
+    });
+    expect(window.location.pathname).toBe("/folders");
+    expect(window.location.search).toBe("?create=1");
+    expect(screen.queryByRole("dialog", { name: "New bookmark" })).toBeNull();
+    await waitFor(() => {
+      expect(document.activeElement).toBe(within(form).getByRole("textbox", { name: "Name" }));
+    });
+  });
+
   it("toggles the theme and saves the choice", async () => {
     serve();
     await openApp();

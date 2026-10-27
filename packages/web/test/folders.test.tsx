@@ -424,6 +424,53 @@ describe("creating a folder", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(server.lists().length).toBeGreaterThan(1);
   });
 
+  it("opens from ?create=1 with the focus in the name field, and drops the flag from the address when the form is closed", async () => {
+    stubServer([folder(1, { name: "Archive" })]);
+    await openApp("/folders?sort=count&create=1");
+
+    const dialog = await screen.findByRole("dialog", { name: "New folder" });
+    expect(screen.queryByRole("dialog", { name: "New bookmark" })).toBeNull();
+    await waitFor(() => {
+      expect(document.activeElement).toBe(within(dialog).getByRole("textbox", { name: "Name" }));
+    });
+    expect(window.location.search).toContain("create=1");
+
+    await press(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "New folder" })).toBeNull();
+    });
+    expect(window.location.search).toBe("?sort=count");
+  });
+
+  it("drops the flag from the address once the folder is created", async () => {
+    const server = stubServer([]);
+    await openApp("/folders?create=1");
+    const dialog = await screen.findByRole("dialog", { name: "New folder" });
+    await type(dialog, "Recipes");
+
+    await press(within(dialog).getByRole("button", { name: "Create folder" }));
+
+    await waitFor(() => {
+      expect(server.to("POST")).toHaveLength(1);
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "New folder" })).toBeNull();
+    });
+    expect(window.location.search).toBe("");
+  });
+
+  it("puts the flag in the address when the form is opened with N or the button", async () => {
+    stubServer([folder(1)]);
+    await openApp("/folders");
+    await inPage.findByText("Folder 1");
+
+    await key({ key: "n" });
+
+    await screen.findByRole("dialog", { name: "New folder" });
+    expect(window.location.search).toBe("?create=1");
+  });
+
   it("sends the defaults of the form when only the name is entered", async () => {
     const server = stubServer([]);
     await openApp("/folders");
