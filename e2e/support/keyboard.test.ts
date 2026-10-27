@@ -89,4 +89,48 @@ void describe("the keyboard steps of the journeys", () => {
     await assert.rejects(waitForInitialFocus(missing, "the URL field", 100), /the URL field has the initial focus within 100 ms/);
     assert.ok(timeouts.length > 0 && timeouts.every((timeout) => timeout > 0 && timeout <= 100), `timeouts ${timeouts.join(", ")}`);
   });
+
+  // A timer can fire before the wall clock reaches the deadline it was set for: here the lookup rejects once its timeout
+  // has run out while `Date.now()` still reads a millisecond short of the deadline.
+  void it("the wait reports a lookup whose timeout ran out as the missed focus while the wall clock is a millisecond short", async (context) => {
+    const wallClock = Date.now.bind(Date);
+    let skew = 0;
+    context.mock.method(Date, "now", () => wallClock() - skew);
+    const missing: FocusTarget = {
+      evaluate: (_pageFunction, _arg, options) => {
+        skew = 1;
+        return new Promise<boolean>((_resolve, reject) => {
+          setTimeout(() => {
+            reject(new Error("locator.evaluate: Timeout"));
+          }, options?.timeout);
+        });
+      },
+    };
+    const failure = await waitForInitialFocus(missing, "the URL field", 100).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    assert.ok(failure instanceof Error);
+    assert.match(failure.message, /the URL field has the initial focus within 100 ms/);
+    assert.match((failure.cause as Error).message, /locator\.evaluate: Timeout/);
+  });
+
+  void it("the wait reports a TimeoutError of the lookup as the missed focus", async () => {
+    const timedOut = new Error("locator.evaluate: Timeout 100ms exceeded.");
+    timedOut.name = "TimeoutError";
+    const missing: FocusTarget = { evaluate: () => Promise.reject(timedOut) };
+    const failure = await waitForInitialFocus(missing, "the URL field", 100).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    assert.ok(failure instanceof Error);
+    assert.match(failure.message, /the URL field has the initial focus within 100 ms/);
+    assert.equal(failure.cause, timedOut);
+  });
+
+  void it("the wait rethrows a lookup error that is not its timeout as it is", async () => {
+    const broken = new Error("locator.evaluate: Target closed");
+    const target: FocusTarget = { evaluate: () => Promise.reject(broken) };
+    await assert.rejects(waitForInitialFocus(target, "the URL field", 100), (error: unknown) => error === broken);
+  });
 });
