@@ -6,6 +6,7 @@ import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { useConfig } from "../config/config-context.tsx";
 import { meQuery, type Account, type PreferenceChanges } from "./me.ts";
+import { useCachedAccount } from "./use-cached-account.ts";
 import { useUpdatePreferences } from "./use-update-preferences.ts";
 
 type PreferenceName = keyof PreferenceChanges;
@@ -135,11 +136,13 @@ export function AccountPreferencesPage(): ReactElement {
   const { t } = useTranslation();
   const router = useRouter();
   const me = useQuery(meQuery(router.options.context.api));
+  // Read from the cache the way the theme and the accent are, so a choice shows in the same render that applies it.
+  const account = useCachedAccount();
 
   return (
     <div className="flex flex-col gap-4">
       <h1 className="font-semibold text-xl">{t("settings.preferences.title")}</h1>
-      {me.data === undefined ? null : <PreferencesForm account={me.data.account} key={me.data.account.id} />}
+      {account === undefined ? null : <PreferencesForm account={account} key={account.id} />}
       {me.isPending ? <Loading label={t("shell.loading")} /> : null}
       {me.isError ? (
         <Banner
