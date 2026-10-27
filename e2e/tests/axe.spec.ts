@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 import { findViolations, parseAllowlist, type AllowlistEntry } from "../support/axe.ts";
 import { message } from "../support/catalog.ts";
+import { openPaletteWithShortcut, paletteDialog } from "../support/palette.ts";
 import { productName } from "../support/product.ts";
 import { expect, test } from "../support/test.ts";
 
@@ -75,6 +76,11 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(page.locator("html")).toHaveClass(themed);
       // The toggle offers the other theme, so the shell that was scanned is the one in this theme.
       await expect(page.getByRole("button", { name: message("en", scheme === "light" ? "shell.switchToDark" : "shell.switchToLight") })).toBeVisible();
+      // The command palette is the shell's overlay: it is scanned open in this theme too, in the journey that holds the account's
+      // preferences already, so that the queue for them does not grow.
+      await openPaletteWithShortcut(page);
+      await expect(paletteDialog(page)).toBeVisible();
+      await app.scan();
     });
   });
 }
