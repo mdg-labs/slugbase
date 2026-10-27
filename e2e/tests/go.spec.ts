@@ -378,8 +378,9 @@ for (const { name, viewport } of [
         expect(((await refused.json()) as { code?: unknown }).code).toBe("url_not_allowed");
 
         // Neither of them stored anything, and nothing ran.
-        const listed = (await (await page.request.get(`${BOOKMARKS}?limit=100`)).json()) as { items: { url: string }[] };
-        expect(listed.items.filter((item) => item.url.toLowerCase().startsWith("javascript:")), "stored bookmarks with a javascript: address").toEqual([]);
+        // The record is looked up by its title, which the server keeps as sent, not by the address it might have rewritten.
+        const listed = (await (await page.request.get(`${BOOKMARKS}?limit=100`)).json()) as { items: { title: string }[] };
+        expect(listed.items.filter((item) => item.title === `Script ${token}`), "stored bookmarks of the refused attempts").toEqual([]);
         expect(dialogs, "scripts that ran during the journey").toEqual([]);
 
         await page.keyboard.press("Escape");
