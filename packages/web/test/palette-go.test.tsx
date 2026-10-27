@@ -375,9 +375,11 @@ describe("resolving on Enter", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(within(dialog).getByRole("group").querySelectorAll("[data-slot='skeleton']").length).toBeGreaterThan(0);
     await act(async () => {
       pending.resolve(json({ url: DOCS_URL }));
-      await new Promise((done) => setTimeout(done, 20));
+      await pending.promise;
     });
-    expect(navigateTo).toHaveBeenCalledExactlyOnceWith(DOCS_URL);
+    await waitFor(() => {
+      expect(navigateTo).toHaveBeenCalledExactlyOnceWith(DOCS_URL);
+    });
   });
 
   it("resolves the slug of a suggestion that is chosen, instead of going to it directly", async () => {
