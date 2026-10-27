@@ -18,6 +18,11 @@ function isHidden(element: HTMLElement, container: HTMLElement): boolean {
     if (current === container) {
       break;
     }
+    // The content of a closed <details> is skipped without a computed `display: none`; only its summary stays reachable.
+    const parent: HTMLElement | null = current.parentElement;
+    if (parent instanceof HTMLDetailsElement && !parent.open && parent.querySelector(":scope > summary") !== current) {
+      return true;
+    }
   }
   return false;
 }
