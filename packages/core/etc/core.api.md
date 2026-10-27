@@ -1284,6 +1284,24 @@ export interface BookmarkFolderRef {
 }
 
 // @public (undocumented)
+export interface BookmarkHit {
+    // (undocumented)
+    readonly forwarding: boolean;
+    // (undocumented)
+    readonly host: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly pinned: boolean;
+    // (undocumented)
+    readonly slug: string | null;
+    // (undocumented)
+    readonly title: string;
+    // (undocumented)
+    readonly url: string;
+}
+
+// @public (undocumented)
 export interface BookmarkIdsAsk extends BookmarkFilterAsk {
     // (undocumented)
     readonly scope: BookmarkScope;
@@ -2245,6 +2263,18 @@ export type FolderFilingResult =
 export interface FolderFilingStore {
     file(request: FolderFilingRequest): Promise<FolderFilingResult>;
     unfile(request: FolderFilingRequest): Promise<FolderFilingResult>;
+}
+
+// @public (undocumented)
+export interface FolderHit {
+    // (undocumented)
+    readonly color: number;
+    // (undocumented)
+    readonly icon: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
 }
 
 // @public (undocumented)
@@ -4189,6 +4219,9 @@ export function normalizeFolderName(name: string): {
 };
 
 // @public
+export function normalizeSearchQuery(query: string): string;
+
+// @public
 export function normalizeSlug(input: string): string;
 
 // @public
@@ -4518,6 +4551,68 @@ export interface SealedSecret {
 }
 
 // @public
+export function search(input: SearchDependencies, ask: SearchAsk): Promise<SearchResult>;
+
+// @public
+export const SEARCH_DEFAULT_LIMITS: Readonly<Record<SearchType, number>>;
+
+// @public
+export const SEARCH_MAX_LIMIT = 20;
+
+// @public
+export const SEARCH_QUERY_MAX_LENGTH = 100;
+
+// @public (undocumented)
+export const SEARCH_TYPES: readonly ["bookmark", "folder", "tag"];
+
+// @public (undocumented)
+export interface SearchAsk {
+    // (undocumented)
+    readonly accountId: string;
+    readonly limit?: number;
+    // (undocumented)
+    readonly query: string;
+    readonly types?: readonly SearchType[];
+}
+
+// @public (undocumented)
+export interface SearchDependencies {
+    // (undocumented)
+    readonly store: SearchStore;
+}
+
+// @public (undocumented)
+export interface SearchResult {
+    // (undocumented)
+    readonly bookmarks: readonly BookmarkHit[];
+    // (undocumented)
+    readonly folders: readonly FolderHit[];
+    // (undocumented)
+    readonly tags: readonly TagHit[];
+}
+
+// @public (undocumented)
+export interface SearchStore {
+    bookmarks(request: {
+        readonly text: string;
+        readonly limit: number;
+    }): Promise<readonly BookmarkHit[]>;
+    folders(request: {
+        readonly accountId: string;
+        readonly text: string;
+        readonly limit: number;
+    }): Promise<readonly FolderHit[]>;
+    tags(request: {
+        readonly accountId: string;
+        readonly text: string;
+        readonly limit: number;
+    }): Promise<readonly TagHit[]>;
+}
+
+// @public (undocumented)
+export type SearchType = (typeof SEARCH_TYPES)[number];
+
+// @public
 export interface SeatEntitlements {
     limit(accountId: string, workspaceId: string, request: object): Promise<number | null>;
 }
@@ -4649,6 +4744,14 @@ export interface TagDeletionAsk {
 export interface TagDeletionDependencies {
     // (undocumented)
     readonly store: Pick<TagStore, "remove">;
+}
+
+// @public (undocumented)
+export interface TagHit {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
 }
 
 // @public (undocumented)

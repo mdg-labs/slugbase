@@ -107,6 +107,7 @@ describe("the package entry point", () => {
         "membershipRepository",
         "migrate",
         "migrationLevel",
+        "searchRepository",
         "tagRepository",
         "workspacePurgeOrder",
         "workspaceRepository",

@@ -56,6 +56,7 @@ import type { MemberRoleStore } from '@slugbase/core';
 import { NewBookmark } from '@slugbase/core';
 import { PgColumn } from 'drizzle-orm/pg-core';
 import { PgTable } from 'drizzle-orm/pg-core';
+import type { SearchStore } from '@slugbase/core';
 import { SlugUse } from '@slugbase/core';
 import { SQL } from 'drizzle-orm';
 import type { TagStore } from '@slugbase/core';
@@ -1326,6 +1327,12 @@ export interface SealedVerifier {
     // (undocumented)
     readonly keyId: string;
 }
+
+// @public (undocumented)
+export type SearchRepository = SearchStore;
+
+// @public
+export function searchRepository(tx: TenantTx): SearchRepository;
 
 // @public
 export type SecondFactor =

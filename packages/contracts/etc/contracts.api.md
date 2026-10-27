@@ -1442,6 +1442,30 @@ export interface ComponentTypes {
         ResetPasswordResult: {
             next: "done" | "mfa";
         };
+        SearchBookmark: {
+            forwarding: boolean;
+            host: string;
+            id: string;
+            pinned: boolean;
+            slug: string | null;
+            title: string;
+            url: string;
+        };
+        SearchFolder: {
+            color: number;
+            icon: string;
+            id: string;
+            name: string;
+        };
+        SearchResults: {
+            bookmarks: ComponentTypes["schemas"]["SearchBookmark"][];
+            folders: ComponentTypes["schemas"]["SearchFolder"][];
+            tags: ComponentTypes["schemas"]["SearchTag"][];
+        };
+        SearchTag: {
+            id: string;
+            name: string;
+        };
         Session: {
             createdAt: string;
             current: boolean;
@@ -10984,6 +11008,71 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    search: {
+        parameters: {
+            query: {
+                q: string;
+                types?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["SearchResults"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     sendInstanceTestMail: {
         parameters: {
             query?: never;
@@ -13255,6 +13344,23 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/api/v1/session/active-workspace": {
         parameters: {
             query?: never;
@@ -14562,6 +14668,124 @@ export const RevokeSessionsQuerySchema: z.ZodObject<{
         true: "true";
         false: "false";
     }>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const search: {
+    readonly method: "get";
+    readonly path: "/api/v1/search";
+    readonly operationId: "search";
+    readonly tag: "search";
+    readonly summary: "Search my bookmarks, folders and tags";
+    readonly auth: "member";
+    readonly rate: "read";
+    readonly scope: "read";
+    readonly request: {
+        readonly query: z.ZodObject<{
+            q: z.ZodString;
+            types: z.ZodOptional<z.ZodString>;
+            limit: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        bookmarks: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        title: z.ZodString;
+        url: z.ZodString;
+        host: z.ZodString;
+        slug: z.ZodNullable<z.ZodString>;
+        forwarding: z.ZodBoolean;
+        pinned: z.ZodBoolean;
+        }, z.core.$strict>>;
+        folders: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        icon: z.ZodString;
+        color: z.ZodNumber;
+        }, z.core.$strict>>;
+        tags: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        }, z.core.$strict>>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 401: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public
+export const SEARCH_DEFAULT_LIMITS: {
+    readonly bookmark: 8;
+    readonly folder: 4;
+    readonly tag: 4;
+};
+
+// @public
+export const SEARCH_MAX_LIMIT = 20;
+
+// @public
+export const SEARCH_QUERY_MAX_LENGTH = 100;
+
+// @public
+export const SEARCH_TYPES: readonly ["bookmark", "folder", "tag"];
+
+// @public (undocumented)
+export const SearchBookmarkSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    title: z.ZodString;
+    url: z.ZodString;
+    host: z.ZodString;
+    slug: z.ZodNullable<z.ZodString>;
+    forwarding: z.ZodBoolean;
+    pinned: z.ZodBoolean;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const SearchFolderSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    name: z.ZodString;
+    icon: z.ZodString;
+    color: z.ZodNumber;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const SearchQuerySchema: z.ZodObject<{
+    q: z.ZodString;
+    types: z.ZodOptional<z.ZodString>;
+    limit: z.ZodOptional<z.ZodCoercedNumber<unknown>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const SearchResultsSchema: z.ZodObject<{
+    bookmarks: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        title: z.ZodString;
+        url: z.ZodString;
+        host: z.ZodString;
+        slug: z.ZodNullable<z.ZodString>;
+        forwarding: z.ZodBoolean;
+        pinned: z.ZodBoolean;
+    }, z.core.$strict>>;
+    folders: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        icon: z.ZodString;
+        color: z.ZodNumber;
+    }, z.core.$strict>>;
+    tags: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+    }, z.core.$strict>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const SearchTagSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    name: z.ZodString;
 }, z.core.$strict>;
 
 // @public (undocumented)

@@ -49,6 +49,7 @@ import { bookmarkRoutes } from "./routes/bookmarks/index.ts";
 import { tagRoutes } from "./routes/tags/index.ts";
 import { folderRoutes } from "./routes/folders/index.ts";
 import { goRoutes } from "./routes/go/index.ts";
+import { searchRoutes } from "./routes/search/index.ts";
 import { goNavigationRoutes, isGoShell } from "./routes/go/navigate.ts";
 import { isOpenSearchDocument, openSearchRoutes } from "./routes/opensearch.ts";
 import { slugRoutes } from "./routes/slugs/index.ts";
@@ -590,6 +591,8 @@ export function createServer(options: CreateServerOptions): Server {
   // And what a slug resolves to for the member, and the member's choice among its candidates, which counts the use in the same buffer an open does.
   builtInRoutes.push(...goRoutes({ usage }));
   builtInRoutes.push(...goPreferenceRoutes({ cursorSecret: config.SESSION_SECRET }));
+  // And the search across the member's readable bookmarks, own folders and own tags (the palette's query).
+  builtInRoutes.push(...searchRoutes());
   const ownedWorkspaceEntitlements = createOwnedWorkspaceEntitlements(entitlementService);
   // Stage 9 and the handlers that decide an entitlement themselves (accepting an invitation) ask the same check, so an operation is gated the same way wherever it is decided.
   const entitlementCheck: EntitlementCheck = options.entitlements ?? (adapters.entitlements.available ? createEntitlementCheck(entitlementService) : denyEntitlements);

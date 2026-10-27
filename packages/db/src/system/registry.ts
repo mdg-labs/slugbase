@@ -110,6 +110,7 @@ export const systemOperations: readonly string[] = [
   "sys_bookmark_archive_set",
   "sys_flush_open_counts",
   "sys_go_other_workspaces",
+  "sys_search",
 ];
 
 /**

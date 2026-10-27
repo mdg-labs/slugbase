@@ -638,6 +638,41 @@
       "when": 1793046013918,
       "tag": "20261026202013_add_go_other_workspaces",
       "breakpoints": true
+    },
+    {
+      "idx": 91,
+      "version": "7",
+      "when": 1793096552898,
+      "tag": "20261027102232_index_bookmark_search",
+      "breakpoints": true
+    },
+    {
+      "idx": 92,
+      "version": "7",
+      "when": 1793096552899,
+      "tag": "20261027102233_index_bookmark_search",
+      "breakpoints": true
+    },
+    {
+      "idx": 93,
+      "version": "7",
+      "when": 1793096552900,
+      "tag": "20261027102234_index_bookmark_search_2",
+      "breakpoints": true
+    },
+    {
+      "idx": 94,
+      "version": "7",
+      "when": 1793096552901,
+      "tag": "20261027102235_index_bookmark_search_3",
+      "breakpoints": true
+    },
+    {
+      "idx": 95,
+      "version": "7",
+      "when": 1793096552902,
+      "tag": "20261027102236_index_bookmark_search_4",
+      "breakpoints": true
     }
   ]
 }

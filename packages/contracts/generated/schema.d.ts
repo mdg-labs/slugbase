@@ -1088,6 +1088,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Search my bookmarks, folders and tags */
+        get: operations["search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/session/active-workspace": {
         parameters: {
             query?: never;
@@ -2600,6 +2617,55 @@ export interface components {
              * @enum {string}
              */
             next: "done" | "mfa";
+        };
+        SearchBookmark: {
+            /** @description Whether /go forwards to the bookmark by its slug */
+            forwarding: boolean;
+            /** @description The host name of the URL, lower case and in punycode */
+            host: string;
+            /**
+             * Format: uuid
+             * @description The bookmark's identifier
+             */
+            id: string;
+            /** @description Whether the bookmark is pinned */
+            pinned: boolean;
+            /** @description The bookmark's slug, null when it has none */
+            slug: string | null;
+            /** @description The bookmark's title */
+            title: string;
+            /** @description The URL as stored: normalised, and always http or https */
+            url: string;
+        };
+        SearchFolder: {
+            /** @description The folder's colour, 1 to 8: the number of the --folder-N theme token */
+            color: number;
+            /** @description The folder's icon: a lucide icon name from the list the folder operations publish */
+            icon: string;
+            /**
+             * Format: uuid
+             * @description The folder's identifier
+             */
+            id: string;
+            /** @description The folder's name, in the case it was entered in */
+            name: string;
+        };
+        SearchResults: {
+            /** @description The caller's bookmarks that match, best first: an exact slug, then a slug prefix, then full text, then trigram similarity; plan-archived bookmarks never match */
+            bookmarks: components["schemas"]["SearchBookmark"][];
+            /** @description The caller's own folders whose name contains the text, an exact name first, then a name that starts with it, then the rest; another member's folders are never in it */
+            folders: components["schemas"]["SearchFolder"][];
+            /** @description The caller's own tags whose name contains the text, in the order of the folders; another member's tags are never in it */
+            tags: components["schemas"]["SearchTag"][];
+        };
+        SearchTag: {
+            /**
+             * Format: uuid
+             * @description The tag's identifier
+             */
+            id: string;
+            /** @description The tag's name, in the case it was entered in */
+            name: string;
         };
         Session: {
             /**
@@ -9360,6 +9426,77 @@ export interface operations {
             };
             /** @description The reference documents are disabled on this server */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    search: {
+        parameters: {
+            query: {
+                q: string;
+                types?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The matches grouped by type, each group at most `limit` long (8 bookmarks, 4 folders and 4 tags by default); a type that was not asked for, and a text that matches nothing, give empty lists */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SearchResults"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The query did not pass validation (a missing, blank or over-long q, a types list with a value other than bookmark, folder and tag, a limit outside 1 to 20, or an unknown parameter) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

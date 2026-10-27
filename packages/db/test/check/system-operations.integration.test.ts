@@ -193,6 +193,7 @@ describe("the shipped chain", () => {
       "sys_bookmark_archive_set",
       "sys_flush_open_counts",
       "sys_go_other_workspaces",
+      "sys_search",
     ]);
     expect(internalSystemOperations).toEqual(["sys_create_workspace"]);
     expect(internalSystemOperations.every((name) => systemOperations.includes(name))).toBe(true);
