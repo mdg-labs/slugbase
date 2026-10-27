@@ -112,6 +112,13 @@ async function section(name: string): Promise<HTMLElement> {
   return region as HTMLElement;
 }
 
+/** The teaching empty state, which the Getting started checklist beside it shares a New bookmark action with. */
+function emptyState(): HTMLElement {
+  const empty = screen.getByRole("heading", { level: 2, name: "Save your first bookmark" }).closest("[data-slot='empty']");
+  expect(empty).not.toBeNull();
+  return empty as HTMLElement;
+}
+
 describe("the counts and the search", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("shows the bookmarks, folders and tags as metric tiles in the language's number format, and no Shared with you tile", async () => {
     use({ fixtures: { getDashboard: dashboard() } });
@@ -304,7 +311,7 @@ describe("a workspace with no bookmarks", { timeout: HEAVY_TEST_TIMEOUT_MS }, ()
 
     expect(await screen.findByRole("heading", { level: 2, name: "Save your first bookmark" })).toBeTruthy();
     expect(screen.getByText("Give a bookmark a short, private slug and open it from anywhere through /go/.")).toBeTruthy();
-    expect(within(screen.getByRole("main")).getByRole("button", { name: "New bookmark" })).toBeTruthy();
+    expect(within(emptyState()).getByRole("button", { name: "New bookmark" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "Set up your browser" }).getAttribute("href")).toBe("/forwarding");
     expect(screen.queryByRole("heading", { level: 2, name: "Quick access" })).toBeNull();
     expect(screen.queryByRole("heading", { level: 2, name: "Pinned" })).toBeNull();
@@ -318,7 +325,7 @@ describe("a workspace with no bookmarks", { timeout: HEAVY_TEST_TIMEOUT_MS }, ()
     await openHome();
 
     await screen.findByRole("heading", { level: 2, name: "Save your first bookmark" });
-    await press(within(screen.getByRole("main")).getByRole("button", { name: "New bookmark" }));
+    await press(within(emptyState()).getByRole("button", { name: "New bookmark" }));
 
     await waitFor(() => {
       expect(window.location.search).toBe("?new=1");

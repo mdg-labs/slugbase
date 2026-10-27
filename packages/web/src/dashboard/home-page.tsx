@@ -10,6 +10,7 @@ import { useConfig } from "../config/config-context.tsx";
 import { Slot } from "../extensions/index.ts";
 import { usePaletteState } from "../palette/palette-state.tsx";
 import { isApplePlatform } from "../palette/platform.ts";
+import { GettingStarted } from "./getting-started.tsx";
 import { CountsRow, HomeSkeleton, PinnedRow, QuickAccessRow, TopTagsRow } from "./dashboard-rows.tsx";
 import { dashboardQuery } from "./dashboard.ts";
 
@@ -100,6 +101,7 @@ export function HomePage(): ReactElement {
             <TopTagsRow tags={data.topTags} />
           </>
         )}
+        <GettingStarted onboarding={data.onboarding} />
       </>
     );
   } else if (dashboard.isError) {

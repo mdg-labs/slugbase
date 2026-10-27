@@ -132,13 +132,12 @@ describe("the preferences page", () => {
     expect([...ACCENTS]).toEqual([...ACCENT_PRESETS]);
   });
 
-  it("shows no AI opt-out and no restore of the Getting started checklist while the server has no AI", async () => {
+  it("shows no AI opt-out while the server has no AI, and the switch that restores the Getting started checklist always", async () => {
     stubServer({ ai: false });
     await openPreferences();
 
     expect(screen.queryByRole("switch", { name: /AI/ })).toBeNull();
-    expect(screen.queryByText(/Getting started/i)).toBeNull();
-    expect(screen.queryByRole("button", { name: /Getting started|restore/i })).toBeNull();
+    expect(screen.getByRole("switch", { name: "Show the Getting started checklist" }).getAttribute("aria-checked")).toBe("true");
   });
 
   it("shows the AI opt-out where the server reports an AI port, and saves it", async () => {
@@ -151,7 +150,6 @@ describe("the preferences page", () => {
       expect(await server.patches()).toEqual([{ aiOptOut: true }]);
     });
     expect(screen.getByRole("switch", { name: "Don't use AI suggestions for me" }).getAttribute("aria-checked")).toBe("true");
-    expect(screen.queryByText(/Getting started/i)).toBeNull();
   });
 
   it("is reachable from the settings navigation of the profile page", async () => {

@@ -1,5 +1,6 @@
 import { hashKey, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
+import { DASHBOARD_QUERY_KEY, withSavedOnboarding, type Dashboard } from "../dashboard/dashboard.ts";
 import { ME_QUERY_KEY, withAccount, type Account, type Me, type PreferenceChanges } from "./me.ts";
 
 const PREFERENCE_KEYS = ["theme", "accent", "defaultView", "singleKeyShortcuts", "signinAlerts", "aiOptOut", "analyticsConsent", "onboarding"] as const;
@@ -82,7 +83,8 @@ function show(queryClient: QueryClient, state: Saves, base?: Account): void {
  * Saves a change of the account's preferences. The change shows at once, in the cached account that the
  * theme, the accent, the shortcuts and the preferences page read, and is taken back when the server refuses
  * it or cannot be reached; a failure is raised as a toast by the app's mutation handler. Changes are sent one
- * after the other, so the last one made is the one the server keeps.
+ * after the other, so the last one made is the one the server keeps. A saved change to the Getting started keys
+ * refreshes the checklist of the home screen.
  */
 export function useUpdatePreferences() {
   const router = useRouter();
@@ -119,6 +121,11 @@ export function useUpdatePreferences() {
       settle(state, context.changes);
       state.confirmed = saved;
       show(queryClient, state, saved);
+      if (context.changes.onboarding !== undefined) {
+        // The Getting started checklist reads the stored keys from the dashboard: it takes the saved ones and reads again.
+        queryClient.setQueryData<Dashboard>(DASHBOARD_QUERY_KEY, (dashboard) => withSavedOnboarding(dashboard, saved.onboarding));
+        void queryClient.invalidateQueries({ queryKey: DASHBOARD_QUERY_KEY });
+      }
     },
   });
 }

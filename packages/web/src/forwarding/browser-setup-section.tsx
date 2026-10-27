@@ -1,10 +1,12 @@
-import { Tabs, TabsList, TabsPanel, TabsTab } from "@slugbase/ui";
-import { CopyValue, SettingsSection } from "@slugbase/ui/patterns";
+import { Button, Tabs, TabsList, TabsPanel, TabsTab } from "@slugbase/ui";
+import { CopyValue, SettingsSection, StatusBadge } from "@slugbase/ui/patterns";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import type { TFunction } from "i18next";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
+import { useCachedAccount } from "../account/use-cached-account.ts";
+import { useUpdatePreferences } from "../account/use-update-preferences.ts";
 import { bookmarkListQuery } from "../bookmarks/bookmarks.ts";
 import { useConfig } from "../config/config-context.tsx";
 import { SAMPLE_SLUG, SEARCH_KEYWORD, SLUG_LIST_PARAMS, searchTemplate } from "./forwarding.ts";
@@ -64,10 +66,41 @@ function BrowserSteps({ browser, values }: { readonly browser: Browser; readonly
   );
 }
 
+/** "Mark as done" (doc 03 section 8): stores that the member set the browser up, which ticks that step of the Getting started checklist. It is shown as done once the server has stored it. */
+function MarkAsDone(): ReactElement {
+  const { t } = useTranslation();
+  const account = useCachedAccount();
+  const update = useUpdatePreferences();
+  if (account?.onboarding.browserSetupDone === true && !update.isPending) {
+    return <StatusBadge variant="success">{t("forwarding.setup.done.badge")}</StatusBadge>;
+  }
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
+      {update.isError ? (
+        <p className="text-destructive-text text-sm" role="alert">
+          {t("forwarding.setup.done.failed")}
+        </p>
+      ) : (
+        <p className="text-muted-foreground text-sm">{t("forwarding.setup.done.description")}</p>
+      )}
+      <Button
+        loading={update.isPending}
+        onClick={() => {
+          update.mutate({ onboarding: { browserSetupDone: true } });
+        }}
+        variant="outline"
+      >
+        {t("forwarding.setup.done.action")}
+      </Button>
+    </div>
+  );
+}
+
 /**
  * "Set up your browser" (doc 03 section 8, doc 02 section 6.5): the search-engine address and keyword to copy, how to add them in
  * each of four browsers, and a link that tries it. The address is on the origin the server is configured with, not the one the
  * page was opened on. The test link goes to one of the member's own forwarding slugs, or to a sample address when they have none.
+ * "Mark as done" ticks the browser setup step of the Getting started checklist.
  */
 export function BrowserSetupSection(): ReactElement {
   const { t } = useTranslation();
@@ -80,7 +113,7 @@ export function BrowserSetupSection(): ReactElement {
   const address = searchTemplate(origin);
   const values = { name: product.name, address, keyword: SEARCH_KEYWORD };
   return (
-    <SettingsSection description={t("forwarding.setup.description")} title={t("forwarding.setup.title")}>
+    <SettingsSection description={t("forwarding.setup.description")} footer={<MarkAsDone />} title={t("forwarding.setup.title")}>
       <div className="flex flex-col gap-6">
         <div className="grid gap-4 md:grid-cols-[2fr_1fr]">
           <div className="flex min-w-0 flex-col gap-1.5">
