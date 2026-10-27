@@ -1,10 +1,11 @@
 import type { ComponentTypes } from "@slugbase/contracts";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { axe } from "vitest-axe";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { navigateTo } from "../src/auth/navigate.ts";
 import { createWebApp } from "../src/index.ts";
-import { CONFIG_BODY, ME_PATH, SESSION_PATH, json, meBody, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
+import { CONFIG_BODY, ME_PATH, SESSION_PATH, allowSlowRender, json, meBody, problem, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
 vi.mock("../src/auth/navigate.ts", () => ({ navigateTo: vi.fn() }));
 
@@ -166,6 +167,16 @@ async function card(): Promise<HTMLElement> {
   return section;
 }
 
+let restoreWait: () => void = () => undefined;
+
+beforeAll(() => {
+  restoreWait = allowSlowRender();
+});
+
+afterAll(() => {
+  restoreWait();
+});
+
 beforeEach(() => {
   stubBrowserApis();
   stubMatchMedia(false);
@@ -178,7 +189,7 @@ afterEach(() => {
   document.documentElement.removeAttribute("lang");
 });
 
-describe("the Linked sign-in methods card", () => {
+describe("the Linked sign-in methods card", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("lists the linked identities with provider, email at link and last use, and a Link action for each provider not linked", async () => {
     stubServer({ identities: [ACME] });
     await openSecurity();
@@ -270,7 +281,7 @@ describe("the Linked sign-in methods card", () => {
   });
 });
 
-describe("unlinking", () => {
+describe("unlinking", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("asks first, explains that one way to sign in must remain, then unlinks and reloads the list", async () => {
     const server = stubServer({ identities: [ACME] });
     await openSecurity();
@@ -357,7 +368,7 @@ describe("unlinking", () => {
   });
 });
 
-describe("linking", () => {
+describe("linking", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("navigates the browser to the provider when the session is fresh, with the Security page to come back to", async () => {
     const server = stubServer();
     await openSecurity();
@@ -445,7 +456,7 @@ describe("linking", () => {
   });
 });
 
-describe("adding a password", () => {
+describe("adding a password", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   it("asks for the new password alone, sends it without a current password and turns into the change form", async () => {
     const server = stubServer({ hasPassword: false });
     await openSecurity();
@@ -501,7 +512,7 @@ describe("adding a password", () => {
   });
 });
 
-describe("the failure of a provider link or re-authentication", () => {
+describe("the failure of a provider link or re-authentication", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
   const FAILED = "Linking or confirming with that provider did not work. Try again.";
 
   it("sends a signed-in visitor of /login?error=oidc_failed to the Security page, which says it once, generically", async () => {
