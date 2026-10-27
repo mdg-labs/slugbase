@@ -329,6 +329,15 @@ export interface CommandPaletteItem {
     shortcut?: readonly string[];
 }
 
+// @public
+export interface CommandPaletteNoResultsAction {
+    icon?: ReactNode;
+    // (undocumented)
+    label: string;
+    // (undocumented)
+    onSelect: () => void;
+}
+
 // @public (undocumented)
 export interface CommandPaletteProps {
     announce: (count: number) => string;
@@ -341,6 +350,7 @@ export interface CommandPaletteProps {
     // (undocumented)
     inputLabel: string;
     noResults: string;
+    noResultsAction?: CommandPaletteNoResultsAction;
     // (undocumented)
     onOpenChange: (open: boolean) => void;
     onQueryChange?: (query: string) => void;
@@ -373,6 +383,7 @@ export interface CommandPaletteSection {
         description?: string;
         icon?: ReactNode;
     };
+    prefiltered?: boolean;
     state?: "ready" | "loading" | "error" | "empty";
     // (undocumented)
     title?: string;
@@ -1042,6 +1053,16 @@ export interface SidePanelProps {
     open: boolean;
     // (undocumented)
     title: ReactNode;
+}
+
+// @public
+export function SlugChip(input: SlugChipProps): ReactElement;
+
+// @public (undocumented)
+export interface SlugChipProps {
+    // (undocumented)
+    className?: string;
+    slug: string;
 }
 
 // @public

@@ -15,6 +15,7 @@ export {
   type CommandPaletteHint,
   type CommandPaletteIntent,
   type CommandPaletteItem,
+  type CommandPaletteNoResultsAction,
   type CommandPaletteProps,
   type CommandPaletteSection,
   type CommandTriggerProps,
@@ -47,6 +48,7 @@ export { SettingsSection, type SettingsSectionProps } from "./settings-section.t
 export { ShortcutSheet, type ShortcutSheetGroup, type ShortcutSheetItem, type ShortcutSheetProps } from "./shortcut-sheet.tsx";
 export { ShownOnce, type ShownOnceProps } from "./shown-once.tsx";
 export { SidePanel, type SidePanelProps } from "./side-panel.tsx";
+export { SlugChip, type SlugChipProps } from "./slug-chip.tsx";
 export { SlugInput, type SlugInputProps } from "./slug-input.tsx";
 export { StatusBadge, type StatusBadgeProps, type StatusBadgeVariant } from "./status-badge.tsx";
 export { TextareaField, type TextareaFieldProps } from "./textarea-field.tsx";

@@ -52,6 +52,16 @@ export interface CommandPaletteSection {
   error?: { message: string; retryLabel: string; onRetry: () => void };
   /** Shown while `state` is `empty`. */
   notice?: { title: string; description?: string; icon?: ReactNode };
+  /** Whether the items already answer the query, as a search the app ran does: the palette then lists them as they are and does not narrow them by the query. */
+  prefiltered?: boolean;
+}
+
+/** What the palette offers in place of results when the query matches nothing: an option that runs `onSelect` when chosen. */
+export interface CommandPaletteNoResultsAction {
+  label: string;
+  /** A decorative icon. */
+  icon?: ReactNode;
+  onSelect: () => void;
 }
 
 export interface CommandPaletteHint {
@@ -73,6 +83,8 @@ export interface CommandPaletteProps {
   sections: readonly CommandPaletteSection[];
   /** Said when the query matches nothing. */
   noResults: string;
+  /** Offered under `noResults` when the query matches nothing, for example to create what was searched for. */
+  noResultsAction?: CommandPaletteNoResultsAction;
   /** The text a screen reader is told when the number of items on offer changes. */
   announce: (count: number) => string;
   footerHints: readonly CommandPaletteHint[];
@@ -125,6 +137,7 @@ export function CommandPalette({
   placeholder,
   sections,
   noResults,
+  noResultsAction,
   announce,
   footerHints,
   closeLabel,
@@ -144,6 +157,7 @@ export function CommandPalette({
           footerHints={footerHints}
           inputLabel={inputLabel}
           noResults={noResults}
+          noResultsAction={noResultsAction}
           onQueryChange={onQueryChange}
           page={page}
           placeholder={placeholder}
@@ -156,10 +170,10 @@ export function CommandPalette({
 
 type BodyProps = Pick<
   CommandPaletteProps,
-  "announce" | "closeLabel" | "footerHints" | "inputLabel" | "noResults" | "onQueryChange" | "page" | "placeholder" | "sections"
+  "announce" | "closeLabel" | "footerHints" | "inputLabel" | "noResults" | "noResultsAction" | "onQueryChange" | "page" | "placeholder" | "sections"
 >;
 
-function PaletteBody({ announce, closeLabel, footerHints, inputLabel, noResults, onQueryChange, page, placeholder, sections }: BodyProps): ReactElement {
+function PaletteBody({ announce, closeLabel, footerHints, inputLabel, noResults, noResultsAction, onQueryChange, page, placeholder, sections }: BodyProps): ReactElement {
   const [query, setQuery] = useState("");
   const terms = fold(query).split(/\s+/).filter((term) => term !== "");
 
@@ -168,7 +182,7 @@ function PaletteBody({ announce, closeLabel, footerHints, inputLabel, noResults,
     if (state !== "ready") {
       return [{ section, state, items: [] }];
     }
-    const items = (section.items ?? []).filter((item) => matches(item, terms));
+    const items = section.prefiltered === true ? (section.items ?? []) : (section.items ?? []).filter((item) => matches(item, terms));
     return items.length === 0 ? [] : [{ section, state, items }];
   });
   const count = shown.reduce((total, { items }) => total + items.length, 0);
@@ -229,10 +243,20 @@ function PaletteBody({ announce, closeLabel, footerHints, inputLabel, noResults,
           </div>
         ))}
         {nothing ? (
-          <p className="flex items-center justify-center gap-2 px-4 py-10 text-muted-foreground text-sm">
-            <SearchIcon aria-hidden="true" className="size-4" />
-            {noResults}
-          </p>
+          <>
+            <p className={`flex items-center justify-center gap-2 px-4 text-muted-foreground text-sm ${noResultsAction === undefined ? "py-10" : "pt-8 pb-4"}`}>
+              <SearchIcon aria-hidden="true" className="size-4" />
+              {noResults}
+            </p>
+            {noResultsAction === undefined ? null : (
+              <CommandList>
+                <CommandItem data-item-key="no-results:action" onClick={noResultsAction.onSelect} value="no-results:action">
+                  {noResultsAction.icon}
+                  <span className="min-w-0 flex-1 truncate">{noResultsAction.label}</span>
+                </CommandItem>
+              </CommandList>
+            )}
+          </>
         ) : (
           <CommandList>
             {listed.map(({ section, state, items }) => (

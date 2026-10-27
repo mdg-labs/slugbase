@@ -19,6 +19,9 @@ export interface CreateHandlersOptions {
     readonly scenario?: Scenario;
 }
 
+// @public
+export function createResolverHandlers(document: OpenApiDocument, resolvers: Readonly<Record<string, OperationResolver>>, baseUrl?: string): HttpHandler[];
+
 // @public (undocumented)
 export interface DeclaredResponse {
     readonly content: ReadonlyMap<string, unknown>;
@@ -63,6 +66,9 @@ export interface OpenApiDocument {
     // (undocumented)
     readonly paths: Readonly<Record<string, unknown>>;
 }
+
+// @public
+export type OperationResolver = (request: Request) => Response | Promise<Response>;
 
 // @public (undocumented)
 export function parseDocument(value: unknown): OpenApiDocument;

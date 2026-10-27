@@ -2567,10 +2567,14 @@
     "loadFailed": "Die Lesezeichen konnten nicht geladen werden.",
     "retry": "Erneut versuchen",
     "group": {
+      "bookmarks": "Lesezeichen",
+      "folders": "Ordner",
+      "tags": "Tags",
       "recent": "Zuletzt geöffnet",
       "pinned": "Angeheftet",
       "navigation": "Navigation",
-      "actions": "Aktionen"
+      "actions": "Aktionen",
+      "commands": "Befehle"
     },
     "empty": {
       "title": "Noch keine Lesezeichen zum Anzeigen",
@@ -2637,6 +2641,16 @@
         "name": "Abmelden",
         "keywords": "ausloggen logout beenden"
       }
+    },
+    "search": {
+      "loading": "Suche läuft",
+      "failed": "Die Suche ist fehlgeschlagen."
+    },
+    "editFailed": "Das Lesezeichen konnte nicht zum Bearbeiten geöffnet werden.",
+    "create": {
+      "url": "Lesezeichen für {url} erstellen",
+      "slug": "Lesezeichen mit dem Slug {slug} erstellen",
+      "blank": "Lesezeichen erstellen"
     }
   },
   "shortcuts": {

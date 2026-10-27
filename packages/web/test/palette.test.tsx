@@ -91,6 +91,9 @@ function serve(overrides: Partial<Server> = {}): Server {
       if (url.pathname === LIST && request.method === "GET") {
         return Promise.resolve(url.searchParams.get("pinned") === "true" ? server.pinned() : url.searchParams.get("sort") === "recently_opened" ? server.recent() : page([]));
       }
+      if (url.pathname === "/api/v1/search") {
+        return Promise.resolve(json({ bookmarks: [], folders: [], tags: [] }));
+      }
       if (url.pathname === "/api/v1/me" && request.method === "PATCH") {
         return request.json().then((changes: object) => json({ ...ACCOUNT_BODY, ...changes }));
       }
@@ -356,7 +359,7 @@ describe("the default view", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await waitFor(() => {
       expect(status()).toBe("No results");
     });
-    expect(within(dialog).queryByRole("option")).toBeNull();
+    expect(within(dialog).getAllByRole("option").map((option) => option.textContent)).toEqual(["Create a bookmark with the slug zzzz"]);
   });
 
   it("shows skeleton rows in Recent and Pinned while they load", async () => {

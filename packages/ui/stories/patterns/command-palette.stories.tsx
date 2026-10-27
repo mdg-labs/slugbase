@@ -1,7 +1,7 @@
 import type { StoryDefault } from "@ladle/react";
-import { BookmarkIcon, HomeIcon, TagIcon } from "lucide-react";
+import { BookmarkIcon, HomeIcon, PlusIcon, TagIcon } from "lucide-react";
 import { useRef, useState } from "react";
-import { CommandPalette, CommandTrigger, type CommandPaletteHint, type CommandPaletteSection } from "../../src/patterns/index.ts";
+import { CommandPalette, CommandTrigger, SlugChip, type CommandPaletteHint, type CommandPaletteNoResultsAction, type CommandPaletteSection } from "../../src/patterns/index.ts";
 
 export default {
   title: "Patterns/Command palette",
@@ -47,7 +47,41 @@ const EMPTY: readonly CommandPaletteSection[] = [
   READY[1] as CommandPaletteSection,
 ];
 
-function Palette({ sections, initiallyOpen = false }: { sections: readonly CommandPaletteSection[]; initiallyOpen?: boolean }): React.ReactElement {
+// The items of a search the app ran: the palette lists them as they are, whatever the query says.
+const FOUND: readonly CommandPaletteSection[] = [
+  {
+    id: "bookmarks",
+    title: "Bookmarks",
+    prefiltered: true,
+    items: [
+      {
+        id: "handbook",
+        label: "Team handbook",
+        icon: <BookmarkIcon aria-hidden="true" />,
+        detail: (
+          <span className="flex min-w-0 items-center gap-2">
+            <SlugChip slug="docs" />
+            <span className="truncate">docs.example.org</span>
+          </span>
+        ),
+        onSelect: () => undefined,
+      },
+    ],
+  },
+  READY[1] as CommandPaletteSection,
+];
+
+const CREATE: CommandPaletteNoResultsAction = { label: "Create a bookmark with the slug zzz", icon: <PlusIcon aria-hidden="true" />, onSelect: () => undefined };
+
+function Palette({
+  sections,
+  initiallyOpen = false,
+  noResultsAction,
+}: {
+  sections: readonly CommandPaletteSection[];
+  initiallyOpen?: boolean;
+  noResultsAction?: CommandPaletteNoResultsAction;
+}): React.ReactElement {
   const [open, setOpen] = useState(initiallyOpen);
   const trigger = useRef<HTMLButtonElement>(null);
   return (
@@ -67,6 +101,7 @@ function Palette({ sections, initiallyOpen = false }: { sections: readonly Comma
         footerHints={HINTS}
         inputLabel="Search or run a command"
         noResults="No results"
+        {...(noResultsAction === undefined ? {} : { noResultsAction })}
         onOpenChange={setOpen}
         open={open}
         placeholder="Search or run a command…"
@@ -86,3 +121,8 @@ export const Loading = (): React.ReactElement => <Palette initiallyOpen sections
 export const Failed = (): React.ReactElement => <Palette initiallyOpen sections={FAILED} />;
 
 export const NothingYet = (): React.ReactElement => <Palette initiallyOpen sections={EMPTY} />;
+
+export const Found = (): React.ReactElement => <Palette initiallyOpen sections={FOUND} />;
+
+/** Type a query that matches nothing, such as "zzz", to see the offer under "No results". */
+export const NoResultsOffer = (): React.ReactElement => <Palette initiallyOpen noResultsAction={CREATE} sections={READY} />;

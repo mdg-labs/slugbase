@@ -1,6 +1,20 @@
 import { useTheme } from "@slugbase/ui";
-import { BookmarkIcon, CommandPalette, PinIcon, feedbackToast, type CommandPaletteHint, type CommandPaletteItem, type CommandPaletteSection } from "@slugbase/ui/patterns";
-import { useQuery } from "@tanstack/react-query";
+import {
+  BookmarkIcon,
+  CommandPalette,
+  FolderIcon,
+  PinIcon,
+  PlusIcon,
+  SlugChip,
+  TagIcon,
+  feedbackToast,
+  type CommandPaletteHint,
+  type CommandPaletteIntent,
+  type CommandPaletteItem,
+  type CommandPaletteNoResultsAction,
+  type CommandPaletteSection,
+} from "@slugbase/ui/patterns";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
@@ -9,11 +23,13 @@ import { useCachedAccount } from "../account/use-cached-account.ts";
 import { useUpdatePreferences } from "../account/use-update-preferences.ts";
 import { useSignOut } from "../auth/sign-out.ts";
 import { useCanSaveBookmarks } from "../bookmarks/can-save-bookmarks.ts";
-import { isHttpUrl, recordOpen, type Bookmark } from "../bookmarks/bookmarks.ts";
+import { bookmarkQuery, isHttpUrl, recordOpen, type Bookmark } from "../bookmarks/bookmarks.ts";
 import { useBookmarkModal } from "../bookmarks/modal-search.ts";
 import { useSwitchFailureMessage, useWorkspaceSwitch, workspacesQuery } from "../shell/workspaces.ts";
 import { useCommands, type CommandGroupId, type PaletteContext } from "./commands.ts";
 import { paletteBookmarksQuery } from "./palette-bookmarks.ts";
+import { createOfferOf, paletteModeOf } from "./palette-query.ts";
+import { usePaletteSearch, type SearchBookmark } from "./palette-search.ts";
 import { usePaletteState } from "./palette-state.tsx";
 import { isApplePlatform } from "./platform.ts";
 
@@ -22,16 +38,19 @@ const GROUP_ORDER: readonly CommandGroupId[] = ["navigation", "actions"];
 type Page = "root" | "workspaces";
 
 /**
- * The command palette (doc 03 section 9): Recent, Pinned, Navigation and Actions, the last two from the command registry.
- * Choosing a bookmark opens it, Ctrl or Command with Enter opens it in a new tab and Alt with Enter edits one of the member's own.
- * "Switch workspace" goes on in the palette as a list of the account's workspaces.
+ * The command palette (doc 03 section 9): Recent, Pinned, Navigation and Actions, the last two from the command registry, until
+ * something is typed; then the bookmarks, folders and tags the search finds and the commands that match. Choosing a bookmark opens it,
+ * Ctrl or Command with Enter opens it in a new tab and Alt with Enter edits one of the member's own. When nothing matches, the palette
+ * offers to create a bookmark from what was typed. "Switch workspace" goes on in the palette as a list of the account's workspaces.
  */
 export function PaletteDialog(): ReactElement {
   const { t } = useTranslation();
   const router = useRouter();
   const api = router.options.context.api;
   const { open, setOpen, focusBack } = usePaletteState();
-  const [page, setPage] = useState<Page>("root");
+  const queryClient = useQueryClient();
+  const [page, setPageState] = useState<Page>("root");
+  const [query, setQuery] = useState("");
   const commands = useCommands();
   const modal = useBookmarkModal();
   const canSaveBookmarks = useCanSaveBookmarks();
@@ -45,6 +64,15 @@ export function PaletteDialog(): ReactElement {
   const switchFailureMessage = useSwitchFailureMessage();
   const recent = useQuery({ ...paletteBookmarksQuery(api, "recent"), enabled: open });
   const pinned = useQuery({ ...paletteBookmarksQuery(api, "pinned"), enabled: open });
+
+  const mode = page === "root" ? paletteModeOf(query) : { kind: "browse" as const };
+  const search = usePaletteSearch(api, mode.kind === "search" ? mode.text : undefined);
+
+  // The input starts empty on every page and every time the palette opens.
+  const setPage = (next: Page): void => {
+    setPageState(next);
+    setQuery("");
+  };
 
   const close = (): void => {
     setOpen(false);
@@ -70,6 +98,20 @@ export function PaletteDialog(): ReactElement {
     },
   };
 
+  /** Opens a bookmark's address, here or in a new tab, and counts the open. */
+  const openAddress = (id: string, url: string, intent: CommandPaletteIntent): void => {
+    if (!isHttpUrl(url)) {
+      return;
+    }
+    recordOpen(api, id);
+    close();
+    if (intent === "newTab") {
+      window.open(url, "_blank", "noopener,noreferrer");
+    } else {
+      window.location.assign(url);
+    }
+  };
+
   const bookmarkItem = (bookmark: Bookmark, pinnedList: boolean): CommandPaletteItem => ({
     id: bookmark.id,
     label: bookmark.title,
@@ -90,16 +132,43 @@ export function PaletteDialog(): ReactElement {
         }
         return;
       }
-      if (!isHttpUrl(bookmark.url)) {
+      openAddress(bookmark.id, bookmark.url, intent);
+    },
+  });
+
+  // A search result does not say who owns the bookmark, so the bookmark itself is read before Alt with Enter edits it.
+  const editIfOwn = (id: string): void => {
+    queryClient.query({ ...bookmarkQuery(api, id), retry: false }).then(
+      (bookmark) => {
+        if (account !== undefined && bookmark.ownerId === account.id) {
+          close();
+          modal.edit(id);
+        }
+      },
+      () => {
+        feedbackToast.error(t("palette.editFailed"));
+      },
+    );
+  };
+
+  const foundBookmarkItem = (bookmark: SearchBookmark): CommandPaletteItem => ({
+    id: bookmark.id,
+    label: bookmark.title,
+    icon: <BookmarkIcon aria-hidden="true" />,
+    detail: (
+      <span className="flex min-w-0 items-center gap-2">
+        {bookmark.slug === null ? null : <SlugChip slug={bookmark.slug} />}
+        <span className="truncate" translate="no">
+          {bookmark.host}
+        </span>
+      </span>
+    ),
+    onSelect: (intent) => {
+      if (intent === "edit") {
+        editIfOwn(bookmark.id);
         return;
       }
-      recordOpen(api, bookmark.id);
-      close();
-      if (intent === "newTab") {
-        window.open(bookmark.url, "_blank", "noopener,noreferrer");
-      } else {
-        window.location.assign(bookmark.url);
-      }
+      openAddress(bookmark.id, bookmark.url, intent);
     },
   });
 
@@ -113,25 +182,96 @@ export function PaletteDialog(): ReactElement {
     return { id, title, items: result.data.map((bookmark) => bookmarkItem(bookmark, id === "pinned")) };
   };
 
+  const commandItems = (groups: readonly CommandGroupId[]): CommandPaletteItem[] =>
+    groups.flatMap((group) =>
+      commands
+        .filter((command) => command.group === group && (command.when?.(context) ?? true))
+        .map((command) => ({
+          id: command.id,
+          label: command.name(t),
+          keywords: command.keywords(t),
+          icon: command.icon,
+          ...(command.shortcut === undefined ? {} : { shortcut: command.shortcut }),
+          onSelect: () => {
+            if (command.keepOpen !== true) {
+              close();
+            }
+            command.run(context);
+          },
+        })),
+    );
+
   const commandSections = GROUP_ORDER.map((group): CommandPaletteSection => ({
     id: group,
     title: t(group === "navigation" ? "palette.group.navigation" : "palette.group.actions"),
-    items: commands
-      .filter((command) => command.group === group && (command.when?.(context) ?? true))
-      .map((command) => ({
-        id: command.id,
-        label: command.name(t),
-        keywords: command.keywords(t),
-        icon: command.icon,
-        ...(command.shortcut === undefined ? {} : { shortcut: command.shortcut }),
-        onSelect: () => {
-          if (command.keepOpen !== true) {
-            close();
-          }
-          command.run(context);
-        },
-      })),
+    items: commandItems([group]),
   }));
+
+  const searchSections = (): CommandPaletteSection[] => {
+    const bookmarksTitle = t("palette.group.bookmarks");
+    const found: CommandPaletteSection[] =
+      search.status === "loading"
+        ? [{ id: "bookmarks", title: bookmarksTitle, state: "loading", loadingLabel: t("palette.search.loading") }]
+        : search.status === "error"
+          ? [{ id: "bookmarks", title: bookmarksTitle, state: "error", error: { message: t("palette.search.failed"), retryLabel: t("palette.retry"), onRetry: search.retry } }]
+          : [
+              { id: "bookmarks", title: bookmarksTitle, prefiltered: true, items: search.results.bookmarks.map(foundBookmarkItem) },
+              {
+                id: "folders",
+                title: t("palette.group.folders"),
+                prefiltered: true,
+                items: search.results.folders.map((folder) => ({
+                  id: folder.id,
+                  label: folder.name,
+                  icon: <FolderIcon aria-hidden="true" />,
+                  onSelect: (intent: CommandPaletteIntent) => {
+                    if (intent !== "edit") {
+                      close();
+                      context.navigate({ to: "/bookmarks", search: { folderId: folder.id } });
+                    }
+                  },
+                })),
+              },
+              {
+                id: "tags",
+                title: t("palette.group.tags"),
+                prefiltered: true,
+                items: search.results.tags.map((tag) => ({
+                  id: tag.id,
+                  label: tag.name,
+                  icon: <TagIcon aria-hidden="true" />,
+                  onSelect: (intent: CommandPaletteIntent) => {
+                    if (intent !== "edit") {
+                      close();
+                      context.navigate({ to: "/bookmarks", search: { tag: [tag.id] } });
+                    }
+                  },
+                })),
+              },
+            ];
+    return [...found, { id: "commands", title: t("palette.group.commands"), items: commandItems(GROUP_ORDER) }];
+  };
+
+  let noResultsAction: CommandPaletteNoResultsAction | undefined;
+  if (mode.kind === "search" && canSaveBookmarks) {
+    const offer = createOfferOf(mode.text);
+    noResultsAction = {
+      label: offer.kind === "url" ? t("palette.create.url", { url: offer.url }) : offer.kind === "slug" ? t("palette.create.slug", { slug: offer.slug }) : t("palette.create.blank"),
+      icon: <PlusIcon aria-hidden="true" />,
+      onSelect: () => {
+        close();
+        if (offer.kind === "slug") {
+          // The bookmark modal reads the slug to prefill from the address (doc 02 section 5.2).
+          void router.navigate({
+            to: ".",
+            search: (previous) => ({ ...previous, new: 1 as const, slug: offer.slug, url: undefined, bookmark: undefined }),
+          });
+        } else {
+          modal.openNew(offer.kind === "url" ? offer.url : undefined);
+        }
+      },
+    };
+  }
 
   let sections: CommandPaletteSection[];
   if (page === "workspaces") {
@@ -158,6 +298,8 @@ export function PaletteDialog(): ReactElement {
             })),
           },
     ];
+  } else if (mode.kind === "search") {
+    sections = searchSections();
   } else {
     const bookmarks = [bookmarkSection("recent", recent), bookmarkSection("pinned", pinned)];
     const noneYet = bookmarks.every(({ state, items }) => state === undefined && (items?.length ?? 0) === 0);
@@ -198,6 +340,7 @@ export function PaletteDialog(): ReactElement {
       footerHints={hints}
       inputLabel={t("palette.input")}
       noResults={t("palette.noResults")}
+      {...(noResultsAction === undefined ? {} : { noResultsAction })}
       onOpenChange={(next) => {
         if (next) {
           setOpen(true);
@@ -205,6 +348,7 @@ export function PaletteDialog(): ReactElement {
           close();
         }
       }}
+      onQueryChange={setQuery}
       open={open}
       {...(workspacePage === undefined ? {} : { page: workspacePage })}
       placeholder={t("palette.placeholder")}
