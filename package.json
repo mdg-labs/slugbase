@@ -26,6 +26,7 @@
     "gate": "pnpm lint && turbo run typecheck test:unit build && pnpm contracts:check && pnpm db:check && pnpm test:integration && pnpm i18n:check && pnpm audit --audit-level=high",
     "db:generate": "pnpm --filter @slugbase/db db:generate",
     "db:migrate": "pnpm --filter @slugbase/db db:migrate",
+    "perf": "turbo run build --filter=slugbase --filter=@slugbase/testing && node scripts/perf/run.mjs",
     "db:seed": "turbo run build --filter=@slugbase/core... && pnpm --filter @slugbase/testing db:seed",
     "api:gen": "pnpm --filter @slugbase/contracts api:gen",
     "api:extract": "turbo run build && node tooling/api-report/api-report.ts extract",

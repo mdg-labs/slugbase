@@ -9,18 +9,18 @@ import type { SeedBookmark } from "./bookmarks.ts";
 
 const BATCH = 500;
 
-function text(value: string): string {
+export function text(value: string): string {
   if (value.includes("\0")) {
     throw new Error("a seeded value contains a NUL character");
   }
   return `'${value.replaceAll("'", "''")}'`;
 }
 
-function nullable(value: string | null): string {
+export function nullable(value: string | null): string {
   return value === null ? "NULL" : text(value);
 }
 
-function time(value: Date | null): string {
+export function time(value: Date | null): string {
   return value === null ? "NULL" : text(value.toISOString());
 }
 
