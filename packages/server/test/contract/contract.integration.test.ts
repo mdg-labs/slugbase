@@ -326,12 +326,12 @@ describe("the walker over the committed document", () => {
     expect(report.failures.filter((failure) => !teamRefusal(failure) && !skippedNotRefused(failure))).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each operation. Each of the eighty-four that need a session also answers 401 without one, each of the seventeen that declare
-    // re-authentication answers 401 reauth_required without it, and each of the sixty whose policy has a role below it (the thirty-three of a member, the ten
+    // One valid request for each operation. Each of the eighty-five that need a session also answers 401 without one, each of the seventeen that declare
+    // re-authentication answers 401 reauth_required without it, and each of the sixty-one whose policy has a role below it (the thirty-four of a member, the ten
     // of an admin, the two of an owner and the fifteen of the instance admin) answers the principal just below it (404 below member, 403 below the others).
     // Each of the eighteen that declare the write scope answers 403 token_scope to a token that may only read, each of the four that declare an entitlement answers
     // 403 to an account without it, and each of the twenty-nine that name a member, a recipient, a team, an invitation, a bookmark, a slug, a tag or a folder, or an input that can carry one, answers for one of workspace B.
-    expect(report.calls).toBe(operations.length + 84 + 17 + 60 + 18 + 4 + 29);
+    expect(report.calls).toBe(operations.length + 85 + 17 + 61 + 18 + 4 + 29);
   }, WALK_TIMEOUT_MS);
 });
 
@@ -524,7 +524,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     });
   }
 
-  it("passes for the forty-five tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations, its bookmarks, its tags, its folders, its remembered choices and its audit log as they were", { timeout: HEAVY_TEST_TIMEOUT_MS }, async () => {
+  it("passes for the forty-six tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations, its bookmarks, its tags, its folders, its remembered choices and its audit log as they were", { timeout: HEAVY_TEST_TIMEOUT_MS }, async () => {
     await seedFixtureWorkspaces();
     const before = await contentOfB();
     // The deletion of the workspace takes no identifier, so the matrix repeats it as every principal of A (the sessions of the matrix have just
@@ -564,6 +564,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     const resolutions: unknown[] = [];
     const searches: unknown[] = [];
     const suggestions: unknown[] = [];
+    const dashboards: unknown[] = [];
     const listings: unknown[] = [];
     const selections: unknown[] = [];
     const mapping = { rowId: "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "createBookmark.slug": "bookmark", "updateBookmark.slug": "bookmark", "checkSlugAvailability.slug": "bookmark", "checkSlugAvailability.bookmarkId": "bookmark", "resolveSlug.slug": "slug", "chooseSlug.slug": "slug", "chooseSlug.bookmarkId": "bookmark", "deleteGoPreference.slug": "slug", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "listBookmarkIds.folderId": "folder", "listBookmarkIds.tag": "tag", "listBookmarkIds.tag[]": "tag", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark", "bulkBookmarks.filter.folderId": "folder", "bulkBookmarks.filter.tag": "tag", "bulkBookmarks.filter.tag[]": "tag", "bulkBookmarks.folderId": "folder", "bulkBookmarks.tagIds[]": "tag", "previewBulkBookmarks.ids[]": "bookmark", "previewBulkBookmarks.filter.hasSlug": "bookmark", "previewBulkBookmarks.filter.folderId": "folder", "previewBulkBookmarks.filter.tag": "tag", "previewBulkBookmarks.filter.tag[]": "tag", "previewBulkBookmarks.tagIds[]": "tag" } as const;
@@ -583,6 +584,9 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
       }
       if (operationId === "search" && response.status === 200) {
         searches.push(response.body);
+      }
+      if (operationId === "getDashboard" && response.status === 200) {
+        dashboards.push(response.body);
       }
       if (operationId === "suggestSlugs" && response.status === 200) {
         suggestions.push(response.body);
@@ -629,8 +633,8 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // Each of the ten principals, the instance admin among them, naming the two bookmarks of B once in the `hasSlug` of the list and once in that of the select-all.
     expect(matrix.failures.filter(filterRefusal)).toHaveLength(10 * 2 * 2);
     expect(report.failures).toEqual([]);
-    expect(report.tenantScoped).toBe(45);
-    expect(report.classified.byKind["tenant-scoped"]).toBe(45);
+    expect(report.tenantScoped).toBe(46);
+    expect(report.classified.byKind["tenant-scoped"]).toBe(46);
     // The bulk request reaches its handler as the three sessions and the three read-write tokens of A, once for each pair of the two bookmarks of B and of the two inputs the matrix fills in `ids` and
     // in the filter's `hasSlug`, and the preview of adding tags is called as the same ten principals. Where the bulk handler is reached, a bookmark of B named in `ids` is skipped as not found with a
     // 200 that reports nothing affected, a filter on the folder and the tags of B matches nothing, and a folder or a tag of B is the declared 404 whichever action names it. Where it is not (a token that
@@ -661,8 +665,9 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // The resolution of a slug names each of the two slugs of B once, which the caller resolves to nothing with an empty 200 (the caller has no bookmark with it, and workspace B is not read for it), and the choice names each of the two slugs of B once for each of the two bookmarks that have them, the right pair among them, which is the declared 404 slug_not_found.
     // The search names none (one of the eighteen calls that name nothing): its text is the one the rows of B are named after.
     // The suggestion names none (one of the nineteen calls that name nothing): its prefix is the one the slugs of B begin with.
+    // The dashboard names none (one of the twenty calls that name nothing): it reads the caller's own rows, and no token may call it.
     // The list of remembered choices names none (one of the seventeen calls that name nothing), and forgetting one names each of the two slugs of B once, the first of which the owner of B has a choice for, which is the declared 404 not_found and leaves it.
-    const calls = 19 + (3 + 3 + 3 + 3 * 3 + 3) + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2;
+    const calls = 20 + (3 + 3 + 3 + 3 * 3 + 3) + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2;
     expect(report.attempts).toBe(10 * calls);
     // The four exceptions are the identifiers of B in the `hasSlug` filter of the bookmark list and of the select-all, which the query validation refuses before the instance admin's missing membership is looked at.
     expect(instanceAdminStatuses.toSorted()).toEqual([...Array<number>(calls - 4).fill(404), 422, 422, 422, 422]);
@@ -674,6 +679,17 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     expect(searches).toEqual(Array.from({ length: 9 }, () => ({ bookmarks: [], folders: [], tags: [] })));
     // And the same nine principals asked for the slugs that start with the prefix the two slugs of B begin with: neither comes back, nor does any bookmark or any address of B.
     expect(suggestions).toEqual(Array.from({ length: 9 }, () => ({ suggestions: [] })));
+    // The three sessions of A read the dashboard (the six tokens are refused before the handler, as the matrix expects): workspace B holds forwarding bookmarks with a slug, a tag and a folder, all named after
+    // matrix, and none of them is counted or named. A holds no bookmark, and the only tags the matrix makes in A are the ones it creates with the name of the walker.
+    expect(dashboards).toHaveLength(3);
+    for (const dashboard of dashboards as { counts: { bookmarks: number }; quickAccess: unknown[]; pinned: unknown[]; topTags: { name: string }[]; onboarding: Record<string, boolean> }[]) {
+      expect(dashboard.counts.bookmarks).toBe(0);
+      expect(dashboard.quickAccess).toEqual([]);
+      expect(dashboard.pinned).toEqual([]);
+      expect(dashboard.topTags.map((entry) => entry.name).filter((name) => name !== "Walker tag")).toEqual([]);
+      expect(JSON.stringify(dashboard)).not.toContain("matrix");
+      expect(dashboard.onboarding).toMatchObject({ bookmarkAdded: false, slugGiven: false });
+    }
     // The three sessions and the six tokens of A (a token that may only read can list) asked the bookmark list and the select-all for the text that every row of B is named after, once for each of the two
     // bookmarks of B the matrix names: no bookmark of B comes back, and the matrix of A holds nothing that matches.
     expect(listings).toEqual(Array.from({ length: 9 * 2 }, () => ({ items: [], nextCursor: null, total: 0 })));

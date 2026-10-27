@@ -335,6 +335,9 @@ export const FIXTURES: ContractFixtures = {
   search: { query: { q: "matrix" } },
   // The suggestion names no identifier either: it takes the start of a slug. The prefix is the one the slugs of workspace B begin with, so a slug of B in an answer would show.
   suggestSlugs: { query: { prefix: "matrix" } },
+  // The dashboard names no identifier either: it reads the caller's own counts, quick access, pinned bookmarks and tags in the workspace of the request. Workspace B holds bookmarks that forward by
+  // a slug, a tag and a folder, all named matrix-..., so a row of B in an answer would show.
+  getDashboard: {},
   getSetupStatus: {},
   // The walker's database has accounts, so setup is closed for it: the valid request is the declared 403.
   completeSetup: {

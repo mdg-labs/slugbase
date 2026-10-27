@@ -67,7 +67,7 @@ export interface AccountProfileChanges {
   readonly onboarding?: Partial<Onboarding>;
 }
 
-function onboardingOf(stored: unknown): Onboarding {
+export function onboardingOf(stored: unknown): Onboarding {
   const keys = typeof stored === "object" && stored !== null ? stored : {};
   const flag = (key: keyof Onboarding): boolean => Reflect.get(keys, key) === true;
   return { browserSetupDone: flag("browserSetupDone"), importDone: flag("importDone"), checklistDismissed: flag("checklistDismissed") };

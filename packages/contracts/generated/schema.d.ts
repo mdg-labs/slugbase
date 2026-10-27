@@ -293,6 +293,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the dashboard */
+        get: operations["getDashboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/entitlements": {
         parameters: {
             query?: never;
@@ -1882,6 +1899,78 @@ export interface components {
             workspaceId: string;
             /** @description The name of that workspace */
             workspaceName: string;
+        };
+        Dashboard: {
+            counts: components["schemas"]["DashboardCounts"];
+            onboarding: components["schemas"]["DashboardOnboarding"];
+            /** @description Up to 12 of the caller's own pinned bookmarks, the most recently pinned first; plan-archived bookmarks are never in it */
+            pinned: components["schemas"]["DashboardBookmark"][];
+            /** @description Up to 8 of the caller's own bookmarks that forward by a slug, the most opened first; a bookmark the caller cannot read, one that does not forward and a plan-archived one are never in it */
+            quickAccess: components["schemas"]["DashboardBookmark"][];
+            /** @description The sharing counts; null while sharing is not available, and whenever the caller's workspace does not hold the sharing entitlements */
+            sharing: components["schemas"]["DashboardSharing"] | null;
+            /** @description Up to 12 of the caller's own tags, the one on the most bookmarks first, then by name; another member's tags are never in it */
+            topTags: components["schemas"]["DashboardTag"][];
+        };
+        DashboardBookmark: {
+            /** @description Whether /go forwards to the bookmark by its slug */
+            forwarding: boolean;
+            /** @description The host name of the URL, lower case and in punycode */
+            host: string;
+            /**
+             * Format: uuid
+             * @description The bookmark's identifier
+             */
+            id: string;
+            /** @description How many times the bookmark was opened */
+            openCount: number;
+            /** @description The bookmark's slug, null when it has none */
+            slug: string | null;
+            /** @description The bookmark's title */
+            title: string;
+            /** @description The URL as stored: normalised, and always http or https */
+            url: string;
+        };
+        DashboardCounts: {
+            /** @description The caller's own bookmarks that are not plan-archived */
+            bookmarks: number;
+            /** @description The caller's own folders */
+            folders: number;
+            /** @description The bookmarks shared with the caller; null while sharing is not available, and whenever the caller's workspace does not hold the sharing entitlements */
+            sharedWithYou: number | null;
+            /** @description The caller's own tags */
+            tags: number;
+        };
+        DashboardOnboarding: {
+            /** @description Whether the caller owns a bookmark; read from the bookmarks, plan-archived ones included */
+            bookmarkAdded: boolean;
+            /** @description Whether the caller marked the browser search engine as set up; the stored onboarding state of the account, which PATCH /me changes */
+            browserSetupDone: boolean;
+            /** @description Whether the caller dismissed the Getting started checklist; the stored onboarding state of the account, which PATCH /me changes */
+            dismissed: boolean;
+            /** @description Whether the caller owns a folder */
+            folderCreated: boolean;
+            /** @description Whether the caller's import from the browser is done; the stored onboarding state of the account, which PATCH /me changes */
+            importDone: boolean;
+            /** @description Whether one of the caller's bookmarks has a slug; read from the bookmarks, plan-archived ones included */
+            slugGiven: boolean;
+        };
+        DashboardSharing: {
+            /** @description The caller's bookmarks that are shared with others */
+            sharedByYou: number;
+            /** @description The bookmarks other members shared with the caller */
+            sharedWithYou: number;
+        };
+        DashboardTag: {
+            /** @description The caller's bookmarks that carry the tag and are not plan-archived */
+            bookmarkCount: number;
+            /**
+             * Format: uuid
+             * @description The tag's identifier
+             */
+            id: string;
+            /** @description The tag's name, in the case it was entered in */
+            name: string;
         };
         DeleteAccountRequest: {
             /** @description The account's own email address, typed to confirm the deletion; case and surrounding space do not matter */
@@ -4585,6 +4674,73 @@ export interface operations {
             };
             /** @description The identifier did not pass validation, or the stored URL is not an http or https URL (url_not_allowed); nothing is counted */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getDashboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's counts, quick access, pinned bookmarks, top tags, sharing counts and Getting started checklist in the active workspace */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Dashboard"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The credential is an API token, which cannot read the dashboard (forbidden) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

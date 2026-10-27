@@ -89,6 +89,7 @@ describe("the package entry point", () => {
         "createUsageStore",
         "createWorkspaceDeletionStore",
         "credentialTokenRepository",
+        "dashboardRepository",
         "defineScopedRepository",
         "emailChangeRepository",
         "entitlementRepository",

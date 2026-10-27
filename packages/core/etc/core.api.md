@@ -1859,6 +1859,103 @@ export interface CredentialToken {
 // @public (undocumented)
 export type CredentialTokenPurpose = (typeof CREDENTIAL_TOKEN_PURPOSES)[number];
 
+// @public (undocumented)
+export interface Dashboard {
+    // (undocumented)
+    readonly counts: {
+        readonly bookmarks: number;
+        readonly folders: number;
+        readonly tags: number;
+        readonly sharedWithYou: number | null;
+    };
+    // (undocumented)
+    readonly onboarding: {
+        readonly bookmarkAdded: boolean;
+        readonly slugGiven: boolean;
+        readonly browserSetupDone: boolean;
+        readonly folderCreated: boolean;
+        readonly importDone: boolean;
+        readonly dismissed: boolean;
+    };
+    // (undocumented)
+    readonly pinned: readonly DashboardBookmark[];
+    // (undocumented)
+    readonly quickAccess: readonly DashboardBookmark[];
+    // (undocumented)
+    readonly sharing: {
+        readonly sharedWithYou: number;
+        readonly sharedByYou: number;
+    } | null;
+    // (undocumented)
+    readonly topTags: readonly {
+        readonly id: string;
+        readonly name: string;
+        readonly bookmarkCount: number;
+    }[];
+}
+
+// @public
+export function dashboard(input: DashboardDependencies, ask: DashboardAsk): Promise<Dashboard | undefined>;
+
+// @public
+export const DASHBOARD_PINNED_LIMIT = 12;
+
+// @public
+export const DASHBOARD_QUICK_ACCESS_LIMIT = 8;
+
+// @public
+export const DASHBOARD_TOP_TAGS_LIMIT = 12;
+
+// @public (undocumented)
+export interface DashboardAsk {
+    readonly accountId: string;
+}
+
+// @public
+export interface DashboardBookmark {
+    // (undocumented)
+    readonly forwarding: boolean;
+    // (undocumented)
+    readonly host: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly openCount: number;
+    // (undocumented)
+    readonly slug: string | null;
+    // (undocumented)
+    readonly title: string;
+    // (undocumented)
+    readonly url: string;
+}
+
+// @public (undocumented)
+export interface DashboardDependencies {
+    // (undocumented)
+    readonly store: DashboardStore;
+    // (undocumented)
+    readonly tags: Pick<TagStore, "list">;
+}
+
+// @public (undocumented)
+export interface DashboardStore {
+    onboarding(ownerId: string): Promise<StoredOnboarding | undefined>;
+    pinned(ownerId: string, limit: number): Promise<readonly DashboardBookmark[]>;
+    quickAccess(ownerId: string, limit: number): Promise<readonly DashboardBookmark[]>;
+    summary(ownerId: string): Promise<DashboardSummary>;
+}
+
+// @public
+export interface DashboardSummary {
+    readonly bookmarks: number;
+    // (undocumented)
+    readonly folders: number;
+    readonly hasBookmark: boolean;
+    readonly hasSlug: boolean;
+    // (undocumented)
+    readonly tags: number;
+}
+
 // @public
 export function deleteAccount<Code extends string>(input: AccountDeletionDependencies<Code>, ask: AccountDeletionAsk): Promise<AccountDeletionOutcome<Code>>;
 
@@ -4758,6 +4855,16 @@ export interface SlugAvailabilityStore {
 export interface SlugUse {
     readonly othersUseCount: number;
     readonly takenByOwner: boolean;
+}
+
+// @public
+export interface StoredOnboarding {
+    // (undocumented)
+    readonly browserSetupDone: boolean;
+    // (undocumented)
+    readonly checklistDismissed: boolean;
+    // (undocumented)
+    readonly importDone: boolean;
 }
 
 // @public

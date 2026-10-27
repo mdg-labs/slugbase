@@ -1083,6 +1083,46 @@ export interface ComponentTypes {
             workspaceId: string;
             workspaceName: string;
         };
+        Dashboard: {
+            counts: ComponentTypes["schemas"]["DashboardCounts"];
+            onboarding: ComponentTypes["schemas"]["DashboardOnboarding"];
+            pinned: ComponentTypes["schemas"]["DashboardBookmark"][];
+            quickAccess: ComponentTypes["schemas"]["DashboardBookmark"][];
+            sharing: ComponentTypes["schemas"]["DashboardSharing"] | null;
+            topTags: ComponentTypes["schemas"]["DashboardTag"][];
+        };
+        DashboardBookmark: {
+            forwarding: boolean;
+            host: string;
+            id: string;
+            openCount: number;
+            slug: string | null;
+            title: string;
+            url: string;
+        };
+        DashboardCounts: {
+            bookmarks: number;
+            folders: number;
+            sharedWithYou: number | null;
+            tags: number;
+        };
+        DashboardOnboarding: {
+            bookmarkAdded: boolean;
+            browserSetupDone: boolean;
+            dismissed: boolean;
+            folderCreated: boolean;
+            importDone: boolean;
+            slugGiven: boolean;
+        };
+        DashboardSharing: {
+            sharedByYou: number;
+            sharedWithYou: number;
+        };
+        DashboardTag: {
+            bookmarkCount: number;
+            id: string;
+            name: string;
+        };
         DeleteAccountRequest: {
             email: string;
         };
@@ -2245,6 +2285,102 @@ export const CreateWorkspaceRequestSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public
+export const DASHBOARD_PINNED_LIMIT = 12;
+
+// @public
+export const DASHBOARD_QUICK_ACCESS_LIMIT = 8;
+
+// @public
+export const DASHBOARD_TOP_TAGS_LIMIT = 12;
+
+// @public (undocumented)
+export const DashboardBookmarkSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    title: z.ZodString;
+    url: z.ZodString;
+    host: z.ZodString;
+    slug: z.ZodNullable<z.ZodString>;
+    forwarding: z.ZodBoolean;
+    openCount: z.ZodNumber;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const DashboardCountsSchema: z.ZodObject<{
+    bookmarks: z.ZodNumber;
+    folders: z.ZodNumber;
+    tags: z.ZodNumber;
+    sharedWithYou: z.ZodNullable<z.ZodNumber>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const DashboardOnboardingSchema: z.ZodObject<{
+    bookmarkAdded: z.ZodBoolean;
+    slugGiven: z.ZodBoolean;
+    browserSetupDone: z.ZodBoolean;
+    folderCreated: z.ZodBoolean;
+    importDone: z.ZodBoolean;
+    dismissed: z.ZodBoolean;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const DashboardSchema: z.ZodObject<{
+    counts: z.ZodObject<{
+        bookmarks: z.ZodNumber;
+        folders: z.ZodNumber;
+        tags: z.ZodNumber;
+        sharedWithYou: z.ZodNullable<z.ZodNumber>;
+    }, z.core.$strict>;
+    quickAccess: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        title: z.ZodString;
+        url: z.ZodString;
+        host: z.ZodString;
+        slug: z.ZodNullable<z.ZodString>;
+        forwarding: z.ZodBoolean;
+        openCount: z.ZodNumber;
+    }, z.core.$strict>>;
+    pinned: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        title: z.ZodString;
+        url: z.ZodString;
+        host: z.ZodString;
+        slug: z.ZodNullable<z.ZodString>;
+        forwarding: z.ZodBoolean;
+        openCount: z.ZodNumber;
+    }, z.core.$strict>>;
+    topTags: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        bookmarkCount: z.ZodNumber;
+    }, z.core.$strict>>;
+    sharing: z.ZodNullable<z.ZodObject<{
+        sharedWithYou: z.ZodNumber;
+        sharedByYou: z.ZodNumber;
+    }, z.core.$strict>>;
+    onboarding: z.ZodObject<{
+        bookmarkAdded: z.ZodBoolean;
+        slugGiven: z.ZodBoolean;
+        browserSetupDone: z.ZodBoolean;
+        folderCreated: z.ZodBoolean;
+        importDone: z.ZodBoolean;
+        dismissed: z.ZodBoolean;
+    }, z.core.$strict>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const DashboardSharingSchema: z.ZodObject<{
+    sharedWithYou: z.ZodNumber;
+    sharedByYou: z.ZodNumber;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const DashboardTagSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    name: z.ZodString;
+    bookmarkCount: z.ZodNumber;
+}, z.core.$strict>;
+
+// @public
 export function defineOperation<const D extends OperationDefinition>(definition: D): D;
 
 // @public (undocumented)
@@ -2781,6 +2917,67 @@ export const getBookmark: {
         readonly 401: ProblemResponse;
         readonly 404: ProblemResponse;
         readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const getDashboard: {
+    readonly method: "get";
+    readonly path: "/api/v1/dashboard";
+    readonly operationId: "getDashboard";
+    readonly tag: "dashboard";
+    readonly summary: "Read the dashboard";
+    readonly auth: "member";
+    readonly rate: "read";
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        counts: z.ZodObject<{
+        bookmarks: z.ZodNumber;
+        folders: z.ZodNumber;
+        tags: z.ZodNumber;
+        sharedWithYou: z.ZodNullable<z.ZodNumber>;
+        }, z.core.$strict>;
+        quickAccess: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        title: z.ZodString;
+        url: z.ZodString;
+        host: z.ZodString;
+        slug: z.ZodNullable<z.ZodString>;
+        forwarding: z.ZodBoolean;
+        openCount: z.ZodNumber;
+        }, z.core.$strict>>;
+        pinned: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        title: z.ZodString;
+        url: z.ZodString;
+        host: z.ZodString;
+        slug: z.ZodNullable<z.ZodString>;
+        forwarding: z.ZodBoolean;
+        openCount: z.ZodNumber;
+        }, z.core.$strict>>;
+        topTags: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        bookmarkCount: z.ZodNumber;
+        }, z.core.$strict>>;
+        sharing: z.ZodNullable<z.ZodObject<{
+        sharedWithYou: z.ZodNumber;
+        sharedByYou: z.ZodNumber;
+        }, z.core.$strict>>;
+        onboarding: z.ZodObject<{
+        bookmarkAdded: z.ZodBoolean;
+        slugGiven: z.ZodBoolean;
+        browserSetupDone: z.ZodBoolean;
+        folderCreated: z.ZodBoolean;
+        importDone: z.ZodBoolean;
+        dismissed: z.ZodBoolean;
+        }, z.core.$strict>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
         readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
     };
@@ -7372,6 +7569,67 @@ export interface OperationTypes {
                 };
             };
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    getDashboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["Dashboard"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12687,6 +12945,23 @@ export interface paths {
         get?: never;
         put?: never;
         post: OperationTypes["openBookmark"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["getDashboard"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;

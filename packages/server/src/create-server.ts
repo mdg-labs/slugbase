@@ -49,6 +49,7 @@ import { bookmarkRoutes } from "./routes/bookmarks/index.ts";
 import { tagRoutes } from "./routes/tags/index.ts";
 import { folderRoutes } from "./routes/folders/index.ts";
 import { goRoutes } from "./routes/go/index.ts";
+import { dashboardRoutes } from "./routes/dashboard/index.ts";
 import { searchRoutes } from "./routes/search/index.ts";
 import { goNavigationRoutes, isGoShell } from "./routes/go/navigate.ts";
 import { isOpenSearchDocument, openSearchRoutes } from "./routes/opensearch.ts";
@@ -593,6 +594,8 @@ export function createServer(options: CreateServerOptions): Server {
   builtInRoutes.push(...goPreferenceRoutes({ cursorSecret: config.SESSION_SECRET }));
   // And the search across the member's readable bookmarks, own folders and own tags (the palette's query).
   builtInRoutes.push(...searchRoutes());
+  // And the member's dashboard: their own counts, quick access, pinned bookmarks, top tags and Getting started checklist in one read.
+  builtInRoutes.push(...dashboardRoutes());
   const ownedWorkspaceEntitlements = createOwnedWorkspaceEntitlements(entitlementService);
   // Stage 9 and the handlers that decide an entitlement themselves (accepting an invitation) ask the same check, so an operation is gated the same way wherever it is decided.
   const entitlementCheck: EntitlementCheck = options.entitlements ?? (adapters.entitlements.available ? createEntitlementCheck(entitlementService) : denyEntitlements);

@@ -49,6 +49,8 @@ export { isTagNameTaken, tagRepository } from "./repositories/tags.ts";
 export type { TagRepository } from "./repositories/tags.ts";
 export { folderRepository, isFolderNameTaken } from "./repositories/folders.ts";
 export { goRepository } from "./repositories/go.ts";
+export { dashboardRepository } from "./repositories/dashboard.ts";
+export type { DashboardRepository } from "./repositories/dashboard.ts";
 export { searchRepository } from "./repositories/search.ts";
 export type { SearchRepository } from "./repositories/search.ts";
 export type { GoRepository } from "./repositories/go.ts";
