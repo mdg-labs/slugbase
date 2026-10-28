@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { message } from "../support/catalog.ts";
 import { expectNoCspViolations, watchCsp } from "../support/csp.ts";
+import { homeCounts, homeHeading } from "../support/home.ts";
 import { STORAGE_STATE } from "../support/environment.ts";
 import { OWNER_EMAIL, OWNER_NAME, SECOND_OWNER_EMAIL, SECOND_WORKSPACE_NAME, WORKSPACE_NAME } from "../support/instance.ts";
 import { createWorkspace, enrolSecondFactor } from "../support/instance-admin.ts";
@@ -73,7 +74,8 @@ test("accounts journey: the first-run setup claims the instance and signs the ow
   await app.scan();
   await page.getByRole("button", { name: message("en", "setup.done.home"), exact: true }).click();
 
-  await expect(page.getByRole("heading", { level: 1, name: message("en", "home.title", { name }) })).toBeVisible();
+  await expect(homeHeading(page, "en", name)).toBeVisible();
+  await expect(homeCounts(page, "en")).toBeVisible();
   await app.scan();
   await expect(page.getByRole("button", { name: message("en", "shell.account"), exact: true })).toBeVisible();
   // The wizard and the page it ends on load without a violation of the page's policy (doc 01 section 4 step 2).

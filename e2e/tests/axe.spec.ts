@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 import { findViolations, parseAllowlist, type AllowlistEntry } from "../support/axe.ts";
 import { message } from "../support/catalog.ts";
+import { homeCounts, homeHeading } from "../support/home.ts";
 import { openPaletteWithShortcut, paletteDialog } from "../support/palette.ts";
 import { productName } from "../support/product.ts";
 import { expect, test } from "../support/test.ts";
@@ -72,7 +73,8 @@ for (const scheme of ["light", "dark"] as const) {
 
     test("has no accessibility violations", async ({ page, app }) => {
       const name = await productName(page);
-      await app.visit("/", page.getByRole("heading", { level: 1, name: message("en", "home.title", { name }) }));
+      await app.visit("/", homeCounts(page, "en"));
+      await expect(homeHeading(page, "en", name)).toBeVisible();
       await expect(page.locator("html")).toHaveClass(themed);
       // The toggle offers the other theme, so the shell that was scanned is the one in this theme.
       await expect(page.getByRole("button", { name: message("en", scheme === "light" ? "shell.switchToDark" : "shell.switchToLight") })).toBeVisible();
