@@ -1,9 +1,10 @@
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { connect, createServer } from "node:net";
+import { connect } from "node:net";
 import { resolve } from "node:path";
 import { createTestDatabase, type TestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { BIND_ANY_PORT, boundPort, PLACEHOLDER_PORTS } from "./ephemeral-ports.ts";
 
 // The worker command needs a database: it starts pg-boss against it. The
 // tests run the entry point as a process, the way the image does.
@@ -60,19 +61,6 @@ interface WorkerRun {
   observed?: string;
 }
 
-function freePort(): Promise<number> {
-  return new Promise((resolvePort, reject) => {
-    const probe = createServer();
-    probe.once("error", reject);
-    probe.listen(0, "127.0.0.1", () => {
-      const address = probe.address();
-      probe.close(() => {
-        resolvePort(typeof address === "object" && address !== null ? address.port : 0);
-      });
-    });
-  });
-}
-
 function get(port: number, path: string): Promise<string> {
   return send(port, `GET ${path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n`);
 }
@@ -103,9 +91,9 @@ function send(port: number, request: string): Promise<string> {
 // pg-boss instances registered in the database, sends SIGTERM and waits for the exit.
 async function runWorker(
   database: TestDatabase,
-  options: { env?: Record<string, string>; whenStarted?: () => Promise<string> } = {},
+  options: { env?: Record<string, string>; whenStarted?: (output: string) => Promise<string> } = {},
 ): Promise<WorkerRun> {
-  const child = spawn(process.execPath, ["src/main.ts", "worker"], {
+  const child = spawn(process.execPath, [...BIND_ANY_PORT, "src/main.ts", "worker"], {
     cwd: APP,
     env: { PATH: process.env["PATH"] ?? "", ...valid, NODE_ENV: "test", DATABASE_URL: databaseUrl(database), ...options.env },
   });
@@ -133,7 +121,7 @@ async function runWorker(
     let instances = 0;
     let observed: string | undefined;
     if (await started) {
-      observed = await options.whenStarted?.();
+      observed = await options.whenStarted?.(output);
       const rows = await database.app<{ count: string }[]>`SELECT count(*) FROM pgboss.instance`;
       instances = Number(rows[0]?.count);
     }
@@ -211,10 +199,15 @@ describe("apps/slugbase main worker", () => {
   }, 60_000);
 
   it("serves /metrics on the internal port while the worker runs and stops with it", async () => {
-    const metricsPort = await freePort();
     const { status, output, observed } = await runWorker(database, {
-      env: { METRICS_PORT: String(metricsPort) },
-      whenStarted: () => get(metricsPort, "/metrics"),
+      env: { METRICS_PORT: PLACEHOLDER_PORTS.METRICS_PORT },
+      whenStarted: (logged) => {
+        const metricsPort = boundPort(logged, "Metrics listening");
+        if (metricsPort === undefined) {
+          throw new Error(`the worker did not log its metrics port\n${logged}`);
+        }
+        return get(metricsPort, "/metrics");
+      },
     });
     expect(status, output).toBe(0);
     expect(observed).toMatch(/^HTTP\/1\.1 200 /);
@@ -232,13 +225,12 @@ interface ServerRun {
   observed?: string;
 }
 
-// Starts the server command and waits until it listens or exits. A listening
-// server is asked for /ready, sent SIGTERM and waited for.
+// Starts the server command, on a port the kernel picks when the child binds it, and waits until it listens or
+// exits. A listening server is asked for /ready, sent SIGTERM and waited for.
 async function runServer(env: Record<string, string>, whenReady?: (port: number) => Promise<string>): Promise<ServerRun> {
-  const port = await freePort();
-  const child = spawn(process.execPath, ["src/main.ts", "server"], {
+  const child = spawn(process.execPath, [...BIND_ANY_PORT, "src/main.ts", "server"], {
     cwd: APP,
-    env: { PATH: process.env["PATH"] ?? "", ...valid, PORT: String(port), ...env },
+    env: { PATH: process.env["PATH"] ?? "", ...valid, PORT: PLACEHOLDER_PORTS.PORT, ...env },
   });
   let output = "";
   const exited = new Promise<number | null>((resolveExit) => {
@@ -249,7 +241,7 @@ async function runServer(env: Record<string, string>, whenReady?: (port: number)
   const listening = new Promise<boolean>((resolveListening) => {
     const watch = (chunk: Buffer): void => {
       output += chunk.toString("utf8");
-      if (output.includes('"Listening"')) {
+      if (boundPort(output, "Listening") !== undefined) {
         resolveListening(true);
       }
     };
@@ -263,7 +255,8 @@ async function runServer(env: Record<string, string>, whenReady?: (port: number)
   try {
     let ready = "";
     let observed: string | undefined;
-    if (await listening) {
+    const port = (await listening) ? boundPort(output, "Listening") : undefined;
+    if (port !== undefined) {
       // Listening comes first, and the server answers /ready 503 until its migration is done.
       for (const deadline = Date.now() + 20_000; Date.now() < deadline; ) {
         ready = await get(port, "/ready");

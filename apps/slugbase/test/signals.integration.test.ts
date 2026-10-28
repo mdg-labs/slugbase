@@ -4,6 +4,7 @@ import { createServer } from "node:net";
 import { resolve } from "node:path";
 import { createTestDatabase, type TestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { BIND_ANY_PORT, PLACEHOLDER_PORTS } from "./ephemeral-ports.ts";
 
 // A signal that arrives while a command is still starting must lead to an
 // orderly shutdown, not to the default action of the signal. The tests send
@@ -48,28 +49,21 @@ function runMigrate(database: TestDatabase) {
   return { status: result.status, output: `${result.stdout}${result.stderr}` };
 }
 
-function freePort(): Promise<number> {
-  return new Promise((resolvePort, reject) => {
-    const probe = createServer();
-    probe.once("error", reject);
-    probe.listen(0, "127.0.0.1", () => {
-      const address = probe.address();
-      probe.close(() => {
-        resolvePort(typeof address === "object" && address !== null ? address.port : 0);
-      });
-    });
-  });
-}
-
 interface Run {
   status: number | null;
   signal: NodeJS.Signals | null;
   output: string;
 }
 
-// Starts the command, sends `signal` as soon as it has loaded its configuration, and waits for the exit.
-async function runSignalled(command: "server" | "worker", env: Record<string, string>, signal: NodeJS.Signals = "SIGTERM"): Promise<Run> {
-  const child = spawn(process.execPath, ["src/main.ts", command], {
+// Starts the command, sends `signal` as soon as it has loaded its configuration, and waits for the exit. `nodeArgs`
+// are Node options for the child: BIND_ANY_PORT lets a server bind a port the kernel picks.
+async function runSignalled(
+  command: "server" | "worker",
+  env: Record<string, string>,
+  signal: NodeJS.Signals = "SIGTERM",
+  nodeArgs: readonly string[] = [],
+): Promise<Run> {
+  const child = spawn(process.execPath, [...nodeArgs, "src/main.ts", command], {
     cwd: APP,
     env: { PATH: process.env["PATH"] ?? "", ...valid, ...env },
   });
@@ -140,7 +134,12 @@ describe("apps/slugbase main worker, signalled while it starts", () => {
 
 describe("apps/slugbase main server, signalled while it starts", () => {
   it("shuts down what started and exits 0 on SIGTERM", async () => {
-    const { status, signal, output } = await runSignalled("server", { MIGRATE_ON_START: "false", PORT: String(await freePort()) });
+    const { status, signal, output } = await runSignalled(
+      "server",
+      { MIGRATE_ON_START: "false", PORT: PLACEHOLDER_PORTS.PORT },
+      "SIGTERM",
+      BIND_ANY_PORT,
+    );
     expect(signal, output).toBeNull();
     expect(status, output).toBe(0);
     expect(output).toContain("Shutting down");
@@ -150,8 +149,9 @@ describe("apps/slugbase main server, signalled while it starts", () => {
   it("shuts down what started and exits 0 on SIGINT", async () => {
     const { status, signal, output } = await runSignalled(
       "server",
-      { MIGRATE_ON_START: "false", PORT: String(await freePort()) },
+      { MIGRATE_ON_START: "false", PORT: PLACEHOLDER_PORTS.PORT },
       "SIGINT",
+      BIND_ANY_PORT,
     );
     expect(signal, output).toBeNull();
     expect(status, output).toBe(0);
