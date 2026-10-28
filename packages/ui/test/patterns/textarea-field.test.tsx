@@ -4,12 +4,17 @@ import { TextareaField } from "../../src/patterns/index.ts";
 import { expectNoViolations } from "../support.tsx";
 
 describe("TextareaField", () => {
-  it("is a textarea named by its label, capped at the maximum, and described by the counter", async () => {
-    const { container } = render(<TextareaField counter="4 / 10" label="Description" maxLength={10} onChange={() => undefined} value="abcd" />);
+  it("is a textarea named by its label, capped at the maximum, and described by the counter", () => {
+    render(<TextareaField counter="4 / 10" label="Description" maxLength={10} onChange={() => undefined} value="abcd" />);
 
     const field = screen.getByRole("textbox", { name: "Description" });
     expect(field.getAttribute("maxlength")).toBe("10");
     expect(field.getAttribute("aria-describedby")?.split(" ")).toContain(screen.getByText("4 / 10").closest("[id]")?.id);
+  });
+
+  it("is free of accessibility violations", async () => {
+    const { container } = render(<TextareaField counter="4 / 10" label="Description" maxLength={10} onChange={() => undefined} value="abcd" />);
+
     await expectNoViolations(container);
   });
 

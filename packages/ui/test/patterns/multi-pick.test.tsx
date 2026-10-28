@@ -61,9 +61,15 @@ async function typeInto(input: HTMLElement, text: string): Promise<void> {
 }
 
 describe("MultiPick", () => {
+  it("is free of accessibility violations", async () => {
+    const { container } = render(<Pick initial={["reading", "work"]} />);
+
+    await expectNoViolations(container);
+  });
+
   it("is a combobox named by its label that shows each chosen option as a chip with a button that takes it off", async () => {
     const onValueChange = vi.fn<(value: string[]) => void>();
-    const { container } = render(<Pick initial={["reading", "work"]} onValueChange={onValueChange} />);
+    render(<Pick initial={["reading", "work"]} onValueChange={onValueChange} />);
 
     expect(screen.getByText("Reading")).toBeTruthy();
     expect(screen.getByText("Work")).toBeTruthy();
@@ -74,7 +80,6 @@ describe("MultiPick", () => {
 
     expect(onValueChange).toHaveBeenLastCalledWith(["work"]);
     expect(screen.queryByText("Reading")).toBeNull();
-    await expectNoViolations(container);
   });
 
   it("lists the options, adds the one that is chosen to the chips and keeps the others", async () => {

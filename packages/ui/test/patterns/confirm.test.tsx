@@ -39,6 +39,12 @@ describe("Confirm", () => {
     const dialog = await screen.findByRole("alertdialog", { name: "Delete the folder?" });
     expect(dialog.getAttribute("aria-describedby")).toBeTruthy();
     expect(screen.getByText("The bookmarks stay.").id).toBe(dialog.getAttribute("aria-describedby"));
+  });
+
+  it("is free of accessibility violations", async () => {
+    render(<Harness onConfirm={() => undefined} />);
+    await screen.findByRole("alertdialog");
+
     await expectNoViolations(document.body);
   });
 

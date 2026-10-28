@@ -4,13 +4,16 @@ import { TileGrid, TileLink } from "../../src/patterns/index.ts";
 import { expectNoViolations } from "../support.tsx";
 
 describe("TileLink", () => {
-  it("lists its tiles, links the title with the hint on hover and shows the subtitle in mono", async () => {
-    const { container } = render(
+  const renderTiles = () =>
+    render(
       <TileGrid label="Quick access">
         <TileLink hint="https://example.com/docs" href="/go/docs" monogram="e" subtitle="example.com" title="Example docs" />
         <TileLink monogram="p" title="Plain" />
       </TileGrid>,
     );
+
+  it("lists its tiles, links the title with the hint on hover and shows the subtitle in mono", () => {
+    renderTiles();
 
     const list = screen.getByRole("list", { name: "Quick access" });
     expect(within(list).getAllByRole("listitem")).toHaveLength(2);
@@ -20,6 +23,11 @@ describe("TileLink", () => {
     expect(screen.getByText("example.com").className).toContain("font-mono");
     expect(screen.queryByRole("link", { name: "Plain" })).toBeNull();
     expect(screen.getByText("Plain")).toBeTruthy();
+  });
+
+  it("is free of accessibility violations", async () => {
+    const { container } = renderTiles();
+
     await expectNoViolations(container);
   });
 
