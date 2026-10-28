@@ -80,7 +80,7 @@ test.describe("a visitor without a session, in German", () => {
 });
 
 function homeHeading(page: Page, locale: Locale, name: string) {
-  return page.getByRole("heading", { level: 1, name: message(locale, "home.empty.title", { name }) });
+  return page.getByRole("heading", { level: 1, name: message(locale, "home.title", { name }) });
 }
 
 const LANGUAGES: readonly { readonly locale: Locale; readonly browser: string; readonly title: string }[] = [
@@ -101,7 +101,7 @@ for (const { locale, browser, title } of LANGUAGES) {
 
       await expect(page).toHaveURL(/\/$/);
       await expect(page.locator("html")).toHaveAttribute("lang", locale);
-      await expect(page.getByText(message(locale, "home.empty.description"))).toBeVisible();
+      await expect(page.getByText(message(locale, "home.tagline"))).toBeVisible();
       await expect(page.getByRole("link", { name: message(locale, "shell.home") })).toBeVisible();
       await expect(page.getByRole("link", { name: message(locale, "shell.skipToContent") })).toBeAttached();
       // The member is not sent to sign in.

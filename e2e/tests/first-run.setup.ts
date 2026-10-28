@@ -73,7 +73,7 @@ test("accounts journey: the first-run setup claims the instance and signs the ow
   await app.scan();
   await page.getByRole("button", { name: message("en", "setup.done.home"), exact: true }).click();
 
-  await expect(page.getByRole("heading", { level: 1, name: message("en", "home.empty.title", { name }) })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: message("en", "home.title", { name }) })).toBeVisible();
   await app.scan();
   await expect(page.getByRole("button", { name: message("en", "shell.account"), exact: true })).toBeVisible();
   // The wizard and the page it ends on load without a violation of the page's policy (doc 01 section 4 step 2).

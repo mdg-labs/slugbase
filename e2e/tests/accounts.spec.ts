@@ -37,7 +37,7 @@ function required<T>(value: T | undefined, what: string): T {
 }
 
 function homeHeading(page: Page, name: string) {
-  return page.getByRole("heading", { level: 1, name: message("en", "home.empty.title", { name }) });
+  return page.getByRole("heading", { level: 1, name: message("en", "home.title", { name }) });
 }
 
 function signInCard(page: Page) {

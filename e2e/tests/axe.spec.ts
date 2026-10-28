@@ -72,7 +72,7 @@ for (const scheme of ["light", "dark"] as const) {
 
     test("has no accessibility violations", async ({ page, app }) => {
       const name = await productName(page);
-      await app.visit("/", page.getByRole("heading", { level: 1, name: message("en", "home.empty.title", { name }) }));
+      await app.visit("/", page.getByRole("heading", { level: 1, name: message("en", "home.title", { name }) }));
       await expect(page.locator("html")).toHaveClass(themed);
       // The toggle offers the other theme, so the shell that was scanned is the one in this theme.
       await expect(page.getByRole("button", { name: message("en", scheme === "light" ? "shell.switchToDark" : "shell.switchToLight") })).toBeVisible();
