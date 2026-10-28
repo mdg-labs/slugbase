@@ -2,6 +2,7 @@ import { z } from "zod";
 import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
 import { SEARCH_QUERY_MAX_LENGTH } from "./search.ts";
 import { TAG_NAME_MAX_LENGTH } from "./tags.ts";
+import { withoutNul } from "./text.ts";
 
 // The bookmarks tag of doc 04 section 10.6: the operations that create a bookmark, read it back, change it and delete it. They
 // act in the workspace the request is bound to and name none (D11), and a bookmark is its owner's: another member's bookmark of
@@ -50,7 +51,7 @@ export const BOOKMARK_TAG_FILTER_MAX = 10;
 
 const BookmarkTagIdsSchema = z.array(z.uuid()).max(BOOKMARK_TAGS_MAX);
 
-const BookmarkTagNamesSchema = z.array(z.string().trim().min(1).max(TAG_NAME_MAX_LENGTH)).max(BOOKMARK_TAGS_MAX);
+const BookmarkTagNamesSchema = z.array(withoutNul(z.string().trim().min(1).max(TAG_NAME_MAX_LENGTH))).max(BOOKMARK_TAGS_MAX);
 
 export const CreateBookmarkRequestSchema = z
   .strictObject({
@@ -61,11 +62,8 @@ export const CreateBookmarkRequestSchema = z
       .describe(
         "The address to save: an http or https URL of at most 2 048 characters. It is stored with a lower-case scheme and host, an internationalised host name in punycode, the default port left out and the fragment kept. Any other scheme is refused with 422 url_not_allowed",
       ),
-    title: z.string().trim().min(1).max(BOOKMARK_TITLE_MAX_LENGTH).describe("The bookmark's title, 1 to 300 characters; surrounding whitespace is removed and a title that is blank after that is refused"),
-    description: z
-      .string()
-      .trim()
-      .max(BOOKMARK_DESCRIPTION_MAX_LENGTH)
+    title: withoutNul(z.string().trim().min(1).max(BOOKMARK_TITLE_MAX_LENGTH)).describe("The bookmark's title, 1 to 300 characters; surrounding whitespace is removed and a title that is blank after that is refused"),
+    description: withoutNul(z.string().trim().max(BOOKMARK_DESCRIPTION_MAX_LENGTH))
       .optional()
       .describe("The bookmark's description, 0 to 1 000 characters; surrounding whitespace is removed and an empty one is stored as none"),
     pinned: z.boolean().optional().describe("Whether the bookmark is pinned; not pinned when left out"),
@@ -101,11 +99,8 @@ export const UpdateBookmarkRequestSchema = z
       .describe(
         "The new address: an http or https URL of at most 2 048 characters, stored as a creation stores it; the canonical form and the host are derived again. Any other scheme is refused with 422 url_not_allowed. Left out, the address is left as it is",
       ),
-    title: z.string().trim().min(1).max(BOOKMARK_TITLE_MAX_LENGTH).optional().describe("The new title, 1 to 300 characters; surrounding whitespace is removed and a title that is blank after that is refused. It cannot be cleared. Left out, the title is left as it is"),
-    description: z
-      .string()
-      .trim()
-      .max(BOOKMARK_DESCRIPTION_MAX_LENGTH)
+    title: withoutNul(z.string().trim().min(1).max(BOOKMARK_TITLE_MAX_LENGTH)).optional().describe("The new title, 1 to 300 characters; surrounding whitespace is removed and a title that is blank after that is refused. It cannot be cleared. Left out, the title is left as it is"),
+    description: withoutNul(z.string().trim().max(BOOKMARK_DESCRIPTION_MAX_LENGTH))
       .nullable()
       .optional()
       .describe("The new description, 0 to 1 000 characters; surrounding whitespace is removed, and an empty one and null clear it. Left out, the description is left as it is"),
@@ -495,7 +490,7 @@ export const createBookmark = defineOperation({
       "The Idempotency-Key was used before for another request (idempotency_conflict), or the caller already uses the slug on another bookmark of the workspace (slug_taken, errors on slug), also when two requests set it at once; nothing is written",
     ),
     422: problemResponse(
-      "The body did not pass validation (a missing, empty or over-long URL, title or description, a malformed URL, a slug outside the grammar, forwarding true without a slug, a folderIds, tagIds or tagNames list of more than 100 or with a malformed identifier, or a tag name that is empty or over 40 characters, or a field the operation does not declare), the URL is not an http or https URL (url_not_allowed), or the workspace already holds as many bookmarks as its bookmarks.max entitlement allows (bookmark_limit_reached; the problem carries limit and used). Nothing is written, and a refused request keeps no key, so a retry with it runs",
+      "The body did not pass validation (a missing, empty or over-long URL, title or description, a title, description or tag name that holds a NUL character, a malformed URL, a slug outside the grammar, forwarding true without a slug, a folderIds, tagIds or tagNames list of more than 100 or with a malformed identifier, or a tag name that is empty or over 40 characters, or a field the operation does not declare), the URL is not an http or https URL (url_not_allowed), or the workspace already holds as many bookmarks as its bookmarks.max entitlement allows (bookmark_limit_reached; the problem carries limit and used). Nothing is written, and a refused request keeps no key, so a retry with it runs",
     ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse(
@@ -576,7 +571,7 @@ export const updateBookmark = defineOperation({
     409: problemResponse("The caller already uses the slug on another bookmark of the workspace (slug_taken, errors on slug), also when two requests set it at once; nothing is written"),
     412: problemResponse("If-Match names a version other than the bookmark's current one (precondition_failed); the bookmark is unchanged"),
     422: problemResponse(
-      "The identifier or the body did not pass validation (a malformed, empty or over-long URL, a title that is blank or over-long, a description over 1 000 characters, a null title or URL, a slug outside the grammar, forwarding true or left on without a slug, a folderIds, tagIds or tagNames list of more than 100 or with a malformed identifier, or a tag name that is empty or over 40 characters, or a field the operation does not declare), or the URL is not an http or https URL (url_not_allowed). Nothing is written",
+      "The identifier or the body did not pass validation (a malformed, empty or over-long URL, a title that is blank, over-long or holding a NUL character, a description over 1 000 characters or holding one, a null title or URL, a slug outside the grammar, forwarding true or left on without a slug, a folderIds, tagIds or tagNames list of more than 100 or with a malformed identifier, or a tag name that is empty or over 40 characters, or a field the operation does not declare), or the URL is not an http or https URL (url_not_allowed). Nothing is written",
     ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),

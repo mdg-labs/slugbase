@@ -3895,7 +3895,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation, or the password is outside 12 to 256 characters or is on the breached list (weak_password) */
+            /** @description The body did not pass validation (a display name that holds a NUL character, among others), or the password is outside 12 to 256 characters or is on the breached list (weak_password) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4235,7 +4235,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation (a missing, empty or over-long URL, title or description, a malformed URL, a slug outside the grammar, forwarding true without a slug, a folderIds, tagIds or tagNames list of more than 100 or with a malformed identifier, or a tag name that is empty or over 40 characters, or a field the operation does not declare), the URL is not an http or https URL (url_not_allowed), or the workspace already holds as many bookmarks as its bookmarks.max entitlement allows (bookmark_limit_reached; the problem carries limit and used). Nothing is written, and a refused request keeps no key, so a retry with it runs */
+            /** @description The body did not pass validation (a missing, empty or over-long URL, title or description, a title, description or tag name that holds a NUL character, a malformed URL, a slug outside the grammar, forwarding true without a slug, a folderIds, tagIds or tagNames list of more than 100 or with a malformed identifier, or a tag name that is empty or over 40 characters, or a field the operation does not declare), the URL is not an http or https URL (url_not_allowed), or the workspace already holds as many bookmarks as its bookmarks.max entitlement allows (bookmark_limit_reached; the problem carries limit and used). Nothing is written, and a refused request keeps no key, so a retry with it runs */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4874,7 +4874,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The identifier or the body did not pass validation (a malformed, empty or over-long URL, a title that is blank or over-long, a description over 1 000 characters, a null title or URL, a slug outside the grammar, forwarding true or left on without a slug, a folderIds, tagIds or tagNames list of more than 100 or with a malformed identifier, or a tag name that is empty or over 40 characters, or a field the operation does not declare), or the URL is not an http or https URL (url_not_allowed). Nothing is written */
+            /** @description The identifier or the body did not pass validation (a malformed, empty or over-long URL, a title that is blank, over-long or holding a NUL character, a description over 1 000 characters or holding one, a null title or URL, a slug outside the grammar, forwarding true or left on without a slug, a folderIds, tagIds or tagNames list of more than 100 or with a malformed identifier, or a tag name that is empty or over 40 characters, or a field the operation does not declare), or the URL is not an http or https URL (url_not_allowed). Nothing is written */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5274,7 +5274,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The query did not pass validation (an unknown parameter, scope or sort, a limit outside 1 to 100, a search text longer than 64 characters) */
+            /** @description The query did not pass validation (an unknown parameter, scope or sort, a limit outside 1 to 100, a search text longer than 64 characters or holding a NUL character) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5372,7 +5372,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation (a name that is blank or longer than 64 characters, an icon outside the list, a colour outside 1 to 8, or a field the operation does not declare) */
+            /** @description The body did not pass validation (a name that is blank, longer than 64 characters or holds a NUL character, an icon outside the list, a colour outside 1 to 8, or a field the operation does not declare) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5650,7 +5650,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The identifier or the body did not pass validation (a name that is blank or longer than 64 characters, an icon outside the list, a colour outside 1 to 8, or a field the operation does not declare). Nothing is written */
+            /** @description The identifier or the body did not pass validation (a name that is blank, longer than 64 characters or holds a NUL character, an icon outside the list, a colour outside 1 to 8, or a field the operation does not declare). Nothing is written */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -7031,7 +7031,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation: a field the operation does not declare, a name that is blank or longer than 64 characters, neither or both of ownerAccountId and ownerEmail, or an ownerAccountId that is no account or is disabled (unknown_account). Nothing is written */
+            /** @description The body did not pass validation: a field the operation does not declare, a name that is blank, longer than 64 characters or holds a NUL character, neither or both of ownerAccountId and ownerEmail, or an ownerAccountId that is no account or is disabled (unknown_account). Nothing is written */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -7601,7 +7601,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation (a display name without a password or the reverse included), the password is outside 12 to 256 characters or is on the breached list (weak_password), or the workspace has no seat left (seat_limit_reached); nothing is written and the invitation stays pending */
+            /** @description The body did not pass validation (a display name without a password or the reverse included, a display name that holds a NUL character), the password is outside 12 to 256 characters or is on the breached list (weak_password), or the workspace has no seat left (seat_limit_reached); nothing is written and the invitation stays pending */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -8156,7 +8156,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation: an unknown field or onboarding key, a name that is empty or longer than 100 characters, or a value outside the one the field allows (a language other than en and de, an accent that is not a preset name) */
+            /** @description The body did not pass validation: an unknown field or onboarding key, a name that is empty, longer than 100 characters or holds a NUL character, or a value outside the one the field allows (a language other than en and de, an accent that is not a preset name) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -8333,7 +8333,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation (a name outside 1 to 64 characters, an unknown scope, an expiry other than 30, 90, 365 or null); or the account already has 10 tokens that are neither revoked nor expired (validation_failed with the field code api_token_limit_reached) */
+            /** @description The body did not pass validation (a name outside 1 to 64 characters or holding a NUL character, an unknown scope, an expiry other than 30, 90, 365 or null); or the account already has 10 tokens that are neither revoked nor expired (validation_failed with the field code api_token_limit_reached) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10296,7 +10296,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation, or the password is outside 12 to 256 characters or is on the breached list (weak_password) */
+            /** @description The body did not pass validation (a display name or a workspace name that holds a NUL character, among others), or the password is outside 12 to 256 characters or is on the breached list (weak_password) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10602,7 +10602,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation (a name that is blank or longer than 40 characters, or a field the operation does not declare) */
+            /** @description The body did not pass validation (a name that is blank, longer than 40 characters or holds a NUL character, or a field the operation does not declare) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10856,7 +10856,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The identifier or the body did not pass validation (a name that is blank or longer than 40 characters, or a field the operation does not declare) */
+            /** @description The identifier or the body did not pass validation (a name that is blank, longer than 40 characters or holds a NUL character, or a field the operation does not declare) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11126,7 +11126,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation (a name that is blank or longer than 64 characters, a description longer than 280, or a field the operation does not declare) */
+            /** @description The body did not pass validation (a name that is blank, longer than 64 characters or holds a NUL character, a description longer than 280 or holding one, or a field the operation does not declare) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11404,7 +11404,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The identifier or the body did not pass validation (a name that is blank or longer than 64 characters, a description longer than 280, or a field the operation does not declare). Nothing is written */
+            /** @description The identifier or the body did not pass validation (a name that is blank, longer than 64 characters or holds a NUL character, a description longer than 280 or holding one, or a field the operation does not declare). Nothing is written */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11751,7 +11751,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation (a name that is blank or outside 1 to 64 characters, or a field the operation does not declare) */
+            /** @description The body did not pass validation (a name that is blank, outside 1 to 64 characters or holds a NUL character, or a field the operation does not declare) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12250,7 +12250,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation (a name that is blank or outside 1 to 64 characters, or a field the operation does not declare), or the account already owns as many workspaces as its workspaces.ownMax entitlement allows (workspace_limit_reached; the problem carries limit, used and upgradeAvailable). Nothing is written */
+            /** @description The body did not pass validation (a name that is blank, outside 1 to 64 characters or holds a NUL character, or a field the operation does not declare), or the account already owns as many workspaces as its workspaces.ownMax entitlement allows (workspace_limit_reached; the problem carries limit, used and upgradeAvailable). Nothing is written */
             422: {
                 headers: {
                     [name: string]: unknown;

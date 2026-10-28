@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
+import { withoutNul } from "./text.ts";
 
 // The teams tag of doc 04 section 10.5: the operations that list, create, read, change and delete the teams of the workspace the request is
 // bound to, and replace a team's members. They act in the workspace of the request and name none (D11). A team is the workspace's and no
@@ -25,23 +26,10 @@ export const TEAM_LIST_DEFAULT_LIMIT = 50;
 /** The longest cursor a client may send back. The largest one the server issues carries a team name (64 characters, up to 6 bytes each once JSON-escaped), the identifier and the signature, as base64url: about 650 characters. */
 export const TEAM_CURSOR_MAX_LENGTH = 1024;
 
-// The database refuses a NUL in text, which would answer a name or a description that holds one with a server error.
-const withoutNul = (value: string): boolean => !value.includes("\u0000");
-const NUL_MESSAGE = "must not contain a NUL character";
-
-const TeamNameSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(TEAM_NAME_MAX_LENGTH)
-  .refine(withoutNul, { message: NUL_MESSAGE })
+const TeamNameSchema = withoutNul(z.string().trim().min(1).max(TEAM_NAME_MAX_LENGTH))
   .describe("The team's name, 1 to 64 characters after the whitespace around it is removed. It is stored as entered, in the case it is written in, and is unique in the workspace without regard to case");
 
-const TeamDescriptionSchema = z
-  .string()
-  .trim()
-  .max(TEAM_DESCRIPTION_MAX_LENGTH)
-  .refine(withoutNul, { message: NUL_MESSAGE })
+const TeamDescriptionSchema = withoutNul(z.string().trim().max(TEAM_DESCRIPTION_MAX_LENGTH))
   .describe("The team's description, 0 to 280 characters after the whitespace around it is removed");
 
 export const CreateTeamRequestSchema = z
@@ -170,7 +158,7 @@ export const createTeam = defineOperation({
     403: problemResponse(CHANGE_REFUSED),
     404: problemResponse(NO_WORKSPACE),
     409: problemResponse("The workspace already has a team with this name, in any case (name_taken); nothing is written"),
-    422: problemResponse("The body did not pass validation (a name that is blank or longer than 64 characters, a description longer than 280, or a field the operation does not declare)"),
+    422: problemResponse("The body did not pass validation (a name that is blank, longer than 64 characters or holds a NUL character, a description longer than 280 or holding one, or a field the operation does not declare)"),
     429: rateLimitedResponse(RATE_LIMITED),
     503: problemResponse(UNAVAILABLE),
   },
@@ -219,7 +207,7 @@ export const updateTeam = defineOperation({
     404: problemResponse(NO_TEAM),
     409: problemResponse("The workspace has another team with this name, in any case (name_taken); nothing is written"),
     412: problemResponse("If-Match names a version other than the team's current one (precondition_failed); the team is unchanged"),
-    422: problemResponse("The identifier or the body did not pass validation (a name that is blank or longer than 64 characters, a description longer than 280, or a field the operation does not declare). Nothing is written"),
+    422: problemResponse("The identifier or the body did not pass validation (a name that is blank, longer than 64 characters or holds a NUL character, a description longer than 280 or holding one, or a field the operation does not declare). Nothing is written"),
     429: rateLimitedResponse(RATE_LIMITED),
     503: problemResponse(UNAVAILABLE),
   },

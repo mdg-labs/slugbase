@@ -135,7 +135,7 @@ export const register = defineOperation({
     403: problemResponse(
       "The request did not come from the application itself (cross_site_request); public registration is off (registration_closed); or the deployment's registration policy refused the address (registration_refused, one answer for every reason). Nothing is written",
     ),
-    422: problemResponse("The body did not pass validation, or the password is outside 12 to 256 characters or is on the breached list (weak_password)"),
+    422: problemResponse("The body did not pass validation (a display name that holds a NUL character, among others), or the password is outside 12 to 256 characters or is on the breached list (weak_password)"),
     429: rateLimitedResponse("Too many registrations from this address; Retry-After says when to try again"),
     503: problemResponse(
       "Email verification is required and no mail is configured (mail_unavailable), or the service is temporarily unavailable (unavailable). Nothing is written",

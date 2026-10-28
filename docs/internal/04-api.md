@@ -92,6 +92,7 @@ Actions that are not CRUD use a sub-resource noun (`POST /bookmarks/{id}/open`, 
 | Slugs | Lower-case (doc 02 §6.1). Every slug a request carries — the `slug` of a bookmark body, the `slug` query of `GET /slugs/availability`, the `slug` of `POST /go/resolve` and `POST /go/choose`, the `prefix` of `GET /go/suggest`, the `{slug}` of `DELETE /me/go-preferences/{slug}` and the segment of `GET /go/<slug>` — is trimmed and lower-cased by the server before it is validated, written or looked up, so `Mail` and `mail` are the same slug and a slug differing only in case is `slug_taken`. Responses always carry the lower-case form |
 | Booleans | Never stringly typed; query-string booleans are `true`/`false` only |
 | Unknown fields | Rejected with `422 validation_failed` (Zod `strict`) — a typo never silently does nothing |
+| NUL in text | A request text field the server stores as entered (a bookmark's title, description and tag names, a folder, tag, team or workspace name, a display name, an API token name, a team description, the instance name and sign-in notice) and the folder list's `q` refuse a value that holds U+0000 with `422 validation_failed` on the field, because PostgreSQL cannot store it in a text column. The search text of the bookmark list and its filters and of the palette search is not stored and is cleaned of it instead |
 | Locale | Problem `detail` is always English (doc 02 §15); the SPA renders localised text from `code`. The account locale and `Accept-Language` affect only emails; data is locale-independent |
 
 ### 2.4 HTTP semantics
