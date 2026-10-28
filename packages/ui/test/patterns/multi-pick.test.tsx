@@ -61,9 +61,14 @@ async function typeInto(input: HTMLElement, text: string): Promise<void> {
 }
 
 describe("MultiPick", () => {
-  it("is free of accessibility violations", async () => {
+  it("is free of accessibility violations once a chip is taken off", async () => {
     const { container } = render(<Pick initial={["reading", "work"]} />);
+    await act(async () => {
+      fireEvent.click(container.querySelector(`[aria-label="${removeLabel("Reading")}"]`) as HTMLElement);
+      await Promise.resolve();
+    });
 
+    expect(chips()).toEqual(["Work"]);
     await expectNoViolations(container);
   });
 
