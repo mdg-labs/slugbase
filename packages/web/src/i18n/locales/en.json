@@ -342,6 +342,7 @@
         "label": "URL",
         "placeholder": "https://",
         "checking": "Checking whether you saved this address already",
+        "reading": "Reading the title and description of the page",
         "error": {
           "required": "Enter the address to save.",
           "tooLong": "Use at most {max, number} characters.",

@@ -18,7 +18,9 @@ export const BOOKMARK_LISTS_QUERY_KEY = [...BOOKMARKS_QUERY_KEY, "list"] as cons
 
 export { BOOKMARK_DESCRIPTION_MAX_LENGTH, BOOKMARK_SLUG_MAX_LENGTH, BOOKMARK_TITLE_MAX_LENGTH, BOOKMARK_URL_MAX_LENGTH } from "@slugbase/contracts";
 
-export type SlugAvailability = ComponentTypes["schemas"]["SlugAvailability"];
+export type BookmarkMetadata = ComponentTypes["schemas"]["BookmarkMetadata"];
+
+export type SlugAvailability =ComponentTypes["schemas"]["SlugAvailability"];
 
 /** One bookmark of the caller, as the modal edits it. */
 export function bookmarkQuery(api: ApiClient, id: string) {
@@ -75,6 +77,19 @@ export function bookmarksByUrlQuery(api: ApiClient, url: string | undefined) {
     staleTime: 0,
     gcTime: 0,
   });
+}
+
+/**
+ * The title and description of the page at `url` (doc 02 section 5.4). The prefill is a convenience: a refused address, an
+ * upstream failure, a rate limit, a network error and an aborted request all answer nothing, and the fields stay as entered.
+ */
+export async function readPageMetadata(api: ApiClient, url: string, signal: AbortSignal): Promise<BookmarkMetadata | undefined> {
+  try {
+    const { data } = await api.POST("/api/v1/bookmarks/metadata", { body: { url }, signal });
+    return data;
+  } catch {
+    return undefined;
+  }
 }
 
 /**

@@ -2,7 +2,7 @@ import { Button, Input } from "@slugbase/ui";
 import { Banner, Confirm, Disclosure, FormField, FormOverlay, SettingSwitch, TextareaField, UnsavedGuard, UrlInput, feedbackToast } from "@slugbase/ui/patterns";
 import { useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { useRef, useState, type KeyboardEvent, type ReactElement, type SyntheticEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactElement, type SyntheticEvent } from "react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { Slot } from "../extensions/index.ts";
@@ -14,6 +14,7 @@ import { CREATE_FOLDER_MUTATION_KEY, FolderPick } from "./folder-pick.tsx";
 import { rateLimitMessage } from "./rate-limit-message.ts";
 import { SlugFields } from "./slug-fields.tsx";
 import { TagPick } from "./tag-pick.tsx";
+import { usePageMetadata } from "./use-page-metadata.ts";
 import {
   BOOKMARKS_QUERY_KEY,
   BOOKMARK_DESCRIPTION_MAX_LENGTH,
@@ -30,6 +31,7 @@ import {
   validateUpdate,
   type Bookmark,
   type BookmarkFailure,
+  type BookmarkMetadata,
   type CreateBookmarkRequest,
   type FieldName,
   type FieldProblem,
@@ -41,6 +43,10 @@ interface Values {
   readonly url: string;
   readonly title: string;
   readonly description: string;
+  /** Whether the title came with the bookmark or was typed by the member, and so is not replaced by what a page says. */
+  readonly titleOwned: boolean;
+  /** The same for the description. */
+  readonly descriptionOwned: boolean;
   /** Trimmed and lower-cased as it is typed; empty for none. */
   readonly slug: string;
   readonly forwarding: boolean;
@@ -75,6 +81,8 @@ function valuesOf(bookmark: Bookmark | undefined, initialUrl: string | undefined
     url: bookmark?.url ?? initialUrl ?? "",
     title: bookmark?.title ?? "",
     description: bookmark?.description ?? "",
+    titleOwned: (bookmark?.title ?? "") !== "",
+    descriptionOwned: (bookmark?.description ?? "") !== "",
     slug,
     forwarding: bookmark === undefined ? slug !== "" : bookmark.forwarding,
     pinned: bookmark?.pinned ?? false,
@@ -201,7 +209,9 @@ type Request =
  * a description under "More" and the pin, for a new bookmark or one loaded to change. A change is sent against the version that was
  * loaded, so one made elsewhere is refused and offered to be read again instead of being overwritten. Closing with
  * unsaved changes asks first. When the address is left, pasted or prefilled, the caller's own bookmarks with the same
- * canonical address are looked up and named in a warning; saving a duplicate stays allowed.
+ * canonical address are looked up and named in a warning; saving a duplicate stays allowed. The same moments ask the API for the
+ * title and description of the page (doc 02 section 5.4) and fill the two fields the member has not typed in; a page that cannot
+ * be read changes nothing.
  */
 export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onEditExisting, onReload }: BookmarkEditorProps): ReactElement {
   const { t } = useTranslation();
@@ -223,6 +233,7 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleteFailure, setDeleteFailure] = useState<BookmarkFailure | undefined>(undefined);
   const pasted = useRef(false);
+  const metadata = usePageMetadata(api);
 
   const lookup = useQuery(bookmarksByUrlQuery(api, lookupUrl));
   const trimmedUrl = values.url.trim();
@@ -233,8 +244,8 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
 
   const dirty =
     values.url !== initial.url ||
-    values.title !== initial.title ||
-    values.description !== initial.description ||
+    (values.titleOwned && values.title !== initial.title) ||
+    (values.descriptionOwned && values.description !== initial.description) ||
     values.slug !== initial.slug ||
     values.forwarding !== initial.forwarding ||
     values.pinned !== initial.pinned ||
@@ -292,6 +303,33 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
     setFailure(undefined);
   }
 
+  const fillFromPage = useCallback((page: BookmarkMetadata): void => {
+    const title = (page.title ?? "").trim().slice(0, BOOKMARK_TITLE_MAX_LENGTH);
+    const description = (page.description ?? "").trim().slice(0, BOOKMARK_DESCRIPTION_MAX_LENGTH);
+    setValues((current) => ({
+      ...current,
+      ...(current.titleOwned ? {} : { title }),
+      ...(current.descriptionOwned ? {} : { description }),
+    }));
+    setProblems((current) => ({ ...current, ...(title === "" ? {} : { title: undefined }) }));
+  }, []);
+
+  function prefill(url: string): void {
+    // The bookmark being changed has its own address and title; only another address is read.
+    if (isHttpUrl(url) && !(bookmark !== undefined && url === bookmark.url)) {
+      metadata.request(url, fillFromPage);
+    }
+  }
+
+  const { request: requestMetadata } = metadata;
+  const startUrl = initial.url.trim();
+  useEffect(() => {
+    // A new bookmark that opens with an address, one pasted onto the page, is read like one pasted into the field.
+    if (!editing && isHttpUrl(startUrl)) {
+      requestMetadata(startUrl, fillFromPage);
+    }
+  }, [editing, startUrl, requestMetadata, fillFromPage]);
+
   function lookUp(url: string): void {
     // The bookmark being changed has its own address; only another bookmark of the caller's is a duplicate.
     if (isHttpUrl(url) && !(bookmark !== undefined && url === bookmark.url)) {
@@ -315,6 +353,7 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
       return;
     }
     setFailure(undefined);
+    metadata.cancel();
     const url = values.url.trim();
     const title = values.title.trim();
     const description = values.description.trim();
@@ -425,6 +464,7 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
               disabled={busy}
               onBlur={() => {
                 lookUp(values.url.trim());
+                prefill(values.url.trim());
               }}
               onPaste={() => {
                 pasted.current = true;
@@ -432,13 +472,15 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
               onValueChange={(url) => {
                 change({ url });
                 setProblems((current) => ({ ...current, url: undefined }));
+                metadata.follow(url.trim());
                 if (pasted.current) {
                   pasted.current = false;
                   lookUp(url.trim());
+                  prefill(url.trim());
                 }
               }}
-              pending={lookupCurrent && lookup.fetchStatus === "fetching"}
-              pendingLabel={t("bookmarks.modal.url.checking")}
+              pending={metadata.pending || (lookupCurrent && lookup.fetchStatus === "fetching")}
+              pendingLabel={metadata.pending ? t("bookmarks.modal.url.reading") : t("bookmarks.modal.url.checking")}
               placeholder={t("bookmarks.modal.url.placeholder")}
               value={values.url}
             />
@@ -471,7 +513,7 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
               disabled={busy}
               maxLength={BOOKMARK_TITLE_MAX_LENGTH}
               onValueChange={(title) => {
-                change({ title });
+                change({ title, titleOwned: true });
                 setProblems((current) => ({ ...current, title: undefined }));
               }}
               value={values.title}
@@ -524,7 +566,7 @@ export function BookmarkEditor({ bookmark, initialUrl, initialSlug, onClose, onE
               maxLength={BOOKMARK_DESCRIPTION_MAX_LENGTH}
               name="description"
               onChange={(description) => {
-                change({ description });
+                change({ description, descriptionOwned: true });
                 setProblems((current) => ({ ...current, description: undefined }));
               }}
               value={values.description}
