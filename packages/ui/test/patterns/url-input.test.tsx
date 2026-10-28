@@ -3,17 +3,26 @@ import { describe, expect, it, vi } from "vitest";
 import { FormField, UrlInput } from "../../src/patterns/index.ts";
 import { expectNoViolations } from "../support.tsx";
 
+function renderFilledField() {
+  return render(
+    <FormField label="URL">
+      <UrlInput onValueChange={() => undefined} pendingLabel="Checking" value="https://slugbase.app" />
+    </FormField>,
+  );
+}
+
 describe("UrlInput", () => {
-  it("is a URL field named by its label", async () => {
-    const { container } = render(
-      <FormField label="URL">
-        <UrlInput onValueChange={() => undefined} pendingLabel="Checking" value="https://slugbase.app" />
-      </FormField>,
-    );
+  it("is a URL field named by its label", () => {
+    renderFilledField();
 
     const field = screen.getByRole("textbox", { name: "URL" });
     expect(field.getAttribute("type")).toBe("url");
     expect((field as HTMLInputElement).value).toBe("https://slugbase.app");
+  });
+
+  it("is free of accessibility violations", async () => {
+    const { container } = renderFilledField();
+
     await expectNoViolations(container);
   });
 
