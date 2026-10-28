@@ -95,6 +95,8 @@ existing line by adding its PR number.
 - **timeout told by timing alone** — an error classifier treats any rejection that arrives near a deadline as that deadline's timeout without reading the error, so an unrelated late failure (`Target closed`) is reported as the timeout — PR 622
 - **hook shorter than its waits** — a test hook calls a helper whose own deadlines (a mail wait, a wait on another worker) exceed the hook's default timeout, so the hook dies first and leaves shared coordination files half-written — PR 622
 - **cross-run state keyed by a reusable value** — state a test run keeps on disk is keyed by a value a later run can draw again (a random free port) instead of being cleared at the start of each run, so a later run reads a session of a stack that is gone — PR 622
+- **ready before the data** — a page check waits for an element the page renders before its data has loaded (a heading above a query's content), so the scan or assertion that follows can run on the loading state and a failed load still passes — PR 626
+- **substring locator** — a Playwright role or text locator takes a catalog string without `exact: true`, so it matches any text that contains the string and passes on extra text around it — PR 626
 
 ## Web UI
 
