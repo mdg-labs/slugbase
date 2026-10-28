@@ -35,6 +35,7 @@ existing line by adding its PR number.
 ## Design docs
 
 - **cache key** — a cached value depends on a scope the key omits (an account-scoped value in a workspace-keyed cache) — PR 354
+- **dedupe key the job does not carry** — a queued job is deduplicated on a value (a page address) it does not carry and re-reads from a mutable row (the bookmark) when it runs, so a waiting job can stand for a row that has since moved away and a later job for that value is dropped as a duplicate — PR 629
 - **doc consistency** — one change states the same fact differently in two docs (when a field exists), ignoring the precedence order — PR 354, 558
 - **external behaviour** — a doc or comment states a third-party system's behaviour more broadly than that system documents it (a database "waits for every older transaction" where it waits only for writers and older snapshots) — PR 365
 
@@ -71,6 +72,7 @@ existing line by adding its PR number.
 ## Input handling
 
 - **quadratic regex** — a regular expression with an end-anchored repetition (a trim's `[\s]+$` branch) runs on input whose length the function itself does not bound, relying on a caller's cap, so a long run of the repeated character followed by another one takes quadratic time — PR 558
+- **overlapping quantifiers** — a regular expression puts two repetitions that match the same characters side by side around an optional token (`\s*["']?\s*`), so one run of that character splits between them in as many ways as it is long — PR 629
 - **sibling path skips the cleanup** — one of several entry points that take the same text (a list filter beside the search) applies a weaker cleanup than the others, so a character the database refuses (NUL) reaches it and the request answers 500 — PR 622
 
 ## Shared helpers
@@ -97,6 +99,7 @@ existing line by adding its PR number.
 - **cross-run state keyed by a reusable value** — state a test run keeps on disk is keyed by a value a later run can draw again (a random free port) instead of being cleared at the start of each run, so a later run reads a session of a stack that is gone — PR 622
 - **ready before the data** — a page check waits for an element the page renders before its data has loaded (a heading above a query's content), so the scan or assertion that follows can run on the loading state and a failed load still passes — PR 626
 - **substring locator** — a Playwright role or text locator takes a catalog string without `exact: true`, so it matches any text that contains the string and passes on extra text around it — PR 626
+- **split moves the state** — splitting a test so that an assertion (an axe pass) runs in a test of its own sets up only the starting state, so the assertion no longer checks the state the original test reached after its actions — PR 629
 
 ## Web UI
 
