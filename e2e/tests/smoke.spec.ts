@@ -99,7 +99,7 @@ for (const { locale, browser, title } of LANGUAGES) {
 
       await expect(page).toHaveURL(/\/$/);
       await expect(page.locator("html")).toHaveAttribute("lang", locale);
-      await expect(page.getByText(message(locale, "home.tagline"))).toBeVisible();
+      await expect(page.getByText(message(locale, "home.tagline"), { exact: true })).toBeVisible();
       await expect(page.getByRole("link", { name: message(locale, "shell.home") })).toBeVisible();
       await expect(page.getByRole("link", { name: message(locale, "shell.skipToContent") })).toBeAttached();
       // The member is not sent to sign in.

@@ -8,7 +8,7 @@ import { message, type Locale } from "./catalog.ts";
 
 /** The heading of the home page, which shows while the dashboard is still loading. */
 export function homeHeading(page: Page, locale: Locale, name: string) {
-  return page.getByRole("heading", { level: 1, name: message(locale, "home.title", { name }) });
+  return page.getByRole("heading", { level: 1, name: message(locale, "home.title", { name }), exact: true });
 }
 
 /** The counts of the home page, which show once the dashboard has answered. */
