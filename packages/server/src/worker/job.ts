@@ -36,6 +36,11 @@ export const DEFAULT_RETRY_POLICY: ResolvedRetryPolicy = {
 export interface JobDefinition<Payload extends JobPayload = JobPayload> {
   readonly name: string;
   readonly retry: ResolvedRetryPolicy;
+  /**
+   * Whether the queue keeps one waiting job for each key a job is queued with (`QueuedJob.singletonKey` of `@slugbase/db`): the queue is created
+   * with the `short` policy of pg-boss, and a job queued with the key of a job that waits is dropped. A job that is running does not hold its key.
+   */
+  readonly dedupe: boolean;
   /** The payload as the schema accepts it; throws when it does not. */
   parse(payload: unknown): Payload;
   /** Validates the payload, then runs the handler. Every job is idempotent (doc 01 section 3 rule 4). */
@@ -50,6 +55,8 @@ export interface DefineJobOptions<Shape extends z.ZodRawShape> {
   /** Must leave the same state whether it runs once or several times for one payload. */
   readonly handle: (payload: z.infer<z.ZodObject<Shape>>, context: ModuleContext) => Promise<void>;
   readonly retry?: RetryPolicy;
+  /** The queue keeps one waiting job for each singleton key; see `JobDefinition.dedupe`. Fixed when the queue is created. */
+  readonly dedupe?: boolean;
 }
 
 /** A schedule: the named job runs on the cron expression, once across all workers. */
@@ -142,6 +149,7 @@ export function defineJob<const Shape extends z.ZodRawShape>(options: DefineJobO
   return {
     name,
     retry,
+    dedupe: options.dedupe ?? false,
     parse,
     handle: async (payload, context) => options.handle(parse(payload), context),
   };

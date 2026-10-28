@@ -242,6 +242,7 @@ export function defineJob<const Shape extends z.ZodRawShape>(options: DefineJobO
 
 // @public (undocumented)
 export interface DefineJobOptions<Shape extends z.ZodRawShape> {
+    readonly dedupe?: boolean;
     readonly handle: (payload: z.infer<z.ZodObject<Shape>>, context: ModuleContext) => Promise<void>;
     readonly name: string;
     readonly payload: z.ZodObject<Shape>;
@@ -536,6 +537,7 @@ export function isProcessType(value: string): value is ProcessType;
 
 // @public
 export interface JobDefinition<Payload extends JobPayload = JobPayload> {
+    readonly dedupe: boolean;
     handle(payload: unknown, context: ModuleContext): Promise<void>;
     // (undocumented)
     readonly name: string;

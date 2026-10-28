@@ -15,7 +15,7 @@ import { assertApplicationRole } from "../migrate/role-guard.ts";
 import { createMetrics, startMetricsListener, type MetricsListener, type QueueSnapshot } from "../metrics/index.ts";
 import type { JobDefinition, JobPayload, ScheduleDefinition } from "./job.ts";
 import { createBuiltInModules } from "./built-in.ts";
-import { queueSettings } from "./queues.ts";
+import { queueSettings, queueUpdates } from "./queues.ts";
 
 export const DEFAULT_WORKER_POOL_SIZE = 5;
 
@@ -196,11 +196,10 @@ export function createWorker(options: CreateWorkerOptions): Worker {
       try {
         await boss.start();
         for (const job of composition.jobs) {
-          const queue = queueSettings(job);
           // `migrate` already created the queues of the built-in and the modules' jobs. createQueue leaves an
-          // existing queue alone, so a changed policy is applied by updateQueue.
-          await boss.createQueue(job.name, queue);
-          await boss.updateQueue(job.name, queue);
+          // existing queue alone, so a changed retry policy is applied by updateQueue, which cannot change the queue's pg-boss policy.
+          await boss.createQueue(job.name, queueSettings(job));
+          await boss.updateQueue(job.name, queueUpdates(job));
           await boss.work<JobPayload>(
             job.name,
             { batchSize: 1, ...(options.pollingIntervalSeconds === undefined ? {} : { pollingIntervalSeconds: options.pollingIntervalSeconds }) },

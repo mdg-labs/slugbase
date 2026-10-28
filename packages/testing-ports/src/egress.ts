@@ -59,6 +59,7 @@ export interface FakeEgressRequest {
   readonly body?: Uint8Array;
   readonly timeoutMs: number;
   readonly maxBytes: number;
+  readonly truncateAtMaxBytes?: boolean;
   readonly acceptContentTypes?: readonly string[];
 }
 
@@ -174,7 +175,7 @@ function withoutFragment(url: ParsedUrl): string {
  * scheme other than http and https, with credentials, or an IP literal that is
  * not a public address is refused), the content-type allowlist is applied to
  * the final response before its body, and a body larger than the request's
- * `maxBytes` is refused. A route can also time out. It refuses the requests the
+ * `maxBytes` is refused, or cut to `maxBytes` when the request sets `truncateAtMaxBytes`. A route can also time out. It refuses the requests the
  * port refuses before any connection: invalid limits (`RangeError`) and a
  * request body over the cap (`egress_too_large`).
  */
@@ -254,14 +255,14 @@ export class FakeEgress {
         throw new FakeEgressError("egress_failed");
       }
       const body = route.body ?? new Uint8Array();
-      if (method !== "HEAD" && body.length > maxBytes) {
+      if (method !== "HEAD" && body.length > maxBytes && request.truncateAtMaxBytes !== true) {
         throw new FakeEgressError("egress_too_large");
       }
       return {
         url: url.href,
         status: route.status ?? 200,
         contentType: route.contentType,
-        body: method === "HEAD" ? new Uint8Array() : body,
+        body: method === "HEAD" ? new Uint8Array() : body.subarray(0, maxBytes),
       };
     }
   }

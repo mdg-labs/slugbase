@@ -18,6 +18,11 @@ export interface QueuedJob {
   /** The dotted name of the job, such as `mail.send`; `migrate` creates the queue under it. */
   readonly queue: string;
   readonly data: QueuedJobData;
+  /**
+   * Names the job within its queue so that a second job with the same key is dropped, not queued, while the first still waits to run. It needs
+   * a queue created with the `short` policy, which `migrate` does for a job defined with `dedupe`. A job without a key is always queued.
+   */
+  readonly singletonKey?: string;
 }
 
 interface InsertedRow {
@@ -34,12 +39,17 @@ export class QueueMissingError extends Error {
   }
 }
 
-/** Inserts the job in the open transaction `tx`; it is visible to the worker when that transaction commits, and never otherwise. */
+/**
+ * Inserts the job in the open transaction `tx`; it is visible to the worker when that transaction commits, and never otherwise. A job with a
+ * `singletonKey` that a waiting job of the queue holds is dropped and the call returns normally.
+ */
 export async function enqueueInTransaction(tx: postgres.TransactionSql, job: QueuedJob): Promise<void> {
   if (!UUID.test(job.id)) {
     throw new RangeError("the id of a job must be a UUID");
   }
-  const rows = await tx<InsertedRow[]>`
+  const rows =
+    job.singletonKey === undefined
+      ? await tx<InsertedRow[]>`
     INSERT INTO pgboss.job (
       id, name, data, keep_until, expire_seconds, deletion_seconds,
       retry_limit, retry_delay, retry_backoff, retry_delay_max, policy, dead_letter, heartbeat_seconds)
@@ -48,8 +58,24 @@ export async function enqueueInTransaction(tx: postgres.TransactionSql, job: Que
            q.retry_limit, q.retry_delay, q.retry_backoff, q.retry_delay_max, q.policy, q.dead_letter, q.heartbeat_seconds
     FROM pgboss.queue q
     WHERE q.name = ${job.queue}
+    RETURNING id`
+      : await tx<InsertedRow[]>`
+    INSERT INTO pgboss.job (
+      id, name, data, singleton_key, keep_until, expire_seconds, deletion_seconds,
+      retry_limit, retry_delay, retry_backoff, retry_delay_max, policy, dead_letter, heartbeat_seconds)
+    SELECT ${job.id}::uuid, q.name, ${JSON.stringify(job.data)}::text::jsonb, ${job.singletonKey}::text,
+           now() + q.retention_seconds * interval '1 second', q.expire_seconds, q.deletion_seconds,
+           q.retry_limit, q.retry_delay, q.retry_backoff, q.retry_delay_max, q.policy, q.dead_letter, q.heartbeat_seconds
+    FROM pgboss.queue q
+    WHERE q.name = ${job.queue}
+    ON CONFLICT DO NOTHING
     RETURNING id`;
-  if (rows.length !== 1) {
+  if (rows.length === 1) {
+    return;
+  }
+  // A job dropped for the key a waiting job holds is not a missing queue.
+  const present = job.singletonKey === undefined ? [] : await tx<{ present: number }[]>`SELECT 1 AS present FROM pgboss.queue WHERE name = ${job.queue}`;
+  if (present.length !== 1) {
     throw new QueueMissingError(job.queue);
   }
 }
@@ -62,7 +88,10 @@ export async function enqueueInTenantTransaction(tx: TenantTx, job: QueuedJob): 
   if (!UUID.test(job.id)) {
     throw new RangeError("the id of a job must be a UUID");
   }
-  const rows = await tenantHandle(tx).execute<InsertedRow & Record<string, unknown>>(sql`
+  const handle = tenantHandle(tx);
+  const rows =
+    job.singletonKey === undefined
+      ? await handle.execute<InsertedRow & Record<string, unknown>>(sql`
     INSERT INTO pgboss.job (
       id, name, data, keep_until, expire_seconds, deletion_seconds,
       retry_limit, retry_delay, retry_backoff, retry_delay_max, policy, dead_letter, heartbeat_seconds)
@@ -71,8 +100,24 @@ export async function enqueueInTenantTransaction(tx: TenantTx, job: QueuedJob): 
            q.retry_limit, q.retry_delay, q.retry_backoff, q.retry_delay_max, q.policy, q.dead_letter, q.heartbeat_seconds
     FROM pgboss.queue q
     WHERE q.name = ${job.queue}
+    RETURNING id`)
+      : await handle.execute<InsertedRow & Record<string, unknown>>(sql`
+    INSERT INTO pgboss.job (
+      id, name, data, singleton_key, keep_until, expire_seconds, deletion_seconds,
+      retry_limit, retry_delay, retry_backoff, retry_delay_max, policy, dead_letter, heartbeat_seconds)
+    SELECT ${job.id}::uuid, q.name, ${JSON.stringify(job.data)}::text::jsonb, ${job.singletonKey}::text,
+           now() + q.retention_seconds * interval '1 second', q.expire_seconds, q.deletion_seconds,
+           q.retry_limit, q.retry_delay, q.retry_backoff, q.retry_delay_max, q.policy, q.dead_letter, q.heartbeat_seconds
+    FROM pgboss.queue q
+    WHERE q.name = ${job.queue}
+    ON CONFLICT DO NOTHING
     RETURNING id`);
-  if (rows.length !== 1) {
+  if (rows.length === 1) {
+    return;
+  }
+  // A job dropped for the key a waiting job holds is not a missing queue.
+  const present = job.singletonKey === undefined ? [] : await handle.execute(sql`SELECT 1 FROM pgboss.queue WHERE name = ${job.queue}`);
+  if (present.length !== 1) {
     throw new QueueMissingError(job.queue);
   }
 }

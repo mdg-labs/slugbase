@@ -17,5 +17,7 @@ describe("the built-in jobs", () => {
 
     expect(builtInJobs().map((job) => job.name).sort()).toEqual(worker.jobs.map((job) => job.name).sort());
     expect(builtInJobs().map((job) => job.name)).toContain("mail.send");
+    expect(builtInJobs().map((job) => job.name)).toContain("bookmark.fetchMetadata");
+    expect(worker.jobs.map((job) => job.name)).toContain("bookmark.fetchMetadata");
   });
 });

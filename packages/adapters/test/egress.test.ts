@@ -723,6 +723,103 @@ describe("limits", () => {
     });
   });
 
+  describe("truncateAtMaxBytes", () => {
+    const html = "<title>x</title>".padEnd(5_000, "a");
+
+    it("answers with the first bytes of a body that declares more than the maximum, where the same request without it is refused", async () => {
+      const server = await serve((_request, socket) => {
+        respond(socket, 200, { "content-type": "text/html" }, html);
+      });
+      const port = open(scripted(["127.0.0.1"]).resolve);
+      const url = `http://cut.example.test:${String(server.port)}/`;
+      expect(await rejection(port, get(url, { maxBytes: 100 }))).toBeInstanceOf(EgressTooLarge);
+
+      const response = await port.request(get(url, { maxBytes: 100, truncateAtMaxBytes: true }));
+
+      expect(response.status).toBe(200);
+      expect(new TextDecoder().decode(response.body)).toBe(html.slice(0, 100));
+    });
+
+    it("stops reading a stream that never ends and closes the connection", async () => {
+      let closedByClient = false;
+      const server = await serve((_request, socket) => {
+        socket.write("HTTP/1.1 200 OK\r\ncontent-type: text/html\r\ntransfer-encoding: chunked\r\n\r\n");
+        const chunk = `${(1024).toString(16)}\r\n${"x".repeat(1024)}\r\n`;
+        const timer = setInterval(() => {
+          if (socket.destroyed) {
+            clearInterval(timer);
+            return;
+          }
+          socket.write(chunk);
+        }, 5);
+        socket.on("close", () => {
+          closedByClient = true;
+          clearInterval(timer);
+        });
+      });
+
+      const response = await open(scripted(["127.0.0.1"]).resolve).request(
+        get(`http://endless.example.test:${String(server.port)}/`, { maxBytes: 4_000, truncateAtMaxBytes: true }),
+      );
+
+      expect(response.body).toHaveLength(4_000);
+      await vi.waitFor(() => {
+        expect(closedByClient).toBe(true);
+      });
+    });
+
+    it("cuts a gzip bomb at the maximum instead of refusing it", async () => {
+      const payload = gzipSync(Buffer.alloc(8 * 1024 * 1024, "y"));
+      expect(payload.length).toBeLessThan(100_000);
+      const server = await serve((_request, socket) => {
+        respond(socket, 200, { "content-encoding": "gzip", "content-type": "text/html" }, payload);
+      });
+
+      const response = await open(scripted(["127.0.0.1"]).resolve).request(
+        get(`http://bomb.example.test:${String(server.port)}/`, { maxBytes: 10_000, truncateAtMaxBytes: true }),
+      );
+
+      expect(response.body).toEqual(new Uint8Array(10_000).fill("y".charCodeAt(0)));
+    });
+
+    it("returns a body that fits in full", async () => {
+      const server = await serve((_request, socket) => {
+        respond(socket, 200, { "content-type": "text/html" }, "short");
+      });
+
+      const response = await open(scripted(["127.0.0.1"]).resolve).request(
+        get(`http://fits.example.test:${String(server.port)}/`, { maxBytes: 100, truncateAtMaxBytes: true }),
+      );
+
+      expect(new TextDecoder().decode(response.body)).toBe("short");
+    });
+
+    it("still refuses a content type outside the list, before any body is read", async () => {
+      const server = await serve((_request, socket) => {
+        respond(socket, 200, { "content-type": "application/pdf" }, html);
+      });
+
+      const error = await rejection(
+        open(scripted(["127.0.0.1"]).resolve),
+        get(`http://pdf.example.test:${String(server.port)}/`, { maxBytes: 100, truncateAtMaxBytes: true, acceptContentTypes: ["text/html"] }),
+      );
+
+      expect(error).toBeInstanceOf(EgressError);
+      expect(error).not.toBeInstanceOf(EgressTooLarge);
+    });
+
+    it("still refuses a non-public address", async () => {
+      const server = await serve(ok);
+      const error = await rejection(
+        new HttpEgress({ nodeEnv: "test", resolve: scripted(["10.0.0.5"]).resolve }),
+        get(`http://internal.example.test:${String(server.port)}/`, { truncateAtMaxBytes: true }),
+      );
+
+      expect(error).toBeInstanceOf(EgressBlocked);
+      expect(server.connections()).toBe(0);
+    });
+  });
+
   it("times out a server that never answers", async () => {
     const server = await serve(() => undefined);
     const started = Date.now();

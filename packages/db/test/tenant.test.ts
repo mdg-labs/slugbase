@@ -110,6 +110,7 @@ describe("the package entry point", () => {
         "migrationLevel",
         "searchRepository",
         "tagRepository",
+        "urlMetadataRepository",
         "workspacePurgeOrder",
         "workspaceRepository",
       ].sort(),

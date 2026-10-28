@@ -10,6 +10,7 @@ import type { ChainContext, RouteBinding } from "../../http/chain.ts";
 import { ProblemError } from "../../http/problem.ts";
 import type { RequestTenant } from "../../http/tenant.ts";
 import { networkPrefixOf } from "../../http/trusted-proxy.ts";
+import { queueFetchMetadata } from "../../worker/jobs/fetch-metadata.ts";
 import { route } from "../register.ts";
 import { acceptedVersions, entityTagOf } from "../workspaces/if-match.ts";
 
@@ -139,7 +140,21 @@ function slugTaken(slug: string | null | undefined): ProblemError {
   return new ProblemError("slug_taken", `You already use the slug "${normalizeSlug(slug ?? "")}" in this workspace.`, { errors: [{ path: "slug", code: "slug_taken" }] });
 }
 
-/** The core store over the repository of the open transaction; the events become jobs of the same transaction. */
+/**
+ * The job that fetches the page of a bookmark of the transaction's workspace, which the account of the transaction owns, for the transaction
+ * that sets the bookmark's address; it is queued with the write and never otherwise.
+ */
+function metadataJobOf(tx: TenantTx, bookmarkId: string, urlCanonical: string) {
+  if (tx.workspaceId === undefined) {
+    throw new Error("a bookmark is written in a tenant transaction opened with a workspace");
+  }
+  return queueFetchMetadata(uuidv7(), { bookmarkId, workspaceId: tx.workspaceId, accountId: tx.accountId }, urlCanonical);
+}
+
+/**
+ * The core store over the repository of the open transaction; the events become jobs of the same transaction, and so does the fetch of the
+ * page's metadata (doc 02 section 5.4): when a bookmark is created, and when an update changes its address.
+ */
 function storeOf(tx: TenantTx): BookmarkStore {
   const repository = bookmarkRepository(tx);
   return {
@@ -149,11 +164,15 @@ function storeOf(tx: TenantTx): BookmarkStore {
         folderIds,
         tags,
         ceiling: ceiling === "unlimited" ? null : ceiling,
-        jobs: events.map((event) => queueDomainEvent(event.eventId, event.name, event.payload)),
+        jobs: [...events.map((event) => queueDomainEvent(event.eventId, event.name, event.payload)), metadataJobOf(tx, bookmark.id, bookmark.urlCanonical)],
       });
     },
     find: (bookmarkId) => repository.find(bookmarkId),
-    update: (request) => repository.update(request),
+    update: (request) =>
+      repository.update({
+        ...request,
+        jobsOnUrlChange: request.changes.url === undefined ? [] : [metadataJobOf(tx, request.bookmarkId, request.changes.url.canonical)],
+      }),
     remove: (request) => repository.remove(request),
   };
 }

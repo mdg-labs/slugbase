@@ -143,6 +143,21 @@ async function seedPreferenceRows(database: TestDatabase, fixture: TenantFixture
   });
 }
 
+/**
+ * The cached page metadata the RLS-only mode runs against: the workspace's own, so A holds an `ok` result (the update of the registry has no predicate and
+ * sets the title of every result it can see) and B holds one, which the methods must not reach.
+ */
+async function seedMetadataRows(database: TestDatabase, fixture: TenantFixture): Promise<void> {
+  await database.owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    await tx`
+      INSERT INTO url_metadata (workspace_id, url_canonical, status, fetched_at, expires_at)
+      VALUES (${fixture.a.id}, 'https://example.com/matrix-seed', 'ok', now(), now() + interval '7 days'),
+             (${fixture.b.id}, 'https://example.com/matrix-seed', 'ok', now(), now() + interval '7 days')
+      ON CONFLICT DO NOTHING`;
+  });
+}
+
 const database = useTestDatabase();
 let scoped: Probe;
 let permissive: Probe;
@@ -235,6 +250,7 @@ describe("the matrix over the committed contract and the repository registry", (
     await seedLinkRows(database(), scoped.fixture);
     await seedTagLinkRows(database(), scoped.fixture);
     await seedPreferenceRows(database(), scoped.fixture);
+    await seedMetadataRows(database(), scoped.fixture);
     const methods = listRepositoryMethods();
     const report = await runRlsOnlyMatrix({ tenant: database().tenant, fixture: { ...scoped.fixture, instanceAdmin: PROBE_INSTANCE_ADMIN }, methods });
     expect(report.methods).toBe(methods.length);
@@ -248,6 +264,8 @@ describe("the matrix over the committed contract and the repository registry", (
     expect(methods.filter((entry) => entry.repository === "bookmark_tags").map((entry) => entry.method)).toEqual(["select", "insert", "delete"]);
     // the repository of the remembered choices is in the registry with the four methods the application role may run on the table: it reads, inserts the columns of a choice, updates the bookmark and deletes, and the policy keeps it to its member's own
     expect(methods.filter((entry) => entry.repository === "slug_preferences").map((entry) => entry.method)).toEqual(["select", "insert", "update", "delete"]);
+    // the repository of the cached page metadata is in the registry with the three methods the application role may run on the table: it reads, inserts a result and updates the columns of one, and deletes none
+    expect(methods.filter((entry) => entry.repository === "url_metadata").map((entry) => entry.method)).toEqual(["select", "insert", "update"]);
     // the bookmarks repository is in the registry with the three methods the application role may run on the table, and no other: a delete is a system operation
     expect(methods.filter((entry) => entry.repository === "bookmarks").map((entry) => entry.method)).toEqual(["select", "insert", "update"]);
     // every method ran once more as the instance admin of the fixture, which belongs to neither workspace

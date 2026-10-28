@@ -44,11 +44,14 @@ export type { EntitlementRepository, EntitlementUsage } from "./repositories/ent
 export { instanceRepository } from "./repositories/instance.ts";
 export type { InstanceCounts, InstanceRepository, JobHealth } from "./repositories/instance.ts";
 export { bookmarkArchiveTransaction, bookmarkRepository, isBookmarkSlugTaken } from "./repositories/bookmarks.ts";
-export type { BookmarkCreation, BookmarkCreationResult, BookmarkRepository } from "./repositories/bookmarks.ts";
+export type { BookmarkCreation, BookmarkCreationResult, BookmarkRepository, BookmarkUpdateJobs } from "./repositories/bookmarks.ts";
 export { isTagNameTaken, tagRepository } from "./repositories/tags.ts";
 export type { TagRepository } from "./repositories/tags.ts";
 export { folderRepository, isFolderNameTaken } from "./repositories/folders.ts";
 export { goRepository } from "./repositories/go.ts";
+export { urlMetadataRepository } from "./repositories/url-metadata.ts";
+export type { UrlMetadataFields, UrlMetadataRecord, UrlMetadataRepository, UrlMetadataResult } from "./repositories/url-metadata.ts";
+export type { UrlMetadataStatus } from "./schema/url-metadata.ts";
 export { dashboardRepository } from "./repositories/dashboard.ts";
 export type { DashboardRepository } from "./repositories/dashboard.ts";
 export { searchRepository } from "./repositories/search.ts";

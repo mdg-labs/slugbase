@@ -141,6 +141,9 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
  * A remembered choice is its member's own in the workspace: the `slug_preferences` sample names the owner of A and a bookmark (`...a0b2`) of that owner's in A, and its update points
  * the preference at another bookmark of the owner's (`...a0b3`); the fixture must hold a preference of the owner of A in A, which the update touches, and one of the owner of B in B, which the
  * methods must not reach. The policy names the account of the transaction too, so the owner of A sees its own preferences only.
+ * The cache of page metadata is the workspace's: the `url_metadata` repository has the three methods the application role may run on the table (it reads, inserts a row and
+ * updates the columns of a result, and deletes none), the sample inserts a `failed` result, which holds no field, and its update sets the title, which only an `ok` row may hold, so
+ * the fixture must hold an `ok` result in A for the update to touch, and one in B, which the methods must not reach.
  */
 export const REPOSITORY_SAMPLES: RepositorySamples = {
   bookmarks: {
@@ -170,6 +173,10 @@ export const REPOSITORY_SAMPLES: RepositorySamples = {
   slug_preferences: {
     values: (fixture) => ({ accountId: fixture.a.owner.accountId, slug: "matrix-pref", bookmarkId: "0192f3a0-2222-7000-8000-00000000a0b2" }),
     set: { bookmarkId: "0192f3a0-2222-7000-8000-00000000a0b3" },
+  },
+  url_metadata: {
+    values: { urlCanonical: "https://example.com/matrix-metadata", status: "failed", fetchedAt: new Date("2026-01-01T00:00:00Z"), expiresAt: new Date("2026-01-08T00:00:00Z") },
+    set: { title: "matrix-metadata-updated" },
   },
   tags: {
     values: (fixture) => ({ id: "0192f3a0-2222-7000-8000-00000000b00d", ownerId: fixture.a.owner.accountId, name: "matrix-tag-inserted" }),

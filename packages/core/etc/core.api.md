@@ -2128,6 +2128,7 @@ export interface EgressRequestBase {
     readonly headers?: Readonly<Record<string, string>>;
     readonly maxBytes: number;
     readonly timeoutMs: number;
+    readonly truncateAtMaxBytes?: boolean;
     // (undocumented)
     readonly url: string;
 }
@@ -4096,6 +4097,9 @@ export function isEntitlementKey(key: string): key is EntitlementKey;
 export function isInstanceAuditAction(value: unknown): value is InstanceAuditAction;
 
 // @public
+export function isMetadataContentType(contentType: string | undefined): boolean;
+
+// @public
 export function issueInstanceResetLink(input: InstanceRecoveryDependencies, ask: InstanceResetLinkAsk): Promise<InstanceResetLinkOutcome>;
 
 // @public
@@ -4288,6 +4292,27 @@ export interface MembershipEndStore extends MemberRoleStore {
 
 // @public (undocumented)
 export function mergeTag(input: TagMergeDependencies, ask: TagMergeAsk): Promise<TagMergeResult>;
+
+// @public
+export const METADATA_CANONICAL_URL_MAX_LENGTH = 2048;
+
+// @public
+export const METADATA_CONTENT_TYPES: readonly string[];
+
+// @public
+export const METADATA_DESCRIPTION_MAX_LENGTH = 1000;
+
+// @public
+export const METADATA_HTML_MAX_BYTES: number;
+
+// @public
+export const METADATA_LANGUAGE_MAX_LENGTH = 35;
+
+// @public
+export const METADATA_SITE_NAME_MAX_LENGTH = 100;
+
+// @public
+export const METADATA_TITLE_MAX_LENGTH = 300;
 
 // @public (undocumented)
 export function navigateToSlug(input: GoNavigateDependencies, ask: GoNavigateAsk): Promise<GoNavigation>;
@@ -4502,6 +4527,26 @@ export type OwnershipTransferOutcome =
 };
 
 // @public
+export interface PageMetadata {
+    readonly canonicalUrl: string | null;
+    // (undocumented)
+    readonly description: string | null;
+    readonly language: string | null;
+    // (undocumented)
+    readonly siteName: string | null;
+    // (undocumented)
+    readonly title: string | null;
+}
+
+// @public (undocumented)
+export interface PageMetadataInput {
+    // (undocumented)
+    readonly body: Uint8Array;
+    readonly contentType: string | undefined;
+    readonly url: string;
+}
+
+// @public
 export function parseAccountEntitlements(answer: unknown): AccountEntitlementValues;
 
 // @public
@@ -4509,6 +4554,9 @@ export function parseAuditMetadata<Name extends AuditAction>(name: Name, value: 
 
 // @public
 export function parseDomainEventPayload<Name extends DomainEventName>(name: Name, value: unknown): DomainEventPayload<Name>;
+
+// @public
+export function parsePageMetadata(input: PageMetadataInput): PageMetadata | undefined;
 
 // @public
 export function parseSlug(input: string): string | undefined;

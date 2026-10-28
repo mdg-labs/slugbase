@@ -41,6 +41,8 @@ export interface FakeEgressRequest {
     // (undocumented)
     readonly timeoutMs: number;
     // (undocumented)
+    readonly truncateAtMaxBytes?: boolean;
+    // (undocumented)
     readonly url: string;
 }
 

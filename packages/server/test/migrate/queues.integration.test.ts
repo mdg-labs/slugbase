@@ -24,11 +24,12 @@ interface QueueRow {
   retry_backoff: boolean;
   retry_delay_max: number | null;
   deletion_seconds: number;
+  policy: string;
 }
 
 async function queues(): Promise<QueueRow[]> {
   return database().owner<QueueRow[]>`
-    SELECT name, retry_limit, retry_delay, retry_backoff, retry_delay_max, deletion_seconds
+    SELECT name, retry_limit, retry_delay, retry_backoff, retry_delay_max, deletion_seconds, policy
       FROM pgboss.queue ORDER BY name`;
 }
 
@@ -48,7 +49,7 @@ describe("the job queues after migrate", () => {
     const found = await queues();
     const jobs = builtInJobs();
     expect(found.map((queue) => queue.name)).toEqual(jobs.map((job) => job.name).sort());
-    expect(found.map((queue) => queue.name)).toEqual(expect.arrayContaining(["mail.send", "rateLimit.purgeIdle", "retention.purge"]));
+    expect(found.map((queue) => queue.name)).toEqual(expect.arrayContaining(["mail.send", "rateLimit.purgeIdle", "retention.purge", "bookmark.fetchMetadata"]));
     for (const job of jobs) {
       const settings = queueSettings(job);
       expect(found.find((queue) => queue.name === job.name)).toEqual({
@@ -58,6 +59,7 @@ describe("the job queues after migrate", () => {
         retry_backoff: settings.retryBackoff,
         retry_delay_max: settings.retryDelayMax ?? null,
         deletion_seconds: settings.deleteAfterSeconds,
+        policy: settings.policy ?? "standard",
       });
     }
     // The values themselves, so a drift of both sides together is seen: three retries, backoff from ten seconds, finished jobs kept 30 days.
@@ -67,6 +69,15 @@ describe("the job queues after migrate", () => {
       retry_backoff: true,
       deletion_seconds: 30 * 24 * 60 * 60,
     });
+  });
+
+  it("gives the queue of a job that keeps one waiting job for each key the short policy of pg-boss, and every other queue the standard one", async () => {
+    await runMigrations({ url: migratorUrl() });
+
+    const found = await queues();
+    expect(found.filter((queue) => queue.policy === "short").map((queue) => queue.name)).toEqual(["bookmark.fetchMetadata"]);
+    expect(found.filter((queue) => queue.policy !== "short").every((queue) => queue.policy === "standard")).toBe(true);
+    expect(builtInJobs().filter((job) => job.dedupe).map((job) => job.name)).toEqual(["bookmark.fetchMetadata"]);
   });
 
   it("creates the queues of the jobs it is given, with their own retry policy", async () => {

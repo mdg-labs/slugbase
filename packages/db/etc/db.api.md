@@ -381,11 +381,16 @@ export interface BookmarkRepository {
         readonly tagIds: readonly string[];
         readonly mode: BookmarkTaggingMode;
     }): Promise<BookmarkLinkingResult>;
-    update(request: BookmarkUpdateRequest): Promise<BookmarkUpdateResult>;
+    update(request: BookmarkUpdateRequest & BookmarkUpdateJobs): Promise<BookmarkUpdateResult>;
 }
 
 // @public (undocumented)
 export function bookmarkRepository(tx: TenantTx): BookmarkRepository;
+
+// @public
+export interface BookmarkUpdateJobs {
+    readonly jobsOnUrlChange?: readonly QueuedJob[];
+}
 
 // @public
 export const CE_CHAIN: MigrationChain;
@@ -1207,6 +1212,7 @@ export interface QueuedJob {
     readonly data: QueuedJobData;
     readonly id: string;
     readonly queue: string;
+    readonly singletonKey?: string;
 }
 
 // @public
@@ -1479,6 +1485,51 @@ export interface UnusedBackupCode {
 export type UpdateValues<T extends WorkspaceTable> = Partial<Omit<InferInsertModel<T>, "workspaceId">> & {
     workspaceId?: string;
 };
+
+// @public
+export interface UrlMetadataFields {
+    readonly canonicalUrl: string | null;
+    // (undocumented)
+    readonly description: string | null;
+    // (undocumented)
+    readonly language: string | null;
+    // (undocumented)
+    readonly siteName: string | null;
+    // (undocumented)
+    readonly title: string | null;
+}
+
+// @public (undocumented)
+export interface UrlMetadataRecord extends UrlMetadataFields {
+    // (undocumented)
+    readonly expiresAt: Date;
+    // (undocumented)
+    readonly fetchedAt: Date;
+    // (undocumented)
+    readonly status: UrlMetadataStatus;
+    // (undocumented)
+    readonly urlCanonical: string;
+}
+
+// @public (undocumented)
+export interface UrlMetadataRepository {
+    bookmarkUrl(bookmarkId: string): Promise<string | undefined>;
+    current(urlCanonical: string): Promise<UrlMetadataRecord | undefined>;
+    store(urlCanonical: string, result: UrlMetadataResult): Promise<void>;
+}
+
+// @public (undocumented)
+export function urlMetadataRepository(tx: TenantTx): UrlMetadataRepository;
+
+// @public
+export type UrlMetadataResult = ({
+    readonly status: "ok";
+} & UrlMetadataFields) | {
+    readonly status: "failed" | "blocked";
+};
+
+// @public
+export type UrlMetadataStatus = "ok" | "failed" | "blocked";
 
 // @public
 export const USAGE_FLUSH_BATCH_SIZE = 10000;

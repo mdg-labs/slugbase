@@ -1,6 +1,7 @@
 import type { ModuleContribution, ServerModule } from "../create-server.ts";
 import { eventJobs } from "../events/jobs.ts";
 import type { JobDefinition } from "./job.ts";
+import { fetchMetadataJob } from "./jobs/fetch-metadata.ts";
 import { invitationSendJob } from "./jobs/invitation-mail.ts";
 import { mailJobs } from "./jobs/mail-send.ts";
 import { workspaceDeleteJob } from "./jobs/workspace-delete.ts";
@@ -19,6 +20,8 @@ interface BuiltIn {
 const BUILT_IN: readonly BuiltIn[] = [
   { name: "@slugbase/server/maintenance", contribute: maintenanceContribution },
   { name: "@slugbase/server/mail", contribute: () => ({ jobs: [...mailJobs, invitationSendJob] }) },
+  // Fetches and caches the metadata of the page a bookmark points at (doc 02 section 5.4).
+  { name: "@slugbase/server/bookmark-metadata", contribute: () => ({ jobs: [fetchMetadataJob] }) },
   // Removes the rows of a workspace that was marked as being deleted (doc 05 section 7.2).
   { name: "@slugbase/server/workspace-deletion", contribute: (stores) => ({ jobs: [workspaceDeleteJob(stores.workspaceDeletion)] }) },
   // One job per domain event, which hands the event to the subscribers of the composed modules.
