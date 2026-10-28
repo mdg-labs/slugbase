@@ -130,7 +130,8 @@ export function isMetadataContentType(contentType: string | undefined): boolean 
 }
 
 const CHARSET_PARAMETER = /;\s*charset\s*=\s*"?([A-Za-z0-9_:.-]{1,40})/i;
-const META_CHARSET = /<meta[^>]{0,300}?charset\s*=\s*["']?\s*([A-Za-z0-9_:.-]{1,40})/i;
+// One way to match each run of whitespace: the space after a quote is part of the optional quote, so no two `\s*` meet.
+const META_CHARSET = /<meta[^>]{0,300}?charset\s*=\s*(?:["']\s*)?([A-Za-z0-9_:.-]{1,40})/i;
 const CHARSET_SNIFF_BYTES = 2048;
 
 /** The text of the body in the character set its response names, or the first `<meta>` that names one, and UTF-8 otherwise. */

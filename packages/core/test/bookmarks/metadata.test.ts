@@ -143,6 +143,9 @@ describe("parsePageMetadata, what a page says about itself", () => {
     expect(parse(latin1, "text/html; charset=iso-8859-1").title).toBe("äö");
     expect(parse(Uint8Array.from([...new TextEncoder().encode('<meta charset="windows-1252">'), ...latin1]), "text/html").title).toBe("äö");
     expect(parse(latin1, "text/html; charset=no-such-set").title).toBe("��");
+    for (const tag of ["<meta charset=windows-1252>", "<meta charset = \" windows-1252\">", "<meta charset=\t'\twindows-1252'>", '<meta http-equiv="Content-Type" content="text/html; charset=windows-1252">']) {
+      expect(parse(Uint8Array.from([...new TextEncoder().encode(tag), ...latin1]), "text/html").title).toBe("äö");
+    }
   });
 
   it("reads application/xhtml+xml and no other type", () => {
@@ -217,6 +220,7 @@ describe("pages that try to hurt the parser", () => {
     ["a million whitespace characters", () => `<title>${" \n\t".repeat(200_000)}x${" ".repeat(100_000)}</title>`],
     ["NUL bytes everywhere", () => `<ti\u0000tle>A\u0000B</ti\u0000tle>${"\u0000".repeat(300_000)}`],
     ["deeply nested svg", () => "<svg>".repeat(100_000) + "<title>Inner</title>"],
+    ["a charset meta tag followed by a run of whitespace", () => `<meta charset=${"\t".repeat(600_000)}`],
   ];
 
   it.each(hostile)("ends %s as bounded plain text, in time", (_name, build) => {
