@@ -1109,6 +1109,10 @@ export interface ComponentTypes {
         CreateTagRequest: {
             name: string;
         };
+        CreateTeamRequest: {
+            description?: string;
+            name: string;
+        };
         CreateWorkspaceRequest: {
             name: string;
         };
@@ -1530,6 +1534,9 @@ export interface ComponentTypes {
         RenameWorkspaceRequest: {
             name: string;
         };
+        ReplaceTeamMembersRequest: {
+            accountIds: string[];
+        };
         RequestEmailChangeRequest: {
             email: string;
         };
@@ -1617,6 +1624,34 @@ export interface ComponentTypes {
             total: number | null;
             totalAtLeast?: 10000;
         };
+        Team: {
+            createdAt: string;
+            description: string;
+            id: string;
+            memberCount: number;
+            name: string;
+            updatedAt: string;
+            version: number;
+        };
+        TeamList: {
+            items: ComponentTypes["schemas"]["Team"][];
+            nextCursor: string | null;
+        };
+        TeamMember: {
+            accountId: string;
+            displayName: string;
+            email: string;
+        };
+        TeamWithMembers: {
+            createdAt: string;
+            description: string;
+            id: string;
+            memberCount: number;
+            members: ComponentTypes["schemas"]["TeamMember"][];
+            name: string;
+            updatedAt: string;
+            version: number;
+        };
         TransferOwnershipRequest: {
             accountId: string;
             demoteSelf: boolean;
@@ -1661,6 +1696,10 @@ export interface ComponentTypes {
         };
         UpdateMemberRequest: {
             role: "owner" | "admin" | "member";
+        };
+        UpdateTeamRequest: {
+            description?: string;
+            name?: string;
         };
         UpdateWorkspaceSettingsRequest: {
             aiEnabled?: boolean;
@@ -2287,6 +2326,59 @@ export const CreateTagRequestSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
+export const createTeam: {
+    readonly method: "post";
+    readonly path: "/api/v1/teams";
+    readonly operationId: "createTeam";
+    readonly tag: "teams";
+    readonly summary: "Create a team";
+    readonly auth: "admin";
+    readonly rate: "write";
+    readonly entitlement: "teams.manage";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            name: z.ZodString;
+            description: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 201: JsonResponse<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        description: z.ZodString;
+        memberCount: z.ZodNumber;
+        version: z.ZodNumber;
+        createdAt: z.ZodISODateTime;
+        updatedAt: z.ZodISODateTime;
+        members: z.ZodArray<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        email: z.ZodString;
+        }, z.core.$strict>>;
+        }, z.core.$strict>, {
+        readonly ETag: {
+        readonly description: "The team's version as an entity tag, for example \"3\"; the If-Match of the next change";
+        readonly schema: z.ZodString;
+        };
+        }>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 409: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const CreateTeamRequestSchema: z.ZodObject<{
+    name: z.ZodString;
+    description: z.ZodOptional<z.ZodString>;
+}, z.core.$strict>;
+
+// @public (undocumented)
 export const createWorkspace: {
     readonly method: "post";
     readonly path: "/api/v1/workspaces";
@@ -2602,6 +2694,33 @@ export const deleteTag: {
     readonly auth: "member";
     readonly rate: "write";
     readonly scope: "write";
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 204: EmptyResponse<Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const deleteTeam: {
+    readonly method: "delete";
+    readonly path: "/api/v1/teams/{id}";
+    readonly operationId: "deleteTeam";
+    readonly tag: "teams";
+    readonly summary: "Delete a team";
+    readonly auth: "admin";
+    readonly rate: "write";
+    readonly entitlement: "teams.manage";
     readonly request: {
         readonly params: z.ZodObject<{
             id: z.ZodUUID;
@@ -3466,6 +3585,50 @@ export const getTagStats: {
         total: z.ZodNullable<z.ZodNumber>;
         totalAtLeast: z.ZodOptional<z.ZodLiteral<10000>>;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 401: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const getTeam: {
+    readonly method: "get";
+    readonly path: "/api/v1/teams/{id}";
+    readonly operationId: "getTeam";
+    readonly tag: "teams";
+    readonly summary: "Get a team with its members";
+    readonly auth: "member";
+    readonly rate: "read";
+    readonly scope: "read";
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        description: z.ZodString;
+        memberCount: z.ZodNumber;
+        version: z.ZodNumber;
+        createdAt: z.ZodISODateTime;
+        updatedAt: z.ZodISODateTime;
+        members: z.ZodArray<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        email: z.ZodString;
+        }, z.core.$strict>>;
+        }, z.core.$strict>, {
+        readonly ETag: {
+        readonly description: "The team's version as an entity tag, for example \"3\"; the If-Match of the next change";
+        readonly schema: z.ZodString;
+        };
+        }>;
+        readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;
         readonly 404: ProblemResponse;
         readonly 422: ProblemResponse;
@@ -4836,6 +4999,50 @@ export const ListTagsQuerySchema: z.ZodObject<{
         name: "name";
         count: "count";
     }>>;
+    limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+    cursor: z.ZodOptional<z.ZodString>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const listTeams: {
+    readonly method: "get";
+    readonly path: "/api/v1/teams";
+    readonly operationId: "listTeams";
+    readonly tag: "teams";
+    readonly summary: "List the teams";
+    readonly auth: "member";
+    readonly rate: "read";
+    readonly scope: "read";
+    readonly request: {
+        readonly query: z.ZodObject<{
+            limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
+            cursor: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        description: z.ZodString;
+        memberCount: z.ZodNumber;
+        version: z.ZodNumber;
+        createdAt: z.ZodISODateTime;
+        updatedAt: z.ZodISODateTime;
+        }, z.core.$strict>>;
+        nextCursor: z.ZodNullable<z.ZodString>;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const ListTeamsQuerySchema: z.ZodObject<{
     limit: z.ZodDefault<z.ZodCoercedNumber<unknown>>;
     cursor: z.ZodOptional<z.ZodString>;
 }, z.core.$strict>;
@@ -6808,6 +7015,96 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    createTeam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["CreateTeamRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    ETag: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["TeamWithMembers"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     createWorkspace: {
         parameters: {
             query?: never;
@@ -7354,6 +7651,83 @@ export interface OperationTypes {
     };
     // (undocumented)
     deleteTag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    deleteTeam: {
         parameters: {
             query?: never;
             header?: never;
@@ -8437,6 +8811,78 @@ export interface OperationTypes {
                 };
                 content: {
                     "application/json": ComponentTypes["schemas"]["TagStats"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    getTeam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    ETag: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["TeamWithMembers"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
                 };
             };
             401: {
@@ -9835,6 +10281,78 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    listTeams: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["TeamList"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     listWorkspaces: {
         parameters: {
             query?: never;
@@ -10794,6 +11312,90 @@ export interface OperationTypes {
                 };
             };
             412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    replaceTeamMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["ReplaceTeamMembersRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    ETag: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["TeamWithMembers"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12745,6 +13347,108 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    updateTeam: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["UpdateTeamRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    ETag: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["TeamWithMembers"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     updateWorkspaceSettings: {
         parameters: {
             query?: never;
@@ -14273,6 +14977,57 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/teams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["listTeams"];
+        put?: never;
+        post: OperationTypes["createTeam"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/teams/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["getTeam"];
+        put?: never;
+        post?: never;
+        delete: OperationTypes["deleteTeam"];
+        options?: never;
+        head?: never;
+        patch: OperationTypes["updateTeam"];
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/teams/{id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: OperationTypes["replaceTeamMembers"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/api/v1/workspace": {
         parameters: {
             query?: never;
@@ -15026,6 +15781,59 @@ export const renameWorkspace: {
 // @public (undocumented)
 export const RenameWorkspaceRequestSchema: z.ZodObject<{
     name: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const replaceTeamMembers: {
+    readonly method: "put";
+    readonly path: "/api/v1/teams/{id}/members";
+    readonly operationId: "replaceTeamMembers";
+    readonly tag: "teams";
+    readonly summary: "Replace the members of a team";
+    readonly auth: "admin";
+    readonly rate: "write";
+    readonly entitlement: "teams.manage";
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+        readonly body: z.ZodObject<{
+            accountIds: z.ZodArray<z.ZodUUID>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        description: z.ZodString;
+        memberCount: z.ZodNumber;
+        version: z.ZodNumber;
+        createdAt: z.ZodISODateTime;
+        updatedAt: z.ZodISODateTime;
+        members: z.ZodArray<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        email: z.ZodString;
+        }, z.core.$strict>>;
+        }, z.core.$strict>, {
+        readonly ETag: {
+        readonly description: "The team's version as an entity tag, for example \"3\"; the If-Match of the next change";
+        readonly schema: z.ZodString;
+        };
+        }>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const ReplaceTeamMembersRequestSchema: z.ZodObject<{
+    accountIds: z.ZodArray<z.ZodUUID>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -15864,6 +16672,82 @@ export const TagStatsSchema: z.ZodObject<{
     totalAtLeast: z.ZodOptional<z.ZodLiteral<10000>>;
 }, z.core.$strict>;
 
+// @public
+export const TEAM_CURSOR_MAX_LENGTH = 1024;
+
+// @public
+export const TEAM_DESCRIPTION_MAX_LENGTH = 280;
+
+// @public
+export const TEAM_LIST_DEFAULT_LIMIT = 50;
+
+// @public
+export const TEAM_LIST_MAX_LIMIT = 100;
+
+// @public
+export const TEAM_MEMBERS_MAX = 1000;
+
+// @public
+export const TEAM_NAME_MAX_LENGTH = 64;
+
+// @public
+export const TeamIfMatchHeaderSchema: z.ZodObject<{
+    "If-Match": z.ZodOptional<z.ZodString>;
+}, z.core.$strip>;
+
+// @public (undocumented)
+export const TeamListSchema: z.ZodObject<{
+    items: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        description: z.ZodString;
+        memberCount: z.ZodNumber;
+        version: z.ZodNumber;
+        createdAt: z.ZodISODateTime;
+        updatedAt: z.ZodISODateTime;
+    }, z.core.$strict>>;
+    nextCursor: z.ZodNullable<z.ZodString>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const TeamMemberSchema: z.ZodObject<{
+    accountId: z.ZodUUID;
+    displayName: z.ZodString;
+    email: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const TeamParamsSchema: z.ZodObject<{
+    id: z.ZodUUID;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const TeamSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    name: z.ZodString;
+    description: z.ZodString;
+    memberCount: z.ZodNumber;
+    version: z.ZodNumber;
+    createdAt: z.ZodISODateTime;
+    updatedAt: z.ZodISODateTime;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const TeamWithMembersSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    name: z.ZodString;
+    description: z.ZodString;
+    memberCount: z.ZodNumber;
+    version: z.ZodNumber;
+    createdAt: z.ZodISODateTime;
+    updatedAt: z.ZodISODateTime;
+    members: z.ZodArray<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        email: z.ZodString;
+    }, z.core.$strict>>;
+}, z.core.$strict>;
+
 // @public (undocumented)
 export const THEMES: readonly ["light", "dark", "system"];
 
@@ -16493,6 +17377,66 @@ export const UpdateMemberRequestSchema: z.ZodObject<{
         admin: "admin";
         owner: "owner";
     }>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const updateTeam: {
+    readonly method: "patch";
+    readonly path: "/api/v1/teams/{id}";
+    readonly operationId: "updateTeam";
+    readonly tag: "teams";
+    readonly summary: "Rename or describe a team";
+    readonly auth: "admin";
+    readonly rate: "write";
+    readonly entitlement: "teams.manage";
+    readonly request: {
+        readonly params: z.ZodObject<{
+            id: z.ZodUUID;
+        }, z.core.$strict>;
+        readonly headers: z.ZodObject<{
+            "If-Match": z.ZodOptional<z.ZodString>;
+        }, z.core.$strip>;
+        readonly body: z.ZodObject<{
+            name: z.ZodOptional<z.ZodString>;
+            description: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        description: z.ZodString;
+        memberCount: z.ZodNumber;
+        version: z.ZodNumber;
+        createdAt: z.ZodISODateTime;
+        updatedAt: z.ZodISODateTime;
+        members: z.ZodArray<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        email: z.ZodString;
+        }, z.core.$strict>>;
+        }, z.core.$strict>, {
+        readonly ETag: {
+        readonly description: "The team's version as an entity tag, for example \"3\"; the If-Match of the next change";
+        readonly schema: z.ZodString;
+        };
+        }>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 409: ProblemResponse;
+        readonly 412: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const UpdateTeamRequestSchema: z.ZodObject<{
+    name: z.ZodOptional<z.ZodString>;
+    description: z.ZodOptional<z.ZodString>;
 }, z.core.$strict>;
 
 // @public (undocumented)

@@ -1311,6 +1311,60 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/teams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the teams */
+        get: operations["listTeams"];
+        put?: never;
+        /** Create a team */
+        post: operations["createTeam"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/teams/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a team with its members */
+        get: operations["getTeam"];
+        put?: never;
+        post?: never;
+        /** Delete a team */
+        delete: operations["deleteTeam"];
+        options?: never;
+        head?: never;
+        /** Rename or describe a team */
+        patch: operations["updateTeam"];
+        trace?: never;
+    };
+    "/api/v1/teams/{id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Replace the members of a team */
+        put: operations["replaceTeamMembers"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspace": {
         parameters: {
             query?: never;
@@ -1912,6 +1966,12 @@ export interface components {
         };
         CreateTagRequest: {
             /** @description The tag's name, 1 to 40 characters after the whitespace around it is removed. It is stored as entered, in the case it is written in, and is unique among the caller's tags without regard to case */
+            name: string;
+        };
+        CreateTeamRequest: {
+            /** @description The team's description, 0 to 280 characters; empty when left out */
+            description?: string;
+            /** @description The team's name, 1 to 64 characters after the whitespace around it is removed. It is stored as entered, in the case it is written in, and is unique in the workspace without regard to case */
             name: string;
         };
         CreateWorkspaceRequest: {
@@ -2780,6 +2840,10 @@ export interface components {
             /** @description The workspace's name, 1 to 64 characters; surrounding whitespace is removed and a name that is blank after that is refused */
             name: string;
         };
+        ReplaceTeamMembersRequest: {
+            /** @description The accounts that are the team's members afterwards, 0 to 1 000 identifiers; one named twice counts once. Every one must be a current member of the workspace, and an empty list empties the team */
+            accountIds: string[];
+        };
         RequestEmailChangeRequest: {
             /**
              * Format: email
@@ -2969,6 +3033,75 @@ export interface components {
              */
             totalAtLeast?: 10000;
         };
+        Team: {
+            /**
+             * Format: date-time
+             * @description When the team was created, RFC 3339 UTC
+             */
+            createdAt: string;
+            /** @description The team's description; empty when it has none */
+            description: string;
+            /**
+             * Format: uuid
+             * @description The team's identifier
+             */
+            id: string;
+            /** @description How many members the team has */
+            memberCount: number;
+            /** @description The team's name, in the case it was entered in */
+            name: string;
+            /**
+             * Format: date-time
+             * @description When the team's name or description last changed, RFC 3339 UTC
+             */
+            updatedAt: string;
+            /** @description Moves by one with every change of the name or the description; the ETag header of the single-team operations carries it and If-Match takes it back */
+            version: number;
+        };
+        TeamList: {
+            /** @description One page of the workspace's teams, ordered by name (ignoring case) and then identifier */
+            items: components["schemas"]["Team"][];
+            /** @description Passed as `cursor` to get the next page; null on the last page */
+            nextCursor: string | null;
+        };
+        TeamMember: {
+            /**
+             * Format: uuid
+             * @description The member's account identifier
+             */
+            accountId: string;
+            /** @description The member's display name */
+            displayName: string;
+            /** @description The member's email address, which every co-member of the workspace sees */
+            email: string;
+        };
+        TeamWithMembers: {
+            /**
+             * Format: date-time
+             * @description When the team was created, RFC 3339 UTC
+             */
+            createdAt: string;
+            /** @description The team's description; empty when it has none */
+            description: string;
+            /**
+             * Format: uuid
+             * @description The team's identifier
+             */
+            id: string;
+            /** @description How many members the team has */
+            memberCount: number;
+            /** @description The team's members, ordered by display name and then account identifier */
+            members: components["schemas"]["TeamMember"][];
+            /** @description The team's name, in the case it was entered in */
+            name: string;
+            /**
+             * Format: date-time
+             * @description When the team's name or description last changed, RFC 3339 UTC
+             */
+            updatedAt: string;
+            /** @description Moves by one with every change of the name or the description; the ETag header of the single-team operations carries it and If-Match takes it back */
+            version: number;
+        };
         TransferOwnershipRequest: {
             /**
              * Format: uuid
@@ -3070,6 +3203,12 @@ export interface components {
              * @enum {string}
              */
             role: "owner" | "admin" | "member";
+        };
+        UpdateTeamRequest: {
+            /** @description The new description, 0 to 280 characters; an empty string clears it. Left out, the description is left as it is */
+            description?: string;
+            /** @description The new name, 1 to 64 characters after the whitespace around it is removed; unique in the workspace without regard to case. Left out, the name is left as it is */
+            name?: string;
         };
         UpdateWorkspaceSettingsRequest: {
             /** @description Turns AI suggestions on or off; a field that is left out is left as it is */
@@ -10809,6 +10948,556 @@ export interface operations {
                 };
             };
             /** @description The identifier or the body did not pass validation, or `intoTagId` is the tag in the path (validation_failed on `intoTagId`, code same_tag); nothing is changed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listTeams: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One page of the workspace's teams, each with its member count, and the cursor of the next page. Every member sees every team */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamList"];
+                };
+            };
+            /** @description The request was malformed, or the cursor is not one this workspace was issued (bad_request) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The query did not pass validation (an unknown parameter, a limit outside 1 to 100) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createTeam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTeamRequest"];
+            };
+        };
+        responses: {
+            /** @description The team, with no members and version 1; the ETag header carries the version */
+            201: {
+                headers: {
+                    /** @description The team's version as an entity tag, for example "3"; the If-Match of the next change */
+                    ETag: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamWithMembers"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the workspace does not hold the teams.manage entitlement (entitlement_required) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The workspace already has a team with this name, in any case (name_taken); nothing is written */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation (a name that is blank or longer than 64 characters, a description longer than 280, or a field the operation does not declare) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getTeam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The team with its members. Every member sees every team */
+            200: {
+                headers: {
+                    /** @description The team's version as an entity tag, for example "3"; the If-Match of the next change */
+                    ETag: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamWithMembers"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The workspace the request acts in has no team with this identifier: a team of another workspace and one that never existed are answered alike */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The identifier did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteTeam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The team is deleted for good together with its memberships; the members stay members of the workspace */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the workspace does not hold the teams.manage entitlement (entitlement_required) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The workspace the request acts in has no team with this identifier: a team of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The identifier did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    updateTeam: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTeamRequest"];
+            };
+        };
+        responses: {
+            /** @description The team after a JSON Merge Patch of its name and description. A change moves the version by one and the ETag is that of the new version; a patch that names the values the team has, and an empty one, write nothing and answer with the unchanged version */
+            200: {
+                headers: {
+                    /** @description The team's version as an entity tag, for example "3"; the If-Match of the next change */
+                    ETag: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamWithMembers"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the workspace does not hold the teams.manage entitlement (entitlement_required) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The workspace the request acts in has no team with this identifier: a team of another workspace and one that never existed are answered alike */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The workspace has another team with this name, in any case (name_taken); nothing is written */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description If-Match names a version other than the team's current one (precondition_failed); the team is unchanged */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The identifier or the body did not pass validation (a name that is blank or longer than 64 characters, a description longer than 280, or a field the operation does not declare). Nothing is written */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    replaceTeamMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceTeamMembersRequest"];
+            };
+        };
+        responses: {
+            /** @description The team with the members the request named, whether or not the set changed. Accounts outside the set are removed from the team and accounts in it are added; the team's version does not move, since it covers the name and the description */
+            200: {
+                headers: {
+                    /** @description The team's version as an entity tag, for example "3"; the If-Match of the next change */
+                    ETag: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamWithMembers"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the workspace does not hold the teams.manage entitlement (entitlement_required) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The workspace the request acts in has no team with this identifier: a team of another workspace and one that never existed are answered alike */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The identifier or the body did not pass validation: an account that is no current member of the workspace (validation_failed on accountIds, whichever workspace the account belongs to), more than 1 000 identifiers, or a field the operation does not declare. Nothing is written */
             422: {
                 headers: {
                     [name: string]: unknown;

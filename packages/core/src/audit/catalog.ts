@@ -6,7 +6,7 @@
 // section 10. The catalog holds the actions that are recorded so far.
 
 /** The groups the audit log filters by. */
-export const AUDIT_CATEGORIES = ["workspace", "member", "invitation", "bookmark"] as const;
+export const AUDIT_CATEGORIES = ["workspace", "member", "invitation", "team", "bookmark"] as const;
 
 export type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
 
@@ -23,6 +23,9 @@ export interface AuditActionDefinition {
 
 /** A workspace's name has 1 to 64 characters (doc 02 section 3.1); the metadata of its creation records it. */
 const WORKSPACE_NAME: AuditMetadataField = { type: "text", minLength: 1, maxLength: 64 };
+
+/** A team's name has 1 to 64 characters (doc 02 section 4); the events of a team record it and nothing else of the team or its members. */
+const TEAM_NAME: AuditMetadataField = { type: "text", minLength: 1, maxLength: 64 };
 
 /** The name of a setting and the value it had or has, as text: a flag is `true` or `false`. */
 const SETTING_NAME: AuditMetadataField = { type: "text", minLength: 1, maxLength: 64 };
@@ -60,6 +63,11 @@ export const AUDIT_ACTIONS = {
   "invitation.resent": { category: "invitation", metadata: { role: MEMBER_ROLE } },
   "invitation.link_created": { category: "invitation", metadata: { role: MEMBER_ROLE } },
   "invitation.revoked": { category: "invitation", metadata: { role: MEMBER_ROLE } },
+  // The name of a team is the one thing its events say: a member's name or address, and the team's description, have no field (doc 10 T7).
+  "team.created": { category: "team", metadata: { name: TEAM_NAME } },
+  "team.updated": { category: "team", metadata: { from: TEAM_NAME, to: TEAM_NAME } },
+  "team.deleted": { category: "team", metadata: { name: TEAM_NAME } },
+  "team.members_changed": { category: "team", metadata: { name: TEAM_NAME } },
   // A composition archived, or restored, bookmarks of the workspace (doc 01 section 13.3): the number whose state changed, and nothing about them.
   "bookmark.archived": { category: "bookmark", metadata: { count: COUNT } },
   "bookmark.restored": { category: "bookmark", metadata: { count: COUNT } },

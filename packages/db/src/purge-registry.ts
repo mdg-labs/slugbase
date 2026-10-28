@@ -20,8 +20,11 @@ export const workspacePurgeOrder: readonly string[] = [
   "bookmarks",
   // folders reference the membership of their owner, so they go before the members.
   "folders",
+  // The memberships of teams reference both the team and the membership of the member, so they go first.
+  "team_members",
   // tags reference the membership of their owner, so they go before the members.
   "tags",
+  "teams",
   "url_metadata",
   "workspace_invitations",
   "workspace_settings",

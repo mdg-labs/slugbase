@@ -51,7 +51,7 @@ function memoryStore(): { store: AuditStore; records: AuditRecord[] } {
 
 describe("the audit catalog", () => {
   it("groups the recorded actions by category and declares the metadata of each", () => {
-    expect(AUDIT_ACTION_NAMES).toEqual(["workspace.created", "workspace.renamed", "workspace.settings_changed", "workspace.deletion_requested", "workspace.ownership_transferred", "member.role_changed", "member.removed", "member.left", "member.joined", "member.instance_admin_joined", "invitation.created", "invitation.resent", "invitation.link_created", "invitation.revoked", "bookmark.archived", "bookmark.restored", "bookmark.bulk_deleted"]);
+    expect(AUDIT_ACTION_NAMES).toEqual(["workspace.created", "workspace.renamed", "workspace.settings_changed", "workspace.deletion_requested", "workspace.ownership_transferred", "member.role_changed", "member.removed", "member.left", "member.joined", "member.instance_admin_joined", "invitation.created", "invitation.resent", "invitation.link_created", "invitation.revoked", "team.created", "team.updated", "team.deleted", "team.members_changed", "bookmark.archived", "bookmark.restored", "bookmark.bulk_deleted"]);
     for (const name of AUDIT_ACTION_NAMES) {
       expect(AUDIT_ACTIONS[name].category).toBe(name.split(".")[0]);
     }
@@ -69,6 +69,10 @@ describe("the audit catalog", () => {
     expect(Object.keys(AUDIT_ACTIONS["invitation.resent"].metadata)).toEqual(["role"]);
     expect(Object.keys(AUDIT_ACTIONS["invitation.link_created"].metadata)).toEqual(["role"]);
     expect(Object.keys(AUDIT_ACTIONS["invitation.revoked"].metadata)).toEqual(["role"]);
+    expect(Object.keys(AUDIT_ACTIONS["team.created"].metadata)).toEqual(["name"]);
+    expect(Object.keys(AUDIT_ACTIONS["team.updated"].metadata)).toEqual(["from", "to"]);
+    expect(Object.keys(AUDIT_ACTIONS["team.deleted"].metadata)).toEqual(["name"]);
+    expect(Object.keys(AUDIT_ACTIONS["team.members_changed"].metadata)).toEqual(["name"]);
     expect(Object.keys(AUDIT_ACTIONS["bookmark.archived"].metadata)).toEqual(["count"]);
     expect(Object.keys(AUDIT_ACTIONS["bookmark.restored"].metadata)).toEqual(["count"]);
     expect(Object.keys(AUDIT_ACTIONS["bookmark.bulk_deleted"].metadata)).toEqual(["count"]);

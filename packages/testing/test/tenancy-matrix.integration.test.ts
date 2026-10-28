@@ -158,6 +158,32 @@ async function seedMetadataRows(database: TestDatabase, fixture: TenantFixture):
   });
 }
 
+/**
+ * The teams the RLS-only mode runs against: a team is the workspace's, so A holds exactly one (the update of the registry has no predicate and gives every team it
+ * can see one name) with a member of A in it, which the delete of the registry removes and the insert of the sample leaves in place (the sample adds the owner of A, whose
+ * account and membership `seedTagRows` made); B holds the same of its own, the team and the membership the methods must not reach. The member is the admin of the side.
+ */
+async function seedTeamRows(database: TestDatabase, fixture: TenantFixture): Promise<void> {
+  const sides = [
+    { workspaceId: fixture.a.id, member: fixture.a.admin.accountId, email: "matrix-team-a@example.test", teamId: "0192f3a0-2222-7000-8000-00000000a0e1" },
+    { workspaceId: fixture.b.id, member: fixture.b.admin.accountId, email: "matrix-team-b@example.test", teamId: "0192f3a0-2222-7000-8000-00000000b0e1" },
+  ];
+  for (const { member, email } of sides) {
+    await database.owner.begin(async (tx) => {
+      await tx`SELECT set_config('app.account_id', ${member}, true)`;
+      await tx`INSERT INTO accounts (id, email, display_name) VALUES (${member}, ${email}, 'Matrix team member') ON CONFLICT DO NOTHING`;
+    });
+  }
+  await database.owner.begin(async (tx) => {
+    await tx`SET LOCAL ROLE slugbase_system`;
+    for (const { workspaceId, member, teamId } of sides) {
+      await tx`INSERT INTO workspace_members (workspace_id, account_id, role) VALUES (${workspaceId}, ${member}, 'admin') ON CONFLICT DO NOTHING`;
+      await tx`INSERT INTO teams (id, workspace_id, name) VALUES (${teamId}, ${workspaceId}, 'matrix-team-seed') ON CONFLICT DO NOTHING`;
+      await tx`INSERT INTO team_members (workspace_id, team_id, account_id) VALUES (${workspaceId}, ${teamId}, ${member}) ON CONFLICT DO NOTHING`;
+    }
+  });
+}
+
 const database = useTestDatabase();
 let scoped: Probe;
 let permissive: Probe;
@@ -203,15 +229,14 @@ describe("the matrix over the committed contract and the repository registry", (
   };
 
   it(`API mode classifies the ${String(classification.summary.total)} operations of openapi.json and calls each tenant-scoped one once for every principal of A`, async () => {
-    // The probe fixture holds no team and no invitation, so workspace B is given one of each: the matrix puts the team in the invitation's `teamIds`
-    // and the invitation in the path of the operations that resend, link and revoke one.
+    // The probe fixture holds a team of workspace B, which the matrix puts in the invitation's `teamIds` and in the path of the team operations, and no
+    // invitation, so workspace B is given one for the path of the operations that resend, link and revoke one.
     const fixture = {
       ...scoped.fixture,
       b: {
         ...scoped.fixture.b,
         identifiers: [
           ...scoped.fixture.b.identifiers,
-          { kind: "team" as const, id: "0192f3a0-cccc-7000-8000-000000000005" },
           { kind: "invitation" as const, id: "0192f3a0-cccc-7000-8000-000000000007" },
           { kind: "slug" as const, id: "matrix-b-slug-0" },
           { kind: "slug" as const, id: "matrix-b-slug-1" },
@@ -220,7 +245,7 @@ describe("the matrix over the committed contract and the repository registry", (
         ],
       },
     };
-    const matrix = await runApiMatrix({ document, fixture, request: answersAsTheChainDoes, mapping: { accountId: "member", transferTo: "member", "teamIds[]": "team", id: "invitation", "getBookmark.id": "bookmark", "createBookmark.slug": "bookmark", "updateBookmark.slug": "bookmark", "checkSlugAvailability.slug": "bookmark", "checkSlugAvailability.bookmarkId": "bookmark", "resolveSlug.slug": "slug", "chooseSlug.slug": "slug", "chooseSlug.bookmarkId": "bookmark", "deleteGoPreference.slug": "slug", "getFavicon.host": "host", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "listBookmarkIds.folderId": "folder", "listBookmarkIds.tag": "tag", "listBookmarkIds.tag[]": "tag", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark", "bulkBookmarks.filter.folderId": "folder", "bulkBookmarks.filter.tag": "tag", "bulkBookmarks.filter.tag[]": "tag", "bulkBookmarks.folderId": "folder", "bulkBookmarks.tagIds[]": "tag", "previewBulkBookmarks.ids[]": "bookmark", "previewBulkBookmarks.filter.hasSlug": "bookmark", "previewBulkBookmarks.filter.folderId": "folder", "previewBulkBookmarks.filter.tag": "tag", "previewBulkBookmarks.filter.tag[]": "tag", "previewBulkBookmarks.tagIds[]": "tag" }, emptyAnswers: { resolveSlug: 200, getFavicon: 202 } });
+    const matrix = await runApiMatrix({ document, fixture, request: answersAsTheChainDoes, mapping: { accountId: "member", transferTo: "member", "teamIds[]": "team", "getTeam.id": "team", "updateTeam.id": "team", "deleteTeam.id": "team", "replaceTeamMembers.id": "team", "replaceTeamMembers.accountIds[]": "member", id: "invitation", "getBookmark.id": "bookmark", "createBookmark.slug": "bookmark", "updateBookmark.slug": "bookmark", "checkSlugAvailability.slug": "bookmark", "checkSlugAvailability.bookmarkId": "bookmark", "resolveSlug.slug": "slug", "chooseSlug.slug": "slug", "chooseSlug.bookmarkId": "bookmark", "deleteGoPreference.slug": "slug", "getFavicon.host": "host", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "listBookmarkIds.folderId": "folder", "listBookmarkIds.tag": "tag", "listBookmarkIds.tag[]": "tag", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark", "bulkBookmarks.filter.folderId": "folder", "bulkBookmarks.filter.tag": "tag", "bulkBookmarks.filter.tag[]": "tag", "bulkBookmarks.folderId": "folder", "bulkBookmarks.tagIds[]": "tag", "previewBulkBookmarks.ids[]": "bookmark", "previewBulkBookmarks.filter.hasSlug": "bookmark", "previewBulkBookmarks.filter.folderId": "folder", "previewBulkBookmarks.filter.tag": "tag", "previewBulkBookmarks.filter.tag[]": "tag", "previewBulkBookmarks.tagIds[]": "tag" }, emptyAnswers: { resolveSlug: 200, getFavicon: 202 } });
     // The matrix expects 404 for an identifier of workspace B. The one exception is the 422 every team is refused with (see above), for the two sessions
     // of A that reach the handler of the invitation; it is named exactly, and every other failure stays one.
     const teamRefusal = (failure: MatrixFailure): boolean => failure.subject.startsWith("createInvitation ") && failure.kind === "unexpected_status" && /answered 422, expected 404/.test(failure.detail);
@@ -230,16 +255,16 @@ describe("the matrix over the committed contract and the repository registry", (
     expect(report.classified.total).toBe(classification.operations.length);
     expect(report.classified.total).toBeGreaterThan(0);
     expect(Object.values(report.classified.byKind).reduce((sum, count) => sum + count, 0)).toBe(report.classified.total);
-    // The operations on /workspace (reading, renaming and deleting it), /workspace/settings, the entitlements, the members list, the creation of a bookmark (which the matrix calls once, with the one folder of B in `folderIds` and the one tag of B in `tagIds`), the page-metadata lookup, the creation, the list and the statistics of tags, the creation and the list of folders, the list of remembered choices and the dashboard read act in the workspace of the request and take no identifier of B;
+    // The operations on /workspace (reading, renaming and deleting it), /workspace/settings, the entitlements, the members list, the creation of a bookmark (which the matrix calls once, with the one folder of B in `folderIds` and the one tag of B in `tagIds`), the page-metadata lookup, the creation, the list and the statistics of tags, the creation and the list of folders, the creation and the list of teams, the list of remembered choices and the dashboard read act in the workspace of the request and take no identifier of B;
     // the role change, the ownership transfer and the removal name a member by account identifier, the removal and the leaving a recipient, the invitation a team,
-    // the resend, the link and the revocation of an invitation name an invitation, and the bookmark read, change, deletion and open name a bookmark, as do the select-all, the bulk request and the preview of adding tags in their inputs (and the folder and the tags they act with, and the folder and the tags of their filters, name a folder and tags of B), and the rename, the merge and the deletion of a tag name a tag, and the read, the change and the deletion of a folder name a folder; the invitation list takes no identifier.
-    expect(report.classified.byKind["tenant-scoped"]).toBe(48);
+    // the resend, the link and the revocation of an invitation name an invitation, and the bookmark read, change, deletion and open name a bookmark, as do the select-all, the bulk request and the preview of adding tags in their inputs (and the folder and the tags they act with, and the folder and the tags of their filters, name a folder and tags of B), and the rename, the merge and the deletion of a tag name a tag, and the read, the change and the deletion of a folder name a folder, and the read, the change, the deletion and the replacement of the members of a team name a team (the replacement also the members of B in `accountIds`); the invitation list takes no identifier.
+    expect(report.classified.byKind["tenant-scoped"]).toBe(54);
     // Three sessions and six tokens of A, once on each of the nineteen operations that name no member other than the creation of a bookmark and twice on the creation of a bookmark (once for each of the two bookmarks of B put in its `slug`, which is mapped to a bookmark and judged with the folder and the tag of B in the same call), once for each of the three members of B on the role
     // change, on the ownership transfer and on the leaving, once for each pair of members of B (path and recipient) on the removal, once for the
     // team of B on the invitation, once for the invitation of B on each of the resend, the link and the revocation, and once for each of the two
     // bookmarks of B on each of the bookmark read, change, deletion and open, and in the `hasSlug` filter of the bookmark list and of the select-all (picked by
-    // its name), and once for each pair of a bookmark of B in `ids` and one in `filter.hasSlug` of the bulk request and of its preview, and once for the tag of B on each of the rename, the merge and the deletion of a tag, and once for the folder of B on each of the read, the change and the deletion of a folder, and once for each of the two bookmarks of B with the folder of B on each of the filing and the unfiling of bookmarks, and once for each pair of a bookmark of B in `id` and one in `slug` on the change of a bookmark, and for each pair of a bookmark of B in `bookmarkId` and one in `slug` on the slug availability, and once for each of the two slugs of B on the resolution of a slug and on the choice of a bookmark (the choice for each of the two bookmarks of B as well), and once for each of the two slugs of B on the forgetting of a remembered choice, and once for each of the two hosts of B on the favicon (answered the placeholder, 202, by a principal that reaches the handler).
-    expect(report.attempts).toBe(9 * 20 + 9 * (3 + 3 + 3 + 3 * 3 + 3 + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2 + 1 + 2));
+    // its name), and once for each pair of a bookmark of B in `ids` and one in `filter.hasSlug` of the bulk request and of its preview, and once for the tag of B on each of the rename, the merge and the deletion of a tag, and once for the folder of B on each of the read, the change and the deletion of a folder, and once for the team of B on each of the read, the change and the deletion of a team and once for each of the three members of B with the team of B on the replacement of its members, and once for each of the two bookmarks of B with the folder of B on each of the filing and the unfiling of bookmarks, and once for each pair of a bookmark of B in `id` and one in `slug` on the change of a bookmark, and for each pair of a bookmark of B in `bookmarkId` and one in `slug` on the slug availability, and once for each of the two slugs of B on the resolution of a slug and on the choice of a bookmark (the choice for each of the two bookmarks of B as well), and once for each of the two slugs of B on the forgetting of a remembered choice, and once for each of the two hosts of B on the favicon (answered the placeholder, 202, by a principal that reaches the handler).
+    expect(report.attempts).toBe(9 * 22 + 9 * (3 + 3 + 3 + 3 * 3 + 3 + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2 + 1 + 2 + 3 + 3));
     assertMatrixPassed(report);
   });
 
@@ -255,6 +280,7 @@ describe("the matrix over the committed contract and the repository registry", (
     await seedTagLinkRows(database(), scoped.fixture);
     await seedPreferenceRows(database(), scoped.fixture);
     await seedMetadataRows(database(), scoped.fixture);
+    await seedTeamRows(database(), scoped.fixture);
     const methods = listRepositoryMethods();
     const report = await runRlsOnlyMatrix({ tenant: database().tenant, fixture: { ...scoped.fixture, instanceAdmin: PROBE_INSTANCE_ADMIN }, methods });
     expect(report.methods).toBe(methods.length);
@@ -270,6 +296,10 @@ describe("the matrix over the committed contract and the repository registry", (
     expect(methods.filter((entry) => entry.repository === "slug_preferences").map((entry) => entry.method)).toEqual(["select", "insert", "update", "delete"]);
     // the repository of the cached page metadata is in the registry with the three methods the application role may run on the table: it reads, inserts a result and updates the columns of one, and deletes none
     expect(methods.filter((entry) => entry.repository === "url_metadata").map((entry) => entry.method)).toEqual(["select", "insert", "update"]);
+    // the teams repository is in the registry with all four methods: the application role may insert, change, delete and read a team, and the policies keep it to the workspace
+    expect(methods.filter((entry) => entry.repository === "teams").map((entry) => entry.method).sort()).toEqual(["delete", "insert", "select", "update"]);
+    // the repository of the team members is in the registry with the three methods the application role may run on the table: it reads, inserts the columns of a membership and deletes, and updates none
+    expect(methods.filter((entry) => entry.repository === "team_members").map((entry) => entry.method)).toEqual(["select", "insert", "delete"]);
     // the bookmarks repository is in the registry with the three methods the application role may run on the table, and no other: a delete is a system operation
     expect(methods.filter((entry) => entry.repository === "bookmarks").map((entry) => entry.method)).toEqual(["select", "insert", "update"]);
     // every method ran once more as the instance admin of the fixture, which belongs to neither workspace

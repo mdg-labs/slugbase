@@ -63,6 +63,7 @@ import type { SearchStore } from '@slugbase/core';
 import { SlugUse } from '@slugbase/core';
 import { SQL } from 'drizzle-orm';
 import type { TagStore } from '@slugbase/core';
+import type { TeamStore } from '@slugbase/core';
 import type { WorkspaceAdministrationStore } from '@slugbase/core';
 import type { WorkspaceRenameRequest } from '@slugbase/core';
 import type { WorkspaceRenameResult } from '@slugbase/core';
@@ -837,6 +838,9 @@ export function isLastOwnerViolation(error: unknown): boolean;
 export function isTagNameTaken(error: unknown): boolean;
 
 // @public
+export function isTeamNameTaken(error: unknown): boolean;
+
+// @public
 export interface JobHealth {
     readonly failed: number;
     readonly queueDepth: number;
@@ -1481,6 +1485,12 @@ export type TagRepository = TagStore;
 
 // @public (undocumented)
 export function tagRepository(tx: TenantTx): TagRepository;
+
+// @public (undocumented)
+export type TeamRepository = TeamStore;
+
+// @public (undocumented)
+export function teamRepository(tx: TenantTx): TeamRepository;
 
 // @public
 export interface TenantContext {

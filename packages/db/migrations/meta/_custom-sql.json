@@ -1,4 +1,4 @@
 {
-  "sha256": "d1c0331523ae23fc3f691df3e0559883d9ac4d8b518184019a41203125503a1c",
-  "migration": "20261028114106_add_favicons"
+  "sha256": "91051bbe6527760d2dbf724dddfd043ad7a23bf0578dd01c987135ed1d1fa51c",
+  "migration": "20261028191655_add_teams"
 }

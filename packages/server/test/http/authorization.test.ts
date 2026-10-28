@@ -187,7 +187,7 @@ function setup(options: SetupOptions = {}) {
     owner: operationOf("/api/v1/owner-check", "checkOwner", "owner", { scope: "read" }),
     unscoped: operationOf("/api/v1/tokens", "listTokens", "account"),
     instance: operationOf("/api/v1/instance/probe", "listAccounts", "instanceAdmin"),
-    gated: operationOf("/api/v1/teams", "listTeams", "member", { scope: "read", entitlement: "teams.manage" }),
+    gated: operationOf("/api/v1/gated-items", "listGatedItems", "member", { scope: "read", entitlement: "teams.manage" }),
     machine: operationOf("/api/v1/events", "receiveEvent", "machine", { method: "post", audience: "machine" }),
     form: operationOf("/api/v1/contact", "sendContact", "anonymous", { method: "post", audience: "marketing-form" }),
     partial: operationOf("/api/v1/test/partial", "checkPartial", "partial", { method: "post" }),
@@ -594,7 +594,7 @@ describe("stage 9: authorization", () => {
 
   it("refuses an operation that declares an entitlement when no entitlement source is configured", async () => {
     const { server, seen } = setup();
-    const response = await server.fetch(get("/api/v1/teams", cookieOf("owner")));
+    const response = await server.fetch(get("/api/v1/gated-items", cookieOf("owner")));
     expect(response.status).toBe(403);
     expect(await codeOf(response)).toBe("entitlement_required");
     expect(seen).toEqual([]);
@@ -837,7 +837,7 @@ describe("an entitlement source", () => {
   function gated(check: EntitlementCheck, upgradeAvailable?: EntitlementUpgradeCheck) {
     const app = new Hono<ChainEnv>();
     const handled: string[] = [];
-    const operation = operationOf("/api/v1/teams", "listTeams", "member", { scope: "read", entitlement: "teams.manage" });
+    const operation = operationOf("/api/v1/gated-items", "listGatedItems", "member", { scope: "read", entitlement: "teams.manage" });
     installChain(
       app,
       {
@@ -876,28 +876,28 @@ describe("an entitlement source", () => {
   it("lets the request through when the source holds the entitlement, asking it for the account and workspace", async () => {
     const asked: [string, EntitlementSubject][] = [];
     const { app, handled } = gated((entitlement, subject) => (asked.push([entitlement, subject]), true));
-    expect((await app.request("http://localhost/api/v1/teams")).status).toBe(200);
+    expect((await app.request("http://localhost/api/v1/gated-items")).status).toBe(200);
     expect(asked).toEqual([["teams.manage", { accountId: ACCOUNTS.owner, workspaceId: WORKSPACE }]]);
     expect(handled).toEqual(["handler"]);
   });
 
   it("answers 403 entitlement_required when the source does not hold it", async () => {
     const { app, handled } = gated(() => Promise.resolve(false));
-    const response = await app.request("http://localhost/api/v1/teams");
+    const response = await app.request("http://localhost/api/v1/gated-items");
     expect(response.status).toBe(403);
     expect(await codeOf(response)).toBe("entitlement_required");
     expect(handled).toEqual([]);
   });
 
   it("names the missing entitlement in the problem, with no upgrade path unless the source offers one", async () => {
-    const plain = await gated(() => false).app.request("http://localhost/api/v1/teams");
+    const plain = await gated(() => false).app.request("http://localhost/api/v1/gated-items");
     expect(await plain.json()).toMatchObject({ code: "entitlement_required", status: 403, entitlement: "teams.manage", upgradeAvailable: false });
 
     const asked: [string, EntitlementSubject][] = [];
     const offered = await gated(
       () => false,
       (entitlement, subject) => (asked.push([entitlement, subject]), true),
-    ).app.request("http://localhost/api/v1/teams");
+    ).app.request("http://localhost/api/v1/gated-items");
     expect(await offered.json()).toMatchObject({ code: "entitlement_required", entitlement: "teams.manage", upgradeAvailable: true });
     expect(asked).toEqual([["teams.manage", { accountId: ACCOUNTS.owner, workspaceId: WORKSPACE }]]);
   });
@@ -905,13 +905,13 @@ describe("an entitlement source", () => {
   it("asks nothing of the upgrade check when the entitlement is held", async () => {
     const asked: string[] = [];
     const { app } = gated(() => true, (entitlement) => (asked.push(entitlement), true));
-    expect((await app.request("http://localhost/api/v1/teams")).status).toBe(200);
+    expect((await app.request("http://localhost/api/v1/gated-items")).status).toBe(200);
     expect(asked).toEqual([]);
   });
 
   it("fails the request when the source cannot decide", async () => {
     const { app, handled } = gated(() => Promise.reject(new Error("source down")));
-    expect((await app.request("http://localhost/api/v1/teams")).status).toBe(500);
+    expect((await app.request("http://localhost/api/v1/gated-items")).status).toBe(500);
     expect(handled).toEqual([]);
   });
 });

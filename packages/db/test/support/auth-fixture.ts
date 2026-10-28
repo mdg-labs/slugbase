@@ -17,6 +17,7 @@ export interface SeedAccount {
   readonly passwordChangedAt?: Date | null;
   readonly isInstanceAdmin?: boolean;
   readonly emailVerified?: boolean;
+  readonly displayName?: string;
 }
 
 let counter = 0;
@@ -41,7 +42,7 @@ export async function seedAccount(database: TestDatabase, account: SeedAccount):
     await tx`SELECT set_config('app.account_id', ${account.id}, true)`;
     await tx`
       INSERT INTO accounts (id, email, display_name, password_hash, disabled_at, password_changed_at, is_instance_admin, email_verified_at)
-      VALUES (${account.id}, ${account.email}, 'Test account', ${account.passwordHash ?? null},
+      VALUES (${account.id}, ${account.email}, ${account.displayName ?? "Test account"}, ${account.passwordHash ?? null},
               ${account.disabledAt ?? null}, ${account.passwordChangedAt ?? null}, ${account.isInstanceAdmin ?? false},
               ${account.emailVerified === true ? new Date() : null})`;
   });

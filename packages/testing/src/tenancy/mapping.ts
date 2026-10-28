@@ -60,7 +60,8 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  *   `addFolderBookmarks` and `removeFolderBookmarks` takes a bookmark identifier.
  * - Member identifier (an account): `accountId` of `removeMember`, `updateMember` and `transferWorkspaceOwnership`, and `transferTo` of
  *   `removeMember` and `leaveWorkspace`.
- * - Team identifier: `teamIds[]` of `createInvitation`.
+ * - Team identifier: `teamIds[]` of `createInvitation`, and the path parameter `id` of `getTeam`, `updateTeam`, `deleteTeam` and `replaceTeamMembers`. The body input
+ *   `accountIds[]` of `replaceTeamMembers` takes a member identifier (an account).
  * - Invitation identifier: the path parameter `id` of `revokeInvitation`, `createInvitationLink` and `resendInvitation`.
  *
  * Entries are keyed by operation, because the name `id` takes a bookmark in one operation and an invitation in another. The fixture the matrix
@@ -119,6 +120,11 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
   "previewBulkBookmarks.filter.tag[]": "tag",
   "previewBulkBookmarks.tagIds[]": "tag",
   "createInvitation.teamIds[]": "team",
+  "getTeam.id": "team",
+  "updateTeam.id": "team",
+  "deleteTeam.id": "team",
+  "replaceTeamMembers.id": "team",
+  "replaceTeamMembers.accountIds[]": "member",
   "revokeInvitation.id": "invitation",
   "createInvitationLink.id": "invitation",
   "resendInvitation.id": "invitation",
@@ -149,6 +155,10 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
  * The cache of page metadata is the workspace's: the `url_metadata` repository has the three methods the application role may run on the table (it reads, inserts a row and
  * updates the columns of a result, and deletes none), the sample inserts a `failed` result, which holds no field, and its update sets the title, which only an `ok` row may hold, so
  * the fixture must hold an `ok` result in A for the update to touch, and one in B, which the methods must not reach.
+ * A team is the workspace's and no member's: the policies of `teams` and `team_members` name the workspace only. The update and the delete of the registry have no predicate,
+ * so they touch every team of A the policy shows, and the update gives them all one name: the fixture must hold exactly one team in A (and one in B, which the methods must
+ * not reach). The `team_members` sample names that team (`...a0e1`) and the owner of A, who is no member of it yet; the fixture must hold another member of A in the team, which
+ * the delete of the registry removes, and a team with a member of its own in B. The repository has no update, so its `set` is empty.
  */
 export const REPOSITORY_SAMPLES: RepositorySamples = {
   bookmarks: {
@@ -182,6 +192,14 @@ export const REPOSITORY_SAMPLES: RepositorySamples = {
   url_metadata: {
     values: { urlCanonical: "https://example.com/matrix-metadata", status: "failed", fetchedAt: new Date("2026-01-01T00:00:00Z"), expiresAt: new Date("2026-01-08T00:00:00Z") },
     set: { title: "matrix-metadata-updated" },
+  },
+  teams: {
+    values: { id: "0192f3a0-2222-7000-8000-00000000b00f", name: "matrix-team-inserted" },
+    set: { name: "matrix-team-updated" },
+  },
+  team_members: {
+    values: (fixture) => ({ teamId: "0192f3a0-2222-7000-8000-00000000a0e1", accountId: fixture.a.owner.accountId }),
+    set: {},
   },
   tags: {
     values: (fixture) => ({ id: "0192f3a0-2222-7000-8000-00000000b00d", ownerId: fixture.a.owner.accountId, name: "matrix-tag-inserted" }),

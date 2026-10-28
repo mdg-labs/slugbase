@@ -28,7 +28,7 @@ function unmapped(inputs: readonly string[], mapping: PathParameterMapping): str
 }
 
 describe("PATH_PARAMETER_MAPPING", () => {
-  it("finds the identifier-carrying inputs of the bookmark, tag, folder, member and invitation operations in the committed contract", () => {
+  it("finds the identifier-carrying inputs of the bookmark, tag, folder, team, member and invitation operations in the committed contract", () => {
     expect(contractInputs()).toEqual(
       expect.arrayContaining([
         "openBookmark.id",
@@ -70,6 +70,11 @@ describe("PATH_PARAMETER_MAPPING", () => {
         "previewBulkBookmarks.filter.tag[]",
         "previewBulkBookmarks.tagIds[]",
         "createInvitation.teamIds[]",
+        "getTeam.id",
+        "updateTeam.id",
+        "deleteTeam.id",
+        "replaceTeamMembers.id",
+        "replaceTeamMembers.accountIds[]",
         "revokeInvitation.id",
         "createInvitationLink.id",
         "resendInvitation.id",
@@ -122,6 +127,11 @@ describe("PATH_PARAMETER_MAPPING", () => {
       "previewBulkBookmarks.filter.tag[]": "tag",
       "previewBulkBookmarks.tagIds[]": "tag",
       "createInvitation.teamIds[]": "team",
+      "getTeam.id": "team",
+      "updateTeam.id": "team",
+      "deleteTeam.id": "team",
+      "replaceTeamMembers.id": "team",
+      "replaceTeamMembers.accountIds[]": "member",
       "revokeInvitation.id": "invitation",
       "createInvitationLink.id": "invitation",
       "resendInvitation.id": "invitation",
