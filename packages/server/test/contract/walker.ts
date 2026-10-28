@@ -176,6 +176,7 @@ function checkAnswer(
   operation: DocumentedOperation,
   response: Response,
   text: string,
+  bytes: Uint8Array,
   resolve: ResolveReference,
 ): { kind: string; detail: string }[] {
   const found: { kind: string; detail: string }[] = [];
@@ -200,6 +201,12 @@ function checkAnswer(
     const media = mediaTypes.find((candidate) => candidate.toLowerCase() === actual);
     if (media === undefined) {
       found.push({ kind: "wrong_content_type", detail: `answered ${actual === "" ? "no content type" : actual}, declared ${mediaTypes.join(", ")}` });
+    } else if (isRecord(content[media]) && isRecord(content[media]["schema"]) && content[media]["schema"]["type"] === "string" && content[media]["schema"]["format"] === "binary") {
+      // Bytes, not JSON: the body must be a PNG when the operation declares image/png, and never empty.
+      const png = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+      if (bytes.length === 0 || (media === "image/png" && !png.every((value, index) => bytes[index] === value))) {
+        found.push({ kind: "invalid_binary", detail: `the ${media} body is empty or does not start as the type declares` });
+      }
     } else {
       let body: unknown;
       let parsed = true;
@@ -277,8 +284,10 @@ export async function walkContract(options: WalkerOptions): Promise<WalkerReport
         fail("request_failed", error instanceof Error ? error.message : String(error), scenario);
         return;
       }
-      const text = await response.text();
-      for (const { kind, detail } of checkAnswer(operation, response, text, resolve)) {
+      const received = await response.arrayBuffer();
+      const bytes = new Uint8Array(received);
+      const text = new TextDecoder().decode(received);
+      for (const { kind, detail } of checkAnswer(operation, response, text, bytes, resolve)) {
         fail(kind, detail, scenario);
       }
       if (response.status !== expected.status) {

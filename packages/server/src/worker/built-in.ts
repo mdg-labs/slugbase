@@ -1,6 +1,7 @@
 import type { ModuleContribution, ServerModule } from "../create-server.ts";
 import { eventJobs } from "../events/jobs.ts";
 import type { JobDefinition } from "./job.ts";
+import { fetchFaviconJob } from "./jobs/fetch-favicon.ts";
 import { fetchMetadataJob } from "./jobs/fetch-metadata.ts";
 import { invitationSendJob } from "./jobs/invitation-mail.ts";
 import { mailJobs } from "./jobs/mail-send.ts";
@@ -22,6 +23,8 @@ const BUILT_IN: readonly BuiltIn[] = [
   { name: "@slugbase/server/mail", contribute: () => ({ jobs: [...mailJobs, invitationSendJob] }) },
   // Fetches and caches the metadata of the page a bookmark points at (doc 02 section 5.4).
   { name: "@slugbase/server/bookmark-metadata", contribute: () => ({ jobs: [fetchMetadataJob] }) },
+  // Fetches and caches the favicon of a host a member has a bookmark on (doc 02 section 5.4).
+  { name: "@slugbase/server/favicons", contribute: () => ({ jobs: [fetchFaviconJob] }) },
   // Removes the rows of a workspace that was marked as being deleted (doc 05 section 7.2).
   { name: "@slugbase/server/workspace-deletion", contribute: (stores) => ({ jobs: [workspaceDeleteJob(stores.workspaceDeletion)] }) },
   // One job per domain event, which hands the event to the subscribers of the composed modules.

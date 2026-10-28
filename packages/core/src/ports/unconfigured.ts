@@ -7,7 +7,7 @@ function unavailable(port: keyof Adapters, code: PortUnavailableCode = "unavaila
 
 /**
  * The adapters of an instance with nothing configured (D22): every port reports
- * `available: false`. Mail, AI, identity, billing, egress, the secret box, the
+ * `available: false`. Mail, AI, identity, billing, egress, the image codec, the secret box, the
  * rate limiter, the tenant resolver and the entitlement source reject with
  * `PortUnavailable` when used, so a missing adapter never reads as success (an
  * instance with no source holds no entitlement; billing answers
@@ -53,6 +53,7 @@ export function unconfigured(): Adapters {
     clientErrorReport: { available: false, dsn: () => Promise.resolve(null) },
     challenge: { available: false, verify: () => Promise.resolve({ ok: true }) },
     egress: { available: false, request: unavailable("egress") },
+    imageCodec: { available: false, reencodeIcon: unavailable("imageCodec") },
     rateLimit: { available: false, consume: unavailable("rateLimit") },
     secretBox: {
       available: false,

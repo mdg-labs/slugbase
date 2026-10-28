@@ -12,7 +12,8 @@ import { rateLimitKeyOf } from "./trusted-proxy.ts";
 // bad-credential requests is throttled before any credential lookup. Once it is
 // authenticated it takes one from the buckets of its account and, for a bucket
 // that has one, its workspace (stage 6), unless the operation is anonymous;
-// whichever is empty first denies it. The
+// whichever is empty first denies it. An operation that declares
+// `rateTakenByHandler` is limited this way by the `read` bucket, and its handler takes the declared bucket besides. The
 // IP is the one the request-context stage derived across the trusted proxy
 // hops, never a header read here; its bucket key is the IPv4 address, or the /64
 // of an IPv6 one (`rateLimitKeyOf`). An operation that declares `none`, a
@@ -28,6 +29,9 @@ const DENIED_DETAIL = "Too many requests. Try again later.";
 
 // A request without a socket address (an in-process call) shares one bucket.
 const UNKNOWN_CLIENT = "unknown";
+
+// The bucket the stages take for an operation that takes its declared bucket in its handler.
+const HANDLER_TAKEN_STAGE_BUCKET = "read";
 
 /** What a request took from one bucket, for the `RateLimit` headers. */
 export interface TakenLimit {
@@ -60,6 +64,13 @@ export type TakeEmailLimit = (context: ChainContext, key: string) => Promise<voi
  * unavailable` when the limiter cannot decide.
  */
 export type TakeAccountLimit = (context: ChainContext, accountId: string) => Promise<void>;
+
+/**
+ * For an operation that declares `rateTakenByHandler`: takes one token from every limit of its declared bucket that the request has a subject for
+ * (its address, its account and, for a bucket that has one, its workspace), in the registry's order. Throws `429 rate_limited` when one is empty and
+ * `503 unavailable` when the limiter cannot decide.
+ */
+export type TakeBucketLimit = (context: ChainContext) => Promise<void>;
 
 export interface RateLimiting {
   /** Stage 3a: the per-IP take, before authentication. */
@@ -175,18 +186,23 @@ export function createRateLimiting({ limiter, registry, logger, errors, recordRe
     return { denied: false };
   };
 
-  const limitedOperation = (context: ChainContext): { bucket: string; limits: readonly ScopeLimit[] } | undefined => {
+  const declaredBucket = (context: ChainContext, named?: string): { bucket: string; limits: readonly ScopeLimit[] } | undefined => {
     const operation = context.get("route")?.operation;
     if (operation === undefined || operation.rate === "none" || operation.audience === "machine") {
       return undefined;
     }
-    const bucket = operation.rate;
+    const bucket = named ?? operation.rate;
     const limits = registry.scopesOf(bucket);
     if (limits === undefined) {
       throw failure(context, bucket, new Error("the bucket is not in the registry"));
     }
     return { bucket, limits };
   };
+
+  // The bucket the stages take from. An operation whose handler takes its declared bucket is still limited by the `read` bucket on every request,
+  // per address before authentication and per account after it, so a flood of bad credentials is throttled whatever the handler later decides.
+  const limitedOperation = (context: ChainContext): { bucket: string; limits: readonly ScopeLimit[] } | undefined =>
+    declaredBucket(context, context.get("route")?.operation.rateTakenByHandler === true ? HANDLER_TAKEN_STAGE_BUCKET : undefined);
 
   // Takes one token from each of the bucket's limits that `include` selects, in
   // the registry's order, and answers the refusal of the first one that is empty.
@@ -239,6 +255,22 @@ export function createRateLimiting({ limiter, registry, logger, errors, recordRe
     }
   };
 
+  // The limits of the declared bucket for an operation whose handler decides when the request is one the bucket guards.
+  const takeBucket: TakeBucketLimit = async (context) => {
+    const limited = declaredBucket(context);
+    if (limited === undefined) {
+      throw failure(context, "none", new Error("the operation has no bucket to take from"));
+    }
+    const entries = limited.limits.flatMap((limit) => {
+      const key = subjectOf(context, limit);
+      return key === undefined ? [] : [{ limit, key }];
+    });
+    const { denied } = await consume(context, limited.bucket, entries);
+    if (denied) {
+      throw new ProblemError("rate_limited", DENIED_DETAIL);
+    }
+  };
+
   const ipStage: RequestStage = async (context, next) => {
     const refusal = await take(context, (limit) => limit.scope === "ip");
     return refusal ?? next();
@@ -249,7 +281,9 @@ export function createRateLimiting({ limiter, registry, logger, errors, recordRe
     if (refusal !== undefined) {
       return refusal;
     }
-    if (limitedOperation(context) !== undefined) {
+    if (context.get("route")?.operation.rateTakenByHandler === true) {
+      context.set("takeBucketLimit", takeBucket);
+    } else if (limitedOperation(context) !== undefined) {
       context.set("takeEmailLimit", takeEmail);
       context.set("takeAccountLimit", takeAccount);
     }

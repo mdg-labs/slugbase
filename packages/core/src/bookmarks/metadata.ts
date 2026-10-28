@@ -266,13 +266,19 @@ function canonicalLinkOf(raw: string, base: string): string | null {
   return resolved.href.length <= METADATA_CANONICAL_URL_MAX_LENGTH ? resolved.href : null;
 }
 
+/** The most `<link rel=icon>` targets `parsePageIcons` returns. */
+export const METADATA_ICON_LINKS_MAX = 8;
+
+interface PageWalk {
+  readonly metadata: PageMetadata;
+  readonly icons: readonly string[];
+}
+
 /**
- * The metadata of an HTML page: the title from `og:title`, then `<title>`; the description from `og:description`, then
- * `<meta name="description">`; the site name from `og:site_name`, then `application-name`; the canonical link; and the language from
- * `<html lang>`, then `og:locale`. A value that is empty once cleaned counts as absent, so the next source is tried. Undefined when the response
- * is not a type the parser reads. Only the first `METADATA_HTML_MAX_BYTES` bytes are looked at.
+ * The one pass over the text of a page that `parsePageMetadata` and `parsePageIcons` share: the metadata fields, and the targets of the
+ * `<link rel=icon>` tags in document order. Undefined when the response is not a type the parser reads.
  */
-export function parsePageMetadata(input: PageMetadataInput): PageMetadata | undefined {
+function walkPage(input: PageMetadataInput): PageWalk | undefined {
   if (!isMetadataContentType(input.contentType)) {
     return undefined;
   }
@@ -283,6 +289,7 @@ export function parsePageMetadata(input: PageMetadataInput): PageMetadata | unde
   let documentTitle: string | null = null;
   let htmlLanguage: string | null = null;
   let canonical: string | null = null;
+  const icons: string[] = [];
   let metaTags = 0;
   let linkTags = 0;
   let svgDepth = 0;
@@ -397,13 +404,20 @@ export function parsePageMetadata(input: PageMetadataInput): PageMetadata | unde
       }
       case "link": {
         linkTags += 1;
-        if (canonical !== null || linkTags > MAX_LINK_TAGS) {
-          break;
-        }
         const rel = tag.attributes.get("rel");
         const href = tag.attributes.get("href");
-        if (rel !== undefined && href !== undefined && rel.toLowerCase().split(/\s+/).includes("canonical")) {
+        if (linkTags > MAX_LINK_TAGS || rel === undefined || href === undefined) {
+          break;
+        }
+        const tokens = rel.toLowerCase().split(/\s+/);
+        if (canonical === null && tokens.includes("canonical")) {
           canonical = canonicalLinkOf(href, input.url);
+        }
+        if (icons.length < METADATA_ICON_LINKS_MAX && tokens.includes("icon")) {
+          const target = canonicalLinkOf(href, input.url);
+          if (target !== null && !icons.includes(target)) {
+            icons.push(target);
+          }
         }
         break;
       }
@@ -413,10 +427,33 @@ export function parsePageMetadata(input: PageMetadataInput): PageMetadata | unde
   }
 
   return {
-    title: meta.get("og:title") ?? documentTitle,
-    description: meta.get("og:description") ?? meta.get("description") ?? null,
-    siteName: meta.get("og:site_name") ?? meta.get("application-name") ?? null,
-    canonicalUrl: canonical,
-    language: htmlLanguage ?? languageOf(meta.get("og:locale")),
+    metadata: {
+      title: meta.get("og:title") ?? documentTitle,
+      description: meta.get("og:description") ?? meta.get("description") ?? null,
+      siteName: meta.get("og:site_name") ?? meta.get("application-name") ?? null,
+      canonicalUrl: canonical,
+      language: htmlLanguage ?? languageOf(meta.get("og:locale")),
+    },
+    icons,
   };
+}
+
+/**
+ * The metadata of an HTML page: the title from `og:title`, then `<title>`; the description from `og:description`, then
+ * `<meta name="description">`; the site name from `og:site_name`, then `application-name`; the canonical link; and the language from
+ * `<html lang>`, then `og:locale`. A value that is empty once cleaned counts as absent, so the next source is tried. Undefined when the response
+ * is not a type the parser reads. Only the first `METADATA_HTML_MAX_BYTES` bytes are looked at.
+ */
+export function parsePageMetadata(input: PageMetadataInput): PageMetadata | undefined {
+  return walkPage(input)?.metadata;
+}
+
+/**
+ * The addresses the `<link>` tags of an HTML page with `rel=icon` (also `shortcut icon`) name, in document order, at most `METADATA_ICON_LINKS_MAX`:
+ * absolute `http` and `https` addresses, resolved against the page's own address, without credentials or fragment and without duplicates. The
+ * addresses are text and nothing here fetches them. Empty when the response is not a type the parser reads. The same bounded walk as
+ * `parsePageMetadata`, over the first `METADATA_HTML_MAX_BYTES` bytes.
+ */
+export function parsePageIcons(input: PageMetadataInput): readonly string[] {
+  return walkPage(input)?.icons ?? [];
 }

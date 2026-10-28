@@ -344,6 +344,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/favicons/{host}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The icon of a host */
+        get: operations["getFavicon"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/folders": {
         parameters: {
             query?: never;
@@ -4960,6 +4977,103 @@ export interface operations {
                 };
             };
             /** @description The service is temporarily unavailable, or no entitlement source is configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getFavicon: {
+        parameters: {
+            query?: {
+                size?: "32" | "64";
+            };
+            header?: never;
+            path: {
+                host: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The cached icon of the host, a PNG that the server encoded itself from an image of at most 64 KiB that it fetched through the egress adapter; never SVG and never the fetched bytes. The browser may keep it for seven days */
+            200: {
+                headers: {
+                    /** @description A stored icon: cacheable by the browser only (private) for 604800 seconds */
+                    "Cache-Control": "private, max-age=604800";
+                    /** @description Always nosniff, so the browser reads the body as the PNG it is */
+                    "X-Content-Type-Options": "nosniff";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description The host has no icon in the cache: a transparent placeholder PNG, which the browser keeps for a minute only. When the caller can read a bookmark on the host and the host is not known to have none, a fetch is queued; a host with no icon the server can use stays a placeholder until the record expires, and the web app draws a monogram for it */
+            202: {
+                headers: {
+                    /** @description The placeholder: cacheable by the browser only (private) for 60 seconds */
+                    "Cache-Control": "private, max-age=60";
+                    /** @description Always nosniff, so the browser reads the body as the PNG it is */
+                    "X-Content-Type-Options": "nosniff";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The credential is an API token, which cannot read icons (forbidden) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The host is not a lower-case host name in punycode of at most 253 characters, or the size is not 32 or 64, or a parameter the operation does not declare was sent */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests, or too many fetches were started; Retry-After says when to try again. Every request takes from the read limit; only a request that would start a fetch takes from the fetch limit, and one answered from the cache never does */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
             503: {
                 headers: {
                     [name: string]: unknown;

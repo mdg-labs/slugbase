@@ -49,6 +49,10 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  *   `404 slug_not_found`. `resolveSlug` answers an empty `200` and not `404` for a slug of B, which `runApiMatrix` is told by its `emptyAnswers` option. The path parameter `slug` of
  *   `deleteGoPreference` is a slug as well, and the default maps it to a bookmark; a fixture that holds the slugs of workspace B maps it to `slug`, and forgetting a slug of B, which the owner of B
  *   has a remembered choice for and the caller has none, is `404 not_found` and leaves the choice of B as it was. `listGoPreferences` has no identifier input.
+ * - Host: the path parameter `host` of `getFavicon` is the host name of a bookmark, a handle the caller writes and not the identifier of a row, so the default maps it to a bookmark (an
+ *   identifier of the default fixture is a valid host name, which is all the operation reads). A fixture that holds the hosts of the bookmarks of workspace B (kind `host`), which the caller has no
+ *   bookmark on, maps it to `host` and holds that a host of B is answered the placeholder, queues no fetch and names nothing of B. `getFavicon` answers `202` and not `404` for such a host, which
+ *   `runApiMatrix` is told by its `emptyAnswers` option.
  * - Tag identifier: the path parameter `id` of `renameTag`, `mergeTag` and `deleteTag`, the body input `intoTagId` of `mergeTag`, the query parameter `tag` of `listBookmarks` and `listBookmarkIds` (as a single value and as a repeated one), the body input `filter.tag` of `bulkBookmarks` and
  *   `previewBulkBookmarks` (as a single value and as a list) and the body input `tagIds[]` of `createBookmark`, `updateBookmark`, `bulkBookmarks` and `previewBulkBookmarks`. The body input `tagNames[]` of the two is a name, not an identifier, and takes no entry.
  * - Folder identifier: the path parameter `id` of `getFolder`, `updateFolder`, `deleteFolder`, `addFolderBookmarks` and `removeFolderBookmarks`, the query
@@ -74,6 +78,7 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
   "chooseSlug.slug": "bookmark",
   "chooseSlug.bookmarkId": "bookmark",
   "deleteGoPreference.slug": "bookmark",
+  "getFavicon.host": "bookmark",
   "updateBookmark.id": "bookmark",
   "deleteBookmark.id": "bookmark",
   "openBookmark.id": "bookmark",

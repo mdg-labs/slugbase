@@ -78,8 +78,8 @@ async function seedSession(session: SeedSession): Promise<string> {
   return id;
 }
 
-/** What a purge answers when it deleted `sessions` sessions, `apiTokens` API tokens, `loginStates` OIDC login states, `credentialTokens` credential tokens, `auditEvents` audit events, `idempotencyKeys` idempotency keys, `invitations` invitations and `urlMetadata` cached page metadata, in the order of doc 05 section 6. */
-function counts(sessions: number, apiTokens = 0, loginStates = 0, credentialTokens = 0, auditEvents = 0, idempotencyKeys = 0, invitations = 0, urlMetadata = 0): { table: string; deleted: number }[] {
+/** What a purge answers when it deleted `sessions` sessions, `apiTokens` API tokens, `loginStates` OIDC login states, `credentialTokens` credential tokens, `auditEvents` audit events, `idempotencyKeys` idempotency keys, `invitations` invitations and `urlMetadata` cached page metadata and `favicons` cached favicons, in the order of doc 05 section 6. */
+function counts(sessions: number, apiTokens = 0, loginStates = 0, credentialTokens = 0, auditEvents = 0, idempotencyKeys = 0, invitations = 0, urlMetadata = 0, favicons = 0): { table: string; deleted: number }[] {
   return [
     { table: "sessions", deleted: sessions },
     { table: "api_tokens", deleted: apiTokens },
@@ -88,6 +88,7 @@ function counts(sessions: number, apiTokens = 0, loginStates = 0, credentialToke
     { table: "workspace_invitations", deleted: invitations },
     { table: "idempotency_keys", deleted: idempotencyKeys },
     { table: "url_metadata", deleted: urlMetadata },
+    { table: "favicons", deleted: favicons },
     { table: "audit_events", deleted: auditEvents },
   ];
 }
@@ -683,6 +684,56 @@ describe("purging expired page metadata", () => {
 
   it("gives slugbase_app no DELETE on url_metadata: the purge is the only way it removes one", async () => {
     await expect(db.app.unsafe("DELETE FROM public.url_metadata")).rejects.toMatchObject({ code: "42501" });
+  });
+});
+
+describe("purging expired favicons", () => {
+  /** Seeds a favicon row that expires `expiresIn` milliseconds from now (negative is in the past). */
+  async function seedFavicon(host: string, expiresIn: number): Promise<void> {
+    await asSystem(
+      db,
+      (tx) => tx`
+        INSERT INTO favicons (host, status, fetched_at, expires_at)
+        VALUES (${host}, 'none', now() - interval '8 days', now() + ${expiresIn} * interval '1 millisecond')`,
+    );
+  }
+
+  async function remaining(): Promise<string[]> {
+    const rows = await asSystem(db, (tx) => tx<{ host: string }[]>`SELECT host FROM favicons`);
+    return rows.map((row) => row.host).sort();
+  }
+
+  it("deletes a favicon past its expiry and keeps a current one, counting what it deleted", async () => {
+    await clearSessions();
+    await asSystem(db, (tx) => tx`DELETE FROM favicons`);
+    await seedFavicon("gone.example.com", -HOUR_MS);
+    await seedFavicon("also-gone.example.com", -DAY_MS);
+    await seedFavicon("kept.example.com", HOUR_MS);
+    await seedFavicon("kept-too.example.com", 6 * DAY_MS);
+
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 0, 0, 0, 0, 2));
+    expect(await remaining()).toEqual(["kept-too.example.com", "kept.example.com"]);
+    expect(await store.purge()).toEqual(counts(0));
+  });
+
+  it("deletes one batch of 5 000 per call and finishes the rest on the next calls", async () => {
+    await asSystem(db, (tx) => tx`DELETE FROM favicons`);
+    const extra = 3;
+    await asSystem(
+      db,
+      (tx) => tx`
+        INSERT INTO favicons (host, status, fetched_at, expires_at)
+        SELECT 'batch' || n || '.example.com', 'none', now() - interval '8 days', now() - interval '1 hour'
+        FROM generate_series(1, ${BATCH + extra}::int) AS n`,
+    );
+
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 0, 0, 0, 0, BATCH));
+    expect(await store.purge()).toEqual(counts(0, 0, 0, 0, 0, 0, 0, 0, extra));
+    expect(await store.purge()).toEqual(counts(0));
+  });
+
+  it("gives slugbase_app no DELETE on favicons: the purge is the only way it removes a row", async () => {
+    await expect(db.app.unsafe("DELETE FROM public.favicons")).rejects.toMatchObject({ code: "42501" });
   });
 });
 

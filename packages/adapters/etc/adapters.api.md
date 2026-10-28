@@ -11,10 +11,12 @@ import type { EntitlementSource } from '@slugbase/core';
 import type { ErrorReportPort } from '@slugbase/core';
 import { IdentityPort } from '@slugbase/core';
 import { IdentityProviderConfig } from '@slugbase/core';
+import { ImageCodecPort } from '@slugbase/core';
 import type { MailMessage } from '@slugbase/core';
 import { MailPort } from '@slugbase/core';
 import type { RateLimitPort } from '@slugbase/core';
 import type { RateLimitStore } from '@slugbase/db';
+import { ReencodedIcon } from '@slugbase/core';
 import type { SecretBoxPort } from '@slugbase/core';
 
 // @public
@@ -224,6 +226,15 @@ export interface SecretBoxKey {
 
 // @public (undocumented)
 export type SecretBoxOperation = "configure" | "seal" | "open";
+
+// @public
+export class SharpImageCodec implements ImageCodecPort {
+    constructor();
+    // (undocumented)
+    readonly available = true;
+    // (undocumented)
+    reencodeIcon(input: Uint8Array): Promise<ReencodedIcon>;
+}
 
 // @public
 export type SmtpSecurity = "tls" | "starttls" | "none";

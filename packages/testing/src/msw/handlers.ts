@@ -13,6 +13,12 @@ import { DEFAULT_SCENARIO, type Scenario } from "./scenarios.js";
 
 const PROBLEM_MEDIA_TYPE = "application/problem+json";
 
+// The one binary answer the mock builds: a PNG, as the favicon operation declares one. It is a transparent 1 by 1 image, so a page that shows it shows nothing.
+const MOCK_PNG = Uint8Array.from(
+  atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAACXBIWXMAAAPoAAAD6AG1e1JrAAAADUlEQVQI12NgYGBgAAAABQABXvMqOgAAAABJRU5ErkJggg=="),
+  (character) => character.charCodeAt(0),
+);
+
 // A schema of type string would give `Set-Cookie` the value `string`, which the cookie store of the MSW
 // server cannot parse: it answers 500. Any operation that declares the header gets a cookie that parses,
 // shaped like the session cookie of doc 04 section 4.1 without the `__Host-` prefix and `Secure` that
@@ -143,6 +149,10 @@ function buildResponse(
   }
   const [mediaType, schema] = content;
   const isJson = mediaType === "application/json" || mediaType.endsWith("+json");
+  if (mediaType === "image/png" && isRecord(schema) && schema["type"] === "string" && schema["format"] === "binary") {
+    const bodyHeaders = [...headers.filter(([name]) => name.toLowerCase() !== "content-type"), ["Content-Type", mediaType]] satisfies [string, string][];
+    return () => new HttpResponse(MOCK_PNG, { status: response.status, headers: new Headers(bodyHeaders) });
+  }
   if (!isJson && !mediaType.startsWith("text/")) {
     throw new Error(`${describe(operation)} answers ${mediaType}; the mock builds JSON and text bodies only`);
   }

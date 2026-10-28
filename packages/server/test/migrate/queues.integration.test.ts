@@ -49,7 +49,7 @@ describe("the job queues after migrate", () => {
     const found = await queues();
     const jobs = builtInJobs();
     expect(found.map((queue) => queue.name)).toEqual(jobs.map((job) => job.name).sort());
-    expect(found.map((queue) => queue.name)).toEqual(expect.arrayContaining(["mail.send", "rateLimit.purgeIdle", "retention.purge", "bookmark.fetchMetadata"]));
+    expect(found.map((queue) => queue.name)).toEqual(expect.arrayContaining(["mail.send", "rateLimit.purgeIdle", "retention.purge", "bookmark.fetchMetadata", "favicon.fetch"]));
     for (const job of jobs) {
       const settings = queueSettings(job);
       expect(found.find((queue) => queue.name === job.name)).toEqual({
@@ -75,9 +75,9 @@ describe("the job queues after migrate", () => {
     await runMigrations({ url: migratorUrl() });
 
     const found = await queues();
-    expect(found.filter((queue) => queue.policy === "short").map((queue) => queue.name)).toEqual(["bookmark.fetchMetadata"]);
+    expect(found.filter((queue) => queue.policy === "short").map((queue) => queue.name)).toEqual(["bookmark.fetchMetadata", "favicon.fetch"]);
     expect(found.filter((queue) => queue.policy !== "short").every((queue) => queue.policy === "standard")).toBe(true);
-    expect(builtInJobs().filter((job) => job.dedupe).map((job) => job.name)).toEqual(["bookmark.fetchMetadata"]);
+    expect(builtInJobs().filter((job) => job.dedupe).map((job) => job.name)).toEqual(["bookmark.fetchMetadata", "favicon.fetch"]);
   });
 
   it("creates the queues of the jobs it is given, with their own retry policy", async () => {

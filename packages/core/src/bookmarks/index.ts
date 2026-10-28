@@ -7,6 +7,8 @@ export {
   METADATA_SITE_NAME_MAX_LENGTH,
   METADATA_TITLE_MAX_LENGTH,
   isMetadataContentType,
+  METADATA_ICON_LINKS_MAX,
+  parsePageIcons,
   parsePageMetadata,
 } from "./metadata.ts";
 export type { PageMetadata, PageMetadataInput } from "./metadata.ts";

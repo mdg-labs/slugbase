@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   ProblemSchema,
   problemStatus,
+  type BinaryResponse,
   type EmptyResponse,
   type JsonResponse,
   type Problem,
@@ -260,7 +261,7 @@ export class ResponseMismatchError extends Error {
  */
 export type ResponseValidation = "throw" | "strip";
 
-type DeclaredResponse = JsonResponse | EmptyResponse | ProblemResponse;
+type DeclaredResponse = JsonResponse | EmptyResponse | ProblemResponse | BinaryResponse;
 
 function mismatch(path: string, code: string): ResponseMismatchError {
   return new ResponseMismatchError([{ path, code }]);
@@ -384,6 +385,21 @@ export function responseStage(validation: ResponseValidation): ResponseStage {
     const route = context.get("route");
     const problem = isProblemContentType(response);
     if (route === undefined && !problem) {
+      return;
+    }
+    const declaredNow = problem ? undefined : declaredResponse(context, response.status);
+    if (declaredNow?.kind === "binary") {
+      // Bytes are checked as bytes: reading them as text would change them.
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if ((response.headers.get("content-type") ?? "").split(";")[0]?.trim().toLowerCase() !== declaredNow.mediaType) {
+        throw mismatch("", "wrong_content_type");
+      }
+      if (bytes.length === 0) {
+        throw mismatch("", "empty_body");
+      }
+      const kept = new Headers(response.headers);
+      context.res = undefined;
+      context.res = new Response(bytes, { status: response.status, statusText: response.statusText, headers: kept });
       return;
     }
     const text = await response.text();

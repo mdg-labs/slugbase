@@ -46,6 +46,7 @@ import { isOpenApiDocument, openApiRoute } from "./routes/meta/openapi.ts";
 import { setupRoutes } from "./routes/setup/index.ts";
 import { invitationRoutes } from "./routes/invitations/index.ts";
 import { bookmarkRoutes } from "./routes/bookmarks/index.ts";
+import { faviconRoutes } from "./routes/favicons.ts";
 import { tagRoutes } from "./routes/tags/index.ts";
 import { folderRoutes } from "./routes/folders/index.ts";
 import { goRoutes } from "./routes/go/index.ts";
@@ -64,7 +65,7 @@ import { createUsageBuffer, type UsageBuffer } from "./usage/buffer.ts";
 import type { JobDefinition, ScheduleDefinition } from "./worker/job.ts";
 
 export type { ChainContext, ChainEnv, MatchedRoute, RouteBinding, RouteHandler, StageName, ValidatedInput } from "./http/chain.ts";
-export type { RateLimitState, TakeEmailLimit, TakenLimit } from "./http/rate-limit.ts";
+export type { RateLimitState, TakeBucketLimit, TakeEmailLimit, TakenLimit } from "./http/rate-limit.ts";
 export type {
   ApiTokenPrincipal,
   Authenticator,
@@ -297,6 +298,7 @@ const ADAPTER_PORTS: Record<keyof Adapters, true> = {
   clientErrorReport: true,
   challenge: true,
   egress: true,
+  imageCodec: true,
   rateLimit: true,
   secretBox: true,
   tenantResolver: true,
@@ -588,6 +590,8 @@ export function createServer(options: CreateServerOptions): Server {
   builtInRoutes.push(...entitlementRoutes({ withTenant: context.withTenant, service: entitlementService }));
   // So are the bookmarks of the active workspace: created under the workspace's `bookmarks.max` (the ceiling is read from the engine, the count is taken in the database) and read back by their owner.
   builtInRoutes.push(...bookmarkRoutes({ entitlements: createBookmarkEntitlements(entitlementService), cursorSecret: config.SESSION_SECRET, usage, egress: adapters.egress, ...(options.metadataBudgetMs === undefined ? {} : { metadataBudgetMs: options.metadataBudgetMs }) }));
+  // The icon of a host the bookmarks point at, from the deployment-wide cache, queuing its fetch for a host the caller can read a bookmark on.
+  builtInRoutes.push(...faviconRoutes());
   // And the tags of the member who makes them: created, listed with their counts, renamed and deleted by their owner alone.
   builtInRoutes.push(...tagRoutes({ cursorSecret: config.SESSION_SECRET }));
   // And the folders of the member who makes them: created, listed with their bookmark counts, read, changed (with `If-Match`) and deleted by their owner alone.

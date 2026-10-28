@@ -4,6 +4,7 @@ import {
   HTTP_METHODS,
   RATE_BUCKETS,
   TOKEN_SCOPES,
+  type BinaryResponse,
   type EmptyResponse,
   type JsonResponse,
   type OperationDefinition,
@@ -40,9 +41,11 @@ export type ResponseHeadersOf<H> = keyof H extends never
 export type ResponseResult<R> = {
   [S in keyof R & number]: R[S] extends JsonResponse<infer Schema, infer H>
     ? { readonly status: S; readonly body: z.input<Schema> } & ResponseHeadersOf<H>
-    : R[S] extends EmptyResponse
-      ? { readonly status: S; readonly body?: never; readonly headers?: Readonly<Record<string, string>> }
-      : never;
+    : R[S] extends BinaryResponse<infer H>
+      ? { readonly status: S; readonly body: Uint8Array } & ResponseHeadersOf<H>
+      : R[S] extends EmptyResponse
+        ? { readonly status: S; readonly body?: never; readonly headers?: Readonly<Record<string, string>> }
+        : never;
 }[keyof R & number];
 
 /**
@@ -66,12 +69,19 @@ interface UntypedResult {
 }
 
 function respond(operation: OperationDefinition, result: UntypedResult): Response {
-  const responses: Readonly<Partial<Record<number, JsonResponse | EmptyResponse | { readonly kind: "problem" }>>> = operation.responses;
+  const responses: Readonly<Partial<Record<number, JsonResponse | EmptyResponse | BinaryResponse | { readonly kind: "problem" }>>> = operation.responses;
   const declared = responses[result.status];
-  if (declared?.kind !== "json" && declared?.kind !== "empty") {
+  if (declared?.kind !== "json" && declared?.kind !== "empty" && declared?.kind !== "binary") {
     throw new Error(`${operation.operationId} answered ${String(result.status)}, which it does not declare as a body or empty response`);
   }
   const headers = new Headers(result.headers);
+  if (declared.kind === "binary") {
+    if (!(result.body instanceof Uint8Array)) {
+      throw new Error(`${operation.operationId} answered ${String(result.status)} without the bytes it declares`);
+    }
+    headers.set("content-type", declared.mediaType);
+    return new Response(result.body, { status: result.status, headers });
+  }
   if (declared.kind === "json") {
     headers.set("content-type", "application/json; charset=utf-8");
     return new Response(JSON.stringify(result.body), { status: result.status, headers });

@@ -6,7 +6,9 @@ import {
   METADATA_LANGUAGE_MAX_LENGTH,
   METADATA_SITE_NAME_MAX_LENGTH,
   METADATA_TITLE_MAX_LENGTH,
+  METADATA_ICON_LINKS_MAX,
   isMetadataContentType,
+  parsePageIcons,
   parsePageMetadata,
   type PageMetadata,
 } from "../../src/index.ts";
@@ -266,5 +268,38 @@ describe("pages that try to hurt the parser", () => {
     const page = parse(`<title>&lt;img src=x onerror=alert(1)&gt;<img src=x onerror=alert(2)></title>`);
 
     expect(page.title).toBe("<img src=x onerror=alert(1)><img src=x onerror=alert(2)>");
+  });
+});
+
+describe("parsePageIcons", () => {
+  const page = (head: string, url = "https://example.test/dir/page"): Parameters<typeof parsePageIcons>[0] => ({
+    body: new TextEncoder().encode(`<html><head>${head}</head></html>`),
+    contentType: "text/html",
+    url,
+  });
+
+  it("returns the rel=icon and rel=shortcut icon targets in document order, resolved against the page, without duplicates", () => {
+    expect(
+      parsePageIcons(
+        page(
+          '<link rel="stylesheet" href="/a.css"><link rel="ICON" href="a.png"><link rel="shortcut icon" href="/b.ico"><link rel="icon" href="a.png"><link rel="apple-touch-icon" href="/c.png"><link rel="mask-icon" href="/d.svg">',
+        ),
+      ),
+    ).toEqual(["https://example.test/dir/a.png", "https://example.test/b.ico"]);
+  });
+
+  it("keeps only http and https addresses, drops credentials and the fragment, and keeps the canonical link beside them", () => {
+    const input = page(
+      '<link rel="icon" href="data:image/png;base64,AAAA"><link rel="icon" href="javascript:alert(1)"><link rel="icon" href="//user:pw@cdn.test/i.png#frag"><link rel="canonical" href="/canon">',
+    );
+    expect(parsePageIcons(input)).toEqual(["https://cdn.test/i.png"]);
+    expect(parsePageMetadata(input)?.canonicalUrl).toBe("https://example.test/canon");
+  });
+
+  it("returns at most eight, skips links inside comments, scripts and svg, and nothing for a type it does not read", () => {
+    const many = Array.from({ length: 12 }, (_, index) => `<link rel="icon" href="/i${String(index)}.png">`).join("");
+    expect(parsePageIcons(page(many))).toHaveLength(METADATA_ICON_LINKS_MAX);
+    expect(parsePageIcons(page('<!-- <link rel="icon" href="/c.png"> --><script>var x = \'<link rel="icon" href="/s.png">\';</script>'))).toEqual([]);
+    expect(parsePageIcons({ ...page('<link rel="icon" href="/i.png">'), contentType: "image/svg+xml" })).toEqual([]);
   });
 });

@@ -6,6 +6,7 @@
 
 import { Adapters } from '@slugbase/core';
 import { AuthStore } from '@slugbase/db';
+import { BinaryResponse } from '@slugbase/contracts';
 import type { BookmarkUsage } from '@slugbase/core';
 import type { ClientErrorReportRequest } from '@slugbase/core';
 import type { Context } from 'hono';
@@ -83,6 +84,7 @@ export interface ChainEnv {
         rateLimit?: RateLimitState;
         takeEmailLimit?: TakeEmailLimit;
         takeAccountLimit?: (context: ChainContext, accountId: string) => Promise<void>;
+        takeBucketLimit?: TakeBucketLimit;
         workspaceId?: string;
         tenant?: RequestTenant;
         hooks?: HookDispatcher;
@@ -986,6 +988,9 @@ export type ResponseResult<R> = {
     [S in keyof R & number]: R[S] extends JsonResponse<infer Schema, infer H> ? {
         readonly status: S;
         readonly body: z.input<Schema>;
+    } & ResponseHeadersOf<H> : R[S] extends BinaryResponse<infer H> ? {
+        readonly status: S;
+        readonly body: Uint8Array;
     } & ResponseHeadersOf<H> : R[S] extends EmptyResponse ? {
         readonly status: S;
         readonly body?: never;
@@ -1339,6 +1344,9 @@ export interface StartOptions {
     readonly metricsPort?: number;
     readonly port?: number;
 }
+
+// @public
+export type TakeBucketLimit = (context: ChainContext) => Promise<void>;
 
 // @public
 export type TakeEmailLimit = (context: ChainContext, key: string) => Promise<void>;

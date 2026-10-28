@@ -4,8 +4,8 @@ import { loadConfig, type Logger } from "@slugbase/server";
 import { describe, expect, it } from "vitest";
 import { composeAdapters } from "../src/main.ts";
 
-// The composition root builds the five CE adapters from configuration (doc 09
-// section 2.1); the other ports stay at the unconfigured defaults (D22).
+// The composition root builds the CE adapters from configuration (doc 09
+// section 2.1), the image codec of the favicon fetch among them; the other ports stay at the unconfigured defaults (D22).
 
 const warnings: string[] = [];
 const logger: Logger = { info: () => undefined, warn: (message) => warnings.push(message), error: () => undefined };
@@ -30,7 +30,7 @@ const configured = {
   SMTP_FROM: "SlugBase <slugbase@example.com>",
 };
 
-const FIVE = ["egress", "secretBox", "rateLimit", "mail", "errors"] as const satisfies readonly (keyof Adapters)[];
+const FIVE = ["egress", "imageCodec", "secretBox", "rateLimit", "mail", "errors"] as const satisfies readonly (keyof Adapters)[];
 const REST = ["ai", "identity", "analytics", "clientErrorReport", "challenge", "tenantResolver"] as const satisfies readonly (keyof Adapters)[];
 
 describe("the CE adapters of the composition root", () => {
@@ -47,7 +47,7 @@ describe("the CE adapters of the composition root", () => {
   it("are real adapters for the worker too, and the unavailable ones are the adapters that report so", async () => {
     const config = loadConfig("worker", environment).config;
     const adapters = composeAdapters(config, logger);
-    for (const port of ["egress", "secretBox", "rateLimit"] as const) {
+    for (const port of ["egress", "imageCodec", "secretBox", "rateLimit"] as const) {
       expect(adapters[port].available, port).toBe(true);
     }
     // Without SMTP keys and a DSN, mail is the log-only adapter, which says it is off and logs what it

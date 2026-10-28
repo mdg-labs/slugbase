@@ -1,4 +1,5 @@
 import {
+  binaryResponse,
   defineOperation,
   emptyResponse,
   getHealth,
@@ -379,5 +380,47 @@ describe("the registration check", () => {
       }),
     ).toThrow(CompositionError);
     expect(database.closed.count).toBe(1);
+  });
+});
+
+describe("a route of an operation with a binary response", () => {
+  const getImage = defineOperation({
+    method: "get",
+    path: "/api/v1/images/{id}",
+    operationId: "getImage",
+    tag: "images",
+    auth: "anonymous",
+    rate: "none",
+    request: { params: z.strictObject({ id: z.string() }) },
+    responses: {
+      200: binaryResponse("a PNG", "image/png", { headers: { "X-Content-Type-Options": { description: "nosniff", schema: z.literal("nosniff") } } }),
+      404: problemResponse("not found"),
+    },
+  });
+  const BYTES = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff, 0x80]);
+
+  function serveImage(handle: Parameters<ReturnType<typeof route<typeof getImage>>["handle"]>[0]) {
+    const module = moduleOf(route(getImage).handle(handle));
+    return compose([module], documentFor([getImage]));
+  }
+
+  it("answers the bytes of the handler with the media type the operation declares, whatever the handler sets", async () => {
+    const server = serveImage(() => ({ status: 200, body: BYTES, headers: { "X-Content-Type-Options": "nosniff", "content-type": "text/html" } }));
+
+    const response = await server.fetch(new Request("http://localhost/api/v1/images/1"));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/png");
+    expect(response.headers.get("x-content-type-options")).toBe("nosniff");
+    expect(Buffer.from(await response.arrayBuffer()).equals(Buffer.from(BYTES))).toBe(true);
+  });
+
+  it("answers 500, and not a body, for a handler that hands over text where the operation declares bytes", async () => {
+    const server = serveImage(() => ({ status: 200, body: "<svg/>" as unknown as Uint8Array, headers: { "X-Content-Type-Options": "nosniff" } }));
+
+    const response = await server.fetch(new Request("http://localhost/api/v1/images/1"));
+
+    expect(response.status).toBe(500);
+    expect(response.headers.get("content-type")).toMatch(/^application\/problem\+json/);
   });
 });

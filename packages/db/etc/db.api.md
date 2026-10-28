@@ -572,6 +572,40 @@ export interface EntitlementUsage {
     readonly seatsUsed: number;
 }
 
+// @public
+export type FaviconRecord = {
+    readonly status: "ok";
+    readonly png: Uint8Array;
+} | {
+    readonly status: "none";
+};
+
+// @public (undocumented)
+export interface FaviconRepository {
+    current(host: string, size: FaviconSize): Promise<FaviconRecord | undefined>;
+    enqueue(job: QueuedJob): Promise<void>;
+    hostReadable(host: string): Promise<boolean>;
+    store(host: string, result: FaviconResult): Promise<void>;
+}
+
+// @public (undocumented)
+export function faviconRepository(tx: TenantTx): FaviconRepository;
+
+// @public
+export type FaviconResult = {
+    readonly status: "ok";
+    readonly png64: Uint8Array;
+    readonly png32: Uint8Array;
+} | {
+    readonly status: "none";
+};
+
+// @public
+export type FaviconSize = 32 | 64;
+
+// @public
+export type FaviconStatus = "ok" | "none";
+
 // @public (undocumented)
 export type FolderRepository = FolderStore & FolderFilingStore;
 

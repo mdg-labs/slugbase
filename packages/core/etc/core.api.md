@@ -152,6 +152,8 @@ export interface Adapters {
     // (undocumented)
     readonly identity: IdentityPort;
     // (undocumented)
+    readonly imageCodec: ImageCodecPort;
+    // (undocumented)
     readonly mail: MailPort;
     // (undocumented)
     readonly rateLimit: RateLimitPort;
@@ -2268,7 +2270,40 @@ export interface ErrorReportPort extends Port {
 }
 
 // @public
+export const FAVICON_CONTENT_TYPES: readonly string[];
+
+// @public
+export const FAVICON_LINK_CANDIDATES_MAX = 4;
+
+// @public
+export const FAVICON_MAX_BYTES: number;
+
+// @public
+export const FAVICON_REQUEST_TIMEOUT_MS = 5000;
+
+// @public
+export const FAVICON_TOTAL_TIMEOUT_MS = 20000;
+
+// @public (undocumented)
+export interface FaviconFetchDependencies {
+    // (undocumented)
+    readonly egress: EgressPort;
+    // (undocumented)
+    readonly imageCodec: ImageCodecPort;
+}
+
+// @public
+export type FaviconFetchOutcome = ({
+    readonly kind: "ok";
+} & ReencodedIcon) | {
+    readonly kind: "none";
+};
+
+// @public
 export function federatedDisplayName(name: string | undefined, email: string): string;
+
+// @public
+export function fetchFavicon(input: FaviconFetchDependencies, host: string): Promise<FaviconFetchOutcome>;
 
 // @public
 export function fetchPageMetadata(egress: EgressPort, urlCanonical: string, timeoutMs: number): Promise<PageFetchOutcome>;
@@ -2958,6 +2993,12 @@ export function hashCredentialToken(value: string): Buffer | undefined;
 // @public
 export function hashOidcState(state: string): Buffer | undefined;
 
+// @public
+export const ICON_MAX_INPUT_PIXELS = 4194304;
+
+// @public
+export const ICON_SIZES: readonly [32, 64];
+
 // @public (undocumented)
 export interface IdentityAcceptance {
     readonly accountId: string;
@@ -3072,6 +3113,28 @@ export interface IdentityProviderInfo {
     readonly displayName: string;
     // (undocumented)
     readonly id: string;
+}
+
+// @public
+export interface ImageCodecPort extends Port {
+    // (undocumented)
+    reencodeIcon(input: Uint8Array): Promise<ReencodedIcon>;
+}
+
+// @public (undocumented)
+export type ImageRefusalCode =
+/** The bytes are not an image format the codec accepts (PNG, JPEG, GIF, WebP or ICO): an SVG, an HTML page, a script, anything else. */
+"unsupported_format"
+/** The image declares more than `ICON_MAX_INPUT_PIXELS` pixels, or an animation or a size the codec does not decode. */
+| "too_large"
+/** The bytes name a supported format but cannot be decoded. */
+| "undecodable";
+
+// @public
+export class ImageRefused extends Error {
+    constructor(code: ImageRefusalCode);
+    // (undocumented)
+    readonly code: ImageRefusalCode;
 }
 
 // @public
@@ -4317,6 +4380,9 @@ export const METADATA_DESCRIPTION_MAX_LENGTH = 1000;
 export const METADATA_HTML_MAX_BYTES: number;
 
 // @public
+export const METADATA_ICON_LINKS_MAX = 8;
+
+// @public
 export const METADATA_LANGUAGE_MAX_LENGTH = 35;
 
 // @public
@@ -4617,6 +4683,9 @@ export function parseAuditMetadata<Name extends AuditAction>(name: Name, value: 
 export function parseDomainEventPayload<Name extends DomainEventName>(name: Name, value: unknown): DomainEventPayload<Name>;
 
 // @public
+export function parsePageIcons(input: PageMetadataInput): readonly string[];
+
+// @public
 export function parsePageMetadata(input: PageMetadataInput): PageMetadata | undefined;
 
 // @public
@@ -4748,6 +4817,14 @@ export const REAUTH_WINDOW_MS: number;
 
 // @public
 export function reauthenticatedRecently(reauthAt: Date | undefined, nowMs: number): boolean;
+
+// @public
+export interface ReencodedIcon {
+    // (undocumented)
+    readonly png32: Uint8Array;
+    // (undocumented)
+    readonly png64: Uint8Array;
+}
 
 // @public
 export type RegistrationLocale = "en" | "de";

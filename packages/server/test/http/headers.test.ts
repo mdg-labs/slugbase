@@ -1,4 +1,4 @@
-import { defineOperation, emptyResponse, jsonResponse, problemResponse, type OperationDefinition } from "@slugbase/contracts";
+import { binaryResponse, defineOperation, emptyResponse, jsonResponse, problemResponse, type OperationDefinition } from "@slugbase/contracts";
 import { unconfigured } from "@slugbase/core";
 import { Hono } from "hono";
 import { describe, expect, it } from "vitest";
@@ -135,6 +135,25 @@ describe("Strict-Transport-Security follows the scheme of APP_ORIGIN", () => {
 describe("the declared cache policy", () => {
   it("is the literal a response header declares for the status", () => {
     expect(declaredCachePolicy(withCache(z.literal("public, max-age=60")), 200)).toBe("public, max-age=60");
+  });
+
+  it("is the literal a binary response declares, for the status that declares it", () => {
+    const declared = defineOperation({
+      method: "get",
+      path: "/api/v1/images",
+      operationId: "getImages",
+      tag: "test",
+      auth: "anonymous",
+      rate: "none",
+      responses: {
+        200: binaryResponse("stored", "image/png", { headers: { "Cache-Control": { description: "kept", schema: z.literal("private, max-age=604800") } } }),
+        202: binaryResponse("placeholder", "image/png", { headers: { "Cache-Control": { description: "kept briefly", schema: z.literal("private, max-age=60") } } }),
+        404: problemResponse("not found"),
+      },
+    });
+    expect(declaredCachePolicy(declared, 200)).toBe("private, max-age=604800");
+    expect(declaredCachePolicy(declared, 202)).toBe("private, max-age=60");
+    expect(declaredCachePolicy(declared, 404)).toBeUndefined();
   });
 
   it("is absent for a status that declares none", () => {

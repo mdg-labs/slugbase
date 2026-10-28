@@ -12,6 +12,8 @@ export { bookmarks } from "./bookmarks.ts";
 export { bookmarkTags, tags } from "./tags.ts";
 export { folderBookmarks, folders } from "./folders.ts";
 export { slugPreferences } from "./slug-preferences.ts";
+export { favicons } from "./favicons.ts";
+export type { FaviconStatus } from "./favicons.ts";
 export { urlMetadata } from "./url-metadata.ts";
 export type { UrlMetadataStatus } from "./url-metadata.ts";
 export { workspaceInvitations } from "./invitations.ts";

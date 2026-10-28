@@ -412,6 +412,123 @@ describe("the rate-limit stage", () => {
     });
   });
 
+  describe("the bucket an operation takes in its handler (rateTakenByHandler)", () => {
+    // The favicon operation is in the `fetch` bucket, but only a request that would start a fetch takes from it: the stages limit every request by the `read` bucket, and the
+    // handler takes the limits of the declared bucket through the context when it decides the request is such a one.
+    const handlerTaken = (): OperationDefinition =>
+      defineOperation({
+        method: "get",
+        path: "/api/v1/things",
+        operationId: "things",
+        tag: "test",
+        auth: "account",
+        rate: "fetch",
+        rateTakenByHandler: true,
+        responses: { 200: jsonResponse("ok", Echo), 404: problemResponse("not found") },
+      });
+    const taking = (when: (context: Parameters<RouteBinding["handler"]>[0]) => boolean) =>
+      route(handlerTaken(), async (context) => {
+        if (when(context)) {
+          await context.get("takeBucketLimit")?.(context);
+        }
+        return Response.json({ ok: true });
+      });
+
+    it("takes the read bucket in the stages and the declared bucket's address and account limits only where the handler asks", async () => {
+      const { get, memory } = build([taking((context) => context.req.header("x-miss") !== undefined)]);
+
+      expect((await get("/api/v1/things", { "x-account": "a" })).status).toBe(200);
+      expect(memory.takes).toEqual([
+        { bucket: "read", key: "unknown" },
+        { bucket: "read:account", key: "a" },
+      ]);
+      expect((await get("/api/v1/things", { "x-account": "a", "x-miss": "1" })).status).toBe(200);
+
+      expect(memory.takes.slice(2)).toEqual([
+        { bucket: "read", key: "unknown" },
+        { bucket: "read:account", key: "a" },
+        { bucket: "fetch", key: "unknown" },
+        { bucket: "fetch:account", key: "a" },
+      ]);
+    });
+
+    it("answers 429 rate_limited with Retry-After and the RateLimit headers when the handler's take finds the bucket empty, and never for a request that did not ask", async () => {
+      const { get, rejections } = build([taking((context) => context.req.header("x-miss") !== undefined)], { env: { RATE_LIMIT_FETCH_ACCOUNT: "2/min", RATE_LIMIT_FETCH_IP: "100/min" } });
+      for (let served = 0; served < 5; served += 1) {
+        expect((await get("/api/v1/things", { "x-account": "a" })).status).toBe(200);
+      }
+      expect((await get("/api/v1/things", { "x-account": "a", "x-miss": "1" })).status).toBe(200);
+      expect((await get("/api/v1/things", { "x-account": "a", "x-miss": "1" })).status).toBe(200);
+
+      const denied = await get("/api/v1/things", { "x-account": "a", "x-miss": "1" });
+
+      expect(denied.status).toBe(429);
+      expect(await denied.json()).toMatchObject({ code: "rate_limited", status: 429 });
+      expect(Number(denied.headers.get("retry-after"))).toBeGreaterThanOrEqual(1);
+      expect(denied.headers.get("ratelimit-policy")).toContain('"fetch:account"');
+      expect(rejections).toEqual(["fetch"]);
+      expect((await get("/api/v1/things", { "x-account": "a" })).status).toBe(200);
+      expect((await get("/api/v1/things", { "x-account": "b", "x-miss": "1" })).status).toBe(200);
+    });
+
+    it("answers 503 when the limiter cannot decide in the handler's take", async () => {
+      const broken: RateLimitPort = { available: true, consume: () => Promise.reject(new Error("the limiter's store is down")) };
+      const { get } = build([taking(() => true)], { limiter: () => broken });
+
+      expect((await get("/api/v1/things", { "x-account": "a" })).status).toBe(503);
+    });
+
+    it("stops 1000 requests from one IP with random bearer tokens reaching the token lookup after the burst of the read bucket", async () => {
+      const lookups = { count: 0 };
+      const authenticator: Authenticator = {
+        credential: "bearer",
+        authenticate: () => {
+          lookups.count += 1;
+          return Promise.resolve(undefined);
+        },
+      };
+      const guarded = route(
+        defineOperation({
+          method: "get",
+          path: "/api/v1/things",
+          operationId: "things",
+          tag: "test",
+          auth: "member",
+          rate: "fetch",
+          rateTakenByHandler: true,
+          responses: { 200: jsonResponse("ok", Echo), 404: problemResponse("not found") },
+        }),
+      );
+      const { get, rejections } = build([guarded], {
+        env: { RATE_LIMIT_READ_IP: "20/min" },
+        stages: { authentication: createAuthentication({ authenticators: [authenticator] }) },
+      });
+      const statuses = new Map<number, number>();
+      for (let request = 0; request < 1000; request += 1) {
+        const response = await get("/api/v1/things", { authorization: `Bearer slb_${crypto.randomUUID()}` });
+        statuses.set(response.status, (statuses.get(response.status) ?? 0) + 1);
+      }
+      expect(Object.fromEntries(statuses)).toEqual({ 401: 20, 429: 980 });
+      expect(lookups.count).toBe(20);
+      expect(new Set(rejections)).toEqual(new Set(["read"]));
+    });
+
+    it("is not offered on an operation that does not declare it, whose stages take as always", async () => {
+      let offered: unknown = "unset";
+      const { get, memory } = build([
+        route(limited("/api/v1/items", "items", "read", { auth: "account" }), (context) => {
+          offered = context.get("takeBucketLimit");
+          return Response.json({ ok: true });
+        }),
+      ]);
+
+      await get("/api/v1/items", { "x-account": "a" });
+
+      expect(offered).toBeUndefined();
+      expect(memory.takes.length).toBeGreaterThan(0);
+    });
+  });
+
   describe("before authentication (T9)", () => {
     function rejectingBearer(): { readonly authenticator: Authenticator; readonly lookups: () => number } {
       let lookups = 0;

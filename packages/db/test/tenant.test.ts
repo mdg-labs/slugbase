@@ -107,6 +107,7 @@ describe("the package entry point", () => {
         "memberRepository",
         "membershipRepository",
         "migrate",
+        "faviconRepository",
         "migrationLevel",
         "searchRepository",
         "tagRepository",
