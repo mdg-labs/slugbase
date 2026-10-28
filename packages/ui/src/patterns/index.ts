@@ -38,6 +38,7 @@ export { MultiPick, type MultiPickCreate, type MultiPickProps } from "./multi-pi
 export { PasswordStrength, type PasswordScore, type PasswordStrengthProps } from "./password-strength.tsx";
 export { Picker, type PickerOption, type PickerProps } from "./picker.tsx";
 export { RowActions, type RowAction, type RowActionsProps } from "./row-actions.tsx";
+export { SearchEntry, type SearchEntryProps } from "./search-entry.tsx";
 export { SecretInput, type SecretInputProps } from "./secret-input.tsx";
 export { SegmentedChoice, type SegmentedChoiceOption, type SegmentedChoiceProps } from "./segmented-choice.tsx";
 export { SelectCheckbox, type SelectCheckboxProps } from "./select-checkbox.tsx";
@@ -51,7 +52,9 @@ export { SidePanel, type SidePanelProps } from "./side-panel.tsx";
 export { SlugChip, type SlugChipProps } from "./slug-chip.tsx";
 export { SlugInput, type SlugInputProps } from "./slug-input.tsx";
 export { StatusBadge, type StatusBadgeProps, type StatusBadgeVariant } from "./status-badge.tsx";
+export { TagLink, type TagLinkProps } from "./tag-link.tsx";
 export { TextareaField, type TextareaFieldProps } from "./textarea-field.tsx";
+export { TileGrid, TileLink, type TileGridProps, type TileLinkProps } from "./tile-link.tsx";
 export { Totp, type TotpProps } from "./totp.tsx";
 export { TypedConfirm, matchesExpected, type TypedConfirmProps } from "./typed-confirm.tsx";
 export { UnsavedGuard, type UnsavedGuardProps } from "./unsaved-guard.tsx";

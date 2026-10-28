@@ -32,6 +32,7 @@ function PreferencesForm({ account }: { account: Account }): ReactElement {
   const viewError = errorOf("defaultView");
   const shortcutsError = errorOf("singleKeyShortcuts");
   const aiError = errorOf("aiOptOut");
+  const checklistError = errorOf("onboarding");
 
   const themeOptions = [
     { value: "system", label: t("settings.preferences.theme.option.system") },
@@ -113,6 +114,18 @@ function PreferencesForm({ account }: { account: Account }): ReactElement {
           }}
         />
       </SettingsSection>
+      <SettingsSection description={t("settings.preferences.checklist.description")} title={t("settings.preferences.checklist.title")}>
+        <SettingSwitch
+          checked={!account.onboarding.checklistDismissed}
+          description={t("settings.preferences.checklist.show.description")}
+          error={checklistError}
+          label={t("settings.preferences.checklist.show.label")}
+          name="checklistDismissed"
+          onCheckedChange={(show) => {
+            update.mutate({ onboarding: { checklistDismissed: !show } });
+          }}
+        />
+      </SettingsSection>
       {features.ai ? (
         <SettingsSection description={t("settings.preferences.ai.description")} title={t("settings.preferences.ai.title")}>
           <SettingSwitch
@@ -131,7 +144,7 @@ function PreferencesForm({ account }: { account: Account }): ReactElement {
   );
 }
 
-/** `/settings/account/preferences` (doc 03 section 11.4): theme, accent, default view, shortcuts and the AI opt-out, each saved as it is changed. */
+/** `/settings/account/preferences` (doc 03 section 11.4): theme, accent, default view, shortcuts, the Getting started checklist and the AI opt-out, each saved as it is changed. */
 export function AccountPreferencesPage(): ReactElement {
   const { t } = useTranslation();
   const router = useRouter();

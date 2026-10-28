@@ -71,14 +71,10 @@ describe("createWebApp", () => {
     await renderApp(<App />);
 
     expect(await screen.findByRole("heading", { name: WELCOME })).toBeTruthy();
-    expect(fetch.mock.calls.map(([request]) => new URL(request.url).pathname)).toEqual([
-      "/api/config",
-      SESSION_PATH,
-      ME_PATH,
-      WORKSPACES_PATH,
-      "/api/v1/entitlements",
-      "/api/v1/folders",
-    ]);
+    const paths = fetch.mock.calls.map(([request]) => new URL(request.url).pathname);
+    // The configuration, the session and the account come first and in this order; the shell and the Home screen then ask for what they show, side by side.
+    expect(paths.slice(0, 3)).toEqual(["/api/config", SESSION_PATH, ME_PATH]);
+    expect(paths.slice(3).sort()).toEqual(["/api/v1/dashboard", "/api/v1/entitlements", "/api/v1/folders", WORKSPACES_PATH].sort());
   });
 
   it("renders nothing of the product while the configuration is on its way", async () => {

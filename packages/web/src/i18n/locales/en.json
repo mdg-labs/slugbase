@@ -44,9 +44,66 @@
     }
   },
   "home": {
+    "title": "Welcome to {name}",
+    "tagline": "Bookmarks with short, private slugs.",
+    "loading": "Loading your home screen",
+    "loadFailed": {
+      "title": "The home screen could not be loaded",
+      "description": "Try again in a moment."
+    },
+    "refreshFailed": "The home screen could not be refreshed, so it may be out of date.",
+    "retry": "Try again",
+    "search": {
+      "label": "Search bookmarks, folders and tags"
+    },
+    "counts": {
+      "label": "Totals",
+      "bookmarks": "Bookmarks",
+      "folders": "Folders",
+      "tags": "Tags",
+      "sharedWithYou": "Shared with you"
+    },
+    "quickAccess": {
+      "title": "Quick access",
+      "label": "Most used slugs",
+      "empty": "The bookmarks with a slug that you open most appear here."
+    },
+    "pinned": {
+      "title": "Pinned",
+      "label": "Pinned bookmarks",
+      "viewAll": "View all →",
+      "empty": "Pin a bookmark to keep it here."
+    },
+    "tags": {
+      "title": "Most used tags",
+      "empty": "The tags you put on bookmarks appear here."
+    },
     "empty": {
-      "title": "Welcome to {name}",
-      "description": "Bookmarks with short, private slugs."
+      "title": "Save your first bookmark",
+      "description": "Give a bookmark a short, private slug and open it from anywhere through /go/.",
+      "forwarding": "Set up your browser"
+    },
+    "gettingStarted": {
+      "title": "Getting started",
+      "description": "A few steps to get set up.",
+      "progress": "Getting started progress",
+      "done": "{done} of {total} done",
+      "step": {
+        "bookmark": "Add a bookmark",
+        "slug": "Give a bookmark a slug",
+        "browser": "Set up the browser search engine",
+        "folder": "Create a folder",
+        "import": "Import from your browser"
+      },
+      "action": {
+        "forwarding": "Forwarding",
+        "setup": "Forwarding setup",
+        "folder": "New folder",
+        "import": "Import"
+      },
+      "dismiss": "Dismiss",
+      "dismissFailed": "The checklist could not be dismissed. Try again in a moment.",
+      "allSet": "All set"
     }
   },
   "bookmarks": {
@@ -715,6 +772,12 @@
         "link": "Test it: open go/{slug}",
         "own": "Opens go/{slug} in a new tab. Once the search engine is set up, type {keyword} {slug} in the address bar.",
         "sample": "You have no slug that forwards yet, so this opens a sample address. SlugBase answers that no bookmark has that slug and offers to create one."
+      },
+      "done": {
+        "action": "Mark as done",
+        "description": "Once your browser is set up, mark it as done to tick it off the Getting started checklist.",
+        "failed": "The setup could not be marked as done. Try again in a moment.",
+        "badge": "Marked as done"
       }
     },
     "slugs": {
@@ -1440,6 +1503,14 @@
       },
       "loadFailed": {
         "title": "Your preferences could not be loaded"
+      },
+      "checklist": {
+        "title": "Getting started",
+        "description": "The checklist on the Home screen.",
+        "show": {
+          "label": "Show the Getting started checklist",
+          "description": "Turn it on to bring the checklist back after dismissing it."
+        }
       }
     },
     "security": {

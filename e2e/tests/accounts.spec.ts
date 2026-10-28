@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import type { Page } from "@playwright/test";
 import { message } from "../support/catalog.ts";
 import { appOrigin } from "../support/environment.ts";
+import { homeCounts, homeHeading } from "../support/home.ts";
 import { OWNER_NAME, WORKSPACE_NAME } from "../support/instance.ts";
 import { invitationLink, waitForMail } from "../support/mailpit.ts";
 import { productName } from "../support/product.ts";
@@ -34,10 +35,6 @@ function required<T>(value: T | undefined, what: string): T {
     throw new Error(`${what} was not handed over by the step before`);
   }
   return value;
-}
-
-function homeHeading(page: Page, name: string) {
-  return page.getByRole("heading", { level: 1, name: message("en", "home.empty.title", { name }) });
 }
 
 function signInCard(page: Page) {
@@ -130,7 +127,8 @@ test.describe("accounts journey: invite, accept and sign in with a second factor
       await page.getByRole("button", { name: message("en", "invite.signUp.submit"), exact: true }).click();
 
       // The account is a member of the workspace and signed in: the home page opens in the shell.
-      await expect(homeHeading(page, name)).toBeVisible();
+      await expect(homeHeading(page, "en", name)).toBeVisible();
+      await expect(homeCounts(page, "en")).toBeVisible();
       await expect(page).toHaveURL(/\/$/);
       await app.scan();
 
@@ -181,7 +179,8 @@ test.describe("accounts journey: invite, accept and sign in with a second factor
       // give is the next step's: the server takes a code one step ahead of its clock.
       await typeCode(page, message("en", "loginMfa.code.label"), totpCode(key, totpStep(Date.now()) + 1));
 
-      await expect(homeHeading(page, name)).toBeVisible();
+      await expect(homeHeading(page, "en", name)).toBeVisible();
+      await expect(homeCounts(page, "en")).toBeVisible();
       await expect(page).toHaveURL(/\/$/);
       await app.scan();
       await signOut(page, app);
@@ -202,7 +201,8 @@ test.describe("accounts journey: invite, accept and sign in with a second factor
       await field.fill(backupCode);
       await app.scan();
       await submit.click();
-      await expect(homeHeading(page, name)).toBeVisible();
+      await expect(homeHeading(page, "en", name)).toBeVisible();
+      await expect(homeCounts(page, "en")).toBeVisible();
       await app.scan();
       await signOut(page, app);
 
@@ -213,7 +213,7 @@ test.describe("accounts journey: invite, accept and sign in with a second factor
       await submit.click();
       await expect(page.getByText(message("en", "loginMfa.error.invalidCode"))).toBeVisible();
       await expect(page).toHaveURL(/\/login\/mfa/);
-      await expect(homeHeading(page, name)).toHaveCount(0);
+      await expect(homeHeading(page, "en", name)).toHaveCount(0);
       await app.scan();
 
       // Going back ends the half-finished sign-in.

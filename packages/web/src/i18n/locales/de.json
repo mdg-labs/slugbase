@@ -44,9 +44,66 @@
     }
   },
   "home": {
+    "title": "Willkommen bei {name}",
+    "tagline": "Lesezeichen mit kurzen, privaten Slugs.",
+    "loading": "Startseite wird geladen",
+    "loadFailed": {
+      "title": "Die Startseite konnte nicht geladen werden",
+      "description": "Versuche es gleich noch einmal."
+    },
+    "refreshFailed": "Die Startseite konnte nicht aktualisiert werden und ist möglicherweise veraltet.",
+    "retry": "Erneut versuchen",
+    "search": {
+      "label": "Lesezeichen, Ordner und Tags durchsuchen"
+    },
+    "counts": {
+      "label": "Gesamtzahlen",
+      "bookmarks": "Lesezeichen",
+      "folders": "Ordner",
+      "tags": "Tags",
+      "sharedWithYou": "Mit dir geteilt"
+    },
+    "quickAccess": {
+      "title": "Schnellzugriff",
+      "label": "Am häufigsten genutzte Slugs",
+      "empty": "Hier erscheinen die Lesezeichen mit Slug, die du am häufigsten öffnest."
+    },
+    "pinned": {
+      "title": "Angeheftet",
+      "label": "Angeheftete Lesezeichen",
+      "viewAll": "Alle anzeigen →",
+      "empty": "Hefte ein Lesezeichen an, um es hier zu behalten."
+    },
+    "tags": {
+      "title": "Häufigste Tags",
+      "empty": "Hier erscheinen die Tags, die du Lesezeichen gibst."
+    },
     "empty": {
-      "title": "Willkommen bei {name}",
-      "description": "Lesezeichen mit kurzen, privaten Slugs."
+      "title": "Speichere dein erstes Lesezeichen",
+      "description": "Gib einem Lesezeichen einen kurzen, privaten Slug und öffne es von überall über /go/.",
+      "forwarding": "Browser einrichten"
+    },
+    "gettingStarted": {
+      "title": "Erste Schritte",
+      "description": "Ein paar Schritte, um loszulegen.",
+      "progress": "Fortschritt bei den ersten Schritten",
+      "done": "{done} von {total} erledigt",
+      "step": {
+        "bookmark": "Lesezeichen hinzufügen",
+        "slug": "Einem Lesezeichen einen Slug geben",
+        "browser": "Browser-Suchmaschine einrichten",
+        "folder": "Ordner anlegen",
+        "import": "Aus dem Browser importieren"
+      },
+      "action": {
+        "forwarding": "Weiterleitung",
+        "setup": "Weiterleitung einrichten",
+        "folder": "Neuer Ordner",
+        "import": "Importieren"
+      },
+      "dismiss": "Ausblenden",
+      "dismissFailed": "Die Checkliste konnte nicht ausgeblendet werden. Versuche es gleich noch einmal.",
+      "allSet": "Alles erledigt"
     }
   },
   "bookmarks": {
@@ -715,6 +772,12 @@
         "link": "Ausprobieren: go/{slug} öffnen",
         "own": "Öffnet go/{slug} in einem neuen Tab. Sobald die Suchmaschine eingerichtet ist, gib {keyword} {slug} in die Adressleiste ein.",
         "sample": "Du hast noch keinen Slug, der weiterleitet, daher öffnet das eine Beispieladresse. SlugBase antwortet, dass kein Lesezeichen diesen Slug hat, und bietet an, eines anzulegen."
+      },
+      "done": {
+        "action": "Als erledigt markieren",
+        "description": "Markiere die Einrichtung als erledigt, sobald dein Browser eingerichtet ist, um sie in der Checkliste „Erste Schritte“ abzuhaken.",
+        "failed": "Die Einrichtung konnte nicht als erledigt markiert werden. Versuche es gleich noch einmal.",
+        "badge": "Als erledigt markiert"
       }
     },
     "slugs": {
@@ -1440,6 +1503,14 @@
       },
       "loadFailed": {
         "title": "Deine Voreinstellungen konnten nicht geladen werden"
+      },
+      "checklist": {
+        "title": "Erste Schritte",
+        "description": "Die Checkliste auf der Startseite.",
+        "show": {
+          "label": "Checkliste „Erste Schritte“ anzeigen",
+          "description": "Schalte sie ein, um die Checkliste nach dem Ausblenden wieder anzuzeigen."
+        }
       }
     },
     "security": {

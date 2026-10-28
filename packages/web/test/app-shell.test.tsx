@@ -135,7 +135,7 @@ describe("the app shell while the configuration loads", () => {
     expect(screen.queryByRole("main")).toBeNull();
     answer(json(CONFIG_BODY));
     expect(await screen.findByRole("main")).toBeTruthy();
-    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.queryByRole("status", { name: "Loading" })).toBeNull();
   });
 
   it("hands a configuration that cannot be loaded to the failure view, not to the shell", async () => {

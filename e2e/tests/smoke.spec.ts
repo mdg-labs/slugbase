@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 import { savingTheme } from "../support/account-preferences.ts";
 import { message, type Locale } from "../support/catalog.ts";
+import { homeCounts, homeHeading } from "../support/home.ts";
 import { productName } from "../support/product.ts";
 import { expect, test } from "../support/test.ts";
 
@@ -79,10 +80,6 @@ test.describe("a visitor without a session, in German", () => {
   });
 });
 
-function homeHeading(page: Page, locale: Locale, name: string) {
-  return page.getByRole("heading", { level: 1, name: message(locale, "home.empty.title", { name }) });
-}
-
 const LANGUAGES: readonly { readonly locale: Locale; readonly browser: string; readonly title: string }[] = [
   { locale: "en", browser: "en-US", title: "in English" },
   { locale: "de", browser: "de-DE", title: "in German" },
@@ -97,11 +94,12 @@ for (const { locale, browser, title } of LANGUAGES) {
     test("opens the shell on the home page", async ({ page, app, account }) => {
       await account.set({ locale });
       const name = await productName(page);
-      await app.visit("/", homeHeading(page, locale, name));
+      await app.visit("/", homeCounts(page, locale));
+      await expect(homeHeading(page, locale, name)).toBeVisible();
 
       await expect(page).toHaveURL(/\/$/);
       await expect(page.locator("html")).toHaveAttribute("lang", locale);
-      await expect(page.getByText(message(locale, "home.empty.description"))).toBeVisible();
+      await expect(page.getByText(message(locale, "home.tagline"), { exact: true })).toBeVisible();
       await expect(page.getByRole("link", { name: message(locale, "shell.home") })).toBeVisible();
       await expect(page.getByRole("link", { name: message(locale, "shell.skipToContent") })).toBeAttached();
       // The member is not sent to sign in.
@@ -115,7 +113,8 @@ for (const { locale, browser, title } of LANGUAGES) {
       // theme, which comes back when the test ends, is the last thing written.
       await account.set({ theme: "light", locale });
       const name = await productName(page);
-      await app.visit("/", homeHeading(page, locale, name));
+      await app.visit("/", homeCounts(page, locale));
+      await expect(homeHeading(page, locale, name)).toBeVisible();
 
       const root = page.locator("html");
       const toLight = page.getByRole("button", { name: message(locale, "shell.switchToLight") });
@@ -154,6 +153,7 @@ for (const { locale, browser, title } of LANGUAGES) {
       // Go home leads back to the home page, which the check covers as well.
       await page.getByRole("link", { name: message(locale, "errorPage.goHome") }).click();
       await expect(homeHeading(page, locale, name)).toBeVisible();
+      await expect(homeCounts(page, locale)).toBeVisible();
       await app.scan();
     });
   });

@@ -2,6 +2,7 @@ export * from "./accounts/index.ts";
 export * from "./audit/index.ts";
 export * from "./auth/index.ts";
 export * from "./bookmarks/index.ts";
+export * from "./dashboard/index.ts";
 export * from "./entitlements/index.ts";
 export * from "./events/index.ts";
 export * from "./folders/index.ts";

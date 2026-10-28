@@ -6,7 +6,7 @@ import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 
 // The CE web entry: it builds the app with createWebApp, mounts it on #root, and
 // the app asks /api/config before it renders, then checks the session, loads the account
-// for its first page, the list of its workspaces for the switcher and the list of its folders for the sidebar. The server side of the configuration
+// for its first page, the list of its workspaces for the switcher, the list of its folders for the sidebar and the dashboard for the Home screen. The server side of the configuration
 // answer (the product name from the build info) is checked with the built app in web-build.test.ts; here the answer is typed from the contract.
 
 const config: ComponentTypes["schemas"]["ApiConfig"] = {
@@ -64,6 +64,14 @@ it("mounts the app on #root and shows the product name that /api/config answers 
     upgradeAvailable: false,
   };
   const folders: ComponentTypes["schemas"]["FolderList"] = { items: [], nextCursor: null, total: 0 };
+  const dashboard: ComponentTypes["schemas"]["Dashboard"] = {
+    counts: { bookmarks: 0, folders: 0, tags: 0, sharedWithYou: null },
+    quickAccess: [],
+    pinned: [],
+    topTags: [],
+    sharing: null,
+    onboarding: { bookmarkAdded: false, slugGiven: false, browserSetupDone: false, folderCreated: false, importDone: false, dismissed: false },
+  };
   vi.stubGlobal("fetch", (request: Request) => {
     const { pathname } = new URL(request.url);
     requested.push(pathname);
@@ -75,6 +83,9 @@ it("mounts the app on #root and shows the product name that /api/config answers 
     }
     if (pathname === "/api/v1/folders") {
       return Promise.resolve(Response.json(folders));
+    }
+    if (pathname === "/api/v1/dashboard") {
+      return Promise.resolve(Response.json(dashboard));
     }
     return Promise.resolve(Response.json(pathname === "/api/v1/workspaces" ? workspaces : config));
   });
@@ -93,6 +104,16 @@ it("mounts the app on #root and shows the product name that /api/config answers 
 
   const heading = await screen.findByRole("heading", { name: "Welcome to Bookmarks Entry Test" });
   expect(heading.closest("#root")).not.toBeNull();
-  // The entry mounts the app in StrictMode, whose development remount cancels the sidebar's folder list read and starts it again.
-  expect(requested).toEqual(["/api/config", "/api/v1/me/sessions", "/api/v1/me", "/api/v1/workspaces", "/api/v1/entitlements", "/api/v1/folders", "/api/v1/folders"]);
+  // The entry mounts the app in StrictMode, whose development remount cancels the sidebar's folder list read and the Home screen's dashboard read and starts each again.
+  expect(requested).toEqual([
+    "/api/config",
+    "/api/v1/me/sessions",
+    "/api/v1/me",
+    "/api/v1/dashboard",
+    "/api/v1/workspaces",
+    "/api/v1/entitlements",
+    "/api/v1/folders",
+    "/api/v1/dashboard",
+    "/api/v1/folders",
+  ]);
 });

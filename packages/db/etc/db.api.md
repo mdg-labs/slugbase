@@ -20,6 +20,7 @@ import { BookmarkTagSelection } from '@slugbase/core';
 import { BookmarkUpdateRequest } from '@slugbase/core';
 import { BookmarkUpdateResult } from '@slugbase/core';
 import type { CredentialTokenPurpose } from '@slugbase/core';
+import type { DashboardStore } from '@slugbase/core';
 import type { EntitlementVersionWriter } from '@slugbase/core';
 import type { FolderFilingStore } from '@slugbase/core';
 import type { FolderStore } from '@slugbase/core';
@@ -480,6 +481,12 @@ export interface CredentialTokenRepository {
 
 // @public (undocumented)
 export function credentialTokenRepository(tx: TenantTx): CredentialTokenRepository;
+
+// @public (undocumented)
+export type DashboardRepository = DashboardStore;
+
+// @public
+export function dashboardRepository(tx: TenantTx): DashboardRepository;
 
 // @public
 export interface Database {
