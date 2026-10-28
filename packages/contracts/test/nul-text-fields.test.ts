@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { RegisterRequestSchema } from "../src/operations/auth.ts";
+import { ForgotPasswordRequestSchema, LoginRequestSchema, RegisterRequestSchema, ResendVerifyEmailRequestSchema } from "../src/operations/auth.ts";
 import { CreateBookmarkRequestSchema, UpdateBookmarkRequestSchema } from "../src/operations/bookmarks.ts";
 import { CreateFolderRequestSchema, ListFoldersQuerySchema, UpdateFolderRequestSchema } from "../src/operations/folders.ts";
-import { AcceptInvitationRequestSchema } from "../src/operations/invitations.ts";
+import { AcceptInvitationRequestSchema, CreateInvitationRequestSchema } from "../src/operations/invitations.ts";
 import { CreateInstanceWorkspaceRequestSchema, UpdateInstanceSettingsRequestSchema } from "../src/operations/instance.ts";
-import { CreateApiTokenRequestSchema, UpdateAccountRequestSchema } from "../src/operations/me.ts";
+import { CreateApiTokenRequestSchema, RequestEmailChangeRequestSchema, UpdateAccountRequestSchema } from "../src/operations/me.ts";
 import { SetupRequestSchema } from "../src/operations/setup.ts";
 import { CreateTagRequestSchema, RenameTagRequestSchema } from "../src/operations/tags.ts";
 import { CreateTeamRequestSchema, UpdateTeamRequestSchema } from "../src/operations/teams.ts";
@@ -78,5 +78,29 @@ describe("a NUL character in a text field a request stores", () => {
     expect(CreateTagRequestSchema.safeParse({ name: "n" }).success).toBe(true);
     expect(CreateWorkspaceRequestSchema.safeParse({ name: "n" }).success).toBe(true);
     expect(CreateApiTokenRequestSchema.safeParse({ name: "n", scope: "read" }).success).toBe(true);
+  });
+});
+
+describe("a NUL character in the email of a request that looks an account up by it", () => {
+  const cases: readonly (readonly [string, z.ZodType, unknown])[] = [
+    ["sign-in", LoginRequestSchema, { email: `a${NUL}b@example.test`, password: "a password" }],
+    ["sign-in, at the end", LoginRequestSchema, { email: `a@example.test${NUL}`, password: "a password" }],
+    ["password reset", ForgotPasswordRequestSchema, { email: `a${NUL}b@example.test` }],
+    ["verification resend", ResendVerifyEmailRequestSchema, { email: `a${NUL}b@example.test` }],
+    ["registration", RegisterRequestSchema, { displayName: "Ada", email: `a${NUL}b@example.test`, password: "a long enough password" }],
+    ["email change", RequestEmailChangeRequestSchema, { email: `a${NUL}b@example.test` }],
+    ["invitation", CreateInvitationRequestSchema, { email: `a${NUL}b@example.test`, role: "member" }],
+    ["setup", SetupRequestSchema, { displayName: "Admin", email: `a${NUL}b@example.test`, password: "a long enough password", workspaceName: "Home" }],
+    ["instance workspace owner", CreateInstanceWorkspaceRequestSchema, { name: "Home", ownerEmail: `a${NUL}b@example.test` }],
+  ];
+
+  it.each(cases)("is refused in the %s with one field error on the email", (_name, schema, input) => {
+    const paths = issuePaths(schema, input);
+    expect(paths.length).toBe(1);
+    expect(paths[0]).toMatch(/^(email|ownerEmail)$/);
+  });
+
+  it("does not refuse the same sign-in without it", () => {
+    expect(LoginRequestSchema.safeParse({ email: "a@example.test", password: "a password" }).success).toBe(true);
   });
 });

@@ -3391,7 +3391,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation */
+            /** @description The body did not pass validation: a field the operation does not declare, a missing or wrongly typed field, an empty password or one longer than 256 characters, or an email address that is empty, longer than 320 characters or holds a NUL character. The refusal comes before the sign-in is attempted, so it is the same whether or not the address has an account */
             422: {
                 headers: {
                     [name: string]: unknown;
