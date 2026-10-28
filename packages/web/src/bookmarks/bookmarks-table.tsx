@@ -1,9 +1,9 @@
-import { DataTable, PinIcon, RowActions, SelectCheckbox, type DataTableColumn, type DataTableSortDirection } from "@slugbase/ui/patterns";
+import { DataTable, Favicon, PinIcon, RowActions, SelectCheckbox, type DataTableColumn, type DataTableSortDirection } from "@slugbase/ui/patterns";
 import { useRouter } from "@tanstack/react-router";
 import type { ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { useFormat } from "../i18n/use-format.ts";
-import { monogramOf, useBookmarkActions, type BookmarkActionHandlers } from "./bookmark-card.tsx";
+import { useBookmarkActions, type BookmarkActionHandlers } from "./bookmark-card.tsx";
 import { FolderDots, TagBadges } from "./bookmark-labels.tsx";
 import { isHttpUrl, recordOpen, type Bookmark } from "./bookmarks.ts";
 import { DEFAULT_SORT, type BookmarkSort } from "./list-search.ts";
@@ -39,9 +39,7 @@ function TitleCell({ bookmark }: { readonly bookmark: Bookmark }): ReactElement 
   };
   return (
     <span className="flex items-center gap-3">
-      <span aria-hidden="true" className="grid size-7 shrink-0 place-items-center rounded-md bg-muted font-medium text-muted-foreground text-xs uppercase" translate="no">
-        {monogramOf(bookmark)}
-      </span>
+      <Favicon host={bookmark.host} />
       <span className="max-w-64 truncate font-medium text-sm lg:max-w-96">
         {isHttpUrl(bookmark.url) ? (
           <a

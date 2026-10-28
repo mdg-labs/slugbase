@@ -7,8 +7,8 @@ describe("TileLink", () => {
   const renderTiles = () =>
     render(
       <TileGrid label="Quick access">
-        <TileLink hint="https://example.com/docs" href="/go/docs" monogram="e" subtitle="example.com" title="Example docs" />
-        <TileLink monogram="p" title="Plain" />
+        <TileLink hint="https://example.com/docs" href="/go/docs" host="example.com" subtitle="example.com" title="Example docs" />
+        <TileLink host="plain.example" title="Plain" />
       </TileGrid>,
     );
 
@@ -35,7 +35,7 @@ describe("TileLink", () => {
     const onOpen = vi.fn<() => void>();
     render(
       <TileGrid label="Tiles">
-        <TileLink href="/go/docs" monogram="d" onOpen={onOpen} title="Docs" />
+        <TileLink href="/go/docs" host="docs.example" onOpen={onOpen} title="Docs" />
       </TileGrid>,
     );
     const link = screen.getByRole("link", { name: "Docs" });
@@ -50,11 +50,11 @@ describe("TileLink", () => {
   it("draws a title and a subtitle as text, whatever they hold", () => {
     const { container } = render(
       <TileGrid label="Tiles">
-        <TileLink monogram="x" subtitle="<b>host</b>" title="<img src=x onerror=alert(1)>" />
+        <TileLink host="x.example" subtitle="<b>host</b>" title="<img src=x onerror=alert(1)>" />
       </TileGrid>,
     );
 
-    expect(container.querySelector("img")).toBeNull();
+    expect(Array.from(container.querySelectorAll("img")).map((img) => img.getAttribute("src"))).toEqual(["/api/v1/favicons/x.example"]);
     expect(container.querySelector("b")).toBeNull();
     expect(screen.getByText("<img src=x onerror=alert(1)>")).toBeTruthy();
   });

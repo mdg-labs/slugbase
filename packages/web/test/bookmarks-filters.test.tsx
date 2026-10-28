@@ -593,7 +593,7 @@ describe("the folders and tags of a bookmark", { timeout: HEAVY_TEST_TIMEOUT_MS 
     expect(within(first).getByText("zig")).toBeDefined();
     expect(within(first).queryByText("<img src=x onerror=alert(1)>")).toBeNull();
     expect(within(first).getByRole("img", { name: "1 more tag" }).textContent).toBe("+1");
-    expect(first.querySelector("img")).toBeNull();
+    expect(first.querySelector("img:not([src^='/api/v1/favicons/'])")).toBeNull();
     const second = await card("Bookmark 2");
     expect(within(second).queryByRole("img", { name: /^(Work|Reading)$/ })).toBeNull();
   });
@@ -608,6 +608,6 @@ describe("the folders and tags of a bookmark", { timeout: HEAVY_TEST_TIMEOUT_MS 
     expect(cells.getAllByRole("img", { name: /^(Work|Reading)$/ })).toHaveLength(2);
     expect(["go", "rust", "zig"].map((name) => cells.getByText(name).textContent)).toEqual(["go", "rust", "zig"]);
     expect(cells.getByRole("img", { name: "1 more tag" })).toBeDefined();
-    expect((row as HTMLElement).querySelector("img")).toBeNull();
+    expect((row as HTMLElement).querySelector("img:not([src^='/api/v1/favicons/'])")).toBeNull();
   });
 });

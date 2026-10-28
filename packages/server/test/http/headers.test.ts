@@ -303,6 +303,25 @@ describe("the check the suite runs on every response", () => {
     }).toThrow();
   });
 
+  it.each(["https://example.com", "example.com", "*", "https:", "http://127.0.0.1", "blob:", "'unsafe-inline'"])(
+    "fails an img-src that allows %s, so an image can only come from the app's own origin and the favicon proxy",
+    (source) => {
+      const headers = good();
+      headers.set("content-security-policy", (headers.get("content-security-policy") ?? "").replace("img-src 'self' data:", `img-src 'self' data: ${source}`));
+      expect(() => {
+        expectSecurityHeaders(headers, { https: false });
+      }).toThrow();
+    },
+  );
+
+  it("fails a policy without an img-src, which would leave images to default-src", () => {
+    const headers = good();
+    headers.set("content-security-policy", (headers.get("content-security-policy") ?? "").replace("img-src 'self' data:; ", ""));
+    expect(() => {
+      expectSecurityHeaders(headers, { https: false });
+    }).toThrow();
+  });
+
   it("fails a default-src that allows an inline script", () => {
     const headers = good();
     headers.set(

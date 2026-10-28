@@ -39,7 +39,7 @@ function renderCard(props: Partial<Parameters<typeof CardGridItem>[0]> = {}) {
         actions={actionsOf(() => undefined)}
         actionsLabel="Actions for Example"
         href="https://example.com/docs"
-        monogram="e"
+        host="example.com"
         selectLabel="Select Example"
         subtitle="example.com"
         title="Example docs"
@@ -139,7 +139,7 @@ describe("CardGrid", () => {
   it("is a list while nothing is selected and an ARIA grid of rows and cells while a selection is active", async () => {
     const card = (selectionActive: boolean) => (
       <CardGrid label="Bookmarks" selectionActive={selectionActive}>
-        <CardGridItem actions={actionsOf(() => undefined)} actionsLabel="Actions for Example" href="https://example.com/docs" monogram="e" selectLabel="Select Example" title="Example docs" />
+        <CardGridItem actions={actionsOf(() => undefined)} actionsLabel="Actions for Example" href="https://example.com/docs" host="example.com" selectLabel="Select Example" title="Example docs" />
       </CardGrid>
     );
     const { container, rerender } = render(card(false));
@@ -159,9 +159,9 @@ describe("CardGrid", () => {
   it("takes one card as the stop on the Tab key and leaves the others to the arrow keys", () => {
     render(
       <CardGrid label="Bookmarks">
-        <CardGridItem actions={actionsOf(() => undefined)} actionsLabel="Actions for One" itemId="one" monogram="o" selectLabel="Select One" tabStop title="One" />
-        <CardGridItem actions={actionsOf(() => undefined)} actionsLabel="Actions for Two" itemId="two" monogram="t" selectLabel="Select Two" tabStop={false} title="Two" />
-        <CardGridItem actions={actionsOf(() => undefined)} actionsLabel="Actions for Three" itemId="three" monogram="t" selectLabel="Select Three" title="Three" />
+        <CardGridItem actions={actionsOf(() => undefined)} actionsLabel="Actions for One" itemId="one" host="one.example" selectLabel="Select One" tabStop title="One" />
+        <CardGridItem actions={actionsOf(() => undefined)} actionsLabel="Actions for Two" itemId="two" host="two.example" selectLabel="Select Two" tabStop={false} title="Two" />
+        <CardGridItem actions={actionsOf(() => undefined)} actionsLabel="Actions for Three" itemId="three" host="two.example" selectLabel="Select Three" title="Three" />
       </CardGrid>,
     );
 

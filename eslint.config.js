@@ -247,6 +247,33 @@ export const componentLibraryRules = {
   },
 };
 
+// An icon is drawn by the `Favicon` pattern of @slugbase/ui and nowhere else (doc 03 "Component system"): it is the one place an image element is
+// created, so every picture of a bookmark comes from the app's own favicon proxy and the content security policy for images stays `'self'` (doc 10 T6,
+// T14). The block repeats the syntax bans above because a later no-restricted-syntax entry replaces an earlier one for the same files. The QR code of the
+// two-factor enrolment is an image of the account's own secret, not an icon, and stays a plain element.
+const ICON_IMAGE_MESSAGE =
+  "An icon is drawn with the Favicon pattern of @slugbase/ui, the one place an image element is created (doc 03 Component system, doc 10 T14).";
+const IMAGE_ELEMENT = "/^(img|image|picture)$/i";
+const CREATE_ELEMENT = ":matches(CallExpression[callee.name='createElement'], CallExpression[callee.property.name='createElement'])";
+
+export const iconImageRules = {
+  files: ["packages/ui/src/**/*.{ts,tsx,mts,cts}", "packages/web/src/**/*.{ts,tsx,mts,cts}"],
+  ignores: ["packages/ui/src/patterns/favicon.tsx", "packages/web/src/account/mfa-enrollment.tsx"],
+  rules: {
+    "no-restricted-syntax": [
+      ...componentLibraryRules.rules["no-restricted-syntax"],
+      // <img>, <picture> and the SVG <image>, in any case the JSX spells them.
+      { selector: `JSXOpeningElement[name.type='JSXIdentifier'][name.name=${IMAGE_ELEMENT}]`, message: ICON_IMAGE_MESSAGE },
+      // document.createElement("img"), React.createElement("img"): a call that is handed the element's name, as a string or a static template literal.
+      { selector: `${CREATE_ELEMENT} > Literal.arguments[value=${IMAGE_ELEMENT}]`, message: ICON_IMAGE_MESSAGE },
+      { selector: `${CREATE_ELEMENT} > TemplateLiteral.arguments[quasis.length=1] > TemplateElement[value.cooked=${IMAGE_ELEMENT}]`, message: ICON_IMAGE_MESSAGE },
+      // new Image(): the constructor of an image element, also through window or globalThis.
+      { selector: "NewExpression[callee.name='Image']", message: ICON_IMAGE_MESSAGE },
+      { selector: "NewExpression > MemberExpression.callee[computed=false][property.name='Image']", message: ICON_IMAGE_MESSAGE },
+    ],
+  },
+};
+
 // Package boundaries and import bans (doc 09 section 2.1, doc 01 sections 5.3
 // and 10): which package may import which, the I/O and database-driver bans,
 // the testing-package restriction and unsanitised HTML. The rules decide by the
@@ -281,6 +308,7 @@ export default [
   projectRules,
   processEnvRules,
   componentLibraryRules,
+  iconImageRules,
   vocabularyRules,
   boundaryRules,
   i18nRules,

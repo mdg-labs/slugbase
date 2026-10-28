@@ -67,7 +67,7 @@ export function BookmarkCard({ bookmark, pinPending, selected, selectionActive, 
           </span>
         ) : null
       }
-      monogram={monogramOf(bookmark)}
+      host={bookmark.host}
       onOpen={() => {
         recordOpen(router.options.context.api, bookmark.id);
       }}
@@ -99,9 +99,4 @@ export function BookmarkCard({ bookmark, pinPending, selected, selectionActive, 
       </div>
     </CardGridItem>
   );
-}
-
-/** The first letter of the host, which stands in for the favicon until real ones arrive. */
-export function monogramOf(bookmark: Bookmark): string {
-  return Array.from(bookmark.host.replace(/^www\./i, ""))[0] ?? "";
 }

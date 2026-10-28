@@ -22,6 +22,14 @@ async function errorRules(code: string, filePath: string): Promise<string[]> {
   return result.messages.filter((m) => m.severity === 2).map((m) => m.ruleId ?? "parse-error");
 }
 
+async function syntaxMessages(code: string, filePath: string): Promise<string[]> {
+  const [result] = await eslint.lintText(code, { filePath });
+  if (result === undefined) {
+    throw new Error(`no lint result for ${filePath}`);
+  }
+  return result.messages.filter((m) => m.ruleId === "no-restricted-syntax").map((m) => m.message);
+}
+
 describe("packages/web/eslint.config.js", () => {
   it(
     "rejects a process.env read in the web sources",
@@ -67,6 +75,44 @@ describe("packages/web/eslint.config.js", () => {
         TSX_PROBE_PATH,
       );
       expect(rules).toContain("i18next/no-literal-string");
+    },
+    SUBPROCESS_TIMEOUT_MS,
+  );
+
+  it(
+    "rejects an icon image element outside the Favicon pattern in the web sources",
+    async () => {
+      for (const code of [
+        'export const a = <img alt="" src="https://x.example/f.ico" />;\n',
+        'export const a = document.createElement("img");\n',
+        "export const a = new Image();\n",
+      ]) {
+        const messages = await syntaxMessages(code, TSX_PROBE_PATH);
+        expect(messages).toHaveLength(1);
+        expect(messages[0]).toContain("Favicon pattern");
+      }
+    },
+    SUBPROCESS_TIMEOUT_MS,
+  );
+
+  it(
+    "allows the image of the two-factor enrolment, which draws no icon",
+    async () => {
+      const messages = await syntaxMessages('export const a = <img alt="" src={qr} />;\n', resolve(WEB, "src/account/mfa-enrollment.tsx"));
+      expect(messages).toEqual([]);
+    },
+    SUBPROCESS_TIMEOUT_MS,
+  );
+
+  it(
+    "keeps the process.env and second-library selectors beside the icon image selectors",
+    async () => {
+      const env = await syntaxMessages("export const value = process.env.EXAMPLE;\n", TS_PROBE_PATH);
+      expect(env).toHaveLength(1);
+      expect(env[0]).toContain("process.env");
+      const library = await syntaxMessages('export const load = () => import("sonner");\n', TS_PROBE_PATH);
+      expect(library).toHaveLength(1);
+      expect(library[0]).not.toContain("Favicon pattern");
     },
     SUBPROCESS_TIMEOUT_MS,
   );

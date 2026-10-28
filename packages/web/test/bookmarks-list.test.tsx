@@ -185,7 +185,7 @@ describe("a card", () => {
     await openApp("/bookmarks");
 
     const first = await card("<img src=x onerror=alert(1)>");
-    expect(first.querySelector("img")).toBeNull();
+    expect(Array.from(first.querySelectorAll("img")).map((img) => img.getAttribute("src"))).toEqual(["/api/v1/favicons/site1.example.com"]);
     expect(within(first).getByText("site1.example.com").className).toContain("font-mono");
     expect(within(first).getByText("No slug")).toBeDefined();
     expect(within(first).getByRole("img", { name: "Pinned" })).toBeDefined();
@@ -672,7 +672,7 @@ describe("the table view", () => {
     ]);
     expect(lists()[0]?.params.get("limit")).toBe("48");
     const first = await row("<img src=x onerror=alert(1)>");
-    expect(first.querySelector("img")).toBeNull();
+    expect(Array.from(first.querySelectorAll("img")).map((img) => img.getAttribute("src"))).toEqual(["/api/v1/favicons/site1.example.com"]);
     const cells = within(first).getAllByRole("cell");
     expect(cells.map((cell) => cell.textContent)).toEqual(["", "s<img src=x onerror=alert(1)>", "/go/mail", "site1.example.com", "", "", "1,234", "2 hr. ago", "Oct 1, 2026", ""]);
     expect(within(first).getByRole("img", { name: "Pinned" })).toBeDefined();

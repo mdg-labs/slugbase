@@ -1,6 +1,7 @@
 import { createContext, use, type MouseEvent, type ReactElement, type ReactNode } from "react";
 import { Card } from "../components/ui/card.tsx";
 import { cn } from "../lib/utils.ts";
+import { Favicon } from "./favicon.tsx";
 import { listRoles } from "./list-roles.ts";
 import { ContextActions } from "./context-actions.tsx";
 import { RowActions, type RowAction } from "./row-actions.tsx";
@@ -36,8 +37,8 @@ export interface CardGridItemProps {
   href?: string;
   /** Called when the link is followed, with a click or a middle click, before the browser navigates. It must not delay the navigation. */
   onOpen?: () => void;
-  /** The letter that stands in for a picture. */
-  monogram: string;
+  /** The host the card's icon is drawn for; the favicon of the host, or its monogram when it has none. */
+  host: string;
   /** A line in mono under the title, for an address or a host. It is not translated. */
   subtitle?: string;
   /** Marks beside the actions, for example a pin. */
@@ -65,11 +66,11 @@ export interface CardGridItemProps {
 }
 
 /**
- * One card of a `CardGrid`: a monogram, the title as the link, a subtitle in mono and the content under them, with a
+ * One card of a `CardGrid`: the favicon of its host, the title as the link, a subtitle in mono and the content under them, with a
  * checkbox that appears on hover or focus and the card's actions in a menu button and a context menu. The whole card
  * follows the link; the checkbox and the menu button keep their own clicks. A card is selected by its checkbox.
  */
-export function CardGridItem({ title, href, onOpen, monogram, subtitle, indicator, children, actions, actionsLabel, selectLabel, itemId, selected, onSelectedChange, selectionActive = false, tabStop }: CardGridItemProps): ReactElement {
+export function CardGridItem({ title, href, onOpen, host, subtitle, indicator, children, actions, actionsLabel, selectLabel, itemId, selected, onSelectedChange, selectionActive = false, tabStop }: CardGridItemProps): ReactElement {
   const roles = listRoles(use(SelectionActiveContext));
   return (
     <div className="group/card outline-none" data-item-id={itemId} role={roles.row} {...(tabStop === undefined ? {} : { tabIndex: tabStop ? 0 : -1 })}>
@@ -80,13 +81,7 @@ export function CardGridItem({ title, href, onOpen, monogram, subtitle, indicato
             data-selected={selected === true ? "true" : undefined}
           >
             <div className="flex items-start gap-3">
-              <span
-                aria-hidden="true"
-                className="grid size-9 shrink-0 place-items-center rounded-md bg-muted font-medium text-muted-foreground text-sm uppercase"
-                translate="no"
-              >
-                {monogram}
-              </span>
+              <Favicon host={host} size={32} />
               <div className="min-w-0 flex-1">
                 <h2 className="line-clamp-2 font-medium text-sm wrap-anywhere">
                   {href === undefined ? (

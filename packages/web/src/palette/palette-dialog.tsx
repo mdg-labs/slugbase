@@ -2,8 +2,8 @@ import { useTheme } from "@slugbase/ui";
 import {
   BookmarkIcon,
   CommandPalette,
+  Favicon,
   FolderIcon,
-  PinIcon,
   PlusIcon,
   SlugChip,
   TagIcon,
@@ -136,11 +136,11 @@ export function PaletteDialog(): ReactElement {
     }
   };
 
-  const bookmarkItem = (bookmark: Bookmark, pinnedList: boolean): CommandPaletteItem => ({
+  const bookmarkItem = (bookmark: Bookmark): CommandPaletteItem => ({
     id: bookmark.id,
     label: bookmark.title,
     keywords: `${bookmark.host} ${bookmark.slug ?? ""}`,
-    icon: pinnedList ? <PinIcon aria-hidden="true" /> : <BookmarkIcon aria-hidden="true" />,
+    icon: <Favicon host={bookmark.host} />,
     detail: (
       <span translate="no">
         {bookmark.host}
@@ -178,7 +178,7 @@ export function PaletteDialog(): ReactElement {
   const foundBookmarkItem = (bookmark: SearchBookmark): CommandPaletteItem => ({
     id: bookmark.id,
     label: bookmark.title,
-    icon: <BookmarkIcon aria-hidden="true" />,
+    icon: <Favicon host={bookmark.host} />,
     detail: (
       <span className="flex min-w-0 items-center gap-2">
         {bookmark.slug === null ? null : <SlugChip slug={bookmark.slug} />}
@@ -203,7 +203,7 @@ export function PaletteDialog(): ReactElement {
         ? { id, title, state: "error", error: { message: t("palette.loadFailed"), retryLabel: t("palette.retry"), onRetry: () => void result.refetch() } }
         : { id, title, state: "loading", loadingLabel: t("palette.loading") };
     }
-    return { id, title, items: result.data.map((bookmark) => bookmarkItem(bookmark, id === "pinned")) };
+    return { id, title, items: result.data.map((bookmark) => bookmarkItem(bookmark)) };
   };
 
   const commandItems = (groups: readonly CommandGroupId[]): CommandPaletteItem[] =>

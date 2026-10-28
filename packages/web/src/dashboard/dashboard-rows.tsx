@@ -7,11 +7,6 @@ import { isHttpUrl, recordOpen } from "../bookmarks/bookmarks.ts";
 import { useFormat } from "../i18n/use-format.ts";
 import type { Dashboard, DashboardBookmark } from "./dashboard.ts";
 
-/** The first letter of the host, which stands in for the favicon until real ones arrive. */
-function monogramOf(bookmark: DashboardBookmark): string {
-  return Array.from(bookmark.host.replace(/^www\./i, ""))[0] ?? "";
-}
-
 function Row({ id, title, action, children }: { readonly id: string; readonly title: string; readonly action?: ReactNode; readonly children: ReactNode }): ReactElement {
   return (
     <section aria-labelledby={id} className="flex flex-col gap-2">
@@ -55,7 +50,7 @@ export function QuickAccessRow({ bookmarks }: { readonly bookmarks: readonly Das
       ) : (
         <TileGrid label={t("home.quickAccess.label")}>
           {withSlug.map(({ bookmark, slug }) => (
-            <TileLink hint={bookmark.url} href={`/go/${encodeURIComponent(slug)}`} key={bookmark.id} monogram={monogramOf(bookmark)} title={bookmark.title}>
+            <TileLink hint={bookmark.url} href={`/go/${encodeURIComponent(slug)}`} host={bookmark.host} key={bookmark.id} title={bookmark.title}>
               <SlugChip slug={slug} />
             </TileLink>
           ))}
@@ -87,7 +82,7 @@ export function PinnedRow({ bookmarks }: { readonly bookmarks: readonly Dashboar
             <TileLink
               {...(isHttpUrl(bookmark.url) ? { href: bookmark.url } : {})}
               key={bookmark.id}
-              monogram={monogramOf(bookmark)}
+              host={bookmark.host}
               onOpen={() => {
                 recordOpen(router.options.context.api, bookmark.id);
               }}
