@@ -223,8 +223,44 @@ describe("the retention purge of a worker without modules", () => {
 
     await until(() => purgeLogs(logger).length > 0, 15_000, "the purge job to run");
     expect(await sessionIds()).toEqual([live, otherLive].sort());
-    expect(purgeLogs(logger).map((entry) => entry.fields)).toEqual([{ deleted: { sessions: 3, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0, workspace_invitations: 0, idempotency_keys: 0, audit_events: 0 } }]);
+    expect(purgeLogs(logger).map((entry) => entry.fields)).toEqual([{ deleted: { sessions: 3, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0, workspace_invitations: 0, idempotency_keys: 0, url_metadata: 0, favicons: 0, audit_events: 0 } }]);
     await expectOnlyEnqueuedRuns(since, [run]);
+  });
+
+  describe("the cached page metadata", () => {
+    it("deletes the results past their expiry when the job runs, in every workspace, keeps the current ones and logs the count", async () => {
+      await clearSessions();
+      const workspaces = [randomUUID(), randomUUID()];
+      await database().owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        await tx`DELETE FROM url_metadata`;
+        for (const id of workspaces) {
+          await tx`INSERT INTO workspaces (id, name) VALUES (${id}, 'Cached workspace')`;
+          await tx`
+            INSERT INTO url_metadata (workspace_id, url_canonical, status, fetched_at, expires_at) VALUES
+              (${id}, 'https://example.com/expired', 'failed', now() - interval '8 days', now() - interval '1 day'),
+              (${id}, 'https://example.com/current', 'failed', now(), now() + interval '7 days')`;
+        }
+      });
+      const { created, logger } = ceWorker();
+      const running = await startWithoutHourlySchedule(created);
+      const job = created.jobs.find((candidate) => candidate.name === JOB);
+      if (job === undefined) {
+        throw new Error("the worker registers no retention job");
+      }
+
+      await enqueueRun(running, job);
+
+      await until(() => purgeLogs(logger).length > 0, 15_000, "the purge job to run");
+      expect(purgeLogs(logger).map((entry) => entry.fields)).toEqual([
+        { deleted: { sessions: 0, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0, workspace_invitations: 0, idempotency_keys: 0, url_metadata: 2, favicons: 0, audit_events: 0 } },
+      ]);
+      const left = await database().owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        return tx<{ workspace_id: string; url_canonical: string }[]>`SELECT workspace_id, url_canonical FROM url_metadata ORDER BY workspace_id`;
+      });
+      expect(left.map((row) => [row.workspace_id, row.url_canonical]).sort()).toEqual(workspaces.map((id) => [id, "https://example.com/current"]).sort());
+    });
   });
 
   describe("the audit log", () => {
@@ -287,7 +323,7 @@ describe("the retention purge of a worker without modules", () => {
       const logs = await runOnce({ AUDIT_RETENTION_DAYS: "30" });
 
       expect(logs.map((entry) => entry.fields)).toEqual([
-        { deleted: { sessions: 0, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0, workspace_invitations: 0, idempotency_keys: 0, audit_events: 2 } },
+        { deleted: { sessions: 0, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0, workspace_invitations: 0, idempotency_keys: 0, url_metadata: 0, favicons: 0, audit_events: 2 } },
       ]);
       expect(await auditIds()).toEqual([recent, fresh].sort());
     });
@@ -300,7 +336,7 @@ describe("the retention purge of a worker without modules", () => {
       const logs = await runOnce({ AUDIT_RETENTION_DAYS: "0" });
 
       expect(logs.map((entry) => entry.fields)).toEqual([
-        { deleted: { sessions: 0, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0, workspace_invitations: 0, idempotency_keys: 0, audit_events: 0 } },
+        { deleted: { sessions: 0, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0, workspace_invitations: 0, idempotency_keys: 0, url_metadata: 0, favicons: 0, audit_events: 0 } },
       ]);
       expect(await auditIds()).toEqual([old]);
     });
@@ -340,8 +376,8 @@ describe("the retention purge of a worker without modules", () => {
     await until(() => purgeLogs(logger).length === 2, 15_000, "the second run");
     expect(await sessionIds()).toEqual([live]);
     expect(purgeLogs(logger).map((entry) => entry.fields)).toEqual([
-      { deleted: { sessions: BATCH, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0, workspace_invitations: 0, idempotency_keys: 0, audit_events: 0 } },
-      { deleted: { sessions: extra, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0, workspace_invitations: 0, idempotency_keys: 0, audit_events: 0 } },
+      { deleted: { sessions: BATCH, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0, workspace_invitations: 0, idempotency_keys: 0, url_metadata: 0, favicons: 0, audit_events: 0 } },
+      { deleted: { sessions: extra, api_tokens: 0, oidc_login_states: 0, credential_tokens: 0, workspace_invitations: 0, idempotency_keys: 0, url_metadata: 0, favicons: 0, audit_events: 0 } },
     ]);
     await expectOnlyEnqueuedRuns(since, [first, second]);
   }, 60_000);

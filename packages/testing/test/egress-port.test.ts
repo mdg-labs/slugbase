@@ -31,6 +31,13 @@ describe("FakeEgress against EgressPort", () => {
     await expect(port.request({ url: "https://example.test/", timeoutMs: 1_000, maxBytes: 10 })).resolves.toMatchObject({ status: 204 });
   });
 
+  it("takes the truncate flag of the port's request and cuts the body as the port does", async () => {
+    const port: EgressPort = new FakeEgress({ "https://example.test/": { body: new Uint8Array(20) } });
+    const cut = await port.request({ url: "https://example.test/", timeoutMs: 1_000, maxBytes: 10, truncateAtMaxBytes: true });
+    expect(cut.body).toHaveLength(10);
+    await expect(port.request({ url: "https://example.test/", timeoutMs: 1_000, maxBytes: 10 })).rejects.toMatchObject({ code: new EgressTooLarge().code });
+  });
+
   it("follows redirects and refuses the ones the port refuses, as errors of the port's classes", async () => {
     const port: EgressPort = new FakeEgress({
       "https://example.test/old": { kind: "redirect", to: "/new" },

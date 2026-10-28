@@ -11,6 +11,12 @@ export interface EgressRequestBase {
   /** The most bytes of the decoded response body the port reads; a longer body is refused and the stream aborted. */
   readonly maxBytes: number;
   /**
+   * Answers with the first `maxBytes` bytes of a decoded body that is longer, and closes the connection after them, instead of refusing it with
+   * `EgressTooLarge`. A declared length above `maxBytes` is not refused either. Every other limit (the time budget, the redirect rules, the
+   * content types, the address checks) applies as without it. The caller cannot tell from the response whether it was cut.
+   */
+  readonly truncateAtMaxBytes?: boolean;
+  /**
    * The media types the final response may have, compared without parameters and ignoring case. A response with any
    * other type, or none, is refused with an `EgressError` once its headers arrive and before its body is read.
    * Without the list the type is not checked.

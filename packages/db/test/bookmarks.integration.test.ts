@@ -757,6 +757,58 @@ describe("update", () => {
     expect(await bookmarkCount(a.id)).toBe(counted);
   });
 
+  describe("the jobs of a change of the address", () => {
+    async function seeded() {
+      const workspace = await workspaceOf(1);
+      const owner = memberOf(workspace, 0);
+      const id = await seedBookmark({ workspaceId: workspace.id, ownerId: owner, url: "https://example.com/seed", title: "Docs" });
+      return { workspace, owner, id, acting: { accountId: owner, workspaceId: workspace.id } };
+    }
+
+    it("queues them in the transaction of a change that sets another address, and only then", async () => {
+      const { workspace, owner, id, acting } = await seeded();
+      const jobsOnUrlChange = [jobFor(workspace.id, id, owner)];
+
+      await update(acting, { bookmarkId: id, ownerId: owner, expectedVersions: undefined, changes: { title: "Only the title" }, jobsOnUrlChange });
+      await update(acting, { bookmarkId: id, ownerId: owner, expectedVersions: undefined, changes: { url: urlOf("https://example.com/seed"), pinned: true }, jobsOnUrlChange });
+      expect(await jobCount()).toBe(0);
+
+      const moved = await update(acting, { bookmarkId: id, ownerId: owner, expectedVersions: undefined, changes: { url: urlOf("https://example.org/new") }, jobsOnUrlChange });
+
+      expect(moved.kind).toBe("updated");
+      expect(await jobCount()).toBe(1);
+    });
+
+    it("queues nothing for a change that is refused, stale or unchanged, and none when the change is undone", async () => {
+      const { workspace, owner, id, acting } = await seeded();
+      const jobsOnUrlChange = [jobFor(workspace.id, id, owner)];
+      const moved = { url: urlOf("https://example.org/new") };
+
+      expect((await update(acting, { bookmarkId: id, ownerId: owner, expectedVersions: [7], changes: moved, jobsOnUrlChange })).kind).toBe("stale");
+      expect((await update(acting, { bookmarkId: id, ownerId: owner, expectedVersions: undefined, changes: { ...moved, folderIds: [freshId()] }, jobsOnUrlChange })).kind).toBe("folder_not_found");
+      expect((await update(acting, { bookmarkId: freshId(), ownerId: owner, expectedVersions: undefined, changes: moved, jobsOnUrlChange })).kind).toBe("not_found");
+      expect(await jobCount()).toBe(0);
+
+      await expect(
+        inTenant(acting, async (tx) => {
+          await bookmarkRepository(tx).update({ bookmarkId: id, ownerId: owner, expectedVersions: undefined, changes: moved, jobsOnUrlChange });
+          throw new Error("the transaction fails after the change");
+        }),
+      ).rejects.toThrow("the transaction fails");
+      expect(await jobCount()).toBe(0);
+      expect((await versionOf(id))?.title).toBe("Docs");
+    });
+
+    it("leaves the bookmark's own fields as the change gives them: queuing a job never changes one", async () => {
+      const { workspace, owner, id, acting } = await seeded();
+      const before = await asSystem(db, (tx) => tx`SELECT title, description, slug, forwarding FROM bookmarks WHERE id = ${id}`);
+
+      await update(acting, { bookmarkId: id, ownerId: owner, expectedVersions: undefined, changes: { url: urlOf("https://example.org/new") }, jobsOnUrlChange: [jobFor(workspace.id, id, owner)] });
+
+      expect(await asSystem(db, (tx) => tx`SELECT title, description, slug, forwarding FROM bookmarks WHERE id = ${id}`)).toEqual(before);
+    });
+  });
+
   it("refuses to change without a workspace", async () => {
     const workspace = await workspaceOf(1);
     const owner = memberOf(workspace, 0);

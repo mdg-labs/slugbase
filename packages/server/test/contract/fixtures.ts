@@ -47,6 +47,9 @@ export const UNKNOWN_FOLDER_ID = "0192f3a0-cccc-7000-8000-00000000000b";
 /** The slugs of the two forwarding bookmarks the matrix seeds in workspace B, which the resolution and the choice of A name: workspace A has no bookmark with either. */
 export const B_SLUGS = ["matrix-b-slug-0", "matrix-b-slug-1"] as const;
 
+/** The hosts of the two bookmarks the matrix seeds in workspace B, which the favicon operation of A names: workspace A has no bookmark on either. */
+export const B_HOSTS = ["matrix-b-host-0.example.test", "matrix-b-host-1.example.test"] as const;
+
 /** An invitation no workspace holds: the walker's request to resend, link or revoke it is the declared 404. */
 export const UNKNOWN_INVITATION_ID = "0192f3a0-cccc-7000-8000-000000000006";
 
@@ -269,6 +272,13 @@ export const FIXTURES: ContractFixtures = {
   // The open names a bookmark by identifier as well, and counts it only for a bookmark the caller owns: the valid request is the declared 404 for
   // a bookmark no workspace holds, and the matrix puts the bookmarks of workspace B in the path.
   openBookmark: { path: { id: UNKNOWN_BOOKMARK_ID }, status: 404, foreign: { path: { id: UNKNOWN_BOOKMARK_ID } } },
+  // The page-metadata lookup names no workspace or account identifier: it acts in the workspace of the request and reads and writes that workspace's cache. The
+  // walker's server has the unconfigured egress port, which refuses every request, so its valid request is the declared 502; the lookup itself, its cache
+  // and its refusals are walked by the metadata tests.
+  fetchBookmarkMetadata: { body: { url: "https://example.com/walker" }, status: 502 },
+  // The icon of a host names a host the caller writes and not the identifier of a row. A host nothing of the caller's is on, the walker's own and one that only workspace B has
+  // a bookmark on alike, is answered the placeholder, 202, and queues no fetch; the matrix puts the hosts of B in the path.
+  getFavicon: { path: { host: "walker.example.test" }, status: 202, foreign: { path: { host: "walker.example.test" } }, foreignAnswer: { status: 202 } },
   // Whether a slug is free names the caller's bookmark in `bookmarkId` when it has one: a bookmark no workspace holds, and so one of workspace B, is the declared
   // 404 whoever would hold it, before the slug is looked at. Without it the slug is judged for a new bookmark, which names nothing of any workspace: the valid
   // request is the declared 200. The matrix picks `slug` as an input that can carry an identifier, by its name, and puts a bookmark of B in it and in `bookmarkId`.

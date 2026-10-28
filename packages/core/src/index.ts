@@ -5,6 +5,7 @@ export * from "./bookmarks/index.ts";
 export * from "./dashboard/index.ts";
 export * from "./entitlements/index.ts";
 export * from "./events/index.ts";
+export * from "./favicons/index.ts";
 export * from "./folders/index.ts";
 export * from "./go/index.ts";
 export * from "./go/navigate.ts";

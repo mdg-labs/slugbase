@@ -30,6 +30,12 @@ describe("SidePanel", () => {
     expect(dialog.getAttribute("aria-describedby")).toBeTruthy();
     expect(dialog.textContent).toContain("Three bookmarks.");
     expect(dialog.closest("[data-slot=sheet-viewport]")).not.toBeNull();
+  });
+
+  it("is free of accessibility violations", async () => {
+    render(<Harness description="The latest ones." />);
+    await screen.findByRole("dialog");
+
     await expectNoViolations(document.body);
   });
 

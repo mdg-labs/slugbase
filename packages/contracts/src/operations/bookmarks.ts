@@ -19,7 +19,7 @@ import { TAG_NAME_MAX_LENGTH } from "./tags.ts";
 // query (doc 04 section 10.6). A bulk request deletes, pins, unpins, files in a folder (adds to it, moves to it, takes out of it) or tags (adds tags, removes tags) many of the caller's own
 // bookmarks at once, named by identifier or by the list's filters, in one transaction; the folder or the tags it acts with are the caller's own, and one that is
 // not is answered 404 with nothing changed (doc 02 section 5.8). The preview of adding tags answers the tag set the bookmarks would carry, without writing. The
-// select-all operation returns the identifiers a filter matches so a client can name them. The text query `q` narrows the list, the select-all and a bulk request by filter to the bookmarks the
+// select-all operation returns the identifiers a filter matches so a client can name them. The metadata operation reads the title and description of a page for the modal that is open, from the workspace's cache or from a fetch through the egress adapter within three seconds; an address the server refuses to connect to is 422 url_not_allowed, a page that cannot be read is 502 upstream_failed, and it takes from the fetch bucket and needs the write scope because it writes the cache (doc 04 sections 3.2, 7 and 10.6). The text query `q` narrows the list, the select-all and a bulk request by filter to the bookmarks the
 // search of doc 02 section 9.1 finds by their title, host, slug and description (never the path of the URL), in the order the list is asked for and not by relevance; it is plain text.
 
 /** The longest bookmark URL, in characters (doc 02 section 5.1). */
@@ -430,6 +430,29 @@ export const SlugAvailabilitySchema = z
   })
   .meta({ id: "SlugAvailability" });
 
+export const BookmarkMetadataRequestSchema = z
+  .strictObject({
+    url: z
+      .string()
+      .min(1)
+      .max(BOOKMARK_URL_MAX_LENGTH)
+      .describe(
+        "The address of the page to read the title and description of: an http or https URL of at most 2 048 characters, judged as a bookmark's URL is. Any other scheme is refused with 422 url_not_allowed",
+      ),
+  })
+  .meta({ id: "BookmarkMetadataRequest" });
+
+export const BookmarkMetadataSchema = z
+  .strictObject({
+    title: z.string().nullable().describe("The page's title (its og:title, else its title element), plain text of at most 300 characters; null when the page gave none"),
+    description: z.string().nullable().describe("The page's description (its og:description, else its description meta tag), plain text of at most 1 000 characters; null when the page gave none"),
+    siteName: z.string().nullable().describe("The page's site name (its og:site_name), plain text of at most 100 characters; null when the page gave none"),
+    canonicalUrl: z.string().nullable().describe("The page's own canonical link, an absolute http or https URL without credentials, as text and never fetched; null when the page gave none"),
+    language: z.string().nullable().describe("The page's language tag, such as en or de-AT; null when the page gave none"),
+    cached: z.boolean().describe("Whether the answer is the workspace's cached result of an earlier fetch of this page, which expires seven days after it was fetched, and not a fetch made for this request"),
+  })
+  .meta({ id: "BookmarkMetadata" });
+
 export const BookmarkParamsSchema = z.strictObject({
   id: z.uuid().describe("The bookmark's identifier"),
 });
@@ -717,6 +740,36 @@ export const checkSlugAvailability = defineOperation({
     ),
     422: problemResponse("The query did not pass validation (no slug, a bookmarkId that is not an identifier, a parameter the operation does not declare)"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    503: problemResponse("The service is temporarily unavailable"),
+  },
+});
+
+export const fetchBookmarkMetadata = defineOperation({
+  method: "post",
+  path: "/api/v1/bookmarks/metadata",
+  operationId: "fetchBookmarkMetadata",
+  tag: "bookmarks",
+  summary: "Read the title and description of a page",
+  auth: "member",
+  rate: "fetch",
+  scope: "write",
+  request: { body: BookmarkMetadataRequestSchema },
+  responses: {
+    200: jsonResponse(
+      "What the page says about itself, from the workspace's cached result when it has not expired or from a fetch made for this request, which is then cached for the workspace for seven days. The fetch goes through the egress adapter, reads at most the first 512 KiB of an HTML page and is answered within 3 seconds at the latest. A field the page does not give is null. Nothing of any bookmark is changed",
+      BookmarkMetadataSchema,
+    ),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse("There is no session, or its second factor is not complete"),
+    403: problemResponse("The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"),
+    404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),
+    422: problemResponse(
+      "The body did not pass validation (a missing, empty, over-long or malformed URL, or a field the operation does not declare), or the URL is not one that can be fetched (url_not_allowed): not an http or https URL, or an address the server refuses to connect to (a private, loopback, link-local, carrier-grade NAT or cloud-metadata address, also behind a redirect or a host name). Nothing is cached",
+    ),
+    429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
+    502: problemResponse(
+      "The page could not be read (upstream_failed): the connection failed, the fetch did not finish within 3 seconds, the status was not a success, or the body was not an HTML page. Nothing is cached",
+    ),
     503: problemResponse("The service is temporarily unavailable"),
   },
 });

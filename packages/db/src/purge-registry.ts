@@ -22,6 +22,7 @@ export const workspacePurgeOrder: readonly string[] = [
   "folders",
   // tags reference the membership of their owner, so they go before the members.
   "tags",
+  "url_metadata",
   "workspace_invitations",
   "workspace_settings",
   "workspace_members",

@@ -191,6 +191,16 @@ describe("FakeEgress", () => {
     expect((await egress.request({ url: "https://edge.test/", ...limits })).body).toHaveLength(100);
   });
 
+  it("cuts a body over the maximum to the maximum when the request asks to truncate, and still refuses a type outside the list", async () => {
+    const body = Uint8Array.from({ length: 101 }, (_, index) => index);
+    const egress = new FakeEgress({ "https://big.test/": { body, contentType: "text/html" } });
+    const response = await egress.request({ url: "https://big.test/", truncateAtMaxBytes: true, ...limits });
+    expect(response.body).toEqual(body.subarray(0, 100));
+    await expect(egress.request({ url: "https://big.test/", truncateAtMaxBytes: true, acceptContentTypes: ["image/png"], ...limits })).rejects.toMatchObject({
+      code: "egress_failed",
+    });
+  });
+
   it("answers HEAD without a body", async () => {
     const egress = new FakeEgress({ "https://big.test/": { body: new Uint8Array(1_000), contentType: "image/png" } });
     const response = await egress.request({ url: "https://big.test/", method: "HEAD", ...limits });

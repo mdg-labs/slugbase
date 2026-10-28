@@ -71,6 +71,7 @@ export type {
   SessionPrincipal,
   StageName,
   StartOptions,
+  TakeBucketLimit,
   TakeEmailLimit,
   TakenLimit,
   ValidatedInput,

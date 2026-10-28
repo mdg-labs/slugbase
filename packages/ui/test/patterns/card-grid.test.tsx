@@ -52,8 +52,8 @@ function renderCard(props: Partial<Parameters<typeof CardGridItem>[0]> = {}) {
 }
 
 describe("CardGrid", () => {
-  it("lists the cards, with the title as a same-tab link that keeps the opener to itself", async () => {
-    const { container } = renderCard();
+  it("lists the cards, with the title as a same-tab link that keeps the opener to itself", () => {
+    renderCard();
 
     const list = screen.getByRole("list", { name: "Bookmarks" });
     expect(within(list).getAllByRole("listitem")).toHaveLength(1);
@@ -65,6 +65,11 @@ describe("CardGrid", () => {
     expect(screen.getByText("example.com").getAttribute("translate")).toBe("no");
     expect(screen.getByText("Details")).toBeDefined();
     expect(screen.getByRole("checkbox", { name: "Select Example" })).toBeDefined();
+  });
+
+  it("is free of accessibility violations", async () => {
+    const { container } = renderCard();
+
     await expectNoViolations(container);
   });
 

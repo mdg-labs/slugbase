@@ -83,6 +83,12 @@ const CONNECT_ERRORS = new Set([
 
 class ConnectFailure extends EgressError {}
 
+// How much of a response body is read: at most `maxBytes`, and what happens to a longer one. It is refused, or cut to `maxBytes` when `truncate` is set.
+interface BodyLimit {
+  readonly maxBytes: number;
+  readonly truncate: boolean;
+}
+
 type Hop =
   | { readonly kind: "response"; readonly response: EgressResponse }
   | { readonly kind: "redirect"; readonly status: number; readonly location: string };
@@ -271,6 +277,7 @@ export class HttpEgress implements EgressPort {
 
   async request(request: EgressRequest): Promise<EgressResponse> {
     const { timeoutMs, maxBytes } = request;
+    const truncate = request.truncateAtMaxBytes === true;
     if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || !Number.isSafeInteger(maxBytes) || maxBytes < 0) {
       throw new RangeError("An egress request needs a positive time budget and a maximum size");
     }
@@ -297,7 +304,7 @@ export class HttpEgress implements EgressPort {
     try {
       for (let redirects = 0; ; redirects += 1) {
         const addresses = await raceDeadline(this.#validatedAddresses(target), controller.signal);
-        const hop = await this.#connect(target, addresses, method, headers, body, maxBytes, accepted, controller.signal);
+        const hop = await this.#connect(target, addresses, method, headers, body, { maxBytes, truncate }, accepted, controller.signal);
         if (hop.kind === "response") {
           return hop.response;
         }
@@ -332,13 +339,13 @@ export class HttpEgress implements EgressPort {
     method: string,
     headers: Readonly<Record<string, string>> | undefined,
     body: Uint8Array | undefined,
-    maxBytes: number,
+    limit: BodyLimit,
     accepted: ReadonlySet<string | undefined> | undefined,
     signal: AbortSignal,
   ): Promise<Hop> {
     for (const address of addresses) {
       try {
-        return await this.#exchange(target, address, method, headers, body, maxBytes, accepted, signal);
+        return await this.#exchange(target, address, method, headers, body, limit, accepted, signal);
       } catch (error) {
         if (!(error instanceof ConnectFailure)) {
           throw error;
@@ -381,7 +388,7 @@ export class HttpEgress implements EgressPort {
     method: string,
     callerHeaders: Readonly<Record<string, string>> | undefined,
     body: Uint8Array | undefined,
-    maxBytes: number,
+    { maxBytes, truncate }: BodyLimit,
     accepted: ReadonlySet<string | undefined> | undefined,
     signal: AbortSignal,
   ): Promise<Hop> {
@@ -461,7 +468,7 @@ export class HttpEgress implements EgressPort {
             return;
           }
           // A declared length is the encoded size when the body is encoded; then only the decoded bytes count.
-          if (hasBody && decoders.length === 0 && Number.isFinite(declared) && declared > maxBytes) {
+          if (!truncate && hasBody && decoders.length === 0 && Number.isFinite(declared) && declared > maxBytes) {
             settle(new EgressTooLarge());
             return;
           }
@@ -469,11 +476,27 @@ export class HttpEgress implements EgressPort {
           let received = 0;
           const sink = new Writable({
             write(chunk: Buffer, _encoding, done): void {
-              received += chunk.length;
-              if (received > maxBytes) {
-                done(new EgressTooLarge());
+              if (settled) {
+                done();
                 return;
               }
+              if (received + chunk.length > maxBytes) {
+                if (!truncate) {
+                  done(new EgressTooLarge());
+                  return;
+                }
+                // The body is cut here: the first bytes up to the maximum are the answer and the rest is never read.
+                chunks.push(chunk.subarray(0, maxBytes - received));
+                received = maxBytes;
+                settle({
+                  kind: "response",
+                  response: { url: url.href, status, contentType, body: new Uint8Array(Buffer.concat(chunks)) },
+                });
+                req?.destroy();
+                done();
+                return;
+              }
+              received += chunk.length;
               chunks.push(chunk);
               done();
             },

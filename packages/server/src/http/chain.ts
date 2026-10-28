@@ -13,7 +13,7 @@ import { createCrossSiteProtection } from "./cross-site.ts";
 import { createSecurityHeaders } from "./headers.ts";
 import { createIdempotency } from "./idempotency.ts";
 import { failRequest, notFoundProblem, responseStage, type ResponseValidation } from "./problem.ts";
-import { createRateLimiting, type RateLimitState, type TakeEmailLimit } from "./rate-limit.ts";
+import { createRateLimiting, type RateLimitState, type TakeBucketLimit, type TakeEmailLimit } from "./rate-limit.ts";
 import { createRequestContext } from "./request-context.ts";
 import { createTenantResolution, type RequestTenant } from "./tenant.ts";
 import { validation } from "./validation.ts";
@@ -98,6 +98,11 @@ export interface ChainEnv {
      * limit takes it once it knows the request is a signed-in account's.
      */
     takeAccountLimit?: (context: ChainContext, accountId: string) => Promise<void>;
+    /**
+     * Set by the rate-limiting stage for an operation that declares `rateTakenByHandler`: the stages limited it by the `read` bucket, and its handler takes the
+     * limits of the declared bucket besides when the request does the work the bucket guards.
+     */
+    takeBucketLimit?: TakeBucketLimit;
     /** Set by the tenant-resolution stage: the active workspace's internal UUID. */
     workspaceId?: string;
     /** Set by the tenant-resolution stage when the resolver found a workspace for the principal. */

@@ -1,3 +1,21 @@
+export {
+  METADATA_CANONICAL_URL_MAX_LENGTH,
+  METADATA_CONTENT_TYPES,
+  METADATA_DESCRIPTION_MAX_LENGTH,
+  METADATA_HTML_MAX_BYTES,
+  METADATA_LANGUAGE_MAX_LENGTH,
+  METADATA_SITE_NAME_MAX_LENGTH,
+  METADATA_TITLE_MAX_LENGTH,
+  isMetadataContentType,
+  METADATA_ICON_LINKS_MAX,
+  parsePageIcons,
+  parsePageMetadata,
+} from "./metadata.ts";
+export type { PageMetadata, PageMetadataInput } from "./metadata.ts";
+export { fetchPageMetadata } from "./page-fetch.ts";
+export type { PageFetchOutcome } from "./page-fetch.ts";
+export { lookupPageMetadata } from "./metadata-lookup.ts";
+export type { CachedPageMetadata, PageMetadataCache, PageMetadataLookupDependencies, PageMetadataLookupOutcome } from "./metadata-lookup.ts";
 export { BOOKMARK_URL_MAX_LENGTH, normalizeBookmarkUrl } from "./url.ts";
 export type { BookmarkUrl, BookmarkUrlRefusal, BookmarkUrlResult } from "./url.ts";
 export { BOOKMARK_DESCRIPTION_MAX_LENGTH, BOOKMARK_TITLE_MAX_LENGTH, createBookmark } from "./create.ts";

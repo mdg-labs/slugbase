@@ -1,5 +1,6 @@
 import {
   PROBLEM_CATALOG,
+  binaryResponse,
   defineOperation,
   emptyResponse,
   jsonResponse,
@@ -288,6 +289,46 @@ describe("the server's problem responses", () => {
       database: fakeDatabase(),
     });
     expect((await server.fetch(new Request("http://localhost/api/v1/widgets/1"))).status).toBe(500);
+  });
+});
+
+describe("response validation of a binary response", () => {
+  const image = defineOperation({
+    method: "get",
+    path: "/api/v1/images/{id}",
+    operationId: "getImage",
+    tag: "test",
+    auth: "anonymous",
+    rate: "none",
+    responses: { 200: binaryResponse("a PNG", "image/png"), 404: problemResponse("not found") },
+  });
+  const PNG = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0xff, 0xfe, 0x00, 0x80]);
+  const serveImage = (handler: RouteBinding["handler"], env = "test") => serve(handler, { env, operation: image, path: "/api/v1/images/1" });
+
+  it("passes the bytes through unchanged, high bytes and NULs included, in development and in production", async () => {
+    for (const env of ["test", "production"]) {
+      const { request } = serveImage(() => new Response(PNG, { headers: { "content-type": "image/png" } }), env);
+      const response = await request("/api/v1/images/1");
+      expect(response.status).toBe(200);
+      expect(Buffer.from(await response.arrayBuffer()).equals(Buffer.from(PNG))).toBe(true);
+    }
+  });
+
+  it("answers 500 for a body of another content type, the SVG a hostile site would like served included, and for an empty body", async () => {
+    const svg = serveImage(() => new Response("<svg><script>alert(1)</script></svg>", { headers: { "content-type": "image/svg+xml" } }));
+    const json = serveImage(() => Response.json({ id: "1" }));
+    const text = serveImage(() => new Response(PNG, { headers: { "content-type": "text/html" } }));
+    const empty = serveImage(() => new Response(new Uint8Array(), { headers: { "content-type": "image/png" } }));
+    for (const { request } of [svg, json, text, empty]) {
+      const response = await request("/api/v1/images/1");
+      expect(response.status).toBe(500);
+      expect(await response.json()).toMatchObject({ code: "internal" });
+    }
+  });
+
+  it("compares the media type without parameters and ignoring case", async () => {
+    const { request } = serveImage(() => new Response(PNG, { headers: { "content-type": "IMAGE/PNG; charset=binary" } }));
+    expect((await request("/api/v1/images/1")).status).toBe(200);
   });
 });
 

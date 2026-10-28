@@ -32,6 +32,7 @@ describe("PATH_PARAMETER_MAPPING", () => {
     expect(contractInputs()).toEqual(
       expect.arrayContaining([
         "openBookmark.id",
+        "getFavicon.host",
         "renameTag.id",
         "deleteTag.id",
         "mergeTag.id",

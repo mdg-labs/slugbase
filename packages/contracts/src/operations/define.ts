@@ -82,11 +82,31 @@ export interface RateLimitedResponse extends ProblemResponse {
   readonly headers: { readonly [RETRY_AFTER_HEADER]: ResponseHeader } & ResponseHeaders;
 }
 
+/**
+ * A response whose body is bytes of one media type (an image), not JSON. The media type is fixed by the declaration, and the response stage checks the
+ * `Content-Type` of an answer against it. It may document headers, as a JSON response does.
+ */
+export interface BinaryResponse<H extends ResponseHeaders = ResponseHeaders> {
+  readonly kind: "binary";
+  readonly description: string;
+  readonly mediaType: string;
+  readonly headers?: H;
+}
+
 /** A response without a body; it may still document headers, as a redirect documents its `Location`. */
 export interface EmptyResponse<H extends ResponseHeaders = ResponseHeaders> {
   readonly kind: "empty";
   readonly description: string;
   readonly headers?: H;
+}
+
+/** A response whose body is bytes of the media type `mediaType`, and optionally the headers it documents. */
+export function binaryResponse<H extends ResponseHeaders = ResponseHeaders>(
+  description: string,
+  mediaType: string,
+  options: JsonResponseOptions<H> = {},
+): BinaryResponse<H> {
+  return options.headers === undefined ? { kind: "binary", description, mediaType } : { kind: "binary", description, mediaType, headers: options.headers };
 }
 
 /** A response with a JSON body described by a Zod schema, and optionally the headers it documents. */
@@ -134,7 +154,7 @@ export type AtLeastOne<T> = { [K in keyof T]-?: Required<Pick<T, K>> & Partial<O
  * Client-error statuses are problem documents, and at least one must be declared.
  * Other statuses carry any response kind.
  */
-export type OperationResponses = { [S in OtherResponseStatus]?: JsonResponse | EmptyResponse | ProblemResponse } & AtLeastOne<{
+export type OperationResponses = { [S in OtherResponseStatus]?: JsonResponse | EmptyResponse | ProblemResponse | BinaryResponse } & AtLeastOne<{
   [S in ProblemResponseStatus]: S extends 429 ? RateLimitedResponse : ProblemResponse;
 }>;
 
@@ -185,6 +205,12 @@ export interface OperationDefinition {
    * it is not part of the generated OpenAPI document.
    */
   readonly maxBodyBytes?: number;
+  /**
+   * The operation takes its declared `rate` bucket itself, in its handler, when the request does the work the bucket guards (a favicon request
+   * that starts a fetch). The rate-limit stages limit every request of it by the `read` bucket instead, per address before authentication and per
+   * account after it. Server-side policy: it is not part of the generated OpenAPI document, which still names the declared bucket.
+   */
+  readonly rateTakenByHandler?: boolean;
   readonly responses: OperationResponses;
 }
 

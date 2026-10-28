@@ -7,7 +7,7 @@ describe("Toast", () => {
   beforeEach(stubBrowserApis);
 
   it("announces a toast added through the manager", async () => {
-    const { baseElement } = render(<ToastProvider>{null}</ToastProvider>);
+    render(<ToastProvider>{null}</ToastProvider>);
 
     act(() => {
       toastManager.add({ title: "Bookmark pinned", description: "It is at the top of your list." });
@@ -15,6 +15,16 @@ describe("Toast", () => {
 
     expect(await screen.findByText("Bookmark pinned")).toBeTruthy();
     expect(screen.getByText("It is at the top of your list.")).toBeTruthy();
+  });
+
+  it("is free of accessibility violations while a toast is shown", async () => {
+    const { baseElement } = render(<ToastProvider>{null}</ToastProvider>);
+
+    act(() => {
+      toastManager.add({ title: "Bookmark pinned", description: "It is at the top of your list." });
+    });
+    await screen.findByText("Bookmark pinned");
+
     await expectNoViolations(baseElement);
   });
 

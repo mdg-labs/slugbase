@@ -16,6 +16,7 @@ export const IDENTIFIER_KINDS = [
   "folder",
   "tag",
   "slug",
+  "host",
   "invitation",
   "token",
 ] as const;

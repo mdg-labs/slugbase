@@ -5,6 +5,7 @@ import { dashboardRepository, tagRepository } from "../src/index.ts";
 import { pinnedQuery, quickAccessQuery, summaryStatement } from "../src/repositories/dashboard.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
+import { vacuumUntilAllVisible } from "./support/vacuum-fixture.ts";
 import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 
 // The plan and the time of the dashboard on a workspace of 50 000 bookmarks (doc 08 section 5.3, doc 05 section 2.4): the quick access reads `bookmarks_owner_popular_idx` and the pinned
@@ -20,6 +21,7 @@ const SMALL_BOOKMARKS = 50;
 const TAGS = 40;
 const RUNS = 40;
 const P95_BUDGET_MS = 100;
+const FIXTURE_TABLES = ["bookmarks", "tags", "bookmark_tags", "folders"] as const;
 
 let db: TestDatabase;
 let accountId: string;
@@ -75,9 +77,9 @@ beforeAll(async () => {
            'https://example.com/s' || w || '/' || n, 'https://example.com/s' || w || '/' || n, 'example.com', 'Small ' || w || ' ' || n,
            CASE WHEN n % 5 = 0 THEN 'small-' || w || '-' || n END, n % 20 = 5, CASE WHEN n % 25 = 0 THEN now() END
     FROM generate_series(1, ${SMALL_WORKSPACES}) AS w CROSS JOIN generate_series(1, ${SMALL_BOOKMARKS}) AS n`);
-  // A running instance has had its tables vacuumed and analysed.
+  // A running instance has its tables vacuumed and analysed, and a vacuum marks all-visible each page whose rows every transaction can see, so an Index Only Scan answers for the entries on those pages from the index alone: the fixture vacuums until the map covers every page, so the map is part of the fixture.
   await db.owner.unsafe("ALTER TABLE bookmarks ALTER COLUMN workspace_id SET STATISTICS 10000, ALTER COLUMN owner_id SET STATISTICS 10000, ALTER COLUMN forwarding SET STATISTICS 10000");
-  await db.owner.unsafe("VACUUM (ANALYZE) bookmarks, tags, bookmark_tags, folders");
+  await vacuumUntilAllVisible(db, FIXTURE_TABLES);
 }, HOOK_TIMEOUT_MS);
 
 afterAll(async () => {
@@ -152,6 +154,14 @@ describe("the dashboard on a workspace of 50 000 bookmarks", () => {
     expect(answer?.topTags).toHaveLength(12);
     expect(answer?.counts.bookmarks).toBe(44_500);
     expect(answer?.counts).toMatchObject({ folders: 30, tags: TAGS });
+  });
+
+  it("measures tables whose every page the visibility map marks all-visible", async () => {
+    const rows = await db.owner<{ name: string; pages: number; visible: number }[]>`
+      SELECT relname AS name, relpages AS pages, relallvisible AS visible FROM pg_class WHERE oid = ANY (${FIXTURE_TABLES.map((table) => `public.${table}`)}::regclass[]) ORDER BY relname`;
+
+    expect(rows.map((row) => row.name)).toEqual([...FIXTURE_TABLES].sort());
+    expect(rows.filter((row) => row.visible < row.pages)).toEqual([]);
   });
 
   it(`answers in under ${String(P95_BUDGET_MS)} ms at the 95th percentile`, async () => {

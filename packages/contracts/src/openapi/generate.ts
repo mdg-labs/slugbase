@@ -306,9 +306,12 @@ function checkDeclaration(raw: unknown, index: number, seenIds: Set<string>, see
         continue;
       }
       const kind = isRecord(response) ? response["kind"] : undefined;
-      if (kind !== "json" && kind !== "problem" && kind !== "empty") {
-        need(`response ${status} must be built with jsonResponse, problemResponse or emptyResponse`);
+      if (kind !== "json" && kind !== "problem" && kind !== "empty" && kind !== "binary") {
+        need(`response ${status} must be built with jsonResponse, problemResponse, emptyResponse or binaryResponse`);
         continue;
+      }
+      if (kind === "binary" && !(isRecord(response) && typeof response["mediaType"] === "string" && /^[a-z]+\/[a-z0-9.+-]+$/.test(response["mediaType"]))) {
+        need(`response ${status} needs a media type such as image/png`);
       }
       if (kind === "json" && !(isRecord(response) && response["schema"] instanceof z.ZodType)) {
         need(`response ${status} needs a Zod schema`);
@@ -437,6 +440,15 @@ function buildOperation(op: OperationDefinition, converter: Converter): JsonObje
       const built: JsonObject = {
         description: response.description,
         content: { "application/json": { schema: schema ?? {} } },
+      };
+      if (response.headers !== undefined) {
+        built["headers"] = buildHeaders(response.headers, converter);
+      }
+      responses[status] = built;
+    } else if (response.kind === "binary") {
+      const built: JsonObject = {
+        description: response.description,
+        content: { [response.mediaType]: { schema: { type: "string", format: "binary" } } },
       };
       if (response.headers !== undefined) {
         built["headers"] = buildHeaders(response.headers, converter);

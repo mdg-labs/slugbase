@@ -1,4 +1,4 @@
-import type { EmptyResponse, JsonResponse, OperationDefinition, ProblemResponse, ResponseHeader } from "@slugbase/contracts";
+import type { BinaryResponse, EmptyResponse, JsonResponse, OperationDefinition, ProblemResponse, ResponseHeader } from "@slugbase/contracts";
 import { z } from "zod";
 import type { ChainContext, RequestStage } from "./chain.ts";
 
@@ -83,9 +83,9 @@ function literalOf(header: ResponseHeader): string | undefined {
 
 /** The `Cache-Control` value the operation declares for the status, if it declares one. */
 export function declaredCachePolicy(operation: OperationDefinition, status: number): string | undefined {
-  const responses: Readonly<Partial<Record<number, JsonResponse | EmptyResponse | ProblemResponse>>> = operation.responses;
+  const responses: Readonly<Partial<Record<number, JsonResponse | EmptyResponse | ProblemResponse | BinaryResponse>>> = operation.responses;
   const declared = responses[status];
-  if (declared?.kind !== "json" || declared.headers === undefined) {
+  if ((declared?.kind !== "json" && declared?.kind !== "binary") || declared.headers === undefined) {
     return undefined;
   }
   const entry = Object.entries(declared.headers).find(([name]) => name.toLowerCase() === "cache-control");

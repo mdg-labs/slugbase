@@ -8,6 +8,7 @@ import {
   defineJob,
   defineSchedule,
 } from "../src/worker/index.ts";
+import { queueSettings, queueUpdates } from "../src/worker/queues.ts";
 import { moduleContext } from "./support.ts";
 
 const handle = () => Promise.resolve();
@@ -69,6 +70,24 @@ describe("defineJob", () => {
     const given = context();
     await job.handle({ id: "m1" }, given);
     expect(seen).toEqual([{ id: "m1" }, given]);
+  });
+});
+
+describe("the queue of a job that keeps one waiting job for each key", () => {
+  const plain = defineJob({ name: "test.plain", payload: z.object({}), handle });
+  const deduped = defineJob({ name: "test.deduped", payload: z.object({}), handle, dedupe: true, retry: { limit: 1, delaySeconds: 5, backoff: false } });
+
+  it("is created with the short policy of pg-boss, and a job that does not ask for it with none", () => {
+    expect(plain.dedupe).toBe(false);
+    expect(queueSettings(plain)).not.toHaveProperty("policy");
+    expect(deduped.dedupe).toBe(true);
+    expect(queueSettings(deduped)).toMatchObject({ policy: "short", retryLimit: 1, retryDelay: 5, retryBackoff: false });
+  });
+
+  it("is updated without its policy, which pg-boss refuses to change, and with the rest of its settings", () => {
+    expect(queueUpdates(deduped)).not.toHaveProperty("policy");
+    expect(queueUpdates(deduped)).toMatchObject({ retryLimit: 1, retryDelay: 5, retryBackoff: false });
+    expect(queueUpdates(plain)).toEqual(queueSettings(plain));
   });
 });
 

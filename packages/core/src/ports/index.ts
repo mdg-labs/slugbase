@@ -74,6 +74,8 @@ export type {
   IdentityProviderConfig,
   IdentityProviderInfo,
 } from "./identity.ts";
+export { ICON_MAX_INPUT_PIXELS, ICON_SIZES, ImageRefused } from "./image-codec.ts";
+export type { ImageCodecPort, ImageRefusalCode, ReencodedIcon } from "./image-codec.ts";
 export type { MailMessage, MailPort } from "./mail.ts";
 export { PortUnavailable } from "./port.ts";
 export type { Port, PortUnavailableCode } from "./port.ts";

@@ -5,8 +5,8 @@ import { FormField } from "../../src/patterns/index.ts";
 import { expectNoViolations } from "../support.tsx";
 
 describe("FormField", () => {
-  it("names the control by its label and describes it by its description", async () => {
-    const { container } = render(
+  it("names the control by its label and describes it by its description", () => {
+    render(
       <FormField description="The address you registered with." label="Email">
         <Input type="email" />
       </FormField>,
@@ -16,11 +16,20 @@ describe("FormField", () => {
     expect(field.getAttribute("aria-invalid")).toBeNull();
     expect(field.getAttribute("aria-describedby")).toBeTruthy();
     expect(screen.getByText("The address you registered with.").id).toBe(field.getAttribute("aria-describedby"));
+  });
+
+  it("is free of accessibility violations with a description", async () => {
+    const { container } = render(
+      <FormField description="The address you registered with." label="Email">
+        <Input type="email" />
+      </FormField>,
+    );
+
     await expectNoViolations(container);
   });
 
-  it("marks the control invalid and describes it by the error", async () => {
-    const { container } = render(
+  it("marks the control invalid and describes it by the error", () => {
+    render(
       <FormField error="Enter your email address." label="Email">
         <Input type="email" />
       </FormField>,
@@ -30,6 +39,15 @@ describe("FormField", () => {
     expect(field.getAttribute("aria-invalid")).toBe("true");
     const error = screen.getByText("Enter your email address.");
     expect(field.getAttribute("aria-describedby")?.split(" ")).toContain(error.id);
+  });
+
+  it("is free of accessibility violations with an error", async () => {
+    const { container } = render(
+      <FormField error="Enter your email address." label="Email">
+        <Input type="email" />
+      </FormField>,
+    );
+
     await expectNoViolations(container);
   });
 

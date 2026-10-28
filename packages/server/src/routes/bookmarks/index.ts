@@ -1,6 +1,6 @@
-import { BOOKMARK_LIST_TOTAL_CAP, bulkBookmarks as bulkBookmarksOperation, createBookmark as createBookmarkOperation, deleteBookmark as deleteBookmarkOperation, getBookmark, listBookmarkIds as listBookmarkIdsOperation, listBookmarks as listBookmarksOperation, openBookmark as openBookmarkOperation, previewBulkBookmarks as previewBulkBookmarksOperation, updateBookmark as updateBookmarkOperation, type BookmarkSchema, type BulkBookmarksRequestSchema } from "@slugbase/contracts";
-import { bulkBookmarks, createAuditWriter, createBookmark, deleteBookmark, listBookmarkIds, listBookmarks, normalizeSlug, openBookmark, previewBulkTags, readBookmark, updateBookmark, type AuditActor, type BookmarkBulkStore, type BookmarkCursors, type BookmarkEntitlements, type BookmarkListStore, type BookmarkRecord, type BookmarkStore, type BookmarkUsage } from "@slugbase/core";
-import { accountProfileRepository, auditEventRepository, bookmarkRepository, isBookmarkSlugTaken, type TenantTx } from "@slugbase/db";
+import { BOOKMARK_LIST_TOTAL_CAP, bulkBookmarks as bulkBookmarksOperation, createBookmark as createBookmarkOperation, deleteBookmark as deleteBookmarkOperation, fetchBookmarkMetadata as fetchBookmarkMetadataOperation, getBookmark, listBookmarkIds as listBookmarkIdsOperation, listBookmarks as listBookmarksOperation, openBookmark as openBookmarkOperation, previewBulkBookmarks as previewBulkBookmarksOperation, updateBookmark as updateBookmarkOperation, type BookmarkSchema, type BulkBookmarksRequestSchema } from "@slugbase/contracts";
+import { bulkBookmarks, createAuditWriter, createBookmark, deleteBookmark, listBookmarkIds, listBookmarks, lookupPageMetadata, normalizeSlug, openBookmark, previewBulkTags, readBookmark, updateBookmark, type AuditActor, type BookmarkBulkStore, type BookmarkCursors, type BookmarkEntitlements, type BookmarkListStore, type BookmarkRecord, type BookmarkStore, type BookmarkUsage, type EgressPort, type PageMetadataCache } from "@slugbase/core";
+import { accountProfileRepository, auditEventRepository, bookmarkRepository, isBookmarkSlugTaken, urlMetadataRepository, type TenantTx } from "@slugbase/db";
 import type { z } from "zod";
 import { createPageCursorCodec } from "../../auth/page-cursor.ts";
 import { uuidv7 } from "../../auth/uuidv7.ts";
@@ -10,6 +10,7 @@ import type { ChainContext, RouteBinding } from "../../http/chain.ts";
 import { ProblemError } from "../../http/problem.ts";
 import type { RequestTenant } from "../../http/tenant.ts";
 import { networkPrefixOf } from "../../http/trusted-proxy.ts";
+import { queueFetchMetadata } from "../../worker/jobs/fetch-metadata.ts";
 import { route } from "../register.ts";
 import { acceptedVersions, entityTagOf } from "../workspaces/if-match.ts";
 
@@ -89,6 +90,13 @@ import { acceptedVersions, entityTagOf } from "../workspaces/if-match.ts";
 // the database later (`sys_flush_open_counts`): the answer never waits for the database to take the count. A bookmark the caller
 // cannot read is `404` and counts nothing, and the stored URL is checked to be http or https again before it is handed back. It is
 // in the `go` rate bucket.
+//
+// POST /api/v1/bookmarks/metadata (doc 04 sections 3.2, 7 and 10.6, doc 02 sections 5.4 and 16, doc 10 T6 and T13) answers the title, description, site name,
+// canonical link and language of a page for the modal that is open, from the workspace's cache or from a fetch through the egress adapter that is
+// answered within the budget of the composition (three seconds by default; `metadataBudgetMs`). The URL is judged as a bookmark's is: a scheme other than
+// http and https and a target the egress adapter refuses (a private, loopback, link-local, carrier-grade NAT or metadata address, also behind a redirect or a
+// name) are `422 url_not_allowed`, and a fetch that fails, runs out of time, answers a status outside 2xx or a body that is not an HTML page is `502 upstream_failed`;
+// neither says where the connection went. Only a successful result is cached. It takes from the `fetch` bucket and, writing the cache, needs a token of the `write` scope.
 
 const NO_WORKSPACE = "No such resource.";
 const NO_SUCH_BOOKMARK = "No such resource.";
@@ -97,6 +105,8 @@ const NO_SUCH_TAG = "No such resource.";
 const URL_NOT_ALLOWED = "Only http and https URLs can be saved as a bookmark.";
 const DESTINATION_NOT_ALLOWED = "The bookmark's address is not an http or https URL, so it is not opened.";
 const URL_INVALID = "The URL is not valid.";
+const METADATA_URL_NOT_ALLOWED = "The page at this URL cannot be fetched.";
+const METADATA_UPSTREAM_FAILED = "The page could not be read.";
 const STALE_VERSION = "The bookmark has changed since it was read; read it again and retry.";
 const AT_LIMIT = "Your plan allows no more bookmarks in this workspace.";
 const BAD_CURSOR = "The cursor is not valid.";
@@ -112,7 +122,14 @@ export interface BookmarkRoutesOptions {
   readonly entitlements: BookmarkEntitlements;
   /** Where an open is counted; the usage buffer of the server process. */
   readonly usage: BookmarkUsage;
+  /** The egress port the metadata of a page is fetched through. */
+  readonly egress: EgressPort;
+  /** The most the metadata lookup may take, in milliseconds; three seconds when left out. */
+  readonly metadataBudgetMs?: number;
 }
+
+/** The time the lookup of a page's metadata is held to (doc 02 section 16). */
+const DEFAULT_METADATA_BUDGET_MS = 3_000;
 
 function tenantOf(context: ChainContext): RequestTenant {
   const tenant = context.get("tenant");
@@ -139,7 +156,21 @@ function slugTaken(slug: string | null | undefined): ProblemError {
   return new ProblemError("slug_taken", `You already use the slug "${normalizeSlug(slug ?? "")}" in this workspace.`, { errors: [{ path: "slug", code: "slug_taken" }] });
 }
 
-/** The core store over the repository of the open transaction; the events become jobs of the same transaction. */
+/**
+ * The job that fetches the page of a bookmark of the transaction's workspace, which the account of the transaction owns, for the transaction
+ * that sets the bookmark's address; it is queued with the write and never otherwise.
+ */
+function metadataJobOf(tx: TenantTx, bookmarkId: string, urlCanonical: string) {
+  if (tx.workspaceId === undefined) {
+    throw new Error("a bookmark is written in a tenant transaction opened with a workspace");
+  }
+  return queueFetchMetadata(uuidv7(), { bookmarkId, workspaceId: tx.workspaceId, accountId: tx.accountId }, urlCanonical);
+}
+
+/**
+ * The core store over the repository of the open transaction; the events become jobs of the same transaction, and so does the fetch of the
+ * page's metadata (doc 02 section 5.4): when a bookmark is created, and when an update changes its address.
+ */
 function storeOf(tx: TenantTx): BookmarkStore {
   const repository = bookmarkRepository(tx);
   return {
@@ -149,11 +180,15 @@ function storeOf(tx: TenantTx): BookmarkStore {
         folderIds,
         tags,
         ceiling: ceiling === "unlimited" ? null : ceiling,
-        jobs: events.map((event) => queueDomainEvent(event.eventId, event.name, event.payload)),
+        jobs: [...events.map((event) => queueDomainEvent(event.eventId, event.name, event.payload)), metadataJobOf(tx, bookmark.id, bookmark.urlCanonical)],
       });
     },
     find: (bookmarkId) => repository.find(bookmarkId),
-    update: (request) => repository.update(request),
+    update: (request) =>
+      repository.update({
+        ...request,
+        jobsOnUrlChange: request.changes.url === undefined ? [] : [metadataJobOf(tx, request.bookmarkId, request.changes.url.canonical)],
+      }),
     remove: (request) => repository.remove(request),
   };
 }
@@ -236,7 +271,20 @@ function bookmarkBody(bookmark: BookmarkRecord): z.input<typeof BookmarkSchema> 
   };
 }
 
-export function bookmarkRoutes({ entitlements, cursorSecret, usage }: BookmarkRoutesOptions): RouteBinding[] {
+/** The workspace's metadata cache, each call in a transaction of its own so that none is open while a page is fetched. */
+function metadataCacheOf(tenant: RequestTenant): PageMetadataCache {
+  return {
+    read: async (urlCanonical) => {
+      const row = await tenant.withTenant((tx) => urlMetadataRepository(tx).current(urlCanonical));
+      return row === undefined
+        ? undefined
+        : { status: row.status, title: row.title, description: row.description, siteName: row.siteName, canonicalUrl: row.canonicalUrl, language: row.language };
+    },
+    write: (urlCanonical, page) => tenant.withTenant((tx) => urlMetadataRepository(tx).store(urlCanonical, { status: "ok", ...page })),
+  };
+}
+
+export function bookmarkRoutes({ entitlements, cursorSecret, usage, egress, metadataBudgetMs = DEFAULT_METADATA_BUDGET_MS }: BookmarkRoutesOptions): RouteBinding[] {
   const cursors = bookmarkCursors(cursorSecret);
   return [
     route(createBookmarkOperation).handle(async ({ body }, context) => {
@@ -459,6 +507,24 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage }: BookmarkRo
           throw new ProblemError("not_found", NO_SUCH_BOOKMARK);
         case "url_refused":
           throw new ProblemError("url_not_allowed", DESTINATION_NOT_ALLOWED);
+      }
+    }),
+
+    route(fetchBookmarkMetadataOperation).handle(async ({ body }, context) => {
+      const tenant = tenantOf(context);
+      const outcome = await lookupPageMetadata({ egress, cache: metadataCacheOf(tenant), budgetMs: metadataBudgetMs, now: () => performance.now() }, body.url);
+      switch (outcome.kind) {
+        case "found":
+          return { status: 200, body: { ...outcome.page, cached: outcome.cached } };
+        case "url_refused":
+          if (outcome.reason === "not_http") {
+            throw new ProblemError("url_not_allowed", URL_NOT_ALLOWED, { errors: [{ path: "url", code: "url_not_allowed" }] });
+          }
+          throw new ProblemError("validation_failed", URL_INVALID, { errors: [{ path: "url", code: URL_FIELD_CODES[outcome.reason] }] });
+        case "blocked":
+          throw new ProblemError("url_not_allowed", METADATA_URL_NOT_ALLOWED, { errors: [{ path: "url", code: "url_not_allowed" }] });
+        case "failed":
+          throw new ProblemError("upstream_failed", METADATA_UPSTREAM_FAILED);
       }
     }),
 

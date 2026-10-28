@@ -7,6 +7,7 @@ import type { EgressPort } from "./egress.ts";
 import type { EntitlementSource } from "./entitlements.ts";
 import type { ErrorReportPort } from "./error-report.ts";
 import type { IdentityPort } from "./identity.ts";
+import type { ImageCodecPort } from "./image-codec.ts";
 import type { MailPort } from "./mail.ts";
 import type { RateLimitPort } from "./rate-limit.ts";
 import type { SecretBoxPort } from "./secret-box.ts";
@@ -26,6 +27,7 @@ export interface Adapters {
   readonly clientErrorReport: ClientErrorReportPort;
   readonly challenge: ChallengePort;
   readonly egress: EgressPort;
+  readonly imageCodec: ImageCodecPort;
   readonly rateLimit: RateLimitPort;
   readonly secretBox: SecretBoxPort;
   readonly tenantResolver: TenantResolver;

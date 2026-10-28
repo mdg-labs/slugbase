@@ -69,7 +69,7 @@ BEGIN
     RAISE EXCEPTION 'sys_workspace_purge_batch needs a workspace, a table and a batch size from 1 to 10000'
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
-  IF p_table NOT IN ('api_tokens', 'audit_events', 'bookmark_tags', 'bookmarks', 'folder_bookmarks', 'folders', 'slug_preferences', 'tags', 'workspace_invitations', 'workspace_settings', 'workspace_members') THEN
+  IF p_table NOT IN ('api_tokens', 'audit_events', 'bookmark_tags', 'bookmarks', 'folder_bookmarks', 'folders', 'slug_preferences', 'tags', 'url_metadata', 'workspace_invitations', 'workspace_settings', 'workspace_members') THEN
     RAISE EXCEPTION 'sys_workspace_purge_batch does not know the table %', p_table
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
@@ -104,6 +104,9 @@ BEGIN
   ELSIF p_table = 'tags' THEN
     DELETE FROM public.tags
     WHERE id IN (SELECT t.id FROM public.tags t WHERE t.workspace_id = p_workspace_id LIMIT p_batch_size);
+  ELSIF p_table = 'url_metadata' THEN
+    DELETE FROM public.url_metadata
+    WHERE (workspace_id, url_canonical) IN (SELECT m.workspace_id, m.url_canonical FROM public.url_metadata m WHERE m.workspace_id = p_workspace_id LIMIT p_batch_size);
   ELSIF p_table = 'workspace_invitations' THEN
     DELETE FROM public.workspace_invitations
     WHERE id IN (SELECT i.id FROM public.workspace_invitations i WHERE i.workspace_id = p_workspace_id LIMIT p_batch_size);

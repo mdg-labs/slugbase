@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   HttpEgress,
+  SharpImageCodec,
   createFullEntitlementSource,
   createLogOnlyMail,
   createOidcIdentity,
@@ -247,6 +248,7 @@ export function composeAdapters(config: ServerConfig | WorkerConfig, logger: Log
     secretBox,
     errors,
     egress,
+    imageCodec: new SharpImageCodec(),
     identity: composeIdentity(config, egress, logger),
     rateLimit,
     entitlements: createFullEntitlementSource(),

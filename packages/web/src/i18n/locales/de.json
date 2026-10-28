@@ -342,6 +342,7 @@
         "label": "URL",
         "placeholder": "https://",
         "checking": "Es wird geprüft, ob du diese Adresse schon gespeichert hast",
+        "reading": "Titel und Beschreibung der Seite werden gelesen",
         "error": {
           "required": "Gib die Adresse ein, die du speichern möchtest.",
           "tooLong": "Verwende höchstens {max, number} Zeichen.",

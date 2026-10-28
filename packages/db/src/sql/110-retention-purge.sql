@@ -55,6 +55,14 @@
 -- a row lock, which slugbase_system holds no UPDATE privilege for. The grants it needs are in
 -- 250-audit-events.sql.
 --
+-- url_metadata: past expires_at, which is seven days after the page was fetched (doc 05 section 6). A reader treats an expired row as absent and
+-- the fetch job replaces it, so deleting the row later changes no answer. Rows another statement holds are skipped and found by the next call.
+-- The grants it needs are in 620-url-metadata.sql.
+--
+-- favicons: past expires_at, which is seven days after the host was fetched (doc 05 section 6). sys_favicon_get answers nothing for an expired row from
+-- the moment it is one and the fetch job replaces it, so deleting the row later changes no answer. Rows another statement holds are skipped and found by
+-- the next call. The grants it needs are in 630-favicons.sql.
+--
 -- Every other rule is fixed in the function, and its one argument only chooses how
 -- long audit events stay, so a caller cannot widen what the other tables lose; it
 -- uses no dynamic SQL. The overload without an argument keeps working for a replica
@@ -142,6 +150,26 @@ BEGIN
   );
   GET DIAGNOSTICS v_deleted = ROW_COUNT;
   RETURN QUERY SELECT 'idempotency_keys'::text, v_deleted;
+
+  DELETE FROM public.url_metadata
+  WHERE (workspace_id, url_canonical) IN (
+    SELECT m.workspace_id, m.url_canonical FROM public.url_metadata m
+    WHERE m.expires_at <= v_now
+    LIMIT c_batch
+    FOR UPDATE SKIP LOCKED
+  );
+  GET DIAGNOSTICS v_deleted = ROW_COUNT;
+  RETURN QUERY SELECT 'url_metadata'::text, v_deleted;
+
+  DELETE FROM public.favicons
+  WHERE host IN (
+    SELECT f.host FROM public.favicons f
+    WHERE f.expires_at <= v_now
+    LIMIT c_batch
+    FOR UPDATE SKIP LOCKED
+  );
+  GET DIAGNOSTICS v_deleted = ROW_COUNT;
+  RETURN QUERY SELECT 'favicons'::text, v_deleted;
 
   v_deleted := 0;
   IF p_audit_retention_days > 0 THEN

@@ -312,7 +312,7 @@ This table is the single list of defaults; doc 02 §16 shows the same values.
 | `read` | Every other authenticated `GET`, and `POST /bookmarks/bulk/preview` (it writes nothing) | 1 200 / min | 1 200 / min |
 | `write` | Every other authenticated mutation | 300 / min | 120 / min |
 | `bulk` | `POST /bookmarks/bulk`, `/import/*`, `GET /export/*` | 20 / hour | 20 / hour |
-| `fetch` | `POST /bookmarks/metadata`, `GET /favicons/*` (cache misses only) | 120 / min | 60 / min |
+| `fetch` | `POST /bookmarks/metadata`, `GET /favicons/*` (cache misses only; every `GET /favicons/*` request is also limited by `read`, per IP before authentication and per account after it) | 120 / min | 60 / min |
 | `ai` | `POST /ai/suggestions` | 60 / hour | 60 / hour per account, 600 / hour per workspace |
 | `public` | `GET /api/config`, `GET /setup/status`, `GET /opensearch.xml` and the public read operations modules declare | 300 / min | — |
 

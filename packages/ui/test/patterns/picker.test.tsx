@@ -26,10 +26,15 @@ async function open(): Promise<void> {
 }
 
 describe("Picker", () => {
-  it("is a combobox named by its label that shows the chosen option", async () => {
-    const { container } = render(<Picker emptyLabel="Nobody matches" label="Recipient" onValueChange={() => undefined} options={OPTIONS} value="grace" />);
+  it("is a combobox named by its label that shows the chosen option", () => {
+    render(<Picker emptyLabel="Nobody matches" label="Recipient" onValueChange={() => undefined} options={OPTIONS} value="grace" />);
 
     expect(screen.getByRole<HTMLInputElement>("combobox", { name: "Recipient" }).value).toBe("Grace Hopper");
+  });
+
+  it("is free of accessibility violations", async () => {
+    const { container } = render(<Picker emptyLabel="Nobody matches" label="Recipient" onValueChange={() => undefined} options={OPTIONS} value="grace" />);
+
     await expectNoViolations(container);
   });
 

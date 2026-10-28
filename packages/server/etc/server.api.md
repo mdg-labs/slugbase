@@ -6,6 +6,7 @@
 
 import { Adapters } from '@slugbase/core';
 import { AuthStore } from '@slugbase/db';
+import { BinaryResponse } from '@slugbase/contracts';
 import type { BookmarkUsage } from '@slugbase/core';
 import type { ClientErrorReportRequest } from '@slugbase/core';
 import type { Context } from 'hono';
@@ -83,6 +84,7 @@ export interface ChainEnv {
         rateLimit?: RateLimitState;
         takeEmailLimit?: TakeEmailLimit;
         takeAccountLimit?: (context: ChainContext, accountId: string) => Promise<void>;
+        takeBucketLimit?: TakeBucketLimit;
         workspaceId?: string;
         tenant?: RequestTenant;
         hooks?: HookDispatcher;
@@ -179,6 +181,7 @@ export interface CreateServerOptions {
     readonly instanceAdminGrant?: InstanceAdminGrantCheck;
     // (undocumented)
     readonly logger: Logger;
+    readonly metadataBudgetMs?: number;
     readonly migrations: readonly MigrationChain[];
     // (undocumented)
     readonly modules: readonly ServerModule[];
@@ -242,6 +245,7 @@ export function defineJob<const Shape extends z.ZodRawShape>(options: DefineJobO
 
 // @public (undocumented)
 export interface DefineJobOptions<Shape extends z.ZodRawShape> {
+    readonly dedupe?: boolean;
     readonly handle: (payload: z.infer<z.ZodObject<Shape>>, context: ModuleContext) => Promise<void>;
     readonly name: string;
     readonly payload: z.ZodObject<Shape>;
@@ -536,6 +540,7 @@ export function isProcessType(value: string): value is ProcessType;
 
 // @public
 export interface JobDefinition<Payload extends JobPayload = JobPayload> {
+    readonly dedupe: boolean;
     handle(payload: unknown, context: ModuleContext): Promise<void>;
     // (undocumented)
     readonly name: string;
@@ -983,6 +988,9 @@ export type ResponseResult<R> = {
     [S in keyof R & number]: R[S] extends JsonResponse<infer Schema, infer H> ? {
         readonly status: S;
         readonly body: z.input<Schema>;
+    } & ResponseHeadersOf<H> : R[S] extends BinaryResponse<infer H> ? {
+        readonly status: S;
+        readonly body: Uint8Array;
     } & ResponseHeadersOf<H> : R[S] extends EmptyResponse ? {
         readonly status: S;
         readonly body?: never;
@@ -1336,6 +1344,9 @@ export interface StartOptions {
     readonly metricsPort?: number;
     readonly port?: number;
 }
+
+// @public
+export type TakeBucketLimit = (context: ChainContext) => Promise<void>;
 
 // @public
 export type TakeEmailLimit = (context: ChainContext, key: string) => Promise<void>;

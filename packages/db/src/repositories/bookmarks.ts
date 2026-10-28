@@ -137,6 +137,12 @@ export type BookmarkCreationResult =
   /** The owner already has another bookmark with the slug in the workspace; nothing is written. */
   | { readonly kind: "slug_taken" };
 
+/** Jobs an update queues in its own transaction. */
+export interface BookmarkUpdateJobs {
+  /** Queued only when the update changes the bookmark's address (`url`); nothing is queued for a change of any other column, for `unchanged` or for a refusal. */
+  readonly jobsOnUrlChange?: readonly QueuedJob[];
+}
+
 export interface BookmarkRepository {
   /**
    * Takes one place under the ceiling, inserts the bookmark, files it in the folders and queues the jobs, in the open transaction. Nothing
@@ -156,9 +162,10 @@ export interface BookmarkRepository {
    * owner's folders the bookmark is filed in, and `changes.tags` the owner's tags it carries; a folder or a tag that is not the owner's is
    * `folder_not_found` or `tag_not_found` with nothing written, and a name of `changes.tags` that the owner has no tag of creates one. A change
    * of the row's own columns moves the version by one (the trigger
-   * `bookmarks_bump_version`). Needs a transaction opened with a workspace.
+   * `bookmarks_bump_version`). The jobs of `jobsOnUrlChange` are queued in the same transaction when the address changes. Needs a transaction
+   * opened with a workspace.
    */
-  update(request: BookmarkUpdateRequest): Promise<BookmarkUpdateResult>;
+  update(request: BookmarkUpdateRequest & BookmarkUpdateJobs): Promise<BookmarkUpdateResult>;
   /**
    * Deletes the bookmark that `ownerId` owns in the workspace of the transaction, a plan-archived one included, and answers
    * whether there was one, through `sys_bookmark_delete`: the workspace's `bookmark_count` falls by one with the row unless the
@@ -692,7 +699,7 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
       return recordOf(row, filed.get(row.id) ?? [], carried.get(row.id) ?? []);
     },
 
-    async update({ bookmarkId, ownerId, changes, expectedVersions }) {
+    async update({ bookmarkId, ownerId, changes, expectedVersions, jobsOnUrlChange = [] }) {
       if (tx.workspaceId === undefined) {
         throw new TenantContextError("workspace_required", "changing a bookmark needs a tenant transaction opened with a workspace");
       }
@@ -776,6 +783,11 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
           throw new Error("changing a locked bookmark did not update exactly one row");
         }
         row = updated;
+      }
+      if (set.url !== undefined) {
+        for (const job of jobsOnUrlChange) {
+          await enqueueInTenantTransaction(tx, job);
+        }
       }
       if (leaving.length > 0) {
         await deleteLinks(tx, leaving, [bookmarkId]);

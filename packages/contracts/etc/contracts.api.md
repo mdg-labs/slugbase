@@ -289,6 +289,21 @@ export const AUTH_POLICIES: readonly ["anonymous", "partial", "account", "member
 export type AuthPolicy = (typeof AUTH_POLICIES)[number];
 
 // @public
+export interface BinaryResponse<H extends ResponseHeaders = ResponseHeaders> {
+    // (undocumented)
+    readonly description: string;
+    // (undocumented)
+    readonly headers?: H;
+    // (undocumented)
+    readonly kind: "binary";
+    // (undocumented)
+    readonly mediaType: string;
+}
+
+// @public
+export function binaryResponse<H extends ResponseHeaders = ResponseHeaders>(description: string, mediaType: string, options?: JsonResponseOptions<H>): BinaryResponse<H>;
+
+// @public
 export const BOOKMARK_BULK_IDS_MAX = 1000;
 
 // @public
@@ -425,6 +440,21 @@ export const BookmarkListSchema: z.ZodObject<{
     nextCursor: z.ZodNullable<z.ZodString>;
     total: z.ZodNullable<z.ZodNumber>;
     totalAtLeast: z.ZodOptional<z.ZodLiteral<10000>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const BookmarkMetadataRequestSchema: z.ZodObject<{
+    url: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const BookmarkMetadataSchema: z.ZodObject<{
+    title: z.ZodNullable<z.ZodString>;
+    description: z.ZodNullable<z.ZodString>;
+    siteName: z.ZodNullable<z.ZodString>;
+    canonicalUrl: z.ZodNullable<z.ZodString>;
+    language: z.ZodNullable<z.ZodString>;
+    cached: z.ZodBoolean;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -974,6 +1004,17 @@ export interface ComponentTypes {
             nextCursor: string | null;
             total: number | null;
             totalAtLeast?: 10000;
+        };
+        BookmarkMetadata: {
+            cached: boolean;
+            canonicalUrl: string | null;
+            description: string | null;
+            language: string | null;
+            siteName: string | null;
+            title: string | null;
+        };
+        BookmarkMetadataRequest: {
+            url: string;
         };
         BookmarkOpen: {
             url: string;
@@ -2705,6 +2746,69 @@ export const EntitlementUsageSchema: z.ZodObject<{
     "workspaces.owned": z.ZodInt;
 }, z.core.$strict>;
 
+// @public
+export const FAVICON_CACHE_MAX_AGE_SECONDS = 604800;
+
+// @public
+export const FAVICON_HOST_MAX_LENGTH = 253;
+
+// @public
+export const FAVICON_HOST_PATTERN: RegExp;
+
+// @public
+export const FAVICON_PLACEHOLDER_MAX_AGE_SECONDS = 60;
+
+// @public
+export const FAVICON_SIZES: readonly ["32", "64"];
+
+// @public (undocumented)
+export const FaviconParamsSchema: z.ZodObject<{
+    host: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const FaviconQuerySchema: z.ZodObject<{
+    size: z.ZodOptional<z.ZodEnum<{
+        32: "32";
+        64: "64";
+    }>>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const fetchBookmarkMetadata: {
+    readonly method: "post";
+    readonly path: "/api/v1/bookmarks/metadata";
+    readonly operationId: "fetchBookmarkMetadata";
+    readonly tag: "bookmarks";
+    readonly summary: "Read the title and description of a page";
+    readonly auth: "member";
+    readonly rate: "fetch";
+    readonly scope: "write";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            url: z.ZodString;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        title: z.ZodNullable<z.ZodString>;
+        description: z.ZodNullable<z.ZodString>;
+        siteName: z.ZodNullable<z.ZodString>;
+        canonicalUrl: z.ZodNullable<z.ZodString>;
+        language: z.ZodNullable<z.ZodString>;
+        cached: z.ZodBoolean;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 502: ProblemResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
 // @public (undocumented)
 export const FOLDER_COLOR_MAX = 8;
 
@@ -3016,6 +3120,45 @@ export const getEntitlements: {
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;
         readonly 404: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 503: ProblemResponse;
+    };
+};
+
+// @public (undocumented)
+export const getFavicon: {
+    readonly method: "get";
+    readonly path: "/api/v1/favicons/{host}";
+    readonly operationId: "getFavicon";
+    readonly tag: "favicons";
+    readonly summary: "The icon of a host";
+    readonly auth: "member";
+    readonly rate: "fetch";
+    readonly rateTakenByHandler: true;
+    readonly request: {
+        readonly params: z.ZodObject<{
+            host: z.ZodString;
+        }, z.core.$strict>;
+        readonly query: z.ZodObject<{
+            size: z.ZodOptional<z.ZodEnum<{
+                32: "32";
+                64: "64";
+            }>>;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: BinaryResponse<Record<string, {
+        description: string;
+        schema: z.ZodType;
+        }>>;
+        readonly 202: BinaryResponse<Record<string, {
+        description: string;
+        schema: z.ZodType;
+        }>>;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
         readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;
     };
@@ -5061,6 +5204,7 @@ export interface OperationDefinition {
     readonly path: string;
     // (undocumented)
     readonly rate: RateBucket;
+    readonly rateTakenByHandler?: boolean;
     readonly reauth?: boolean;
     // (undocumented)
     readonly request?: OperationRequest;
@@ -5086,7 +5230,7 @@ export interface OperationRequest {
 
 // @public
 export type OperationResponses = {
-    [S in OtherResponseStatus]?: JsonResponse | EmptyResponse | ProblemResponse;
+    [S in OtherResponseStatus]?: JsonResponse | EmptyResponse | ProblemResponse | BinaryResponse;
 } & AtLeastOne<{
     [S in ProblemResponseStatus]: S extends 429 ? RateLimitedResponse : ProblemResponse;
 }>;
@@ -7432,6 +7576,95 @@ export interface OperationTypes {
         };
     };
     // (undocumented)
+    fetchBookmarkMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["BookmarkMetadataRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["BookmarkMetadata"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
     forgotPassword: {
         parameters: {
             query?: never;
@@ -7691,6 +7924,91 @@ export interface OperationTypes {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    getFavicon: {
+        parameters: {
+            query?: {
+                size?: "32" | "64";
+            };
+            header?: never;
+            path: {
+                host: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    "Cache-Control": "private, max-age=604800";
+                    "X-Content-Type-Options": "nosniff";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            202: {
+                headers: {
+                    "Cache-Control": "private, max-age=60";
+                    "X-Content-Type-Options": "nosniff";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12918,6 +13236,23 @@ export interface paths {
         trace?: never;
     };
     // (undocumented)
+    "/api/v1/bookmarks/metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["fetchBookmarkMetadata"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
     "/api/v1/bookmarks/{id}": {
         parameters: {
             query?: never;
@@ -12977,6 +13312,23 @@ export interface paths {
             cookie?: never;
         };
         get: OperationTypes["getEntitlements"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/favicons/{host}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: OperationTypes["getFavicon"];
         put?: never;
         post?: never;
         delete?: never;

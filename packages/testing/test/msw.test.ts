@@ -124,6 +124,11 @@ describe("the generated handlers", () => {
       paths: { "/export": { get: { operationId: "getExport", responses: { 200: { description: "ok", content: { "application/zip": { schema: { type: "string" } } } } } } } },
     });
     expect(() => createHandlers(binary)).toThrow(/getExport.*application\/zip/);
+    const image = parseDocument({
+      openapi: "3.1.0",
+      paths: { "/icon": { get: { operationId: "getIcon", responses: { 200: { description: "ok", content: { "image/png": { schema: { type: "string", format: "binary" } } }, headers: { "X-Content-Type-Options": { schema: { const: "nosniff", type: "string" } } } } } } } },
+    });
+    expect(() => createHandlers(image)).not.toThrow();
     const unnamed = parseDocument({ openapi: "3.1.0", paths: { "/x": { get: { responses: { 200: { description: "ok" } } } } } });
     expect(() => listOperations(unnamed)).toThrow(/no operationId/);
   });
@@ -134,6 +139,11 @@ describe("the generated handlers", () => {
       const response = await answer(operation);
       expect(response.status, operation.operationId).toBe(status);
       const schema = operation.schemas.get(status);
+      if (response.headers.get("content-type") === "image/png") {
+        // The favicon operation answers bytes: a PNG, with the headers it declares.
+        expect(Buffer.from(await response.arrayBuffer()).subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])), operation.operationId).toBe(true);
+        continue;
+      }
       if (schema !== undefined && operation.method !== "head") {
         expect(response.headers.get("content-type"), operation.operationId).toContain("application/json");
         const body: unknown = await response.json();

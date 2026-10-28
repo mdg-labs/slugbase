@@ -196,6 +196,8 @@ describe("the shipped chain", () => {
       "sys_search",
       "sys_go_suggest",
       "sys_bookmark_match",
+      "sys_favicon_get",
+      "sys_favicon_put",
     ]);
     expect(internalSystemOperations).toEqual(["sys_create_workspace"]);
     expect(internalSystemOperations.every((name) => systemOperations.includes(name))).toBe(true);
