@@ -13,8 +13,9 @@ import { HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type World } from
 // POST and PATCH /api/v1/bookmarks queue the bookmark.fetchMetadata job in the transaction that writes the bookmark (doc 02 section 5.4, doc 01 section
 // 8.1, doc 10 T13), through the whole chain over the migrated database, and the worker runs it. The failure scenario: a bookmark whose address is set
 // or changed and whose page is never looked at (the job is not queued, or queued for a write that did not happen), or one looked at over and over (a
-// job for every write although the address stayed, or several waiting jobs for one page). The job carries identifiers and no address, a write that
-// is refused or rolled back queues none, and the queue holds one waiting job for each workspace and canonical URL.
+// job for every write although the address stayed, or several waiting jobs for one bookmark and page). The job carries identifiers and no address, a
+// write that is refused or rolled back queues none, and the queue holds one waiting job for each bookmark and canonical URL: the job reads the
+// bookmark's address when it runs, so a job keyed by the page alone could stand for a bookmark that has moved away from it.
 
 const TEST_TIMEOUT_MS = 60_000;
 const BOOKMARKS = "/api/v1/bookmarks";
@@ -61,7 +62,8 @@ async function queued(): Promise<QueuedRow[]> {
   return [...(await database().app<QueuedRow[]>`SELECT state, singleton_key, policy, data FROM pgboss.job WHERE name = ${JOB} ORDER BY created_on, id`)];
 }
 
-const keyOf = (workspaceId: string, canonical: string): string => `${workspaceId}:${createHash("sha256").update(canonical).digest("hex")}`;
+const keyOf = (workspaceId: string, bookmarkId: string, canonical: string): string =>
+  `${workspaceId}:${bookmarkId}:${createHash("sha256").update(canonical).digest("hex")}`;
 
 async function setup(world: World) {
   const owner = await harness.person(world);
@@ -82,28 +84,42 @@ describe("creating a bookmark", () => {
 
       const [job, ...rest] = await queued();
       expect(rest).toEqual([]);
-      expect(job).toMatchObject({ state: "created", policy: "short", singleton_key: keyOf(shared.workspaceId, "https://example.com/Docs?a=1&b=2") });
+      expect(job).toMatchObject({ state: "created", policy: "short", singleton_key: keyOf(shared.workspaceId, bookmark.id, "https://example.com/Docs?a=1&b=2") });
       expect(job?.data).toEqual({ bookmarkId: bookmark.id, workspaceId: shared.workspaceId, accountId: owner.account.id });
       expect(JSON.stringify(job)).not.toMatch(/example\.com|secret|reader/i);
     },
     TEST_TIMEOUT_MS,
   );
 
-  it("queues one waiting fetch for the pages of one canonical URL, a second one for another page, and one for each workspace", async () => {
+  it("queues one fetch for each bookmark of a page, in its own workspace", async () => {
     const world = harness.serve();
     const { owner, stranger, shared, other } = await setup(world);
 
-    await created(world, owner, { url: "https://example.com/docs", title: "One" });
-    await created(world, owner, { url: "https://example.com/docs/?utm_campaign=x#again", title: "Same page" });
-    expect(await queued()).toHaveLength(1);
-
-    await created(world, owner, { url: "https://example.com/other", title: "Another page" });
-    await created(world, stranger, { url: "https://example.com/docs", title: "The same page in another workspace" });
+    const one = await created(world, owner, { url: "https://example.com/docs", title: "One" });
+    const same = await created(world, owner, { url: "https://example.com/docs/?utm_campaign=x#again", title: "Same page" });
+    const another = await created(world, owner, { url: "https://example.com/other", title: "Another page" });
+    const elsewhere = await created(world, stranger, { url: "https://example.com/docs", title: "The same page in another workspace" });
 
     const keys = (await queued()).map((row) => row.singleton_key).sort();
     expect(keys).toEqual(
-      [keyOf(shared.workspaceId, "https://example.com/docs"), keyOf(shared.workspaceId, "https://example.com/other"), keyOf(other.workspaceId, "https://example.com/docs")].sort(),
+      [
+        keyOf(shared.workspaceId, one.id, "https://example.com/docs"),
+        keyOf(shared.workspaceId, same.id, "https://example.com/docs"),
+        keyOf(shared.workspaceId, another.id, "https://example.com/other"),
+        keyOf(other.workspaceId, elsewhere.id, "https://example.com/docs"),
+      ].sort(),
     );
+  });
+
+  it("queues a fetch for a page whose waiting fetch belongs to a bookmark that has moved away from it", async () => {
+    const world = harness.serve();
+    const { owner, shared } = await setup(world);
+    const moved = await created(world, owner, { url: "https://example.com/docs", title: "Moved" });
+    expect((await patch(world, owner, moved.id, { url: "https://example.com/elsewhere" })).status).toBe(200);
+
+    const stays = await created(world, owner, { url: "https://example.com/docs", title: "Stays" });
+
+    expect((await queued()).map((row) => row.singleton_key)).toContain(keyOf(shared.workspaceId, stays.id, "https://example.com/docs"));
   });
 
   it("queues nothing for a creation that is refused", async () => {
@@ -137,21 +153,21 @@ describe("changing a bookmark", () => {
 
     const [job, ...rest] = await queued();
     expect(rest).toEqual([]);
-    expect(job).toMatchObject({ state: "created", singleton_key: keyOf(shared.workspaceId, "https://example.org/moved?a=1&b=2") });
+    expect(job).toMatchObject({ state: "created", singleton_key: keyOf(shared.workspaceId, bookmark.id, "https://example.org/moved?a=1&b=2") });
     expect(job?.data).toEqual({ bookmarkId: bookmark.id, workspaceId: shared.workspaceId, accountId: owner.account.id });
   });
 
-  it("queues one waiting fetch when the address changes to a page that already waits, and another for a page that does not", async () => {
+  it("queues one waiting fetch when the address changes back to a page the bookmark already waits for, and another for a page it does not", async () => {
     const world = harness.serve();
     const { owner } = await setup(world);
-    const first = await created(world, owner, { url: "https://example.com/one", title: "One" });
-    await created(world, owner, { url: "https://example.com/two", title: "Two" });
+    const bookmark = await created(world, owner, { url: "https://example.com/one", title: "One" });
+    expect((await patch(world, owner, bookmark.id, { url: "https://example.com/two" })).status).toBe(200);
     expect(await queued()).toHaveLength(2);
 
-    expect((await patch(world, owner, first.id, { url: "https://example.com/two#section" })).status).toBe(200);
+    expect((await patch(world, owner, bookmark.id, { url: "https://example.com/one#section" })).status).toBe(200);
     expect(await queued()).toHaveLength(2);
 
-    expect((await patch(world, owner, first.id, { url: "https://example.com/three" })).status).toBe(200);
+    expect((await patch(world, owner, bookmark.id, { url: "https://example.com/three" })).status).toBe(200);
     expect(await queued()).toHaveLength(3);
   });
 

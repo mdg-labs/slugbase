@@ -17,7 +17,10 @@ import { defineJob } from "../job.ts";
 // executes and follows nothing. No transaction is open while the request runs, so a slow page holds no database connection. A database error
 // is an error of the job and is retried.
 //
-// The queue keeps one waiting job for each workspace and canonical URL (`dedupe`), so a page saved or re-pointed several times in a moment is fetched once.
+// The queue keeps one waiting job for each bookmark and canonical URL (`dedupe`), so a bookmark saved or re-pointed to one page several times in a
+// moment is fetched once. The key holds the bookmark because the job reads the bookmark's address when it runs: a job keyed by the page alone could
+// stand for another bookmark that has since moved away from that page, and the page would never be fetched. A second bookmark of the same page gets
+// its own job, which finds the cached result and does nothing.
 
 export const FETCH_METADATA_JOB = "bookmark.fetchMetadata";
 
@@ -67,7 +70,7 @@ export const fetchMetadataJob = defineJob({
 
 /**
  * The job that fetches the page of a bookmark whose address was just set; for the transaction that writes the bookmark. Its singleton key names
- * the workspace and the canonical URL, so the queue holds one waiting job for them. The payload holds identifiers, never the URL.
+ * the workspace, the bookmark and the canonical URL, so the queue holds one waiting job for them. The payload holds identifiers, never the URL.
  */
 export function queueFetchMetadata(
   id: string,
@@ -79,6 +82,6 @@ export function queueFetchMetadata(
     id,
     queue: FETCH_METADATA_JOB,
     data: { bookmarkId: payload.bookmarkId, workspaceId: payload.workspaceId, accountId: payload.accountId },
-    singletonKey: `${payload.workspaceId}:${createHash("sha256").update(urlCanonical).digest("hex")}`,
+    singletonKey: `${payload.workspaceId}:${payload.bookmarkId}:${createHash("sha256").update(urlCanonical).digest("hex")}`,
   };
 }
