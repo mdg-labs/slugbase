@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { METADATA_CONTENT_TYPES, METADATA_HTML_MAX_BYTES, parsePageMetadata, type EgressPort } from "@slugbase/core";
+import { fetchPageMetadata, type EgressPort } from "@slugbase/core";
 import { urlMetadataRepository, type QueuedJob, type UrlMetadataResult } from "@slugbase/db";
 import { z } from "zod";
 import { defineJob } from "../job.ts";
@@ -10,7 +10,7 @@ import { defineJob } from "../job.ts";
 // deleted since the job was queued is judged by what it is now, and it never changes a bookmark field: the cache row is all it writes. A result
 // that has not expired is left alone, so a second job for the same page does nothing.
 //
-// The fetch goes through the egress port and nowhere else: the canonical URL (which carries no credentials, which the port refuses), at most the
+// The fetch (`fetchPageMetadata`, which POST /api/v1/bookmarks/metadata uses too) goes through the egress port and nowhere else: the canonical URL (which carries no credentials, which the port refuses), at most the
 // first 512 KiB, and only `text/html` and `application/xhtml+xml`. A target the port refuses is recorded as `blocked`, a status outside 2xx, a
 // page of another type and any other error as `failed`; neither holds a field. Neither is an error of the job: the outcome is the cached answer,
 // and a bookmark whose fetch failed keeps the fields as entered (doc 02 section 5.4). The page is parsed as text by `parsePageMetadata`, which
@@ -27,29 +27,9 @@ const JOB_REQUEST_ID = FETCH_METADATA_JOB;
 /** The time budget of one fetch, redirects included. */
 export const FETCH_METADATA_TIMEOUT_MS = 10_000;
 
-const REQUEST_HEADERS = { accept: "text/html,application/xhtml+xml", "user-agent": "SlugBase-Metadata" } as const;
-
-/** The code the egress port gives a target it refuses; matched by value because the fake of the port does not share the class. */
-const BLOCKED_CODE = "egress_blocked";
-
 async function fetchPage(egress: EgressPort, urlCanonical: string): Promise<UrlMetadataResult> {
-  try {
-    const response = await egress.request({
-      url: urlCanonical,
-      headers: REQUEST_HEADERS,
-      timeoutMs: FETCH_METADATA_TIMEOUT_MS,
-      maxBytes: METADATA_HTML_MAX_BYTES,
-      truncateAtMaxBytes: true,
-      acceptContentTypes: METADATA_CONTENT_TYPES,
-    });
-    if (response.status < 200 || response.status >= 300) {
-      return { status: "failed" };
-    }
-    const page = parsePageMetadata({ body: response.body, contentType: response.contentType, url: response.url });
-    return page === undefined ? { status: "failed" } : { status: "ok", ...page };
-  } catch (error) {
-    return { status: (error as { code?: unknown } | null)?.code === BLOCKED_CODE ? "blocked" : "failed" };
-  }
+  const outcome = await fetchPageMetadata(egress, urlCanonical, FETCH_METADATA_TIMEOUT_MS);
+  return outcome.kind === "ok" ? { status: "ok", ...outcome.page } : { status: outcome.kind };
 }
 
 export const fetchMetadataJob = defineJob({

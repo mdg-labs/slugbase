@@ -428,6 +428,21 @@ export const BookmarkListSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
+export const BookmarkMetadataRequestSchema: z.ZodObject<{
+    url: z.ZodString;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const BookmarkMetadataSchema: z.ZodObject<{
+    title: z.ZodNullable<z.ZodString>;
+    description: z.ZodNullable<z.ZodString>;
+    siteName: z.ZodNullable<z.ZodString>;
+    canonicalUrl: z.ZodNullable<z.ZodString>;
+    language: z.ZodNullable<z.ZodString>;
+    cached: z.ZodBoolean;
+}, z.core.$strict>;
+
+// @public (undocumented)
 export const BookmarkOpenSchema: z.ZodObject<{
     url: z.ZodString;
 }, z.core.$strict>;
@@ -974,6 +989,17 @@ export interface ComponentTypes {
             nextCursor: string | null;
             total: number | null;
             totalAtLeast?: 10000;
+        };
+        BookmarkMetadata: {
+            cached: boolean;
+            canonicalUrl: string | null;
+            description: string | null;
+            language: string | null;
+            siteName: string | null;
+            title: string | null;
+        };
+        BookmarkMetadataRequest: {
+            url: string;
         };
         BookmarkOpen: {
             url: string;
@@ -2704,6 +2730,41 @@ export const EntitlementUsageSchema: z.ZodObject<{
     "seats.used": z.ZodInt;
     "workspaces.owned": z.ZodInt;
 }, z.core.$strict>;
+
+// @public (undocumented)
+export const fetchBookmarkMetadata: {
+    readonly method: "post";
+    readonly path: "/api/v1/bookmarks/metadata";
+    readonly operationId: "fetchBookmarkMetadata";
+    readonly tag: "bookmarks";
+    readonly summary: "Read the title and description of a page";
+    readonly auth: "member";
+    readonly rate: "fetch";
+    readonly scope: "write";
+    readonly request: {
+        readonly body: z.ZodObject<{
+            url: z.ZodString;
+        }, z.core.$strict>;
+    };
+    readonly responses: {
+        readonly 200: JsonResponse<z.ZodObject<{
+        title: z.ZodNullable<z.ZodString>;
+        description: z.ZodNullable<z.ZodString>;
+        siteName: z.ZodNullable<z.ZodString>;
+        canonicalUrl: z.ZodNullable<z.ZodString>;
+        language: z.ZodNullable<z.ZodString>;
+        cached: z.ZodBoolean;
+        }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
+        readonly 400: ProblemResponse;
+        readonly 401: ProblemResponse;
+        readonly 403: ProblemResponse;
+        readonly 404: ProblemResponse;
+        readonly 422: ProblemResponse;
+        readonly 429: RateLimitedResponse;
+        readonly 502: ProblemResponse;
+        readonly 503: ProblemResponse;
+    };
+};
 
 // @public (undocumented)
 export const FOLDER_COLOR_MAX = 8;
@@ -7415,6 +7476,95 @@ export interface OperationTypes {
             429: {
                 headers: {
                     "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    // (undocumented)
+    fetchBookmarkMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": ComponentTypes["schemas"]["BookmarkMetadataRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": ComponentTypes["schemas"]["BookmarkMetadata"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            429: {
+                headers: {
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            502: {
+                headers: {
                     [name: string]: unknown;
                 };
                 content: {
@@ -12911,6 +13061,23 @@ export interface paths {
         get: OperationTypes["listBookmarkIds"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    // (undocumented)
+    "/api/v1/bookmarks/metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: OperationTypes["fetchBookmarkMetadata"];
         delete?: never;
         options?: never;
         head?: never;

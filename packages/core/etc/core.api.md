@@ -1755,6 +1755,11 @@ export interface BreachedPasswords {
 export function bulkBookmarks(input: BookmarkBulkDependencies, ask: BookmarkBulkAsk): Promise<BookmarkBulkOutcome>;
 
 // @public
+export type CachedPageMetadata = PageMetadata & {
+    readonly status: "ok" | "failed" | "blocked";
+};
+
+// @public
 export function canCreateWorkspace(input: WorkspaceCreationCapacity): boolean;
 
 // @public
@@ -2264,6 +2269,9 @@ export interface ErrorReportPort extends Port {
 
 // @public
 export function federatedDisplayName(name: string | undefined, email: string): string;
+
+// @public
+export function fetchPageMetadata(egress: EgressPort, urlCanonical: string, timeoutMs: number): Promise<PageFetchOutcome>;
 
 // @public
 export function fileBookmarks(input: FolderFilingDependencies, ask: FolderFilingAsk): Promise<FolderFilingResult>;
@@ -4143,6 +4151,9 @@ export function listTags(input: TagListDependencies, ask: TagListAsk): Promise<T
 // @public
 export function loadBreachedPasswords(): BreachedPasswords;
 
+// @public (undocumented)
+export function lookupPageMetadata(dependencies: PageMetadataLookupDependencies, url: string): Promise<PageMetadataLookupOutcome>;
+
 // @public
 export interface MailMessage {
     // (undocumented)
@@ -4527,6 +4538,20 @@ export type OwnershipTransferOutcome =
 };
 
 // @public
+export type PageFetchOutcome = {
+    readonly kind: "ok";
+    readonly page: PageMetadata;
+}
+/** The port refused the target: the URL, an address it resolves to, or a redirect hop is not one the server may connect to. */
+| {
+    readonly kind: "blocked";
+}
+/** Anything else: no connection, a timeout, a status outside 2xx, a page of another type or one that cannot be read. */
+| {
+    readonly kind: "failed";
+};
+
+// @public
 export interface PageMetadata {
     readonly canonicalUrl: string | null;
     // (undocumented)
@@ -4539,12 +4564,48 @@ export interface PageMetadata {
 }
 
 // @public (undocumented)
+export interface PageMetadataCache {
+    read(urlCanonical: string): Promise<CachedPageMetadata | undefined>;
+    write(urlCanonical: string, page: PageMetadata): Promise<void>;
+}
+
+// @public (undocumented)
 export interface PageMetadataInput {
     // (undocumented)
     readonly body: Uint8Array;
     readonly contentType: string | undefined;
     readonly url: string;
 }
+
+// @public (undocumented)
+export interface PageMetadataLookupDependencies {
+    readonly budgetMs: number;
+    // (undocumented)
+    readonly cache: PageMetadataCache;
+    // (undocumented)
+    readonly egress: EgressPort;
+    readonly now: () => number;
+}
+
+// @public (undocumented)
+export type PageMetadataLookupOutcome = {
+    readonly kind: "found";
+    readonly page: PageMetadata;
+    readonly cached: boolean;
+}
+/** The value is not a URL that can be fetched; nothing was read or requested. */
+| {
+    readonly kind: "url_refused";
+    readonly reason: BookmarkUrlRefusal;
+}
+/** The egress port refuses the target. */
+| {
+    readonly kind: "blocked";
+}
+/** The page could not be read, or the budget ran out. */
+| {
+    readonly kind: "failed";
+};
 
 // @public
 export function parseAccountEntitlements(answer: unknown): AccountEntitlementValues;

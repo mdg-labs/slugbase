@@ -257,6 +257,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/bookmarks/metadata": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read the title and description of a page */
+        post: operations["fetchBookmarkMetadata"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/bookmarks/{id}": {
         parameters: {
             query?: never;
@@ -1672,6 +1689,24 @@ export interface components {
              * @constant
              */
             totalAtLeast?: 10000;
+        };
+        BookmarkMetadata: {
+            /** @description Whether the answer is the workspace's cached result of an earlier fetch of this page, which expires seven days after it was fetched, and not a fetch made for this request */
+            cached: boolean;
+            /** @description The page's own canonical link, an absolute http or https URL without credentials, as text and never fetched; null when the page gave none */
+            canonicalUrl: string | null;
+            /** @description The page's description (its og:description, else its description meta tag), plain text of at most 1 000 characters; null when the page gave none */
+            description: string | null;
+            /** @description The page's language tag, such as en or de-AT; null when the page gave none */
+            language: string | null;
+            /** @description The page's site name (its og:site_name), plain text of at most 100 characters; null when the page gave none */
+            siteName: string | null;
+            /** @description The page's title (its og:title, else its title element), plain text of at most 300 characters; null when the page gave none */
+            title: string | null;
+        };
+        BookmarkMetadataRequest: {
+            /** @description The address of the page to read the title and description of: an http or https URL of at most 2 048 characters, judged as a bookmark's URL is. Any other scheme is refused with 422 url_not_allowed */
+            url: string;
         };
         BookmarkOpen: {
             /** @description The destination to go to: the bookmark's URL as stored, checked again to be an http or https URL */
@@ -4321,6 +4356,104 @@ export interface operations {
                 headers: {
                     /** @description Whole seconds to wait before the request can succeed */
                     "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    fetchBookmarkMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookmarkMetadataRequest"];
+            };
+        };
+        responses: {
+            /** @description What the page says about itself, from the workspace's cached result when it has not expired or from a fetch made for this request, which is then cached for the workspace for seven days. The fetch goes through the egress adapter, reads at most the first 512 KiB of an HTML page and is answered within 3 seconds at the latest. A field the page does not give is null. Nothing of any bookmark is changed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookmarkMetadata"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The body did not pass validation (a missing, empty, over-long or malformed URL, or a field the operation does not declare), or the URL is not one that can be fetched (url_not_allowed): not an http or https URL, or an address the server refuses to connect to (a private, loopback, link-local, carrier-grade NAT or cloud-metadata address, also behind a redirect or a host name). Nothing is cached */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The page could not be read (upstream_failed): the connection failed, the fetch did not finish within 3 seconds, the status was not a success, or the body was not an HTML page. Nothing is cached */
+            502: {
+                headers: {
                     [name: string]: unknown;
                 };
                 content: {

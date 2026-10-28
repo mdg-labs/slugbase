@@ -269,6 +269,10 @@ export const FIXTURES: ContractFixtures = {
   // The open names a bookmark by identifier as well, and counts it only for a bookmark the caller owns: the valid request is the declared 404 for
   // a bookmark no workspace holds, and the matrix puts the bookmarks of workspace B in the path.
   openBookmark: { path: { id: UNKNOWN_BOOKMARK_ID }, status: 404, foreign: { path: { id: UNKNOWN_BOOKMARK_ID } } },
+  // The page-metadata lookup names no workspace or account identifier: it acts in the workspace of the request and reads and writes that workspace's cache. The
+  // walker's server has the unconfigured egress port, which refuses every request, so its valid request is the declared 502; the lookup itself, its cache
+  // and its refusals are walked by the metadata tests.
+  fetchBookmarkMetadata: { body: { url: "https://example.com/walker" }, status: 502 },
   // Whether a slug is free names the caller's bookmark in `bookmarkId` when it has one: a bookmark no workspace holds, and so one of workspace B, is the declared
   // 404 whoever would hold it, before the slug is looked at. Without it the slug is judged for a new bookmark, which names nothing of any workspace: the valid
   // request is the declared 200. The matrix picks `slug` as an input that can carry an identifier, by its name, and puts a bookmark of B in it and in `bookmarkId`.

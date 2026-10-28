@@ -10,6 +10,10 @@ export {
   parsePageMetadata,
 } from "./metadata.ts";
 export type { PageMetadata, PageMetadataInput } from "./metadata.ts";
+export { fetchPageMetadata } from "./page-fetch.ts";
+export type { PageFetchOutcome } from "./page-fetch.ts";
+export { lookupPageMetadata } from "./metadata-lookup.ts";
+export type { CachedPageMetadata, PageMetadataCache, PageMetadataLookupDependencies, PageMetadataLookupOutcome } from "./metadata-lookup.ts";
 export { BOOKMARK_URL_MAX_LENGTH, normalizeBookmarkUrl } from "./url.ts";
 export type { BookmarkUrl, BookmarkUrlRefusal, BookmarkUrlResult } from "./url.ts";
 export { BOOKMARK_DESCRIPTION_MAX_LENGTH, BOOKMARK_TITLE_MAX_LENGTH, createBookmark } from "./create.ts";

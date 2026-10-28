@@ -326,12 +326,12 @@ describe("the walker over the committed document", () => {
     expect(report.failures.filter((failure) => !teamRefusal(failure) && !skippedNotRefused(failure))).toEqual([]);
     expect(report.operations).toBe(operations.length);
     expect(report.operations).toBeGreaterThan(0);
-    // One valid request for each operation. Each of the eighty-five that need a session also answers 401 without one, each of the seventeen that declare
-    // re-authentication answers 401 reauth_required without it, and each of the sixty-one whose policy has a role below it (the thirty-four of a member, the ten
+    // One valid request for each operation. Each of the eighty-six that need a session also answers 401 without one, each of the seventeen that declare
+    // re-authentication answers 401 reauth_required without it, and each of the sixty-two whose policy has a role below it (the thirty-five of a member, the ten
     // of an admin, the two of an owner and the fifteen of the instance admin) answers the principal just below it (404 below member, 403 below the others).
-    // Each of the eighteen that declare the write scope answers 403 token_scope to a token that may only read, each of the four that declare an entitlement answers
+    // Each of the nineteen that declare the write scope answers 403 token_scope to a token that may only read, each of the four that declare an entitlement answers
     // 403 to an account without it, and each of the twenty-nine that name a member, a recipient, a team, an invitation, a bookmark, a slug, a tag or a folder, or an input that can carry one, answers for one of workspace B.
-    expect(report.calls).toBe(operations.length + 85 + 17 + 61 + 18 + 4 + 29);
+    expect(report.calls).toBe(operations.length + 86 + 17 + 62 + 19 + 4 + 29);
   }, WALK_TIMEOUT_MS);
 });
 
@@ -524,7 +524,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     });
   }
 
-  it("passes for the forty-six tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations, its bookmarks, its tags, its folders, its remembered choices and its audit log as they were", { timeout: HEAVY_TEST_TIMEOUT_MS }, async () => {
+  it("passes for the forty-seven tenant-scoped operations, and leaves workspace B, its settings, its members, its invitations, its bookmarks, its tags, its folders, its remembered choices and its audit log as they were", { timeout: HEAVY_TEST_TIMEOUT_MS }, async () => {
     await seedFixtureWorkspaces();
     const before = await contentOfB();
     // The deletion of the workspace takes no identifier, so the matrix repeats it as every principal of A (the sessions of the matrix have just
@@ -633,8 +633,8 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // Each of the ten principals, the instance admin among them, naming the two bookmarks of B once in the `hasSlug` of the list and once in that of the select-all.
     expect(matrix.failures.filter(filterRefusal)).toHaveLength(10 * 2 * 2);
     expect(report.failures).toEqual([]);
-    expect(report.tenantScoped).toBe(46);
-    expect(report.classified.byKind["tenant-scoped"]).toBe(46);
+    expect(report.tenantScoped).toBe(47);
+    expect(report.classified.byKind["tenant-scoped"]).toBe(47);
     // The bulk request reaches its handler as the three sessions and the three read-write tokens of A, once for each pair of the two bookmarks of B and of the two inputs the matrix fills in `ids` and
     // in the filter's `hasSlug`, and the preview of adding tags is called as the same ten principals. Where the bulk handler is reached, a bookmark of B named in `ids` is skipped as not found with a
     // 200 that reports nothing affected, a filter on the folder and the tags of B matches nothing, and a folder or a tag of B is the declared 404 whichever action names it. Where it is not (a token that
@@ -666,8 +666,9 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // The search names none (one of the eighteen calls that name nothing): its text is the one the rows of B are named after.
     // The suggestion names none (one of the nineteen calls that name nothing): its prefix is the one the slugs of B begin with.
     // The dashboard names none (one of the twenty calls that name nothing): it reads the caller's own rows, and no token may call it.
+    // The page-metadata lookup names none: its URL is no identifier of any workspace, and it reads and writes the cache of the workspace of the request.
     // The list of remembered choices names none (one of the seventeen calls that name nothing), and forgetting one names each of the two slugs of B once, the first of which the owner of B has a choice for, which is the declared 404 not_found and leaves it.
-    const calls = 20 + (3 + 3 + 3 + 3 * 3 + 3) + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2;
+    const calls = 20 + (3 + 3 + 3 + 3 * 3 + 3) + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2 + 1;
     expect(report.attempts).toBe(10 * calls);
     // The four exceptions are the identifiers of B in the `hasSlug` filter of the bookmark list and of the select-all, which the query validation refuses before the instance admin's missing membership is looked at.
     expect(instanceAdminStatuses.toSorted()).toEqual([...Array<number>(calls - 4).fill(404), 422, 422, 422, 422]);

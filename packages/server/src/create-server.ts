@@ -171,6 +171,11 @@ export interface CreateServerOptions {
    */
   readonly usage?: UsageBuffer;
   /**
+   * The most the page-metadata lookup of `POST /api/v1/bookmarks/metadata` may take, in milliseconds (doc 02 section 16); by default
+   * three seconds. A composition leaves it out; a test shortens it.
+   */
+  readonly metadataBudgetMs?: number;
+  /**
    * What `PUBLIC_REGISTRATION` and `EMAIL_VERIFICATION_REQUIRED` mean when the operator left them unset
    * (doc 01 section 11): the composition root's choice, never an edition flag (D4). By default registration
    * is closed and verification is not required, the Community Edition's.
@@ -582,7 +587,7 @@ export function createServer(options: CreateServerOptions): Server {
   });
   builtInRoutes.push(...entitlementRoutes({ withTenant: context.withTenant, service: entitlementService }));
   // So are the bookmarks of the active workspace: created under the workspace's `bookmarks.max` (the ceiling is read from the engine, the count is taken in the database) and read back by their owner.
-  builtInRoutes.push(...bookmarkRoutes({ entitlements: createBookmarkEntitlements(entitlementService), cursorSecret: config.SESSION_SECRET, usage }));
+  builtInRoutes.push(...bookmarkRoutes({ entitlements: createBookmarkEntitlements(entitlementService), cursorSecret: config.SESSION_SECRET, usage, egress: adapters.egress, ...(options.metadataBudgetMs === undefined ? {} : { metadataBudgetMs: options.metadataBudgetMs }) }));
   // And the tags of the member who makes them: created, listed with their counts, renamed and deleted by their owner alone.
   builtInRoutes.push(...tagRoutes({ cursorSecret: config.SESSION_SECRET }));
   // And the folders of the member who makes them: created, listed with their bookmark counts, read, changed (with `If-Match`) and deleted by their owner alone.

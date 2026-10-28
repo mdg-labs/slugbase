@@ -179,6 +179,7 @@ export interface CreateServerOptions {
     readonly instanceAdminGrant?: InstanceAdminGrantCheck;
     // (undocumented)
     readonly logger: Logger;
+    readonly metadataBudgetMs?: number;
     readonly migrations: readonly MigrationChain[];
     // (undocumented)
     readonly modules: readonly ServerModule[];
