@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { searchRepository } from "../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
+import { vacuumUntilAllVisible, visibilityOf } from "./support/vacuum-fixture.ts";
 import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 
 // The plan and the time of the search on a workspace of 50 000 bookmarks, beside many small workspaces and another member's bookmarks in the same workspace (doc 08 section 5.3, doc 05
@@ -14,6 +15,7 @@ import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 // statement below. The file runs in a vitest project of its own, one file at a time, so that no other database-heavy file shares the machine with its timings (vitest.config.ts).
 
 const HOOK_TIMEOUT_MS = 300_000;
+const FIXTURE_TABLES = ["bookmarks"] as const;
 const BOOKMARKS = 50_000;
 const SMALL_WORKSPACES = 1_000;
 const P95_BUDGET_MS = 100;
@@ -91,13 +93,22 @@ beforeAll(async () => {
              'https://github.com/s' || n, 'https://github.com/s' || n, 'github.com', 'GitHub docs ' || n, 'mail-' || n
       FROM generate_series(1, ${SMALL_WORKSPACES}) AS n`,
   );
-  // A running instance has had its tables vacuumed and analysed.
-  await db.owner.unsafe("VACUUM (ANALYZE) bookmarks");
+  // A running instance has its tables vacuumed and analysed, and a vacuum marks all-visible each page whose rows every transaction can see, so an Index Only Scan answers for the entries on those pages from the index alone: the fixture vacuums until the map covers every page, so the map is part of the fixture.
+  await vacuumUntilAllVisible(db, FIXTURE_TABLES);
 }, HOOK_TIMEOUT_MS);
 
 afterAll(async () => {
   await db.drop();
 }, HOOK_TIMEOUT_MS);
+
+describe("the fixture", () => {
+  it("measures tables whose every page the visibility map marks all-visible", async () => {
+    const rows = await visibilityOf(db, FIXTURE_TABLES);
+
+    expect(rows.map((row) => row.name)).toEqual([...FIXTURE_TABLES].sort());
+    expect(rows.filter((row) => row.visible < row.pages)).toEqual([]);
+  });
+});
 
 interface PlanNode {
   "Node Type": string;
@@ -342,7 +353,7 @@ describe("the plan of the search on a workspace of 50 000 bookmarks seeded again
   beforeAll(async () => {
     await asSystem(db, (tx) => tx`DELETE FROM bookmarks WHERE workspace_id = ${workspaceId}`);
     await seedLibrary();
-    await db.owner.unsafe("VACUUM (ANALYZE) bookmarks");
+    await vacuumUntilAllVisible(db, FIXTURE_TABLES);
   }, HOOK_TIMEOUT_MS);
 
   describe.each(LONG_TEXTS)("for %s", (text) => {

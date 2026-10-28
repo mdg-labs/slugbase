@@ -3,6 +3,18 @@ import type { TestDatabase } from "../../src/testing.ts";
 const VACUUM_ATTEMPTS = 20;
 const VACUUM_RETRY_DELAY_MS = 250;
 
+export interface TableVisibility {
+  name: string;
+  pages: number;
+  visible: number;
+}
+
+/** The pages of each table, and how many of them the visibility map marks all-visible, as `pg_class` last recorded them (a VACUUM, an ANALYZE and a few DDL commands such as CREATE INDEX record them), ordered by table name. */
+export async function visibilityOf(database: TestDatabase, tables: readonly string[]): Promise<TableVisibility[]> {
+  return database.owner<TableVisibility[]>`
+    SELECT relname AS name, relpages AS pages, relallvisible AS visible FROM pg_class WHERE oid = ANY (${tables.map((table) => `public.${table}`)}::regclass[]) ORDER BY relname`;
+}
+
 /**
  * Vacuums the tables until the visibility map marks every page of each all-visible. One VACUUM of a fixture just inserted can leave pages unmarked (measured on the dashboard
  * fixture: none of the 5 027 pages of `bookmarks` and none of the 225 of `bookmark_tags` after the first VACUUM in 4 of 4 runs, every page after a later one). With pages unmarked an
@@ -12,8 +24,7 @@ const VACUUM_RETRY_DELAY_MS = 250;
 export async function vacuumUntilAllVisible(database: TestDatabase, tables: readonly string[]): Promise<void> {
   for (let attempt = 1; attempt <= VACUUM_ATTEMPTS; attempt += 1) {
     await database.owner.unsafe(`VACUUM (ANALYZE) ${tables.join(", ")}`);
-    const rows = await database.owner<{ name: string; pages: number; visible: number }[]>`
-      SELECT relname AS name, relpages AS pages, relallvisible AS visible FROM pg_class WHERE oid = ANY (${tables.map((table) => `public.${table}`)}::regclass[])`;
+    const rows = await visibilityOf(database, tables);
     if (rows.length === tables.length && rows.every((row) => row.visible >= row.pages)) {
       return;
     }
