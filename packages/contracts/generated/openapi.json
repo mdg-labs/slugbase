@@ -1818,7 +1818,7 @@
             "type": "array"
           },
           "quickAccess": {
-            "description": "Up to 8 of the caller's own bookmarks that forward by a slug, the most opened first; a bookmark the caller cannot read, one that does not forward and a plan-archived one are never in it",
+            "description": "Up to 8 of the bookmarks the caller can read, its own and those shared with it, that forward by a slug, the most opened first by the bookmark's total opens; a bookmark the caller cannot read, one that does not forward and a plan-archived one are never in it",
             "items": {
               "$ref": "#/components/schemas/DashboardBookmark"
             },
@@ -1834,7 +1834,7 @@
                 "type": "null"
               }
             ],
-            "description": "The sharing counts; null while sharing is not available, and whenever the caller's workspace does not hold the sharing entitlements"
+            "description": "The sharing counts; null whenever the caller's workspace does not hold the sharing entitlements"
           },
           "topTags": {
             "description": "Up to 12 of the caller's own tags, the one on the most bookmarks first, then by name; another member's tags are never in it",
@@ -1931,7 +1931,7 @@
                 "type": "null"
               }
             ],
-            "description": "The bookmarks shared with the caller; null while sharing is not available, and whenever the caller's workspace does not hold the sharing entitlements"
+            "description": "The bookmarks other members shared with the caller, plan-archived ones not counted; null whenever the caller's workspace does not hold the sharing entitlements"
           },
           "tags": {
             "description": "The caller's own tags",
@@ -1990,7 +1990,7 @@
         "additionalProperties": false,
         "properties": {
           "sharedByYou": {
-            "description": "The caller's bookmarks that are shared with others",
+            "description": "The caller's bookmarks that are shared with others, plan-archived ones not counted",
             "maximum": 9007199254740991,
             "minimum": 0,
             "type": "integer"

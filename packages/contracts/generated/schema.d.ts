@@ -2213,9 +2213,9 @@ export interface components {
             onboarding: components["schemas"]["DashboardOnboarding"];
             /** @description Up to 12 of the caller's own pinned bookmarks, the most recently pinned first; plan-archived bookmarks are never in it */
             pinned: components["schemas"]["DashboardBookmark"][];
-            /** @description Up to 8 of the caller's own bookmarks that forward by a slug, the most opened first; a bookmark the caller cannot read, one that does not forward and a plan-archived one are never in it */
+            /** @description Up to 8 of the bookmarks the caller can read, its own and those shared with it, that forward by a slug, the most opened first by the bookmark's total opens; a bookmark the caller cannot read, one that does not forward and a plan-archived one are never in it */
             quickAccess: components["schemas"]["DashboardBookmark"][];
-            /** @description The sharing counts; null while sharing is not available, and whenever the caller's workspace does not hold the sharing entitlements */
+            /** @description The sharing counts; null whenever the caller's workspace does not hold the sharing entitlements */
             sharing: components["schemas"]["DashboardSharing"] | null;
             /** @description Up to 12 of the caller's own tags, the one on the most bookmarks first, then by name; another member's tags are never in it */
             topTags: components["schemas"]["DashboardTag"][];
@@ -2244,7 +2244,7 @@ export interface components {
             bookmarks: number;
             /** @description The caller's own folders */
             folders: number;
-            /** @description The bookmarks shared with the caller; null while sharing is not available, and whenever the caller's workspace does not hold the sharing entitlements */
+            /** @description The bookmarks other members shared with the caller, plan-archived ones not counted; null whenever the caller's workspace does not hold the sharing entitlements */
             sharedWithYou: number | null;
             /** @description The caller's own tags */
             tags: number;
@@ -2264,7 +2264,7 @@ export interface components {
             slugGiven: boolean;
         };
         DashboardSharing: {
-            /** @description The caller's bookmarks that are shared with others */
+            /** @description The caller's bookmarks that are shared with others, plan-archived ones not counted */
             sharedByYou: number;
             /** @description The bookmarks other members shared with the caller */
             sharedWithYou: number;

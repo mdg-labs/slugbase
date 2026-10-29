@@ -81,6 +81,11 @@
       "title": "Häufigste Tags",
       "empty": "Hier erscheinen die Tags, die du Lesezeichen gibst."
     },
+    "sharing": {
+      "title": "Teilen",
+      "withYou": "Mit dir geteilt",
+      "byYou": "Von dir geteilt"
+    },
     "empty": {
       "title": "Speichere dein erstes Lesezeichen",
       "description": "Gib einem Lesezeichen einen kurzen, privaten Slug und öffne es von überall über /go/.",

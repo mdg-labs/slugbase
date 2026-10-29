@@ -1,8 +1,8 @@
-import { dashboard } from "@slugbase/core";
+import { BOOKMARK_SORTS, dashboard } from "@slugbase/core";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { dashboardRepository, tagRepository } from "../src/index.ts";
-import { pinnedQuery, quickAccessQuery, summaryStatement } from "../src/repositories/dashboard.ts";
+import { bookmarkRepository, dashboardRepository, tagRepository } from "../src/index.ts";
+import { pinnedQuery, quickAccessQuery, sharedCountsStatement, sharedQuickAccessStatement, summaryStatement } from "../src/repositories/dashboard.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
 import { vacuumUntilAllVisible } from "./support/vacuum-fixture.ts";
@@ -11,7 +11,9 @@ import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 // The plan and the time of the dashboard on a workspace of 50 000 bookmarks (doc 08 section 5.3, doc 05 section 2.4): the quick access reads `bookmarks_owner_popular_idx` and the pinned
 // bookmarks `bookmarks_pinned_idx`, no statement reads the table of bookmarks sequentially, and the whole dashboard, the tags with their counts among it, answers in under 100 ms at the 95th
 // percentile through the repositories as slugbase_app, the round trip included. The failure scenario: a statement that does not match its index (a missing owner, a different direction of the
-// key) plans a scan and a sort of the whole library, which this test sees as a sequential scan. The file runs in the quiet project (vitest.config.ts) so that no other database-heavy file
+// key) plans a scan and a sort of the whole library, which this test sees as a sequential scan. The library also holds shares: the other member shares 600 of its bookmarks with the owner (a
+// quarter of them forwarding), and the owner shares 300 of its bookmarks directly and 200 through a folder, so the quick access of the shared bookmarks and the sharing counts are planned and
+// timed over a realistic number of grants, and none of them scans the table of bookmarks. The file runs in the quiet project (vitest.config.ts) so that no other database-heavy file
 // shares the machine with its timings.
 
 const HOOK_TIMEOUT_MS = 300_000;
@@ -21,12 +23,13 @@ const SMALL_BOOKMARKS = 50;
 const TAGS = 40;
 const RUNS = 40;
 const P95_BUDGET_MS = 100;
-const FIXTURE_TABLES = ["bookmarks", "tags", "bookmark_tags", "folders"] as const;
+const FIXTURE_TABLES = ["bookmarks", "tags", "bookmark_tags", "folders", "bookmark_shares", "folder_shares", "folder_bookmarks"] as const;
 
 let db: TestDatabase;
 let accountId: string;
 let otherId: string;
 let workspaceId: string;
+let sharedFolder: string;
 
 const dialect = new PgDialect({ casing: "snake_case" });
 
@@ -44,7 +47,7 @@ beforeAll(async () => {
     INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title, slug, forwarding, pinned_at, open_count, plan_archived_at)
     SELECT gen_random_uuid(), ${workspaceId}, CASE WHEN n % 10 = 0 THEN ${otherId}::uuid ELSE ${accountId}::uuid END,
            'https://example.com/' || n, 'https://example.com/' || n, 'example.com', 'Title ' || (n % 997),
-           CASE WHEN n % 5 = 0 THEN 'slug-' || n END, n % 20 = 5, CASE WHEN n % 25 = 0 THEN now() - (n % 5000) * interval '1 minute' END, n % 50,
+           CASE WHEN n % 5 = 0 THEN 'slug-' || n END, n % 20 = 5 OR n % 40 = 0, CASE WHEN n % 25 = 0 THEN now() - (n % 5000) * interval '1 minute' END, n % 50,
            CASE WHEN n % 100 = 1 THEN now() END
     FROM generate_series(1, ${BOOKMARKS}) AS n`);
   await asSystem(db, (tx) => tx`
@@ -64,6 +67,24 @@ beforeAll(async () => {
     SELECT ${workspaceId}::uuid, mine.id, ranked.id FROM mine JOIN ranked ON ranked.n = 1 + mine.n % ${TAGS}::int WHERE mine.n % 5 < 2
     UNION
     SELECT ${workspaceId}::uuid, mine.id, ranked.id FROM mine JOIN ranked ON ranked.n = 1 + (mine.n * 7 + 3) % ${TAGS}::int WHERE mine.n % 5 < 2 AND mine.n % 3 = 0`);
+  // The shares: 300 of the other member's forwarding bookmarks and 300 of its others are shared with the owner, 300 of the owner's bookmarks are shared with the other member directly, and
+  // 200 more are filed in a folder of the owner that is shared with the other member.
+  sharedFolder = freshId();
+  await asSystem(db, async (tx) => {
+    await tx`
+      INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_account_id, granted_by)
+      SELECT gen_random_uuid(), ${workspaceId}, id, ${accountId}, ${otherId} FROM (
+        (SELECT id FROM bookmarks WHERE workspace_id = ${workspaceId} AND owner_id = ${otherId} AND forwarding ORDER BY id LIMIT 300)
+        UNION ALL (SELECT id FROM bookmarks WHERE workspace_id = ${workspaceId} AND owner_id = ${otherId} AND NOT forwarding ORDER BY id LIMIT 300)) picked`;
+    await tx`
+      INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_account_id, granted_by)
+      SELECT gen_random_uuid(), ${workspaceId}, id, ${otherId}, ${accountId} FROM bookmarks WHERE workspace_id = ${workspaceId} AND owner_id = ${accountId} ORDER BY id LIMIT 300`;
+    await tx`INSERT INTO folders (id, workspace_id, owner_id, name) VALUES (${sharedFolder}, ${workspaceId}, ${accountId}, 'Shared folder')`;
+    await tx`
+      INSERT INTO folder_bookmarks (workspace_id, folder_id, bookmark_id)
+      SELECT ${workspaceId}, ${sharedFolder}, id FROM bookmarks WHERE workspace_id = ${workspaceId} AND owner_id = ${accountId} ORDER BY id DESC LIMIT 200`;
+    await tx`INSERT INTO folder_shares (id, workspace_id, folder_id, target_account_id, granted_by) VALUES (${freshId()}, ${workspaceId}, ${sharedFolder}, ${otherId}, ${accountId})`;
+  });
   // Many small workspaces beside it, so no workspace dominates a table.
   await asSystem(db, (tx) => tx`
     INSERT INTO workspaces (id, name)
@@ -146,14 +167,45 @@ describe("the dashboard on a workspace of 50 000 bookmarks", () => {
     expect(indexesOf(nodes)).toEqual(expect.arrayContaining(["bookmarks_owner_title_idx", "bookmarks_owner_slug_key"]));
   });
 
+  it("plans the forwarding bookmarks shared with the owner from the set of its grants, with no sequential scan of the bookmarks", async () => {
+    const statement = await inTenant((tx) => Promise.resolve(dialect.sqlToQuery(sharedQuickAccessStatement(tx, accountId, 8))));
+
+    const nodes = await planOf(statement);
+
+    expect(nodes.filter((node) => node["Node Type"] === "Seq Scan" && node["Relation Name"] === "bookmarks")).toEqual([]);
+    expect(indexesOf(nodes)).toContain("bookmarks_workspace_id_id_key");
+  });
+
+  it("plans the sharing counts with no sequential scan of the bookmarks", async () => {
+    const statement = await inTenant((tx) => Promise.resolve(dialect.sqlToQuery(sharedCountsStatement(tx, accountId))));
+
+    const nodes = await planOf(statement);
+
+    expect(nodes.filter((node) => node["Node Type"] === "Seq Scan" && node["Relation Name"] === "bookmarks")).toEqual([]);
+  });
+
+  it("counts the shares as the lists of the shared scopes list them, and ranks the shared bookmarks into the quick access by their opens", async () => {
+    const answer = await inTenant((tx) => dashboard({ store: dashboardRepository(tx), tags: tagRepository(tx) }, { accountId, sharing: true }));
+    const listed = async (scope: "shared_with_me" | "shared_by_me"): Promise<number> => {
+      const rows = await inTenant((tx) => bookmarkRepository(tx).list({ filter: { ownerId: accountId, scope }, sort: BOOKMARK_SORTS[0], after: undefined, limit: 5_000 }));
+      return rows.length;
+    };
+
+    expect(answer?.sharing).toEqual({ sharedWithYou: 600, sharedByYou: await listed("shared_by_me") });
+    expect(answer?.sharing?.sharedWithYou).toBe(await listed("shared_with_me"));
+    expect(answer?.sharing?.sharedByYou).toBeGreaterThan(0);
+    const opens = answer?.quickAccess.map((entry) => entry.openCount) ?? [];
+    expect(opens).toEqual(opens.toSorted((a, b) => b - a));
+  });
+
   it("answers the library the test seeded: eight, twelve and twelve entries, and the counts of the owner", async () => {
-    const answer = await inTenant((tx) => dashboard({ store: dashboardRepository(tx), tags: tagRepository(tx) }, { accountId }));
+    const answer = await inTenant((tx) => dashboard({ store: dashboardRepository(tx), tags: tagRepository(tx) }, { accountId, sharing: true }));
 
     expect(answer?.quickAccess).toHaveLength(8);
     expect(answer?.pinned).toHaveLength(12);
     expect(answer?.topTags).toHaveLength(12);
     expect(answer?.counts.bookmarks).toBe(44_500);
-    expect(answer?.counts).toMatchObject({ folders: 30, tags: TAGS });
+    expect(answer?.counts).toMatchObject({ folders: 31, tags: TAGS });
   });
 
   it("measures tables whose every page the visibility map marks all-visible", async () => {
@@ -168,7 +220,7 @@ describe("the dashboard on a workspace of 50 000 bookmarks", () => {
     const times: number[] = [];
     for (let run = 0; run < RUNS + 1; run += 1) {
       const started = performance.now();
-      const answer = await inTenant((tx) => dashboard({ store: dashboardRepository(tx), tags: tagRepository(tx) }, { accountId }));
+      const answer = await inTenant((tx) => dashboard({ store: dashboardRepository(tx), tags: tagRepository(tx) }, { accountId, sharing: true }));
       const elapsed = performance.now() - started;
       expect(answer?.topTags).toHaveLength(12);
       if (run > 0) {

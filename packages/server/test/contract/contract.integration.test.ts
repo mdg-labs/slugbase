@@ -797,10 +797,13 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // And the same nine principals asked for the slugs that start with the prefix the two slugs of B begin with: neither comes back, nor does any bookmark or any address of B.
     expect(suggestions).toEqual(Array.from({ length: 9 }, () => ({ suggestions: [] })));
     // The three sessions of A read the dashboard (the six tokens are refused before the handler, as the matrix expects): workspace B holds forwarding bookmarks with a slug, a tag and a folder, all named after
-    // matrix, and none of them is counted or named. A holds no bookmark, and the only tags the matrix makes in A are the ones it creates with the name of the walker.
+    // matrix, and none of them is counted or named. A holds no bookmark, and the only tags the matrix makes in A are the ones it creates with the name of the walker. B also holds shares of its bookmarks
+    // and its folder with its team, and the matrix holds the sharing entitlements, so the sharing block is answered and counts none of them, in either direction.
     expect(dashboards).toHaveLength(3);
-    for (const dashboard of dashboards as { counts: { bookmarks: number }; quickAccess: unknown[]; pinned: unknown[]; topTags: { name: string }[]; onboarding: Record<string, boolean> }[]) {
+    for (const dashboard of dashboards as { counts: { bookmarks: number; sharedWithYou: number | null }; quickAccess: unknown[]; pinned: unknown[]; topTags: { name: string }[]; sharing: unknown; onboarding: Record<string, boolean> }[]) {
       expect(dashboard.counts.bookmarks).toBe(0);
+      expect(dashboard.counts.sharedWithYou).toBe(0);
+      expect(dashboard.sharing).toEqual({ sharedWithYou: 0, sharedByYou: 0 });
       expect(dashboard.quickAccess).toEqual([]);
       expect(dashboard.pinned).toEqual([]);
       expect(dashboard.topTags.map((entry) => entry.name).filter((name) => name !== "Walker tag")).toEqual([]);

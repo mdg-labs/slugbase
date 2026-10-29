@@ -1,9 +1,13 @@
+import type { EntitlementCheck } from "@slugbase/core";
 import { useTestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { bearer, HOOK_TIMEOUT_MS, send, workspaceHarness, type Person, type World } from "../workspaces/support.ts";
 
 // GET /api/v1/dashboard (doc 04 section 10.8, doc 02 section 9.3, doc 10 T1 and T2), through the whole chain over the migrated database. The failure scenario: another member's pinned bookmark,
-// quick-access slug or tag is never in a member's dashboard, its counts never include another member's rows, a plan-archived bookmark or another workspace, and an API token cannot read it.
+// quick-access slug or tag is never in a member's dashboard, its counts never include another member's rows, a plan-archived bookmark or another workspace, and an API token cannot read it. The
+// sharing counts and the Shared with you count are answered only where the workspace holds `sharing.members` or `sharing.teams` (null otherwise, and when the source of the entitlements fails the
+// request fails), count what the lists of the shared scopes list and not what is shared with another member or in another workspace, and the quick access holds the forwarding bookmarks
+// shared with the caller and no bookmark the caller cannot read.
 
 const TEST_TIMEOUT_MS = 60_000;
 const DASHBOARD = "/api/v1/dashboard";
@@ -11,6 +15,10 @@ const BOOKMARKS = "/api/v1/bookmarks";
 const FOLDERS = "/api/v1/folders";
 const TAGS = "/api/v1/tags";
 const ME = "/api/v1/me";
+
+const GRANTED: EntitlementCheck = (entitlement) => entitlement === "sharing.members" || entitlement === "sharing.teams";
+const TEAMS_ONLY: EntitlementCheck = (entitlement) => entitlement === "sharing.teams";
+const RELAXED = { RATE_LIMIT_WRITE_IP: "10000/min", RATE_LIMIT_WRITE_ACCOUNT: "10000/min", RATE_LIMIT_READ_IP: "10000/min", RATE_LIMIT_READ_ACCOUNT: "10000/min" };
 
 const database = useTestDatabase();
 const harness = workspaceHarness(database);
@@ -273,4 +281,118 @@ describe("GET /dashboard", () => {
     },
     TEST_TIMEOUT_MS,
   );
+
+  describe("the sharing counts and the shared quick access", () => {
+    async function shareWith(world: World, as: Person, bookmarkId: string, target: Person): Promise<void> {
+      const response = await send(world, "POST", `${BOOKMARKS}/${bookmarkId}/shares`, asPerson(as), { accountId: target.account.id });
+      expect([200, 201]).toContain(response.status);
+    }
+
+    it(
+      "counts what is shared with the caller and what the caller shares where sharing is granted, and none shared with another member or in another workspace",
+      async () => {
+        const world = harness.serve({ entitlements: GRANTED, env: RELAXED });
+        const { owner, member, stranger } = await setup(world);
+        const forwarded = await bookmark(world, owner, "Shared forwarding", { slug: "shared-fwd", forwarding: true });
+        const plain = await bookmark(world, owner, "Shared plain");
+        await bookmark(world, owner, "Kept back", { slug: "not-for-member", forwarding: true });
+        await bookmark(world, owner, "Private", { slug: "private", forwarding: true });
+        await shareWith(world, owner, forwarded, member);
+        await shareWith(world, owner, plain, member);
+        await bookmark(world, stranger, "Elsewhere", { slug: "elsewhere", forwarding: true });
+
+        const members = await dashboardOf(world, member);
+        const owners = await dashboardOf(world, owner);
+        const strangers = await dashboardOf(world, stranger);
+
+        expect(members.counts.sharedWithYou).toBe(2);
+        expect(members.sharing).toEqual({ sharedWithYou: 2, sharedByYou: 0 });
+        expect(owners.counts.sharedWithYou).toBe(0);
+        expect(owners.sharing).toEqual({ sharedWithYou: 0, sharedByYou: 2 });
+        expect(strangers.sharing).toEqual({ sharedWithYou: 0, sharedByYou: 0 });
+        expect(members.quickAccess.map((entry) => entry.title)).toEqual(["Shared forwarding"]);
+        expect(JSON.stringify(members)).not.toMatch(/Private|Kept back|not-for-member|Elsewhere/);
+        expect(JSON.stringify(strangers)).not.toMatch(/Shared|Private/);
+      },
+      TEST_TIMEOUT_MS,
+    );
+
+    it(
+      "answers the sharing block where only sharing.teams is granted",
+      async () => {
+        const world = harness.serve({ entitlements: TEAMS_ONLY });
+        const { owner } = await setup(world);
+
+        expect((await dashboardOf(world, owner)).sharing).toEqual({ sharedWithYou: 0, sharedByYou: 0 });
+      },
+      TEST_TIMEOUT_MS,
+    );
+
+    it(
+      "answers null for the counts and the block where neither sharing entitlement is granted, and still lists the shared forwarding bookmarks the caller can read",
+      async () => {
+        const granting = harness.serve({ entitlements: GRANTED, env: RELAXED });
+        const { owner, member } = await setup(granting);
+        const forwarded = await bookmark(granting, owner, "Shared forwarding", { slug: "shared-fwd", forwarding: true });
+        await shareWith(granting, owner, forwarded, member);
+        const refusing = harness.serve({ entitlements: () => false });
+
+        const answer = await dashboardOf(refusing, member);
+
+        expect(answer.counts.sharedWithYou).toBeNull();
+        expect(answer.sharing).toBeNull();
+        expect(answer.quickAccess.map((entry) => entry.title)).toEqual(["Shared forwarding"]);
+        expect((await dashboardOf(refusing, owner)).sharing).toBeNull();
+      },
+      TEST_TIMEOUT_MS,
+    );
+
+    it(
+      "fails the request, and answers no sharing block, when the source of the entitlements fails",
+      async () => {
+        const world = harness.serve({
+          entitlements: () => {
+            throw new Error("the entitlement source is down");
+          },
+          env: RELAXED,
+        });
+        const { owner } = await setup(world);
+
+        const response = await send(world, "GET", DASHBOARD, asPerson(owner));
+
+        expect(response.status).toBeGreaterThanOrEqual(500);
+        expect(await response.text()).not.toContain("sharedWithYou");
+      },
+      TEST_TIMEOUT_MS,
+    );
+
+    it(
+      "ranks a shared bookmark with the caller's own by the bookmark's total opens, and never lists a plan-archived share",
+      async () => {
+        const world = harness.serve({ entitlements: GRANTED, env: RELAXED });
+        const { owner, member } = await setup(world);
+        const popular = await bookmark(world, owner, "Popular", { slug: "popular", forwarding: true });
+        const archived = await bookmark(world, owner, "Archived share", { slug: "archived-share", forwarding: true });
+        const mine = await bookmark(world, member, "Mine", { slug: "mine", forwarding: true });
+        await shareWith(world, owner, popular, member);
+        await shareWith(world, owner, archived, member);
+        await database().owner.begin(async (tx) => {
+          await tx`SET LOCAL ROLE slugbase_system`;
+          await tx`UPDATE bookmarks SET open_count = 50 WHERE id = ${popular}`;
+          await tx`UPDATE bookmarks SET open_count = 7 WHERE id = ${mine}`;
+          await tx`UPDATE bookmarks SET open_count = 99 WHERE id = ${archived}`;
+        });
+        await archive(archived);
+
+        const answer = await dashboardOf(world, member);
+
+        expect(answer.quickAccess.map((entry) => [entry.title, entry.openCount])).toEqual([
+          ["Popular", 50],
+          ["Mine", 7],
+        ]);
+        expect(answer.sharing).toEqual({ sharedWithYou: 1, sharedByYou: 0 });
+      },
+      TEST_TIMEOUT_MS,
+    );
+  });
 });

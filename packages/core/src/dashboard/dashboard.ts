@@ -2,8 +2,9 @@ import type { TagStore } from "../tags/create.ts";
 
 // The dashboard of a member (doc 02 section 9.3, doc 04 section 10.8, doc 10 T1 and T2): the member's own counts, their most used slugs, their pinned bookmarks and their most used tags
 // in the active workspace, and the state of the Getting started checklist. Every read names the account of the transaction as the owner, so another member's bookmark, folder or tag and
-// anything of another workspace is never in an answer, and plan-archived bookmarks are neither counted nor listed. Sharing does not exist yet: the count of bookmarks shared with the
-// member and the sharing block are null until it does.
+// anything of another workspace is never in an answer, and plan-archived bookmarks are neither counted nor listed. The quick access also holds the forwarding bookmarks other members
+// shared with the member, by the one rule of reading (doc 05 section 4). The count of bookmarks shared with the member and the sharing block are read only for a workspace that holds
+// the sharing entitlements, and are null otherwise.
 
 /** The most bookmarks the quick access holds. */
 export const DASHBOARD_QUICK_ACCESS_LIMIT = 8;
@@ -44,11 +45,19 @@ export interface StoredOnboarding {
   readonly checklistDismissed: boolean;
 }
 
+/** The bookmarks shared with the member and the member's own that are shared with others, plan-archived ones not counted. */
+export interface DashboardSharedCounts {
+  readonly sharedWithYou: number;
+  readonly sharedByYou: number;
+}
+
 export interface DashboardStore {
   /** The counts and the derived checklist facts of `ownerId` in the workspace of the transaction. */
   summary(ownerId: string): Promise<DashboardSummary>;
-  /** At most `limit` of the bookmarks `ownerId` owns and can read that forward by a slug and are not plan-archived, the most opened first, then by identifier. */
+  /** At most `limit` of the bookmarks `ownerId` can read, its own and those shared with it, that forward by a slug and are not plan-archived, the most opened first, then by identifier. */
   quickAccess(ownerId: string, limit: number): Promise<readonly DashboardBookmark[]>;
+  /** The bookmarks of other members that are shared with `ownerId` and the bookmarks of `ownerId` that are shared with anyone, counted as the lists of those scopes count them. */
+  sharedCounts(ownerId: string): Promise<DashboardSharedCounts>;
   /** At most `limit` of the not plan-archived bookmarks `ownerId` owns and pinned, the most recently pinned first, then by identifier. */
   pinned(ownerId: string, limit: number): Promise<readonly DashboardBookmark[]>;
   /** The onboarding state stored on the account `ownerId`; undefined when the account has no row. */
@@ -63,6 +72,8 @@ export interface DashboardDependencies {
 export interface DashboardAsk {
   /** The member whose dashboard it is; the account of the transaction. */
   readonly accountId: string;
+  /** Whether the workspace holds the sharing entitlements; the sharing counts are read and answered only then. */
+  readonly sharing: boolean;
 }
 
 export interface Dashboard {
@@ -88,17 +99,18 @@ export async function dashboard({ store, tags }: DashboardDependencies, ask: Das
   const summary = await store.summary(ownerId);
   const quickAccess = await store.quickAccess(ownerId, DASHBOARD_QUICK_ACCESS_LIMIT);
   const pinned = await store.pinned(ownerId, DASHBOARD_PINNED_LIMIT);
+  const shared = ask.sharing ? await store.sharedCounts(ownerId) : undefined;
   const topTags = await tags.list({ ownerId, sort: "count", after: undefined, limit: DASHBOARD_TOP_TAGS_LIMIT });
   const stored = await store.onboarding(ownerId);
   if (stored === undefined) {
     return undefined;
   }
   return {
-    counts: { bookmarks: summary.bookmarks, folders: summary.folders, tags: summary.tags, sharedWithYou: null },
+    counts: { bookmarks: summary.bookmarks, folders: summary.folders, tags: summary.tags, sharedWithYou: shared?.sharedWithYou ?? null },
     quickAccess,
     pinned,
     topTags: topTags.map(({ id, name, bookmarkCount }) => ({ id, name, bookmarkCount })),
-    sharing: null,
+    sharing: shared ?? null,
     onboarding: {
       bookmarkAdded: summary.hasBookmark,
       slugGiven: summary.hasSlug,

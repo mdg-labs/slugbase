@@ -2328,6 +2328,7 @@ export const DASHBOARD_TOP_TAGS_LIMIT = 12;
 // @public (undocumented)
 export interface DashboardAsk {
     readonly accountId: string;
+    readonly sharing: boolean;
 }
 
 // @public
@@ -2356,11 +2357,20 @@ export interface DashboardDependencies {
     readonly tags: Pick<TagStore, "list">;
 }
 
+// @public
+export interface DashboardSharedCounts {
+    // (undocumented)
+    readonly sharedByYou: number;
+    // (undocumented)
+    readonly sharedWithYou: number;
+}
+
 // @public (undocumented)
 export interface DashboardStore {
     onboarding(ownerId: string): Promise<StoredOnboarding | undefined>;
     pinned(ownerId: string, limit: number): Promise<readonly DashboardBookmark[]>;
     quickAccess(ownerId: string, limit: number): Promise<readonly DashboardBookmark[]>;
+    sharedCounts(ownerId: string): Promise<DashboardSharedCounts>;
     summary(ownerId: string): Promise<DashboardSummary>;
 }
 

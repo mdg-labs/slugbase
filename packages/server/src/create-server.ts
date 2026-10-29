@@ -608,8 +608,8 @@ export function createServer(options: CreateServerOptions): Server {
   builtInRoutes.push(...goPreferenceRoutes({ cursorSecret: config.SESSION_SECRET }));
   // And the search across the member's readable bookmarks, own folders and own tags (the palette's query).
   builtInRoutes.push(...searchRoutes());
-  // And the member's dashboard: their own counts, quick access, pinned bookmarks, top tags and Getting started checklist in one read.
-  builtInRoutes.push(...dashboardRoutes());
+  // And the member's dashboard: their own counts, quick access (shared bookmarks included), pinned bookmarks, top tags, sharing counts and Getting started checklist in one read.
+  builtInRoutes.push(...dashboardRoutes({ sharingEntitlements: entitlementCheck }));
   const ownedWorkspaceEntitlements = createOwnedWorkspaceEntitlements(entitlementService);
   // The CE instance admin's operations are part of the server and mounted in every composition: the policy admits no one on a deployment
   // where no account holds the flag (Q44), so a composition needs no switch of its own.

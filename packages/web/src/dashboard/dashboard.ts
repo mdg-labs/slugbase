@@ -8,6 +8,10 @@ export type Dashboard = ComponentTypes["schemas"]["Dashboard"];
 export type DashboardBookmark = ComponentTypes["schemas"]["DashboardBookmark"];
 export type DashboardTag = ComponentTypes["schemas"]["DashboardTag"];
 
+/** The searches of the bookmark list that the Sharing row links to: the bookmarks shared with the member and those the member shares. */
+export const SHARED_WITH_YOU_SEARCH = { scope: "shared_with_me" } as const;
+export const SHARED_BY_YOU_SEARCH = { scope: "shared_by_me" } as const;
+
 // Under the bookmarks' key: whatever refreshes the bookmarks after a change (a new, edited, pinned or deleted one) refreshes the home screen too.
 export const DASHBOARD_QUERY_KEY = [...BOOKMARKS_QUERY_KEY, "dashboard"] as const;
 

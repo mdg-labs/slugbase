@@ -81,6 +81,11 @@
       "title": "Most used tags",
       "empty": "The tags you put on bookmarks appear here."
     },
+    "sharing": {
+      "title": "Sharing",
+      "withYou": "Shared with you",
+      "byYou": "Shared by you"
+    },
     "empty": {
       "title": "Save your first bookmark",
       "description": "Give a bookmark a short, private slug and open it from anywhere through /go/.",
