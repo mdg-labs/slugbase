@@ -43,6 +43,7 @@ import { Route as AppSettingsAccountSecurityRouteImport } from "./routes/_app/se
 import { Route as AppSettingsAccountTokensRouteImport } from "./routes/_app/settings/account/tokens.tsx";
 import { Route as AppSettingsWorkspaceIndexRouteImport } from "./routes/_app/settings/workspace/index.tsx";
 import { Route as AppSettingsWorkspaceMembersRouteImport } from "./routes/_app/settings/workspace/members.tsx";
+import { Route as AppSettingsWorkspaceTeamsRouteImport } from "./routes/_app/settings/workspace/teams.tsx";
 
 const AppRoute = AppRouteImport.update({
   id: "/_app",
@@ -218,6 +219,12 @@ const AppSettingsWorkspaceMembersRoute =
     path: "/workspace/members",
     getParentRoute: () => AppSettingsRoute,
   } as any);
+const AppSettingsWorkspaceTeamsRoute =
+  AppSettingsWorkspaceTeamsRouteImport.update({
+    id: "/workspace/teams",
+    path: "/workspace/teams",
+    getParentRoute: () => AppSettingsRoute,
+  } as any);
 
 export interface FileRoutesByFullPath {
   "/": typeof AppIndexRoute;
@@ -251,6 +258,7 @@ export interface FileRoutesByFullPath {
   "/settings/account/security": typeof AppSettingsAccountSecurityRoute;
   "/settings/account/tokens": typeof AppSettingsAccountTokensRoute;
   "/settings/workspace/members": typeof AppSettingsWorkspaceMembersRoute;
+  "/settings/workspace/teams": typeof AppSettingsWorkspaceTeamsRoute;
   "/settings/account/": typeof AppSettingsAccountIndexRoute;
   "/settings/workspace/": typeof AppSettingsWorkspaceIndexRoute;
 }
@@ -284,6 +292,7 @@ export interface FileRoutesByTo {
   "/settings/account/security": typeof AppSettingsAccountSecurityRoute;
   "/settings/account/tokens": typeof AppSettingsAccountTokensRoute;
   "/settings/workspace/members": typeof AppSettingsWorkspaceMembersRoute;
+  "/settings/workspace/teams": typeof AppSettingsWorkspaceTeamsRoute;
   "/settings/account": typeof AppSettingsAccountIndexRoute;
   "/settings/workspace": typeof AppSettingsWorkspaceIndexRoute;
 }
@@ -321,6 +330,7 @@ export interface FileRoutesById {
   "/_app/settings/account/security": typeof AppSettingsAccountSecurityRoute;
   "/_app/settings/account/tokens": typeof AppSettingsAccountTokensRoute;
   "/_app/settings/workspace/members": typeof AppSettingsWorkspaceMembersRoute;
+  "/_app/settings/workspace/teams": typeof AppSettingsWorkspaceTeamsRoute;
   "/_app/settings/account/": typeof AppSettingsAccountIndexRoute;
   "/_app/settings/workspace/": typeof AppSettingsWorkspaceIndexRoute;
 }
@@ -358,6 +368,7 @@ export interface FileRouteTypes {
     | "/settings/account/security"
     | "/settings/account/tokens"
     | "/settings/workspace/members"
+    | "/settings/workspace/teams"
     | "/settings/account/"
     | "/settings/workspace/";
   fileRoutesByTo: FileRoutesByTo;
@@ -391,6 +402,7 @@ export interface FileRouteTypes {
     | "/settings/account/security"
     | "/settings/account/tokens"
     | "/settings/workspace/members"
+    | "/settings/workspace/teams"
     | "/settings/account"
     | "/settings/workspace";
   id:
@@ -427,6 +439,7 @@ export interface FileRouteTypes {
     | "/_app/settings/account/security"
     | "/_app/settings/account/tokens"
     | "/_app/settings/workspace/members"
+    | "/_app/settings/workspace/teams"
     | "/_app/settings/account/"
     | "/_app/settings/workspace/";
   fileRoutesById: FileRoutesById;
@@ -688,6 +701,13 @@ declare module "@tanstack/react-router" {
       preLoaderRoute: typeof AppSettingsWorkspaceMembersRouteImport;
       parentRoute: typeof AppSettingsRoute;
     };
+    "/_app/settings/workspace/teams": {
+      id: "/_app/settings/workspace/teams";
+      path: "/workspace/teams";
+      fullPath: "/settings/workspace/teams";
+      preLoaderRoute: typeof AppSettingsWorkspaceTeamsRouteImport;
+      parentRoute: typeof AppSettingsRoute;
+    };
   }
 }
 
@@ -715,6 +735,7 @@ interface AppSettingsRouteChildren {
   AppSettingsAccountSecurityRoute: typeof AppSettingsAccountSecurityRoute;
   AppSettingsAccountTokensRoute: typeof AppSettingsAccountTokensRoute;
   AppSettingsWorkspaceMembersRoute: typeof AppSettingsWorkspaceMembersRoute;
+  AppSettingsWorkspaceTeamsRoute: typeof AppSettingsWorkspaceTeamsRoute;
   AppSettingsAccountIndexRoute: typeof AppSettingsAccountIndexRoute;
   AppSettingsWorkspaceIndexRoute: typeof AppSettingsWorkspaceIndexRoute;
 }
@@ -725,6 +746,7 @@ const AppSettingsRouteChildren: AppSettingsRouteChildren = {
   AppSettingsAccountSecurityRoute: AppSettingsAccountSecurityRoute,
   AppSettingsAccountTokensRoute: AppSettingsAccountTokensRoute,
   AppSettingsWorkspaceMembersRoute: AppSettingsWorkspaceMembersRoute,
+  AppSettingsWorkspaceTeamsRoute: AppSettingsWorkspaceTeamsRoute,
   AppSettingsAccountIndexRoute: AppSettingsAccountIndexRoute,
   AppSettingsWorkspaceIndexRoute: AppSettingsWorkspaceIndexRoute,
 };

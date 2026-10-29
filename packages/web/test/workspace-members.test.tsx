@@ -81,7 +81,7 @@ async function optionsOf(select: string): Promise<string[]> {
   return names;
 }
 
-describe("the Members navigation entry", () => {
+describe("the Members and Teams navigation entries", () => {
   it.each<[Role, boolean]>([
     ["owner", true],
     ["admin", true],
@@ -95,7 +95,7 @@ describe("the Members navigation entry", () => {
     const group = await screen.findByRole("list", { name: "Workspace" });
     await within(group).findByRole("link", { name: "General" });
 
-    expect(within(group).getAllByRole("link").map((link) => link.textContent)).toEqual(listed ? ["General", "Members"] : ["General"]);
+    expect(within(group).getAllByRole("link").map((link) => link.textContent)).toEqual(listed ? ["General", "Members", "Teams"] : ["General", "Teams"]);
   }, SLOW_TEST_TIMEOUT_MS);
 
   it("opens the members page", async () => {

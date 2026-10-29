@@ -1334,7 +1334,8 @@
       "tokens": "API tokens",
       "workspace": "Workspace",
       "general": "General",
-      "members": "Members"
+      "members": "Members",
+      "teams": "Teams"
     },
     "account": {
       "title": "Profile",
@@ -2570,6 +2571,88 @@
         "notAMember": "This person is no longer a member of the workspace. The list has been reloaded.",
         "recipientGone": "The person chosen to receive the content is no longer a member of the workspace. Choose someone else."
       }
+    }
+  },
+  "teams": {
+    "title": "Teams",
+    "description": "Group members into teams, then share with a team instead of with each person.",
+    "descriptionReadOnly": "The teams of this workspace and who is in them. Admins and owners change them.",
+    "create": "Create team",
+    "loading": "Loading teams",
+    "loadFailed": "The teams could not be loaded",
+    "loadMore": "Load more",
+    "actionsFor": "Actions for the team {name}",
+    "column": {
+      "name": "Name",
+      "description": "Description",
+      "members": "Members",
+      "actions": "Actions"
+    },
+    "action": {
+      "edit": "Edit",
+      "delete": "Delete"
+    },
+    "members": {
+      "stack": "Members: {names}"
+    },
+    "empty": {
+      "title": "No teams yet",
+      "description": "Create one to group members and share access.",
+      "descriptionReadOnly": "An admin or owner can create one to group members and share access."
+    },
+    "form": {
+      "close": "Close the team form",
+      "intro": "A team is shared by the whole workspace.",
+      "description": {
+        "label": "Description",
+        "counter": "{count, number} / {max, number}"
+      },
+      "title": {
+        "create": "Create team",
+        "update": "Edit {name}"
+      },
+      "loading": "Loading the team",
+      "loadFailed": "The team could not be loaded.",
+      "name": {
+        "label": "Name",
+        "error": {
+          "required": "Enter a name for the team.",
+          "taken": "The workspace already has a team with this name.",
+          "invalid": "Use a name of 1 to {max, number} characters."
+        }
+      },
+      "members": {
+        "label": "Members",
+        "placeholder": "Search members",
+        "empty": "No member matches.",
+        "loading": "Loading members",
+        "unavailable": "The members could not be loaded.",
+        "remove": "Remove {name}"
+      },
+      "cancel": "Cancel",
+      "submit": {
+        "create": "Create team",
+        "update": "Save changes"
+      },
+      "saved": {
+        "created": "Team created.",
+        "updated": "Team saved."
+      },
+      "error": {
+        "memberGone": "Someone you chose is no longer a member of this workspace. Remove them and try again.",
+        "changedElsewhere": "This team was changed somewhere else. Close this form and open it again to see the latest version.",
+        "notFound": "This team no longer exists.",
+        "unavailable": "The team could not be saved right now. Try again in a moment.",
+        "partlySaved": "Some of your changes were saved, but not all of them. Save again to send the rest."
+      }
+    },
+    "delete": {
+      "title": "Delete “{name}”?",
+      "description": "Everything shared through the team “{name}” stops being shared with its members. The members stay in the workspace.",
+      "confirm": "Delete team",
+      "cancel": "Cancel",
+      "done": "Team “{name}” deleted.",
+      "gone": "This team was already deleted."
     }
   },
   "invite": {

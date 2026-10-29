@@ -154,6 +154,24 @@ export interface AuthLayoutProps {
 }
 
 // @public
+export function AvatarStack(input: AvatarStackProps): ReactElement;
+
+// @public (undocumented)
+export interface AvatarStackPerson {
+    id: string;
+    name: string;
+}
+
+// @public (undocumented)
+export interface AvatarStackProps {
+    // (undocumented)
+    className?: string;
+    label: string;
+    max?: number;
+    people: readonly AvatarStackPerson[];
+}
+
+// @public
 export function Banner(input: BannerProps): ReactElement;
 
 // @public (undocumented)

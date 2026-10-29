@@ -1334,7 +1334,8 @@
       "tokens": "API-Tokens",
       "workspace": "Workspace",
       "general": "Allgemein",
-      "members": "Mitglieder"
+      "members": "Mitglieder",
+      "teams": "Teams"
     },
     "account": {
       "title": "Profil",
@@ -2570,6 +2571,88 @@
         "notAMember": "Diese Person ist kein Mitglied des Workspace mehr. Die Liste wurde neu geladen.",
         "recipientGone": "Die Person, die die Inhalte übernehmen sollte, ist kein Mitglied des Workspace mehr. Wähle jemand anderen."
       }
+    }
+  },
+  "teams": {
+    "title": "Teams",
+    "description": "Fasse Mitglieder zu Teams zusammen und teile mit einem Team statt mit jeder Person einzeln.",
+    "descriptionReadOnly": "Die Teams dieses Workspace und wer darin ist. Admins und Eigentümer ändern sie.",
+    "create": "Team erstellen",
+    "loading": "Teams werden geladen",
+    "loadFailed": "Die Teams konnten nicht geladen werden",
+    "loadMore": "Mehr anzeigen",
+    "actionsFor": "Aktionen für das Team {name}",
+    "column": {
+      "name": "Name",
+      "description": "Beschreibung",
+      "members": "Mitglieder",
+      "actions": "Aktionen"
+    },
+    "action": {
+      "edit": "Bearbeiten",
+      "delete": "Löschen"
+    },
+    "members": {
+      "stack": "Mitglieder: {names}"
+    },
+    "empty": {
+      "title": "Noch keine Teams",
+      "description": "Erstelle eines, um Mitglieder zu gruppieren und Zugriff zu teilen.",
+      "descriptionReadOnly": "Ein Admin oder Eigentümer kann eines erstellen, um Mitglieder zu gruppieren und Zugriff zu teilen."
+    },
+    "form": {
+      "close": "Teamformular schließen",
+      "intro": "Ein Team gehört dem ganzen Workspace.",
+      "description": {
+        "label": "Beschreibung",
+        "counter": "{count, number} / {max, number}"
+      },
+      "title": {
+        "create": "Team erstellen",
+        "update": "{name} bearbeiten"
+      },
+      "loading": "Team wird geladen",
+      "loadFailed": "Das Team konnte nicht geladen werden.",
+      "name": {
+        "label": "Name",
+        "error": {
+          "required": "Gib dem Team einen Namen.",
+          "taken": "Der Workspace hat bereits ein Team mit diesem Namen.",
+          "invalid": "Verwende einen Namen mit 1 bis {max, number} Zeichen."
+        }
+      },
+      "members": {
+        "label": "Mitglieder",
+        "placeholder": "Mitglieder suchen",
+        "empty": "Kein Mitglied passt.",
+        "loading": "Mitglieder werden geladen",
+        "unavailable": "Die Mitglieder konnten nicht geladen werden.",
+        "remove": "{name} entfernen"
+      },
+      "cancel": "Abbrechen",
+      "submit": {
+        "create": "Team erstellen",
+        "update": "Änderungen speichern"
+      },
+      "saved": {
+        "created": "Team erstellt.",
+        "updated": "Team gespeichert."
+      },
+      "error": {
+        "memberGone": "Jemand, den du gewählt hast, ist kein Mitglied dieses Workspace mehr. Entferne die Person und versuche es erneut.",
+        "changedElsewhere": "Dieses Team wurde woanders geändert. Schließe dieses Formular und öffne es erneut, um die neueste Version zu sehen.",
+        "notFound": "Dieses Team gibt es nicht mehr.",
+        "unavailable": "Das Team konnte gerade nicht gespeichert werden. Versuche es gleich noch einmal.",
+        "partlySaved": "Ein Teil deiner Änderungen wurde gespeichert, aber nicht alle. Speichere erneut, um den Rest zu senden."
+      }
+    },
+    "delete": {
+      "title": "„{name}“ löschen?",
+      "description": "Alles, was über das Team „{name}“ geteilt wurde, wird nicht mehr mit seinen Mitgliedern geteilt. Die Mitglieder bleiben im Workspace.",
+      "confirm": "Team löschen",
+      "cancel": "Abbrechen",
+      "done": "Team „{name}“ gelöscht.",
+      "gone": "Dieses Team wurde bereits gelöscht."
     }
   },
   "invite": {
