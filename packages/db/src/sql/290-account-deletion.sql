@@ -4,7 +4,7 @@
 --
 -- The account row is deleted by sys_delete_account only, and the events that name the account lose what names it
 -- before the account is gone: the coarse network of the events it made, and the target identifier (entity_id) and
--- the `transferTo` metadata field of the events about it (doc 05 section 7.1). Those are the only columns of
+-- the `transferTo` and `targetId` metadata fields of the events about it (doc 05 section 7.1). Those are the only columns of
 -- audit_events slugbase_system may change.
 GRANT DELETE ON TABLE public.accounts TO slugbase_system;
 GRANT UPDATE (ip_prefix, entity_id, metadata) ON TABLE public.audit_events TO slugbase_system;
@@ -114,9 +114,9 @@ $$;
 -- workspaces in `sole_workspace_ids` are put through the request half of the workspace deletion (doc 05 section 7.2) as
 -- sys_workspace_mark_deleting does for one: deleting_at is set, the sessions that had them active are pointed at none and
 -- their API tokens are revoked. The network prefix of every event that names the account as its actor is cleared, the
--- target identifier of every event that names it as its target is cleared and the `transferTo` metadata field that
--- names it is removed (the event keeps its type, label and other fields; `transferTo` is the only field of the audit
--- catalog that holds an account identifier), and the account row is deleted, which ends its memberships elsewhere (the
+-- target identifier of every event that names it as its target is cleared and the `transferTo` or `targetId` metadata
+-- field that names it is removed (the event keeps its type, label and other fields; those two are the only fields of the
+-- audit catalog that hold an account identifier), and the account row is deleted, which ends its memberships elsewhere (the
 -- owner rule does not apply to a workspace being deleted) and deletes everything that cascades from it: sessions, API
 -- tokens, identities, credential tokens, backup codes; the audit events stay with the actor reference set to NULL and
 -- the label they carry. The caller holds the locks of sys_account_deletion_scope (or of
@@ -136,6 +136,7 @@ BEGIN
   UPDATE public.audit_events SET ip_prefix = NULL WHERE actor_account_id = p_account_id AND ip_prefix IS NOT NULL;
   UPDATE public.audit_events SET entity_id = NULL WHERE entity_id = p_account_id;
   UPDATE public.audit_events SET metadata = metadata - 'transferTo' WHERE lower(metadata ->> 'transferTo') = p_account_id::text;
+  UPDATE public.audit_events SET metadata = metadata - 'targetId' WHERE lower(metadata ->> 'targetId') = p_account_id::text;
   DELETE FROM public.accounts WHERE id = p_account_id;
 END
 $$;

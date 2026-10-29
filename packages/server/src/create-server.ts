@@ -50,6 +50,7 @@ import { faviconRoutes } from "./routes/favicons.ts";
 import { tagRoutes } from "./routes/tags/index.ts";
 import { folderRoutes } from "./routes/folders/index.ts";
 import { teamRoutes } from "./routes/teams/index.ts";
+import { sharingRoutes } from "./routes/sharing/index.ts";
 import { goRoutes } from "./routes/go/index.ts";
 import { dashboardRoutes } from "./routes/dashboard/index.ts";
 import { searchRoutes } from "./routes/search/index.ts";
@@ -636,6 +637,8 @@ export function createServer(options: CreateServerOptions): Server {
   builtInRoutes.push(...memberRoutes({ cursorSecret: config.SESSION_SECRET, cookie: sessionCookieSpec(config.APP_ORIGIN) }));
   // So are the teams of the active workspace: every member lists them and reads their members, and an admin or owner holding `teams.manage` creates, renames, deletes them and replaces their members.
   builtInRoutes.push(...teamRoutes({ cursorSecret: config.SESSION_SECRET }));
+  // So are the shares of a bookmark: its owner finds the members and teams to share with, grants, lists and revokes the shares, under `sharing.members` or `sharing.teams` decided with the check stage 9 uses.
+  builtInRoutes.push(...sharingRoutes({ entitlements: entitlementCheck, upgradeAvailable: upgradeCheck }));
   // So are the invitations of the active workspace: an admin invites an address, and the invitation's email is queued with it when the composition can send mail; the pending ones are listed, resent, linked and revoked.
   builtInRoutes.push(
     ...invitationRoutes({

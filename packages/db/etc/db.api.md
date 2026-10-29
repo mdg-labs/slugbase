@@ -14,6 +14,7 @@ import { BookmarkListPage } from '@slugbase/core';
 import { BookmarkListRequest } from '@slugbase/core';
 import { BookmarkListRow } from '@slugbase/core';
 import { BookmarkRecord } from '@slugbase/core';
+import type { BookmarkShareStore } from '@slugbase/core';
 import { BookmarkTaggingMode } from '@slugbase/core';
 import { BookmarkTagPreviewResult } from '@slugbase/core';
 import { BookmarkTagSelection } from '@slugbase/core';
@@ -60,6 +61,7 @@ import { NewBookmark } from '@slugbase/core';
 import { PgColumn } from 'drizzle-orm/pg-core';
 import { PgTable } from 'drizzle-orm/pg-core';
 import type { SearchStore } from '@slugbase/core';
+import type { ShareTargetStore } from '@slugbase/core';
 import { SlugUse } from '@slugbase/core';
 import { SQL } from 'drizzle-orm';
 import type { TagStore } from '@slugbase/core';
@@ -387,6 +389,12 @@ export interface BookmarkRepository {
 
 // @public (undocumented)
 export function bookmarkRepository(tx: TenantTx): BookmarkRepository;
+
+// @public (undocumented)
+export type BookmarkShareRepository = BookmarkShareStore;
+
+// @public (undocumented)
+export function bookmarkShareRepository(tx: TenantTx): BookmarkShareRepository;
 
 // @public
 export interface BookmarkUpdateJobs {
@@ -1444,6 +1452,12 @@ export interface SetupStore {
     setSetupToken(tokenHash: Buffer): Promise<boolean>;
     setupPending(): Promise<boolean>;
 }
+
+// @public (undocumented)
+export type ShareTargetRepository = ShareTargetStore;
+
+// @public (undocumented)
+export function shareTargetRepository(tx: TenantTx): ShareTargetRepository;
 
 // @public
 export interface SignInAlertContext {

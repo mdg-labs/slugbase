@@ -310,6 +310,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/bookmarks/{id}/shares": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the shares of a bookmark */
+        get: operations["listBookmarkShares"];
+        put?: never;
+        /** Share a bookmark with a member or a team */
+        post: operations["createBookmarkShare"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/bookmarks/{id}/shares/{shareId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke a share of a bookmark */
+        delete: operations["deleteBookmarkShare"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dashboard": {
         parameters: {
             query?: never;
@@ -1224,6 +1259,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/share-targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Find the members and teams to share with */
+        get: operations["listShareTargets"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/slugs/availability": {
         parameters: {
             query?: never;
@@ -1783,6 +1835,37 @@ export interface components {
             /** @description The destination to go to: the bookmark's URL as stored, checked again to be an http or https URL */
             url: string;
         };
+        BookmarkShare: {
+            /** @description The account identifier of the member the bookmark is shared with; null for a team */
+            accountId: string | null;
+            /**
+             * Format: date-time
+             * @description When the bookmark was shared with the target, RFC 3339 UTC
+             */
+            createdAt: string;
+            /** @description The member's email address, which every co-member of the workspace sees; null for a team */
+            email: string | null;
+            /**
+             * Format: uuid
+             * @description The share's identifier
+             */
+            id: string;
+            /**
+             * @description What the target is: a member of the workspace, or one of its teams
+             * @enum {string}
+             */
+            kind: "member" | "team";
+            /** @description The display name of the member, the name of the team */
+            name: string;
+            /** @description The identifier of the team the bookmark is shared with; null for a member */
+            teamId: string | null;
+        };
+        BookmarkShareList: {
+            /** @description How many distinct members other than the owner can read the bookmark through its shares: the members it is shared with and the members of the teams it is shared with */
+            audienceSize: number;
+            /** @description The shares of the bookmark, oldest first */
+            items: components["schemas"]["BookmarkShare"][];
+        };
         BookmarkTag: {
             /**
              * Format: uuid
@@ -1924,6 +2007,19 @@ export interface components {
             title: string;
             /** @description The address to save: an http or https URL of at most 2 048 characters. It is stored with a lower-case scheme and host, an internationalised host name in punycode, the default port left out and the fragment kept. Any other scheme is refused with 422 url_not_allowed */
             url: string;
+        };
+        CreateBookmarkShareRequest: {
+            /**
+             * Format: uuid
+             * @description The account identifier of the member to share the bookmark with; it must be a current member of the workspace other than the caller
+             */
+            accountId: string;
+        } | {
+            /**
+             * Format: uuid
+             * @description The identifier of the team to share the bookmark with; it must be a team of the workspace
+             */
+            teamId: string;
         };
         CreateFolderRequest: {
             /** @description The folder's colour, 1 to 8, the number of the --folder-N theme token; 1 when left out */
@@ -2983,6 +3079,26 @@ export interface components {
             setupRequired: boolean;
             /** @description Whether the first account needs the one-time setup token: true only while setup is pending and the deployment requires one, false otherwise. A flag only, never the token */
             setupTokenRequired: boolean;
+        };
+        ShareTarget: {
+            /** @description The member's email address, which every co-member of the workspace sees; null for a team */
+            email: string | null;
+            /**
+             * Format: uuid
+             * @description The account identifier of a member, the team identifier of a team
+             */
+            id: string;
+            /**
+             * @description What the target is: a member of the workspace, or one of its teams
+             * @enum {string}
+             */
+            kind: "member" | "team";
+            /** @description The display name of a member, the name of a team */
+            name: string;
+        };
+        ShareTargetList: {
+            /** @description The members of the workspace other than the caller and the teams of the workspace that match, ordered by name (ignoring case) and then identifier. A kind the workspace has no sharing entitlement for is left out */
+            items: components["schemas"]["ShareTarget"][];
         };
         SlugAvailability: {
             /** @description How many bookmarks of other members of the workspace, and of members who have left it, have the slug and are not plan-archived: a count only, for the collision hint. 0 for an invalid slug */
@@ -4962,6 +5078,279 @@ export interface operations {
                 };
             };
             /** @description The identifier did not pass validation, or the stored URL is not an http or https URL (url_not_allowed); nothing is counted */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listBookmarkShares: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The shares of the bookmark and the size of the audience they make. Only the owner of the bookmark reads them */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookmarkShareList"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The credential is an API token, or the workspace holds neither the sharing.members nor the sharing.teams entitlement (entitlement_required; the problem carries entitlement and upgradeAvailable) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The workspace the request acts in has no bookmark of the caller with this identifier: another member's bookmark, a bookmark of another workspace and one that never existed are answered alike */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The identifier did not pass validation */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    createBookmarkShare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateBookmarkShareRequest"];
+            };
+        };
+        responses: {
+            /** @description The bookmark was shared with this target already: the share that exists, with nothing written */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookmarkShare"];
+                };
+            };
+            /** @description The bookmark is shared with the target; the audit log records share.granted */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookmarkShare"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token that may only read (token_scope), or the workspace does not hold the entitlement of the kind of target: sharing.members for a member, sharing.teams for a team (entitlement_required; the problem carries entitlement and upgradeAvailable) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The workspace the request acts in has no bookmark of the caller with this identifier: another member's bookmark, a bookmark of another workspace and one that never existed are answered alike, or the bookmark is plan-archived */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The identifier or the body did not pass validation: no target or two, a field the operation does not declare, the caller as the member (validation_failed on accountId, cannot_share_with_self), an account that is no current member of the workspace (unknown_member on accountId) or a team of no team of the workspace (unknown_team on teamId). Nothing is written */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    deleteBookmarkShare: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                shareId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The share is revoked for good: the target can no longer read the bookmark through it. The audit log records share.revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token that may only read (token_scope), or the workspace holds neither the sharing.members nor the sharing.teams entitlement (entitlement_required; the problem carries entitlement and upgradeAvailable) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The workspace the request acts in has no bookmark of the caller with this identifier: another member's bookmark, a bookmark of another workspace and one that never existed are answered alike, or the bookmark has no share with this identifier: a share of another bookmark, one that never existed and one that was revoked before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204 */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The identifiers did not pass validation */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10355,6 +10744,94 @@ export interface operations {
                 };
             };
             /** @description Too many requests from this address; Retry-After says when to try again */
+            429: {
+                headers: {
+                    /** @description Whole seconds to wait before the request can succeed */
+                    "Retry-After": number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The service is temporarily unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listShareTargets: {
+        parameters: {
+            query?: {
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The members (other than the caller) and the teams of the workspace that match, for the kinds the workspace may share with */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShareTargetList"];
+                };
+            };
+            /** @description The request was malformed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description There is no session, or its second factor is not complete */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The credential is an API token, or the workspace holds neither the sharing.members nor the sharing.teams entitlement (entitlement_required; the problem carries entitlement and upgradeAvailable) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The request acts in no workspace: the account has none, or the workspace is being deleted */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The query did not pass validation (an unknown parameter, a text that is blank, longer than 100 characters or holds a NUL character, a limit outside 1 to 50) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Too many requests; Retry-After says when to try again */
             429: {
                 headers: {
                     /** @description Whole seconds to wait before the request can succeed */

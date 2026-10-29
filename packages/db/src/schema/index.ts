@@ -12,6 +12,7 @@ export { bookmarks } from "./bookmarks.ts";
 export { bookmarkTags, tags } from "./tags.ts";
 export { folderBookmarks, folders } from "./folders.ts";
 export { teamMembers, teams } from "./teams.ts";
+export { bookmarkShares } from "./shares.ts";
 export { slugPreferences } from "./slug-preferences.ts";
 export { favicons } from "./favicons.ts";
 export type { FaviconStatus } from "./favicons.ts";

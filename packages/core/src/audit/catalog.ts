@@ -6,7 +6,7 @@
 // section 10. The catalog holds the actions that are recorded so far.
 
 /** The groups the audit log filters by. */
-export const AUDIT_CATEGORIES = ["workspace", "member", "invitation", "team", "bookmark"] as const;
+export const AUDIT_CATEGORIES = ["workspace", "member", "invitation", "team", "bookmark", "share"] as const;
 
 export type AuditCategory = (typeof AUDIT_CATEGORIES)[number];
 
@@ -27,6 +27,12 @@ const WORKSPACE_NAME: AuditMetadataField = { type: "text", minLength: 1, maxLeng
 /** A team's name has 1 to 64 characters (doc 02 section 4); the events of a team record it and nothing else of the team or its members. */
 const TEAM_NAME: AuditMetadataField = { type: "text", minLength: 1, maxLength: 64 };
 
+/** What a share was granted to: `member` or `team`. */
+const SHARE_TARGET_KIND: AuditMetadataField = { type: "text", minLength: 4, maxLength: 6 };
+
+/** The name a share's target had: a member's display name (1 to 100 characters) or a team's name (1 to 64). */
+const SHARE_TARGET_NAME: AuditMetadataField = { type: "text", minLength: 1, maxLength: 100 };
+
 /** The name of a setting and the value it had or has, as text: a flag is `true` or `false`. */
 const SETTING_NAME: AuditMetadataField = { type: "text", minLength: 1, maxLength: 64 };
 const SETTING_VALUE: AuditMetadataField = { type: "text", minLength: 1, maxLength: 64 };
@@ -43,8 +49,8 @@ const CONTENT_CHOICE: AuditMetadataField = { type: "text", minLength: 6, maxLeng
 /** How many rows a bulk change touched; the one thing such an event says about them, never a title or a URL. */
 const COUNT: AuditMetadataField = { type: "count" };
 
-// `transferTo` names an account: the deletion of that account removes the field from the stored row (doc 05 section
-// 7.1), so the parser below validates what is written and is not the check for a row that was read back.
+// `transferTo`, and `targetId` of a share of a bookmark with a member, name an account: the deletion of that account removes the field from the stored row
+// (doc 05 section 7.1), so the parser below validates what is written and is not the check for a row that was read back.
 export const AUDIT_ACTIONS = {
   "workspace.created": { category: "workspace", metadata: { name: WORKSPACE_NAME } },
   "workspace.renamed": { category: "workspace", metadata: { from: WORKSPACE_NAME, to: WORKSPACE_NAME } },
@@ -73,6 +79,11 @@ export const AUDIT_ACTIONS = {
   "bookmark.restored": { category: "bookmark", metadata: { count: COUNT } },
   // A member deleted several of their bookmarks in one request (doc 02 section 5.8): the number deleted, and nothing about them.
   "bookmark.bulk_deleted": { category: "bookmark", metadata: { count: COUNT } },
+  // A bookmark was shared with a member or a team, or a share was revoked (doc 02 section 8). The event is about the bookmark and says nothing of it but its
+  // identifier: the log is read by administrators, who have no implicit access to a member's bookmarks. The target is named by kind, identifier and the name it
+  // had; the deletion of a member's account removes `targetId` from the events that name it (doc 05 section 7.1).
+  "share.granted": { category: "share", metadata: { targetKind: SHARE_TARGET_KIND, targetId: { type: "uuid" }, targetName: SHARE_TARGET_NAME } },
+  "share.revoked": { category: "share", metadata: { targetKind: SHARE_TARGET_KIND, targetId: { type: "uuid" }, targetName: SHARE_TARGET_NAME } },
 } as const satisfies Record<string, AuditActionDefinition>;
 
 export type AuditAction = keyof typeof AUDIT_ACTIONS;

@@ -63,6 +63,9 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  * - Team identifier: `teamIds[]` of `createInvitation`, and the path parameter `id` of `getTeam`, `updateTeam`, `deleteTeam` and `replaceTeamMembers`. The body input
  *   `accountIds[]` of `replaceTeamMembers` takes a member identifier (an account).
  * - Invitation identifier: the path parameter `id` of `revokeInvitation`, `createInvitationLink` and `resendInvitation`.
+ * - Sharing: the path parameter `id` of `listBookmarkShares`, `createBookmarkShare` and `deleteBookmarkShare` takes a bookmark identifier, the body input `accountId` of
+ *   `createBookmarkShare` a member identifier and its `teamId` a team identifier, and the path parameter `shareId` of `deleteBookmarkShare` a share identifier (kind `share`).
+ *   The body of `createBookmarkShare` takes one target, so the matrix puts a member of B and a team of B in it together and a request function sends the two apart.
  *
  * Entries are keyed by operation, because the name `id` takes a bookmark in one operation and an invitation in another. The fixture the matrix
  * runs against must hold identifiers of workspace B of every kind it is mapped to: the default fixture of `createProbe` holds `member` and
@@ -125,6 +128,12 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
   "deleteTeam.id": "team",
   "replaceTeamMembers.id": "team",
   "replaceTeamMembers.accountIds[]": "member",
+  "listBookmarkShares.id": "bookmark",
+  "createBookmarkShare.id": "bookmark",
+  "createBookmarkShare.accountId": "member",
+  "createBookmarkShare.teamId": "team",
+  "deleteBookmarkShare.id": "bookmark",
+  "deleteBookmarkShare.shareId": "share",
   "revokeInvitation.id": "invitation",
   "createInvitationLink.id": "invitation",
   "resendInvitation.id": "invitation",
@@ -159,6 +168,10 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
  * so they touch every team of A the policy shows, and the update gives them all one name: the fixture must hold exactly one team in A (and one in B, which the methods must
  * not reach). The `team_members` sample names that team (`...a0e1`) and the owner of A, who is no member of it yet; the fixture must hold another member of A in the team, which
  * the delete of the registry removes, and a team with a member of its own in B. The repository has no update, so its `set` is empty.
+ * A share is written by the owner of its bookmark, in the owner's name (the insert policy of `bookmark_shares` says so): the `bookmark_shares` sample names a bookmark (`...a0b2`) that
+ * the owner of A owns in A, the admin of A as the target and the owner of A as the author; the fixture must hold that bookmark, the admin of A as a member (the team seed makes
+ * one), and another share of the owner's in A, on the bookmark `...a0b3`, which the delete of the registry removes; B holds the same of its own. The repository has no update, so its
+ * `set` is empty.
  */
 export const REPOSITORY_SAMPLES: RepositorySamples = {
   bookmarks: {
@@ -192,6 +205,15 @@ export const REPOSITORY_SAMPLES: RepositorySamples = {
   url_metadata: {
     values: { urlCanonical: "https://example.com/matrix-metadata", status: "failed", fetchedAt: new Date("2026-01-01T00:00:00Z"), expiresAt: new Date("2026-01-08T00:00:00Z") },
     set: { title: "matrix-metadata-updated" },
+  },
+  bookmark_shares: {
+    values: (fixture) => ({
+      id: "0192f3a0-2222-7000-8000-00000000b010",
+      bookmarkId: "0192f3a0-2222-7000-8000-00000000a0b2",
+      targetAccountId: fixture.a.admin.accountId,
+      grantedBy: fixture.a.owner.accountId,
+    }),
+    set: {},
   },
   teams: {
     values: { id: "0192f3a0-2222-7000-8000-00000000b00f", name: "matrix-team-inserted" },

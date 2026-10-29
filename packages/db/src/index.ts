@@ -47,6 +47,8 @@ export { bookmarkArchiveTransaction, bookmarkRepository, isBookmarkSlugTaken } f
 export type { BookmarkCreation, BookmarkCreationResult, BookmarkRepository, BookmarkUpdateJobs } from "./repositories/bookmarks.ts";
 export { isTagNameTaken, tagRepository } from "./repositories/tags.ts";
 export type { TagRepository } from "./repositories/tags.ts";
+export { bookmarkShareRepository, shareTargetRepository } from "./repositories/bookmark-shares.ts";
+export type { BookmarkShareRepository, ShareTargetRepository } from "./repositories/bookmark-shares.ts";
 export { isTeamNameTaken, teamRepository } from "./repositories/teams.ts";
 export type { TeamRepository } from "./repositories/teams.ts";
 export { folderRepository, isFolderNameTaken } from "./repositories/folders.ts";
