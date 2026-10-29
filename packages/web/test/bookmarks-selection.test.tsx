@@ -162,6 +162,10 @@ function stubServer(
         return json(list);
       }
       if (pathname === `${LIST}/ids`) {
+        // The select-all also asks which of the matches are shared with the member; none of these lists holds one.
+        if (new URL(request.url).searchParams.get("scope") === "shared_with_me") {
+          return json({ ids: [], truncated: false });
+        }
         return answerIds === undefined ? json(ids) : answerIds();
       }
       if (pathname === BULK) {

@@ -121,7 +121,11 @@
       "retry": "Erneut versuchen",
       "empty": {
         "title": "Noch keine Lesezeichen",
-        "description": "Gib einem Lesezeichen einen kurzen, privaten Slug und öffne es von überall über /go/. Füge irgendwo auf dieser Seite einen Link ein, um ihn zu speichern, oder lege selbst ein Lesezeichen an."
+        "description": "Gib einem Lesezeichen einen kurzen, privaten Slug und öffne es von überall über /go/. Füge irgendwo auf dieser Seite einen Link ein, um ihn zu speichern, oder lege selbst ein Lesezeichen an.",
+        "sharedWithMe": {
+          "title": "Bisher wurde nichts mit dir geteilt",
+          "description": "Lesezeichen, die andere Mitglieder mit dir teilen, direkt, über ein Team oder über einen Ordner, erscheinen hier."
+        }
       },
       "noMatch": "Keine Lesezeichen passen zu diesen Filtern",
       "search": {
@@ -177,7 +181,9 @@
       "scope": {
         "label": "Bereich",
         "all": "Alle",
-        "mine": "Meine"
+        "mine": "Meine",
+        "sharedWithMe": "Mit mir geteilt",
+        "sharedByMe": "Von mir geteilt"
       },
       "sort": {
         "label": "Sortieren nach",
@@ -211,6 +217,14 @@
       "opens": "{count, plural, one {# Aufruf} other {# Aufrufe}}",
       "usage": "{count, plural, one {# Aufruf} other {# Aufrufe}} · {when}",
       "edit": "Bearbeiten",
+      "open": "Öffnen",
+      "copyAddress": "Adresse kopieren",
+      "addressCopied": "Adresse kopiert.",
+      "addressCopyFailed": "Die Adresse konnte nicht kopiert werden. Kopiere sie stattdessen aus dem Link des Lesezeichens.",
+      "shared": {
+        "marker": "Geteilt",
+        "formerMember": "Ehemaliges Mitglied"
+      },
       "share": "Teilen",
       "unpin": "Anheftung lösen",
       "pin": {
@@ -240,6 +254,14 @@
       "label": "Ausgewählte Lesezeichen",
       "count": "{count, plural, one {# ausgewählt} other {# ausgewählt}}",
       "clear": "Auswahl aufheben",
+      "openAll": {
+        "action": "Alle öffnen",
+        "partial": "{opened, number} von {selected, number} geöffnet. Die übrigen sind in der Liste nicht geladen oder haben keine Webadresse."
+      },
+      "limited": {
+        "note": "{count, plural, one {# geteiltes Lesezeichen ist ausgewählt, daher steht nur Alle öffnen zur Verfügung.} other {# geteilte Lesezeichen sind ausgewählt, daher steht nur Alle öffnen zur Verfügung.}}",
+        "reason": "Mit dir geteilte Lesezeichen kannst du öffnen, aber nicht ändern. Hebe ihre Auswahl auf, um diese Aktion zu nutzen."
+      },
       "pin": "Anheften",
       "unpin": "Anheftung lösen",
       "addToFolder": "Zu Ordner hinzufügen",
@@ -327,6 +349,10 @@
       "save": "Speichern",
       "more": "Mehr",
       "loading": "Lesezeichen wird geladen",
+      "shared": {
+        "title": "Dieses Lesezeichen ist mit dir geteilt",
+        "description": "Nur sein Besitzer ändert es. Du kannst es in der Liste öffnen und seine Adresse kopieren."
+      },
       "retry": "Erneut versuchen",
       "saved": {
         "created": "Lesezeichen gespeichert.",

@@ -358,6 +358,14 @@ export function isBookmarkMissing(error: unknown): boolean {
   return error instanceof ApiProblemError && (error.status === 404 || error.status === 422);
 }
 
+/**
+ * Whether the bookmark is another member's and shared with the caller (doc 02 section 8.2): it names how it is shared or
+ * who owns it. A bookmark the caller owns names neither, and the server always sends both, so an absent value reads as none.
+ */
+export function isSharedWithMe(bookmark: Bookmark): boolean {
+  return (bookmark.sharedVia ?? null) !== null || (bookmark.owner ?? null) !== null;
+}
+
 /** Whether `value` is an address a bookmark can have, as far as the browser can tell: an `http` or `https` URL. */
 export function isHttpUrl(value: string): boolean {
   return /^https?:\/\//i.test(value) && URL.canParse(value);

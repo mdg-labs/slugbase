@@ -83,7 +83,8 @@ function stubServer(all: readonly Bookmark[]): Server {
           return json({ items, nextCursor: null, total: items.length });
         }
         if (url.pathname === `${BOOKMARKS}/ids` && other.method === "GET") {
-          return json({ ids: matching().map((bookmark) => bookmark.id), truncated: false });
+          // None of these bookmarks is shared with the member.
+          return json({ ids: url.searchParams.get("scope") === "shared_with_me" ? [] : matching().map((bookmark) => bookmark.id), truncated: false });
         }
         return json({ type: "about:blank", title: "Not found", status: 404, code: "not_found" }, { status: 404, contentType: "application/problem+json" });
       }),
@@ -292,9 +293,14 @@ describe("the search field of the bookmark list", { timeout: HEAVY_TEST_TIMEOUT_
     await press(await screen.findByRole("button", { name: "Select all 2 matching" }));
 
     expect(await screen.findByText("2 selected")).toBeDefined();
-    const asked = server.calls.filter((call) => call.method === "GET" && call.path === `${BOOKMARKS}/ids`);
+    const askedIds = server.calls.filter((call) => call.method === "GET" && call.path === `${BOOKMARKS}/ids`);
+    // The matches and, with the same text, the matches that are shared with the member, which the bar limits its actions by.
+    const asked = askedIds.filter((call) => call.params.get("scope") === null);
     expect(asked).toHaveLength(1);
     expect(asked[0]?.params.get("q")).toBe("widget");
+    const sharedAsked = askedIds.filter((call) => call.params.get("scope") === "shared_with_me");
+    expect(sharedAsked).toHaveLength(1);
+    expect(sharedAsked[0]?.params.get("q")).toBe("widget");
   });
 
   it("shows a text as text, never as markup", async () => {

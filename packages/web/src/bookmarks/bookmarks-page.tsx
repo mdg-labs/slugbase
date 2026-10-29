@@ -15,7 +15,7 @@ import { useBulkBookmarks, usePendingPins, useDeleteBookmark, usePinBookmark } f
 import { useBookmarkSelection, useSelectionShortcuts } from "./bookmark-selection.ts";
 import { bookmarkFailureOf, bookmarkListQuery, type Bookmark } from "./bookmarks.ts";
 import { BookmarksToolbar } from "./bookmarks-toolbar.tsx";
-import { BOOKMARK_PAGE_SIZES, DEFAULT_SORT, filterParamsOf, hasActiveFilters, listParamsOf, pageSizeOfSearch, useBookmarkListControls, useBookmarkListSearch, withoutFolder, type BookmarkView } from "./list-search.ts";
+import { BOOKMARK_PAGE_SIZES, DEFAULT_SORT, filterParamsOf, hasActiveFilters, listParamsOf, pageSizeOfSearch, useBookmarkListControls, useBookmarkListSearch, withoutFolder, type BookmarkListSearch, type BookmarkView } from "./list-search.ts";
 import { useBookmarkModal } from "./modal-search.ts";
 import { useListShortcuts } from "./use-list-shortcuts.ts";
 import { usePasteToCreate } from "./use-paste-to-create.ts";
@@ -24,6 +24,13 @@ import { usePasteToCreate } from "./use-paste-to-create.ts";
 const PAGE_FRAME = "flex w-full min-w-0 flex-col gap-4 p-4 md:p-6";
 
 const SKELETON_CARDS = ["a", "b", "c", "d", "e", "f"] as const;
+
+// Whether the scope is the only filter of the list.
+function onlyScope(search: BookmarkListSearch): boolean {
+  const rest = { ...search };
+  Reflect.deleteProperty(rest, "scope");
+  return !hasActiveFilters(rest);
+}
 
 function CardsLoading({ view }: { readonly view: BookmarkView }): ReactElement {
   const { t } = useTranslation();
@@ -181,6 +188,21 @@ export function BookmarksPage(): ReactElement {
         variant="error"
       />
     );
+  } else if (items.length === 0 && !query.hasNextPage && search.scope === "shared_with_me" && onlyScope(search)) {
+    // The member has filtered nothing but the scope, so the list is empty because nothing has been shared with them (doc 03 section 3.5).
+    body = (
+      <EmptyState
+        actions={
+          <Button onClick={controls.clearFilters} variant="outline">
+            <FilterXIcon aria-hidden="true" />
+            {t("bookmarks.list.clearFilters")}
+          </Button>
+        }
+        description={t("bookmarks.list.empty.sharedWithMe.description")}
+        icon={<InboxIcon aria-hidden="true" />}
+        title={t("bookmarks.list.empty.sharedWithMe.title")}
+      />
+    );
   } else if (items.length === 0 && !query.hasNextPage) {
     body = (
       <EmptyState
@@ -303,7 +325,7 @@ export function BookmarksPage(): ReactElement {
       ) : null}
       <BookmarksToolbar controls={controls} folders={folders} search={search} tags={tags} />
       {body}
-      <BookmarksBulkBar bulk={bulk} filters={filters} selection={selection} total={lastPage?.total ?? null} />
+      <BookmarksBulkBar bulk={bulk} filters={filters} items={items} selection={selection} total={lastPage?.total ?? null} />
       <p aria-live="polite" className="sr-only" role="status">
         {bulk.announcement}
       </p>

@@ -5,7 +5,8 @@ import { useTranslation } from "react-i18next";
 import { useFormat } from "../i18n/use-format.ts";
 import { useBookmarkActions, type BookmarkActionHandlers } from "./bookmark-card.tsx";
 import { FolderDots, TagBadges } from "./bookmark-labels.tsx";
-import { isHttpUrl, recordOpen, type Bookmark } from "./bookmarks.ts";
+import { isHttpUrl, isSharedWithMe, recordOpen, type Bookmark } from "./bookmarks.ts";
+import { SharedMarker } from "./shared-marker.tsx";
 import { DEFAULT_SORT, type BookmarkSort } from "./list-search.ts";
 
 export type BookmarksTableProps = Pick<BookmarkActionHandlers, "onEdit" | "onPin" | "onShare" | "onDelete"> & {
@@ -64,6 +65,7 @@ function TitleCell({ bookmark }: { readonly bookmark: Bookmark }): ReactElement 
           <PinIcon aria-hidden="true" className="size-4" />
         </span>
       ) : null}
+      {isSharedWithMe(bookmark) ? <SharedMarker bookmark={bookmark} /> : null}
     </span>
   );
 }

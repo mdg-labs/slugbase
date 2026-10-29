@@ -121,7 +121,11 @@
       "retry": "Try again",
       "empty": {
         "title": "No bookmarks yet",
-        "description": "Give a bookmark a short, private slug and open it from anywhere through /go/. Paste a link anywhere on this page to save it, or create a bookmark yourself."
+        "description": "Give a bookmark a short, private slug and open it from anywhere through /go/. Paste a link anywhere on this page to save it, or create a bookmark yourself.",
+        "sharedWithMe": {
+          "title": "Nothing has been shared with you yet",
+          "description": "Bookmarks that other members share with you, directly, through a team or through a folder, appear here."
+        }
       },
       "noMatch": "No bookmarks match these filters",
       "search": {
@@ -177,7 +181,9 @@
       "scope": {
         "label": "Scope",
         "all": "All",
-        "mine": "Mine"
+        "mine": "Mine",
+        "sharedWithMe": "Shared with me",
+        "sharedByMe": "Shared by me"
       },
       "sort": {
         "label": "Sort by",
@@ -211,6 +217,14 @@
       "opens": "{count, plural, one {# open} other {# opens}}",
       "usage": "{count, plural, one {# open} other {# opens}} · {when}",
       "edit": "Edit",
+      "open": "Open",
+      "copyAddress": "Copy address",
+      "addressCopied": "Address copied.",
+      "addressCopyFailed": "The address could not be copied. Copy it from the bookmark’s link instead.",
+      "shared": {
+        "marker": "Shared",
+        "formerMember": "Former member"
+      },
       "share": "Share",
       "unpin": "Unpin",
       "pin": {
@@ -240,6 +254,14 @@
       "label": "Selected bookmarks",
       "count": "{count, plural, one {# selected} other {# selected}}",
       "clear": "Clear selection",
+      "openAll": {
+        "action": "Open all",
+        "partial": "Opened {opened, number} of {selected, number}. The others are not loaded in the list or have no web address."
+      },
+      "limited": {
+        "note": "{count, plural, one {# shared bookmark is selected, so only Open all is available.} other {# shared bookmarks are selected, so only Open all is available.}}",
+        "reason": "Bookmarks shared with you can be opened but not changed. Deselect them to use this action."
+      },
       "pin": "Pin",
       "unpin": "Unpin",
       "addToFolder": "Add to folder",
@@ -327,6 +349,10 @@
       "save": "Save",
       "more": "More",
       "loading": "Loading the bookmark",
+      "shared": {
+        "title": "This bookmark is shared with you",
+        "description": "Its owner changes it. You can open it and copy its address from the list."
+      },
       "retry": "Try again",
       "saved": {
         "created": "Bookmark saved.",

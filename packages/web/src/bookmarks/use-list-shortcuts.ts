@@ -2,7 +2,7 @@ import { useShortcut } from "@slugbase/ui";
 import { useRouter } from "@tanstack/react-router";
 import { useRef, useState, type FocusEvent, type RefObject } from "react";
 import { focusedItem, type BookmarkSelection } from "./bookmark-selection.ts";
-import { isHttpUrl, recordOpen, type Bookmark } from "./bookmarks.ts";
+import { isHttpUrl, isSharedWithMe, recordOpen, type Bookmark } from "./bookmarks.ts";
 import type { BookmarkListControls, BookmarkView } from "./list-search.ts";
 import type { BookmarkModalControls } from "./modal-search.ts";
 
@@ -32,7 +32,7 @@ export interface ListNavigation {
 /**
  * The keyboard shortcuts of the list (doc 03 section 14), all of them single-key shortcuts: `J` and `K` or the arrow keys
  * move focus from item to item, `Enter` follows the focused item, Ctrl or Command `Enter` opens it in a new tab, `E` edits
- * it, `P` pins or unpins it, `V` switches between the grid and the table, and `Esc` clears the selection and, with none,
+ * it, `P` pins or unpins it (both only a bookmark of the member's own), `V` switches between the grid and the table, and `Esc` clears the selection and, with none,
  * the filters. An open overlay takes `Esc` for itself before this does. The returned `ListNavigation` is for the element
  * that holds the items.
  */
@@ -100,13 +100,14 @@ export function useListShortcuts({ items, view, selection, filtered, controls, m
   });
   useShortcut({ key: "e" }, () => {
     const bookmark = focusedBookmark();
-    if (bookmark !== undefined) {
+    // A bookmark shared with the member is read-only (Q22), so neither the edit nor the pin shortcut reaches it.
+    if (bookmark !== undefined && !isSharedWithMe(bookmark)) {
       modal.edit(bookmark.id);
     }
   });
   useShortcut({ key: "p" }, () => {
     const bookmark = focusedBookmark();
-    if (bookmark !== undefined && !pendingPins.has(bookmark.id)) {
+    if (bookmark !== undefined && !isSharedWithMe(bookmark) && !pendingPins.has(bookmark.id)) {
       pin(bookmark, !bookmark.pinned);
     }
   });
