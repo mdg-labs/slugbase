@@ -59,7 +59,8 @@
     },
     "overrides": {
       "@esbuild-kit/core-utils>esbuild": "^0.25.0",
-      "@ai-sdk/provider-utils": "^4.0.33"
+      "@ai-sdk/provider-utils": "^4.0.33",
+      "@ladle/react>vite": "^6.4.5"
     },
     "patchedDependencies": {
       "postgres@3.4.9": "patches/postgres@3.4.9.patch"
