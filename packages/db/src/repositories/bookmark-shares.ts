@@ -2,6 +2,7 @@ import type { BookmarkShareGrant, BookmarkShareList, BookmarkShareRecord, Bookma
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { accounts } from "../schema/accounts.ts";
 import { bookmarks } from "../schema/bookmarks.ts";
+import { bookmarkReadableBy } from "./bookmark-access.ts";
 import { bookmarkShares } from "../schema/shares.ts";
 import { teams } from "../schema/teams.ts";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
@@ -124,6 +125,26 @@ export function bookmarkShareRepository(tx: TenantTx): BookmarkShareRepository {
           ),
         );
       return (use === "grant" ? await query.for("key share") : await query).length === 1;
+    },
+
+    async sharedWith({ bookmarkId, accountId }) {
+      const workspaceId = requireWorkspace(tx);
+      if (accountId.toLowerCase() !== tx.accountId.toLowerCase()) {
+        throw new Error("only the account of the transaction asks whether a bookmark is shared with it");
+      }
+      const found = await tenantHandle(tx)
+        .select({ id: bookmarks.id })
+        .from(bookmarks)
+        .where(
+          and(
+            eq(bookmarks.workspaceId, workspaceId),
+            eq(bookmarks.id, bookmarkId),
+            isNull(bookmarks.planArchivedAt),
+            sql`${bookmarks.ownerId} IS DISTINCT FROM ${accountId}::uuid`,
+            bookmarkReadableBy(accountId),
+          ),
+        );
+      return found.length === 1;
     },
 
     async list(bookmarkId): Promise<BookmarkShareList> {

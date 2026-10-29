@@ -403,12 +403,15 @@ describe("the list narrowed to a folder", () => {
     }
   });
 
-  it("does not show the folders of another member on a bookmark it reads", async () => {
+  it("does not show the folders of another member on a bookmark shared with it that it reads", async () => {
     const { a, b, workspace, bookmarkOfB } = await library();
 
+    const unshared = await inTenant({ accountId: a, workspaceId: workspace.id }, (tx) => bookmarkRepository(tx).find(bookmarkOfB));
+    await asSystem(db, (tx) => tx`INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_account_id, granted_by) VALUES (${freshId()}, ${workspace.id}, ${bookmarkOfB}, ${a}, ${b})`);
     const read = await inTenant({ accountId: a, workspaceId: workspace.id }, (tx) => bookmarkRepository(tx).find(bookmarkOfB));
     const own = await inTenant({ accountId: b, workspaceId: workspace.id }, (tx) => bookmarkRepository(tx).find(bookmarkOfB));
 
+    expect(unshared).toBeUndefined();
     expect(read?.folders).toEqual([]);
     expect(own?.folders).toHaveLength(1);
   });

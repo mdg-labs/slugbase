@@ -374,6 +374,14 @@ export interface BookmarkRepository {
         readonly ownerId: string;
         readonly pinned: boolean;
     }): Promise<number>;
+    sharedAmong(request: {
+        readonly bookmarkIds: readonly string[];
+        readonly accountId: string;
+    }): Promise<readonly string[]>;
+    sharedWith(request: {
+        readonly bookmarkId: string;
+        readonly accountId: string;
+    }): Promise<boolean>;
     slugUse(request: {
         readonly slug: string;
         readonly ownerId: string;

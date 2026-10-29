@@ -39,11 +39,15 @@ import { acceptedVersions, entityTagOf } from "../workspaces/if-match.ts";
 // slug and no `forwarding` stores true, forwarding without a slug, and clearing the slug of a bookmark that forwards unless the patch turns forwarding off, are `422
 // validation_failed` on `forwarding`, and turning forwarding off keeps the slug. GET /api/v1/slugs/availability answers whether a slug is free (routes/slugs).
 //
-// A bookmark is its owner's: reading, changing or deleting one that another member owns, one of another workspace and one that
-// does not exist are the same `404 not_found` (doc 04 section 2.4), and the body carries the bookmark's version, which the `ETag`
-// repeats.
+// A bookmark is its owner's: reading, changing or deleting one that another member owns and has not shared with the caller, one of another workspace
+// and one that does not exist are the same `404 not_found` (doc 04 section 2.4), and the body carries the bookmark's version, which the `ETag`
+// repeats. One that is shared with the caller (directly, through a team or through a folder, doc 02 section 8, doc 05 section 4) is theirs to read and
+// to open, and the body then names the owner and how it is shared (`owner`, `sharedVia`) and carries none of the owner's folders, tags or pin; the owner's alone
+// are the change, the deletion, the tagging, the filing and the sharing of it, and a try by the caller is `403 forbidden` with nothing written (Q22). A bulk request
+// whose selection holds such a bookmark is `403 forbidden` as a whole, and so is a preview of tags for it.
 //
-// GET /api/v1/bookmarks lists the caller's own bookmarks (doc 04 sections 6.1 and 10.6, doc 02 section 5.7): the filters `pinned`, `hasSlug`,
+// GET /api/v1/bookmarks lists the bookmarks of its `scope` (doc 04 sections 6.1 and 10.6, doc 02 section 5.7): the caller's own (`mine`), those shared with them
+// (`shared_with_me`), those they share (`shared_by_me`), or the first and the second (`all`, the default), each bookmark once and the plan-archived never. The filters `pinned`, `hasSlug`,
 // `forwarding`, `url` (the canonical form of the value, for the duplicate warning) and `q` (the text of the search of doc 02 section 9.1, read through
 // the system operation `sys_bookmark_match`, which the sort and the cursor leave as they are), six sorts with the identifier as tiebreak, and a page
 // of at most 100 that the `nextCursor` resumes. The cursor is the sort key and identifier of the last item, signed with a subkey derived
@@ -102,6 +106,7 @@ const NO_WORKSPACE = "No such resource.";
 const NO_SUCH_BOOKMARK = "No such resource.";
 const NO_SUCH_FOLDER = "No such resource.";
 const NO_SUCH_TAG = "No such resource.";
+const SHARED_READ_ONLY = "This bookmark is shared with you, and a share gives read access only.";
 const URL_NOT_ALLOWED = "Only http and https URLs can be saved as a bookmark.";
 const DESTINATION_NOT_ALLOWED = "The bookmark's address is not an http or https URL, so it is not opened.";
 const URL_INVALID = "The URL is not valid.";
@@ -184,6 +189,7 @@ function storeOf(tx: TenantTx): BookmarkStore {
       });
     },
     find: (bookmarkId) => repository.find(bookmarkId),
+    sharedWith: (request) => repository.sharedWith(request),
     update: (request) =>
       repository.update({
         ...request,
@@ -198,6 +204,7 @@ function bulkStoreOf(tx: TenantTx): BookmarkBulkStore {
   const repository = bookmarkRepository(tx);
   return {
     ids: (filter, limit) => repository.ids(filter, limit),
+    sharedAmong: (request) => repository.sharedAmong(request),
     removeMany: (bookmarkIds) => repository.removeMany({ bookmarkIds }),
     setPinned: (request) => repository.setPinned(request),
     fileIn: (request) => repository.fileIn(request),
@@ -263,6 +270,8 @@ function bookmarkBody(bookmark: BookmarkRecord): z.input<typeof BookmarkSchema> 
     pinned: bookmark.pinned,
     openCount: bookmark.openCount,
     lastOpenedAt: bookmark.lastOpenedAt === null ? null : bookmark.lastOpenedAt.toISOString(),
+    owner: bookmark.owner === null ? null : { accountId: bookmark.owner.accountId, displayName: bookmark.owner.displayName },
+    sharedVia: bookmark.sharedVia,
     folders: bookmark.folders.map((folder) => ({ id: folder.id, name: folder.name, icon: folder.icon, color: folder.color })),
     tags: bookmark.tags.map((tag) => ({ id: tag.id, name: tag.name })),
     version: bookmark.version,
@@ -427,6 +436,8 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage, egress, meta
           throw new ProblemError("validation_failed", URL_INVALID, { errors: [{ path: "filter.url", code: outcome.reason === "not_http" ? "url_not_allowed" : URL_FIELD_CODES[outcome.reason] }] });
         case "unavailable":
           throw new ProblemError("not_found", NO_WORKSPACE);
+        case "forbidden":
+          throw new ProblemError("forbidden", SHARED_READ_ONLY);
         case "target_not_found":
           throw new ProblemError("not_found", body.folderId === undefined ? NO_SUCH_TAG : NO_SUCH_FOLDER);
       }
@@ -451,6 +462,8 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage, egress, meta
           throw new ProblemError("validation_failed", TOO_MANY_MATCHES, { errors: [{ path: body.ids === undefined ? "filter" : "ids", code: "too_big" }] });
         case "url_refused":
           throw new ProblemError("validation_failed", URL_INVALID, { errors: [{ path: "filter.url", code: outcome.reason === "not_http" ? "url_not_allowed" : URL_FIELD_CODES[outcome.reason] }] });
+        case "forbidden":
+          throw new ProblemError("forbidden", SHARED_READ_ONLY);
         case "target_not_found":
           throw new ProblemError("not_found", NO_SUCH_TAG);
       }
@@ -482,6 +495,8 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage, egress, meta
           throw new ProblemError("validation_failed", URL_INVALID, { errors: [{ path: "url", code: URL_FIELD_CODES[outcome.reason] }] });
         case "stale":
           throw new ProblemError("precondition_failed", STALE_VERSION);
+        case "forbidden":
+          throw new ProblemError("forbidden", SHARED_READ_ONLY);
         case "not_found":
           throw new ProblemError("not_found", NO_SUCH_BOOKMARK);
         case "folder_not_found":
@@ -530,11 +545,15 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage, egress, meta
 
     route(deleteBookmarkOperation).handle(async ({ params }, context) => {
       const tenant = tenantOf(context);
-      const deleted = await tenant.withTenant((tx) => deleteBookmark({ store: storeOf(tx) }, { bookmarkId: params.id, accountId: tenant.accountId }));
-      if (!deleted) {
-        throw new ProblemError("not_found", NO_SUCH_BOOKMARK);
+      const outcome = await tenant.withTenant((tx) => deleteBookmark({ store: storeOf(tx) }, { bookmarkId: params.id, accountId: tenant.accountId }));
+      switch (outcome.kind) {
+        case "deleted":
+          return { status: 204 };
+        case "forbidden":
+          throw new ProblemError("forbidden", SHARED_READ_ONLY);
+        case "not_found":
+          throw new ProblemError("not_found", NO_SUCH_BOOKMARK);
       }
-      return { status: 204 };
     }),
   ];
 }

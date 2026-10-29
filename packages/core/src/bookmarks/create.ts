@@ -28,7 +28,18 @@ export interface BookmarkFolderRef {
   readonly color: number;
 }
 
-/** A bookmark as its owner sees it. */
+/** The ways a bookmark of another member is shared with the caller: with them, with a team they are in, or through a shared folder it is filed in. */
+export const BOOKMARK_SHARED_VIA = ["direct", "team", "folder"] as const;
+
+export type BookmarkSharedVia = (typeof BOOKMARK_SHARED_VIA)[number];
+
+/** The member who owns a bookmark that is shared with the caller, as a member of the workspace sees them. */
+export interface BookmarkOwner {
+  readonly accountId: string;
+  readonly displayName: string;
+}
+
+/** A bookmark as the member who reads it sees it: the owner's own, or one shared with them, which carries nothing of the owner's folders, tags or pin. */
 export interface BookmarkRecord {
   readonly id: string;
   /** The member who owns it; null once that member has left the workspace (doc 02 section 3.5). */
@@ -39,10 +50,15 @@ export interface BookmarkRecord {
   readonly description: string | null;
   readonly slug: string | null;
   readonly forwarding: boolean;
+  /** Whether the reader pinned it: always false for a bookmark shared with them, since a pin is the owner's (Q22). */
   readonly pinned: boolean;
   readonly openCount: number;
   readonly lastOpenedAt: Date | null;
-  /** The owner's folders the bookmark is filed in, in the order of their names. Filing does not move `version`. */
+  /** Who owns it when it is shared with the reader; null for the reader's own bookmark and for one whose owner has left the workspace. */
+  readonly owner: BookmarkOwner | null;
+  /** How it is shared with the reader; null for the reader's own bookmark. */
+  readonly sharedVia: BookmarkSharedVia | null;
+  /** The reader's folders the bookmark is filed in, in the order of their names; none for a bookmark shared with them. Filing does not move `version`. */
   readonly folders: readonly BookmarkFolderRef[];
   /** The caller's own tags on the bookmark, in the order of their names; another member's tags are never in it. Tagging does not move `version`. */
   readonly tags: readonly BookmarkTagRef[];
@@ -105,8 +121,17 @@ export interface BookmarkStore {
    * owner has no tag of creates one in that transaction.
    */
   create(request: BookmarkCreationRequest): Promise<BookmarkStoreResult>;
-  /** The bookmark of the workspace of the transaction with that identifier, whoever owns it; undefined when there is none. */
+  /**
+   * The bookmark of the workspace of the transaction with that identifier, when the account of the transaction can read it: it owns it, or it is shared with the account
+   * directly, through a team or through a folder. Undefined when there is none, when it is plan-archived and when the account cannot read it. A bookmark shared with the
+   * account comes with its owner and how it is shared (`owner`, `sharedVia`), and with none of the owner's folders or tags and not the owner's pin.
+   */
   find(bookmarkId: string): Promise<BookmarkRecord | undefined>;
+  /**
+   * Whether the bookmark is shared with `accountId` (the account of the transaction): the account can read it through a share, directly, through a team or through
+   * a folder, and someone else owns it. A plan-archived bookmark is not. It tells a bookmark the account may read and not change (forbidden) from one it cannot see (not found).
+   */
+  sharedWith(request: { readonly bookmarkId: string; readonly accountId: string }): Promise<boolean>;
   /**
    * Changes the bookmark of the workspace of the transaction that `request.ownerId` owns and that is not plan-archived, under the
    * row's lock: a version outside `request.expectedVersions` is `stale`, a patch that names the values the bookmark has is

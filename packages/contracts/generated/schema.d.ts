@@ -1757,7 +1757,7 @@ export interface components {
             createdAt: string;
             /** @description The bookmark's description, null when it has none */
             description: string | null;
-            /** @description The owner's folders the bookmark is filed in, in the order of their names; empty when it is filed in none */
+            /** @description The caller's folders the bookmark is filed in, in the order of their names; empty when it is filed in none, and always for a bookmark that is shared with the caller */
             folders: components["schemas"]["BookmarkFolder"][];
             /** @description Whether /go forwards to the bookmark by its slug */
             forwarding: boolean;
@@ -1770,15 +1770,27 @@ export interface components {
             id: string;
             /** @description When the bookmark was last opened, RFC 3339 UTC, null when it never was */
             lastOpenedAt: string | null;
-            /** @description How many times the bookmark was opened */
+            /** @description How many times the bookmark was opened, by everyone it is shared with included */
             openCount: number;
+            /** @description Who owns a bookmark that is shared with the caller; null for the caller's own bookmark and for one whose owner has left the workspace. The server always sends it; a client reads an absent value as null */
+            owner?: {
+                /**
+                 * Format: uuid
+                 * @description The owner's account
+                 */
+                accountId: string;
+                /** @description The owner's display name, as a member of the workspace sees it */
+                displayName: string;
+            } | null;
             /** @description The account of the member who owns the bookmark; null once that member has left the workspace */
             ownerId: string | null;
-            /** @description Whether the bookmark is pinned */
+            /** @description Whether the caller pinned the bookmark; always false for a bookmark that is shared with the caller, since a pin is the owner's */
             pinned: boolean;
+            /** @description How the bookmark is shared with the caller: directly, through a team or through a shared folder; null for the caller's own bookmark. The server always sends it; a client reads an absent value as null */
+            sharedVia?: ("direct" | "team" | "folder") | null;
             /** @description The bookmark's slug, null when it has none */
             slug: string | null;
-            /** @description The caller's own tags on the bookmark, in the order of their names; another member's tags are never in it, and empty when the caller put none on it */
+            /** @description The caller's own tags on the bookmark, in the order of their names; another member's tags are never in it, the owner's among them, and empty when the caller put none on it */
             tags: components["schemas"]["BookmarkTag"][];
             /** @description The bookmark's title */
             title: string;
@@ -1807,10 +1819,10 @@ export interface components {
             /** @description Narrows the bookmarks to those the search of the palette finds, by their title, host, slug and description (the path of the URL is not searched): every word of it must be the start of a word of one of them, or of the slug, and a typo is matched only when no bookmark has the words. It is plain text, 1 to 100 characters after the whitespace around it is removed, and `&`, `|`, `!`, `:`, `*`, `%`, `_`, quotes and backslashes are never operators or wildcards. A text of fewer than three characters matches the start of the slug or of the title only. The sort, the keyset and the filters are kept, so the bookmarks are not ranked by relevance. Left out, the text does not filter */
             q?: string;
             /**
-             * @description Whose bookmarks are matched. Only the caller's own bookmarks exist until sharing arrives, so both name the same bookmarks today; mine when left out
+             * @description Whose bookmarks are matched, as the list's scope says; mine when left out. A selection that holds a bookmark shared with the caller is refused by a bulk request with 403, whatever the action
              * @enum {string}
              */
-            scope?: "all" | "mine";
+            scope?: "all" | "mine" | "shared_with_me" | "shared_by_me";
             /** @description Matches the bookmarks that carry every one of the given tags of the caller's (AND; OR is not offered), at most 10. A tag that is another member's, another workspace's or unknown matches nothing. Left out, tags are not filtered on */
             tag?: string | string[];
             /** @description Matches the caller's bookmarks whose canonical URL equals the canonical form of this value; one that cannot be a bookmark's URL is refused with 422 */
@@ -1830,13 +1842,13 @@ export interface components {
             name: string;
         };
         BookmarkIds: {
-            /** @description The identifiers of the caller's bookmarks that match the filters, newest first, at most 5 000 */
+            /** @description The identifiers of the bookmarks the scope covers that match the filters, newest first, at most 5 000 */
             ids: string[];
             /** @description true when more than 5 000 bookmarks match, so ids holds the first 5 000 only and a bulk request by the same filter is refused */
             truncated: boolean;
         };
         BookmarkList: {
-            /** @description One page of the caller's bookmarks, in the order asked for; plan-archived bookmarks are never listed */
+            /** @description One page of the bookmarks the scope covers, in the order asked for; plan-archived bookmarks are never listed */
             items: components["schemas"]["Bookmark"][];
             /** @description Passed as `cursor` to get the next page; null on the last page */
             nextCursor: string | null;
@@ -1921,7 +1933,7 @@ export interface components {
             skippedReasons: {
                 /** @description Bookmarks the caller owns none of in this workspace: another member's, another workspace's, one that is gone, and, for every action but delete, a plan-archived one. They are not told apart */
                 not_found: number;
-                /** @description Bookmarks the caller can read and does not own; none exist until sharing arrives */
+                /** @description Bookmarks the caller can read and does not own; always 0, since a selection that holds one is refused as a whole with 403 */
                 not_owner: number;
             };
             /** @description The tags the bookmarks the action would reach carry afterwards, in the order of their names: the tags they carry now and the tags the action adds */
@@ -1969,7 +1981,7 @@ export interface components {
             skippedReasons: {
                 /** @description Bookmarks the caller owns none of in this workspace: another member's, another workspace's, one that is gone, and, for every action but delete, a plan-archived one. They are not told apart */
                 not_found: number;
-                /** @description Bookmarks the caller can read and does not own; none exist until sharing arrives */
+                /** @description Bookmarks the caller can read and does not own; always 0, since a selection that holds one is refused as a whole with 403 */
                 not_owner: number;
             };
         };
@@ -4275,7 +4287,7 @@ export interface operations {
     listBookmarks: {
         parameters: {
             query?: {
-                scope?: "all" | "mine";
+                scope?: "all" | "mine" | "shared_with_me" | "shared_by_me";
                 pinned?: "true" | "false";
                 hasSlug?: "true" | "false";
                 forwarding?: "true" | "false";
@@ -4293,7 +4305,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description One page of the caller's bookmarks in the order asked for, with the cursor of the next page and the total the filters match (exact up to 10 000, then null with totalAtLeast). Another member's bookmarks, those of another workspace and plan-archived ones are never listed */
+            /** @description One page of the bookmarks the scope covers in the order asked for, with the cursor of the next page and the total the filters match (exact up to 10 000, then null with totalAtLeast). Another member's bookmarks that are not shared with the caller, those of another workspace and plan-archived ones are never listed. A bookmark of another member carries its owner and how it is shared with the caller, and none of the owner's folders, tags or pin */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4474,7 +4486,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description What the request did, as counts only. The whole request is one transaction: every bookmark it affects changes or none does. Only the caller's own bookmarks change; the others are skipped as not_found without saying whether they exist. A delete gives the workspace's bookmark count back once for the request, by the bookmarks that were not plan-archived, and records one bookmark.bulk_deleted audit event with the number deleted, never a title or a URL. Filing and tagging write links only: they move no bookmark's version, record no audit event, and leave a plan-archived bookmark alone */
+            /** @description What the request did, as counts only. The whole request is one transaction: every bookmark it affects changes or none does. Only the caller's own bookmarks change; the others are skipped as not_found without saying whether they exist, and a selection that holds one shared with the caller is refused as a whole with 403. A delete gives the workspace's bookmark count back once for the request, by the bookmarks that were not plan-archived, and records one bookmark.bulk_deleted audit event with the number deleted, never a title or a URL. Filing and tagging write links only: they move no bookmark's version, record no audit event, and leave a plan-archived bookmark alone */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4501,7 +4513,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope) */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the selection holds a bookmark that is another member's and shared with the caller, who can read it and may not act on it (forbidden); nothing is changed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4590,7 +4602,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the preview is a POST, so it takes the write scope though it writes nothing */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the preview is a POST, so it takes the write scope though it writes nothing; or the selection holds a bookmark that is another member's and shared with the caller, who may not tag it (forbidden) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4642,7 +4654,7 @@ export interface operations {
     listBookmarkIds: {
         parameters: {
             query?: {
-                scope?: "all" | "mine";
+                scope?: "all" | "mine" | "shared_with_me" | "shared_by_me";
                 pinned?: "true" | "false";
                 hasSlug?: "true" | "false";
                 forwarding?: "true" | "false";
@@ -4657,7 +4669,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The identifiers of the caller's bookmarks that match the filters of the list, newest first, up to the select-all cap of 5 000, and whether more matched. Another member's bookmarks, those of another workspace and plan-archived ones are never returned */
+            /** @description The identifiers of the bookmarks the scope covers that match the filters of the list, newest first, up to the select-all cap of 5 000, and whether more matched. Another member's bookmarks that are not shared with the caller, those of another workspace and plan-archived ones are never returned */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4833,7 +4845,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The caller's bookmark */
+            /** @description The caller's bookmark, or a bookmark of another member that is shared with the caller, directly, through a team or through a folder. The latter carries its owner (the display name, null once the owner has left the workspace) and how it is shared with the caller, and nothing of the owner's tags, folders or pin and no list of the others it is shared with */
             200: {
                 headers: {
                     /** @description The bookmark's version as an entity tag, for example "3"; the If-Match of the next change */
@@ -4862,7 +4874,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The workspace the request acts in has no bookmark of the caller with this identifier: another member's bookmark, a bookmark of another workspace and one that never existed are answered alike */
+            /** @description The workspace the request acts in has no bookmark with this identifier that the caller can read: another member's bookmark that is not shared with the caller, a plan-archived one, a bookmark of another workspace and one that never existed are answered alike */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4938,7 +4950,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope) */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the bookmark is another member's and shared with the caller, who can read it and may not delete it (forbidden); nothing is deleted */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4947,7 +4959,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The workspace the request acts in has no bookmark of the caller with this identifier: another member's bookmark, a bookmark of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204 */
+            /** @description The workspace the request acts in has no bookmark of the caller with this identifier and none shared with them: another member's bookmark that is not shared with the caller, a bookmark of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5033,7 +5045,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope) */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the bookmark is another member's and shared with the caller, who can read it and may not change it, tag it or file it (forbidden); nothing is changed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5042,7 +5054,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The workspace the request acts in has no bookmark of the caller with this identifier that can be changed: another member's bookmark, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike. A folder of folderIds or a tag of tagIds that is not the caller's (another member's, another workspace's or unknown) is answered alike, and nothing is changed */
+            /** @description The workspace the request acts in has no bookmark of the caller with this identifier that can be changed and none shared with the caller: another member's bookmark that is not shared with them, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike. A folder of folderIds or a tag of tagIds that is not the caller's (another member's, another workspace's or unknown) is answered alike, and nothing is changed */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5111,7 +5123,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The destination of the bookmark. The open is counted asynchronously: the bookmark's open count and last opened time follow within seconds, and only that count and the latest time are kept, with no history, referrer or address */
+            /** @description The destination of the bookmark, which is the caller's own or another member's that is shared with the caller. The open is counted asynchronously, on the bookmark itself, so the owner sees the total of everyone's opens: the bookmark's open count and last opened time follow within seconds, and only that count and the latest time are kept, with no history, referrer or address */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -5147,7 +5159,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The workspace the request acts in has no bookmark of the caller with this identifier: another member's bookmark, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike, and nothing is counted */
+            /** @description The workspace the request acts in has no bookmark with this identifier that the caller can read: another member's bookmark that is not shared with the caller, a bookmark of another workspace, a plan-archived one and one that never existed are answered alike, and nothing is counted */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5225,7 +5237,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The credential is an API token, or the workspace holds neither the sharing.members nor the sharing.teams entitlement (entitlement_required; the problem carries entitlement and upgradeAvailable) */
+            /** @description The credential is an API token, or the workspace holds neither the sharing.members nor the sharing.teams entitlement (entitlement_required; the problem carries entitlement and upgradeAvailable), or the bookmark is another member's and shared with the caller, who can read it and may not see or change its shares (forbidden) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5234,7 +5246,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The workspace the request acts in has no bookmark of the caller with this identifier: another member's bookmark, a bookmark of another workspace and one that never existed are answered alike */
+            /** @description The workspace the request acts in has no bookmark of the caller with this identifier and none shared with them: another member's bookmark that is not shared with the caller, a bookmark of another workspace and one that never existed are answered alike */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5325,7 +5337,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token that may only read (token_scope), or the workspace does not hold the entitlement of the kind of target: sharing.members for a member, sharing.teams for a team (entitlement_required; the problem carries entitlement and upgradeAvailable) */
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token that may only read (token_scope), or the workspace does not hold the entitlement of the kind of target: sharing.members for a member, sharing.teams for a team (entitlement_required; the problem carries entitlement and upgradeAvailable), or the bookmark is another member's and shared with the caller, who can read it and may not see or change its shares (forbidden) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5334,7 +5346,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The workspace the request acts in has no bookmark of the caller with this identifier: another member's bookmark, a bookmark of another workspace and one that never existed are answered alike, or the bookmark is plan-archived */
+            /** @description The workspace the request acts in has no bookmark of the caller with this identifier and none shared with them: another member's bookmark that is not shared with the caller, a bookmark of another workspace and one that never existed are answered alike, or the bookmark is plan-archived */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5411,7 +5423,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token that may only read (token_scope), or the workspace holds neither the sharing.members nor the sharing.teams entitlement (entitlement_required; the problem carries entitlement and upgradeAvailable) */
+            /** @description The request did not come from the application itself (cross_site_request), the credential is an API token that may only read (token_scope), or the workspace holds neither the sharing.members nor the sharing.teams entitlement (entitlement_required; the problem carries entitlement and upgradeAvailable), or the bookmark is another member's and shared with the caller, who can read it and may not see or change its shares (forbidden) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5420,7 +5432,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The workspace the request acts in has no bookmark of the caller with this identifier: another member's bookmark, a bookmark of another workspace and one that never existed are answered alike, or the bookmark has no share with this identifier: a share of another bookmark, one that never existed and one that was revoked before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204 */
+            /** @description The workspace the request acts in has no bookmark of the caller with this identifier and none shared with them: another member's bookmark that is not shared with the caller, a bookmark of another workspace and one that never existed are answered alike, or the bookmark has no share with this identifier: a share of another bookmark, one that never existed and one that was revoked before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6193,7 +6205,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope) */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or a bookmark named is another member's and shared with the caller, who can read it and may not file it (forbidden); none of the bookmarks is filed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6286,7 +6298,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope) */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or a bookmark named is another member's and shared with the caller, who can read it and may not take it out of a folder (forbidden); none of the bookmarks is unfiled */
             403: {
                 headers: {
                     [name: string]: unknown;

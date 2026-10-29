@@ -1046,7 +1046,13 @@ export const BOOKMARK_DESCRIPTION_MAX_LENGTH = 1000;
 export const BOOKMARK_LIST_TOTAL_CAP = 10000;
 
 // @public
+export const BOOKMARK_SCOPES: readonly ["all", "mine", "shared_with_me", "shared_by_me"];
+
+// @public
 export const BOOKMARK_SELECT_ALL_CAP = 5000;
+
+// @public
+export const BOOKMARK_SHARED_VIA: readonly ["direct", "team", "folder"];
 
 // @public (undocumented)
 export const BOOKMARK_SORTS: readonly ["recent", "oldest", "title_asc", "title_desc", "most_used", "recently_opened"];
@@ -1129,6 +1135,10 @@ export type BookmarkBulkOutcome = {
 | {
     readonly kind: "unavailable";
 }
+/** The selection holds a bookmark that is shared with the caller, whom a share gives read access only; nothing was written. */
+| {
+    readonly kind: "forbidden";
+}
 /** The folder of a folder action or a tag of a tag action is not one the caller has (another member's, another workspace's or unknown); nothing was written. */
 | {
     readonly kind: "target_not_found";
@@ -1145,7 +1155,7 @@ export interface BookmarkBulkPreviewAsk {
 // @public (undocumented)
 export interface BookmarkBulkPreviewDependencies {
     // (undocumented)
-    readonly store: Pick<BookmarkBulkStore, "ids" | "previewTags">;
+    readonly store: Pick<BookmarkBulkStore, "ids" | "previewTags" | "sharedAmong">;
 }
 
 // @public (undocumented)
@@ -1168,6 +1178,10 @@ export type BookmarkBulkPreviewOutcome = {
 | {
     readonly kind: "url_refused";
     readonly reason: BookmarkUrlRefusal;
+}
+/** The selection holds a bookmark that is shared with the caller, who may not tag it. */
+| {
+    readonly kind: "forbidden";
 }
 /** A tag is not one the caller has (another member's, another workspace's or unknown). */
 | {
@@ -1194,6 +1208,10 @@ export interface BookmarkBulkStore {
         readonly ownerId: string;
         readonly pinned: boolean;
     }): Promise<number>;
+    sharedAmong(request: {
+        readonly bookmarkIds: readonly string[];
+        readonly accountId: string;
+    }): Promise<readonly string[]>;
     tag(request: {
         readonly bookmarkIds: readonly string[];
         readonly ownerId: string;
@@ -1332,8 +1350,21 @@ export interface BookmarkDeletionAsk {
 // @public (undocumented)
 export interface BookmarkDeletionDependencies {
     // (undocumented)
-    readonly store: Pick<BookmarkStore, "remove">;
+    readonly store: Pick<BookmarkStore, "remove" | "sharedWith">;
 }
+
+// @public (undocumented)
+export type BookmarkDeletionOutcome = {
+    readonly kind: "deleted";
+}
+/** The account can read the bookmark and does not own it; nothing was deleted. */
+| {
+    readonly kind: "forbidden";
+}
+/** The account owns no such bookmark and can read none; which of the reasons it is stays unsaid. */
+| {
+    readonly kind: "not_found";
+};
 
 // @public
 export interface BookmarkEntitlements {
@@ -1354,6 +1385,7 @@ export interface BookmarkFilterAsk {
     // (undocumented)
     readonly pinned: boolean | undefined;
     readonly q?: string | undefined;
+    readonly scope?: BookmarkScope | undefined;
     readonly tagIds?: readonly string[] | undefined;
     readonly url: string | undefined;
 }
@@ -1459,6 +1491,7 @@ export interface BookmarkListFilter {
     readonly ownerId: string;
     readonly pinned?: boolean | undefined;
     readonly q?: string | undefined;
+    readonly scope?: BookmarkScope | undefined;
     readonly tagIds?: readonly string[] | undefined;
     readonly urlCanonical?: string | undefined;
 }
@@ -1554,6 +1587,14 @@ export type BookmarkOpenOutcome =
 };
 
 // @public
+export interface BookmarkOwner {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly displayName: string;
+}
+
+// @public
 export interface BookmarkPatch {
     // (undocumented)
     readonly description?: string | null;
@@ -1621,9 +1662,10 @@ export interface BookmarkRecord {
     readonly lastOpenedAt: Date | null;
     // (undocumented)
     readonly openCount: number;
+    readonly owner: BookmarkOwner | null;
     readonly ownerId: string | null;
-    // (undocumented)
     readonly pinned: boolean;
+    readonly sharedVia: BookmarkSharedVia | null;
     // (undocumented)
     readonly slug: string | null;
     readonly tags: readonly BookmarkTagRef[];
@@ -1636,8 +1678,8 @@ export interface BookmarkRecord {
     readonly version: number;
 }
 
-// @public
-export type BookmarkScope = "all" | "mine";
+// @public (undocumented)
+export type BookmarkScope = (typeof BOOKMARK_SCOPES)[number];
 
 // @public (undocumented)
 export interface BookmarkShareAsk {
@@ -1658,8 +1700,11 @@ export interface BookmarkShareDependencies {
     readonly audit: AuditWriter;
     readonly newId: () => string;
     // (undocumented)
-    readonly store: Pick<BookmarkShareStore, "ownedBookmark" | "grant" | "revoke">;
+    readonly store: Pick<BookmarkShareStore, "ownedBookmark" | "sharedWith" | "grant" | "revoke">;
 }
+
+// @public (undocumented)
+export type BookmarkSharedVia = (typeof BOOKMARK_SHARED_VIA)[number];
 
 // @public (undocumented)
 export type BookmarkShareGrant = {
@@ -1689,6 +1734,10 @@ export type BookmarkShareGrantOutcome = {
 } | {
     readonly kind: "existing";
     readonly share: BookmarkShareRecord;
+}
+/** The bookmark is shared with the caller, who may not share it further. */
+| {
+    readonly kind: "forbidden";
 } | {
     readonly kind: "not_found";
 }
@@ -1712,6 +1761,8 @@ export type BookmarkShareListOutcome = {
     readonly kind: "listed";
     readonly list: BookmarkShareList;
 } | {
+    readonly kind: "forbidden";
+} | {
     readonly kind: "not_found";
 };
 
@@ -1725,7 +1776,7 @@ export interface BookmarkShareReadAsk {
 // @public (undocumented)
 export interface BookmarkShareReadDependencies {
     // (undocumented)
-    readonly store: Pick<BookmarkShareStore, "ownedBookmark" | "list">;
+    readonly store: Pick<BookmarkShareStore, "ownedBookmark" | "sharedWith" | "list">;
 }
 
 // @public
@@ -1757,6 +1808,8 @@ export type BookmarkShareRevocationOutcome = {
     readonly kind: "revoked";
     readonly share: BookmarkShareRecord;
 } | {
+    readonly kind: "forbidden";
+} | {
     readonly kind: "not_found";
 };
 
@@ -1773,6 +1826,10 @@ export interface BookmarkShareStore {
         readonly bookmarkId: string;
         readonly shareId: string;
     }): Promise<BookmarkShareRecord | undefined>;
+    sharedWith(request: {
+        readonly bookmarkId: string;
+        readonly accountId: string;
+    }): Promise<boolean>;
 }
 
 // @public
@@ -1788,6 +1845,10 @@ export interface BookmarkStore {
     remove(request: {
         readonly bookmarkId: string;
         readonly ownerId: string;
+    }): Promise<boolean>;
+    sharedWith(request: {
+        readonly bookmarkId: string;
+        readonly accountId: string;
     }): Promise<boolean>;
     update(request: BookmarkUpdateRequest): Promise<BookmarkUpdateResult>;
 }
@@ -1869,11 +1930,15 @@ export interface BookmarkUpdateAsk {
 export interface BookmarkUpdateDependencies {
     readonly newId: () => string;
     // (undocumented)
-    readonly store: Pick<BookmarkStore, "update">;
+    readonly store: Pick<BookmarkStore, "update" | "sharedWith">;
 }
 
 // @public (undocumented)
 export type BookmarkUpdateOutcome = BookmarkUpdateResult
+/** The caller can read the bookmark and does not own it; nothing was written. */
+| {
+    readonly kind: "forbidden";
+}
 /** The new URL is refused; nothing was written. */
 | {
     readonly kind: "url_refused";
@@ -2190,8 +2255,8 @@ export interface DashboardSummary {
 // @public
 export function deleteAccount<Code extends string>(input: AccountDeletionDependencies<Code>, ask: AccountDeletionAsk): Promise<AccountDeletionOutcome<Code>>;
 
-// @public
-export function deleteBookmark(input: BookmarkDeletionDependencies, ask: BookmarkDeletionAsk): Promise<boolean>;
+// @public (undocumented)
+export function deleteBookmark(input: BookmarkDeletionDependencies, ask: BookmarkDeletionAsk): Promise<BookmarkDeletionOutcome>;
 
 // @public
 export function deleteFolder(input: FolderDeletionDependencies, ask: FolderDeletionAsk): Promise<boolean>;
@@ -2641,13 +2706,26 @@ export type FolderFilingResult =
 /** The owner has no such folder, or owns no such bookmark among those named; nothing was written. */
 | {
     readonly kind: "not_found";
+}
+/** A bookmark named is shared with the caller, who can read it and may not file it; nothing was written. */
+| {
+    readonly kind: "forbidden";
 };
 
 // @public (undocumented)
 export interface FolderFilingStore {
-    file(request: FolderFilingRequest): Promise<FolderFilingResult>;
-    unfile(request: FolderFilingRequest): Promise<FolderFilingResult>;
+    file(request: FolderFilingRequest): Promise<FolderFilingStoreResult>;
+    sharedAmong(request: {
+        readonly bookmarkIds: readonly string[];
+        readonly accountId: string;
+    }): Promise<readonly string[]>;
+    unfile(request: FolderFilingRequest): Promise<FolderFilingStoreResult>;
 }
+
+// @public
+export type FolderFilingStoreResult = Exclude<FolderFilingResult, {
+    readonly kind: "forbidden";
+}>;
 
 // @public (undocumented)
 export interface FolderHit {

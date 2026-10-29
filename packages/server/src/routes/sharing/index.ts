@@ -52,12 +52,15 @@ import { route } from "../register.ts";
 // `404 not_found`, whatever the entitlement. A grant to the caller is `422 validation_failed` (`cannot_share_with_self`), and one to an account that is
 // no member of the workspace or a team that is none of its teams is `422 validation_failed` (`unknown_member`, `unknown_team`), with nothing written. A
 // repeated grant answers `200` with the share that exists; the first answers `201`. Each grant and revocation and its audit event (`share.granted`,
-// `share.revoked`, naming the bookmark, the kind and the identifier of the target and its name) are one transaction.
+// `share.revoked`, naming the bookmark, the kind and the identifier of the target and its name) are one transaction. A bookmark that is shared with the caller is
+// theirs to read and not to share further or see the shares of: the list, the grant and the revocation answer `403 forbidden` for it, and `404` for a bookmark
+// that is another member's and not shared with them.
 
 const UNAUTHENTICATED = "Authentication is required.";
 const NO_WORKSPACE = "No such resource.";
 const NO_SUCH_BOOKMARK = "No such resource.";
 const NO_SUCH_FOLDER = "No such resource.";
+const SHARED_READ_ONLY = "This bookmark is shared with you, and a share gives read access only.";
 const SELF_SHARE = "A bookmark is not shared with its owner.";
 const SELF_SHARE_FOLDER = "A folder is not shared with its owner.";
 const NOT_A_MEMBER = "The account must be a current member of the workspace.";
@@ -183,6 +186,9 @@ export function sharingRoutes({ entitlements, upgradeAvailable }: SharingRoutesO
       const tenant = tenantOf(context);
       await requireSharing(context, tenant);
       const outcome = await tenant.withTenant((tx) => listBookmarkShares({ store: bookmarkShareRepository(tx) }, { accountId: tenant.accountId, bookmarkId: params.id }));
+      if (outcome.kind === "forbidden") {
+        throw new ProblemError("forbidden", SHARED_READ_ONLY);
+      }
       if (outcome.kind === "not_found") {
         throw new ProblemError("not_found", NO_SUCH_BOOKMARK);
       }
@@ -199,6 +205,8 @@ export function sharingRoutes({ entitlements, upgradeAvailable }: SharingRoutesO
           return { status: 201, body: shareBody(outcome.share) };
         case "existing":
           return { status: 200, body: shareBody(outcome.share) };
+        case "forbidden":
+          throw new ProblemError("forbidden", SHARED_READ_ONLY);
         case "not_found":
           throw new ProblemError("not_found", NO_SUCH_BOOKMARK);
         case "self":
@@ -214,6 +222,9 @@ export function sharingRoutes({ entitlements, upgradeAvailable }: SharingRoutesO
       const tenant = tenantOf(context);
       await requireSharing(context, tenant);
       const outcome = await acting(context, tenant, ({ store, audit }, request) => revokeBookmarkShare({ store, audit }, { ...request, bookmarkId: params.id, shareId: params.shareId }));
+      if (outcome.kind === "forbidden") {
+        throw new ProblemError("forbidden", SHARED_READ_ONLY);
+      }
       if (outcome.kind === "not_found") {
         throw new ProblemError("not_found", NO_SUCH_BOOKMARK);
       }

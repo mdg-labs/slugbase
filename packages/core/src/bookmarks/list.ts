@@ -2,8 +2,9 @@ import { normalizeSearchQuery } from "../search/search.ts";
 import type { BookmarkRecord } from "./create.ts";
 import { normalizeBookmarkUrl, type BookmarkUrlRefusal } from "./url.ts";
 
-// Listing the bookmarks of a member (doc 02 section 5.7, doc 04 sections 6.1 and 6.2, doc 10 T1 and T2). A page is a slice of
-// one ordering of the member's own bookmarks, resumed by an opaque cursor that carries the sort key and the identifier of the
+// Listing the bookmarks of a member (doc 02 sections 5.7 and 8.2, doc 04 sections 6.1 and 6.2, doc 10 T1 and T2). A page is a slice of
+// one ordering of the bookmarks the member's scope covers (their own, the ones shared with them, the ones they share, or the first and the second together),
+// resumed by an opaque cursor that carries the sort key and the identifier of the
 // last item (a keyset, never an offset). The cursor is signed for the account, the workspace, the filter and the sort it was
 // issued for, so it opens nothing else: a cursor of another list, another sort or another filter is refused like a forged one.
 // The total is the number of bookmarks the filter matches, exact up to `BOOKMARK_LIST_TOTAL_CAP` and not counted beyond it (Q42).
@@ -15,12 +16,23 @@ export type BookmarkSort = (typeof BOOKMARK_SORTS)[number];
 /** Where `GET /bookmarks` stops counting (Q42): above it the total is not given, only that it is at least this many. */
 export const BOOKMARK_LIST_TOTAL_CAP = 10_000;
 
-/** The bookmarks a list covers. Only the member's own exist until sharing arrives, so both scopes name the same rows today. */
-export type BookmarkScope = "all" | "mine";
+/**
+ * The bookmarks a list covers: `mine` the member's own, `shared_with_me` those of other members that are shared with them (directly, through a team or through a folder),
+ * `shared_by_me` the member's own that are shared with anyone, and `all` the first and the second kind together. A bookmark that can be read through more than one route
+ * is listed once, and a plan-archived one never.
+ */
+export const BOOKMARK_SCOPES = ["all", "mine", "shared_with_me", "shared_by_me"] as const;
+
+export type BookmarkScope = (typeof BOOKMARK_SCOPES)[number];
 
 export interface BookmarkListFilter {
-  /** The member whose bookmarks are listed. */
+  /** The member who lists: the owner of the bookmarks of the `mine` and `shared_by_me` scopes and the one the others are shared with. */
   readonly ownerId: string;
+  /**
+   * Which bookmarks the member's list covers; `mine` when undefined. Filters that name the member's own things (`folderId`, `tagIds`, `urlCanonical`) reach
+   * the member's own bookmarks alone, since a bookmark shared with them is filed in none of their folders and carries none of their tags.
+   */
+  readonly scope?: BookmarkScope | undefined;
   /** True for pinned bookmarks only, false for unpinned only; no filter when undefined. */
   readonly pinned?: boolean | undefined;
   /** True for bookmarks with a slug only, false for those without; no filter when undefined. */
@@ -128,6 +140,8 @@ function cursorScope(ask: BookmarkListAsk, filter: BookmarkListFilter): string {
 export interface BookmarkFilterAsk {
   /** The member whose bookmarks are matched. */
   readonly accountId: string;
+  /** Which bookmarks are matched; the member's own when left out. */
+  readonly scope?: BookmarkScope | undefined;
   readonly pinned: boolean | undefined;
   readonly hasSlug: boolean | undefined;
   readonly forwarding: boolean | undefined;
@@ -155,6 +169,7 @@ export function bookmarkListFilter(ask: BookmarkFilterAsk): { readonly ok: true;
     ok: true,
     filter: {
       ownerId: ask.accountId,
+      scope: ask.scope,
       pinned: ask.pinned,
       hasSlug: ask.hasSlug,
       forwarding: ask.forwarding,

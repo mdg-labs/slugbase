@@ -61,6 +61,7 @@ function store(answers: Partial<BookmarkShareStore> = {}) {
   };
   const dependencies: BookmarkShareStore = {
     ownedBookmark: answers.ownedBookmark ?? ((request) => record("ownedBookmark", request, request.ownerId === OWNER && request.bookmarkId === BOOKMARK)),
+    sharedWith: answers.sharedWith ?? ((request) => record("sharedWith", request, false)),
     list: answers.list ?? ((bookmarkId) => record("list", bookmarkId, { shares: [memberShare()], audienceSize: 1 })),
     grant: answers.grant ?? ((request) => record("grant", request, { kind: "granted", share: memberShare() } as const)),
     revoke: answers.revoke ?? ((request) => record<BookmarkShareRecord | undefined>("revoke", request, memberShare())),
@@ -116,6 +117,12 @@ describe("listBookmarkShares", () => {
   it("reads nothing of a bookmark that is not the caller's", async () => {
     const { store: shares, calls } = store();
     expect(await listBookmarkShares({ store: shares }, { accountId: MEMBER, bookmarkId: BOOKMARK })).toEqual({ kind: "not_found" });
+    expect(calls.map((call) => call.method)).toEqual(["ownedBookmark", "sharedWith"]);
+  });
+
+  it("is forbidden, and reads nothing, for a bookmark that is shared with the caller", async () => {
+    const { store: shares, calls } = store({ sharedWith: (request) => Promise.resolve(request.accountId === MEMBER) });
+    expect(await listBookmarkShares({ store: shares }, { accountId: MEMBER, bookmarkId: BOOKMARK })).toEqual({ kind: "forbidden" });
     expect(calls.map((call) => call.method)).toEqual(["ownedBookmark"]);
   });
 });
@@ -161,6 +168,16 @@ describe("grantBookmarkShare", () => {
     const stranger = { ...ask, actor: { type: "account", accountId: MEMBER, label: "Max Member" } } as const;
     expect(await grantBookmarkShare({ store: shares, audit, newId }, { ...stranger, target: { kind: "member", accountId: MEMBER } })).toEqual({ kind: "not_found" });
     expect(await grantBookmarkShare({ store: shares, audit, newId }, { ...stranger, target: { kind: "team", teamId: TEAM } })).toEqual({ kind: "not_found" });
+    expect(calls.map((call) => call.method)).toEqual(["ownedBookmark", "sharedWith", "ownedBookmark", "sharedWith"]);
+    expect(records).toEqual([]);
+  });
+
+  it("is forbidden, and writes nothing, for a bookmark that is shared with the caller, whatever the target", async () => {
+    const { store: shares, calls } = store({ sharedWith: () => Promise.resolve(true) });
+    const { audit, records } = auditor();
+    const recipient = { ...ask, actor: { type: "account", accountId: MEMBER, label: "Max Member" } } as const;
+    expect(await grantBookmarkShare({ store: shares, audit, newId }, { ...recipient, target: { kind: "member", accountId: MEMBER } })).toEqual({ kind: "forbidden" });
+    expect(await grantBookmarkShare({ store: shares, audit, newId }, { ...recipient, target: { kind: "team", teamId: TEAM } })).toEqual({ kind: "forbidden" });
     expect(calls.map((call) => call.method)).toEqual(["ownedBookmark", "ownedBookmark"]);
     expect(records).toEqual([]);
   });
@@ -215,9 +232,19 @@ describe("revokeBookmarkShare", () => {
     const { store: shares, calls } = store();
     const { audit, records } = auditor();
     expect(await revokeBookmarkShare({ store: shares, audit }, { ...ask, actor: { type: "account", accountId: MEMBER, label: "Max" }, shareId: SHARE })).toEqual({ kind: "not_found" });
-    expect(calls.map((call) => call.method)).toEqual(["ownedBookmark"]);
+    expect(calls.map((call) => call.method)).toEqual(["ownedBookmark", "sharedWith"]);
     const { store: empty } = store({ revoke: () => Promise.resolve(undefined) });
     expect(await revokeBookmarkShare({ store: empty, audit }, { ...ask, shareId: SHARE })).toEqual({ kind: "not_found" });
+    expect(records).toEqual([]);
+  });
+});
+
+describe("revokeBookmarkShare for a recipient", () => {
+  it("is forbidden, and revokes and records nothing, for a bookmark that is shared with the caller", async () => {
+    const { store: shares, calls } = store({ sharedWith: () => Promise.resolve(true) });
+    const { audit, records } = auditor();
+    expect(await revokeBookmarkShare({ store: shares, audit }, { ...ask, actor: { type: "account", accountId: MEMBER, label: "Max" }, shareId: SHARE })).toEqual({ kind: "forbidden" });
+    expect(calls.map((call) => call.method)).toEqual(["ownedBookmark"]);
     expect(records).toEqual([]);
   });
 });

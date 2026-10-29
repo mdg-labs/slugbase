@@ -84,6 +84,11 @@ export interface BookmarkShareStore {
    * its deletion for the rest of the transaction, and a bookmark that is plan-archived is refused: its shares can still be read and ended.
    */
   ownedBookmark(request: { readonly bookmarkId: string; readonly ownerId: string; readonly use: BookmarkShareUse }): Promise<boolean>;
+  /**
+   * Whether the bookmark is shared with `accountId` (the account of the transaction): it can read it through a share, directly, through a team or through a folder,
+   * and someone else owns it. A plan-archived bookmark is not. It tells a bookmark the account may read and not share (forbidden) from one it cannot see (not found).
+   */
+  sharedWith(request: { readonly bookmarkId: string; readonly accountId: string }): Promise<boolean>;
   /** The shares of the bookmark, in the order of their creation, and the size of the audience they make. */
   list(bookmarkId: string): Promise<BookmarkShareList>;
   /**

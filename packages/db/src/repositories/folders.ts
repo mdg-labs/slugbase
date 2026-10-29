@@ -1,8 +1,9 @@
-import type { FolderFilingRequest, FolderFilingResult, FolderFilingStore, FolderListRequest, FolderListRow, FolderPosition, FolderRecord, FolderSort, FolderStore, FolderStoreCreationResult, FolderUpdateRequest, FolderUpdateResult, NewFolder } from "@slugbase/core";
+import type { FolderFilingRequest, FolderFilingStore, FolderFilingStoreResult, FolderListRequest, FolderListRow, FolderPosition, FolderRecord, FolderSort, FolderStore, FolderStoreCreationResult, FolderUpdateRequest, FolderUpdateResult, NewFolder } from "@slugbase/core";
 import { and, asc, desc, eq, isNull, not, sql, type SQL } from "drizzle-orm";
 import { bookmarks } from "../schema/bookmarks.ts";
 import { folderBookmarks, folders } from "../schema/folders.ts";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
+import { bookmarkRepository } from "./bookmarks.ts";
 import { deleteLinks, insertLinks, lockOwnedBookmarks, lockOwnedFolders } from "./folder-links.ts";
 import { defineScopedRepository } from "./scoped.ts";
 
@@ -140,7 +141,7 @@ function foldersOf(
   return limit === undefined ? query : query.limit(limit);
 }
 
-async function changeFiling(tx: TenantTx, { folderId, ownerId, bookmarkIds }: FolderFilingRequest, change: "file" | "unfile"): Promise<FolderFilingResult> {
+async function changeFiling(tx: TenantTx, { folderId, ownerId, bookmarkIds }: FolderFilingRequest, change: "file" | "unfile"): Promise<FolderFilingStoreResult> {
   const owner = requireOwner(tx, ownerId);
   if (!(await lockOwnedFolders(tx, owner, [folderId])) || !(await lockOwnedBookmarks(tx, owner, bookmarkIds, change === "file" ? "exclude" : "include"))) {
     return { kind: "not_found" };
@@ -251,5 +252,7 @@ export function folderRepository(tx: TenantTx): FolderRepository {
     file: (request) => changeFiling(tx, request, "file"),
 
     unfile: (request) => changeFiling(tx, request, "unfile"),
+
+    sharedAmong: (request) => bookmarkRepository(tx).sharedAmong(request),
   };
 }

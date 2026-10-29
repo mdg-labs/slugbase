@@ -9,7 +9,8 @@ import { normalizeBookmarkUrl, type BookmarkUrl, type BookmarkUrlRefusal } from 
 // store finds the bookmark by identifier and owner, locks it, compares its version with the `If-Match` the caller sent and
 // writes what differs. Filing moves no version: the folders of a bookmark are rows of their own, so a patch that changes only `folderIds` keeps
 // the `ETag`; the same holds for its tags. Only the owner changes a bookmark, so another member's bookmark of the workspace, another workspace's
-// and a plan-archived one (which nobody edits, doc 02 section 5.6) are the same `not_found`.
+// and a plan-archived one (which nobody edits, doc 02 section 5.6) are the same `not_found`. A bookmark that is shared with the caller is one they can read and not change,
+// so a change of it by them is `forbidden` (doc 02 section 8.2, Q22): the fields, the slug, the pin, the folders and the tags are the owner's.
 
 /** The fields of a JSON Merge Patch of a bookmark (doc 04 section 2.4): a field left out is left as it is, and a description of `null` clears it. */
 export interface BookmarkPatch {
@@ -71,7 +72,7 @@ export type BookmarkUpdateResult =
   | { readonly kind: "not_found" };
 
 export interface BookmarkUpdateDependencies {
-  readonly store: Pick<BookmarkStore, "update">;
+  readonly store: Pick<BookmarkStore, "update" | "sharedWith">;
   /** A fresh UUIDv7, for a tag a name of the patch creates. */
   readonly newId: () => string;
 }
@@ -86,6 +87,8 @@ export interface BookmarkUpdateAsk {
 
 export type BookmarkUpdateOutcome =
   | BookmarkUpdateResult
+  /** The caller can read the bookmark and does not own it; nothing was written. */
+  | { readonly kind: "forbidden" }
   /** The new URL is refused; nothing was written. */
   | { readonly kind: "url_refused"; readonly reason: BookmarkUrlRefusal }
   /** The new slug is outside the grammar once trimmed and lower-cased; nothing was written. */
@@ -139,9 +142,10 @@ export async function updateBookmark({ store, newId }: BookmarkUpdateDependencie
     return { kind: "forwarding_requires_slug" };
   }
   const tags = bookmarkTagSelection(patch.tagIds, patch.tagNames, newId);
-  return store.update({
+  const accountId = ask.accountId.toLowerCase();
+  const result = await store.update({
     bookmarkId: ask.bookmarkId,
-    ownerId: ask.accountId.toLowerCase(),
+    ownerId: accountId,
     changes: {
       ...(url === undefined ? {} : { url }),
       ...(patch.title === undefined ? {} : { title: patch.title }),
@@ -154,4 +158,8 @@ export async function updateBookmark({ store, newId }: BookmarkUpdateDependencie
     },
     expectedVersions: ask.expectedVersions,
   });
+  if (result.kind === "not_found" && (await store.sharedWith({ bookmarkId: ask.bookmarkId, accountId }))) {
+    return { kind: "forbidden" };
+  }
+  return result;
 }

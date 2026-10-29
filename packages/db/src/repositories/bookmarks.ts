@@ -13,19 +13,23 @@ import {
   type BookmarkListPage,
   type BookmarkListRequest,
   type BookmarkListRow,
+  type BookmarkOwner,
   type BookmarkRecord,
+  type BookmarkSharedVia,
   type BookmarkSort,
   type BookmarkUpdateRequest,
   type BookmarkUpdateResult,
   type NewBookmark,
   type SlugUse,
 } from "@slugbase/core";
-import { and, eq, isNotNull, isNull, sql, type SQL } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
+import { accounts } from "../schema/accounts.ts";
 import { bookmarks } from "../schema/bookmarks.ts";
 import { folderBookmarks, folders } from "../schema/folders.ts";
 import { bookmarkTags, tags } from "../schema/tags.ts";
 import { auditEventRepository } from "./audit-events.ts";
+import { bookmarkReadableBy, bookmarkSharedByOwner, sharedBookmarks, sharedViaOf, type SharedVia } from "./bookmark-access.ts";
 import { entitlementRepository } from "./entitlements.ts";
 import { enqueueInTenantTransaction, type QueuedJob } from "../system/queue.ts";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
@@ -45,9 +49,11 @@ import { deleteTagLinks, deleteTagLinksMany, insertTagLinks, insertTagLinksMany,
 // insert takes the place back with it, and two creations at the limit minus one make one. Archiving and restoring are the system
 // operation `sys_bookmark_archive_set`, which sets or clears `plan_archived_at` for the given bookmarks, moves the counter by the rows
 // that changed, in one call, because `slugbase_app` may write neither column; the `entitlement_version` is raised separately, through
-// `sys_workspace_bump_entitlement_version` (`withEntitlementChange`, doc 01 section 7.5). A list is one owner's bookmarks of the
-// workspace in one of six orderings, resumed by a keyset: the sort key of the last row and its identifier, compared as a row, so
-// the statement is a range scan of the index that serves the sort (doc 05 section 2.4) and the page costs the same at any depth.
+// `sys_workspace_bump_entitlement_version` (`withEntitlementChange`, doc 01 section 7.5). A list is the bookmarks of the workspace that the scope of its filter
+// covers (the caller's own, those shared with the caller, those the caller shares, or the first and the second together) in one of six orderings, resumed by a keyset:
+// the sort key of the last row and its identifier, compared as a row, so the statement is a range scan of the index that serves the sort (doc 05 section 2.4) and the
+// page costs the same at any depth. The caller's own bookmarks are read from that index; the ones shared with the caller are read from the set of the grants to the caller
+// (src/repositories/bookmark-access.ts), each probed by primary key, so a list of them never scans the table, and the page of `all` is the better of the two sorted together.
 // The sort keys are read back as text and passed back as text, because a timestamp the driver turns into a `Date` loses the
 // microseconds the database keeps, and a row that shares its key with the cursor's would then be skipped or repeated. A bookmark is filed in
 // the folders of its owner in the same transaction that creates or changes it (`folderIds`), through the links of src/repositories/folder-links.ts;
@@ -151,10 +157,18 @@ export interface BookmarkRepository {
    */
   create(creation: BookmarkCreation): Promise<BookmarkCreationResult>;
   /**
-   * The bookmark of the workspace of the transaction with that identifier, whoever owns it; undefined when there is none or it
-   * is plan-archived. Needs a transaction opened with a workspace.
+   * The bookmark of the workspace of the transaction with that identifier, when the account of the transaction can read it (it owns it, or it is shared with the account directly,
+   * through a team or through a folder, doc 05 section 4); undefined when there is none, it is plan-archived or the account cannot read it. A bookmark shared with the account
+   * comes with its owner and how it is shared, and with none of the owner's folders or tags and not the owner's pin. Needs a transaction opened with a workspace.
    */
   find(bookmarkId: string): Promise<BookmarkRecord | undefined>;
+  /**
+   * Whether the bookmark is shared with `accountId`: readable by it through a share, owned by someone else, not plan-archived. `accountId` is the account of the transaction.
+   * Needs a transaction opened with a workspace.
+   */
+  sharedWith(request: { readonly bookmarkId: string; readonly accountId: string }): Promise<boolean>;
+  /** Those of `bookmarkIds` that are shared with `accountId`, as `sharedWith` judges each. `accountId` is the account of the transaction. Needs a transaction opened with a workspace. */
+  sharedAmong(request: { readonly bookmarkIds: readonly string[]; readonly accountId: string }): Promise<readonly string[]>;
   /**
    * Changes the bookmark that `ownerId` owns in the workspace of the transaction, unless it is plan-archived. The row is locked
    * first; when `expectedVersions` is given and the version under the lock is none of them the answer is `stale` and nothing is
@@ -213,7 +227,7 @@ export interface BookmarkRepository {
    */
   previewTags(request: { readonly bookmarkIds: readonly string[]; readonly ownerId: string; readonly tagIds: readonly string[] }): Promise<BookmarkTagPreviewResult>;
   /**
-   * The identifiers of the bookmarks that `filter.ownerId` owns in the workspace of the transaction and that match the filter, newest
+   * The identifiers of the bookmarks of the scope of the filter (`filter.ownerId`'s own unless it says more) in the workspace of the transaction that match the filter, newest
    * first and without the plan-archived ones, at most `limit`. Needs a transaction opened with a workspace.
    */
   ids(filter: BookmarkListFilter, limit: number): Promise<readonly string[]>;
@@ -226,7 +240,7 @@ export interface BookmarkRepository {
    */
   setArchived(request: { readonly bookmarkIds: readonly string[]; readonly archived: boolean }): Promise<number | undefined>;
   /**
-   * The bookmarks that `request.filter.ownerId` owns in the workspace of the transaction and that are not plan-archived, in the order
+   * The bookmarks of the scope of `request.filter` (`filter.ownerId`'s own unless it says more) in the workspace of the transaction that are not plan-archived, in the order
    * of `request.sort` with the identifier as the tiebreak, starting after `request.after` and at most `request.limit` of them; each
    * comes with its sort key as text, which a later call passes back in `after`. A never-opened bookmark sorts last under
    * `recently_opened`. Needs a transaction opened with a workspace.
@@ -261,13 +275,57 @@ function tagged(tagId: string): SQL {
     WHERE ${bookmarkTags.workspaceId} = ${bookmarks.workspaceId} AND ${bookmarkTags.bookmarkId} = ${bookmarks.id} AND ${bookmarkTags.tagId} = ${tagId}::uuid AND ${tags.ownerId} = ${bookmarks.ownerId})`;
 }
 
-/** The predicate of a list and of its count without the text query: the workspace, the owner, never a plan-archived bookmark, and the filters given. */
-function filterPredicate(workspaceId: string, filter: BookmarkListFilter): SQL {
+/** The part of a scope a statement reads: the caller's own bookmarks, those shared with the caller, or the caller's own that are shared with anyone. */
+type Branch = "own" | "shared" | "sharedByMe";
+
+/**
+ * The parts of the scope of `filter`. A filter that names the caller's folder or tags, or the URL of the duplicate warning, reaches the caller's own bookmarks alone: a bookmark shared
+ * with the caller is filed in none of their folders and carries none of their tags (Q22), and the warning is about what they saved themselves (doc 04 section 10.6).
+ */
+function branchesOf(filter: BookmarkListFilter): readonly Branch[] {
+  const own = filter.folderId !== undefined || (filter.tagIds ?? []).length > 0 || filter.urlCanonical !== undefined;
+  switch (filter.scope ?? "mine") {
+    case "mine":
+      return ["own"];
+    case "all":
+      return own ? ["own"] : ["own", "shared"];
+    case "shared_with_me":
+      return own ? [] : ["shared"];
+    case "shared_by_me":
+      return ["sharedByMe"];
+  }
+}
+
+/** Whether the filter reads only the caller's own bookmarks without any share: the list of the index of the sort. */
+function isOwnScope(filter: BookmarkListFilter): boolean {
+  return (filter.scope ?? "mine") === "mine";
+}
+
+/** The pin condition: a pin is the owner's (Q22), so a bookmark shared with the caller is never pinned for them. */
+function pinnedCondition(pinned: boolean | undefined, shared: boolean): SQL | undefined {
+  if (pinned === undefined) {
+    return undefined;
+  }
+  if (shared) {
+    return pinned ? sql`false` : undefined;
+  }
+  return pinned ? isNotNull(bookmarks.pinnedAt) : isNull(bookmarks.pinnedAt);
+}
+
+/**
+ * The predicate of one part of a list and of its count without the text query: the workspace, whose bookmark it is, never a plan-archived bookmark, and the filters given. The
+ * part of the bookmarks shared with the caller is read as the access predicate says (`bookmarkReadableBy`), unless the statement drives from the set of the grants and so
+ * probes only bookmarks that are in it (`driven`).
+ */
+function branchPredicate(workspaceId: string, filter: BookmarkListFilter, branch: Branch, driven = false): SQL {
+  const shared = branch === "shared";
   const predicate = and(
     eq(bookmarks.workspaceId, workspaceId),
-    eq(bookmarks.ownerId, filter.ownerId),
+    shared ? sql`${bookmarks.ownerId} IS DISTINCT FROM ${filter.ownerId}::uuid` : eq(bookmarks.ownerId, filter.ownerId),
+    shared && !driven ? bookmarkReadableBy(filter.ownerId) : undefined,
+    branch === "sharedByMe" ? bookmarkSharedByOwner() : undefined,
     isNull(bookmarks.planArchivedAt),
-    filter.pinned === undefined ? undefined : filter.pinned ? isNotNull(bookmarks.pinnedAt) : isNull(bookmarks.pinnedAt),
+    pinnedCondition(filter.pinned, shared),
     filter.hasSlug === undefined ? undefined : filter.hasSlug ? isNotNull(bookmarks.slug) : isNull(bookmarks.slug),
     filter.forwarding === undefined ? undefined : eq(bookmarks.forwarding, filter.forwarding),
     filter.urlCanonical === undefined ? undefined : eq(bookmarks.urlCanonical, filter.urlCanonical),
@@ -280,10 +338,19 @@ function filterPredicate(workspaceId: string, filter: BookmarkListFilter): SQL {
   return predicate;
 }
 
-/** The predicate of a list that has no text query. A filter with one is read by the statements of `matchedPage` and `matchedCount`, which this one never serves. */
+/** The predicate of a list and of its count without the text query, over all the parts of its scope: nothing matches when the scope reads none. */
+function filterPredicate(workspaceId: string, filter: BookmarkListFilter): SQL {
+  const branches = branchesOf(filter).map((branch) => branchPredicate(workspaceId, filter, branch));
+  return branches.length === 1 ? (branches[0] ?? sql`false`) : (or(...branches) ?? sql`false`);
+}
+
+/** The predicate of a list of the caller's own bookmarks that has no text query. A filter with one is read by the statements of `matchedPage` and `matchedCount`, which this one never serves. */
 function listPredicate(workspaceId: string, filter: BookmarkListFilter): SQL {
   if (filter.q !== undefined) {
     throw new Error("a list with a text query is read through the matches of sys_bookmark_match");
+  }
+  if (!isOwnScope(filter)) {
+    throw new Error("a list of a scope that holds bookmarks shared with the caller is read through the statements of pageStatement and countStatement");
   }
   return filterPredicate(workspaceId, filter);
 }
@@ -356,7 +423,13 @@ const SORT_ORDERS: Readonly<Record<BookmarkSort, SortOrder>> = {
   recently_opened: sortOrder(sql`${bookmarks.lastOpenedAt}`, sql`${bookmarks.lastOpenedAt}::text`, "timestamptz", "DESC NULLS LAST", "<"),
 };
 
-function recordOf(row: BookmarkRecordRow, filed: readonly BookmarkFolderRef[], carried: readonly BookmarkTagRef[]): BookmarkRecord {
+/** How a bookmark of another member is shared with the reader, and who owns it: what a record of such a bookmark carries besides the fields of the row. */
+interface Sharing {
+  readonly owner: BookmarkOwner | null;
+  readonly via: BookmarkSharedVia;
+}
+
+function recordOf(row: BookmarkRecordRow, filed: readonly BookmarkFolderRef[], carried: readonly BookmarkTagRef[], sharing?: Sharing): BookmarkRecord {
   return {
     id: row.id,
     ownerId: row.ownerId,
@@ -366,15 +439,66 @@ function recordOf(row: BookmarkRecordRow, filed: readonly BookmarkFolderRef[], c
     description: row.description,
     slug: row.slug,
     forwarding: row.forwarding,
-    pinned: row.pinnedAt !== null,
+    pinned: sharing === undefined && row.pinnedAt !== null,
     openCount: row.openCount,
     lastOpenedAt: row.lastOpenedAt,
+    owner: sharing?.owner ?? null,
+    sharedVia: sharing?.via ?? null,
     folders: filed,
     tags: carried,
     version: row.version,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+}
+
+/**
+ * Who owns the bookmarks of `rows`, which belong to other members than `viewerId` or to none, and how each is shared with `viewerId`: by identifier. A bookmark that is no longer
+ * shared with the viewer by the time its route is read (a share revoked since the row was) is not in the answer.
+ */
+async function sharingOf(tx: TenantTx, viewerId: string, rows: readonly BookmarkRecordRow[]): Promise<Map<string, Sharing>> {
+  const workspaceId = requireListWorkspace(tx, "reading how bookmarks are shared");
+  const handle = tenantHandle(tx);
+  const routes = await handle.execute<{ bookmark_id: string; via: SharedVia }>(sharedViaOf(viewerId, workspaceId, rows.map((row) => row.id)));
+  const ownerIds = [...new Set(rows.flatMap((row) => (row.ownerId === null ? [] : [row.ownerId])))];
+  const names =
+    ownerIds.length === 0
+      ? []
+      : await handle
+          .select({ id: accounts.id, displayName: accounts.displayName })
+          .from(accounts)
+          .where(sql`${accounts.id} = ANY (${uuidArray(ownerIds)}::uuid[])`);
+  const nameOf = new Map(names.map((account) => [account.id, account.displayName]));
+  const found = new Map<string, Sharing>();
+  for (const { bookmark_id: bookmarkId, via } of routes) {
+    const ownerId = rows.find((row) => row.id === bookmarkId)?.ownerId ?? null;
+    const displayName = ownerId === null ? undefined : nameOf.get(ownerId);
+    found.set(bookmarkId, { owner: ownerId === null || displayName === undefined ? null : { accountId: ownerId, displayName }, via });
+  }
+  return found;
+}
+
+/**
+ * The records of `rows`, which `viewerId` can read, in their order. The folders and the tags are the viewer's own, and the viewer files and tags only what is theirs, so a bookmark
+ * shared with them carries none of the owner's; such a bookmark carries its owner and how it is shared instead, and is left out when that share has ended meanwhile.
+ */
+async function recordsOf(tx: TenantTx, viewerId: string, rows: readonly BookmarkRecordRow[]): Promise<BookmarkRecord[]> {
+  if (rows.length === 0) {
+    return [];
+  }
+  const ids = rows.map((row) => row.id);
+  const filed = await foldersOfBookmarks(tx, viewerId, ids);
+  const carried = await tagsOfBookmarks(tx, viewerId, ids);
+  const viewer = viewerId.toLowerCase();
+  const foreign = rows.filter((row) => row.ownerId?.toLowerCase() !== viewer);
+  const sharing = foreign.length === 0 ? new Map<string, Sharing>() : await sharingOf(tx, viewerId, foreign);
+  return rows.flatMap((row) => {
+    if (row.ownerId?.toLowerCase() === viewer) {
+      return [recordOf(row, filed.get(row.id) ?? [], carried.get(row.id) ?? [])];
+    }
+    const route = sharing.get(row.id);
+    return route === undefined ? [] : [recordOf(row, filed.get(row.id) ?? [], carried.get(row.id) ?? [], route)];
+  });
 }
 
 /** The statement of `BookmarkRepository.list`, exported for the test that plans it. Needs a transaction opened with a workspace. */
@@ -429,6 +553,9 @@ export function matchedPageStatement(tx: TenantTx, { filter, sort, after, limit 
   if (filter.q === undefined) {
     throw new Error("a page of matches needs a text query");
   }
+  if (!isOwnScope(filter)) {
+    requireViewer(tx, filter);
+  }
   const { column, key, order, dir } = SORT_ORDERS[sort];
   const predicate = after === undefined ? filterPredicate(workspaceId, filter) : and(filterPredicate(workspaceId, filter), afterPosition(sort, after));
   const few = sql.raw(String(FEW_MATCHES));
@@ -449,14 +576,15 @@ export function matchedPageStatement(tx: TenantTx, { filter, sort, after, limit 
 }
 
 /**
- * The filter is a text query and nothing else, and the owner is the account of the transaction: the bookmarks it matches are exactly the answer of `sys_bookmark_match`, which
- * applies the workspace, the account and the plan-archive rule itself, so the answer can be counted without reading the bookmarks. Any other filter narrows the answer by a
- * predicate of the statement, and an owner other than the account matches nothing, so those are counted by probing.
+ * The filter is a text query and nothing else, the owner is the account of the transaction and the scope is the account's own or its own with the shared ones (`all`): the bookmarks it matches
+ * are exactly the answer of `sys_bookmark_match`, which applies the workspace, the account and the plan-archive rule itself, so the answer can be counted without reading the bookmarks. Any
+ * other filter narrows the answer by a predicate of the statement, and an owner other than the account matches nothing, so those are counted by probing.
  */
 function matchesAreTheAnswer(tx: TenantTx, filter: BookmarkListFilter): boolean {
   return (
     filter.q !== undefined &&
     filter.ownerId.toLowerCase() === tx.accountId.toLowerCase() &&
+    (filter.scope === undefined || filter.scope === "mine" || filter.scope === "all") &&
     filter.pinned === undefined &&
     filter.hasSlug === undefined &&
     filter.forwarding === undefined &&
@@ -474,6 +602,9 @@ export function matchedCountStatement(tx: TenantTx, filter: BookmarkListFilter, 
   const workspaceId = requireListWorkspace(tx, "counting bookmarks");
   if (filter.q === undefined) {
     throw new Error("a count of matches needs a text query");
+  }
+  if (!isOwnScope(filter)) {
+    requireViewer(tx, filter);
   }
   if (matchesAreTheAnswer(tx, filter)) {
     return sql`SELECT least(count(*), ${limit}::integer)::int AS total FROM sys_bookmark_match(${filter.q}::text)`;
@@ -506,31 +637,123 @@ async function matchedCount(tx: TenantTx, filter: BookmarkListFilter, limit: num
 
 /** A page of a list with a text query as bookmark records, in the order of its sort, with how many matches the function answered. */
 async function matchedList(tx: TenantTx, request: BookmarkListRequest): Promise<{ readonly rows: readonly BookmarkListRow[]; readonly matched: number }> {
-  const workspaceId = requireListWorkspace(tx, "listing bookmarks");
   const { page, matched } = await matchedPage(tx, request);
+  return { rows: await rowsOfPage(tx, request.filter, page), matched };
+}
+
+/**
+ * The rows of a page given as identifiers and sort keys, read by identifier in the order of the page: the bookmarks the filter's account can read, so a row whose route has ended
+ * since the page was read is left out. The account's own scope reads by owner, which is what that scope's page was read by.
+ */
+async function rowsOfPage(tx: TenantTx, filter: BookmarkListFilter, page: readonly { readonly id: string; readonly sort_key: string | null }[]): Promise<BookmarkListRow[]> {
+  const workspaceId = requireListWorkspace(tx, "listing bookmarks");
   const ids = page.map((row) => row.id);
   if (ids.length === 0) {
-    return { rows: [], matched };
+    return [];
   }
   const found = await tenantHandle(tx)
     .select(RECORD_COLUMNS)
     .from(bookmarks)
-    .where(and(eq(bookmarks.workspaceId, workspaceId), eq(bookmarks.ownerId, request.filter.ownerId), isNull(bookmarks.planArchivedAt), sql`${bookmarks.id} = ANY (${uuidArray(ids)}::uuid[])`));
-  const rows = new Map(found.map((row) => [row.id, row]));
-  const filed = await foldersOfBookmarks(tx, request.filter.ownerId, ids);
-  const carried = await tagsOfBookmarks(tx, request.filter.ownerId, ids);
-  return {
-    rows: page.flatMap(({ id, sort_key: key }) => {
-      const row = rows.get(id);
-      return row === undefined ? [] : [{ bookmark: recordOf(row, filed.get(id) ?? [], carried.get(id) ?? []), key }];
-    }),
-    matched,
-  };
+    .where(
+      and(
+        eq(bookmarks.workspaceId, workspaceId),
+        isOwnScope(filter) ? eq(bookmarks.ownerId, filter.ownerId) : bookmarkReadableBy(filter.ownerId),
+        isNull(bookmarks.planArchivedAt),
+        sql`${bookmarks.id} = ANY (${uuidArray(ids)}::uuid[])`,
+      ),
+    );
+  const byId = new Map(found.map((row) => [row.id, row]));
+  const ordered = page.flatMap(({ id }) => {
+    const row = byId.get(id);
+    return row === undefined ? [] : [row];
+  });
+  const records = new Map((await recordsOf(tx, filter.ownerId, ordered)).map((record) => [record.id, record]));
+  return page.flatMap(({ id, sort_key: key }) => {
+    const bookmark = records.get(id);
+    return bookmark === undefined ? [] : [{ bookmark, key }];
+  });
+}
+
+function requireViewer(tx: TenantTx, filter: BookmarkListFilter): void {
+  if (filter.ownerId.toLowerCase() !== tx.accountId.toLowerCase()) {
+    throw new Error("only the account of the transaction lists the bookmarks that are shared with it or that it shares");
+  }
+}
+
+/** The grants to the account, read once as the set a list of the shared bookmarks is driven from. */
+function grantsCte(tx: TenantTx, workspaceId: string, branches: readonly Branch[]): SQL {
+  return branches.includes("shared") ? sql`WITH shared AS MATERIALIZED (${sharedBookmarks(tx.accountId, workspaceId)})` : sql``;
+}
+
+/**
+ * The statement of a page of a list of a scope that holds bookmarks shared with the caller (or that the caller shares), exported for the test that plans it: identifiers and sort keys in
+ * the order of the sort, without a text query. Each part of the scope is one leg of a union: the caller's own bookmarks are read from the index of the sort, as a list of them is, and
+ * the shared ones are driven from the set of the grants to the caller and probed by primary key, a lateral subquery the planner cannot flatten (`OFFSET 0`), so the table is never scanned for
+ * them. Each leg is cut at the page and the union is sorted again, so the page is the first of the legs together. A bookmark readable through two routes is in the set once, and an own
+ * bookmark is never in the shared leg, so no bookmark is in the page twice. Undefined when the scope and the filter read no part. Needs a transaction opened with a workspace.
+ */
+export function pageStatement(tx: TenantTx, { filter, sort, after, limit }: BookmarkListRequest): SQL | undefined {
+  const workspaceId = requireListWorkspace(tx, "listing bookmarks");
+  requireViewer(tx, filter);
+  if (filter.q !== undefined) {
+    throw new Error("a page of matches is read through the matches of sys_bookmark_match");
+  }
+  const branches = branchesOf(filter);
+  if (branches.length === 0) {
+    return undefined;
+  }
+  const { column, key, order, dir } = SORT_ORDERS[sort];
+  const legs = branches.map((branch) => {
+    const base = branchPredicate(workspaceId, filter, branch, branch === "shared");
+    const predicate = after === undefined ? base : and(base, afterPosition(sort, after));
+    if (branch !== "shared") {
+      return sql`(SELECT ${bookmarks.id} AS id, ${column} AS ord, ${key} AS sort_key FROM ${bookmarks} WHERE ${predicate} ORDER BY ${order} LIMIT ${limit}::integer)`;
+    }
+    return sql`(SELECT probed.id, probed.ord, probed.sort_key FROM shared
+      CROSS JOIN LATERAL (SELECT ${bookmarks.id} AS id, ${column} AS ord, ${key} AS sort_key FROM ${bookmarks} WHERE ${bookmarks.id} = shared.bookmark_id AND ${predicate} OFFSET 0) probed
+      ORDER BY probed.ord ${dir}, probed.id ${dir} LIMIT ${limit}::integer)`;
+  });
+  return sql`${grantsCte(tx, workspaceId, branches)}
+    SELECT page.id, page.sort_key FROM (${sql.join(legs, sql` UNION ALL `)}) page ORDER BY page.ord ${dir}, page.id ${dir} LIMIT ${limit}::integer`;
+}
+
+/** The statement of the count of a list of a scope that holds bookmarks shared with the caller, exported for the test that plans it: the legs of `pageStatement`, each cut at `limit`. Undefined when the scope and the filter read no part. */
+export function countStatement(tx: TenantTx, filter: BookmarkListFilter, limit: number): SQL | undefined {
+  const workspaceId = requireListWorkspace(tx, "counting bookmarks");
+  requireViewer(tx, filter);
+  if (filter.q !== undefined) {
+    throw new Error("a count of matches is read through the matches of sys_bookmark_match");
+  }
+  const branches = branchesOf(filter);
+  if (branches.length === 0) {
+    return undefined;
+  }
+  const legs = branches.map((branch) => {
+    const predicate = branchPredicate(workspaceId, filter, branch, branch === "shared");
+    if (branch !== "shared") {
+      return sql`(SELECT 1 FROM ${bookmarks} WHERE ${predicate} LIMIT ${limit}::integer)`;
+    }
+    return sql`(SELECT 1 FROM shared CROSS JOIN LATERAL (SELECT 1 FROM ${bookmarks} WHERE ${bookmarks.id} = shared.bookmark_id AND ${predicate} OFFSET 0) probed LIMIT ${limit}::integer)`;
+  });
+  return sql`${grantsCte(tx, workspaceId, branches)}
+    SELECT least(count(*), ${limit}::integer)::int AS total FROM (${sql.join(legs, sql` UNION ALL `)}) capped`;
+}
+
+/** A page of a list that holds bookmarks shared with the caller, or that the caller shares, as records in the order of its sort. */
+async function scopedList(tx: TenantTx, request: BookmarkListRequest): Promise<BookmarkListRow[]> {
+  const statement = pageStatement(tx, request);
+  if (statement === undefined) {
+    return [];
+  }
+  return rowsOfPage(tx, request.filter, await tenantHandle(tx).execute<{ id: string; sort_key: string | null }>(statement));
 }
 
 async function listOf(tx: TenantTx, request: BookmarkListRequest): Promise<readonly BookmarkListRow[]> {
   if (request.filter.q !== undefined) {
     return (await matchedList(tx, request)).rows;
+  }
+  if (!isOwnScope(request.filter)) {
+    return scopedList(tx, request);
   }
   const found = await listQuery(tx, request);
   const filed = await foldersOfBookmarks(tx, request.filter.ownerId, found.map((row) => row.id));
@@ -541,6 +764,17 @@ async function listOf(tx: TenantTx, request: BookmarkListRequest): Promise<reado
 async function countOf(tx: TenantTx, filter: BookmarkListFilter, limit: number): Promise<number> {
   if (filter.q !== undefined) {
     return matchedCount(tx, filter, limit);
+  }
+  if (!isOwnScope(filter)) {
+    const statement = countStatement(tx, filter, limit);
+    if (statement === undefined) {
+      return 0;
+    }
+    const [shared] = await tenantHandle(tx).execute<{ total: number }>(statement);
+    if (shared === undefined) {
+      throw new Error("counting bookmarks returned no row");
+    }
+    return shared.total;
   }
   const [row] = await countQuery(tx, filter, limit);
   if (row === undefined) {
@@ -690,13 +924,42 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
     },
 
     async find(bookmarkId) {
-      const [row] = await rows.select(and(eq(bookmarks.id, bookmarkId), isNull(bookmarks.planArchivedAt)));
+      const [row] = await rows.select(and(eq(bookmarks.id, bookmarkId), isNull(bookmarks.planArchivedAt), bookmarkReadableBy(tx.accountId)));
       if (row === undefined) {
         return undefined;
       }
-      const filed = await foldersOfBookmarks(tx, tx.accountId, [row.id]);
-      const carried = await tagsOfBookmarks(tx, tx.accountId, [row.id]);
-      return recordOf(row, filed.get(row.id) ?? [], carried.get(row.id) ?? []);
+      const [record] = await recordsOf(tx, tx.accountId, [row]);
+      return record;
+    },
+
+    async sharedWith({ bookmarkId, accountId }) {
+      requireAccountOwner(tx, accountId, "asks whether it is shared with it");
+      const [row] = await rows.select(
+        and(eq(bookmarks.id, bookmarkId), isNull(bookmarks.planArchivedAt), sql`${bookmarks.ownerId} IS DISTINCT FROM ${accountId}::uuid`, bookmarkReadableBy(accountId)),
+      );
+      return row !== undefined;
+    },
+
+    async sharedAmong({ bookmarkIds, accountId }) {
+      const workspaceId = requireListWorkspace(tx, "asking which bookmarks are shared");
+      requireAccountOwner(tx, accountId, "asks which bookmarks are shared with it");
+      requireIdentifiers(bookmarkIds, "asking which bookmarks are shared");
+      if (bookmarkIds.length === 0) {
+        return [];
+      }
+      const found = await tenantHandle(tx)
+        .select({ id: bookmarks.id })
+        .from(bookmarks)
+        .where(
+          and(
+            eq(bookmarks.workspaceId, workspaceId),
+            sql`${bookmarks.id} = ANY (${uuidArray(distinctIdentifiers(bookmarkIds))}::uuid[])`,
+            isNull(bookmarks.planArchivedAt),
+            sql`${bookmarks.ownerId} IS DISTINCT FROM ${accountId}::uuid`,
+            bookmarkReadableBy(accountId),
+          ),
+        );
+      return found.map((row) => row.id);
     },
 
     async update({ bookmarkId, ownerId, changes, expectedVersions, jobsOnUrlChange = [] }) {
@@ -956,6 +1219,10 @@ export function bookmarkRepository(tx: TenantTx): BookmarkRepository {
       const workspaceId = requireListWorkspace(tx, "listing bookmark identifiers");
       if (filter.q !== undefined) {
         return (await matchedPage(tx, { filter, sort: "recent", after: undefined, limit })).page.map((row) => row.id);
+      }
+      if (!isOwnScope(filter)) {
+        const statement = pageStatement(tx, { filter, sort: "recent", after: undefined, limit });
+        return statement === undefined ? [] : (await tenantHandle(tx).execute<{ id: string }>(statement)).map((row) => row.id);
       }
       const found = await tenantHandle(tx)
         .select({ id: bookmarks.id })

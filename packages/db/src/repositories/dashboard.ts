@@ -67,7 +67,7 @@ export function quickAccessQuery(tx: TenantTx, ownerId: string, limit: number) {
   const workspaceId = requireWorkspace(tx);
   const owner = requireOwner(tx, ownerId);
   requireLimit(limit);
-  // The caller's own bookmarks that it can read: today the two are one condition, and the readable rule is applied as well so that the list stays the caller's own when sharing widens it.
+  // The caller's own bookmarks that it can read: the owner condition keeps the list the caller's own, and the readable rule (which also admits the bookmarks shared with the caller) is applied as well so that the rules of reading stay in one place.
   // A bookmark that forwards has a slug (`bookmarks_forwarding_check`), so the statement does not test the slug again: a second condition on a correlated column makes the planner
   // underestimate the matches, and with them the share of the index it has to walk, and it then prefers a scan of the table.
   return tenantHandle(tx)

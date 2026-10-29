@@ -359,10 +359,13 @@ describe("the tags of a bookmark", () => {
 
     const read = await inTenant(asA, (tx) => bookmarkRepository(tx).find(bookmarkOfA));
     const listed = await inTenant(asA, (tx) => bookmarkRepository(tx).list({ filter: { ownerId: a }, sort: "recent", after: undefined, limit: 10 }));
+    const unreadByB = await inTenant(asB, (tx) => bookmarkRepository(tx).find(bookmarkOfA));
+    await asSystem(db, (tx) => tx`INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_account_id, granted_by) VALUES (${freshId()}, ${workspace.id}, ${bookmarkOfA}, ${b}, ${a})`);
     const readByB = await inTenant(asB, (tx) => bookmarkRepository(tx).find(bookmarkOfA));
 
     expect(read?.tags).toEqual([{ id: tagOfA, name: "Of A" }]);
     expect(listed.map((row) => row.bookmark.tags)).toEqual([[{ id: tagOfA, name: "Of A" }]]);
+    expect(unreadByB).toBeUndefined();
     expect(readByB?.tags).toEqual([{ id: tagOfB, name: "Of B" }]);
   });
 

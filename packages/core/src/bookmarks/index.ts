@@ -18,14 +18,16 @@ export { lookupPageMetadata } from "./metadata-lookup.ts";
 export type { CachedPageMetadata, PageMetadataCache, PageMetadataLookupDependencies, PageMetadataLookupOutcome } from "./metadata-lookup.ts";
 export { BOOKMARK_URL_MAX_LENGTH, normalizeBookmarkUrl } from "./url.ts";
 export type { BookmarkUrl, BookmarkUrlRefusal, BookmarkUrlResult } from "./url.ts";
-export { BOOKMARK_DESCRIPTION_MAX_LENGTH, BOOKMARK_TITLE_MAX_LENGTH, createBookmark } from "./create.ts";
+export { BOOKMARK_DESCRIPTION_MAX_LENGTH, BOOKMARK_SHARED_VIA, BOOKMARK_TITLE_MAX_LENGTH, createBookmark } from "./create.ts";
 export type {
   BookmarkCreationAsk,
   BookmarkCreationDependencies,
   BookmarkCreationOutcome,
   BookmarkCreationRequest,
   BookmarkFolderRef,
+  BookmarkOwner,
   BookmarkRecord,
+  BookmarkSharedVia,
   BookmarkStore,
   BookmarkStoreResult,
   NewBookmark,
@@ -45,10 +47,10 @@ export type {
   BookmarkUpdateResult,
 } from "./update.ts";
 export { deleteBookmark } from "./delete.ts";
-export type { BookmarkDeletionAsk, BookmarkDeletionDependencies } from "./delete.ts";
+export type { BookmarkDeletionAsk, BookmarkDeletionDependencies, BookmarkDeletionOutcome } from "./delete.ts";
 export { BookmarkArchiveError, archiveBookmarks, restoreBookmarks } from "./archive.ts";
 export type { BookmarkArchiveRequest, BookmarkArchiveTransaction } from "./archive.ts";
-export { BOOKMARK_LIST_TOTAL_CAP, BOOKMARK_SORTS, bookmarkListFilter, listBookmarks } from "./list.ts";
+export { BOOKMARK_LIST_TOTAL_CAP, BOOKMARK_SCOPES, BOOKMARK_SORTS, bookmarkListFilter, listBookmarks } from "./list.ts";
 export type {
   BookmarkCursors,
   BookmarkFilterAsk,

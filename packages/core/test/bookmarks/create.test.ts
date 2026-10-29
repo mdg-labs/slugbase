@@ -25,7 +25,7 @@ function ids(): () => string {
 function recordOf(request: BookmarkCreationRequest): BookmarkRecord {
   const { id, ownerId, url, host, title, description, pinned } = request.bookmark;
   const now = new Date("2026-10-23T05:00:00.000Z");
-  return { id, ownerId, url, host, title, description, slug: null, forwarding: false, pinned, openCount: 0, lastOpenedAt: null, folders: [], tags: [], version: 1, createdAt: now, updatedAt: now };
+  return { id, ownerId, url, host, title, description, slug: null, forwarding: false, pinned, openCount: 0, lastOpenedAt: null, owner: null, sharedVia: null, folders: [], tags: [], version: 1, createdAt: now, updatedAt: now };
 }
 
 function world(answer: (request: BookmarkCreationRequest) => BookmarkStoreResult = (request) => ({ kind: "created", bookmark: recordOf(request) })) {
