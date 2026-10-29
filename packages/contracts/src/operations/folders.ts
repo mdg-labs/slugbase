@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { BOOKMARK_BULK_IDS_MAX } from "./bookmarks.ts";
 import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
+import { withoutNul } from "./text.ts";
 
 // The folders tag of doc 04 section 10.7: the operations that create, list, read, change and delete a member's folders. They act in
 // the workspace the request is bound to and name none (D11). A folder is its owner's (doc 02 section 7.1): another member's folder of
@@ -91,11 +92,7 @@ export const FOLDER_ICONS = [
 
 export type FolderIcon = (typeof FOLDER_ICONS)[number];
 
-const FolderNameSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(FOLDER_NAME_MAX_LENGTH)
+const FolderNameSchema = withoutNul(z.string().trim().min(1).max(FOLDER_NAME_MAX_LENGTH))
   .describe(
     "The folder's name, 1 to 64 characters after the whitespace around it is removed. It is stored as entered, in the case it is written in, and is unique among the caller's folders without regard to case",
   );
@@ -168,7 +165,7 @@ export const FOLDER_CURSOR_MAX_LENGTH = 1024;
 
 export const ListFoldersQuerySchema = z.strictObject({
   scope: z.enum(["all", "mine"]).default("all").describe("Whose folders are listed. Only the caller's own folders exist until sharing arrives, so both name the same folders today"),
-  q: z.string().trim().min(1).max(FOLDER_SEARCH_MAX_LENGTH).optional().describe("Lists the folders whose name contains this text, without regard to case; left out, names are not filtered on"),
+  q: withoutNul(z.string().trim().min(1).max(FOLDER_SEARCH_MAX_LENGTH)).optional().describe("Lists the folders whose name contains this text, without regard to case; left out, names are not filtered on"),
   sort: z
     .enum(FOLDER_SORTS)
     .default("name")
@@ -224,7 +221,7 @@ export const createFolder = defineOperation({
     403: problemResponse("The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"),
     404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),
     409: problemResponse("The caller already has a folder with this name, in any case (name_taken); nothing is written"),
-    422: problemResponse("The body did not pass validation (a name that is blank or longer than 64 characters, an icon outside the list, a colour outside 1 to 8, or a field the operation does not declare)"),
+    422: problemResponse("The body did not pass validation (a name that is blank, longer than 64 characters or holds a NUL character, an icon outside the list, a colour outside 1 to 8, or a field the operation does not declare)"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },
@@ -245,7 +242,7 @@ export const listFolders = defineOperation({
     400: problemResponse("The request was malformed, or the cursor is not one this account was issued for this workspace, scope, search and sort (bad_request)"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),
-    422: problemResponse("The query did not pass validation (an unknown parameter, scope or sort, a limit outside 1 to 100, a search text longer than 64 characters)"),
+    422: problemResponse("The query did not pass validation (an unknown parameter, scope or sort, a limit outside 1 to 100, a search text longer than 64 characters or holding a NUL character)"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },
@@ -298,7 +295,7 @@ export const updateFolder = defineOperation({
     ),
     409: problemResponse("The caller has another folder with this name, in any case (name_taken); nothing is written"),
     412: problemResponse("If-Match names a version other than the folder's current one (precondition_failed); the folder is unchanged"),
-    422: problemResponse("The identifier or the body did not pass validation (a name that is blank or longer than 64 characters, an icon outside the list, a colour outside 1 to 8, or a field the operation does not declare). Nothing is written"),
+    422: problemResponse("The identifier or the body did not pass validation (a name that is blank, longer than 64 characters or holds a NUL character, an icon outside the list, a colour outside 1 to 8, or a field the operation does not declare). Nothing is written"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },

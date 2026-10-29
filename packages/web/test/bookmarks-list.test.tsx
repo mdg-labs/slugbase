@@ -3,8 +3,9 @@ import { createHandlers, type Scenario } from "@slugbase/testing/msw";
 import { createMockServer, readOpenApiDocument } from "@slugbase/testing/msw/node";
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
-import { ACCOUNT_BODY, meOf, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
+import { ACCOUNT_BODY, allowSlowRender, meOf, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
 // The bookmarks page (doc 03 section 3, doc 02 section 5.7) against the handlers generated from openapi.json, through the
 // app's own API client. The failure scenarios are a filter or sort that does not reach the address or the request, a "load
@@ -76,7 +77,10 @@ async function bodyOf(call: Call | undefined): Promise<unknown> {
   return JSON.parse((await call?.body) ?? "null") as unknown;
 }
 
+let restoreWait: () => void = () => undefined;
+
 beforeAll(() => {
+  restoreWait = allowSlowRender();
   server.listen({ onUnhandledRequest: "error" });
   server.events.on("request:start", ({ request }) => {
     const url = new URL(request.url);
@@ -98,6 +102,7 @@ afterEach(() => {
 
 afterAll(() => {
   server.close();
+  restoreWait();
 });
 
 beforeEach(() => {
@@ -152,8 +157,26 @@ function shown(): string {
   return screen.getByText(/^Showing /).textContent;
 }
 
-describe("reaching the page", () => {
-  it("is the Bookmarks link of the sidebar, and lists the bookmarks under the default sort and size", async () => {
+describe("reaching the page", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
+  it("opens the app on the start page, under the shell", async () => {
+    use({ fixtures: { listBookmarks: page([bookmark(1), bookmark(2)]) } });
+    await openApp("/");
+
+    await screen.findByText(/^Welcome to /);
+    expect(window.location.pathname).toBe("/");
+  });
+
+  it("has the Bookmarks link in the sidebar, which points at the page", async () => {
+    use({ fixtures: { listBookmarks: page([bookmark(1), bookmark(2)]) } });
+    await openApp("/");
+
+    const link = await screen.findByRole("link", { name: "Bookmarks" });
+
+    expect(link.getAttribute("href")).toBe("/bookmarks");
+    expect(link.getAttribute("aria-current")).toBeNull();
+  });
+
+  it("is the Bookmarks link of the sidebar, which opens the page", async () => {
     use({ fixtures: { listBookmarks: page([bookmark(1), bookmark(2)]) } });
     await openApp("/");
 
@@ -161,8 +184,16 @@ describe("reaching the page", () => {
 
     await screen.findByRole("heading", { level: 1, name: "Bookmarks" });
     expect(window.location.pathname).toBe("/bookmarks");
-    expect(screen.getByRole("list", { name: "Bookmarks" }).querySelectorAll("[data-item-id]")).toHaveLength(2);
     expect(screen.getByRole("link", { name: "Bookmarks" }).getAttribute("aria-current")).toBe("page");
+  });
+
+  it("lists the bookmarks under the default sort and size", async () => {
+    use({ fixtures: { listBookmarks: page([bookmark(1), bookmark(2)]) } });
+    await openApp("/bookmarks");
+
+    await screen.findByRole("heading", { level: 1, name: "Bookmarks" });
+    // The heading is drawn while the list request is pending, over a skeleton; the list follows the response.
+    expect((await screen.findByRole("list", { name: "Bookmarks" })).querySelectorAll("[data-item-id]")).toHaveLength(2);
     expect(lists()).toHaveLength(1);
     expect(lists()[0]?.params.get("sort")).toBe("recent");
     expect(lists()[0]?.params.get("limit")).toBe("24");
@@ -185,7 +216,7 @@ describe("a card", () => {
     await openApp("/bookmarks");
 
     const first = await card("<img src=x onerror=alert(1)>");
-    expect(first.querySelector("img")).toBeNull();
+    expect(Array.from(first.querySelectorAll("img")).map((img) => img.getAttribute("src"))).toEqual(["/api/v1/favicons/site1.example.com"]);
     expect(within(first).getByText("site1.example.com").className).toContain("font-mono");
     expect(within(first).getByText("No slug")).toBeDefined();
     expect(within(first).getByRole("img", { name: "Pinned" })).toBeDefined();
@@ -672,7 +703,7 @@ describe("the table view", () => {
     ]);
     expect(lists()[0]?.params.get("limit")).toBe("48");
     const first = await row("<img src=x onerror=alert(1)>");
-    expect(first.querySelector("img")).toBeNull();
+    expect(Array.from(first.querySelectorAll("img")).map((img) => img.getAttribute("src"))).toEqual(["/api/v1/favicons/site1.example.com"]);
     const cells = within(first).getAllByRole("cell");
     expect(cells.map((cell) => cell.textContent)).toEqual(["", "s<img src=x onerror=alert(1)>", "/go/mail", "site1.example.com", "", "", "1,234", "2 hr. ago", "Oct 1, 2026", ""]);
     expect(within(first).getByRole("img", { name: "Pinned" })).toBeDefined();

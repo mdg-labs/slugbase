@@ -3,15 +3,24 @@ import { describe, expect, it, vi } from "vitest";
 import { SettingSwitch } from "../../src/patterns/index.ts";
 import { expectNoViolations } from "../support.tsx";
 
+function renderShortcutsSwitch() {
+  return render(
+    <SettingSwitch checked description="Press a letter to act." label="Single-key shortcuts" onCheckedChange={() => undefined} />,
+  );
+}
+
 describe("SettingSwitch", () => {
-  it("is a switch named by its label, described, and on or off by its value", async () => {
-    const { container } = render(
-      <SettingSwitch checked description="Press a letter to act." label="Single-key shortcuts" onCheckedChange={() => undefined} />,
-    );
+  it("is a switch named by its label, described, and on or off by its value", () => {
+    renderShortcutsSwitch();
 
     const toggle = screen.getByRole("switch", { name: "Single-key shortcuts" });
     expect(toggle.getAttribute("aria-checked")).toBe("true");
     expect(toggle.getAttribute("aria-describedby")).toBeTruthy();
+  });
+
+  it("is free of accessibility violations with a description", async () => {
+    const { container } = renderShortcutsSwitch();
+
     await expectNoViolations(container);
   });
 

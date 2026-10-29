@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
+import { withoutNul } from "./text.ts";
 import { WorkspaceNameSchema } from "./workspaces.ts";
 
 // The instance tag of doc 04 section 10.10: the operations of the CE instance admin. Every one of them declares
@@ -82,25 +83,10 @@ export const INSTANCE_DISPLAY_NAME_MAX_LENGTH = 100;
 /** The longest sign-in notice, in characters (doc 02 section 11.3). */
 export const INSTANCE_SIGN_IN_NOTICE_MAX_LENGTH = 500;
 
-// PostgreSQL cannot store U+0000 in a text column; a value that holds one is refused here, as a field error, rather
-// than failing inside the database.
-const withoutNul = (value: string): boolean => !value.includes("\u0000");
-const NUL_MESSAGE = "must not contain a NUL character";
-
-const InstanceDisplayNameSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(INSTANCE_DISPLAY_NAME_MAX_LENGTH)
-  .refine(withoutNul, { message: NUL_MESSAGE })
+const InstanceDisplayNameSchema = withoutNul(z.string().trim().min(1).max(INSTANCE_DISPLAY_NAME_MAX_LENGTH))
   .describe("The instance name the sign-in page shows, 1 to 100 characters; surrounding whitespace is removed and a name that is blank after that is refused");
 
-const InstanceSignInNoticeSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(INSTANCE_SIGN_IN_NOTICE_MAX_LENGTH)
-  .refine(withoutNul, { message: NUL_MESSAGE })
+const InstanceSignInNoticeSchema = withoutNul(z.string().trim().min(1).max(INSTANCE_SIGN_IN_NOTICE_MAX_LENGTH))
   .describe("Plain text shown on the sign-in page, 1 to 500 characters; surrounding whitespace is removed and a notice that is blank after that is refused. It is shown as text, never as HTML");
 
 export const InstanceSettingsSchema = z
@@ -309,7 +295,7 @@ export const createInstanceWorkspace = defineOperation({
       "The request did not come from the application itself (cross_site_request), the session is not an instance admin's, the account has no second factor enrolled, or the credential is an API token (forbidden). Nothing is written",
     ),
     422: problemResponse(
-      "The body did not pass validation: a field the operation does not declare, a name that is blank or longer than 64 characters, neither or both of ownerAccountId and ownerEmail, or an ownerAccountId that is no account or is disabled (unknown_account). Nothing is written",
+      "The body did not pass validation: a field the operation does not declare, a name that is blank, longer than 64 characters or holds a NUL character, neither or both of ownerAccountId and ownerEmail, or an ownerAccountId that is no account or is disabled (unknown_account). Nothing is written",
     ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),

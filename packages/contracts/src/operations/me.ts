@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
+import { withoutNul } from "./text.ts";
 
 // The me tag of doc 04 section 10.3: what the signed-in account does to itself.
 // The session operations act on the caller's own sessions only; a session id of
@@ -50,11 +51,7 @@ export const MembershipSchema = z
  * characters. Zod counts a character as one code point, as PostgreSQL's length() does, and a parsed value
  * is the trimmed name that is stored.
  */
-export const DisplayNameSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(100)
+export const DisplayNameSchema = withoutNul(z.string().trim().min(1).max(100))
   .describe("The name shown to other members, 1 to 100 characters; surrounding whitespace is removed and a name that is blank after that is refused");
 
 export const AccountSchema = z
@@ -242,7 +239,7 @@ export const updateMe = defineOperation({
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse("The request did not come from the application itself"),
-    422: problemResponse("The body did not pass validation: an unknown field or onboarding key, a name that is empty or longer than 100 characters, or a value outside the one the field allows (a language other than en and de, an accent that is not a preset name)"),
+    422: problemResponse("The body did not pass validation: an unknown field or onboarding key, a name that is empty, longer than 100 characters or holds a NUL character, or a value outside the one the field allows (a language other than en and de, an accent that is not a preset name)"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },
@@ -590,7 +587,7 @@ export const ApiTokenListQuerySchema = z.strictObject({
 
 export const CreateApiTokenRequestSchema = z
   .strictObject({
-    name: z.string().trim().min(1).max(64).describe("The token's name, 1 to 64 characters, unique among the account's tokens; surrounding whitespace is removed"),
+    name: withoutNul(z.string().trim().min(1).max(64)).describe("The token's name, 1 to 64 characters, unique among the account's tokens; surrounding whitespace is removed"),
     scope: z.enum(API_TOKEN_SCOPES).describe("What the token may do: read, or read and write"),
     expiresInDays: z
       .union([z.literal([...API_TOKEN_EXPIRY_DAYS]), z.null()])
@@ -645,7 +642,7 @@ export const createApiToken = defineOperation({
     404: problemResponse("The account is not a member of the workspace named, or the request names none and acts in none"),
     409: problemResponse("The account already has a token with this name (name_taken)"),
     422: problemResponse(
-      "The body did not pass validation (a name outside 1 to 64 characters, an unknown scope, an expiry other than 30, 90, 365 or null); or the account already has 10 tokens that are neither revoked nor expired (validation_failed with the field code api_token_limit_reached)",
+      "The body did not pass validation (a name outside 1 to 64 characters or holding a NUL character, an unknown scope, an expiry other than 30, 90, 365 or null); or the account already has 10 tokens that are neither revoked nor expired (validation_failed with the field code api_token_limit_reached)",
     ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),

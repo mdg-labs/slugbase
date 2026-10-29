@@ -528,7 +528,7 @@ describe("text a stranger wrote", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(bookmarks.textContent).toContain(`/go/${script}`);
     expect(labelsOf(within(dialog).getByRole("group", { name: "Folders" }))).toEqual([script]);
     expect(labelsOf(within(dialog).getByRole("group", { name: "Tags" }))).toEqual([markup]);
-    expect(dialog.querySelector("img, script, svg[onload]")).toBeNull();
+    expect(dialog.querySelector("img:not([src^='/api/v1/favicons/']), script, svg[onload]")).toBeNull();
     expect(dialog.querySelector("[onerror], [onload]")).toBeNull();
   });
 });

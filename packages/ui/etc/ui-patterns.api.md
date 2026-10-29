@@ -227,10 +227,10 @@ export interface CardGridItemProps {
     actions: readonly RowAction[];
     actionsLabel: string;
     children?: ReactNode;
+    host: string;
     href?: string;
     indicator?: ReactNode;
     itemId?: string;
-    monogram: string;
     onOpen?: () => void;
     // (undocumented)
     onSelectedChange?: (selected: boolean) => void;
@@ -551,6 +551,17 @@ export interface EmptyStateProps {
 }
 
 export { ExternalLinkIcon }
+
+// @public
+export function Favicon(input: FaviconProps): ReactElement;
+
+// @public (undocumented)
+export interface FaviconProps {
+    // (undocumented)
+    className?: string;
+    host: string;
+    size?: 16 | 32;
+}
 
 // @public
 export const feedbackToast: {
@@ -1177,8 +1188,8 @@ export function TileLink(input: TileLinkProps): ReactElement;
 export interface TileLinkProps {
     children?: ReactNode;
     hint?: string;
+    host: string;
     href?: string;
-    monogram: string;
     onOpen?: () => void;
     subtitle?: string;
     title: string;

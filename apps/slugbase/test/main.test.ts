@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { connect, createServer } from "node:net";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
+import { BIND_ANY_PORT, boundPort, PLACEHOLDER_PORTS } from "./ephemeral-ports.ts";
 
 // The entry point validates the configuration of its process type before
 // anything else (doc 01 section 3 rule 5). The tests run it as a process, the
@@ -38,19 +39,6 @@ function start(env: Record<string, string>, ...args: string[]) {
   return { status: result.status, output: `${result.stdout}${result.stderr}` };
 }
 
-function freePort(): Promise<number> {
-  return new Promise((resolvePort, reject) => {
-    const probe = createServer();
-    probe.once("error", reject);
-    probe.listen(0, "127.0.0.1", () => {
-      const address = probe.address();
-      probe.close(() => {
-        resolvePort(typeof address === "object" && address !== null ? address.port : 0);
-      });
-    });
-  });
-}
-
 function get(port: number, path: string): Promise<string> {
   return new Promise((resolveBody) => {
     const chunks: Buffer[] = [];
@@ -70,13 +58,12 @@ interface RunningProcess {
   response: string;
 }
 
-// Starts the server command, waits until it listens, asks it for a path, sends
-// SIGTERM and waits for the exit.
+// Starts the server command on a port the kernel picks when the child binds it, waits until it listens, asks it
+// for a path, sends SIGTERM and waits for the exit.
 async function runServer(env: Record<string, string>, ...args: string[]): Promise<RunningProcess> {
-  const port = await freePort();
-  const child = spawn(process.execPath, ["src/main.ts", ...args], {
+  const child = spawn(process.execPath, [...BIND_ANY_PORT, "src/main.ts", ...args], {
     cwd: APP,
-    env: { PATH: process.env["PATH"] ?? "", PORT: String(port), ...env },
+    env: { PATH: process.env["PATH"] ?? "", PORT: PLACEHOLDER_PORTS.PORT, ...env },
   });
   let output = "";
   const exited = new Promise<number | null>((resolveExit) => {
@@ -87,7 +74,7 @@ async function runServer(env: Record<string, string>, ...args: string[]): Promis
   const listening = new Promise<boolean>((resolveListening) => {
     const watch = (chunk: Buffer): void => {
       output += chunk.toString("utf8");
-      if (output.includes('"Listening"')) {
+      if (boundPort(output, "Listening") !== undefined) {
         resolveListening(true);
       }
     };
@@ -99,7 +86,8 @@ async function runServer(env: Record<string, string>, ...args: string[]): Promis
   });
   const timer = setTimeout(() => child.kill("SIGKILL"), 30_000);
   try {
-    const response = (await listening) ? await get(port, "/no-such-path") : "";
+    const port = (await listening) ? boundPort(output, "Listening") : undefined;
+    const response = port === undefined ? "" : await get(port, "/no-such-path");
     child.kill("SIGTERM");
     return { status: await exited, output, response };
   } finally {
@@ -142,11 +130,9 @@ describe("apps/slugbase main", { timeout: 60_000 }, () => {
   });
 
   it("serves /metrics on METRICS_PORT only, and the public port answers 404 not_found for it", async () => {
-    const metricsPort = await freePort();
-    const publicPort = await freePort();
-    const child = spawn(process.execPath, ["src/main.ts", "server"], {
+    const child = spawn(process.execPath, [...BIND_ANY_PORT, "src/main.ts", "server"], {
       cwd: APP,
-      env: { PATH: process.env["PATH"] ?? "", ...standalone, PORT: String(publicPort), METRICS_PORT: String(metricsPort) },
+      env: { PATH: process.env["PATH"] ?? "", ...standalone, ...PLACEHOLDER_PORTS },
     });
     let output = "";
     const exited = new Promise<number | null>((resolveExit) => {
@@ -170,6 +156,13 @@ describe("apps/slugbase main", { timeout: 60_000 }, () => {
     const timer = setTimeout(() => child.kill("SIGKILL"), 30_000);
     try {
       expect(await listening, output).toBe(true);
+      const publicPort = boundPort(output, "Listening");
+      const metricsPort = boundPort(output, "Metrics listening");
+      if (publicPort === undefined || metricsPort === undefined) {
+        throw new Error(`a listener did not log its port\n${output}`);
+      }
+      // The child asked the kernel for both ports, so they are never the configured ones and never one port.
+      expect(new Set([publicPort, metricsPort, ...Object.values(PLACEHOLDER_PORTS).map(Number)]).size).toBe(4);
       const scraped = await get(metricsPort, "/metrics");
       const publicAnswer = await get(publicPort, "/metrics");
       child.kill("SIGTERM");

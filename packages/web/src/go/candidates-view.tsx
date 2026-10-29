@@ -1,5 +1,5 @@
 import { Button } from "@slugbase/ui";
-import { Banner, CheckboxField } from "@slugbase/ui/patterns";
+import { Banner, CheckboxField, Favicon } from "@slugbase/ui/patterns";
 import { Link } from "@tanstack/react-router";
 import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
@@ -78,6 +78,7 @@ export function CandidatesView({ slug, candidates, onRefresh }: CandidatesViewPr
             }}
             variant="outline"
           >
+            <Favicon host={candidate.host} size={32} />
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span className="truncate font-medium text-sm" translate="no">
                 {candidate.title}

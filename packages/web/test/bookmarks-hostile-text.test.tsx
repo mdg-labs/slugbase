@@ -138,7 +138,7 @@ async function settle(): Promise<void> {
   });
 }
 
-const EXECUTABLE = "img, script, iframe, object, embed, link, meta, base, form[action]";
+const EXECUTABLE = "img:not([src^='/api/v1/favicons/']), script, iframe, object, embed, link, meta, base, form[action]";
 
 // The address schemes a browser runs or renders as a document of their own.
 const SCRIPT_SCHEMES = ["javascript:", "vbscript:", "data:"];

@@ -4,6 +4,7 @@ import { connect, createServer } from "node:net";
 import { resolve } from "node:path";
 import { createTestDatabase, type TestDatabase } from "@slugbase/testing/db";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { BIND_ANY_PORT, boundPort, PLACEHOLDER_PORTS } from "./ephemeral-ports.ts";
 
 // Stage 6 of the chain in the composed server (doc 01 section 4 step 6): the
 // entry point is run as a process, the way the image does, with the Postgres
@@ -33,7 +34,8 @@ function databaseUrl(database: TestDatabase): string {
   return url.href;
 }
 
-function freePort(): Promise<number> {
+// A port nothing listens on, for a database address that must be unreachable. The server is never started on it.
+function unusedPort(): Promise<number> {
   return new Promise((resolvePort, reject) => {
     const probe = createServer();
     probe.once("error", reject);
@@ -72,13 +74,12 @@ function get(port: number, path: string, headers: Record<string, string> = {}): 
   });
 }
 
-// Starts the server command, waits until it listens, runs `during` against it,
-// sends SIGTERM and waits for the exit.
+// Starts the server command on a port the kernel picks when the child binds it, waits until it listens, runs
+// `during` against it, sends SIGTERM and waits for the exit.
 async function withServer<T>(env: Record<string, string>, during: (port: number) => Promise<T>): Promise<T> {
-  const port = await freePort();
-  const child = spawn(process.execPath, ["src/main.ts", "server"], {
+  const child = spawn(process.execPath, [...BIND_ANY_PORT, "src/main.ts", "server"], {
     cwd: APP,
-    env: { PATH: process.env["PATH"] ?? "", ...valid, PORT: String(port), ...env },
+    env: { PATH: process.env["PATH"] ?? "", ...valid, PORT: PLACEHOLDER_PORTS.PORT, ...env },
   });
   let output = "";
   const exited = new Promise<number | null>((resolveExit) => {
@@ -89,7 +90,7 @@ async function withServer<T>(env: Record<string, string>, during: (port: number)
   const listening = new Promise<boolean>((resolveListening) => {
     const watch = (chunk: Buffer): void => {
       output += chunk.toString("utf8");
-      if (output.includes('"Listening"')) {
+      if (boundPort(output, "Listening") !== undefined) {
         resolveListening(true);
       }
     };
@@ -102,6 +103,10 @@ async function withServer<T>(env: Record<string, string>, during: (port: number)
   const timer = setTimeout(() => child.kill("SIGKILL"), 40_000);
   try {
     expect(await listening, output).toBe(true);
+    const port = boundPort(output, "Listening");
+    if (port === undefined) {
+      throw new Error(`the server did not log its port\n${output}`);
+    }
     const result = await during(port);
     child.kill("SIGTERM");
     expect(await exited, output).toBe(0);
@@ -158,7 +163,7 @@ describe("apps/slugbase server rate limiting", () => {
 
   it("answers 503 rather than leaving the route unthrottled when the bucket store cannot be reached", async () => {
     const unreachable = new URL(databaseUrl(database));
-    unreachable.port = String(await freePort());
+    unreachable.port = String(await unusedPort());
     await withServer({ DATABASE_URL: unreachable.href }, async (port) => {
       const answer = await get(port, "/api/config");
       expect(answer.status).toBe(503);

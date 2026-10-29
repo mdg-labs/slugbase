@@ -252,7 +252,7 @@ describe("pinned", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await openHome();
 
     const region = await section("Pinned");
-    expect(region.querySelector("img")).toBeNull();
+    expect(region.querySelector("img:not([src^='/api/v1/favicons/'])")).toBeNull();
     expect(within(region).getByText("<img src=x onerror=alert(1)>")).toBeTruthy();
     expect(within(region).queryByRole("link", { name: "<img src=x onerror=alert(1)>" })).toBeNull();
     expect(region.querySelector("a[href^='javascript:']")).toBeNull();

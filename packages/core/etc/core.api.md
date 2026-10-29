@@ -409,6 +409,51 @@ export const AUDIT_ACTIONS: {
             };
         };
     };
+    readonly "team.created": {
+        readonly category: "team";
+        readonly metadata: {
+            readonly name: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
+    };
+    readonly "team.updated": {
+        readonly category: "team";
+        readonly metadata: {
+            readonly from: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+            readonly to: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
+    };
+    readonly "team.deleted": {
+        readonly category: "team";
+        readonly metadata: {
+            readonly name: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
+    };
+    readonly "team.members_changed": {
+        readonly category: "team";
+        readonly metadata: {
+            readonly name: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
+    };
     readonly "bookmark.archived": {
         readonly category: "bookmark";
         readonly metadata: {
@@ -436,7 +481,7 @@ export const AUDIT_ACTIONS: {
 };
 
 // @public
-export const AUDIT_CATEGORIES: readonly ["workspace", "member", "invitation", "bookmark"];
+export const AUDIT_CATEGORIES: readonly ["workspace", "member", "invitation", "team", "bookmark"];
 
 // @public (undocumented)
 export type AuditAction = keyof typeof AUDIT_ACTIONS;
@@ -1840,6 +1885,9 @@ export function createSeatEntitlements(service: EntitlementService): SeatEntitle
 // @public (undocumented)
 export function createTag(input: TagCreationDependencies, ask: TagCreationAsk): Promise<TagCreationOutcome>;
 
+// @public (undocumented)
+export function createTeam(input: TeamCreationDependencies, ask: TeamCreationAsk): Promise<TeamCreationOutcome>;
+
 // @public
 export function createWorkspace(input: WorkspaceCreationDependencies, ask: WorkspaceCreationAsk): Promise<WorkspaceCreationOutcome>;
 
@@ -1977,6 +2025,9 @@ export function deleteInstanceAccount<Code extends string>(input: InstanceAccoun
 
 // @public
 export function deleteTag(input: TagDeletionDependencies, ask: TagDeletionAsk): Promise<boolean>;
+
+// @public
+export function deleteTeam(input: TeamDeletionDependencies, ask: TeamDeletionAsk): Promise<boolean>;
 
 // @public (undocumented)
 export const DOMAIN_EVENT_NAMES: readonly DomainEventName[];
@@ -4212,6 +4263,9 @@ export function listInvitations(input: Pick<InvitationActionDependencies, "store
 export function listTags(input: TagListDependencies, ask: TagListAsk): Promise<TagListOutcome>;
 
 // @public
+export function listTeams(input: TeamReadDependencies<"list">, request: TeamListRequest): Promise<readonly TeamRecord[]>;
+
+// @public
 export function loadBreachedPasswords(): BreachedPasswords;
 
 // @public (undocumented)
@@ -4473,6 +4527,15 @@ export interface NewTag {
 }
 
 // @public
+export interface NewTeam {
+    // (undocumented)
+    readonly description: string;
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public
 export function normalizeBookmarkUrl(input: string): BookmarkUrlResult;
 
 // @public
@@ -4496,6 +4559,20 @@ export function normalizeTagName(name: string): {
     readonly name: string;
 } | {
     readonly refusal: TagNameRefusal;
+};
+
+// @public
+export function normalizeTeamDescription(description: string): {
+    readonly description: string;
+} | {
+    readonly refusal: "too_long";
+};
+
+// @public
+export function normalizeTeamName(name: string): {
+    readonly name: string;
+} | {
+    readonly refusal: TeamTextRefusal;
 };
 
 // @public
@@ -4813,6 +4890,11 @@ export function readBookmark(input: BookmarkReadDependencies, ask: BookmarkReadA
 export function readFolder(input: FolderReadDependencies, ask: FolderReadAsk): Promise<FolderRecord | undefined>;
 
 // @public
+export function readTeam(input: TeamReadDependencies<"find">, ask: {
+    readonly teamId: string;
+}): Promise<TeamDetail | undefined>;
+
+// @public
 export const REAUTH_WINDOW_MS: number;
 
 // @public
@@ -4852,6 +4934,9 @@ export function renameTag(input: TagRenameDependencies, ask: TagRenameAsk): Prom
 
 // @public
 export function renameWorkspace(input: WorkspaceAdministrationDependencies, ask: WorkspaceRenameAsk): Promise<WorkspaceRenameOutcome>;
+
+// @public (undocumented)
+export function replaceTeamMembers(input: TeamMembersDependencies, ask: TeamMembersAsk): Promise<TeamMembersReplacement>;
 
 // @public (undocumented)
 export interface RequestEntitlements {
@@ -5312,6 +5397,264 @@ export type TagStoreCreationResult = {
     readonly kind: "name_taken";
 };
 
+// @public (undocumented)
+export interface TeamChanges {
+    // (undocumented)
+    readonly description?: string;
+    // (undocumented)
+    readonly name?: string;
+}
+
+// @public (undocumented)
+export interface TeamCreationAsk {
+    // (undocumented)
+    readonly actor: AuditActor;
+    readonly description: string | undefined;
+    // (undocumented)
+    readonly ipPrefix: string | null;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface TeamCreationDependencies {
+    // (undocumented)
+    readonly audit: AuditWriter;
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: Pick<TeamStore, "create">;
+}
+
+// @public (undocumented)
+export type TeamCreationOutcome = {
+    readonly kind: "created";
+    readonly team: TeamDetail;
+} | TeamInvalid | {
+    readonly kind: "name_taken";
+};
+
+// @public (undocumented)
+export interface TeamDeletionAsk {
+    // (undocumented)
+    readonly actor: AuditActor;
+    // (undocumented)
+    readonly ipPrefix: string | null;
+    // (undocumented)
+    readonly teamId: string;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface TeamDeletionDependencies {
+    // (undocumented)
+    readonly audit: AuditWriter;
+    // (undocumented)
+    readonly store: Pick<TeamStore, "remove">;
+}
+
+// @public
+export interface TeamDetail extends TeamRecord {
+    // (undocumented)
+    readonly members: readonly TeamMemberRecord[];
+}
+
+// @public
+export interface TeamInvalid {
+    // (undocumented)
+    readonly field: "name" | "description";
+    // (undocumented)
+    readonly kind: "invalid";
+    // (undocumented)
+    readonly reason: TeamTextRefusal;
+}
+
+// @public (undocumented)
+export interface TeamListRequest {
+    readonly after: TeamPosition | undefined;
+    // (undocumented)
+    readonly limit: number;
+}
+
+// @public
+export interface TeamMemberRecord {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly displayName: string;
+    // (undocumented)
+    readonly email: string;
+}
+
+// @public (undocumented)
+export interface TeamMembersAsk {
+    // (undocumented)
+    readonly accountIds: readonly string[];
+    // (undocumented)
+    readonly actor: AuditActor;
+    // (undocumented)
+    readonly ipPrefix: string | null;
+    // (undocumented)
+    readonly teamId: string;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface TeamMembersDependencies {
+    // (undocumented)
+    readonly audit: AuditWriter;
+    // (undocumented)
+    readonly store: Pick<TeamStore, "replaceMembers">;
+}
+
+// @public (undocumented)
+export type TeamMembersReplacement =
+/** The set was replaced; `team` has the new members, and `added` and `removed` count the memberships written and deleted. */
+    {
+    readonly kind: "replaced";
+    readonly team: TeamDetail;
+    readonly added: number;
+    readonly removed: number;
+}
+/** The team has exactly these members already; nothing was written. */
+| {
+    readonly kind: "unchanged";
+    readonly team: TeamDetail;
+}
+/** An account of the set is no member of the workspace; nothing was written. */
+| {
+    readonly kind: "unknown_members";
+} | {
+    readonly kind: "not_found";
+};
+
+// @public
+export interface TeamPatch {
+    // (undocumented)
+    readonly description?: string;
+    // (undocumented)
+    readonly name?: string;
+}
+
+// @public
+export interface TeamPosition {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public (undocumented)
+export interface TeamReadDependencies<Method extends "list" | "find"> {
+    // (undocumented)
+    readonly store: Pick<TeamStore, Method>;
+}
+
+// @public
+export interface TeamRecord {
+    // (undocumented)
+    readonly createdAt: Date;
+    // (undocumented)
+    readonly description: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly memberCount: number;
+    readonly name: string;
+    // (undocumented)
+    readonly updatedAt: Date;
+    readonly version: number;
+}
+
+// @public (undocumented)
+export interface TeamStore {
+    create(team: NewTeam): Promise<TeamStoreCreationResult>;
+    find(teamId: string): Promise<TeamDetail | undefined>;
+    list(request: TeamListRequest): Promise<readonly TeamRecord[]>;
+    remove(teamId: string): Promise<string | undefined>;
+    replaceMembers(request: {
+        readonly teamId: string;
+        readonly accountIds: readonly string[];
+    }): Promise<TeamMembersReplacement>;
+    update(request: TeamUpdateRequest): Promise<TeamUpdateResult>;
+}
+
+// @public (undocumented)
+export type TeamStoreCreationResult = {
+    readonly kind: "created";
+    readonly team: TeamDetail;
+}
+/** The workspace already has a team of that name, spelled in any case. */
+| {
+    readonly kind: "name_taken";
+};
+
+// @public (undocumented)
+export type TeamTextRefusal = "empty" | "too_long";
+
+// @public (undocumented)
+export interface TeamUpdateAsk {
+    // (undocumented)
+    readonly actor: AuditActor;
+    // (undocumented)
+    readonly expectedVersions: readonly number[] | undefined;
+    // (undocumented)
+    readonly ipPrefix: string | null;
+    // (undocumented)
+    readonly patch: TeamPatch;
+    // (undocumented)
+    readonly teamId: string;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface TeamUpdateDependencies {
+    // (undocumented)
+    readonly audit: AuditWriter;
+    // (undocumented)
+    readonly store: Pick<TeamStore, "update">;
+}
+
+// @public (undocumented)
+export type TeamUpdateOutcome = TeamUpdateResult | TeamInvalid;
+
+// @public (undocumented)
+export interface TeamUpdateRequest {
+    // (undocumented)
+    readonly changes: TeamChanges;
+    readonly expectedVersions: readonly number[] | undefined;
+    // (undocumented)
+    readonly teamId: string;
+}
+
+// @public (undocumented)
+export type TeamUpdateResult =
+/** The team was changed; `team` is the row after the change and `previousName` the name it had. */
+    {
+    readonly kind: "updated";
+    readonly team: TeamDetail;
+    readonly previousName: string;
+}
+/** The patch names the values the team already has; nothing was written and the version stays. */
+| {
+    readonly kind: "unchanged";
+    readonly team: TeamDetail;
+}
+/** The version of the team, read under its lock, is none of the accepted ones; nothing was written. */
+| {
+    readonly kind: "stale";
+}
+/** The workspace has another team of that name; nothing was written. */
+| {
+    readonly kind: "name_taken";
+} | {
+    readonly kind: "not_found";
+};
+
 // @public
 export type TenantPrincipal = {
     readonly kind: "session";
@@ -5388,6 +5731,9 @@ export function updateFolder(input: FolderUpdateDependencies, ask: FolderUpdateA
 
 // @public
 export function updateInstanceAccount(input: InstanceAccountDependencies, ask: InstanceAccountUpdateAsk): Promise<InstanceAccountUpdateOutcome>;
+
+// @public (undocumented)
+export function updateTeam(input: TeamUpdateDependencies, ask: TeamUpdateAsk): Promise<TeamUpdateOutcome>;
 
 // @public
 export const USER_AGENT_MAX_LENGTH = 256;

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
 import { DisplayNameSchema } from "./me.ts";
+import { withoutNul } from "./text.ts";
 
 // The auth tag of doc 04 section 10.2. The sign-in operations are anonymous (the
 // credential is the request) and are called from the SPA, so they carry the
@@ -8,7 +9,7 @@ import { DisplayNameSchema } from "./me.ts";
 
 export const LoginRequestSchema = z
   .strictObject({
-    email: z.string().min(1).max(320).describe("The account's email address; case does not matter"),
+    email: withoutNul(z.string().min(1).max(320)).describe("The account's email address; case does not matter"),
     password: z.string().min(1).max(256).describe("The account's password"),
     remember: z.boolean().default(false).describe("Keep the session for 90 days of inactivity instead of 30"),
   })
@@ -112,7 +113,7 @@ export const login = defineOperation({
     403: problemResponse(
       "The request did not come from the application itself (cross_site_request); or the password is right but the deployment requires a verified email address and this account's was never verified (email_unverified), in which case no session is created and POST /auth/verify-email/resend sends the link again",
     ),
-    422: problemResponse("The body did not pass validation"),
+    422: problemResponse("The body did not pass validation: a field the operation does not declare, a missing or wrongly typed field, an empty password or one longer than 256 characters, or an email address that is empty, longer than 320 characters or holds a NUL character. The refusal comes before the sign-in is attempted, so it is the same whether or not the address has an account"),
     429: rateLimitedResponse("Too many sign-in attempts from this address or for this email address; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },
@@ -135,7 +136,7 @@ export const register = defineOperation({
     403: problemResponse(
       "The request did not come from the application itself (cross_site_request); public registration is off (registration_closed); or the deployment's registration policy refused the address (registration_refused, one answer for every reason). Nothing is written",
     ),
-    422: problemResponse("The body did not pass validation, or the password is outside 12 to 256 characters or is on the breached list (weak_password)"),
+    422: problemResponse("The body did not pass validation (a display name that holds a NUL character, among others), or the password is outside 12 to 256 characters or is on the breached list (weak_password)"),
     429: rateLimitedResponse("Too many registrations from this address; Retry-After says when to try again"),
     503: problemResponse(
       "Email verification is required and no mail is configured (mail_unavailable), or the service is temporarily unavailable (unavailable). Nothing is written",

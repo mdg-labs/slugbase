@@ -69,7 +69,7 @@ BEGIN
     RAISE EXCEPTION 'sys_workspace_purge_batch needs a workspace, a table and a batch size from 1 to 10000'
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
-  IF p_table NOT IN ('api_tokens', 'audit_events', 'bookmark_tags', 'bookmarks', 'folder_bookmarks', 'folders', 'slug_preferences', 'tags', 'url_metadata', 'workspace_invitations', 'workspace_settings', 'workspace_members') THEN
+  IF p_table NOT IN ('api_tokens', 'audit_events', 'bookmark_tags', 'bookmarks', 'folder_bookmarks', 'folders', 'slug_preferences', 'team_members', 'teams', 'tags', 'url_metadata', 'workspace_invitations', 'workspace_settings', 'workspace_members') THEN
     RAISE EXCEPTION 'sys_workspace_purge_batch does not know the table %', p_table
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
@@ -101,6 +101,12 @@ BEGIN
   ELSIF p_table = 'folders' THEN
     DELETE FROM public.folders
     WHERE id IN (SELECT f.id FROM public.folders f WHERE f.workspace_id = p_workspace_id LIMIT p_batch_size);
+  ELSIF p_table = 'team_members' THEN
+    DELETE FROM public.team_members
+    WHERE (team_id, account_id) IN (SELECT l.team_id, l.account_id FROM public.team_members l WHERE l.workspace_id = p_workspace_id LIMIT p_batch_size);
+  ELSIF p_table = 'teams' THEN
+    DELETE FROM public.teams
+    WHERE id IN (SELECT t.id FROM public.teams t WHERE t.workspace_id = p_workspace_id LIMIT p_batch_size);
   ELSIF p_table = 'tags' THEN
     DELETE FROM public.tags
     WHERE id IN (SELECT t.id FROM public.tags t WHERE t.workspace_id = p_workspace_id LIMIT p_batch_size);

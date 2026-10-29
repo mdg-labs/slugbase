@@ -1,12 +1,13 @@
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { connect, createServer } from "node:net";
+import { connect } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { loadBuildInfo } from "@slugbase/server";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { renderBuildInfo, sourceCommit } from "../scripts/build-info.ts";
+import { BIND_ANY_PORT, boundPort, PLACEHOLDER_PORTS } from "./ephemeral-ports.ts";
 
 // `pnpm --filter slugbase build` leaves one directory holding the server bundle, the web
 // assets and the build-info file; the tests build into a directory of their own and run the
@@ -50,19 +51,6 @@ describe("sourceCommit", () => {
     }
   });
 });
-
-function freePort(): Promise<number> {
-  return new Promise((resolvePort, reject) => {
-    const probe = createServer();
-    probe.once("error", reject);
-    probe.listen(0, "127.0.0.1", () => {
-      const address = probe.address();
-      probe.close(() => {
-        resolvePort(typeof address === "object" && address !== null ? address.port : 0);
-      });
-    });
-  });
-}
 
 // A raw HTTP/1.1 exchange: the bundle under test is the only peer, and nothing here leaves the machine.
 function fetchText(port: number, path: string): Promise<{ status: number; body: string }> {
@@ -124,12 +112,11 @@ describe("the build output", () => {
   });
 
   it("is served by `main.js server`: /version reads the build-info file and / is the built index.html", async () => {
-    const port = await freePort();
-    const child = spawn(process.execPath, [join(outDir, "dist", "main.js"), "server"], {
+    const child = spawn(process.execPath, [...BIND_ANY_PORT, join(outDir, "dist", "main.js"), "server"], {
       cwd: outDir,
       env: {
         PATH: process.env["PATH"] ?? "",
-        PORT: String(port),
+        PORT: PLACEHOLDER_PORTS.PORT,
         NODE_ENV: "test",
         APP_ORIGIN: "https://bookmarks.example.com",
         DATABASE_URL: "postgres://slugbase_app:Zq8-prod-app-pw@db.internal:5432/slugbase",
@@ -149,7 +136,7 @@ describe("the build output", () => {
     const listening = new Promise<boolean>((resolveListening) => {
       const watch = (chunk: Buffer): void => {
         output += chunk.toString("utf8");
-        if (output.includes('"Listening"')) {
+        if (boundPort(output, "Listening") !== undefined) {
           resolveListening(true);
         }
       };
@@ -162,6 +149,10 @@ describe("the build output", () => {
     const timer = setTimeout(() => child.kill("SIGKILL"), 30_000);
     try {
       expect(await listening, output).toBe(true);
+      const port = boundPort(output, "Listening");
+      if (port === undefined) {
+        throw new Error(`the server did not log its port\n${output}`);
+      }
       expect(output).not.toContain("There is no web build");
       const version = await fetchText(port, "/version");
       const page = await fetchText(port, "/");

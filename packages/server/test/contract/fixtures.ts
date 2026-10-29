@@ -20,7 +20,7 @@ export const UNKNOWN_API_TOKEN_ID = "0192f3a0-cccc-7000-8000-000000000002";
 export const UNKNOWN_MEMBER_ID = "0192f3a0-cccc-7000-8000-000000000004";
 export const UNKNOWN_IDENTITY_ID = "0192f3a0-cccc-7000-8000-000000000003";
 
-/** A team no workspace holds: teams have no members to join yet, so any team named in an invitation is refused the same way. */
+/** A team no workspace holds: the walker's request to read, change, delete or fill it is the declared 404, and a team named in an invitation is refused whichever workspace holds it. */
 export const UNKNOWN_TEAM_ID = "0192f3a0-cccc-7000-8000-000000000005";
 
 /** A workspace no instance holds: the walker's request to delete it is the declared 404. */
@@ -340,6 +340,17 @@ export const FIXTURES: ContractFixtures = {
     status: 404,
     foreign: { path: { id: UNKNOWN_FOLDER_ID }, body: { bookmarkIds: [UNKNOWN_BOOKMARK_ID] } },
   },
+  // The teams of the workspace of the request. The creation and the list name no identifier of any workspace, so the walker's valid request to create is the
+  // declared 201 (a second creation of the name by another account is the declared 409, which the matrix tolerates since it names no identifier). The read, the
+  // change, the deletion and the replacement of the members name a team by identifier, which the walker cannot know for a team it would own, so each valid request
+  // names a team that no workspace holds, the declared 404 whoever would hold it, and so is the team of workspace B that the matrix puts in the path. The
+  // replacement also names members in its body: the walker's request is the empty set, and the matrix puts the members of workspace B in `accountIds`.
+  listTeams: {},
+  createTeam: { body: { name: "Walker team" } },
+  getTeam: { path: { id: UNKNOWN_TEAM_ID }, status: 404, foreign: { path: { id: UNKNOWN_TEAM_ID } } },
+  updateTeam: { path: { id: UNKNOWN_TEAM_ID }, body: { name: "Walker team" }, status: 404, foreign: { path: { id: UNKNOWN_TEAM_ID }, body: { name: "Walker team" } } },
+  deleteTeam: { path: { id: UNKNOWN_TEAM_ID }, status: 404, foreign: { path: { id: UNKNOWN_TEAM_ID } } },
+  replaceTeamMembers: { path: { id: UNKNOWN_TEAM_ID }, body: { accountIds: [] }, status: 404, foreign: { path: { id: UNKNOWN_TEAM_ID }, body: { accountIds: [UNKNOWN_MEMBER_ID] } } },
   // The search names no identifier of any workspace: it takes a text, and acts on the caller's own bookmarks, folders and tags in the workspace of the request. The text is the one
   // the rows of workspace B are named after (the matrix seeds bookmarks, a tag and a folder called matrix-...), so a row of B in an answer would show.
   search: { query: { q: "matrix" } },

@@ -27,12 +27,22 @@ function renderBreadcrumb() {
 }
 
 describe("Breadcrumb", () => {
-  it("renders a labelled navigation with the current page marked", () => {
+  it("marks the current page", () => {
+    renderBreadcrumb();
+
+    expect(screen.getByText("Account").getAttribute("aria-current")).toBe("page");
+  });
+
+  it("renders a labelled navigation", () => {
     renderBreadcrumb();
 
     expect(screen.getByRole("navigation", { name: "breadcrumb" })).toBeTruthy();
+  });
+
+  it("links to the parent page", () => {
+    renderBreadcrumb();
+
     expect(screen.getByRole("link", { name: "Settings" }).getAttribute("href")).toBe("/settings");
-    expect(screen.getByText("Account").getAttribute("aria-current")).toBe("page");
   });
 
   it("is free of accessibility violations", async () => {

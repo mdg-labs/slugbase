@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
+import { withoutNul } from "./text.ts";
 
 // The tags tag of doc 04 section 10.7: the operations that create, list, rename, merge and delete a member's tags and report how they are
 // used. They act in the workspace the request is bound to and name none (D11). A tag is private to the member who created it (doc 02
@@ -9,11 +10,7 @@ import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimi
 /** The longest tag name, in characters (doc 02 section 7.2). */
 export const TAG_NAME_MAX_LENGTH = 40;
 
-const TagNameSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(TAG_NAME_MAX_LENGTH)
+const TagNameSchema = withoutNul(z.string().trim().min(1).max(TAG_NAME_MAX_LENGTH))
   .describe(
     "The tag's name, 1 to 40 characters after the whitespace around it is removed. It is stored as entered, in the case it is written in, and is unique among the caller's tags without regard to case",
   );
@@ -113,7 +110,7 @@ export const createTag = defineOperation({
     403: problemResponse("The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"),
     404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),
     409: problemResponse("The caller already has a tag with this name, in any case (name_taken); nothing is written"),
-    422: problemResponse("The body did not pass validation (a name that is blank or longer than 40 characters, or a field the operation does not declare)"),
+    422: problemResponse("The body did not pass validation (a name that is blank, longer than 40 characters or holds a NUL character, or a field the operation does not declare)"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },
@@ -159,7 +156,7 @@ export const renameTag = defineOperation({
       "The workspace the request acts in has no tag of the caller with this identifier: another member's tag, a tag of another workspace and one that never existed are answered alike",
     ),
     409: problemResponse("The caller has another tag with this name, in any case (name_taken); nothing is written. Merging two tags is another operation"),
-    422: problemResponse("The identifier or the body did not pass validation (a name that is blank or longer than 40 characters, or a field the operation does not declare)"),
+    422: problemResponse("The identifier or the body did not pass validation (a name that is blank, longer than 40 characters or holds a NUL character, or a field the operation does not declare)"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },

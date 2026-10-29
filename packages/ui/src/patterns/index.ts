@@ -26,6 +26,7 @@ export { DangerZone, type DangerZoneItem, type DangerZoneProps } from "./danger-
 export { DataTable, type DataTableCardSlot, type DataTableColumn, type DataTableProps, type DataTableSortDirection } from "./data-table.tsx";
 export { Disclosure, type DisclosureProps } from "./disclosure.tsx";
 export { EmptyState, type EmptyStateProps } from "./empty-state.tsx";
+export { Favicon, type FaviconProps } from "./favicon.tsx";
 export { FeedbackToastProvider, feedbackToast, type FeedbackToastProviderProps } from "./feedback-toast.tsx";
 export { FOLDER_ICON_COMPONENTS } from "./folder-icons.ts";
 export { FormField, type FormFieldProps } from "./form-field.tsx";

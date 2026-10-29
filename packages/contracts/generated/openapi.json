@@ -1388,6 +1388,26 @@
         ],
         "type": "object"
       },
+      "CreateTeamRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "description": "The team's description, 0 to 280 characters; empty when left out",
+            "maxLength": 280,
+            "type": "string"
+          },
+          "name": {
+            "description": "The team's name, 1 to 64 characters after the whitespace around it is removed. It is stored as entered, in the case it is written in, and is unique in the workspace without regard to case",
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
       "CreateWorkspaceRequest": {
         "additionalProperties": false,
         "properties": {
@@ -3919,6 +3939,25 @@
         ],
         "type": "object"
       },
+      "ReplaceTeamMembersRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "accountIds": {
+            "description": "The accounts that are the team's members afterwards, 0 to 1 000 identifiers; one named twice counts once. Every one must be a current member of the workspace, and an empty list empties the team",
+            "items": {
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            },
+            "maxItems": 1000,
+            "type": "array"
+          }
+        },
+        "required": [
+          "accountIds"
+        ],
+        "type": "object"
+      },
       "RequestEmailChangeRequest": {
         "additionalProperties": false,
         "properties": {
@@ -4419,6 +4458,169 @@
         ],
         "type": "object"
       },
+      "Team": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "description": "When the team was created, RFC 3339 UTC",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "type": "string"
+          },
+          "description": {
+            "description": "The team's description; empty when it has none",
+            "type": "string"
+          },
+          "id": {
+            "description": "The team's identifier",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "memberCount": {
+            "description": "How many members the team has",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "name": {
+            "description": "The team's name, in the case it was entered in",
+            "type": "string"
+          },
+          "updatedAt": {
+            "description": "When the team's name or description last changed, RFC 3339 UTC",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "type": "string"
+          },
+          "version": {
+            "description": "Moves by one with every change of the name or the description; the ETag header of the single-team operations carries it and If-Match takes it back",
+            "maximum": 9007199254740991,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "memberCount",
+          "version",
+          "createdAt",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "TeamList": {
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "description": "One page of the workspace's teams, ordered by name (ignoring case) and then identifier",
+            "items": {
+              "$ref": "#/components/schemas/Team"
+            },
+            "type": "array"
+          },
+          "nextCursor": {
+            "description": "Passed as `cursor` to get the next page; null on the last page",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "nextCursor"
+        ],
+        "type": "object"
+      },
+      "TeamMember": {
+        "additionalProperties": false,
+        "properties": {
+          "accountId": {
+            "description": "The member's account identifier",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "displayName": {
+            "description": "The member's display name",
+            "type": "string"
+          },
+          "email": {
+            "description": "The member's email address, which every co-member of the workspace sees",
+            "type": "string"
+          }
+        },
+        "required": [
+          "accountId",
+          "displayName",
+          "email"
+        ],
+        "type": "object"
+      },
+      "TeamWithMembers": {
+        "additionalProperties": false,
+        "properties": {
+          "createdAt": {
+            "description": "When the team was created, RFC 3339 UTC",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "type": "string"
+          },
+          "description": {
+            "description": "The team's description; empty when it has none",
+            "type": "string"
+          },
+          "id": {
+            "description": "The team's identifier",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "memberCount": {
+            "description": "How many members the team has",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "members": {
+            "description": "The team's members, ordered by display name and then account identifier",
+            "items": {
+              "$ref": "#/components/schemas/TeamMember"
+            },
+            "type": "array"
+          },
+          "name": {
+            "description": "The team's name, in the case it was entered in",
+            "type": "string"
+          },
+          "updatedAt": {
+            "description": "When the team's name or description last changed, RFC 3339 UTC",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+            "type": "string"
+          },
+          "version": {
+            "description": "Moves by one with every change of the name or the description; the ETag header of the single-team operations carries it and If-Match takes it back",
+            "maximum": 9007199254740991,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "memberCount",
+          "version",
+          "createdAt",
+          "updatedAt",
+          "members"
+        ],
+        "type": "object"
+      },
       "TransferOwnershipRequest": {
         "additionalProperties": false,
         "properties": {
@@ -4747,6 +4949,23 @@
         "required": [
           "role"
         ],
+        "type": "object"
+      },
+      "UpdateTeamRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "description": {
+            "description": "The new description, 0 to 280 characters; an empty string clears it. Left out, the description is left as it is",
+            "maxLength": 280,
+            "type": "string"
+          },
+          "name": {
+            "description": "The new name, 1 to 64 characters after the whitespace around it is removed; unique in the workspace without regard to case. Left out, the name is left as it is",
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
         "type": "object"
       },
       "UpdateWorkspaceSettingsRequest": {
@@ -5120,7 +5339,7 @@
                 }
               }
             },
-            "description": "The body did not pass validation"
+            "description": "The body did not pass validation: a field the operation does not declare, a missing or wrongly typed field, an empty password or one longer than 256 characters, or an email address that is empty, longer than 320 characters or holds a NUL character. The refusal comes before the sign-in is attempted, so it is the same whether or not the address has an account"
           },
           "429": {
             "content": {
@@ -5838,7 +6057,7 @@
                 }
               }
             },
-            "description": "The body did not pass validation, or the password is outside 12 to 256 characters or is on the breached list (weak_password)"
+            "description": "The body did not pass validation (a display name that holds a NUL character, among others), or the password is outside 12 to 256 characters or is on the breached list (weak_password)"
           },
           "429": {
             "content": {
@@ -6420,7 +6639,7 @@
                 }
               }
             },
-            "description": "The body did not pass validation (a missing, empty or over-long URL, title or description, a malformed URL, a slug outside the grammar, forwarding true without a slug, a folderIds, tagIds or tagNames list of more than 100 or with a malformed identifier, or a tag name that is empty or over 40 characters, or a field the operation does not declare), the URL is not an http or https URL (url_not_allowed), or the workspace already holds as many bookmarks as its bookmarks.max entitlement allows (bookmark_limit_reached; the problem carries limit and used). Nothing is written, and a refused request keeps no key, so a retry with it runs"
+            "description": "The body did not pass validation (a missing, empty or over-long URL, title or description, a title, description or tag name that holds a NUL character, a malformed URL, a slug outside the grammar, forwarding true without a slug, a folderIds, tagIds or tagNames list of more than 100 or with a malformed identifier, or a tag name that is empty or over 40 characters, or a field the operation does not declare), the URL is not an http or https URL (url_not_allowed), or the workspace already holds as many bookmarks as its bookmarks.max entitlement allows (bookmark_limit_reached; the problem carries limit and used). Nothing is written, and a refused request keeps no key, so a retry with it runs"
           },
           "429": {
             "content": {
@@ -7373,7 +7592,7 @@
                 }
               }
             },
-            "description": "The identifier or the body did not pass validation (a malformed, empty or over-long URL, a title that is blank or over-long, a description over 1 000 characters, a null title or URL, a slug outside the grammar, forwarding true or left on without a slug, a folderIds, tagIds or tagNames list of more than 100 or with a malformed identifier, or a tag name that is empty or over 40 characters, or a field the operation does not declare), or the URL is not an http or https URL (url_not_allowed). Nothing is written"
+            "description": "The identifier or the body did not pass validation (a malformed, empty or over-long URL, a title that is blank, over-long or holding a NUL character, a description over 1 000 characters or holding one, a null title or URL, a slug outside the grammar, forwarding true or left on without a slug, a folderIds, tagIds or tagNames list of more than 100 or with a malformed identifier, or a tag name that is empty or over 40 characters, or a field the operation does not declare), or the URL is not an http or https URL (url_not_allowed). Nothing is written"
           },
           "429": {
             "content": {
@@ -7988,7 +8207,7 @@
                 }
               }
             },
-            "description": "The query did not pass validation (an unknown parameter, scope or sort, a limit outside 1 to 100, a search text longer than 64 characters)"
+            "description": "The query did not pass validation (an unknown parameter, scope or sort, a limit outside 1 to 100, a search text longer than 64 characters or holding a NUL character)"
           },
           "429": {
             "content": {
@@ -8111,7 +8330,7 @@
                 }
               }
             },
-            "description": "The body did not pass validation (a name that is blank or longer than 64 characters, an icon outside the list, a colour outside 1 to 8, or a field the operation does not declare)"
+            "description": "The body did not pass validation (a name that is blank, longer than 64 characters or holds a NUL character, an icon outside the list, a colour outside 1 to 8, or a field the operation does not declare)"
           },
           "429": {
             "content": {
@@ -8501,7 +8720,7 @@
                 }
               }
             },
-            "description": "The identifier or the body did not pass validation (a name that is blank or longer than 64 characters, an icon outside the list, a colour outside 1 to 8, or a field the operation does not declare). Nothing is written"
+            "description": "The identifier or the body did not pass validation (a name that is blank, longer than 64 characters or holds a NUL character, an icon outside the list, a colour outside 1 to 8, or a field the operation does not declare). Nothing is written"
           },
           "429": {
             "content": {
@@ -10335,7 +10554,7 @@
                 }
               }
             },
-            "description": "The body did not pass validation: a field the operation does not declare, a name that is blank or longer than 64 characters, neither or both of ownerAccountId and ownerEmail, or an ownerAccountId that is no account or is disabled (unknown_account). Nothing is written"
+            "description": "The body did not pass validation: a field the operation does not declare, a name that is blank, longer than 64 characters or holds a NUL character, neither or both of ownerAccountId and ownerEmail, or an ownerAccountId that is no account or is disabled (unknown_account). Nothing is written"
           },
           "429": {
             "content": {
@@ -11111,7 +11330,7 @@
                 }
               }
             },
-            "description": "The body did not pass validation (a display name without a password or the reverse included), the password is outside 12 to 256 characters or is on the breached list (weak_password), or the workspace has no seat left (seat_limit_reached); nothing is written and the invitation stays pending"
+            "description": "The body did not pass validation (a display name without a password or the reverse included, a display name that holds a NUL character), the password is outside 12 to 256 characters or is on the breached list (weak_password), or the workspace has no seat left (seat_limit_reached); nothing is written and the invitation stays pending"
           },
           "429": {
             "content": {
@@ -11834,7 +12053,7 @@
                 }
               }
             },
-            "description": "The body did not pass validation: an unknown field or onboarding key, a name that is empty or longer than 100 characters, or a value outside the one the field allows (a language other than en and de, an accent that is not a preset name)"
+            "description": "The body did not pass validation: an unknown field or onboarding key, a name that is empty, longer than 100 characters or holds a NUL character, or a value outside the one the field allows (a language other than en and de, an accent that is not a preset name)"
           },
           "429": {
             "content": {
@@ -12075,7 +12294,7 @@
                 }
               }
             },
-            "description": "The body did not pass validation (a name outside 1 to 64 characters, an unknown scope, an expiry other than 30, 90, 365 or null); or the account already has 10 tokens that are neither revoked nor expired (validation_failed with the field code api_token_limit_reached)"
+            "description": "The body did not pass validation (a name outside 1 to 64 characters or holding a NUL character, an unknown scope, an expiry other than 30, 90, 365 or null); or the account already has 10 tokens that are neither revoked nor expired (validation_failed with the field code api_token_limit_reached)"
           },
           "429": {
             "content": {
@@ -14704,7 +14923,7 @@
                 }
               }
             },
-            "description": "The body did not pass validation, or the password is outside 12 to 256 characters or is on the breached list (weak_password)"
+            "description": "The body did not pass validation (a display name or a workspace name that holds a NUL character, among others), or the password is outside 12 to 256 characters or is on the breached list (weak_password)"
           },
           "429": {
             "content": {
@@ -15141,7 +15360,7 @@
                 }
               }
             },
-            "description": "The body did not pass validation (a name that is blank or longer than 40 characters, or a field the operation does not declare)"
+            "description": "The body did not pass validation (a name that is blank, longer than 40 characters or holds a NUL character, or a field the operation does not declare)"
           },
           "429": {
             "content": {
@@ -15487,7 +15706,7 @@
                 }
               }
             },
-            "description": "The identifier or the body did not pass validation (a name that is blank or longer than 40 characters, or a field the operation does not declare)"
+            "description": "The identifier or the body did not pass validation (a name that is blank, longer than 40 characters or holds a NUL character, or a field the operation does not declare)"
           },
           "429": {
             "content": {
@@ -15656,6 +15875,785 @@
         "x-slugbase-auth": "member",
         "x-slugbase-rate": "write",
         "x-slugbase-scope": "write"
+      }
+    },
+    "/api/v1/teams": {
+      "get": {
+        "operationId": "listTeams",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "description": "The most teams to return, at most 100",
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "description": "The `nextCursor` of the previous page. It is valid only for the workspace that received it; any other cursor is refused with 400",
+              "maxLength": 1024,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamList"
+                }
+              }
+            },
+            "description": "One page of the workspace's teams, each with its member count, and the cursor of the next page. Every member sees every team"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed, or the cursor is not one this workspace was issued (bad_request)"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace: the account has none, or the workspace is being deleted"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The query did not pass validation (an unknown parameter, a limit outside 1 to 100)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "List the teams",
+        "tags": [
+          "teams"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-rate": "read",
+        "x-slugbase-scope": "read"
+      },
+      "post": {
+        "operationId": "createTeam",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTeamRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamWithMembers"
+                }
+              }
+            },
+            "description": "The team, with no members and version 1; the ETag header carries the version",
+            "headers": {
+              "ETag": {
+                "description": "The team's version as an entity tag, for example \"3\"; the If-Match of the next change",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the workspace does not hold the teams.manage entitlement (entitlement_required)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request acts in no workspace: the account has none, or the workspace is being deleted"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The workspace already has a team with this name, in any case (name_taken); nothing is written"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The body did not pass validation (a name that is blank, longer than 64 characters or holds a NUL character, a description longer than 280 or holding one, or a field the operation does not declare)"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Create a team",
+        "tags": [
+          "teams"
+        ],
+        "x-slugbase-auth": "admin",
+        "x-slugbase-entitlement": "teams.manage",
+        "x-slugbase-rate": "write"
+      }
+    },
+    "/api/v1/teams/{id}": {
+      "delete": {
+        "operationId": "deleteTeam",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The team's identifier",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The team is deleted for good together with its memberships; the members stay members of the workspace"
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the workspace does not hold the teams.manage entitlement (entitlement_required)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The workspace the request acts in has no team with this identifier: a team of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The identifier did not pass validation"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Delete a team",
+        "tags": [
+          "teams"
+        ],
+        "x-slugbase-auth": "admin",
+        "x-slugbase-entitlement": "teams.manage",
+        "x-slugbase-rate": "write"
+      },
+      "get": {
+        "operationId": "getTeam",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The team's identifier",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamWithMembers"
+                }
+              }
+            },
+            "description": "The team with its members. Every member sees every team",
+            "headers": {
+              "ETag": {
+                "description": "The team's version as an entity tag, for example \"3\"; the If-Match of the next change",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The workspace the request acts in has no team with this identifier: a team of another workspace and one that never existed are answered alike"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The identifier did not pass validation"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Get a team with its members",
+        "tags": [
+          "teams"
+        ],
+        "x-slugbase-auth": "member",
+        "x-slugbase-rate": "read",
+        "x-slugbase-scope": "read"
+      },
+      "patch": {
+        "operationId": "updateTeam",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The team's identifier",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "description": "The ETag of the version the change is made against, for example \"3\". A team at another version answers 412 precondition_failed. Optional, so a caller may leave it out; `*` matches any version",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTeamRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamWithMembers"
+                }
+              }
+            },
+            "description": "The team after a JSON Merge Patch of its name and description. A change moves the version by one and the ETag is that of the new version; a patch that names the values the team has, and an empty one, write nothing and answer with the unchanged version",
+            "headers": {
+              "ETag": {
+                "description": "The team's version as an entity tag, for example \"3\"; the If-Match of the next change",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the workspace does not hold the teams.manage entitlement (entitlement_required)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The workspace the request acts in has no team with this identifier: a team of another workspace and one that never existed are answered alike"
+          },
+          "409": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The workspace has another team with this name, in any case (name_taken); nothing is written"
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "If-Match names a version other than the team's current one (precondition_failed); the team is unchanged"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The identifier or the body did not pass validation (a name that is blank, longer than 64 characters or holds a NUL character, a description longer than 280 or holding one, or a field the operation does not declare). Nothing is written"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Rename or describe a team",
+        "tags": [
+          "teams"
+        ],
+        "x-slugbase-auth": "admin",
+        "x-slugbase-entitlement": "teams.manage",
+        "x-slugbase-rate": "write"
+      }
+    },
+    "/api/v1/teams/{id}/members": {
+      "put": {
+        "operationId": "replaceTeamMembers",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "The team's identifier",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplaceTeamMembersRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamWithMembers"
+                }
+              }
+            },
+            "description": "The team with the members the request named, whether or not the set changed. Accounts outside the set are removed from the team and accounts in it are added; the team's version does not move, since it covers the name and the description",
+            "headers": {
+              "ETag": {
+                "description": "The team's version as an entity tag, for example \"3\"; the If-Match of the next change",
+                "required": true,
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request was malformed"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "There is no session, or its second factor is not complete"
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The request did not come from the application itself (cross_site_request), the credential is an API token, the caller is a member and not an admin or owner of the workspace (forbidden), or the workspace does not hold the teams.manage entitlement (entitlement_required)"
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The workspace the request acts in has no team with this identifier: a team of another workspace and one that never existed are answered alike"
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The identifier or the body did not pass validation: an account that is no current member of the workspace (validation_failed on accountIds, whichever workspace the account belongs to), more than 1 000 identifiers, or a field the operation does not declare. Nothing is written"
+          },
+          "429": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too many requests; Retry-After says when to try again",
+            "headers": {
+              "Retry-After": {
+                "description": "Whole seconds to wait before the request can succeed",
+                "required": true,
+                "schema": {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The service is temporarily unavailable"
+          }
+        },
+        "summary": "Replace the members of a team",
+        "tags": [
+          "teams"
+        ],
+        "x-slugbase-auth": "admin",
+        "x-slugbase-entitlement": "teams.manage",
+        "x-slugbase-rate": "write"
       }
     },
     "/api/v1/workspace": {
@@ -15948,7 +16946,7 @@
                 }
               }
             },
-            "description": "The body did not pass validation (a name that is blank or outside 1 to 64 characters, or a field the operation does not declare)"
+            "description": "The body did not pass validation (a name that is blank, outside 1 to 64 characters or holds a NUL character, or a field the operation does not declare)"
           },
           "429": {
             "content": {
@@ -16579,7 +17577,7 @@
                 }
               }
             },
-            "description": "The body did not pass validation (a name that is blank or outside 1 to 64 characters, or a field the operation does not declare), or the account already owns as many workspaces as its workspaces.ownMax entitlement allows (workspace_limit_reached; the problem carries limit, used and upgradeAvailable). Nothing is written"
+            "description": "The body did not pass validation (a name that is blank, outside 1 to 64 characters or holds a NUL character, or a field the operation does not declare), or the account already owns as many workspaces as its workspaces.ownMax entitlement allows (workspace_limit_reached; the problem carries limit, used and upgradeAvailable). Nothing is written"
           },
           "429": {
             "content": {
@@ -16776,6 +17774,9 @@
     },
     {
       "name": "tags"
+    },
+    {
+      "name": "teams"
     },
     {
       "name": "workspaces"

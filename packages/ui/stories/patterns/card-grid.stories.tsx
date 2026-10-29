@@ -14,14 +14,14 @@ const ACTIONS = [
 
 export const Default = (): React.ReactElement => (
   <CardGrid label="Bookmarks">
-    <CardGridItem actions={ACTIONS} actionsLabel="Actions for Example docs" href="https://example.com/docs" monogram="e" selectLabel="Select Example docs" subtitle="example.com" title="Example docs">
+    <CardGridItem actions={ACTIONS} actionsLabel="Actions for Example docs" href="https://example.com/docs" host="example.com" selectLabel="Select Example docs" subtitle="example.com" title="Example docs">
       <p className="text-muted-foreground text-xs">142 opens · 2 h ago</p>
     </CardGridItem>
     <CardGridItem
       actions={ACTIONS}
       actionsLabel="Actions for A very long title that runs over two lines of the card and is cut off after them"
       href="https://example.org/read"
-      monogram="e"
+      host="example.com"
       selectLabel="Select the long one"
       subtitle="example.org"
       title="A very long title that runs over two lines of the card and is cut off after them"

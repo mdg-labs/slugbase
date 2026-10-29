@@ -18,15 +18,28 @@ beforeEach(() => {
 });
 
 describe("ThemeToggle", () => {
-  it("is a button named for the theme it switches to, and keeps the choice", async () => {
+  it("is a button named for the theme it switches to, and keeps the choice", () => {
     window.localStorage.setItem(THEME_STORAGE_KEY, "light");
-    const { container } = render(<Toggle />);
-    await expectNoViolations(container);
+    render(<Toggle />);
 
     fireEvent.click(screen.getByRole("button", { name: "To dark" }));
 
     expect(window.localStorage.getItem(THEME_STORAGE_KEY)).toBe("dark");
     expect(screen.getByRole("button", { name: "To light" })).toBeTruthy();
+  });
+
+  it("is free of accessibility violations in the light theme", async () => {
+    window.localStorage.setItem(THEME_STORAGE_KEY, "light");
+    const { container } = render(<Toggle />);
+
+    await expectNoViolations(container);
+  });
+
+  it("is free of accessibility violations after switching to the dark theme", async () => {
+    window.localStorage.setItem(THEME_STORAGE_KEY, "light");
+    const { container } = render(<Toggle />);
+    fireEvent.click(screen.getByRole("button", { name: "To dark" }));
+
     await expectNoViolations(container);
   });
 

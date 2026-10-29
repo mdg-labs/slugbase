@@ -2,6 +2,7 @@ import { z } from "zod";
 import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
 import { WORKSPACE_ROLES } from "./me.ts";
 import { EndMembershipRequestSchema, MemberSchema, MembershipEndedSchema } from "./members.ts";
+import { withoutNul } from "./text.ts";
 
 // The workspaces tag of doc 04 section 10.4. The account-level operations list the workspaces the signed-in
 // account belongs to, create one and switch the session's active one; they act on the session's own account,
@@ -37,11 +38,7 @@ export const WorkspaceListSchema = z
  * Zod counts a character as one code point, as PostgreSQL's length() does, and a parsed value is the trimmed
  * name that is stored.
  */
-export const WorkspaceNameSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(WORKSPACE_NAME_MAX_LENGTH)
+export const WorkspaceNameSchema = withoutNul(z.string().trim().min(1).max(WORKSPACE_NAME_MAX_LENGTH))
   .describe("The workspace's name, 1 to 64 characters; surrounding whitespace is removed and a name that is blank after that is refused");
 
 export const CreateWorkspaceRequestSchema = z.strictObject({ name: WorkspaceNameSchema }).meta({ id: "CreateWorkspaceRequest" });
@@ -128,7 +125,7 @@ export const createWorkspace = defineOperation({
       "The request did not come from the application itself (cross_site_request), the credential is an API token, the deployment does not let accounts create workspaces (forbidden), or the account's email address is not verified (email_unverified). Nothing is written",
     ),
     422: problemResponse(
-      "The body did not pass validation (a name that is blank or outside 1 to 64 characters, or a field the operation does not declare), or the account already owns as many workspaces as its workspaces.ownMax entitlement allows (workspace_limit_reached; the problem carries limit, used and upgradeAvailable). Nothing is written",
+      "The body did not pass validation (a name that is blank, outside 1 to 64 characters or holds a NUL character, or a field the operation does not declare), or the account already owns as many workspaces as its workspaces.ownMax entitlement allows (workspace_limit_reached; the problem carries limit, used and upgradeAvailable). Nothing is written",
     ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable, or the entitlement source could not say how many workspaces the account may own"),
@@ -197,7 +194,7 @@ export const renameWorkspace = defineOperation({
     ),
     404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),
     412: problemResponse("If-Match names a version other than the workspace's current one (precondition_failed); the name is unchanged"),
-    422: problemResponse("The body did not pass validation (a name that is blank or outside 1 to 64 characters, or a field the operation does not declare)"),
+    422: problemResponse("The body did not pass validation (a name that is blank, outside 1 to 64 characters or holds a NUL character, or a field the operation does not declare)"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
   },

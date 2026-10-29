@@ -1,5 +1,6 @@
 import type { MouseEvent, ReactElement, ReactNode } from "react";
 import { Card } from "../components/ui/card.tsx";
+import { Favicon } from "./favicon.tsx";
 
 export interface TileGridProps {
   /** Names the list for assistive technology. */
@@ -26,23 +27,21 @@ export interface TileLinkProps {
   hint?: string;
   /** Called when the link is followed, with a click or a middle click, before the browser navigates. It must not delay the navigation. */
   onOpen?: () => void;
-  /** The letter that stands in for a picture. */
-  monogram: string;
+  /** The host the tile's icon is drawn for; the favicon of the host, or its monogram when it has none. */
+  host: string;
   /** A line in mono under the title, for an address or a host. It is not translated. */
   subtitle?: string;
   /** The rest of the tile, under the subtitle, for example a `SlugChip`. */
   children?: ReactNode;
 }
 
-/** One compact card of a `TileGrid` (doc 03 `card-grid` compact variant, quick access tiles): a monogram, the title as the link that stretches over the whole tile, and a mono subtitle. */
-export function TileLink({ title, href, hint, onOpen, monogram, subtitle, children }: TileLinkProps): ReactElement {
+/** One compact card of a `TileGrid` (doc 03 `card-grid` compact variant, quick access tiles): the favicon of the host, the title as the link that stretches over the whole tile, and a mono subtitle. */
+export function TileLink({ title, href, hint, onOpen, host, subtitle, children }: TileLinkProps): ReactElement {
   return (
     <li className="min-w-0">
       <Card className="h-full gap-2 p-3 transition-colors focus-within:ring-2 focus-within:ring-ring hover:bg-accent/30">
         <div className="flex items-center gap-3">
-          <span aria-hidden="true" className="grid size-8 shrink-0 place-items-center rounded-md bg-muted font-medium text-muted-foreground text-sm uppercase" translate="no">
-            {monogram}
-          </span>
+          <Favicon host={host} size={32} />
           <div className="min-w-0 flex-1">
             <p className="truncate font-medium text-sm">
               {href === undefined ? (

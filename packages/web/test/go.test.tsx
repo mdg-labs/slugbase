@@ -284,9 +284,14 @@ describe("a slug with several bookmarks", { timeout: HEAVY_TEST_TIMEOUT_MS }, ()
     const group = screen.getByRole("group", { name: "Bookmarks with this slug" });
     const cards = within(group).getAllByRole("button");
     expect(cards.map((card) => card.textContent)).toEqual([
-      "Mail 1mail1.example.comShared by Grace Hopper · directly",
-      "Mail 2mail2.example.comShared by Ada Lovelace · through a team",
-      "Mail 3mail3.example.comShared by Grace Hopper · through a shared folder",
+      "mMail 1mail1.example.comShared by Grace Hopper · directly",
+      "mMail 2mail2.example.comShared by Ada Lovelace · through a team",
+      "mMail 3mail3.example.comShared by Grace Hopper · through a shared folder",
+    ]);
+    expect(Array.from(group.querySelectorAll("img")).map((img) => img.getAttribute("src"))).toEqual([
+      "/api/v1/favicons/mail1.example.com",
+      "/api/v1/favicons/mail2.example.com",
+      "/api/v1/favicons/mail3.example.com",
     ]);
     expect(screen.getByRole("link", { name: "Manage remembered choices →" }).getAttribute("href")).toBe("/forwarding");
     expect(navigateTo).not.toHaveBeenCalled();
@@ -298,8 +303,8 @@ describe("a slug with several bookmarks", { timeout: HEAVY_TEST_TIMEOUT_MS }, ()
 
     const group = await screen.findByRole("group", { name: "Bookmarks with this slug" });
     expect(within(group).getAllByRole("button").map((card) => card.textContent)).toEqual([
-      "Mail 1mail1.example.comYour bookmark",
-      "Mail 2mail2.example.comShared with you · through a team",
+      "mMail 1mail1.example.comYour bookmark",
+      "mMail 2mail2.example.comShared with you · through a team",
     ]);
   });
 

@@ -297,7 +297,7 @@ export const acceptInvitation = defineOperation({
       "The token is unknown, expired (7 days), already used, revoked or replaced by a newer one, or its workspace is being deleted; all of them answer alike (token_expired) and nothing is changed",
     ),
     422: problemResponse(
-      "The body did not pass validation (a display name without a password or the reverse included), the password is outside 12 to 256 characters or is on the breached list (weak_password), or the workspace has no seat left (seat_limit_reached); nothing is written and the invitation stays pending",
+      "The body did not pass validation (a display name without a password or the reverse included, a display name that holds a NUL character), the password is outside 12 to 256 characters or is on the breached list (weak_password), or the workspace has no seat left (seat_limit_reached); nothing is written and the invitation stays pending",
     ),
     429: rateLimitedResponse("Too many attempts from this address, or from this account; Retry-After says when to try again"),
     503: problemResponse(
