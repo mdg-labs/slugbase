@@ -211,6 +211,7 @@
       "opens": "{count, plural, one {# Aufruf} other {# Aufrufe}}",
       "usage": "{count, plural, one {# Aufruf} other {# Aufrufe}} · {when}",
       "edit": "Bearbeiten",
+      "share": "Teilen",
       "unpin": "Anheftung lösen",
       "pin": {
         "action": "Anheften",
@@ -501,6 +502,7 @@
       "open": "In Lesezeichen öffnen",
       "rename": "Umbenennen",
       "restyle": "Symbol und Farbe ändern",
+      "share": "Freigabe-Einstellungen",
       "delete": "Löschen"
     },
     "delete": {
@@ -2653,6 +2655,71 @@
       "cancel": "Abbrechen",
       "done": "Team „{name}“ gelöscht.",
       "gone": "Dieses Team wurde bereits gelöscht."
+    }
+  },
+  "sharing": {
+    "summary": {
+      "label": "Teilen",
+      "private": "Privat",
+      "shared": "Geteilt mit {with}",
+      "team": "Team {name}",
+      "members": "{count, plural, one {# Mitglied} other {# Mitgliedern}}",
+      "manage": "Verwalten",
+      "loading": "Es wird geladen, mit wem dieses Lesezeichen geteilt ist",
+      "loadFailed": "Die Freigaben konnten nicht geladen werden.",
+      "retry": "Erneut versuchen"
+    },
+    "dialog": {
+      "close": "Teilen-Dialog schließen",
+      "done": "Fertig",
+      "retry": "Erneut versuchen",
+      "title": {
+        "bookmark": "„{name}“ teilen",
+        "folder": "Ordner „{name}“ teilen"
+      },
+      "description": {
+        "bookmark": "Wähle die Mitglieder und Teams, die dieses Lesezeichen lesen können.",
+        "folder": "Wähle die Mitglieder und Teams, die diesen Ordner und alle Lesezeichen darin lesen können, jetzt und später."
+      },
+      "picker": {
+        "label": "Teilen mit",
+        "placeholder": "Mitglieder und Teams suchen",
+        "empty": "Kein Mitglied und kein Team passt.",
+        "loading": "Mitglieder und Teams werden geladen",
+        "unavailable": "Mitglieder und Teams konnten nicht geladen werden.",
+        "members": "Mitglieder",
+        "teams": "Teams"
+      },
+      "list": {
+        "label": "Aktuelle Freigaben",
+        "loading": "Freigaben werden geladen",
+        "loadFailed": "Die Freigaben konnten nicht geladen werden.",
+        "empty": "Noch mit niemandem geteilt."
+      },
+      "row": {
+        "member": "Mitglied",
+        "team": "Team",
+        "remove": "Nicht mehr mit {name} teilen"
+      },
+      "note": {
+        "bookmark": "Teilen ist nur lesend. Mitglieder können dieses Lesezeichen und seinen Slug öffnen, aber nur du kannst es ändern oder löschen.",
+        "folder": "Teilen ist nur lesend. Mitglieder sehen diesen Ordner und die Lesezeichen darin, aber nur du kannst sie ändern oder löschen."
+      },
+      "audience": {
+        "none": "Mit niemandem geteilt",
+        "some": "Sichtbar für {count, plural, one {# Mitglied} other {# Mitglieder}}",
+        "stack": "Mitglieder mit Lesezugriff: {names}"
+      },
+      "toast": {
+        "added": "Mit {name} geteilt",
+        "removed": "Nicht mehr mit {name} geteilt",
+        "removeGone": "{name} hatte keinen Zugriff mehr.",
+        "targetGone": "{name} gehört nicht mehr zum Workspace. Die Liste ist jetzt aktuell.",
+        "gone": {
+          "bookmark": "Dieses Lesezeichen gibt es nicht mehr.",
+          "folder": "Diesen Ordner gibt es nicht mehr."
+        }
+      }
     }
   },
   "invite": {

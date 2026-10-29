@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Picker } from "../../src/patterns/index.ts";
 import { expectNoViolations, stubBrowserApis, stubMatchMedia } from "../support.tsx";
@@ -7,6 +8,12 @@ const OPTIONS = [
   { value: "ada", label: "Ada Lovelace", description: "ada@example.org" },
   { value: "grace", label: "Grace Hopper", description: "grace@example.org" },
   { value: "hedy", label: "Hedy Lamarr", description: "hedy@example.org" },
+];
+
+const GROUPED = [
+  { value: "ada", label: "Ada Lovelace", description: "ada@example.org", group: "Members" },
+  { value: "platform", label: "Platform", group: "Teams" },
+  { value: "grace", label: "Grace Hopper", description: "grace@example.org", group: "Members" },
 ];
 
 beforeEach(() => {
@@ -114,5 +121,61 @@ describe("Picker", () => {
     expect(failed.getAttribute("data-slot")).toBe("picker-unavailable");
     expect(failed.getAttribute("role")).toBe("alert");
     expect(screen.queryByText("Nobody")).toBeNull();
+  });
+  it("lists options under their group headings, narrows each group by what is typed and drops a group with no match", async () => {
+    const grouped = GROUPED;
+    const onValueChange = vi.fn<(value: string) => void>();
+    render(<Picker emptyLabel="Nobody matches" label="Recipient" onValueChange={onValueChange} options={grouped} value={undefined} />);
+    await open();
+
+    expect(await screen.findByText("Members")).toBeTruthy();
+    expect(screen.getByText("Teams")).toBeTruthy();
+    expect((await screen.findAllByRole("option")).map((option) => option.textContent)).toEqual(["Ada Lovelaceada@example.org", "Grace Hoppergrace@example.org", "Platform"]);
+
+    await act(async () => {
+      fireEvent.change(screen.getByRole("combobox", { name: "Recipient" }), { target: { value: "plat" } });
+      await Promise.resolve();
+    });
+    expect((await screen.findAllByRole("option")).map((option) => option.textContent)).toEqual(["Platform"]);
+    expect(screen.queryByText("Members")).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(await screen.findByRole("option", { name: /Platform/ }));
+      await Promise.resolve();
+    });
+    expect(onValueChange).toHaveBeenCalledExactlyOnceWith("platform");
+  });
+  it("reports the text typed in the input", async () => {
+    const onSearchChange = vi.fn<(text: string) => void>();
+    render(<Picker emptyLabel="Nobody matches" label="Recipient" onSearchChange={onSearchChange} onValueChange={() => undefined} options={OPTIONS} value={undefined} />);
+    await open();
+
+    await act(async () => {
+      fireEvent.change(screen.getByRole("combobox", { name: "Recipient" }), { target: { value: "gra" } });
+      await Promise.resolve();
+    });
+
+    expect(onSearchChange).toHaveBeenLastCalledWith("gra");
+  });
+  it("keeps what was typed when the caller renders again with the same options", async () => {
+    function Host(): React.ReactElement {
+      const [text, setText] = useState("");
+      return (
+        <>
+          <Picker emptyLabel="Nobody matches" label="Recipient" onSearchChange={setText} onValueChange={() => undefined} options={GROUPED} value={undefined} />
+          <output>{text}</output>
+        </>
+      );
+    }
+    render(<Host />);
+    await open();
+
+    await act(async () => {
+      fireEvent.change(screen.getByRole("combobox", { name: "Recipient" }), { target: { value: "plat" } });
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole<HTMLInputElement>("combobox", { name: "Recipient" }).value).toBe("plat");
+    expect((await screen.findAllByRole("option")).map((option) => option.textContent)).toEqual(["Platform"]);
   });
 });

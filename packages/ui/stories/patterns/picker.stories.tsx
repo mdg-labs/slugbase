@@ -33,3 +33,13 @@ export const Loading = (): React.ReactElement => (
 export const Unavailable = (): React.ReactElement => (
   <Picker emptyLabel="There is nobody else in the workspace" label="Recipient" onValueChange={() => undefined} options={[]} unavailableLabel="The members could not be loaded" value={undefined} />
 );
+
+const GROUPED = [
+  { value: "ada", label: "Ada Lovelace", description: "ada@example.org", group: "Members" },
+  { value: "grace", label: "Grace Hopper", description: "grace@example.org", group: "Members" },
+  { value: "platform", label: "Platform", group: "Teams" },
+];
+
+export const Grouped = (): React.ReactElement => (
+  <Picker emptyLabel="Nobody matches" label="Share with" onValueChange={() => undefined} options={GROUPED} placeholder="Search members and teams" value={undefined} />
+);

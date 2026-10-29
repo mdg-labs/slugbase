@@ -211,6 +211,7 @@
       "opens": "{count, plural, one {# open} other {# opens}}",
       "usage": "{count, plural, one {# open} other {# opens}} · {when}",
       "edit": "Edit",
+      "share": "Share",
       "unpin": "Unpin",
       "pin": {
         "action": "Pin",
@@ -501,6 +502,7 @@
       "open": "Open in Bookmarks",
       "rename": "Rename",
       "restyle": "Change icon and colour",
+      "share": "Share settings",
       "delete": "Delete"
     },
     "delete": {
@@ -2653,6 +2655,71 @@
       "cancel": "Cancel",
       "done": "Team “{name}” deleted.",
       "gone": "This team was already deleted."
+    }
+  },
+  "sharing": {
+    "summary": {
+      "label": "Sharing",
+      "private": "Private",
+      "shared": "Shared with {with}",
+      "team": "{name} team",
+      "members": "{count, plural, one {# member} other {# members}}",
+      "manage": "Manage",
+      "loading": "Loading who this bookmark is shared with",
+      "loadFailed": "Sharing could not be loaded.",
+      "retry": "Try again"
+    },
+    "dialog": {
+      "close": "Close the share dialog",
+      "done": "Done",
+      "retry": "Try again",
+      "title": {
+        "bookmark": "Share “{name}”",
+        "folder": "Share the folder “{name}”"
+      },
+      "description": {
+        "bookmark": "Choose the members and teams who can read this bookmark.",
+        "folder": "Choose the members and teams who can read this folder and every bookmark filed in it, now and later."
+      },
+      "picker": {
+        "label": "Share with",
+        "placeholder": "Search members and teams",
+        "empty": "No member or team matches.",
+        "loading": "Loading members and teams",
+        "unavailable": "Members and teams could not be loaded.",
+        "members": "Members",
+        "teams": "Teams"
+      },
+      "list": {
+        "label": "Current shares",
+        "loading": "Loading shares",
+        "loadFailed": "The shares could not be loaded.",
+        "empty": "Not shared with anyone yet."
+      },
+      "row": {
+        "member": "Member",
+        "team": "Team",
+        "remove": "Stop sharing with {name}"
+      },
+      "note": {
+        "bookmark": "Sharing is read-only. Members can open this bookmark and its slug, but only you can change or delete it.",
+        "folder": "Sharing is read-only. Members can see this folder and the bookmarks in it, but only you can change or delete them."
+      },
+      "audience": {
+        "none": "Not shared with anyone",
+        "some": "Visible to {count, plural, one {# member} other {# members}}",
+        "stack": "Members who can read it: {names}"
+      },
+      "toast": {
+        "added": "Shared with {name}",
+        "removed": "Stopped sharing with {name}",
+        "removeGone": "{name} did not have access any more.",
+        "targetGone": "{name} is no longer in the workspace. The list is up to date now.",
+        "gone": {
+          "bookmark": "This bookmark no longer exists.",
+          "folder": "This folder no longer exists."
+        }
+      }
     }
   },
   "invite": {

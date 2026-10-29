@@ -91,11 +91,13 @@ export {
   PowerOffIcon,
   SearchIcon,
   SettingsIcon,
+  Share2Icon,
   ShieldCheckIcon,
   SunMoonIcon,
   TableIcon,
   TagIcon,
   Trash2Icon,
   TriangleAlertIcon,
+  UsersIcon,
   XIcon,
 } from "lucide-react";

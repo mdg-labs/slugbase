@@ -1,6 +1,6 @@
 import { Combobox } from "@base-ui/react/combobox";
 import { ChevronsUpDownIcon } from "lucide-react";
-import type { ReactElement, ReactNode } from "react";
+import { useMemo, type ReactElement, type ReactNode } from "react";
 import { Field, FieldDescription, FieldError, FieldLabel } from "../components/ui/field.tsx";
 import { cn } from "../lib/utils.ts";
 
@@ -11,6 +11,28 @@ export interface PickerOption {
   description?: string;
   /** A decorative icon shown before the label in the list and in the field once the option is chosen. */
   icon?: ReactNode;
+  /** The heading of the group the option is listed under; options with the same heading are listed together, in the order the groups first appear. Left out on every option, the list is flat. */
+  group?: string;
+}
+
+interface PickerGroup {
+  value: string;
+  items: PickerOption[];
+}
+
+/** The options under their group headings, in the order the headings first appear; an option without a heading is listed under an empty one. */
+function groupsOf(options: readonly PickerOption[]): PickerGroup[] {
+  const groups = new Map<string, PickerOption[]>();
+  for (const option of options) {
+    const heading = option.group ?? "";
+    const members = groups.get(heading);
+    if (members === undefined) {
+      groups.set(heading, [option]);
+    } else {
+      members.push(option);
+    }
+  }
+  return [...groups].map(([value, items]) => ({ value, items }));
 }
 
 export interface PickerProps {
@@ -31,6 +53,8 @@ export interface PickerProps {
   loadingLabel?: ReactNode;
   /** Set when the options could not be read; the list says so instead of saying there are none. */
   unavailableLabel?: ReactNode;
+  /** Called with the text in the input as it changes, for a caller whose options come from a search it runs itself; the list is still narrowed by that text. */
+  onSearchChange?: (text: string) => void;
   disabled?: boolean;
   className?: string;
 }
@@ -42,13 +66,34 @@ function matches(option: PickerOption, query: string): boolean {
 
 /**
  * One option out of many, chosen by searching (doc 03 `picker`): a Base UI combobox whose input filters the list by
- * label and description, with a message in the list when nothing matches. The list says it is loading, or that it
+ * label and description, with a message in the list when nothing matches. Options that name a `group` are listed under
+ * that heading, and a group with no match is left out of the list. The list says it is loading, or that it
  * could not be read, instead of saying there is nothing to choose.
  */
-export function Picker({ label, description, error, options, value, onValueChange, placeholder, emptyLabel, loadingLabel, unavailableLabel, disabled, className }: PickerProps): ReactElement {
+export function Picker({ label, description, error, options, value, onValueChange, placeholder, emptyLabel, loadingLabel, unavailableLabel, onSearchChange, disabled, className }: PickerProps): ReactElement {
   const invalid = error !== undefined && error !== null && error !== false;
   const selected = options.find((option) => option.value === value) ?? null;
   const listed = loadingLabel !== undefined || unavailableLabel !== undefined;
+  const grouped = options.some((option) => option.group !== undefined);
+  // The combobox starts over, and drops what was typed, when it is handed a new list of items.
+  const groups = useMemo(() => groupsOf(options), [options]);
+  const renderItem = (option: PickerOption): ReactElement => (
+    <Combobox.Item
+      className="flex min-h-8 cursor-default items-center gap-2 rounded-sm px-2 py-1 text-base outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground sm:text-sm"
+      key={option.value}
+      value={option}
+    >
+      {option.icon === undefined ? null : (
+        <span aria-hidden="true" className="shrink-0 text-muted-foreground">
+          {option.icon}
+        </span>
+      )}
+      <span className="flex min-w-0 flex-col">
+        <span className="wrap-anywhere">{option.label}</span>
+        {option.description === undefined ? null : <span className="wrap-anywhere text-muted-foreground text-xs">{option.description}</span>}
+      </span>
+    </Combobox.Item>
+  );
   return (
     <Field className={cn("items-stretch gap-1.5", className)} disabled={disabled} invalid={invalid}>
       <FieldLabel>{label}</FieldLabel>
@@ -56,7 +101,10 @@ export function Picker({ label, description, error, options, value, onValueChang
         disabled={disabled}
         filter={matches}
         isItemEqualToValue={(item, chosen) => item.value === chosen.value}
-        items={options}
+        items={grouped ? groups : options}
+        onInputValueChange={(text) => {
+          onSearchChange?.(text);
+        }}
         onValueChange={(next) => {
           if (next !== null) {
             onValueChange(next.value);
@@ -101,23 +149,16 @@ export function Picker({ label, description, error, options, value, onValueChang
               )}
               <Combobox.Empty className="px-3 py-2 text-muted-foreground text-sm empty:hidden">{listed ? null : emptyLabel}</Combobox.Empty>
               <Combobox.List className="max-h-60 overflow-y-auto p-1 empty:hidden" data-slot="picker-list">
-                {(option: PickerOption) => (
-                  <Combobox.Item
-                    className="flex min-h-8 cursor-default items-center gap-2 rounded-sm px-2 py-1 text-base outline-none data-highlighted:bg-accent data-highlighted:text-accent-foreground sm:text-sm"
-                    key={option.value}
-                    value={option}
-                  >
-                    {option.icon === undefined ? null : (
-                      <span aria-hidden="true" className="shrink-0 text-muted-foreground">
-                        {option.icon}
-                      </span>
-                    )}
-                    <span className="flex min-w-0 flex-col">
-                      <span className="wrap-anywhere">{option.label}</span>
-                      {option.description === undefined ? null : <span className="wrap-anywhere text-muted-foreground text-xs">{option.description}</span>}
-                    </span>
-                  </Combobox.Item>
-                )}
+                {grouped
+                  ? (group: PickerGroup) => (
+                      <Combobox.Group items={group.items} key={group.value}>
+                        {group.value === "" ? null : (
+                          <Combobox.GroupLabel className="px-2 py-1 font-medium text-muted-foreground text-xs">{group.value}</Combobox.GroupLabel>
+                        )}
+                        <Combobox.Collection>{renderItem}</Combobox.Collection>
+                      </Combobox.Group>
+                    )
+                  : renderItem}
               </Combobox.List>
             </Combobox.Popup>
           </Combobox.Positioner>

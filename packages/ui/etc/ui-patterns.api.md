@@ -35,12 +35,14 @@ import { Ref } from 'react';
 import { RefObject } from 'react';
 import { SearchIcon } from 'lucide-react';
 import { SettingsIcon } from 'lucide-react';
+import { Share2Icon } from 'lucide-react';
 import { ShieldCheckIcon } from 'lucide-react';
 import { SunMoonIcon } from 'lucide-react';
 import { TableIcon } from 'lucide-react';
 import { TagIcon } from 'lucide-react';
 import { Trash2Icon } from 'lucide-react';
 import { TriangleAlertIcon } from 'lucide-react';
+import { UsersIcon } from 'lucide-react';
 import { XIcon } from 'lucide-react';
 
 // @public
@@ -773,6 +775,7 @@ export function Picker(input: PickerProps): ReactElement;
 // @public (undocumented)
 export interface PickerOption {
     description?: string;
+    group?: string;
     icon?: ReactNode;
     // (undocumented)
     label: string;
@@ -792,6 +795,7 @@ export interface PickerProps {
     // (undocumented)
     label: ReactNode;
     loadingLabel?: ReactNode;
+    onSearchChange?: (text: string) => void;
     // (undocumented)
     onValueChange: (value: string) => void;
     // (undocumented)
@@ -1023,6 +1027,8 @@ export interface SettingSwitchProps {
     // (undocumented)
     onCheckedChange: (checked: boolean) => void;
 }
+
+export { Share2Icon }
 
 export { ShieldCheckIcon }
 
@@ -1310,6 +1316,8 @@ export interface UsageMeterProps {
     value: number;
     valueLabel: string;
 }
+
+export { UsersIcon }
 
 // @public
 export function Wizard(input: WizardProps): ReactElement;
