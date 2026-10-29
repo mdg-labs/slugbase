@@ -24,6 +24,7 @@ import type { CredentialTokenPurpose } from '@slugbase/core';
 import type { DashboardStore } from '@slugbase/core';
 import type { EntitlementVersionWriter } from '@slugbase/core';
 import type { FolderFilingStore } from '@slugbase/core';
+import type { FolderShareStore } from '@slugbase/core';
 import type { FolderStore } from '@slugbase/core';
 import type { GoPreferenceStore } from '@slugbase/core';
 import type { GoStore } from '@slugbase/core';
@@ -620,6 +621,12 @@ export type FolderRepository = FolderStore & FolderFilingStore;
 
 // @public (undocumented)
 export function folderRepository(tx: TenantTx): FolderRepository;
+
+// @public (undocumented)
+export type FolderShareRepository = FolderShareStore;
+
+// @public (undocumented)
+export function folderShareRepository(tx: TenantTx): FolderShareRepository;
 
 // @public (undocumented)
 export type GoRepository = GoStore & GoPreferenceStore & GoSuggestStore;

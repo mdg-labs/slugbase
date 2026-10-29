@@ -12,6 +12,18 @@ export type {
   BookmarkShareRevocationAsk,
   BookmarkShareRevocationOutcome,
 } from "./bookmark-shares.ts";
+export { grantFolderShare, listFolderShares, revokeFolderShare } from "./folder-shares.ts";
+export type {
+  FolderShareAsk,
+  FolderShareDependencies,
+  FolderShareGrantAsk,
+  FolderShareGrantOutcome,
+  FolderShareListOutcome,
+  FolderShareReadAsk,
+  FolderShareReadDependencies,
+  FolderShareRevocationAsk,
+  FolderShareRevocationOutcome,
+} from "./folder-shares.ts";
 export { SHARE_ENTITLEMENTS } from "./store.ts";
 export type {
   BookmarkShareGrant,
@@ -19,7 +31,13 @@ export type {
   BookmarkShareRecord,
   BookmarkShareStore,
   BookmarkShareUse,
+  FolderShareGrant,
+  FolderShareList,
+  FolderShareRecord,
+  FolderShareStore,
+  FolderShareUse,
   NewBookmarkShare,
+  NewFolderShare,
   ShareTarget,
   ShareTargetKind,
   ShareTargetRecord,

@@ -2770,6 +2770,145 @@ export interface FolderRecord {
 }
 
 // @public (undocumented)
+export interface FolderShareAsk {
+    readonly actor: AuditActor & {
+        readonly type: "account" | "api_token";
+    };
+    // (undocumented)
+    readonly folderId: string;
+    // (undocumented)
+    readonly ipPrefix: string | null;
+    // (undocumented)
+    readonly workspaceId: string;
+}
+
+// @public (undocumented)
+export interface FolderShareDependencies {
+    // (undocumented)
+    readonly audit: AuditWriter;
+    readonly newId: () => string;
+    // (undocumented)
+    readonly store: Pick<FolderShareStore, "ownedFolder" | "grant" | "revoke">;
+}
+
+// @public (undocumented)
+export type FolderShareGrant = {
+    readonly kind: "granted";
+    readonly share: FolderShareRecord;
+}
+/** The folder is shared with the target already; `share` is that share and nothing was written. */
+| {
+    readonly kind: "existing";
+    readonly share: FolderShareRecord;
+}
+/** The target is no member of the workspace, or no team of it; nothing was written. */
+| {
+    readonly kind: "unknown_target";
+};
+
+// @public (undocumented)
+export interface FolderShareGrantAsk extends FolderShareAsk {
+    // (undocumented)
+    readonly target: ShareTarget;
+}
+
+// @public (undocumented)
+export type FolderShareGrantOutcome = {
+    readonly kind: "granted";
+    readonly share: FolderShareRecord;
+} | {
+    readonly kind: "existing";
+    readonly share: FolderShareRecord;
+} | {
+    readonly kind: "not_found";
+}
+/** The target is the owner. */
+| {
+    readonly kind: "self";
+} | {
+    readonly kind: "unknown_target";
+    readonly field: "accountId" | "teamId";
+};
+
+// @public (undocumented)
+export interface FolderShareList {
+    readonly audienceSize: number;
+    // (undocumented)
+    readonly shares: readonly FolderShareRecord[];
+}
+
+// @public (undocumented)
+export type FolderShareListOutcome = {
+    readonly kind: "listed";
+    readonly list: FolderShareList;
+} | {
+    readonly kind: "not_found";
+};
+
+// @public (undocumented)
+export interface FolderShareReadAsk {
+    readonly accountId: string;
+    // (undocumented)
+    readonly folderId: string;
+}
+
+// @public (undocumented)
+export interface FolderShareReadDependencies {
+    // (undocumented)
+    readonly store: Pick<FolderShareStore, "ownedFolder" | "list">;
+}
+
+// @public
+export interface FolderShareRecord {
+    // (undocumented)
+    readonly accountId: string | null;
+    // (undocumented)
+    readonly createdAt: Date;
+    // (undocumented)
+    readonly email: string | null;
+    // (undocumented)
+    readonly folderId: string;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly teamId: string | null;
+}
+
+// @public (undocumented)
+export interface FolderShareRevocationAsk extends FolderShareAsk {
+    // (undocumented)
+    readonly shareId: string;
+}
+
+// @public (undocumented)
+export type FolderShareRevocationOutcome = {
+    readonly kind: "revoked";
+    readonly share: FolderShareRecord;
+} | {
+    readonly kind: "not_found";
+};
+
+// @public (undocumented)
+export interface FolderShareStore {
+    grant(request: NewFolderShare): Promise<FolderShareGrant>;
+    list(folderId: string): Promise<FolderShareList>;
+    ownedFolder(request: {
+        readonly folderId: string;
+        readonly ownerId: string;
+        readonly use: FolderShareUse;
+    }): Promise<boolean>;
+    revoke(request: {
+        readonly folderId: string;
+        readonly shareId: string;
+    }): Promise<FolderShareRecord | undefined>;
+}
+
+// @public
+export type FolderShareUse = "read" | "grant" | "revoke";
+
+// @public (undocumented)
 export type FolderSort = "name" | "count" | "updated";
 
 // @public (undocumented)
@@ -3216,6 +3355,9 @@ export interface GoWorkspaceResolveDependencies {
 
 // @public (undocumented)
 export function grantBookmarkShare(input: BookmarkShareDependencies, ask: BookmarkShareGrantAsk): Promise<BookmarkShareGrantOutcome>;
+
+// @public (undocumented)
+export function grantFolderShare(input: FolderShareDependencies, ask: FolderShareGrantAsk): Promise<FolderShareGrantOutcome>;
 
 // @public
 export function hashApiToken(value: string): Buffer;
@@ -4429,6 +4571,9 @@ export function listBookmarkShares(input: BookmarkShareReadDependencies, ask: Bo
 // @public
 export function listFolders(input: FolderListDependencies, ask: FolderListAsk): Promise<FolderListOutcome>;
 
+// @public (undocumented)
+export function listFolderShares(input: FolderShareReadDependencies, ask: FolderShareReadAsk): Promise<FolderShareListOutcome>;
+
 // @public
 export function listGoPreferences(input: GoPreferenceListDependencies, ask: GoPreferenceListAsk): Promise<GoPreferenceListOutcome>;
 
@@ -4693,6 +4838,16 @@ export interface NewFolder {
     // (undocumented)
     readonly name: string;
     readonly ownerId: string;
+}
+
+// @public (undocumented)
+export interface NewFolderShare {
+    // (undocumented)
+    readonly folderId: string;
+    readonly grantedBy: string;
+    readonly id: string;
+    // (undocumented)
+    readonly target: ShareTarget;
 }
 
 // @public (undocumented)
@@ -5170,6 +5325,9 @@ export function restoreBookmarks(tx: BookmarkArchiveTransaction, request: Bookma
 
 // @public (undocumented)
 export function revokeBookmarkShare(input: Pick<BookmarkShareDependencies, "store" | "audit">, ask: BookmarkShareRevocationAsk): Promise<BookmarkShareRevocationOutcome>;
+
+// @public (undocumented)
+export function revokeFolderShare(input: Pick<FolderShareDependencies, "store" | "audit">, ask: FolderShareRevocationAsk): Promise<FolderShareRevocationOutcome>;
 
 // @public
 export function revokeInvitation(input: Pick<InvitationActionDependencies, "store" | "audit">, ask: InvitationActionAsk): Promise<InvitationRevokeOutcome>;

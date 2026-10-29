@@ -98,8 +98,10 @@ async function workspaceOf(...roles: Role[]): Promise<Workspace> {
     if (members[0] !== undefined) {
       await tx`INSERT INTO team_members (workspace_id, team_id, account_id) VALUES (${workspaceId}, ${teamId}, ${members[0].accountId})`;
       await tx`INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_account_id, granted_by) VALUES (${freshId()}, ${workspaceId}, ${bookmarkId}, ${members[0].accountId}, ${members[0].accountId})`;
+      await tx`INSERT INTO folder_shares (id, workspace_id, folder_id, target_account_id, granted_by) VALUES (${freshId()}, ${workspaceId}, ${folderId}, ${members[0].accountId}, ${members[0].accountId})`;
     }
     await tx`INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_team_id) VALUES (${freshId()}, ${workspaceId}, ${bookmarkId}, ${teamId})`;
+    await tx`INSERT INTO folder_shares (id, workspace_id, folder_id, target_team_id) VALUES (${freshId()}, ${workspaceId}, ${folderId}, ${teamId})`;
     await tx`INSERT INTO url_metadata (workspace_id, url_canonical, status, fetched_at, expires_at) VALUES (${workspaceId}, 'https://example.com', 'failed', now(), now() + interval '7 days')`;
   });
   return { workspaceId, members, tokenHashes };
@@ -169,7 +171,8 @@ async function content(workspaceId: string): Promise<string> {
         coalesce((SELECT string_agg(u::text, '|' ORDER BY u.url_canonical) FROM url_metadata u WHERE u.workspace_id = ${workspaceId}), '') ||
         coalesce((SELECT string_agg(y::text, '|' ORDER BY y.id) FROM teams y WHERE y.workspace_id = ${workspaceId}), '') ||
         coalesce((SELECT string_agg(z::text, '|' ORDER BY z.team_id, z.account_id) FROM team_members z WHERE z.workspace_id = ${workspaceId}), '') ||
-        coalesce((SELECT string_agg(h::text, '|' ORDER BY h.id) FROM bookmark_shares h WHERE h.workspace_id = ${workspaceId}), '')
+        coalesce((SELECT string_agg(h::text, '|' ORDER BY h.id) FROM bookmark_shares h WHERE h.workspace_id = ${workspaceId}), '') ||
+        coalesce((SELECT string_agg(x::text, '|' ORDER BY x.id) FROM folder_shares x WHERE x.workspace_id = ${workspaceId}), '')
       ) AS digest`,
   );
   const [row] = rows;
@@ -182,7 +185,7 @@ async function content(workspaceId: string): Promise<string> {
 async function counts(workspaceId: string): Promise<Record<string, number>> {
   const [row] = await asSystem(
     db,
-    (tx) => tx<{ workspaces: number; members: number; settings: number; tokens: number; events: number; invitations: number; bookmarks: number; tags: number; links: number; folders: number; filings: number; preferences: number; metadata: number; teams: number; memberships: number; shares: number }[]>`
+    (tx) => tx<{ workspaces: number; members: number; settings: number; tokens: number; events: number; invitations: number; bookmarks: number; tags: number; links: number; folders: number; filings: number; preferences: number; metadata: number; teams: number; memberships: number; shares: number; folderShares: number }[]>`
       SELECT (SELECT count(*) FROM workspaces WHERE id = ${workspaceId})::int AS workspaces,
              (SELECT count(*) FROM workspace_members WHERE workspace_id = ${workspaceId})::int AS members,
              (SELECT count(*) FROM workspace_settings WHERE workspace_id = ${workspaceId})::int AS settings,
@@ -198,7 +201,8 @@ async function counts(workspaceId: string): Promise<Record<string, number>> {
              (SELECT count(*) FROM url_metadata WHERE workspace_id = ${workspaceId})::int AS metadata,
              (SELECT count(*) FROM teams WHERE workspace_id = ${workspaceId})::int AS teams,
              (SELECT count(*) FROM team_members WHERE workspace_id = ${workspaceId})::int AS memberships,
-             (SELECT count(*) FROM bookmark_shares WHERE workspace_id = ${workspaceId})::int AS shares`,
+             (SELECT count(*) FROM bookmark_shares WHERE workspace_id = ${workspaceId})::int AS shares,
+             (SELECT count(*) FROM folder_shares WHERE workspace_id = ${workspaceId})::int AS "folderShares"`,
   );
   if (row === undefined) {
     throw new Error("the count query returned no row");
@@ -236,7 +240,7 @@ async function mark(workspace: Workspace, memberIndex: number): Promise<boolean>
 
 describe("the registry of the tables the job empties", () => {
   it("names the tables in dependency order: the tokens before the members they reference", () => {
-    expect([...workspacePurgeOrder]).toEqual(["api_tokens", "audit_events", "bookmark_shares", "bookmark_tags", "folder_bookmarks", "slug_preferences", "bookmarks", "folders", "team_members", "tags", "teams", "url_metadata", "workspace_invitations", "workspace_settings", "workspace_members"]);
+    expect([...workspacePurgeOrder]).toEqual(["api_tokens", "audit_events", "bookmark_shares", "folder_shares", "bookmark_tags", "folder_bookmarks", "slug_preferences", "bookmarks", "folders", "team_members", "tags", "teams", "url_metadata", "workspace_invitations", "workspace_settings", "workspace_members"]);
     expect(workspacePurgeOrder.indexOf("api_tokens")).toBeLessThan(workspacePurgeOrder.indexOf("workspace_members"));
     expect(workspacePurgeOrder.indexOf("bookmarks")).toBeLessThan(workspacePurgeOrder.indexOf("workspace_members"));
     expect(workspacePurgeOrder.indexOf("folders")).toBeLessThan(workspacePurgeOrder.indexOf("workspace_members"));
@@ -407,10 +411,10 @@ describe("the deletion job's operations", () => {
     const rowsLeftBeforeFinish = await counts(a.workspaceId);
     const finished = await store.finish(a.workspaceId, [deletedEvent(a.workspaceId)]);
 
-    expect(deleted).toEqual({ api_tokens: 3, audit_events: 2, bookmark_shares: 2, bookmark_tags: 1, folder_bookmarks: 1, slug_preferences: 1, bookmarks: 1, folders: 1, team_members: 1, tags: 1, teams: 1, url_metadata: 1, workspace_invitations: 1, workspace_settings: 1, workspace_members: 3 });
-    expect(rowsLeftBeforeFinish).toEqual({ workspaces: 1, members: 0, settings: 0, tokens: 0, events: 0, invitations: 0, bookmarks: 0, tags: 0, links: 0, folders: 0, filings: 0, preferences: 0, metadata: 0, teams: 0, memberships: 0, shares: 0 });
+    expect(deleted).toEqual({ api_tokens: 3, audit_events: 2, bookmark_shares: 2, folder_shares: 2, bookmark_tags: 1, folder_bookmarks: 1, slug_preferences: 1, bookmarks: 1, folders: 1, team_members: 1, tags: 1, teams: 1, url_metadata: 1, workspace_invitations: 1, workspace_settings: 1, workspace_members: 3 });
+    expect(rowsLeftBeforeFinish).toEqual({ workspaces: 1, members: 0, settings: 0, tokens: 0, events: 0, invitations: 0, bookmarks: 0, tags: 0, links: 0, folders: 0, filings: 0, preferences: 0, metadata: 0, teams: 0, memberships: 0, shares: 0, folderShares: 0 });
     expect(finished).toBe(true);
-    expect(await counts(a.workspaceId)).toEqual({ workspaces: 0, members: 0, settings: 0, tokens: 0, events: 0, invitations: 0, bookmarks: 0, tags: 0, links: 0, folders: 0, filings: 0, preferences: 0, metadata: 0, teams: 0, memberships: 0, shares: 0 });
+    expect(await counts(a.workspaceId)).toEqual({ workspaces: 0, members: 0, settings: 0, tokens: 0, events: 0, invitations: 0, bookmarks: 0, tags: 0, links: 0, folders: 0, filings: 0, preferences: 0, metadata: 0, teams: 0, memberships: 0, shares: 0, folderShares: 0 });
     expect(await queued(EVENT_QUEUE)).toMatchObject([{ workspaceId: a.workspaceId }]);
     expect(await content(b.workspaceId)).toBe(beforeB);
     expect(await asSystem(db, (tx) => tx`SELECT 1 FROM workspace_members WHERE account_id = ${who(a, 2)}`)).toHaveLength(1);
@@ -442,13 +446,13 @@ describe("the deletion job's operations", () => {
     // a first run that deleted the tokens and one audit event and then died
     await db.app`SELECT sys_workspace_purge_batch(${a.workspaceId}::uuid, 'api_tokens', 1000)`;
     await db.app`SELECT sys_workspace_purge_batch(${a.workspaceId}::uuid, 'audit_events', 1)`;
-    expect(await counts(a.workspaceId)).toEqual({ workspaces: 1, members: 2, settings: 1, tokens: 0, events: 1, invitations: 1, bookmarks: 1, tags: 1, links: 1, folders: 1, filings: 1, preferences: 1, metadata: 1, teams: 1, memberships: 1, shares: 2 });
+    expect(await counts(a.workspaceId)).toEqual({ workspaces: 1, members: 2, settings: 1, tokens: 0, events: 1, invitations: 1, bookmarks: 1, tags: 1, links: 1, folders: 1, filings: 1, preferences: 1, metadata: 1, teams: 1, memberships: 1, shares: 2, folderShares: 2 });
 
     const deleted = await store.purgeRows(a.workspaceId);
-    expect(deleted).toEqual({ api_tokens: 0, audit_events: 1, bookmark_shares: 2, bookmark_tags: 1, folder_bookmarks: 1, slug_preferences: 1, bookmarks: 1, folders: 1, team_members: 1, tags: 1, teams: 1, url_metadata: 1, workspace_invitations: 1, workspace_settings: 1, workspace_members: 2 });
+    expect(deleted).toEqual({ api_tokens: 0, audit_events: 1, bookmark_shares: 2, folder_shares: 2, bookmark_tags: 1, folder_bookmarks: 1, slug_preferences: 1, bookmarks: 1, folders: 1, team_members: 1, tags: 1, teams: 1, url_metadata: 1, workspace_invitations: 1, workspace_settings: 1, workspace_members: 2 });
     expect(await store.finish(a.workspaceId, [deletedEvent(a.workspaceId)])).toBe(true);
 
-    expect(await counts(a.workspaceId)).toEqual({ workspaces: 0, members: 0, settings: 0, tokens: 0, events: 0, invitations: 0, bookmarks: 0, tags: 0, links: 0, folders: 0, filings: 0, preferences: 0, metadata: 0, teams: 0, memberships: 0, shares: 0 });
+    expect(await counts(a.workspaceId)).toEqual({ workspaces: 0, members: 0, settings: 0, tokens: 0, events: 0, invitations: 0, bookmarks: 0, tags: 0, links: 0, folders: 0, filings: 0, preferences: 0, metadata: 0, teams: 0, memberships: 0, shares: 0, folderShares: 0 });
     expect(await content(b.workspaceId)).toBe(beforeB);
   });
 
@@ -476,7 +480,7 @@ describe("the deletion job's operations", () => {
     expect(await counts(a.workspaceId)).toMatchObject({ workspaces: 1, members: 2 });
 
     expect(await store.finish(a.workspaceId, [deletedEvent(a.workspaceId)])).toBe(true);
-    expect(await counts(a.workspaceId)).toEqual({ workspaces: 0, members: 0, settings: 0, tokens: 0, events: 0, invitations: 0, bookmarks: 0, tags: 0, links: 0, folders: 0, filings: 0, preferences: 0, metadata: 0, teams: 0, memberships: 0, shares: 0 });
+    expect(await counts(a.workspaceId)).toEqual({ workspaces: 0, members: 0, settings: 0, tokens: 0, events: 0, invitations: 0, bookmarks: 0, tags: 0, links: 0, folders: 0, filings: 0, preferences: 0, metadata: 0, teams: 0, memberships: 0, shares: 0, folderShares: 0 });
   });
 
   it("is not driven by a tenant transaction: a request cannot purge a workspace being deleted, hasten or finish its deletion", async () => {

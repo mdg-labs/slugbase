@@ -368,6 +368,15 @@ export const FIXTURES: ContractFixtures = {
     foreign: { path: { id: UNKNOWN_BOOKMARK_ID }, body: { accountId: UNKNOWN_MEMBER_ID } },
   },
   deleteBookmarkShare: { path: { id: UNKNOWN_BOOKMARK_ID, shareId: UNKNOWN_SHARE_ID }, status: 404, foreign: { path: { id: UNKNOWN_BOOKMARK_ID, shareId: UNKNOWN_SHARE_ID } } },
+  // The shares of a folder are walked the same way, with a folder no workspace holds.
+  listFolderShares: { path: { id: UNKNOWN_FOLDER_ID }, status: 404, foreign: { path: { id: UNKNOWN_FOLDER_ID } } },
+  createFolderShare: {
+    path: { id: UNKNOWN_FOLDER_ID },
+    body: { accountId: UNKNOWN_MEMBER_ID },
+    status: 404,
+    foreign: { path: { id: UNKNOWN_FOLDER_ID }, body: { accountId: UNKNOWN_MEMBER_ID } },
+  },
+  deleteFolderShare: { path: { id: UNKNOWN_FOLDER_ID, shareId: UNKNOWN_SHARE_ID }, status: 404, foreign: { path: { id: UNKNOWN_FOLDER_ID, shareId: UNKNOWN_SHARE_ID } } },
   // The search names no identifier of any workspace: it takes a text, and acts on the caller's own bookmarks, folders and tags in the workspace of the request. The text is the one
   // the rows of workspace B are named after (the matrix seeds bookmarks, a tag and a folder called matrix-...), so a row of B in an answer would show.
   search: { query: { q: "matrix" } },

@@ -2,10 +2,10 @@ import { z } from "zod";
 import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
 import { withoutNul } from "./text.ts";
 
-// The sharing tag of doc 04 section 10.7: the operations that find the members and teams a bookmark can be shared with and that grant, list and
-// revoke the shares of a bookmark of the workspace the request is bound to. They act in the workspace of the request and name none (D11). Only the
-// owner of a bookmark lists, grants or revokes its shares; a bookmark that is another member's, another workspace's or unknown is the same 404
-// (doc 04 section 2.4, doc 10 T1 and T2). Sharing needs `sharing.members` or `sharing.teams`, by the kind of target; the server decides that in the
+// The sharing tag of doc 04 section 10.7: the operations that find the members and teams a bookmark or a folder can be shared with and that grant, list and
+// revoke the shares of a bookmark or a folder of the workspace the request is bound to. They act in the workspace of the request and name none (D11). Only the
+// owner of a bookmark or a folder lists, grants or revokes its shares; one that is another member's, another workspace's or unknown is the same 404
+// (doc 04 section 2.4, doc 10 T1 and T2). A share of a folder gives read access to every bookmark filed in it, now and later (doc 02 section 8.1). Sharing needs `sharing.members` or `sharing.teams`, by the kind of target; the server decides that in the
 // handler, since the kind is in the request (doc 01 section 7.5, doc 10 T11). The two reads are the session's alone, like the lists of other members'
 // data; granting and revoking take the `write` token scope.
 
@@ -79,10 +79,47 @@ export const BookmarkShareParamsSchema = z.strictObject({
   shareId: z.uuid().describe("The share's identifier"),
 });
 
+export const CreateFolderShareRequestSchema = z
+  .union([
+    z.strictObject({ accountId: z.uuid().describe("The account identifier of the member to share the folder with; it must be a current member of the workspace other than the caller") }),
+    z.strictObject({ teamId: z.uuid().describe("The identifier of the team to share the folder with; it must be a team of the workspace") }),
+  ])
+  .meta({ id: "CreateFolderShareRequest" });
+
+export const FolderShareSchema = z
+  .strictObject({
+    id: z.uuid().describe("The share's identifier"),
+    kind: TargetKindSchema,
+    accountId: z.uuid().nullable().describe("The account identifier of the member the folder is shared with; null for a team"),
+    teamId: z.uuid().nullable().describe("The identifier of the team the folder is shared with; null for a member"),
+    name: z.string().describe("The display name of the member, the name of the team"),
+    email: z.string().nullable().describe("The member's email address, which every co-member of the workspace sees; null for a team"),
+    createdAt: z.iso.datetime().describe("When the folder was shared with the target, RFC 3339 UTC"),
+  })
+  .meta({ id: "FolderShare" });
+
+export const FolderShareListSchema = z
+  .strictObject({
+    items: z.array(FolderShareSchema).describe("The shares of the folder, oldest first"),
+    audienceSize: z.number().int().min(0).describe("How many distinct members other than the owner can read the folder, and the bookmarks in it, through its shares: the members it is shared with and the members of the teams it is shared with"),
+  })
+  .meta({ id: "FolderShareList" });
+
+export const FolderSharesParamsSchema = z.strictObject({
+  id: z.uuid().describe("The folder's identifier"),
+});
+
+export const FolderShareParamsSchema = z.strictObject({
+  id: z.uuid().describe("The folder's identifier"),
+  shareId: z.uuid().describe("The share's identifier"),
+});
+
 const NO_SESSION = "There is no session, or its second factor is not complete";
 const NO_WORKSPACE = "The request acts in no workspace: the account has none, or the workspace is being deleted";
 const NO_BOOKMARK =
   "The workspace the request acts in has no bookmark of the caller with this identifier: another member's bookmark, a bookmark of another workspace and one that never existed are answered alike";
+const NO_FOLDER =
+  "The workspace the request acts in has no folder of the caller with this identifier: another member's folder, a folder of another workspace and one that never existed are answered alike";
 const READ_REFUSED =
   "The credential is an API token, or the workspace holds neither the sharing.members nor the sharing.teams entitlement (entitlement_required; the problem carries entitlement and upgradeAvailable)";
 const WRITE_REFUSED =
@@ -176,6 +213,76 @@ export const deleteBookmarkShare = defineOperation({
     403: problemResponse(REVOKE_REFUSED),
     404: problemResponse(
       `${NO_BOOKMARK}, or the bookmark has no share with this identifier: a share of another bookmark, one that never existed and one that was revoked before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204`,
+    ),
+    422: problemResponse("The identifiers did not pass validation"),
+    429: rateLimitedResponse(RATE_LIMITED),
+    503: problemResponse(UNAVAILABLE),
+  },
+});
+
+export const listFolderShares = defineOperation({
+  method: "get",
+  path: "/api/v1/folders/{id}/shares",
+  operationId: "listFolderShares",
+  tag: "sharing",
+  summary: "List the shares of a folder",
+  auth: "member",
+  rate: "read",
+  request: { params: FolderSharesParamsSchema },
+  responses: {
+    200: jsonResponse("The shares of the folder and the size of the audience they make. Only the owner of the folder reads them", FolderShareListSchema),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse(NO_SESSION),
+    403: problemResponse(READ_REFUSED),
+    404: problemResponse(NO_FOLDER),
+    422: problemResponse("The identifier did not pass validation"),
+    429: rateLimitedResponse(RATE_LIMITED),
+    503: problemResponse(UNAVAILABLE),
+  },
+});
+
+export const createFolderShare = defineOperation({
+  method: "post",
+  path: "/api/v1/folders/{id}/shares",
+  operationId: "createFolderShare",
+  tag: "sharing",
+  summary: "Share a folder with a member or a team",
+  auth: "member",
+  rate: "write",
+  scope: "write",
+  request: { params: FolderSharesParamsSchema, body: CreateFolderShareRequestSchema },
+  responses: {
+    200: jsonResponse("The folder was shared with this target already: the share that exists, with nothing written", FolderShareSchema),
+    201: jsonResponse("The folder, and every bookmark filed in it now or later, is readable by the target; the audit log records share.granted", FolderShareSchema),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse(NO_SESSION),
+    403: problemResponse(WRITE_REFUSED),
+    404: problemResponse(NO_FOLDER),
+    422: problemResponse(
+      "The identifier or the body did not pass validation: no target or two, a field the operation does not declare, the caller as the member (validation_failed on accountId, cannot_share_with_self), an account that is no current member of the workspace (unknown_member on accountId) or a team of no team of the workspace (unknown_team on teamId). Nothing is written",
+    ),
+    429: rateLimitedResponse(RATE_LIMITED),
+    503: problemResponse(UNAVAILABLE),
+  },
+});
+
+export const deleteFolderShare = defineOperation({
+  method: "delete",
+  path: "/api/v1/folders/{id}/shares/{shareId}",
+  operationId: "deleteFolderShare",
+  tag: "sharing",
+  summary: "Revoke a share of a folder",
+  auth: "member",
+  rate: "write",
+  scope: "write",
+  request: { params: FolderShareParamsSchema },
+  responses: {
+    204: emptyResponse("The share is revoked for good: the target can no longer read the folder, or the bookmarks in it, through it. The audit log records share.revoked"),
+    400: problemResponse("The request was malformed"),
+    401: problemResponse(NO_SESSION),
+    403: problemResponse(REVOKE_REFUSED),
+    404: problemResponse(
+      `${NO_FOLDER}, or the folder has no share with this identifier: a share of another folder, one that never existed and one that was revoked before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204`,
     ),
     422: problemResponse("The identifiers did not pass validation"),
     429: rateLimitedResponse(RATE_LIMITED),

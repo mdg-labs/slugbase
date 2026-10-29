@@ -49,6 +49,8 @@ export { isTagNameTaken, tagRepository } from "./repositories/tags.ts";
 export type { TagRepository } from "./repositories/tags.ts";
 export { bookmarkShareRepository, shareTargetRepository } from "./repositories/bookmark-shares.ts";
 export type { BookmarkShareRepository, ShareTargetRepository } from "./repositories/bookmark-shares.ts";
+export { folderShareRepository } from "./repositories/folder-shares.ts";
+export type { FolderShareRepository } from "./repositories/folder-shares.ts";
 export { isTeamNameTaken, teamRepository } from "./repositories/teams.ts";
 export type { TeamRepository } from "./repositories/teams.ts";
 export { folderRepository, isFolderNameTaken } from "./repositories/folders.ts";

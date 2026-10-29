@@ -110,6 +110,7 @@ describe("the package entry point", () => {
         "membershipRepository",
         "migrate",
         "faviconRepository",
+        "folderShareRepository",
         "migrationLevel",
         "searchRepository",
         "shareTargetRepository",

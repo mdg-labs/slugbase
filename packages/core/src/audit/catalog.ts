@@ -49,7 +49,7 @@ const CONTENT_CHOICE: AuditMetadataField = { type: "text", minLength: 6, maxLeng
 /** How many rows a bulk change touched; the one thing such an event says about them, never a title or a URL. */
 const COUNT: AuditMetadataField = { type: "count" };
 
-// `transferTo`, and `targetId` of a share of a bookmark with a member, name an account: the deletion of that account removes the field from the stored row
+// `transferTo`, and `targetId` of a share of a bookmark or a folder with a member, name an account: the deletion of that account removes the field from the stored row
 // (doc 05 section 7.1), so the parser below validates what is written and is not the check for a row that was read back.
 export const AUDIT_ACTIONS = {
   "workspace.created": { category: "workspace", metadata: { name: WORKSPACE_NAME } },
@@ -79,9 +79,9 @@ export const AUDIT_ACTIONS = {
   "bookmark.restored": { category: "bookmark", metadata: { count: COUNT } },
   // A member deleted several of their bookmarks in one request (doc 02 section 5.8): the number deleted, and nothing about them.
   "bookmark.bulk_deleted": { category: "bookmark", metadata: { count: COUNT } },
-  // A bookmark was shared with a member or a team, or a share was revoked (doc 02 section 8). The event is about the bookmark and says nothing of it but its
-  // identifier: the log is read by administrators, who have no implicit access to a member's bookmarks. The target is named by kind, identifier and the name it
-  // had; the deletion of a member's account removes `targetId` from the events that name it (doc 05 section 7.1).
+  // A bookmark or a folder was shared with a member or a team, or a share was revoked (doc 02 section 8). The event is about the bookmark or the folder (its
+  // entity type says which) and says nothing of it but its identifier: the log is read by administrators, who have no implicit access to a member's content.
+  // The target is named by kind, identifier and the name it had; the deletion of a member's account removes `targetId` from the events that name it (doc 05 section 7.1).
   "share.granted": { category: "share", metadata: { targetKind: SHARE_TARGET_KIND, targetId: { type: "uuid" }, targetName: SHARE_TARGET_NAME } },
   "share.revoked": { category: "share", metadata: { targetKind: SHARE_TARGET_KIND, targetId: { type: "uuid" }, targetName: SHARE_TARGET_NAME } },
 } as const satisfies Record<string, AuditActionDefinition>;

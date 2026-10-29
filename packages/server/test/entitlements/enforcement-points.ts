@@ -53,4 +53,10 @@ export const ENFORCEMENT_POINTS: readonly EnforcementPoint[] = [
   { operationId: "createBookmarkShare", entitlement: "sharing.teams", decidedBy: "handler", test: SHARING },
   { operationId: "deleteBookmarkShare", entitlement: "sharing.members", decidedBy: "handler", test: SHARING },
   { operationId: "deleteBookmarkShare", entitlement: "sharing.teams", decidedBy: "handler", test: SHARING },
+  { operationId: "listFolderShares", entitlement: "sharing.members", decidedBy: "handler", test: SHARING },
+  { operationId: "listFolderShares", entitlement: "sharing.teams", decidedBy: "handler", test: SHARING },
+  { operationId: "createFolderShare", entitlement: "sharing.members", decidedBy: "handler", test: SHARING },
+  { operationId: "createFolderShare", entitlement: "sharing.teams", decidedBy: "handler", test: SHARING },
+  { operationId: "deleteFolderShare", entitlement: "sharing.members", decidedBy: "handler", test: SHARING },
+  { operationId: "deleteFolderShare", entitlement: "sharing.teams", decidedBy: "handler", test: SHARING },
 ];

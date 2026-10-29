@@ -66,6 +66,8 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  * - Sharing: the path parameter `id` of `listBookmarkShares`, `createBookmarkShare` and `deleteBookmarkShare` takes a bookmark identifier, the body input `accountId` of
  *   `createBookmarkShare` a member identifier and its `teamId` a team identifier, and the path parameter `shareId` of `deleteBookmarkShare` a share identifier (kind `share`).
  *   The body of `createBookmarkShare` takes one target, so the matrix puts a member of B and a team of B in it together and a request function sends the two apart.
+ *   The shares of a folder are mapped the same way: the path parameter `id` of `listFolderShares`, `createFolderShare` and `deleteFolderShare` takes a folder identifier, the body
+ *   inputs `accountId` and `teamId` of `createFolderShare` a member and a team identifier, and the path parameter `shareId` of `deleteFolderShare` a share identifier.
  *
  * Entries are keyed by operation, because the name `id` takes a bookmark in one operation and an invitation in another. The fixture the matrix
  * runs against must hold identifiers of workspace B of every kind it is mapped to: the default fixture of `createProbe` holds `member` and
@@ -134,6 +136,12 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
   "createBookmarkShare.teamId": "team",
   "deleteBookmarkShare.id": "bookmark",
   "deleteBookmarkShare.shareId": "share",
+  "listFolderShares.id": "folder",
+  "createFolderShare.id": "folder",
+  "createFolderShare.accountId": "member",
+  "createFolderShare.teamId": "team",
+  "deleteFolderShare.id": "folder",
+  "deleteFolderShare.shareId": "share",
   "revokeInvitation.id": "invitation",
   "createInvitationLink.id": "invitation",
   "resendInvitation.id": "invitation",
@@ -172,6 +180,9 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
  * the owner of A owns in A, the admin of A as the target and the owner of A as the author; the fixture must hold that bookmark, the admin of A as a member (the team seed makes
  * one), and another share of the owner's in A, on the bookmark `...a0b3`, which the delete of the registry removes; B holds the same of its own. The repository has no update, so its
  * `set` is empty.
+ * A share of a folder is written the same way, by the owner of its folder: the `folder_shares` sample names the folder (`...a0d2`) that the owner of A owns in A, the admin of A as the
+ * target and the owner of A as the author; the fixture must hold that folder and another share of the owner's on it, with the team `seedTeamRows` made, which the delete of the registry
+ * removes; B holds the same of its own. The repository has no update, so its `set` is empty.
  */
 export const REPOSITORY_SAMPLES: RepositorySamples = {
   bookmarks: {
@@ -210,6 +221,15 @@ export const REPOSITORY_SAMPLES: RepositorySamples = {
     values: (fixture) => ({
       id: "0192f3a0-2222-7000-8000-00000000b010",
       bookmarkId: "0192f3a0-2222-7000-8000-00000000a0b2",
+      targetAccountId: fixture.a.admin.accountId,
+      grantedBy: fixture.a.owner.accountId,
+    }),
+    set: {},
+  },
+  folder_shares: {
+    values: (fixture) => ({
+      id: "0192f3a0-2222-7000-8000-00000000b011",
+      folderId: "0192f3a0-2222-7000-8000-00000000a0d2",
       targetAccountId: fixture.a.admin.accountId,
       grantedBy: fixture.a.owner.accountId,
     }),
