@@ -190,6 +190,14 @@ describe("grantBookmarkShare", () => {
     expect(records).toEqual([]);
   });
 
+  it("refuses the owner as the target whatever the case of the identifier", async () => {
+    const { store: shares, calls } = store();
+    const { audit, records } = auditor();
+    expect(await grantBookmarkShare({ store: shares, audit, newId }, { ...ask, target: { kind: "member", accountId: OWNER.toUpperCase() } })).toEqual({ kind: "self" });
+    expect(calls.map((call) => call.method)).toEqual(["ownedBookmark"]);
+    expect(records).toEqual([]);
+  });
+
   it("answers an unknown target as the field that named it, and records nothing", async () => {
     const { store: shares } = store({ grant: () => Promise.resolve({ kind: "unknown_target" }) });
     const { audit, records } = auditor();

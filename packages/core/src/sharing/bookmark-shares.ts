@@ -72,7 +72,7 @@ export async function grantBookmarkShare({ store, audit, newId }: BookmarkShareD
   if (!(await store.ownedBookmark({ bookmarkId: ask.bookmarkId, ownerId: ask.actor.accountId, use: "grant" }))) {
     return refusalFor(store, ask.bookmarkId, ask.actor.accountId);
   }
-  if (ask.target.kind === "member" && ask.target.accountId === ask.actor.accountId) {
+  if (ask.target.kind === "member" && ask.target.accountId.toLowerCase() === ask.actor.accountId.toLowerCase()) {
     return { kind: "self" };
   }
   const result = await store.grant({ id: newId(), bookmarkId: ask.bookmarkId, grantedBy: ask.actor.accountId, target: ask.target });
