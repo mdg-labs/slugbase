@@ -2,9 +2,9 @@ import { Button, Skeleton } from "@slugbase/ui";
 import { Banner, CardGrid, Confirm, EmptyState, FilterXIcon, InboxIcon, Loading, LoadMore, PlusIcon } from "@slugbase/ui/patterns";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
-import { useEffect, useState, type ReactElement } from "react";
+import { useCallback, useEffect, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
-import { useAllFolders } from "../folders/use-all-folders.ts";
+import { useAllFolders, useSharedFolders } from "../folders/use-all-folders.ts";
 import { useFormat } from "../i18n/use-format.ts";
 import { ShareDialog, type ShareSubject } from "../sharing/index.ts";
 import { useAllTags } from "../tags/use-all-tags.ts";
@@ -67,13 +67,21 @@ export function BookmarksPage(): ReactElement {
   const modal = useBookmarkModal();
   usePasteToCreate(modal.openNew);
   const folders = useAllFolders();
+  const sharedFolders = useSharedFolders();
   const tags = useAllTags();
-  // A folder of the address is concluded not to be the member's only from a whole list; a list that failed or is still
-  // loading says nothing about it. The list held may predate the folder (made on another device, say), so a folder missing
-  // from it is looked for once more in a fresh read, and only a folder still missing then is taken for one that is gone.
-  const missingFolder = addressed.folderId !== undefined && folders.status === "ready" && !folders.folders.some((folder) => folder.id === addressed.folderId);
+  // A folder of the address is concluded not to be the member's, or shared with them, only from the whole lists of both; a list
+  // that failed or is still loading says nothing about it. The lists held may predate the folder (made on another device, say), so
+  // a folder missing from them is looked for once more in fresh reads, and only a folder still missing then is taken for one that is gone.
+  const missingFolder =
+    addressed.folderId !== undefined &&
+    folders.status === "ready" &&
+    sharedFolders.status === "ready" &&
+    !folders.folders.some((folder) => folder.id === addressed.folderId) &&
+    !sharedFolders.folders.some((folder) => folder.id === addressed.folderId);
   const [rereadFor, setRereadFor] = useState<string | undefined>(undefined);
-  const { reread } = folders;
+  const { reread: rereadOwn } = folders;
+  const { reread: rereadShared } = sharedFolders;
+  const reread = useCallback(() => Promise.all([rereadOwn(), rereadShared()]), [rereadOwn, rereadShared]);
   useEffect(() => {
     const folderId = addressed.folderId;
     if (!missingFolder || folderId === undefined || rereadFor === folderId) {
@@ -323,7 +331,7 @@ export function BookmarksPage(): ReactElement {
           variant="warning"
         />
       ) : null}
-      <BookmarksToolbar controls={controls} folders={folders} search={search} tags={tags} />
+      <BookmarksToolbar controls={controls} folders={folders} search={search} shared={sharedFolders} tags={tags} />
       {body}
       <BookmarksBulkBar bulk={bulk} filters={filters} items={items} selection={selection} total={lastPage?.total ?? null} />
       <p aria-live="polite" className="sr-only" role="status">

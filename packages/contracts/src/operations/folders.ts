@@ -4,12 +4,13 @@ import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimi
 import { withoutNul } from "./text.ts";
 
 // The folders tag of doc 04 section 10.7: the operations that create, list, read, change and delete a member's folders. They act in
-// the workspace the request is bound to and name none (D11). A folder is its owner's (doc 02 section 7.1): another member's folder of
-// the same workspace and any folder of another workspace are answered 404, like one that does not exist (doc 04 section 2.4, doc 10 T1
-// and T2). Only the owner of a bookmark files it, and only into a folder of their own (doc 02 sections 7.1 and 8.2, Q22; doc 04 section 10.7
-// says "visible to the caller" for the read operations, which the ownership rule narrows): a folder or a bookmark that is another member's,
-// another workspace's or unknown is answered 404 and none of the bookmarks named is filed or unfiled. Sharing a folder and the share
-// summary are other operations.
+// the workspace the request is bound to and name none (D11). A folder is its owner's to change (doc 02 section 7.1) and its recipients' to read
+// (doc 02 section 8.2): another member's folder that is shared with the caller, directly or through a team, is listed and read, and a change, a
+// deletion or a filing into it is answered 403 (a share gives read access only, Q22); another member's folder that is not shared with the caller
+// and any folder of another workspace are answered 404, like one that does not exist (doc 04 section 2.4, doc 10 T1 and T2). Only the owner of a
+// bookmark files it, and only into a folder of their own (doc 02 sections 7.1 and 8.2, Q22; doc 04 section 10.7 says "visible to the caller" for the
+// read operations, which the ownership rule narrows): a folder or a bookmark that is another member's and not shared with the caller, another
+// workspace's or unknown is answered 404 and none of the bookmarks named is filed or unfiled. Sharing a folder is another operation.
 
 /** The longest folder name, in characters (doc 05 section 2.4). */
 export const FOLDER_NAME_MAX_LENGTH = 64;
@@ -122,10 +123,32 @@ export const UpdateFolderRequestSchema = z
   })
   .meta({ id: "UpdateFolderRequest" });
 
+export const FolderShareSummarySchema = z
+  .strictObject({
+    memberCount: z.number().int().min(0).describe("How many members the folder is shared with directly; the members of the teams it is shared with are not counted"),
+    teams: z
+      .array(z.strictObject({ id: z.uuid().describe("The team's identifier"), name: z.string().describe("The team's name") }))
+      .describe("The teams the folder is shared with, in the order of their names"),
+  })
+  .meta({ id: "FolderShareSummary" });
+
 export const FolderSchema = z
   .strictObject({
     id: z.uuid().describe("The folder's identifier"),
     ownerId: z.uuid().nullable().describe("The account of the member who owns the folder; null once that member has left the workspace"),
+    owner: z
+      .strictObject({
+        accountId: z.uuid().describe("The owner's account"),
+        displayName: z.string().describe("The owner's display name, as a member of the workspace sees it"),
+      })
+      .nullable()
+      .optional()
+      .describe("Who owns a folder that is shared with the caller; null for the caller's own folder and for one whose owner has left the workspace. The server always sends it; a client reads an absent value as null"),
+    shareSummary: FolderShareSummarySchema.nullable()
+      .optional()
+      .describe(
+        "How the caller's own folder is shared: with how many members directly and with which teams; no members and no teams for a private folder. Null for a folder that is another member's, whose recipient sees only who shared it. The server always sends it; a client reads an absent value as null",
+      ),
     name: z.string().describe("The folder's name, in the case it was entered in"),
     icon: z.string().describe("The folder's icon, a lucide icon name"),
     color: z.number().int().min(FOLDER_COLOR_MIN).max(FOLDER_COLOR_MAX).describe("The folder's colour, 1 to 8: the number of the --folder-N theme token"),
@@ -163,8 +186,15 @@ export const FOLDER_SEARCH_MAX_LENGTH = 64;
 /** The longest cursor a client may send back. The largest one the server issues carries a folder name (64 characters, up to 6 bytes each once JSON-escaped), a sort key, the identifier and the signature, as base64url: about 700 characters. */
 export const FOLDER_CURSOR_MAX_LENGTH = 1024;
 
+export const FOLDER_SCOPES = ["all", "mine", "shared"] as const;
+
 export const ListFoldersQuerySchema = z.strictObject({
-  scope: z.enum(["all", "mine"]).default("all").describe("Whose folders are listed. Only the caller's own folders exist until sharing arrives, so both name the same folders today"),
+  scope: z
+    .enum(FOLDER_SCOPES)
+    .default("all")
+    .describe(
+      "Whose folders are listed: all (the caller's own and those shared with them), mine (the caller's own) or shared (other members' folders that are shared with the caller, directly or through a team). A folder that is shared with the caller more than once is listed once",
+    ),
   q: withoutNul(z.string().trim().min(1).max(FOLDER_SEARCH_MAX_LENGTH)).optional().describe("Lists the folders whose name contains this text, without regard to case; left out, names are not filtered on"),
   sort: z
     .enum(FOLDER_SORTS)
@@ -181,7 +211,9 @@ export const ListFoldersQuerySchema = z.strictObject({
 
 export const FolderListSchema = z
   .strictObject({
-    items: z.array(FolderSchema).describe("One page of the caller's folders in the workspace, in the order asked for; another member's folders are never listed"),
+    items: z
+      .array(FolderSchema)
+      .describe("One page of the folders the scope covers in the workspace, in the order asked for; another member's folder that is not shared with the caller is never listed. A folder of another member carries its owner, and the caller's own carries how it is shared"),
     nextCursor: z.string().nullable().describe("Passed as `cursor` to get the next page; null on the last page"),
     total: z.number().int().min(0).nullable().describe("How many folders match the filters, across all pages: exact up to 10 000, and null above that, where totalAtLeast says so"),
     totalAtLeast: z.literal(FOLDER_LIST_TOTAL_CAP).optional().describe("Present, and 10 000, when total is null: the filters match more than 10 000 folders"),
@@ -232,13 +264,13 @@ export const listFolders = defineOperation({
   path: "/api/v1/folders",
   operationId: "listFolders",
   tag: "folders",
-  summary: "List my folders",
+  summary: "List folders",
   auth: "member",
   rate: "read",
   scope: "read",
   request: { query: ListFoldersQuerySchema },
   responses: {
-    200: jsonResponse("One page of the caller's folders in the workspace in the order asked for, each with the number of bookmarks filed in it, the cursor of the next page and the total (exact up to 10 000, then null with totalAtLeast)", FolderListSchema),
+    200: jsonResponse("One page of the folders the scope covers in the workspace in the order asked for, each with the number of bookmarks filed in it and its owner or its share summary, the cursor of the next page and the total (exact up to 10 000, then null with totalAtLeast)", FolderListSchema),
     400: problemResponse("The request was malformed, or the cursor is not one this account was issued for this workspace, scope, search and sort (bad_request)"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     404: problemResponse("The request acts in no workspace: the account has none, or the workspace is being deleted"),
@@ -259,11 +291,11 @@ export const getFolder = defineOperation({
   scope: "read",
   request: { params: FolderParamsSchema },
   responses: {
-    200: jsonResponse("The caller's folder with the number of bookmarks filed in it", FolderSchema, { headers: FolderEntityTag }),
+    200: jsonResponse("The caller's folder, or another member's folder that is shared with the caller, with the number of bookmarks filed in it and its owner or its share summary", FolderSchema, { headers: FolderEntityTag }),
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     404: problemResponse(
-      "The workspace the request acts in has no folder of the caller with this identifier: another member's folder, a folder of another workspace and one that never existed are answered alike",
+      "The workspace the request acts in has no folder of the caller or shared with the caller with this identifier: another member's folder that is not shared with the caller, a folder of another workspace and one that never existed are answered alike",
     ),
     422: problemResponse("The identifier did not pass validation"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
@@ -289,9 +321,11 @@ export const updateFolder = defineOperation({
     ),
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
-    403: problemResponse("The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"),
+    403: problemResponse(
+      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder is another member's and shared with the caller, who can read it and may not change it (forbidden); nothing is changed",
+    ),
     404: problemResponse(
-      "The workspace the request acts in has no folder of the caller with this identifier: another member's folder, a folder of another workspace and one that never existed are answered alike",
+      "The workspace the request acts in has no folder of the caller with this identifier and none shared with the caller: another member's folder that is not shared with the caller, a folder of another workspace and one that never existed are answered alike",
     ),
     409: problemResponse("The caller has another folder with this name, in any case (name_taken); nothing is written"),
     412: problemResponse("If-Match names a version other than the folder's current one (precondition_failed); the folder is unchanged"),
@@ -315,9 +349,11 @@ export const deleteFolder = defineOperation({
     204: emptyResponse("The folder is deleted for good together with the associations of its bookmarks; the bookmarks stay"),
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
-    403: problemResponse("The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"),
+    403: problemResponse(
+      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder is another member's and shared with the caller, who can read it and may not delete it (forbidden); nothing is deleted",
+    ),
     404: problemResponse(
-      "The workspace the request acts in has no folder of the caller with this identifier: another member's folder, a folder of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204",
+      "The workspace the request acts in has no folder of the caller with this identifier and none shared with the caller: another member's folder that is not shared with the caller, a folder of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204",
     ),
     422: problemResponse("The identifier did not pass validation"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
@@ -344,10 +380,10 @@ export const addFolderBookmarks = defineOperation({
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse(
-      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or a bookmark named is another member's and shared with the caller, who can read it and may not file it (forbidden); none of the bookmarks is filed",
+      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder, or a bookmark named, is another member's and shared with the caller, who can read it and may not file into it or file it (forbidden); none of the bookmarks is filed",
     ),
     404: problemResponse(
-      "The caller has no folder with this identifier in the workspace, or owns none of a bookmark named among those it can file: another member's folder or bookmark, one of another workspace, a plan-archived bookmark and one that never existed are answered alike, and none of the bookmarks is filed",
+      "The caller has no folder with this identifier in the workspace, or owns none of a bookmark named among those it can file: another member's folder or bookmark that is not shared with the caller, one of another workspace, a plan-archived bookmark and one that never existed are answered alike, and none of the bookmarks is filed",
     ),
     422: problemResponse("The identifier or the body did not pass validation (no bookmark identifier, more than 1 000, a malformed identifier, or a field the operation does not declare). Nothing is written"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
@@ -374,10 +410,10 @@ export const removeFolderBookmarks = defineOperation({
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse(
-      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or a bookmark named is another member's and shared with the caller, who can read it and may not take it out of a folder (forbidden); none of the bookmarks is unfiled",
+      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder, or a bookmark named, is another member's and shared with the caller, who can read it and may not take bookmarks out of it or take it out of a folder (forbidden); none of the bookmarks is unfiled",
     ),
     404: problemResponse(
-      "The caller has no folder with this identifier in the workspace, or owns none of a bookmark named: another member's folder or bookmark, one of another workspace and one that never existed are answered alike, and none of the bookmarks is unfiled",
+      "The caller has no folder with this identifier in the workspace, or owns none of a bookmark named: another member's folder or bookmark that is not shared with the caller, one of another workspace and one that never existed are answered alike, and none of the bookmarks is unfiled",
     ),
     422: problemResponse("The identifier or the body did not pass validation (no bookmark identifier, more than 1 000, a malformed identifier, or a field the operation does not declare). Nothing is written"),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),

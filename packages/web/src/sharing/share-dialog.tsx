@@ -7,6 +7,7 @@ import { useMemo, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { meQuery } from "../account/me.ts";
 import { ApiProblemError } from "../api/client.ts";
+import { FOLDERS_QUERY_KEY } from "../folders/folders.ts";
 import { rateLimitMessage } from "../bookmarks/rate-limit-message.ts";
 import { inPlaceRefusals } from "../shell/mutation-error-toasts.tsx";
 import { teamQuery } from "../teams/teams.ts";
@@ -80,6 +81,10 @@ function GrantRow({ subject, share }: { subject: ShareSubject; share: Share }): 
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: SHARES_QUERY_KEY });
+      if (subject.kind === "folder") {
+        // The Folders page says how each folder is shared (its share summary), which this change has just moved.
+        void queryClient.invalidateQueries({ queryKey: FOLDERS_QUERY_KEY });
+      }
     },
   });
   return (
@@ -163,6 +168,10 @@ function ShareDialogContent({ subject, onClose }: { subject: ShareSubject; onClo
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: SHARES_QUERY_KEY });
+      if (subject.kind === "folder") {
+        // The Folders page says how each folder is shared (its share summary), which this change has just moved.
+        void queryClient.invalidateQueries({ queryKey: FOLDERS_QUERY_KEY });
+      }
     },
   });
 

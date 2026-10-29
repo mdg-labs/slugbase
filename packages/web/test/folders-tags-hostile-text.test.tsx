@@ -5,7 +5,7 @@ import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-libra
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { HEAVY_TEST_TIMEOUT_MS } from "../../../vitest.shared.ts";
 import { createWebApp } from "../src/index.ts";
-import { allowSlowRender, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
+import { ACCOUNT_BODY, allowSlowRender, meOf, renderApp, stubBrowserApis, stubMatchMedia } from "./support.tsx";
 
 // The name of a folder or a tag is a stranger's text (doc 10 T14, section 6): a member can name one `<img src=x onerror=...>`,
 // and the name is shown on the Folders page, the Tags page, the sidebar, the chips of the bookmark filters, the bookmark
@@ -96,7 +96,8 @@ const tagsOf = (names: readonly string[]): Tag[] => names.map((name, index) => t
 let alerts: unknown[] = [];
 
 function use(scenario: Omit<Scenario, "name"> = {}): void {
-  const fixtures = { listBookmarks: list([bookmark(1), bookmark(2)]), ...scenario.fixtures };
+  // The signed-in account owns the folders, so the row actions only the owner has are offered.
+  const fixtures = { getMe: meOf(ACCOUNT_BODY), listBookmarks: list([bookmark(1), bookmark(2)]), ...scenario.fixtures };
   server.use(...createHandlers(document_, { scenario: { name: "hostile-names", ...scenario, fixtures } }));
 }
 

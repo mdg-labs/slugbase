@@ -584,7 +584,7 @@
         "additionalProperties": false,
         "properties": {
           "folderId": {
-            "description": "Matches the bookmarks filed in this folder of the caller's. A folder that is another member's, another workspace's or unknown matches nothing. Left out, folders are not filtered on",
+            "description": "Matches the bookmarks filed in this folder, the caller's own or one of another member's that is shared with the caller. A folder that is another member's and not shared with the caller, another workspace's or unknown matches nothing. Left out, folders are not filtered on",
             "format": "uuid",
             "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
             "type": "string"
@@ -2289,6 +2289,34 @@
             "description": "The folder's name, in the case it was entered in",
             "type": "string"
           },
+          "owner": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "accountId": {
+                    "description": "The owner's account",
+                    "format": "uuid",
+                    "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                    "type": "string"
+                  },
+                  "displayName": {
+                    "description": "The owner's display name, as a member of the workspace sees it",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "accountId",
+                  "displayName"
+                ],
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who owns a folder that is shared with the caller; null for the caller's own folder and for one whose owner has left the workspace. The server always sends it; a client reads an absent value as null"
+          },
           "ownerId": {
             "anyOf": [
               {
@@ -2301,6 +2329,17 @@
               }
             ],
             "description": "The account of the member who owns the folder; null once that member has left the workspace"
+          },
+          "shareSummary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FolderShareSummary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How the caller's own folder is shared: with how many members directly and with which teams; no members and no teams for a private folder. Null for a folder that is another member's, whose recipient sees only who shared it. The server always sends it; a client reads an absent value as null"
           },
           "updatedAt": {
             "description": "When the folder last changed, RFC 3339 UTC",
@@ -2352,7 +2391,7 @@
         "additionalProperties": false,
         "properties": {
           "items": {
-            "description": "One page of the caller's folders in the workspace, in the order asked for; another member's folders are never listed",
+            "description": "One page of the folders the scope covers in the workspace, in the order asked for; another member's folder that is not shared with the caller is never listed. A folder of another member carries its owner, and the caller's own carries how it is shared",
             "items": {
               "$ref": "#/components/schemas/Folder"
             },
@@ -2483,6 +2522,46 @@
         "required": [
           "items",
           "audienceSize"
+        ],
+        "type": "object"
+      },
+      "FolderShareSummary": {
+        "additionalProperties": false,
+        "properties": {
+          "memberCount": {
+            "description": "How many members the folder is shared with directly; the members of the teams it is shared with are not counted",
+            "maximum": 9007199254740991,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "teams": {
+            "description": "The teams the folder is shared with, in the order of their names",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "description": "The team's identifier",
+                  "format": "uuid",
+                  "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+                  "type": "string"
+                },
+                "name": {
+                  "description": "The team's name",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "memberCount",
+          "teams"
         ],
         "type": "object"
       },
@@ -6776,7 +6855,7 @@
             "required": false,
             "schema": {
               "default": "all",
-              "description": "Whose bookmarks are listed: all (the caller's own and those shared with them), mine (the caller's own), shared_with_me (other members' bookmarks that are shared with the caller, directly, through a team or through a folder) or shared_by_me (the caller's own that are shared with anyone). A bookmark that can be read through more than one route is listed once. The filters folderId, tag and url name the caller's own things and reach the caller's own bookmarks alone, so shared_with_me with one of them lists nothing. A pinned filter means pinned by the caller, so no shared bookmark is pinned. The text query q finds the caller's own bookmarks",
+              "description": "Whose bookmarks are listed: all (the caller's own and those shared with them), mine (the caller's own), shared_with_me (other members' bookmarks that are shared with the caller, directly, through a team or through a folder) or shared_by_me (the caller's own that are shared with anyone). A bookmark that can be read through more than one route is listed once. The filters tag and url name the caller's own things and reach the caller's own bookmarks alone, so shared_with_me with one of them lists nothing. The filter folderId reaches the bookmarks filed in the caller's own folder and those filed in a folder of another member that is shared with the caller, so shared_with_me with it lists the latter. A pinned filter means pinned by the caller, so no shared bookmark is pinned. The text query q finds the caller's own bookmarks",
               "enum": [
                 "all",
                 "mine",
@@ -6852,7 +6931,7 @@
             "name": "folderId",
             "required": false,
             "schema": {
-              "description": "Lists the bookmarks filed in this folder of the caller's. A folder that is another member's, another workspace's or unknown lists nothing: an empty page, not an error. Left out, folders are not filtered on",
+              "description": "Lists the bookmarks filed in this folder, the caller's own or one of another member's that is shared with the caller. A folder that is another member's and not shared with the caller, another workspace's or unknown lists nothing: an empty page, not an error. Left out, folders are not filtered on",
               "format": "uuid",
               "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
               "type": "string"
@@ -7392,7 +7471,7 @@
             "required": false,
             "schema": {
               "default": "all",
-              "description": "Whose bookmarks are listed: all (the caller's own and those shared with them), mine (the caller's own), shared_with_me (other members' bookmarks that are shared with the caller, directly, through a team or through a folder) or shared_by_me (the caller's own that are shared with anyone). A bookmark that can be read through more than one route is listed once. The filters folderId, tag and url name the caller's own things and reach the caller's own bookmarks alone, so shared_with_me with one of them lists nothing. A pinned filter means pinned by the caller, so no shared bookmark is pinned. The text query q finds the caller's own bookmarks",
+              "description": "Whose bookmarks are listed: all (the caller's own and those shared with them), mine (the caller's own), shared_with_me (other members' bookmarks that are shared with the caller, directly, through a team or through a folder) or shared_by_me (the caller's own that are shared with anyone). A bookmark that can be read through more than one route is listed once. The filters tag and url name the caller's own things and reach the caller's own bookmarks alone, so shared_with_me with one of them lists nothing. The filter folderId reaches the bookmarks filed in the caller's own folder and those filed in a folder of another member that is shared with the caller, so shared_with_me with it lists the latter. A pinned filter means pinned by the caller, so no shared bookmark is pinned. The text query q finds the caller's own bookmarks",
               "enum": [
                 "all",
                 "mine",
@@ -7468,7 +7547,7 @@
             "name": "folderId",
             "required": false,
             "schema": {
-              "description": "Lists the bookmarks filed in this folder of the caller's. A folder that is another member's, another workspace's or unknown lists nothing: an empty page, not an error. Left out, folders are not filtered on",
+              "description": "Lists the bookmarks filed in this folder, the caller's own or one of another member's that is shared with the caller. A folder that is another member's and not shared with the caller, another workspace's or unknown lists nothing: an empty page, not an error. Left out, folders are not filtered on",
               "format": "uuid",
               "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
               "type": "string"
@@ -8946,10 +9025,11 @@
             "required": false,
             "schema": {
               "default": "all",
-              "description": "Whose folders are listed. Only the caller's own folders exist until sharing arrives, so both name the same folders today",
+              "description": "Whose folders are listed: all (the caller's own and those shared with them), mine (the caller's own) or shared (other members' folders that are shared with the caller, directly or through a team). A folder that is shared with the caller more than once is listed once",
               "enum": [
                 "all",
-                "mine"
+                "mine",
+                "shared"
               ],
               "type": "string"
             }
@@ -9013,7 +9093,7 @@
                 }
               }
             },
-            "description": "One page of the caller's folders in the workspace in the order asked for, each with the number of bookmarks filed in it, the cursor of the next page and the total (exact up to 10 000, then null with totalAtLeast)"
+            "description": "One page of the folders the scope covers in the workspace in the order asked for, each with the number of bookmarks filed in it and its owner or its share summary, the cursor of the next page and the total (exact up to 10 000, then null with totalAtLeast)"
           },
           "400": {
             "content": {
@@ -9087,7 +9167,7 @@
             "description": "The service is temporarily unavailable"
           }
         },
-        "summary": "List my folders",
+        "summary": "List folders",
         "tags": [
           "folders"
         ],
@@ -9267,7 +9347,7 @@
                 }
               }
             },
-            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"
+            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder is another member's and shared with the caller, who can read it and may not delete it (forbidden); nothing is deleted"
           },
           "404": {
             "content": {
@@ -9277,7 +9357,7 @@
                 }
               }
             },
-            "description": "The workspace the request acts in has no folder of the caller with this identifier: another member's folder, a folder of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204"
+            "description": "The workspace the request acts in has no folder of the caller with this identifier and none shared with the caller: another member's folder that is not shared with the caller, a folder of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204"
           },
           "422": {
             "content": {
@@ -9353,7 +9433,7 @@
                 }
               }
             },
-            "description": "The caller's folder with the number of bookmarks filed in it",
+            "description": "The caller's folder, or another member's folder that is shared with the caller, with the number of bookmarks filed in it and its owner or its share summary",
             "headers": {
               "ETag": {
                 "description": "The folder's version as an entity tag, for example \"3\"; the If-Match of the next change",
@@ -9392,7 +9472,7 @@
                 }
               }
             },
-            "description": "The workspace the request acts in has no folder of the caller with this identifier: another member's folder, a folder of another workspace and one that never existed are answered alike"
+            "description": "The workspace the request acts in has no folder of the caller or shared with the caller with this identifier: another member's folder that is not shared with the caller, a folder of another workspace and one that never existed are answered alike"
           },
           "422": {
             "content": {
@@ -9526,7 +9606,7 @@
                 }
               }
             },
-            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope)"
+            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder is another member's and shared with the caller, who can read it and may not change it (forbidden); nothing is changed"
           },
           "404": {
             "content": {
@@ -9536,7 +9616,7 @@
                 }
               }
             },
-            "description": "The workspace the request acts in has no folder of the caller with this identifier: another member's folder, a folder of another workspace and one that never existed are answered alike"
+            "description": "The workspace the request acts in has no folder of the caller with this identifier and none shared with the caller: another member's folder that is not shared with the caller, a folder of another workspace and one that never existed are answered alike"
           },
           "409": {
             "content": {
@@ -9683,7 +9763,7 @@
                 }
               }
             },
-            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or a bookmark named is another member's and shared with the caller, who can read it and may not take it out of a folder (forbidden); none of the bookmarks is unfiled"
+            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder, or a bookmark named, is another member's and shared with the caller, who can read it and may not take bookmarks out of it or take it out of a folder (forbidden); none of the bookmarks is unfiled"
           },
           "404": {
             "content": {
@@ -9693,7 +9773,7 @@
                 }
               }
             },
-            "description": "The caller has no folder with this identifier in the workspace, or owns none of a bookmark named: another member's folder or bookmark, one of another workspace and one that never existed are answered alike, and none of the bookmarks is unfiled"
+            "description": "The caller has no folder with this identifier in the workspace, or owns none of a bookmark named: another member's folder or bookmark that is not shared with the caller, one of another workspace and one that never existed are answered alike, and none of the bookmarks is unfiled"
           },
           "422": {
             "content": {
@@ -9818,7 +9898,7 @@
                 }
               }
             },
-            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or a bookmark named is another member's and shared with the caller, who can read it and may not file it (forbidden); none of the bookmarks is filed"
+            "description": "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder, or a bookmark named, is another member's and shared with the caller, who can read it and may not file into it or file it (forbidden); none of the bookmarks is filed"
           },
           "404": {
             "content": {
@@ -9828,7 +9908,7 @@
                 }
               }
             },
-            "description": "The caller has no folder with this identifier in the workspace, or owns none of a bookmark named among those it can file: another member's folder or bookmark, one of another workspace, a plan-archived bookmark and one that never existed are answered alike, and none of the bookmarks is filed"
+            "description": "The caller has no folder with this identifier in the workspace, or owns none of a bookmark named among those it can file: another member's folder or bookmark that is not shared with the caller, one of another workspace, a plan-archived bookmark and one that never existed are answered alike, and none of the bookmarks is filed"
           },
           "422": {
             "content": {

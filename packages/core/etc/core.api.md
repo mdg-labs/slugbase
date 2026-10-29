@@ -2381,8 +2381,8 @@ export function deleteAccount<Code extends string>(input: AccountDeletionDepende
 // @public (undocumented)
 export function deleteBookmark(input: BookmarkDeletionDependencies, ask: BookmarkDeletionAsk): Promise<BookmarkDeletionOutcome>;
 
-// @public
-export function deleteFolder(input: FolderDeletionDependencies, ask: FolderDeletionAsk): Promise<boolean>;
+// @public (undocumented)
+export function deleteFolder(input: FolderDeletionDependencies, ask: FolderDeletionAsk): Promise<FolderDeletionResult>;
 
 // @public
 export function deleteInstanceAccount<Code extends string>(input: InstanceAccountDeletionDependencies<Code>, ask: InstanceAccountDeletionAsk): Promise<InstanceAccountDeletionOutcome<Code>>;
@@ -2792,8 +2792,21 @@ export interface FolderDeletionAsk {
 // @public (undocumented)
 export interface FolderDeletionDependencies {
     // (undocumented)
-    readonly store: Pick<FolderStore, "remove">;
+    readonly store: Pick<FolderStore, "remove" | "sharedWith">;
 }
+
+// @public (undocumented)
+export type FolderDeletionResult = {
+    readonly kind: "deleted";
+}
+/** The account owns no such folder and none is shared with it, which a caller must not tell apart from any other case. */
+| {
+    readonly kind: "not_found";
+}
+/** The folder is shared with the account, which can read it and may not delete it; nothing was deleted. */
+| {
+    readonly kind: "forbidden";
+};
 
 // @public (undocumented)
 export interface FolderFilingAsk {
@@ -2830,7 +2843,7 @@ export type FolderFilingResult =
 | {
     readonly kind: "not_found";
 }
-/** A bookmark named is shared with the caller, who can read it and may not file it; nothing was written. */
+/** The folder, or a bookmark named, is shared with the caller, who can read it and may not file into it or file it; nothing was written. */
 | {
     readonly kind: "forbidden";
 };
@@ -2842,6 +2855,10 @@ export interface FolderFilingStore {
         readonly bookmarkIds: readonly string[];
         readonly accountId: string;
     }): Promise<readonly string[]>;
+    sharedWith(request: {
+        readonly folderId: string;
+        readonly accountId: string;
+    }): Promise<boolean>;
     unfile(request: FolderFilingRequest): Promise<FolderFilingStoreResult>;
 }
 
@@ -2868,7 +2885,7 @@ export interface FolderListAsk {
     // (undocumented)
     readonly cursor: string | undefined;
     readonly limit: number;
-    readonly scope: "all" | "mine";
+    readonly scope: FolderScope;
     // (undocumented)
     readonly search: string | undefined;
     // (undocumented)
@@ -2903,10 +2920,11 @@ export interface FolderListRequest {
     // (undocumented)
     readonly limit: number;
     // (undocumented)
-    readonly ownerId: string;
+    readonly scope: FolderScope;
     readonly search: string | undefined;
     // (undocumented)
     readonly sort: FolderSort;
+    readonly viewerId: string;
 }
 
 // @public
@@ -2917,6 +2935,14 @@ export interface FolderListRow extends FolderRecord {
 
 // @public (undocumented)
 export type FolderNameRefusal = "empty" | "too_long";
+
+// @public
+export interface FolderOwner {
+    // (undocumented)
+    readonly accountId: string;
+    // (undocumented)
+    readonly displayName: string;
+}
 
 // @public
 export interface FolderPatch {
@@ -2964,11 +2990,16 @@ export interface FolderRecord {
     // (undocumented)
     readonly id: string;
     readonly name: string;
+    readonly owner: FolderOwner | null;
     readonly ownerId: string | null;
+    readonly shareSummary: FolderShareSummary | null;
     // (undocumented)
     readonly updatedAt: Date;
     readonly version: number;
 }
+
+// @public
+export type FolderScope = "all" | "mine" | "shared";
 
 // @public (undocumented)
 export interface FolderShareAsk {
@@ -3107,6 +3138,15 @@ export interface FolderShareStore {
 }
 
 // @public
+export interface FolderShareSummary {
+    readonly memberCount: number;
+    readonly teams: readonly {
+        readonly id: string;
+        readonly name: string;
+    }[];
+}
+
+// @public
 export type FolderShareUse = "read" | "grant" | "revoke";
 
 // @public (undocumented)
@@ -3115,19 +3155,24 @@ export type FolderSort = "name" | "count" | "updated";
 // @public (undocumented)
 export interface FolderStore {
     count(request: {
-        readonly ownerId: string;
+        readonly viewerId: string;
+        readonly scope: FolderScope;
         readonly search: string | undefined;
         readonly limit: number;
     }): Promise<number>;
     create(folder: NewFolder): Promise<FolderStoreCreationResult>;
     find(request: {
         readonly folderId: string;
-        readonly ownerId: string;
+        readonly viewerId: string;
     }): Promise<FolderRecord | undefined>;
     list(request: FolderListRequest): Promise<readonly FolderListRow[]>;
     remove(request: {
         readonly folderId: string;
         readonly ownerId: string;
+    }): Promise<boolean>;
+    sharedWith(request: {
+        readonly folderId: string;
+        readonly accountId: string;
     }): Promise<boolean>;
     update(request: FolderUpdateRequest): Promise<FolderUpdateResult>;
 }
@@ -3156,7 +3201,7 @@ export interface FolderUpdateAsk {
 // @public (undocumented)
 export interface FolderUpdateDependencies {
     // (undocumented)
-    readonly store: Pick<FolderStore, "update">;
+    readonly store: Pick<FolderStore, "update" | "sharedWith">;
 }
 
 // @public (undocumented)
@@ -3195,9 +3240,13 @@ export type FolderUpdateResult =
 | {
     readonly kind: "name_taken";
 }
-/** The caller owns no such folder; nothing was written. */
+/** The caller owns no such folder, and none is shared with it; nothing was written. */
 | {
     readonly kind: "not_found";
+}
+/** The folder is another member's and shared with the caller, who can read it and may not change it; nothing was written. */
+| {
+    readonly kind: "forbidden";
 };
 
 // @public

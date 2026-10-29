@@ -65,6 +65,10 @@ function stubServer(): Server {
           return json({ items: [BOOKMARK], nextCursor: null, total: 1 });
         }
         if (url.pathname === "/api/v1/folders" && other.method === "GET") {
+          // The folders shared with the member, which the sidebar and the folder filter read beside the member's own, are none.
+          if (url.searchParams.get("scope") === "shared") {
+            return json({ items: [], nextCursor: null, total: 0 });
+          }
           await foldersGate.open;
           return json({
             items: [{ id: WORK, ownerId: OWNER, name: "Work", icon: "folder", color: 1, bookmarkCount: 0, version: 1, createdAt: BOOKMARK.createdAt, updatedAt: BOOKMARK.createdAt }],

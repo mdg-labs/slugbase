@@ -1,14 +1,14 @@
-import { Button, Skeleton, useShortcut } from "@slugbase/ui";
+import { Button, Skeleton, Tabs, TabsList, TabsTab, useShortcut } from "@slugbase/ui";
 import { Banner, Confirm, EmptyState, FolderIcon, Loading, LoadMore, PlusIcon, SelectField } from "@slugbase/ui/patterns";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { useFormat } from "../i18n/use-format.ts";
-import { ShareDialog, type ShareSubject } from "../sharing/index.ts";
+import { ShareDialog, useSharingGranted, type ShareSubject } from "../sharing/index.ts";
 import { FolderForm, type FolderFormIntent } from "./folder-form.tsx";
-import { FOLDER_SORTS, folderFailureOf, folderListQuery, type Folder, type FolderSort } from "./folders.ts";
-import { useCreateFolderForm, useFolderSort } from "./folders-search.ts";
+import { FOLDER_LIST_SCOPES, FOLDER_SORTS, folderFailureOf, folderListQuery, type Folder, type FolderListScope, type FolderSort } from "./folders.ts";
+import { useCreateFolderForm, useFolderScope, useFolderSort } from "./folders-search.ts";
 import { FoldersTable } from "./folders-table.tsx";
 import { useDeleteFolder } from "./use-delete-folder.ts";
 
@@ -21,6 +21,10 @@ const SKELETON_ROWS = ["a", "b", "c", "d"] as const;
 
 function isSort(value: string): value is FolderSort {
   return (FOLDER_SORTS as readonly string[]).includes(value);
+}
+
+function isScope(value: unknown): value is FolderListScope {
+  return (FOLDER_LIST_SCOPES as readonly unknown[]).includes(value);
 }
 
 interface Editing {
@@ -38,7 +42,10 @@ export function FoldersPage(): ReactElement {
   const format = useFormat();
   const router = useRouter();
   const { sort, setSort } = useFolderSort();
-  const query = useInfiniteQuery(folderListQuery(router.options.context.api, sort));
+  const { scope, setScope } = useFolderScope();
+  // Where the workspace may not share, the tabs are hidden; the list is the address's, since reading a share is not gated by the plan.
+  const sharingGranted = useSharingGranted();
+  const query = useInfiniteQuery(folderListQuery(router.options.context.api, sort, scope));
   const createForm = useCreateFolderForm();
   const [editing, setEditing] = useState<Editing | undefined>(undefined);
   const [deleting, setDeleting] = useState<Folder | undefined>(undefined);
@@ -107,15 +114,23 @@ export function FoldersPage(): ReactElement {
   } else if (query.data === undefined) {
     body = <Banner action={retry} title={t("folders.list.loadFailed")} variant="error" />;
   } else if (items.length === 0 && !query.hasNextPage) {
-    body = (
-      <EmptyState
-        actions={newFolder}
-        description={t("folders.list.empty.description")}
-        headingLevel={2}
-        icon={<FolderIcon aria-hidden="true" />}
-        title={t("folders.list.empty.title")}
-      />
-    );
+    body =
+      scope === "shared" ? (
+        <EmptyState
+          description={t("folders.list.empty.shared.description")}
+          headingLevel={2}
+          icon={<FolderIcon aria-hidden="true" />}
+          title={t("folders.list.empty.shared.title")}
+        />
+      ) : (
+        <EmptyState
+          actions={newFolder}
+          description={t("folders.list.empty.description")}
+          headingLevel={2}
+          icon={<FolderIcon aria-hidden="true" />}
+          title={t("folders.list.empty.title")}
+        />
+      );
   } else {
     const shown = format.number(items.length);
     body = (
@@ -151,10 +166,26 @@ export function FoldersPage(): ReactElement {
     { value: "updated", label: t("folders.sort.updated") },
   ] as const satisfies readonly { value: FolderSort; label: string }[];
   const showSort = query.data === undefined || items.length > 0 || query.hasNextPage;
+  const scopeTabs = sharingGranted ? (
+    <Tabs
+      onValueChange={(value) => {
+        if (isScope(value)) {
+          setScope(value);
+        }
+      }}
+      value={scope}
+    >
+      <TabsList aria-label={t("folders.scope.label")} className="w-full sm:w-fit">
+        <TabsTab value="mine">{t("folders.scope.mine")}</TabsTab>
+        <TabsTab value="shared">{t("folders.scope.shared")}</TabsTab>
+      </TabsList>
+    </Tabs>
+  ) : null;
 
   return (
     <div className={PAGE_FRAME}>
       {heading}
+      {scopeTabs}
       {showSort ? (
         <SelectField
           className="sm:w-56"

@@ -24,6 +24,24 @@ export interface FolderRecord {
   readonly version: number;
   readonly createdAt: Date;
   readonly updatedAt: Date;
+  /** Who owns a folder of another member that is shared with the viewer; null for the viewer's own folder and for one whose owner has left the workspace. */
+  readonly owner: FolderOwner | null;
+  /** How the viewer's own folder is shared; null for a folder of another member, whose recipient sees no more than who shared it. */
+  readonly shareSummary: FolderShareSummary | null;
+}
+
+/** The member who owns a folder that is shared with the viewer. */
+export interface FolderOwner {
+  readonly accountId: string;
+  readonly displayName: string;
+}
+
+/** How a folder of the viewer's is shared: with how many members directly, and with which teams by name. A folder shared with none is private. */
+export interface FolderShareSummary {
+  /** The members the folder is shared with directly; the members of a team it is shared with are not counted. */
+  readonly memberCount: number;
+  /** The teams the folder is shared with, by name and then identifier. */
+  readonly teams: readonly { readonly id: string; readonly name: string }[];
 }
 
 /** A folder of a list, with the update time as the database wrote it in text: a `Date` keeps milliseconds and the database microseconds, so the cursor of a page sorted by update time carries the text. */
@@ -44,6 +62,9 @@ export interface NewFolder {
 
 export type FolderSort = "name" | "count" | "updated";
 
+/** Whose folders a list covers: the viewer's own, those of other members that are shared with the viewer (directly or through a team), or both. */
+export type FolderScope = "all" | "mine" | "shared";
+
 export type FolderStoreCreationResult =
   | { readonly kind: "created"; readonly folder: FolderRecord }
   /** The owner already has a folder of that name, spelled in any case. */
@@ -61,7 +82,9 @@ export interface FolderPosition {
 }
 
 export interface FolderListRequest {
-  readonly ownerId: string;
+  /** The member who lists: the owner of the folders of the `mine` scope and the one the others are shared with; the account of the transaction. */
+  readonly viewerId: string;
+  readonly scope: FolderScope;
   /** Lists the folders whose name contains this text, without regard to case; undefined lists them all. */
   readonly search: string | undefined;
   readonly sort: FolderSort;
@@ -73,12 +96,14 @@ export interface FolderListRequest {
 export interface FolderStore {
   /** Inserts the folder for its owner in the workspace of the transaction. Nothing is written for `name_taken`. */
   create(folder: NewFolder): Promise<FolderStoreCreationResult>;
-  /** The folder `folderId` when `ownerId` owns it in the workspace of the transaction; undefined for any other folder. */
-  find(request: { readonly folderId: string; readonly ownerId: string }): Promise<FolderRecord | undefined>;
-  /** The next `request.limit` folders that `request.ownerId` owns in the workspace of the transaction with the number of bookmarks filed in each, in the order of `request.sort`, after `request.after`. */
+  /** The folder `folderId` when `viewerId` owns it in the workspace of the transaction or it is shared with `viewerId`; undefined for any other folder. */
+  find(request: { readonly folderId: string; readonly viewerId: string }): Promise<FolderRecord | undefined>;
+  /** The next `request.limit` folders of `request.scope` for `request.viewerId` in the workspace of the transaction with the number of bookmarks filed in each, in the order of `request.sort`, after `request.after`. */
   list(request: FolderListRequest): Promise<readonly FolderListRow[]>;
-  /** How many folders `ownerId` owns in the workspace of the transaction whose name contains `search`, but at most `limit`. */
-  count(request: { readonly ownerId: string; readonly search: string | undefined; readonly limit: number }): Promise<number>;
+  /** How many folders of `scope` for `viewerId` in the workspace of the transaction have a name that contains `search`, but at most `limit`. */
+  count(request: { readonly viewerId: string; readonly scope: FolderScope; readonly search: string | undefined; readonly limit: number }): Promise<number>;
+  /** Whether the folder `folderId` is another member's and shared with `accountId` (the account of the transaction), directly or through a team: a folder it can read and may not change. */
+  sharedWith(request: { readonly folderId: string; readonly accountId: string }): Promise<boolean>;
   /**
    * Applies the changes to the folder that `request.ownerId` owns. The folder is locked, and its version, read under the lock, must be one
    * of `request.expectedVersions` when that is given (`stale` otherwise). A change to the values the folder has is `unchanged` and writes

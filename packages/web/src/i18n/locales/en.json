@@ -40,7 +40,10 @@
       "loading": "Loading the folder list",
       "loadFailed": "The folder list could not be loaded.",
       "retry": "Reload folders",
-      "empty": "You have no folders yet"
+      "empty": "You have no folders yet",
+      "shared": "Shared with you",
+      "sharedBy": "{name}, shared by {owner}",
+      "sharedLoadFailed": "The folders shared with you could not be loaded."
     }
   },
   "home": {
@@ -529,6 +532,11 @@
       "count": "Bookmarks",
       "updated": "Recently updated"
     },
+    "scope": {
+      "label": "Folders to show",
+      "mine": "Mine",
+      "shared": "Shared with me"
+    },
     "list": {
       "label": "Folders",
       "loading": "Loading the folders",
@@ -544,12 +552,17 @@
       "table": {
         "name": "Name",
         "bookmarks": "Bookmarks",
+        "sharing": "Sharing",
         "updated": "Updated",
         "actions": "Actions"
       },
       "empty": {
         "title": "No folders yet",
-        "description": "Folders group related bookmarks, like everything for one project or one topic. A bookmark can be filed in several folders, and deleting a folder never deletes the bookmarks in it."
+        "description": "Folders group related bookmarks, like everything for one project or one topic. A bookmark can be filed in several folders, and deleting a folder never deletes the bookmarks in it.",
+        "shared": {
+          "title": "Nothing has been shared with you yet",
+          "description": "Folders that other members share with you, directly or through a team, appear here. You can read them and the bookmarks in them, but only their owner can change them."
+        }
       }
     },
     "actions": {
@@ -558,6 +571,10 @@
       "restyle": "Change icon and colour",
       "share": "Share settings",
       "delete": "Delete"
+    },
+    "sharing": {
+      "received": "Shared with you",
+      "receivedBy": "Shared with you by {owner}"
     },
     "delete": {
       "title": "Delete “{name}”?",

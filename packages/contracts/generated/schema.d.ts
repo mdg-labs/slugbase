@@ -403,7 +403,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List my folders */
+        /** List folders */
         get: operations["listFolders"];
         put?: never;
         /** Create a folder */
@@ -1807,7 +1807,7 @@ export interface components {
         BookmarkFilter: {
             /**
              * Format: uuid
-             * @description Matches the bookmarks filed in this folder of the caller's. A folder that is another member's, another workspace's or unknown matches nothing. Left out, folders are not filtered on
+             * @description Matches the bookmarks filed in this folder, the caller's own or one of another member's that is shared with the caller. A folder that is another member's and not shared with the caller, another workspace's or unknown matches nothing. Left out, folders are not filtered on
              */
             folderId?: string;
             /** @description true matches the bookmarks /go forwards to only and false those it does not; left out, forwarding is not filtered on */
@@ -2362,8 +2362,20 @@ export interface components {
             id: string;
             /** @description The folder's name, in the case it was entered in */
             name: string;
+            /** @description Who owns a folder that is shared with the caller; null for the caller's own folder and for one whose owner has left the workspace. The server always sends it; a client reads an absent value as null */
+            owner?: {
+                /**
+                 * Format: uuid
+                 * @description The owner's account
+                 */
+                accountId: string;
+                /** @description The owner's display name, as a member of the workspace sees it */
+                displayName: string;
+            } | null;
             /** @description The account of the member who owns the folder; null once that member has left the workspace */
             ownerId: string | null;
+            /** @description How the caller's own folder is shared: with how many members directly and with which teams; no members and no teams for a private folder. Null for a folder that is another member's, whose recipient sees only who shared it. The server always sends it; a client reads an absent value as null */
+            shareSummary?: components["schemas"]["FolderShareSummary"] | null;
             /**
              * Format: date-time
              * @description When the folder last changed, RFC 3339 UTC
@@ -2377,7 +2389,7 @@ export interface components {
             bookmarkIds: string[];
         };
         FolderList: {
-            /** @description One page of the caller's folders in the workspace, in the order asked for; another member's folders are never listed */
+            /** @description One page of the folders the scope covers in the workspace, in the order asked for; another member's folder that is not shared with the caller is never listed. A folder of another member carries its owner, and the caller's own carries how it is shared */
             items: components["schemas"]["Folder"][];
             /** @description Passed as `cursor` to get the next page; null on the last page */
             nextCursor: string | null;
@@ -2419,6 +2431,20 @@ export interface components {
             audienceSize: number;
             /** @description The shares of the folder, oldest first */
             items: components["schemas"]["FolderShare"][];
+        };
+        FolderShareSummary: {
+            /** @description How many members the folder is shared with directly; the members of the teams it is shared with are not counted */
+            memberCount: number;
+            /** @description The teams the folder is shared with, in the order of their names */
+            teams: {
+                /**
+                 * Format: uuid
+                 * @description The team's identifier
+                 */
+                id: string;
+                /** @description The team's name */
+                name: string;
+            }[];
         };
         ForgotPasswordRequest: {
             /**
@@ -5757,7 +5783,7 @@ export interface operations {
     listFolders: {
         parameters: {
             query?: {
-                scope?: "all" | "mine";
+                scope?: "all" | "mine" | "shared";
                 q?: string;
                 sort?: "name" | "count" | "updated";
                 limit?: number;
@@ -5769,7 +5795,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description One page of the caller's folders in the workspace in the order asked for, each with the number of bookmarks filed in it, the cursor of the next page and the total (exact up to 10 000, then null with totalAtLeast) */
+            /** @description One page of the folders the scope covers in the workspace in the order asked for, each with the number of bookmarks filed in it and its owner or its share summary, the cursor of the next page and the total (exact up to 10 000, then null with totalAtLeast) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -5945,7 +5971,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The caller's folder with the number of bookmarks filed in it */
+            /** @description The caller's folder, or another member's folder that is shared with the caller, with the number of bookmarks filed in it and its owner or its share summary */
             200: {
                 headers: {
                     /** @description The folder's version as an entity tag, for example "3"; the If-Match of the next change */
@@ -5974,7 +6000,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The workspace the request acts in has no folder of the caller with this identifier: another member's folder, a folder of another workspace and one that never existed are answered alike */
+            /** @description The workspace the request acts in has no folder of the caller or shared with the caller with this identifier: another member's folder that is not shared with the caller, a folder of another workspace and one that never existed are answered alike */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6050,7 +6076,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope) */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder is another member's and shared with the caller, who can read it and may not delete it (forbidden); nothing is deleted */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6059,7 +6085,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The workspace the request acts in has no folder of the caller with this identifier: another member's folder, a folder of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204 */
+            /** @description The workspace the request acts in has no folder of the caller with this identifier and none shared with the caller: another member's folder that is not shared with the caller, a folder of another workspace, one that never existed and one that was deleted before are answered alike, since a hard delete keeps no tombstone and a repeat is not answered 204 */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6145,7 +6171,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope) */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder is another member's and shared with the caller, who can read it and may not change it (forbidden); nothing is changed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6154,7 +6180,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The workspace the request acts in has no folder of the caller with this identifier: another member's folder, a folder of another workspace and one that never existed are answered alike */
+            /** @description The workspace the request acts in has no folder of the caller with this identifier and none shared with the caller: another member's folder that is not shared with the caller, a folder of another workspace and one that never existed are answered alike */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6256,7 +6282,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or a bookmark named is another member's and shared with the caller, who can read it and may not file it (forbidden); none of the bookmarks is filed */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder, or a bookmark named, is another member's and shared with the caller, who can read it and may not file into it or file it (forbidden); none of the bookmarks is filed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6265,7 +6291,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The caller has no folder with this identifier in the workspace, or owns none of a bookmark named among those it can file: another member's folder or bookmark, one of another workspace, a plan-archived bookmark and one that never existed are answered alike, and none of the bookmarks is filed */
+            /** @description The caller has no folder with this identifier in the workspace, or owns none of a bookmark named among those it can file: another member's folder or bookmark that is not shared with the caller, one of another workspace, a plan-archived bookmark and one that never existed are answered alike, and none of the bookmarks is filed */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6349,7 +6375,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or a bookmark named is another member's and shared with the caller, who can read it and may not take it out of a folder (forbidden); none of the bookmarks is unfiled */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the folder, or a bookmark named, is another member's and shared with the caller, who can read it and may not take bookmarks out of it or take it out of a folder (forbidden); none of the bookmarks is unfiled */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6358,7 +6384,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The caller has no folder with this identifier in the workspace, or owns none of a bookmark named: another member's folder or bookmark, one of another workspace and one that never existed are answered alike, and none of the bookmarks is unfiled */
+            /** @description The caller has no folder with this identifier in the workspace, or owns none of a bookmark named: another member's folder or bookmark that is not shared with the caller, one of another workspace and one that never existed are answered alike, and none of the bookmarks is unfiled */
             404: {
                 headers: {
                     [name: string]: unknown;

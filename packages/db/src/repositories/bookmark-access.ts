@@ -85,6 +85,25 @@ export function sharedViaOf(accountId: string, workspaceId: string, bookmarkIds:
     ORDER BY g.bookmark_id, CASE g.via WHEN 'direct' THEN 0 WHEN 'team' THEN 1 ELSE 2 END`;
 }
 
+/** The columns of the folder row a statement applies `folderSharedWith` to: its workspace and its identifier, as column references or bound parameters. */
+export interface SharableFolderRow {
+  readonly workspaceId: SQL;
+  readonly id: SQL;
+}
+
+/**
+ * The condition that the folder `folder` is shared with `accountId`: with the account directly, or with a team it is in. It says nothing of who owns the folder, so a statement that wants
+ * the folders of other members adds that itself. The grants of a folder are the two folder legs of `grantsTo`, asked about one folder; the bookmarks they reach are read through that.
+ */
+export function folderSharedWith(accountId: string, folder: SharableFolderRow): SQL {
+  const account = sql`${accountId}::uuid`;
+  return sql`EXISTS (
+    SELECT 1 FROM ${folderShares} fs
+    WHERE fs.workspace_id = ${folder.workspaceId} AND fs.folder_id = ${folder.id}
+      AND (fs.target_account_id = ${account}
+           OR fs.target_team_id IN (SELECT m.team_id FROM ${teamMembers} m WHERE m.workspace_id = ${folder.workspaceId} AND m.account_id = ${account})))`;
+}
+
 /** The condition that `row`, a bookmark of the account that asks, is shared with someone: directly, or through a folder it is filed in. */
 export function bookmarkSharedByOwner(row: SharableBookmarkRow = BOOKMARKS_TABLE): SQL {
   return sql`(EXISTS (SELECT 1 FROM ${bookmarkShares} s WHERE s.workspace_id = ${row.workspaceId} AND s.bookmark_id = ${row.id})

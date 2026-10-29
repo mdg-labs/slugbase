@@ -219,7 +219,7 @@ export const ListBookmarksQuerySchema = z.strictObject({
     .enum(BOOKMARK_SCOPES)
     .default("all")
     .describe(
-      "Whose bookmarks are listed: all (the caller's own and those shared with them), mine (the caller's own), shared_with_me (other members' bookmarks that are shared with the caller, directly, through a team or through a folder) or shared_by_me (the caller's own that are shared with anyone). A bookmark that can be read through more than one route is listed once. The filters folderId, tag and url name the caller's own things and reach the caller's own bookmarks alone, so shared_with_me with one of them lists nothing. A pinned filter means pinned by the caller, so no shared bookmark is pinned. The text query q finds the caller's own bookmarks",
+      "Whose bookmarks are listed: all (the caller's own and those shared with them), mine (the caller's own), shared_with_me (other members' bookmarks that are shared with the caller, directly, through a team or through a folder) or shared_by_me (the caller's own that are shared with anyone). A bookmark that can be read through more than one route is listed once. The filters tag and url name the caller's own things and reach the caller's own bookmarks alone, so shared_with_me with one of them lists nothing. The filter folderId reaches the bookmarks filed in the caller's own folder and those filed in a folder of another member that is shared with the caller, so shared_with_me with it lists the latter. A pinned filter means pinned by the caller, so no shared bookmark is pinned. The text query q finds the caller's own bookmarks",
     ),
   pinned: QueryBooleanSchema.optional().describe("true lists pinned bookmarks only and false unpinned ones only; left out, pinning is not filtered on"),
   hasSlug: QueryBooleanSchema.optional().describe("true lists bookmarks with a slug only and false those without one; left out, slugs are not filtered on"),
@@ -236,7 +236,7 @@ export const ListBookmarksQuerySchema = z.strictObject({
   folderId: z
     .uuid()
     .optional()
-    .describe("Lists the bookmarks filed in this folder of the caller's. A folder that is another member's, another workspace's or unknown lists nothing: an empty page, not an error. Left out, folders are not filtered on"),
+    .describe("Lists the bookmarks filed in this folder, the caller's own or one of another member's that is shared with the caller. A folder that is another member's and not shared with the caller, another workspace's or unknown lists nothing: an empty page, not an error. Left out, folders are not filtered on"),
   tag: z
     .union([z.uuid(), z.array(z.uuid()).max(BOOKMARK_TAG_FILTER_MAX)])
     .optional()
@@ -310,7 +310,7 @@ export const BookmarkFilterSchema = z
     folderId: z
       .uuid()
       .optional()
-      .describe("Matches the bookmarks filed in this folder of the caller's. A folder that is another member's, another workspace's or unknown matches nothing. Left out, folders are not filtered on"),
+      .describe("Matches the bookmarks filed in this folder, the caller's own or one of another member's that is shared with the caller. A folder that is another member's and not shared with the caller, another workspace's or unknown matches nothing. Left out, folders are not filtered on"),
     tag: BookmarkTagFilterSchema.optional(),
   })
   .meta({ id: "BookmarkFilter" });

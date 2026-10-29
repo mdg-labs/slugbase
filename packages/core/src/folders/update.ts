@@ -2,8 +2,9 @@ import { assertFolderStyle, normalizeFolderName, type FolderNameRefusal, type Fo
 
 // Changing a folder (doc 02 section 7.1, doc 04 sections 2.4 and 10.7, doc 10 T2). The service validates everything the caller sent
 // before anything is written, then asks the store to apply it to the caller's own folder: the store finds the folder by identifier and
-// owner, locks it, compares its version with the `If-Match` the caller sent and writes what differs. Only the owner changes a folder, so
-// another member's folder of the workspace and another workspace's are the same `not_found`.
+// owner, locks it, compares its version with the `If-Match` the caller sent and writes what differs. Only the owner changes a folder: a folder
+// that is another member's and shared with the caller, who can read it, is `forbidden` (a share gives read access only, Q22), and another member's
+// folder that is not shared with the caller and another workspace's are the same `not_found`.
 
 /** The fields of a JSON Merge Patch of a folder (doc 04 section 2.4): a field left out is left as it is. */
 export interface FolderPatch {
@@ -37,11 +38,13 @@ export type FolderUpdateResult =
   | { readonly kind: "stale" }
   /** The owner has another folder of that name; nothing was written. */
   | { readonly kind: "name_taken" }
-  /** The caller owns no such folder; nothing was written. */
-  | { readonly kind: "not_found" };
+  /** The caller owns no such folder, and none is shared with it; nothing was written. */
+  | { readonly kind: "not_found" }
+  /** The folder is another member's and shared with the caller, who can read it and may not change it; nothing was written. */
+  | { readonly kind: "forbidden" };
 
 export interface FolderUpdateDependencies {
-  readonly store: Pick<FolderStore, "update">;
+  readonly store: Pick<FolderStore, "update" | "sharedWith">;
 }
 
 export interface FolderUpdateAsk {
@@ -65,9 +68,10 @@ export async function updateFolder({ store }: FolderUpdateDependencies, ask: Fol
     name = normalized.name;
   }
   assertFolderStyle(patch);
-  return store.update({
+  const accountId = ask.accountId.toLowerCase();
+  const result = await store.update({
     folderId: ask.folderId,
-    ownerId: ask.accountId.toLowerCase(),
+    ownerId: accountId,
     changes: {
       ...(name === undefined ? {} : { name }),
       ...(patch.icon === undefined ? {} : { icon: patch.icon }),
@@ -75,4 +79,8 @@ export async function updateFolder({ store }: FolderUpdateDependencies, ask: Fol
     },
     expectedVersions: ask.expectedVersions,
   });
+  if (result.kind === "not_found" && (await store.sharedWith({ folderId: ask.folderId, accountId }))) {
+    return { kind: "forbidden" };
+  }
+  return result;
 }

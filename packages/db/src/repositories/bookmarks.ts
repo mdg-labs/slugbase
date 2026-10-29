@@ -29,7 +29,7 @@ import { bookmarks } from "../schema/bookmarks.ts";
 import { folderBookmarks, folders } from "../schema/folders.ts";
 import { bookmarkTags, tags } from "../schema/tags.ts";
 import { auditEventRepository } from "./audit-events.ts";
-import { bookmarkReadableBy, bookmarkSharedByOwner, sharedBookmarks, sharedViaOf, type SharedVia } from "./bookmark-access.ts";
+import { bookmarkReadableBy, bookmarkSharedByOwner, folderSharedWith, sharedBookmarks, sharedViaOf, type SharedVia } from "./bookmark-access.ts";
 import { entitlementRepository } from "./entitlements.ts";
 import { enqueueInTenantTransaction, type QueuedJob } from "../system/queue.ts";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
@@ -58,7 +58,7 @@ import { deleteTagLinks, deleteTagLinksMany, insertTagLinks, insertTagLinksMany,
 // microseconds the database keeps, and a row that shares its key with the cursor's would then be skipped or repeated. A bookmark is filed in
 // the folders of its owner in the same transaction that creates or changes it (`folderIds`), through the links of src/repositories/folder-links.ts;
 // the folders are locked and checked before the first write, so a folder that is not the owner's ends the call with nothing written, and every
-// record carries the folders it is filed in. A list may be narrowed to one folder of the caller's, which an EXISTS over the links of the
+// record carries the folders it is filed in. A list may be narrowed to one folder, the caller's own or one of another member's that is shared with the caller (the part of the scope that holds shared bookmarks adds that the folder is shared with the caller), which an EXISTS over the links of the
 // bookmark answers by the primary key of `folder_bookmarks`, `(folder_id, bookmark_id)`; the index on `(workspace_id, bookmark_id)`
 // serves the read of the folders of the bookmarks of a page. A bookmark carries the tags of its owner in the same way (`tagIds` and `tagNames`
 // of a creation and `tags` of a change, through src/repositories/tag-links.ts): tags named by identifier are checked before the first write, a name
@@ -259,12 +259,15 @@ export interface BookmarkRepository {
   listWithCount(request: BookmarkListRequest, limit: number): Promise<BookmarkListPage>;
 }
 
-/** The bookmark is filed in the folder `folderId`, and the folder is its owner's: a folder of another member matches nothing. */
+/**
+ * The bookmark is filed in the folder `folderId`, and the folder is its owner's. Two ownerless rows match: the owner of a folder and of the bookmarks filed in it can leave the
+ * workspace together, and a share outlives them, so the shared leg still lists what the folder holds.
+ */
 function filedIn(folderId: string): SQL {
   requireIdentifiers([folderId], "listing the bookmarks of a folder");
   return sql`EXISTS (
     SELECT 1 FROM ${folderBookmarks} INNER JOIN ${folders} ON ${folders.workspaceId} = ${folderBookmarks.workspaceId} AND ${folders.id} = ${folderBookmarks.folderId}
-    WHERE ${folderBookmarks.workspaceId} = ${bookmarks.workspaceId} AND ${folderBookmarks.bookmarkId} = ${bookmarks.id} AND ${folderBookmarks.folderId} = ${folderId}::uuid AND ${folders.ownerId} = ${bookmarks.ownerId})`;
+    WHERE ${folderBookmarks.workspaceId} = ${bookmarks.workspaceId} AND ${folderBookmarks.bookmarkId} = ${bookmarks.id} AND ${folderBookmarks.folderId} = ${folderId}::uuid AND ${folders.ownerId} IS NOT DISTINCT FROM ${bookmarks.ownerId})`;
 }
 
 /** The bookmark carries the tag `tagId`, and the tag is its owner's: a tag of another member matches nothing. */
@@ -279,11 +282,12 @@ function tagged(tagId: string): SQL {
 type Branch = "own" | "shared" | "sharedByMe";
 
 /**
- * The parts of the scope of `filter`. A filter that names the caller's folder or tags, or the URL of the duplicate warning, reaches the caller's own bookmarks alone: a bookmark shared
- * with the caller is filed in none of their folders and carries none of their tags (Q22), and the warning is about what they saved themselves (doc 04 section 10.6).
+ * The parts of the scope of `filter`. A filter that names the caller's tags, or the URL of the duplicate warning, reaches the caller's own bookmarks alone: a bookmark shared with the caller carries
+ * none of their tags (Q22), and the warning is about what they saved themselves (doc 04 section 10.6). A filter that names a folder reaches the caller's own bookmarks filed in the caller's folder and the
+ * bookmarks filed in a folder of another member that is shared with the caller (`branchPredicate`).
  */
 function branchesOf(filter: BookmarkListFilter): readonly Branch[] {
-  const own = filter.folderId !== undefined || (filter.tagIds ?? []).length > 0 || filter.urlCanonical !== undefined;
+  const own = (filter.tagIds ?? []).length > 0 || filter.urlCanonical !== undefined;
   switch (filter.scope ?? "mine") {
     case "mine":
       return ["own"];
@@ -330,6 +334,8 @@ function branchPredicate(workspaceId: string, filter: BookmarkListFilter, branch
     filter.forwarding === undefined ? undefined : eq(bookmarks.forwarding, filter.forwarding),
     filter.urlCanonical === undefined ? undefined : eq(bookmarks.urlCanonical, filter.urlCanonical),
     filter.folderId === undefined ? undefined : filedIn(filter.folderId),
+    // The folder of another member is read through its share: a bookmark shared with the caller by another route is not in it for the caller.
+    shared && filter.folderId !== undefined ? folderSharedWith(filter.ownerId, { workspaceId: sql`${bookmarks.workspaceId}`, id: sql`${filter.folderId}::uuid` }) : undefined,
     ...(filter.tagIds ?? []).map(tagged),
   );
   if (predicate === undefined) {

@@ -19,6 +19,8 @@ export interface BookmarksToolbarProps {
   readonly controls: BookmarkListControls;
   /** The member's folders, which the folder filter offers and names the folder chip from. */
   readonly folders: AllFolders;
+  /** The folders other members shared with the member, which the folder filter offers and names the chip from after their own. */
+  readonly shared: AllFolders;
   /** The member's tags, which the tags filter offers. */
   readonly tags: AllTags;
 }
@@ -46,7 +48,7 @@ function isSort(value: string): value is BookmarkSort {
  * has stopped typing, with the history entry replaced, so the back button leaves the list rather than undoing each word.
  * Whatever narrows the list, the text of the search among it, is also a chip that takes it off.
  */
-export function BookmarksToolbar({ search, controls, folders, tags }: BookmarksToolbarProps): ReactElement {
+export function BookmarksToolbar({ search, controls, folders, shared, tags }: BookmarksToolbarProps): ReactElement {
   const { t } = useTranslation();
   const account = useCachedAccount();
   const preferences = useUpdatePreferences();
@@ -100,11 +102,12 @@ export function BookmarksToolbar({ search, controls, folders, tags }: BookmarksT
       forwarding: active.includes("forwarding") ? true : undefined,
     });
   }
-  const folderOptions = folders.folders.map((folder) => {
+  const filterFolders = [...folders.folders, ...shared.folders];
+  const folderOptions = filterFolders.map((folder) => {
     const Icon = folderIconOf(folder.icon);
     return { value: folder.id, label: folder.name, icon: <Icon className={`size-4 ${folderTextClass(folder.color)}`} /> };
   });
-  const chosenFolder = folders.folders.find((folder) => folder.id === search.folderId);
+  const chosenFolder = filterFolders.find((folder) => folder.id === search.folderId);
   const tagIds = search.tag ?? [];
   // A tag of the address that the member's list lacks (deleted, or never theirs) still has its chip, so it can be taken off.
   const unlisted = tagIds.filter((id) => !tags.tags.some((tag) => tag.id === id));

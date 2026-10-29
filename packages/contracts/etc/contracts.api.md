@@ -133,6 +133,17 @@ export const addFolderBookmarks: {
         readonly 200: JsonResponse<z.ZodObject<{
         id: z.ZodUUID;
         ownerId: z.ZodNullable<z.ZodUUID>;
+        owner: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        }, z.core.$strict>>>;
+        shareSummary: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        memberCount: z.ZodNumber;
+        teams: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        }, z.core.$strict>>;
+        }, z.core.$strict>>>;
         name: z.ZodString;
         icon: z.ZodString;
         color: z.ZodNumber;
@@ -1359,7 +1370,12 @@ export interface ComponentTypes {
             icon: string;
             id: string;
             name: string;
+            owner?: {
+                accountId: string;
+                displayName: string;
+            } | null;
             ownerId: string | null;
+            shareSummary?: ComponentTypes["schemas"]["FolderShareSummary"] | null;
             updatedAt: string;
             version: number;
         };
@@ -1384,6 +1400,13 @@ export interface ComponentTypes {
         FolderShareList: {
             audienceSize: number;
             items: ComponentTypes["schemas"]["FolderShare"][];
+        };
+        FolderShareSummary: {
+            memberCount: number;
+            teams: {
+                id: string;
+                name: string;
+            }[];
         };
         ForgotPasswordRequest: {
             email: string;
@@ -2296,6 +2319,17 @@ export const createFolder: {
         readonly 201: JsonResponse<z.ZodObject<{
         id: z.ZodUUID;
         ownerId: z.ZodNullable<z.ZodUUID>;
+        owner: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        }, z.core.$strict>>>;
+        shareSummary: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        memberCount: z.ZodNumber;
+        teams: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        }, z.core.$strict>>;
+        }, z.core.$strict>>>;
         name: z.ZodString;
         icon: z.ZodString;
         color: z.ZodNumber;
@@ -3323,6 +3357,9 @@ export const FOLDER_LIST_TOTAL_CAP = 10000;
 // @public
 export const FOLDER_NAME_MAX_LENGTH = 64;
 
+// @public (undocumented)
+export const FOLDER_SCOPES: readonly ["all", "mine", "shared"];
+
 // @public
 export const FOLDER_SEARCH_MAX_LENGTH = 64;
 
@@ -3347,6 +3384,17 @@ export const FolderListSchema: z.ZodObject<{
     items: z.ZodArray<z.ZodObject<{
         id: z.ZodUUID;
         ownerId: z.ZodNullable<z.ZodUUID>;
+        owner: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            accountId: z.ZodUUID;
+            displayName: z.ZodString;
+        }, z.core.$strict>>>;
+        shareSummary: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+            memberCount: z.ZodNumber;
+            teams: z.ZodArray<z.ZodObject<{
+                id: z.ZodUUID;
+                name: z.ZodString;
+            }, z.core.$strict>>;
+        }, z.core.$strict>>>;
         name: z.ZodString;
         icon: z.ZodString;
         color: z.ZodNumber;
@@ -3369,6 +3417,17 @@ export const FolderParamsSchema: z.ZodObject<{
 export const FolderSchema: z.ZodObject<{
     id: z.ZodUUID;
     ownerId: z.ZodNullable<z.ZodUUID>;
+    owner: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+    }, z.core.$strict>>>;
+    shareSummary: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        memberCount: z.ZodNumber;
+        teams: z.ZodArray<z.ZodObject<{
+            id: z.ZodUUID;
+            name: z.ZodString;
+        }, z.core.$strict>>;
+    }, z.core.$strict>>>;
     name: z.ZodString;
     icon: z.ZodString;
     color: z.ZodNumber;
@@ -3418,6 +3477,15 @@ export const FolderShareSchema: z.ZodObject<{
 // @public (undocumented)
 export const FolderSharesParamsSchema: z.ZodObject<{
     id: z.ZodUUID;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const FolderShareSummarySchema: z.ZodObject<{
+    memberCount: z.ZodNumber;
+    teams: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+    }, z.core.$strict>>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -3718,6 +3786,17 @@ export const getFolder: {
         readonly 200: JsonResponse<z.ZodObject<{
         id: z.ZodUUID;
         ownerId: z.ZodNullable<z.ZodUUID>;
+        owner: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        }, z.core.$strict>>>;
+        shareSummary: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        memberCount: z.ZodNumber;
+        teams: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        }, z.core.$strict>>;
+        }, z.core.$strict>>>;
         name: z.ZodString;
         icon: z.ZodString;
         color: z.ZodNumber;
@@ -5094,7 +5173,7 @@ export const listFolders: {
     readonly path: "/api/v1/folders";
     readonly operationId: "listFolders";
     readonly tag: "folders";
-    readonly summary: "List my folders";
+    readonly summary: "List folders";
     readonly auth: "member";
     readonly rate: "read";
     readonly scope: "read";
@@ -5103,6 +5182,7 @@ export const listFolders: {
             scope: z.ZodDefault<z.ZodEnum<{
                 all: "all";
                 mine: "mine";
+                shared: "shared";
             }>>;
             q: z.ZodOptional<z.ZodString>;
             sort: z.ZodDefault<z.ZodEnum<{
@@ -5119,6 +5199,17 @@ export const listFolders: {
         items: z.ZodArray<z.ZodObject<{
         id: z.ZodUUID;
         ownerId: z.ZodNullable<z.ZodUUID>;
+        owner: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        }, z.core.$strict>>>;
+        shareSummary: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        memberCount: z.ZodNumber;
+        teams: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        }, z.core.$strict>>;
+        }, z.core.$strict>>>;
         name: z.ZodString;
         icon: z.ZodString;
         color: z.ZodNumber;
@@ -5185,6 +5276,7 @@ export const ListFoldersQuerySchema: z.ZodObject<{
     scope: z.ZodDefault<z.ZodEnum<{
         all: "all";
         mine: "mine";
+        shared: "shared";
     }>>;
     q: z.ZodOptional<z.ZodString>;
     sort: z.ZodDefault<z.ZodEnum<{
@@ -10643,7 +10735,7 @@ export interface OperationTypes {
     listFolders: {
         parameters: {
             query?: {
-                scope?: "all" | "mine";
+                scope?: "all" | "mine" | "shared";
                 q?: string;
                 sort?: "name" | "count" | "updated";
                 limit?: number;
@@ -16878,6 +16970,17 @@ export const removeFolderBookmarks: {
         readonly 200: JsonResponse<z.ZodObject<{
         id: z.ZodUUID;
         ownerId: z.ZodNullable<z.ZodUUID>;
+        owner: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        }, z.core.$strict>>>;
+        shareSummary: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        memberCount: z.ZodNumber;
+        teams: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        }, z.core.$strict>>;
+        }, z.core.$strict>>>;
         name: z.ZodString;
         icon: z.ZodString;
         color: z.ZodNumber;
@@ -18342,6 +18445,17 @@ export const updateFolder: {
         readonly 200: JsonResponse<z.ZodObject<{
         id: z.ZodUUID;
         ownerId: z.ZodNullable<z.ZodUUID>;
+        owner: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        accountId: z.ZodUUID;
+        displayName: z.ZodString;
+        }, z.core.$strict>>>;
+        shareSummary: z.ZodOptional<z.ZodNullable<z.ZodObject<{
+        memberCount: z.ZodNumber;
+        teams: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        }, z.core.$strict>>;
+        }, z.core.$strict>>>;
         name: z.ZodString;
         icon: z.ZodString;
         color: z.ZodNumber;

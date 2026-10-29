@@ -40,7 +40,10 @@
       "loading": "Die Ordnerliste wird geladen",
       "loadFailed": "Die Ordnerliste konnte nicht geladen werden.",
       "retry": "Ordner neu laden",
-      "empty": "Du hast noch keine Ordner"
+      "empty": "Du hast noch keine Ordner",
+      "shared": "Mit dir geteilt",
+      "sharedBy": "{name}, geteilt von {owner}",
+      "sharedLoadFailed": "Die mit dir geteilten Ordner konnten nicht geladen werden."
     }
   },
   "home": {
@@ -529,6 +532,11 @@
       "count": "Lesezeichen",
       "updated": "Zuletzt geändert"
     },
+    "scope": {
+      "label": "Anzuzeigende Ordner",
+      "mine": "Meine",
+      "shared": "Mit mir geteilt"
+    },
     "list": {
       "label": "Ordner",
       "loading": "Ordner werden geladen",
@@ -544,12 +552,17 @@
       "table": {
         "name": "Name",
         "bookmarks": "Lesezeichen",
+        "sharing": "Freigabe",
         "updated": "Geändert",
         "actions": "Aktionen"
       },
       "empty": {
         "title": "Noch keine Ordner",
-        "description": "Ordner fassen zusammengehörige Lesezeichen zusammen, etwa alles zu einem Projekt oder einem Thema. Ein Lesezeichen kann in mehreren Ordnern liegen, und das Löschen eines Ordners löscht nie die Lesezeichen darin."
+        "description": "Ordner fassen zusammengehörige Lesezeichen zusammen, etwa alles zu einem Projekt oder einem Thema. Ein Lesezeichen kann in mehreren Ordnern liegen, und das Löschen eines Ordners löscht nie die Lesezeichen darin.",
+        "shared": {
+          "title": "Bisher wurde nichts mit dir geteilt",
+          "description": "Ordner, die andere Mitglieder mit dir teilen, direkt oder über ein Team, erscheinen hier. Du kannst sie und die Lesezeichen darin lesen, aber nur ihr Besitzer kann sie ändern."
+        }
       }
     },
     "actions": {
@@ -558,6 +571,10 @@
       "restyle": "Symbol und Farbe ändern",
       "share": "Freigabe-Einstellungen",
       "delete": "Löschen"
+    },
+    "sharing": {
+      "received": "Mit dir geteilt",
+      "receivedBy": "Mit dir geteilt von {owner}"
     },
     "delete": {
       "title": "„{name}“ löschen?",

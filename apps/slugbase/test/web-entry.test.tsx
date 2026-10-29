@@ -104,7 +104,7 @@ it("mounts the app on #root and shows the product name that /api/config answers 
 
   const heading = await screen.findByRole("heading", { name: "Welcome to Bookmarks Entry Test" });
   expect(heading.closest("#root")).not.toBeNull();
-  // The entry mounts the app in StrictMode, whose development remount cancels the sidebar's folder list read and the Home screen's dashboard read and starts each again.
+  // The entry mounts the app in StrictMode, whose development remount cancels the sidebar's folder list read and the Home screen's dashboard read and starts each again. The sidebar reads the member's own folders and, once the entitlements allow sharing, the folders shared with them.
   expect(requested).toEqual([
     "/api/config",
     "/api/v1/me/sessions",
@@ -114,6 +114,7 @@ it("mounts the app on #root and shows the product name that /api/config answers 
     "/api/v1/entitlements",
     "/api/v1/folders",
     "/api/v1/dashboard",
+    "/api/v1/folders",
     "/api/v1/folders",
   ]);
 });

@@ -106,6 +106,12 @@ function folderOf(id: string, name: string, ownerId: string) {
 const BOOKMARKS = [bookmarkOf(REPORT, "Quarterly report", ADA), bookmarkOf(FOREIGN, "Roadmap", GRACE)];
 const FOLDERS = [folderOf(OWN_FOLDER, "Design", ADA), folderOf(FOREIGN_FOLDER, "Archive", GRACE)];
 
+/** The folders of the scope the request asks for: the caller's own, those shared with them, or both. */
+function foldersOfScope(request: Request) {
+  const scope = new URL(request.url).searchParams.get("scope");
+  return FOLDERS.filter((folder) => scope === null || scope === "all" || (scope === "mine") === (folder.ownerId === ADA));
+}
+
 function entitlementsBody() {
   return {
     entitlements: {
@@ -241,7 +247,10 @@ function serve(): void {
         const found = BOOKMARKS.find(({ id }) => new URL(request.url).pathname.endsWith(id));
         return found === undefined ? problem(404, "not_found", "req-404") : json(found, { headers: { ETag: '"3"' } });
       },
-      listFolders: () => json({ items: FOLDERS, nextCursor: null, total: FOLDERS.length }),
+      listFolders: (request) => {
+        const items = foldersOfScope(request);
+        return json({ items, nextCursor: null, total: items.length });
+      },
       getTeam: (request) => {
         const team = TEAMS.find(({ id }) => new URL(request.url).pathname.endsWith(id));
         if (team === undefined) {
@@ -659,8 +668,8 @@ describe("the folder's Share settings", { timeout: HEAVY_TEST_TIMEOUT_MS }, () =
 
   it("offers Share settings on an own folder only, and only where the workspace may share", async () => {
     await openApp("/folders");
-    await press(await screen.findByRole("button", { name: "Actions for Archive" }));
-    expect((await screen.findAllByRole("menuitem")).map((item) => item.textContent)).toEqual(["Open in Bookmarks", "Rename", "Change icon and colour", "Delete"]);
+    await press(await screen.findByRole("button", { name: "Actions for Design" }));
+    expect((await screen.findAllByRole("menuitem")).map((item) => item.textContent)).toEqual(["Open in Bookmarks", "Rename", "Change icon and colour", "Share settings", "Delete"]);
   });
 
   it("offers no Share settings where the workspace holds neither sharing entitlement", async () => {

@@ -1,4 +1,4 @@
-import { bookmarkRepository, listRepositoryMethods, TenantContextError, type RepositoryMethodEntry } from "@slugbase/db";
+import { bookmarkRepository, folderRepository, listRepositoryMethods, TenantContextError, type RepositoryMethodEntry } from "@slugbase/db";
 import type { TestDatabase } from "@slugbase/db/testing";
 import { beforeAll, describe, expect, it } from "vitest";
 import { useTestDatabase } from "../src/db.ts";
@@ -1074,5 +1074,69 @@ describe("the bulk operations across workspaces", () => {
       previewTagOfB: { kind: "target_not_found" },
     });
     expect({ a: await linksIn(PROBE_WORKSPACE_A), b: await linksIn(PROBE_WORKSPACE_B) }).toEqual(before);
+  });
+});
+
+// The `shared` scope of the folders list and the folder filter of the bookmarks list (doc 02 section 8.2, doc 10 T1 and T2). The same account is a member of A and B and
+// B's owner shared a folder, with a bookmark filed in it, with that account in B. From a transaction acting in A the folder is not listed in any scope, not read, not
+// reported as shared with the account, and its bookmark is not listed by the folder filter in any scope, so the share of B reaches nothing in A.
+describe("the shared scope of folders across workspaces", () => {
+  const MEMBER_OF_A = "0192f3a0-3333-7000-8000-00000000a0a3";
+  const OWNER_OF_B = "0192f3a0-3333-7000-8000-00000000b0a3";
+  const BOOKMARK_OF_A = "0192f3a0-2222-7000-8000-00000000a0b3";
+  const BOOKMARK_OF_B = "0192f3a0-2222-7000-8000-00000000b0b3";
+  const FOLDER_OF_A = "0192f3a0-4444-7000-8000-00000000a0f3";
+  const FOLDER_OF_B = "0192f3a0-4444-7000-8000-00000000b0f3";
+
+  it("lists, reads and filters by no folder of B that is shared with the account in B, from a transaction acting in A", async () => {
+    await seedWorkspaceRows(database(), [
+      { id: PROBE_WORKSPACE_A, bookmarkId: BOOKMARK_OF_A },
+      { id: PROBE_WORKSPACE_B, bookmarkId: BOOKMARK_OF_B },
+    ]);
+    for (const [accountId, email] of [
+      [MEMBER_OF_A, "shared-scope-a@example.test"],
+      [OWNER_OF_B, "shared-scope-b@example.test"],
+    ] as const) {
+      await database().owner.begin(async (tx) => {
+        await tx`SELECT set_config('app.account_id', ${accountId}, true)`;
+        await tx`INSERT INTO accounts (id, email, display_name) VALUES (${accountId}, ${email}, 'Matrix member') ON CONFLICT DO NOTHING`;
+      });
+    }
+    await database().owner.begin(async (tx) => {
+      await tx`SET LOCAL ROLE slugbase_system`;
+      await tx`
+        INSERT INTO workspace_members (workspace_id, account_id, role)
+        VALUES (${PROBE_WORKSPACE_A}, ${MEMBER_OF_A}, 'owner'), (${PROBE_WORKSPACE_B}, ${MEMBER_OF_A}, 'member'), (${PROBE_WORKSPACE_B}, ${OWNER_OF_B}, 'owner') ON CONFLICT DO NOTHING`;
+      await tx`UPDATE bookmarks SET owner_id = ${MEMBER_OF_A} WHERE id = ${BOOKMARK_OF_A}`;
+      await tx`UPDATE bookmarks SET owner_id = ${OWNER_OF_B} WHERE id = ${BOOKMARK_OF_B}`;
+      await tx`INSERT INTO folders (id, workspace_id, owner_id, name) VALUES (${FOLDER_OF_A}, ${PROBE_WORKSPACE_A}, ${MEMBER_OF_A}, 'shared-scope-a'), (${FOLDER_OF_B}, ${PROBE_WORKSPACE_B}, ${OWNER_OF_B}, 'shared-scope-b')`;
+      await tx`INSERT INTO folder_bookmarks (workspace_id, folder_id, bookmark_id) VALUES (${PROBE_WORKSPACE_B}, ${FOLDER_OF_B}, ${BOOKMARK_OF_B})`;
+      await tx`
+        INSERT INTO folder_shares (id, workspace_id, folder_id, target_account_id, granted_by)
+        VALUES ('0192f3a0-6666-7000-8000-00000000b0f3', ${PROBE_WORKSPACE_B}, ${FOLDER_OF_B}, ${MEMBER_OF_A}, ${OWNER_OF_B})`;
+    });
+
+    const inB = await database().tenant.withTenant({ accountId: MEMBER_OF_A, workspaceId: PROBE_WORKSPACE_B, requestId: "matrix-shared-scope-b" }, async (tx) => ({
+      shared: (await folderRepository(tx).list({ viewerId: MEMBER_OF_A, scope: "shared", search: undefined, sort: "name", after: undefined, limit: 10 })).map((folder) => folder.id),
+      bookmarks: (await bookmarkRepository(tx).ids({ ownerId: MEMBER_OF_A, scope: "shared_with_me", folderId: FOLDER_OF_B }, 10)).length,
+    }));
+    const inA = await database().tenant.withTenant({ accountId: MEMBER_OF_A, workspaceId: PROBE_WORKSPACE_A, requestId: "matrix-shared-scope-a" }, async (tx) => {
+      const folders = folderRepository(tx);
+      const bookmarks = bookmarkRepository(tx);
+      const listed = async (scope: "all" | "mine" | "shared") => (await folders.list({ viewerId: MEMBER_OF_A, scope, search: undefined, sort: "name", after: undefined, limit: 10 })).map((folder) => folder.id);
+      return {
+        shared: await listed("shared"),
+        all: await listed("all"),
+        counted: await folders.count({ viewerId: MEMBER_OF_A, scope: "shared", search: undefined, limit: 10 }),
+        found: await folders.find({ folderId: FOLDER_OF_B, viewerId: MEMBER_OF_A }),
+        sharedWith: await folders.sharedWith({ folderId: FOLDER_OF_B, accountId: MEMBER_OF_A }),
+        bookmarksAll: await bookmarks.ids({ ownerId: MEMBER_OF_A, scope: "all", folderId: FOLDER_OF_B }, 10),
+        bookmarksShared: await bookmarks.ids({ ownerId: MEMBER_OF_A, scope: "shared_with_me", folderId: FOLDER_OF_B }, 10),
+      };
+    });
+
+    // The share is real in B, so a refusal in A is the workspace's and not an absent fixture.
+    expect(inB).toEqual({ shared: [FOLDER_OF_B], bookmarks: 1 });
+    expect(inA).toEqual({ shared: [], all: [FOLDER_OF_A], counted: 0, found: undefined, sharedWith: false, bookmarksAll: [], bookmarksShared: [] });
   });
 });
