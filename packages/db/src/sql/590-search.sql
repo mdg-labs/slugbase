@@ -5,12 +5,12 @@
 -- leakproof. The operators of the search, `@@` (ts_match_vq), `<%` (word_similarity_op) and `LIKE` (textlike), are not, so as slugbase_app the GIN indexes serve the workspace alone
 -- and each search condition is a filter over every bookmark of the workspace (title trigrams took about 165 ms on 50 000 bookmarks against about 0.4 ms with the indexes in use).
 -- slugbase_system bypasses the policies, so the function reads the indexes, and the function itself is the boundary: the workspace and the account come from the settings of the
--- transaction (app_workspace_id() and app_account_id(), never an argument), the access rule (the bookmark is the account's own today, bookmarkReadableBy in
--- src/repositories/bookmark-access.ts; sharing extends both together) and the plan-archive rule are in every branch, and the only parameters are the text of the query and a limit.
+-- transaction (app_workspace_id() and app_account_id(), never an argument), the access rule (the bookmark is the account's own or is shared with it, bookmarkReadableBy in
+-- src/repositories/bookmark-access.ts, which this function states in SQL and the two are changed together) and the plan-archive rule are in every branch, and the only parameters are the text of the query and a limit.
 GRANT CREATE ON SCHEMA public TO slugbase_system;
 
 -- sys_search(p_query, p_limit): at most p_limit (0 to 20) readable, not plan-archived bookmarks of the active workspace that match the query, best first, as the columns the search
--- shows: id, title, url, host, slug, forwarding and whether it is pinned. The rank is the order of doc 02 section 9.1: the query is exactly the slug (1), the slug starts with it (2), the
+-- shows: id, title, url, host, slug, forwarding and whether it is pinned (by the account itself). The rank is the order of doc 02 section 9.1: the query is exactly the slug (1), the slug starts with it (2), the
 -- full-text vector `search` (the `simple` configuration; slug and title weight A, host B, description C) holds every word of it as a prefix (3, then by ts_rank_cd), and the title or the host
 -- has a word that resembles it by trigrams (4, then by the better word similarity); the same title and then the identifier settle a tie. The full-text tier has two parts: the
 -- bookmarks whose slug and title together hold every word, which come first and are all found, through the GIN index over that vector alone (bookmarks_title_slug_search_idx), and ranked
@@ -38,7 +38,10 @@ GRANT CREATE ON SCHEMA public TO slugbase_system;
 -- Each of the first three branches is cut to p_limit rows before the branches are joined, which is enough: a bookmark at position n of the answer is within n of the top of the branch of
 -- its best rank. The window of host and description matches and the trigram branches come last in the order and can only fill what the others leave, so they are not run at all when the
 -- branches before them have found p_limit bookmarks, and each looks at the first 300 bookmarks its index finds: a typo in a word finds few bookmarks, and a broad query that finds thousands is answered by the full text before them. The
--- function answers nothing outside withTenant() (no account or no workspace is set), for an empty text and for a limit of 0, and reads and writes nothing but bookmarks.
+-- access rule of every branch is `readable`: the account's own bookmark, or one in the set of bookmarks shared with the account (directly, through a team of the account, or through a
+-- shared folder it is filed in, or through a folder shared with a team of the account), read once from the four share statements of grantsTo and held as a hashed lookup, so a branch's
+-- condition is a filter on the rows its index finds and sharing changes no index choice. A pin is the owner's (Q22), so a bookmark shared with the account is never pinned in its answer. The
+-- function answers nothing outside withTenant() (no account or no workspace is set), for an empty text and for a limit of 0, and writes nothing and reads nothing but bookmarks and the share, folder-filing and team-member tables.
 CREATE OR REPLACE FUNCTION public.sys_search(p_query text, p_limit integer)
   RETURNS TABLE (id uuid, title text, url text, host text, slug text, forwarding boolean, pinned boolean)
   LANGUAGE plpgsql STABLE SECURITY DEFINER
@@ -64,22 +67,37 @@ BEGIN
 
   IF char_length(v_text) < 3 THEN
     RETURN QUERY
-    WITH hits AS (
+    WITH readable AS MATERIALIZED (
+    SELECT s.bookmark_id FROM public.bookmark_shares s WHERE s.workspace_id = v_workspace AND s.target_account_id = v_account
+    UNION
+    SELECT s.bookmark_id FROM public.bookmark_shares s
+    WHERE s.workspace_id = v_workspace
+      AND s.target_team_id IN (SELECT m.team_id FROM public.team_members m WHERE m.workspace_id = v_workspace AND m.account_id = v_account)
+    UNION
+    SELECT fb.bookmark_id FROM public.folder_shares fs
+    JOIN public.folder_bookmarks fb ON fb.workspace_id = fs.workspace_id AND fb.folder_id = fs.folder_id
+    WHERE fs.workspace_id = v_workspace AND fs.target_account_id = v_account
+    UNION
+    SELECT fb.bookmark_id FROM public.folder_shares fs
+    JOIN public.folder_bookmarks fb ON fb.workspace_id = fs.workspace_id AND fb.folder_id = fs.folder_id
+    WHERE fs.workspace_id = v_workspace
+      AND fs.target_team_id IN (SELECT m.team_id FROM public.team_members m WHERE m.workspace_id = v_workspace AND m.account_id = v_account)
+  ), hits AS (
       (SELECT b.id, 1 AS tier, 0::real AS score FROM public.bookmarks b
-       WHERE b.workspace_id = v_workspace AND b.owner_id = v_account AND b.plan_archived_at IS NULL AND b.slug = v_text
+       WHERE b.workspace_id = v_workspace AND (b.owner_id = v_account OR b.id IN (SELECT r.bookmark_id FROM readable r)) AND b.plan_archived_at IS NULL AND b.slug = v_text
        ORDER BY lower(b.title), b.id LIMIT v_limit)
       UNION ALL
       (SELECT b.id, 2, 0::real FROM public.bookmarks b
-       WHERE b.workspace_id = v_workspace AND b.owner_id = v_account AND b.plan_archived_at IS NULL AND b.slug LIKE v_pattern || '%'
+       WHERE b.workspace_id = v_workspace AND (b.owner_id = v_account OR b.id IN (SELECT r.bookmark_id FROM readable r)) AND b.plan_archived_at IS NULL AND b.slug LIKE v_pattern || '%'
        ORDER BY lower(b.title) || '', b.id LIMIT v_limit)
       UNION ALL
       (SELECT b.id, 3, 0::real FROM public.bookmarks b
-       WHERE b.workspace_id = v_workspace AND b.owner_id = v_account AND b.plan_archived_at IS NULL AND b.title ILIKE v_pattern || '%'
+       WHERE b.workspace_id = v_workspace AND (b.owner_id = v_account OR b.id IN (SELECT r.bookmark_id FROM readable r)) AND b.plan_archived_at IS NULL AND b.title ILIKE v_pattern || '%'
        ORDER BY lower(b.title) || '', b.id LIMIT v_limit)
     ), best AS (
       SELECT DISTINCT ON (h.id) h.id, h.tier, h.score FROM hits h ORDER BY h.id, h.tier
     )
-    SELECT b.id, b.title, b.url, b.host, b.slug, b.forwarding, b.pinned_at IS NOT NULL
+    SELECT b.id, b.title, b.url, b.host, b.slug, b.forwarding, b.pinned_at IS NOT NULL AND b.owner_id IS NOT DISTINCT FROM v_account
     FROM best JOIN public.bookmarks b ON b.workspace_id = v_workspace AND b.id = best.id
     ORDER BY best.tier, lower(b.title), b.id
     LIMIT v_limit;
@@ -96,19 +114,34 @@ BEGIN
   PERFORM set_config('pg_trgm.word_similarity_threshold', '0.4', true);
 
   RETURN QUERY
-  WITH head AS MATERIALIZED (
+  WITH readable AS MATERIALIZED (
+    SELECT s.bookmark_id FROM public.bookmark_shares s WHERE s.workspace_id = v_workspace AND s.target_account_id = v_account
+    UNION
+    SELECT s.bookmark_id FROM public.bookmark_shares s
+    WHERE s.workspace_id = v_workspace
+      AND s.target_team_id IN (SELECT m.team_id FROM public.team_members m WHERE m.workspace_id = v_workspace AND m.account_id = v_account)
+    UNION
+    SELECT fb.bookmark_id FROM public.folder_shares fs
+    JOIN public.folder_bookmarks fb ON fb.workspace_id = fs.workspace_id AND fb.folder_id = fs.folder_id
+    WHERE fs.workspace_id = v_workspace AND fs.target_account_id = v_account
+    UNION
+    SELECT fb.bookmark_id FROM public.folder_shares fs
+    JOIN public.folder_bookmarks fb ON fb.workspace_id = fs.workspace_id AND fb.folder_id = fs.folder_id
+    WHERE fs.workspace_id = v_workspace
+      AND fs.target_team_id IN (SELECT m.team_id FROM public.team_members m WHERE m.workspace_id = v_workspace AND m.account_id = v_account)
+  ), head AS MATERIALIZED (
     SELECT DISTINCT ON (h.id) h.id, h.tier, h.score
     FROM (
       (SELECT b.id, 1 AS tier, 0::real AS score FROM public.bookmarks b
-       WHERE b.workspace_id = v_workspace AND b.owner_id = v_account AND b.plan_archived_at IS NULL AND b.slug = v_text
+       WHERE b.workspace_id = v_workspace AND (b.owner_id = v_account OR b.id IN (SELECT r.bookmark_id FROM readable r)) AND b.plan_archived_at IS NULL AND b.slug = v_text
        ORDER BY lower(b.title), b.id LIMIT v_limit)
       UNION ALL
       (SELECT b.id, 2, 0::real FROM public.bookmarks b
-       WHERE b.workspace_id = v_workspace AND b.owner_id = v_account AND b.plan_archived_at IS NULL AND b.slug LIKE v_pattern || '%'
+       WHERE b.workspace_id = v_workspace AND (b.owner_id = v_account OR b.id IN (SELECT r.bookmark_id FROM readable r)) AND b.plan_archived_at IS NULL AND b.slug LIKE v_pattern || '%'
        ORDER BY lower(b.title) || '', b.id LIMIT v_limit)
       UNION ALL
       (SELECT b.id, 3, ts_rank_cd(b.search, v_tsquery)::real FROM public.bookmarks b
-       WHERE b.workspace_id = v_workspace AND b.owner_id = v_account AND b.plan_archived_at IS NULL
+       WHERE b.workspace_id = v_workspace AND (b.owner_id = v_account OR b.id IN (SELECT r.bookmark_id FROM readable r)) AND b.plan_archived_at IS NULL
          AND (to_tsvector('simple', coalesce(b.slug, '')) || to_tsvector('simple', b.title)) @@ v_tsquery
        ORDER BY 3 DESC, lower(b.title), b.id LIMIT v_limit)
     ) h
@@ -116,7 +149,7 @@ BEGIN
   ), wide AS (
     SELECT w.id, 4 AS tier, ts_rank_cd(w.search, v_tsquery)::real AS score
     FROM (SELECT b.id, b.title, b.search FROM public.bookmarks b
-          WHERE b.workspace_id = v_workspace AND b.owner_id = v_account AND b.plan_archived_at IS NULL AND b.search @@ v_tsquery
+          WHERE b.workspace_id = v_workspace AND (b.owner_id = v_account OR b.id IN (SELECT r.bookmark_id FROM readable r)) AND b.plan_archived_at IS NULL AND b.search @@ v_tsquery
             AND (SELECT count(*) FROM head) < v_limit
           LIMIT 300) w
     ORDER BY 3 DESC, lower(w.title), w.id LIMIT v_limit
@@ -126,12 +159,12 @@ BEGIN
     ORDER BY h.id, h.tier, h.score DESC
   ), fuzzy AS (
     (SELECT b.id, 5 AS tier, word_similarity(v_text, b.title)::real AS score FROM public.bookmarks b
-     WHERE b.workspace_id = v_workspace AND b.owner_id = v_account AND b.plan_archived_at IS NULL AND v_text <% b.title
+     WHERE b.workspace_id = v_workspace AND (b.owner_id = v_account OR b.id IN (SELECT r.bookmark_id FROM readable r)) AND b.plan_archived_at IS NULL AND v_text <% b.title
        AND (SELECT count(*) FROM strong) < v_limit
      LIMIT 300)
     UNION ALL
     (SELECT b.id, 5, word_similarity(v_text, b.host)::real FROM public.bookmarks b
-     WHERE b.workspace_id = v_workspace AND b.owner_id = v_account AND b.plan_archived_at IS NULL AND v_text <% b.host
+     WHERE b.workspace_id = v_workspace AND (b.owner_id = v_account OR b.id IN (SELECT r.bookmark_id FROM readable r)) AND b.plan_archived_at IS NULL AND v_text <% b.host
        AND (SELECT count(*) FROM strong) < v_limit
      LIMIT 300)
   ), best AS (
@@ -139,7 +172,7 @@ BEGIN
     FROM (SELECT * FROM strong UNION ALL SELECT * FROM fuzzy) h
     ORDER BY h.id, h.tier, h.score DESC
   )
-  SELECT b.id, b.title, b.url, b.host, b.slug, b.forwarding, b.pinned_at IS NOT NULL
+  SELECT b.id, b.title, b.url, b.host, b.slug, b.forwarding, b.pinned_at IS NOT NULL AND b.owner_id IS NOT DISTINCT FROM v_account
   FROM best JOIN public.bookmarks b ON b.workspace_id = v_workspace AND b.id = best.id
   ORDER BY best.tier, best.score DESC, lower(b.title), b.id
   LIMIT v_limit;

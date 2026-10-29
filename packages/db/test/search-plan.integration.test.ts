@@ -15,7 +15,7 @@ import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 // statement below. The file runs in a vitest project of its own, one file at a time, so that no other database-heavy file shares the machine with its timings (vitest.config.ts).
 
 const HOOK_TIMEOUT_MS = 300_000;
-const FIXTURE_TABLES = ["bookmarks"] as const;
+const FIXTURE_TABLES = ["bookmark_shares", "bookmarks", "folder_bookmarks"] as const;
 const BOOKMARKS = 50_000;
 const SMALL_WORKSPACES = 1_000;
 const P95_BUDGET_MS = 100;
@@ -24,6 +24,8 @@ let db: TestDatabase;
 let accountId: string;
 let otherId: string;
 let workspaceId: string;
+let teamId: string;
+let folderId: string;
 
 /**
  * Titles of three to five words from a vocabulary of eighty or so, hosts from about 400 sites and one site (github.com) that a tenth of the bookmarks share, a slug on a fifth of them and a
@@ -60,6 +62,21 @@ async function seedLibrary(): Promise<void> {
       VALUES (${freshId()}, ${workspaceId}, ${accountId}, 'https://github.com/', 'https://github.com/', 'github.com', 'GitHub', 'gh', true),
              (${freshId()}, ${workspaceId}, ${accountId}, 'https://mail.example.com/', 'https://mail.example.com/', 'mail.example.com', 'Mail', 'mail', true)`,
   );
+  // A fifth of the other member's bookmarks are shared with the caller directly, a fifth through the team the caller is in and a fifth through the folder shared with the caller, so the search reads them
+  // by the three kinds of share beside the caller's own.
+  await asSystem(
+    db,
+    (tx) => tx`
+      WITH theirs AS (SELECT id, abs(hashtext(id::text)) % 5 AS k FROM bookmarks WHERE workspace_id = ${workspaceId} AND owner_id = ${otherId}),
+      direct AS (
+        INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_account_id, granted_by)
+        SELECT gen_random_uuid(), ${workspaceId}, id, ${accountId}, ${otherId} FROM theirs WHERE k = 0
+      ), via_team AS (
+        INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_team_id, granted_by)
+        SELECT gen_random_uuid(), ${workspaceId}, id, ${teamId}, ${otherId} FROM theirs WHERE k = 1
+      )
+      INSERT INTO folder_bookmarks (workspace_id, folder_id, bookmark_id) SELECT ${workspaceId}, ${folderId}, id FROM theirs WHERE k = 2`,
+  );
 }
 
 beforeAll(async () => {
@@ -71,6 +88,14 @@ beforeAll(async () => {
   workspaceId = await seedWorkspace(db, { name: "Search plan test" });
   await seedMember(db, { workspaceId, accountId, role: "owner" });
   await seedMember(db, { workspaceId, accountId: otherId });
+  teamId = freshId();
+  folderId = freshId();
+  await asSystem(db, async (tx) => {
+    await tx`INSERT INTO teams (id, workspace_id, name) VALUES (${teamId}, ${workspaceId}, 'Readers')`;
+    await tx`INSERT INTO team_members (workspace_id, team_id, account_id) VALUES (${workspaceId}, ${teamId}, ${accountId})`;
+    await tx`INSERT INTO folders (id, workspace_id, owner_id, name) VALUES (${folderId}, ${workspaceId}, ${otherId}, 'Shared folder')`;
+    await tx`INSERT INTO folder_shares (id, workspace_id, folder_id, target_account_id, granted_by) VALUES (${freshId()}, ${workspaceId}, ${folderId}, ${accountId}, ${otherId})`;
+  });
   await seedLibrary();
   // Many small workspaces whose bookmarks carry the same words, so no workspace dominates a table.
   await asSystem(
@@ -92,6 +117,28 @@ beforeAll(async () => {
       SELECT gen_random_uuid(), ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid, ${accountId},
              'https://github.com/s' || n, 'https://github.com/s' || n, 'github.com', 'GitHub docs ' || n, 'mail-' || n
       FROM generate_series(1, ${SMALL_WORKSPACES}) AS n`,
+  );
+  // Each of them also files its bookmark in a folder of its member that is shared with another member and with a team, so the share tables hold the rows of many workspaces and no workspace dominates them.
+  await asSystem(
+    db,
+    async (tx) => {
+      const small = (n: string) => `('00000000-0000-7000-8000-' || lpad(${n}::text, 12, '0'))::uuid`;
+      await tx`
+        INSERT INTO workspace_members (workspace_id, account_id, role)
+        SELECT ${tx.unsafe(small("n"))}, ${otherId}, 'member' FROM generate_series(1, ${SMALL_WORKSPACES}) AS n`;
+      await tx`
+        INSERT INTO folders (id, workspace_id, owner_id, name)
+        SELECT ${tx.unsafe(small("n"))}, ${tx.unsafe(small("n"))}, ${accountId}, 'Small folder' FROM generate_series(1, ${SMALL_WORKSPACES}) AS n`;
+      await tx`
+        INSERT INTO folder_bookmarks (workspace_id, folder_id, bookmark_id)
+        SELECT b.workspace_id, b.workspace_id, b.id FROM bookmarks b WHERE b.slug LIKE 'mail-%' AND b.workspace_id <> ${workspaceId}`;
+      await tx`
+        INSERT INTO folder_shares (id, workspace_id, folder_id, target_account_id, granted_by)
+        SELECT gen_random_uuid(), ${tx.unsafe(small("n"))}, ${tx.unsafe(small("n"))}, ${otherId}, ${accountId} FROM generate_series(1, ${SMALL_WORKSPACES}) AS n`;
+      await tx`
+        INSERT INTO bookmark_shares (id, workspace_id, bookmark_id, target_account_id, granted_by)
+        SELECT gen_random_uuid(), b.workspace_id, b.id, ${otherId}, ${accountId} FROM bookmarks b WHERE b.slug LIKE 'mail-%' AND b.workspace_id <> ${workspaceId}`;
+    },
   );
   // A running instance has its tables vacuumed and analysed, and a vacuum marks all-visible each page whose rows every transaction can see, so an Index Only Scan answers for the entries on those pages from the index alone: the fixture vacuums until the map covers every page, so the map is part of the fixture.
   await vacuumUntilAllVisible(db, FIXTURE_TABLES);
@@ -178,6 +225,16 @@ function indexCondOf(nodes: readonly PlanNode[], indexName: string): string {
     .join(" ");
 }
 
+// The shares the access rule reads are read once, by the indexes of their tables and not by scanning them, whatever the form of the search.
+function expectSharesRead(nodes: readonly PlanNode[]): void {
+  const scanned = nodes.filter((node) => node["Node Type"] === "Seq Scan").map((node) => node["Relation Name"]);
+  for (const table of ["bookmark_shares", "folder_shares", "folder_bookmarks", "team_members"]) {
+    expect(scanned, table).not.toContain(table);
+  }
+  const readShares = nodes.filter((node) => node["Relation Name"] === "bookmark_shares" || node["Relation Name"] === "folder_shares").length;
+  expect(readShares).toBeGreaterThan(0);
+}
+
 const LONG_FORM_INDEXES = ["bookmarks_slug_trgm_idx", "bookmarks_search_idx", "bookmarks_title_slug_search_idx", "bookmarks_title_trgm_idx", "bookmarks_host_trgm_idx"];
 
 // The texts of the plans: a word that few bookmarks hold, words that thousands do (`docs` and `notes` in titles, `www` and `the team` only in hosts and descriptions) and two words. `docs` is the
@@ -192,6 +249,7 @@ async function expectLongFormPlan(text: string): Promise<void> {
   const exactSlug = `${indexCondOf(nodes, "bookmarks_owner_slug_key")} ${indexCondOf(nodes, "bookmarks_slug_idx")}`;
   expect(exactSlug).toContain("slug = ");
   expect(exactSlug).toContain("workspace_id");
+  expectSharesRead(nodes);
   expect(indexCondOf(nodes, "bookmarks_slug_trgm_idx")).toContain("slug ~~ ");
   expect(indexCondOf(nodes, "bookmarks_search_idx")).toContain("search @@ ");
   expect(indexCondOf(nodes, "bookmarks_title_slug_search_idx")).toContain("@@ ");
@@ -218,12 +276,13 @@ describe.each(["g", "gh", "re", "ma", "zq"])("the plan of the search for the sho
     const nodes = await planOfSearch(text, "short");
 
     expect(nodes.filter((node) => node["Node Type"] === "Seq Scan").map((node) => node["Relation Name"])).not.toContain("bookmarks");
-    expect(indexCondOf(nodes, "bookmarks_owner_slug_key")).toContain("slug = ");
+    expect(`${indexCondOf(nodes, "bookmarks_owner_slug_key")} ${indexCondOf(nodes, "bookmarks_slug_idx")}`).toContain("slug = ");
     expect(indexCondOf(nodes, "bookmarks_slug_trgm_idx")).toContain("slug ~~ ");
     expect(indexCondOf(nodes, "bookmarks_title_trgm_idx")).toContain("title ~~* ");
-    for (const indexName of ["bookmarks_owner_slug_key", "bookmarks_slug_trgm_idx", "bookmarks_title_trgm_idx"]) {
+    for (const indexName of ["bookmarks_slug_trgm_idx", "bookmarks_title_trgm_idx"]) {
       expect(indexCondOf(nodes, indexName), indexName).toContain("workspace_id");
     }
+    expectSharesRead(nodes);
   });
 });
 
@@ -239,8 +298,36 @@ describe("the search on a workspace of 50 000 bookmarks", () => {
     expect((await search("mail"))[0]).toMatchObject({ title: "Mail", slug: "mail" });
   });
 
-  it("names no plan-archived bookmark and none of the other member's", async () => {
-    const owned = await asSystem(db, (tx) => tx<{ id: string }[]>`SELECT id FROM bookmarks WHERE workspace_id = ${workspaceId} AND owner_id = ${accountId} AND plan_archived_at IS NULL`);
+  it("finds the other member's bookmark by its slug when it is shared with the caller directly, through the team or through the folder, and not when it is not shared", async () => {
+    const pick = (kind: string, condition: string) =>
+      asSystem(
+        db,
+        (tx) => tx<{ id: string; slug: string }[]>`
+          SELECT b.id, b.slug FROM bookmarks b
+          WHERE b.workspace_id = ${workspaceId} AND b.owner_id = ${otherId} AND b.plan_archived_at IS NULL AND ${tx.unsafe(condition)}
+          ORDER BY b.id LIMIT 1`,
+      ).then(([row]) => {
+        if (row === undefined) {
+          throw new Error(`the fixture has no ${kind} bookmark`);
+        }
+        return row;
+      });
+    const direct = await pick("directly shared", `b.id IN (SELECT bookmark_id FROM bookmark_shares WHERE target_account_id = '${accountId}'::uuid)`);
+    const viaTeam = await pick("team shared", `b.id IN (SELECT bookmark_id FROM bookmark_shares WHERE target_team_id = '${teamId}'::uuid)`);
+    const viaFolder = await pick("folder shared", `b.id IN (SELECT bookmark_id FROM folder_bookmarks WHERE folder_id = '${folderId}'::uuid)`);
+    const unshared = await pick(
+      "unshared",
+      `b.id NOT IN (SELECT bookmark_id FROM bookmark_shares WHERE workspace_id = '${workspaceId}'::uuid) AND b.id NOT IN (SELECT bookmark_id FROM folder_bookmarks WHERE workspace_id = '${workspaceId}'::uuid)`,
+    );
+
+    for (const shared of [direct, viaTeam, viaFolder]) {
+      expect((await search(shared.slug))[0]?.id, shared.slug).toBe(shared.id);
+    }
+    expect((await search(unshared.slug, 20)).map((hit) => hit.id)).not.toContain(unshared.id);
+  });
+
+  it("names no plan-archived bookmark and none of the other member's that is not shared with the caller", async () => {
+    const owned = await asSystem(db, (tx) => tx<{ id: string }[]>`SELECT b.id FROM bookmarks b WHERE b.workspace_id = ${workspaceId} AND ${tx.unsafe(readable())} AND b.plan_archived_at IS NULL`);
     const visible = new Set(owned.map((row) => row.id));
     for (const text of ["github", "docs", "kubernetes guide", "api", "re", "typescript"]) {
       const hits = await search(text, 20);
@@ -251,6 +338,11 @@ describe("the search on a workspace of 50 000 bookmarks", () => {
       ).toEqual([]);
     }
   });
+
+  // Every share of the fixture gives the caller access (the team is the caller's, the folder is shared with the caller), so the bookmarks the caller can read are the caller's own and those with a share or filed in the folder.
+  function readable(): string {
+    return `(b.owner_id = '${accountId}'::uuid OR b.id IN (SELECT bookmark_id FROM bookmark_shares WHERE workspace_id = '${workspaceId}'::uuid) OR b.id IN (SELECT bookmark_id FROM folder_bookmarks WHERE workspace_id = '${workspaceId}'::uuid))`;
+  }
 
   // The statement of the search without any bound: every bookmark the account may read that is the slug, starts with it or holds every word of it as a prefix, ranked as doc 02 section 9.1
   // ranks them (the slug is exactly the text, the slug starts with it, then the full-text rank; a short text has the title prefix in place of the full-text tier and no rank).
@@ -275,7 +367,7 @@ describe("the search on a workspace of 50 000 bookmarks", () => {
         (tx) => tx<Ranked[]>`
           SELECT b.id, tier, 0::real AS score
           FROM bookmarks b CROSS JOIN LATERAL (SELECT CASE WHEN b.slug = ${text} THEN 1 WHEN b.slug LIKE ${pattern + "%"} THEN 2 ELSE 3 END AS tier) t
-          WHERE b.workspace_id = ${workspaceId} AND b.owner_id = ${accountId} AND b.plan_archived_at IS NULL
+          WHERE b.workspace_id = ${workspaceId} AND ${tx.unsafe(readable())} AND b.plan_archived_at IS NULL
             AND (b.slug = ${text} OR b.slug LIKE ${pattern + "%"} OR b.title ILIKE ${pattern + "%"})
           ORDER BY tier, lower(b.title), b.id LIMIT ${limit}`,
       );
@@ -286,7 +378,7 @@ describe("the search on a workspace of 50 000 bookmarks", () => {
         SELECT id, tier, score FROM (
           SELECT b.id, tier, CASE WHEN tier < 3 THEN 0::real ELSE ts_rank_cd(b.search, ${tsqueryOf(text)}::tsquery)::real END AS score, lower(b.title) AS sort_title
           FROM bookmarks b CROSS JOIN LATERAL (SELECT CASE WHEN b.slug = ${text} THEN 1 WHEN b.slug LIKE ${pattern + "%"} THEN 2 ELSE 3 END AS tier) t
-          WHERE b.workspace_id = ${workspaceId} AND b.owner_id = ${accountId} AND b.plan_archived_at IS NULL
+          WHERE b.workspace_id = ${workspaceId} AND ${tx.unsafe(readable())} AND b.plan_archived_at IS NULL
             AND (b.slug = ${text} OR b.slug LIKE ${pattern + "%"} OR b.search @@ ${tsqueryOf(text)}::tsquery)
         ) ranked
         ORDER BY tier, score DESC, sort_title, id LIMIT ${limit}`,

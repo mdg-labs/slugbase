@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { searchRepository, TenantContextError } from "../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
+import { seedTeam, shareBookmark, shareThroughFolder } from "./support/share-fixture.ts";
 import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 
 // The search of a member's bookmarks, folders and tags (doc 02 section 9.1, doc 05 sections 2.4 and 3.3, doc 10 T1 and T2, Q49). The failure scenario: a query made of tsquery operators and
@@ -337,6 +338,94 @@ describe("the bookmarks of a search", () => {
     expect(await found(w, me, "gamma", 3)).toHaveLength(3);
     expect(await found(w, me, "gamma", 20)).toHaveLength(20);
     expect(await callAs(me, w, "gamma", 500)).toHaveLength(20);
+  });
+});
+
+describe("the bookmarks that others share with the caller (T12)", () => {
+  it("are found by an exact slug, a slug prefix, full text and trigram similarity, and by the short form, through every route that shares them", async () => {
+    const me = await account();
+    const owner = await account();
+    const w = await workspace([me, owner]);
+    const team = await seedTeam(db, w, [me]);
+    const direct = await bookmark(w, owner, { title: "Zebra planner", slug: "zebra", forwarding: true });
+    const viaTeam = await bookmark(w, owner, { title: "Okapi guide", slug: "okapi-guide" });
+    const viaFolder = await bookmark(w, owner, { title: "Giraffe handbook" });
+    const viaTeamFolder = await bookmark(w, owner, { title: "Kubernetes primer" });
+    await shareBookmark(db, w, direct, owner, { accountId: me });
+    await shareBookmark(db, w, viaTeam, owner, { teamId: team });
+    await shareThroughFolder(db, w, viaFolder, owner, { accountId: me });
+    await shareThroughFolder(db, w, viaTeamFolder, owner, { teamId: team });
+
+    expect(await found(w, me, "zebra")).toEqual([direct]);
+    expect(await found(w, me, "okapi")).toEqual([viaTeam]);
+    expect(await found(w, me, "giraffe")).toEqual([viaFolder]);
+    expect(await found(w, me, "kubernetes")).toEqual([viaTeamFolder]);
+    expect(await found(w, me, "kuberentes")).toEqual([viaTeamFolder]);
+    expect(await found(w, me, "ze")).toEqual([direct]);
+    expect(await found(w, me, "ok")).toEqual([viaTeam]);
+    expect(await found(w, me, "gi")).toEqual([viaFolder]);
+    const [hit] = await asMember(w, me, (tx) => searchRepository(tx).bookmarks({ text: "zebra", limit: 20 }));
+    expect(hit).toMatchObject({ id: direct, title: "Zebra planner", slug: "zebra", forwarding: true });
+  });
+
+  it("are never pinned for the caller, whether or not the owner pinned them, and the caller's own pins stay", async () => {
+    const me = await account();
+    const owner = await account();
+    const w = await workspace([me, owner]);
+    const sharedPinned = await bookmark(w, owner, { title: "Quokka shared", pinned: true });
+    const own = await bookmark(w, me, { title: "Quokka own", pinned: true });
+    await shareBookmark(db, w, sharedPinned, owner, { accountId: me });
+
+    const hits = await asMember(w, me, (tx) => searchRepository(tx).bookmarks({ text: "quokka", limit: 20 }));
+
+    expect(hits.map((hit) => [hit.id, hit.pinned]).toSorted()).toEqual([[sharedPinned, false], [own, true]].toSorted());
+    expect((await asMember(w, owner, (tx) => searchRepository(tx).bookmarks({ text: "quokka", limit: 20 }))).map((hit) => [hit.id, hit.pinned])).toEqual([[sharedPinned, true]]);
+  });
+
+  it("never include a shared bookmark that is plan-archived, one shared with another member or with a team the caller is not in, one in a folder shared with that team or one shared in another workspace", async () => {
+    const me = await account();
+    const owner = await account();
+    const stranger = await account();
+    const w = await workspace([me, owner, stranger]);
+    const elsewhere = await workspace([me, owner]);
+    const otherTeam = await seedTeam(db, w, [stranger]);
+    const shown = await bookmark(w, owner, { title: "Wombat shown" });
+    const archived = await bookmark(w, owner, { title: "Wombat archived", archived: true });
+    const forStranger = await bookmark(w, owner, { title: "Wombat stranger" });
+    const forTeam = await bookmark(w, owner, { title: "Wombat team" });
+    const inTeamsFolder = await bookmark(w, owner, { title: "Wombat folder" });
+    await bookmark(w, owner, { title: "Wombat private" });
+    const inElsewhere = await bookmark(elsewhere, owner, { title: "Wombat elsewhere" });
+    await shareBookmark(db, w, shown, owner, { accountId: me });
+    await shareBookmark(db, w, archived, owner, { accountId: me });
+    await shareBookmark(db, w, forStranger, owner, { accountId: stranger });
+    await shareBookmark(db, w, forTeam, owner, { teamId: otherTeam });
+    await shareThroughFolder(db, w, inTeamsFolder, owner, { teamId: otherTeam });
+    await shareBookmark(db, elsewhere, inElsewhere, owner, { accountId: me });
+
+    expect(await found(w, me, "wombat")).toEqual([shown]);
+    expect((await found(w, stranger, "wombat")).toSorted()).toEqual([forStranger, forTeam, inTeamsFolder].toSorted());
+    expect(await found(w, me, "wo")).toEqual([shown]);
+    expect(await found(elsewhere, me, "wombat")).toEqual([inElsewhere]);
+    expect((await callAs(me, w, "wombat")).map((row) => row.id)).toEqual([shown]);
+  });
+
+  it("end with the share, and never carry the owner's folders or tags into the caller's search", async () => {
+    const me = await account();
+    const owner = await account();
+    const w = await workspace([me, owner]);
+    const shared = await bookmark(w, owner, { title: "Tapir atlas" });
+    await folder(w, owner, "Tapir folder");
+    await tag(w, owner, "tapir-tag");
+    await shareBookmark(db, w, shared, owner, { accountId: me });
+
+    expect(await found(w, me, "tapir")).toEqual([shared]);
+    const result = await asMember(w, me, async (tx) => ({ folders: await searchRepository(tx).folders({ accountId: me, text: "tapir", limit: 20 }), tags: await searchRepository(tx).tags({ accountId: me, text: "tapir", limit: 20 }) }));
+    expect(result).toEqual({ folders: [], tags: [] });
+
+    await asSystem(db, (tx) => tx`DELETE FROM bookmark_shares WHERE bookmark_id = ${shared}`);
+
+    expect(await found(w, me, "tapir")).toEqual([]);
   });
 });
 

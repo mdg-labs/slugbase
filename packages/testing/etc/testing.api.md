@@ -130,6 +130,7 @@ export interface SeedBookmark {
     readonly createdAt: Date;
     // (undocumented)
     readonly description: string | null;
+    readonly forwarding?: boolean;
     // (undocumented)
     readonly host: string;
     // (undocumented)
@@ -142,6 +143,7 @@ export interface SeedBookmark {
     readonly ownerId: string;
     // (undocumented)
     readonly pinnedAt: Date | null;
+    readonly slug?: string | null;
     // (undocumented)
     readonly title: string;
     // (undocumented)
@@ -150,10 +152,43 @@ export interface SeedBookmark {
     readonly urlCanonical: string;
 }
 
+// @public
+export interface SeedBookmarkShare {
+    // (undocumented)
+    readonly bookmarkId: string;
+    // (undocumented)
+    readonly granted: SeedAccountKey;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly target: SeedAccountKey;
+}
+
+// @public
+export interface SeedFolder {
+    // (undocumented)
+    readonly bookmarkIds: readonly string[];
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+    // (undocumented)
+    readonly owner: SeedAccountKey;
+    // (undocumented)
+    readonly shares: readonly {
+        readonly id: string;
+        readonly target: SeedAccountKey;
+    }[];
+}
+
 // @public (undocumented)
 export interface SeedWorkspace {
     // (undocumented)
     readonly bookmarks: readonly SeedBookmark[];
+    // (undocumented)
+    readonly bookmarkShares: readonly SeedBookmarkShare[];
+    // (undocumented)
+    readonly folders: readonly SeedFolder[];
     // (undocumented)
     readonly id: string;
     readonly members: readonly {

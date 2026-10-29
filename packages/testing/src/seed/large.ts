@@ -24,6 +24,11 @@ const FILED_SHARE = 0.35;
 const ADMIN_WEIGHT = 8;
 /** How many of the owner's slugs the load scenarios resolve. */
 const SLUG_SAMPLE = 200;
+/** How many forwarding bookmarks each member shares with the owner by each route: directly, through a shared folder and through a shared team. */
+const SHARED_PER_ROUTE = 40;
+/** The slug that one member alone shares with the owner, and the slug that both members share with the owner, which the owner has not got as their own. */
+const SHARED_SINGLE_SLUG = "perf-shared-one";
+const SHARED_MANY_SLUG = "perf-shared-many";
 
 const SLUG_WORDS = [
   "docs", "gh", "jira", "wiki", "mail", "cal", "drive", "notes", "ci", "logs", "metrics", "deploy", "status", "pr", "issues", "design",
@@ -56,6 +61,23 @@ export interface LargeNamed {
   readonly name: string;
 }
 
+/** A team of the workspace and its members. */
+export interface LargeTeam {
+  readonly id: string;
+  readonly name: string;
+  readonly memberIds: readonly string[];
+}
+
+/** A grant of read access to a bookmark or a folder, to one account or one team. */
+export interface LargeShare {
+  readonly id: string;
+  /** The bookmark or the folder. */
+  readonly subjectId: string;
+  readonly grantedBy: string;
+  readonly accountId: string | null;
+  readonly teamId: string | null;
+}
+
 export interface LargeWorkspace {
   readonly id: string;
   readonly name: string;
@@ -67,6 +89,9 @@ export interface LargeWorkspace {
   readonly folders: readonly LargeNamed[];
   readonly bookmarkTags: readonly { readonly bookmarkId: string; readonly tagId: string }[];
   readonly folderBookmarks: readonly { readonly folderId: string; readonly bookmarkId: string }[];
+  readonly teams: readonly LargeTeam[];
+  readonly bookmarkShares: readonly LargeShare[];
+  readonly folderShares: readonly LargeShare[];
 }
 
 /** What the load scenarios need to know about the instance; the account's password is made when the run starts. */
@@ -77,6 +102,14 @@ export interface PerfFixtures {
   readonly tagIds: readonly string[];
   readonly folderIds: readonly string[];
   readonly searchTerms: readonly string[];
+  /** Slugs of the account that /go forwards to although others share a bookmark with the same slug: the account's own comes first. */
+  readonly collidingSlugs: readonly string[];
+  /** Slugs that only one member's bookmark, shared with the account, has: /go forwards to it. */
+  readonly sharedSlugs: readonly string[];
+  /** Slugs that several shared bookmarks have and the account has none: /go asks to choose. */
+  readonly ambiguousSlugs: readonly string[];
+  /** Search terms that only bookmarks shared with the account match. */
+  readonly sharedSearchTerms: readonly string[];
 }
 
 export interface LargeInstance {
@@ -133,7 +166,85 @@ function populate(population: Population, workspace: { id: string; name: string;
       folderBookmarks.push({ folderId: random.pick(kept).id, bookmarkId: bookmark.id });
     }
   }
-  return { ...workspace, bookmarks, tags, folders, bookmarkTags, folderBookmarks };
+  return { ...workspace, bookmarks, tags, folders, bookmarkTags, folderBookmarks, teams: [], bookmarkShares: [], folderShares: [] };
+}
+
+/** What `shareWithOwner` made of the workspace, and the slugs the scenarios resolve through the shares. */
+interface Shared {
+  readonly workspace: LargeWorkspace;
+  readonly collidingSlugs: readonly string[];
+  readonly sharedSlugs: readonly string[];
+  readonly ambiguousSlugs: readonly string[];
+}
+
+/**
+ * Each member shares forwarding bookmarks with the owner by every route, so the owner's `/go` meets shared candidates: the slugs of the members and of the owner come from the same words
+ * (a slug is unique per owner, not per workspace), so the shared bookmarks collide with the owner's own, which win, and with each other. Of each member's forwarding bookmarks the first is given
+ * `perf-shared-one` (the first member) or `perf-shared-many` (both members, and the owner has neither), shared directly; the next `SHARED_PER_ROUTE` are shared directly, the next
+ * `SHARED_PER_ROUTE` are filed in a folder of the member shared with the owner, and the next `SHARED_PER_ROUTE` are shared with a team of the owner and both members.
+ */
+function shareWithOwner(large: LargeWorkspace, ownerId: string, memberIds: readonly string[], ids: () => string): Shared {
+  const team: LargeTeam = { id: ids(), name: "Perf team", memberIds: [ownerId, ...memberIds] };
+  const renamed = new Map<string, string>();
+  const bookmarkShares: LargeShare[] = [];
+  const folderShares: LargeShare[] = [];
+  const folders: LargeNamed[] = [];
+  const folderBookmarks: { folderId: string; bookmarkId: string }[] = [];
+  const share = (subjectId: string, grantedBy: string, target: { accountId: string } | { teamId: string }): LargeShare => ({
+    id: ids(),
+    subjectId,
+    grantedBy,
+    accountId: "accountId" in target ? target.accountId : null,
+    teamId: "teamId" in target ? target.teamId : null,
+  });
+  const colliding: string[] = [];
+  const ownerSlugs = new Set(large.bookmarks.filter((bookmark) => bookmark.ownerId === ownerId && bookmark.forwarding).map((bookmark) => bookmark.slug));
+  memberIds.forEach((memberId, index) => {
+    const mine = large.bookmarks.filter((bookmark) => bookmark.ownerId === memberId && bookmark.forwarding && bookmark.slug !== null);
+    const special = index === 0 ? [SHARED_SINGLE_SLUG, SHARED_MANY_SLUG] : [SHARED_MANY_SLUG];
+    special.forEach((slug, at) => {
+      const bookmark = mine[at];
+      if (bookmark !== undefined) {
+        renamed.set(bookmark.id, slug);
+        bookmarkShares.push(share(bookmark.id, memberId, { accountId: ownerId }));
+      }
+    });
+    const rest = mine.slice(special.length);
+    for (const bookmark of rest.slice(0, SHARED_PER_ROUTE)) {
+      bookmarkShares.push(share(bookmark.id, memberId, { accountId: ownerId }));
+    }
+    const filed = rest.slice(SHARED_PER_ROUTE, 2 * SHARED_PER_ROUTE);
+    if (filed.length > 0) {
+      const folder: LargeNamed = { id: ids(), ownerId: memberId, name: "Shared with Perf Admin" };
+      folders.push(folder);
+      folderShares.push(share(folder.id, memberId, { accountId: ownerId }));
+      for (const bookmark of filed) {
+        folderBookmarks.push({ folderId: folder.id, bookmarkId: bookmark.id });
+      }
+    }
+    for (const bookmark of rest.slice(2 * SHARED_PER_ROUTE, 3 * SHARED_PER_ROUTE)) {
+      bookmarkShares.push(share(bookmark.id, memberId, { teamId: team.id }));
+    }
+    colliding.push(...rest.slice(0, 3 * SHARED_PER_ROUTE).flatMap((bookmark) => (bookmark.slug !== null && ownerSlugs.has(bookmark.slug) ? [bookmark.slug] : [])));
+  });
+  const renamedSlugs = new Set(renamed.values());
+  return {
+    workspace: {
+      ...large,
+      bookmarks: large.bookmarks.map((bookmark) => {
+        const slug = renamed.get(bookmark.id);
+        return slug === undefined ? bookmark : { ...bookmark, slug };
+      }),
+      folders: [...large.folders, ...folders],
+      folderBookmarks: [...large.folderBookmarks, ...folderBookmarks],
+      teams: [team],
+      bookmarkShares,
+      folderShares,
+    },
+    collidingSlugs: [...new Set(colliding)].sort(),
+    sharedSlugs: renamedSlugs.has(SHARED_SINGLE_SLUG) ? [SHARED_SINGLE_SLUG] : [],
+    ambiguousSlugs: bookmarkShares.filter((entry) => renamed.get(entry.subjectId) === SHARED_MANY_SLUG).length > 1 ? [SHARED_MANY_SLUG] : [],
+  };
 }
 
 /**
@@ -164,6 +275,8 @@ export function buildLargeInstance(options: LargeInstanceOptions = {}): LargeIns
     accounts.push(owner);
     workspaces.push(populate(population, { id: ids(), name: `Workspace ${String(index)}`, ownerId: owner.id, members: [] }, [owner.id], PERF_EXTRA_WORKSPACE_BOOKMARKS, 3, 2));
   }
+  const shared = shareWithOwner(large, admin.id, members.map((member) => member.id), ids);
+  workspaces[0] = shared.workspace;
   const forwarding = large.bookmarks.filter((bookmark) => bookmark.ownerId === admin.id && bookmark.forwarding && bookmark.slug !== null);
   const step = Math.max(1, Math.floor(forwarding.length / SLUG_SAMPLE));
   return {
@@ -175,6 +288,10 @@ export function buildLargeInstance(options: LargeInstanceOptions = {}): LargeIns
       tagIds: large.tags.filter((tag) => tag.ownerId === admin.id).map((tag) => tag.id),
       folderIds: large.folders.filter((folder) => folder.ownerId === admin.id).map((folder) => folder.id),
       searchTerms: SEARCH_TERMS,
+      collidingSlugs: shared.collidingSlugs,
+      sharedSlugs: shared.sharedSlugs,
+      ambiguousSlugs: shared.ambiguousSlugs,
+      sharedSearchTerms: [...shared.sharedSlugs, ...shared.ambiguousSlugs],
     },
   };
 }

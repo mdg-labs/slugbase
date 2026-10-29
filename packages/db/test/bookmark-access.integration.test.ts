@@ -205,7 +205,7 @@ describe("the access predicate", () => {
 });
 
 describe("the lists with a text query", () => {
-  it("narrow the scope of the list by the matches of the search, which are the caller's own bookmarks, whichever filter comes with the text", async () => {
+  it("narrow the scope of the list by the matches of the search, which are the bookmarks the caller can read, and the filters of the caller's own things narrow them to the caller's own", async () => {
     const found = async (accountId: string, filter: { scope: BookmarkScope; q: string; pinned?: boolean }) =>
       (await inTenant(accountId, (tx) => bookmarkRepository(tx).list({ filter: { ownerId: accountId, ...filter }, sort: "recent", after: undefined, limit: 10 }))).map((row) => row.bookmark.id);
     const counted = async (accountId: string, filter: { scope: BookmarkScope; q: string; pinned?: boolean }) =>
@@ -216,7 +216,14 @@ describe("the lists with a text query", () => {
     expect(await found(accounts.owner, { scope: "shared_by_me", q: "Twice" })).toEqual([bookmarks.twice]);
     expect(await found(accounts.owner, { scope: "shared_by_me", q: "Private" })).toEqual([]);
     expect(await found(accounts.owner, { scope: "shared_with_me", q: "Twice" })).toEqual([]);
-    expect(await found(accounts.direct, { scope: "all", q: "Direct", pinned: false })).toEqual([]);
+    expect(await found(accounts.direct, { scope: "all", q: "Direct", pinned: false })).toEqual([bookmarks.direct]);
+    expect(await found(accounts.direct, { scope: "all", q: "Direct", pinned: true })).toEqual([]);
+    expect(await found(accounts.direct, { scope: "all", q: "Direct" })).toEqual([bookmarks.direct]);
+    expect(await found(accounts.direct, { scope: "shared_with_me", q: "Direct" })).toEqual([bookmarks.direct]);
+    expect(await found(accounts.direct, { scope: "mine", q: "Direct" })).toEqual([]);
+    expect(await found(accounts.direct, { scope: "all", q: "Private" })).toEqual([]);
+    expect(await counted(accounts.direct, { scope: "all", q: "Direct" })).toBe(1);
+    expect(await counted(accounts.direct, { scope: "mine", q: "Direct" })).toBe(0);
     expect(await counted(accounts.owner, { scope: "shared_by_me", q: "Twice" })).toBe(1);
     expect(await counted(accounts.owner, { scope: "all", q: "Private", pinned: false })).toBe(1);
     expect(await counted(accounts.owner, { scope: "shared_with_me", q: "Twice" })).toBe(0);

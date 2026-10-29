@@ -4,6 +4,7 @@ import { bookmarkRepository, TenantContextError } from "../src/index.ts";
 import { listQuery } from "../src/repositories/bookmarks.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
+import { shareBookmark } from "./support/share-fixture.ts";
 import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 
 // The list of the bookmarks of a member narrowed by a text (doc 02 section 5.7, doc 04 section 6.2, doc 05 sections 2.4 and 3.3, doc 10 T1 and T2). The matches come from the system operation
@@ -379,5 +380,66 @@ describe("the bookmarks no list of a member may hold (T1, T2)", () => {
 
   it("never plans a list without a text for a filter that has one, so a text is never accepted and ignored", async () => {
     await expect(inTenant({ accountId: world.alice, workspaceId: world.few }, (tx) => Promise.resolve().then(() => listQuery(tx, { filter: { ownerId: world.alice, q: "widget" }, sort: "recent", after: undefined, limit: 1 })))).rejects.toThrow(/sys_bookmark_match/);
+  });
+});
+
+describe("a list with a text and the bookmarks shared with the caller", () => {
+  const request = (filter: BookmarkListFilter) => ({ filter, sort: "title_asc" as const, after: undefined, limit: 50 });
+
+  async function sharedWorld() {
+    const me = await account();
+    const owner = await account();
+    const w = await seedWorkspace(db, { name: "List search shared" });
+    await seedMember(db, { workspaceId: w, accountId: me });
+    await seedMember(db, { workspaceId: w, accountId: owner });
+    const rows = await asSystem(
+      db,
+      (tx) => tx<{ id: string; owner_id: string }[]>`
+        INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title)
+        VALUES (${freshId()}, ${w}, ${me}, 'https://example.com/m', 'https://example.com/m', 'example.com', 'Zebra planner mine'),
+               (${freshId()}, ${w}, ${owner}, 'https://example.com/s', 'https://example.com/s', 'example.com', 'Zebra planner shared'),
+               (${freshId()}, ${w}, ${owner}, 'https://example.com/p', 'https://example.com/p', 'example.com', 'Zebra planner private')
+        RETURNING id, owner_id`,
+    );
+    const own = rows.find((row) => row.owner_id === me)?.id ?? "";
+    const [shared, unshared] = rows.filter((row) => row.owner_id === owner).map((row) => row.id);
+    await shareBookmark(db, w, shared ?? "", owner, { accountId: me });
+    return { me, workspaceId: w, own, shared: shared ?? "", unshared: unshared ?? "" };
+  }
+
+  it("lists and counts the shared matches in the scopes all and shared_with_me and only the caller's own in mine", async () => {
+    const { me, workspaceId, own, shared, unshared } = await sharedWorld();
+    const tenant = { accountId: me, workspaceId };
+    const idsOf = async (scope?: "all" | "mine" | "shared_with_me") => {
+      const filter: BookmarkListFilter = { ownerId: me, q: "zebra", ...(scope === undefined ? {} : { scope }) };
+      const together = await inTenant(tenant, (tx) => bookmarkRepository(tx).listWithCount(request(filter), 100));
+      const apart = await inTenant(tenant, (tx) => bookmarkRepository(tx).list(request(filter)));
+      expect(together.rows.map((row) => row.bookmark.id)).toEqual(apart.map((row) => row.bookmark.id));
+      expect(together.count).toBe(together.rows.length);
+      expect(await inTenant(tenant, (tx) => bookmarkRepository(tx).count(filter, 100))).toBe(together.count);
+      return together.rows.map((row) => row.bookmark.id);
+    };
+
+    expect(await idsOf("all")).toEqual([own, shared]);
+    expect(await idsOf("shared_with_me")).toEqual([shared]);
+    expect(await idsOf("mine")).toEqual([own]);
+    expect(await idsOf()).toEqual([own]);
+    expect(await idsOf("all")).not.toContain(unshared);
+  });
+
+  it("keeps a list narrowed to the caller's folder, tags or pin to the caller's own bookmarks", async () => {
+    const { me, workspaceId, own } = await sharedWorld();
+    const tenant = { accountId: me, workspaceId };
+    const folderId = freshId();
+    await asSystem(db, async (tx) => {
+      await tx`INSERT INTO folders (id, workspace_id, owner_id, name) VALUES (${folderId}, ${workspaceId}, ${me}, 'Mine')`;
+      await tx`INSERT INTO folder_bookmarks (workspace_id, folder_id, bookmark_id) VALUES (${workspaceId}, ${folderId}, ${own})`;
+    });
+    const filter: BookmarkListFilter = { ownerId: me, q: "zebra", scope: "all", folderId };
+
+    const page = await inTenant(tenant, (tx) => bookmarkRepository(tx).listWithCount(request(filter), 100));
+
+    expect(page.rows.map((row) => row.bookmark.id)).toEqual([own]);
+    expect(page.count).toBe(1);
   });
 });

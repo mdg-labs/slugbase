@@ -85,6 +85,45 @@ describe("the demo instance", () => {
   });
 });
 
+describe("the slugs of the demo workspace", () => {
+  const admin = instance.accounts.find((account) => account.key === "admin")?.id;
+  const member = instance.accounts.find((account) => account.key === "member")?.id;
+  const slugsOf = (ownerId: string | undefined): string[] =>
+    demo.bookmarks
+      .filter((bookmark) => bookmark.ownerId === ownerId && bookmark.slug !== undefined && bookmark.slug !== null)
+      .map((bookmark) => bookmark.slug ?? "")
+      .sort();
+
+  it("collide across the two members: both have docs, mail and wiki, and each slug is the owner's alone", () => {
+    expect(slugsOf(admin)).toEqual(["docs", "mail", "standup", "wiki"]);
+    expect(slugsOf(member)).toEqual(["docs", "mail", "wiki"]);
+    expect(demo.bookmarks.filter((bookmark) => bookmark.slug !== undefined && bookmark.slug !== null).every((bookmark) => bookmark.forwarding === true)).toBe(true);
+    expect(demo.bookmarks.filter((bookmark) => bookmark.slug === undefined || bookmark.slug === null).every((bookmark) => bookmark.forwarding !== true)).toBe(true);
+  });
+
+  it("are shared with the member: mail and standup in a folder of the admin's shared with them, and wiki directly", () => {
+    const adminsBookmark = (slug: string): string | undefined => demo.bookmarks.find((bookmark) => bookmark.slug === slug && bookmark.ownerId === admin)?.id;
+    expect(demo.folders).toEqual([
+      { id: expect.any(String) as string, owner: "admin", name: "Team links", bookmarkIds: [adminsBookmark("mail"), adminsBookmark("standup")], shares: [{ id: expect.any(String) as string, target: "member" }] },
+    ]);
+    expect(demo.bookmarkShares).toEqual([{ id: expect.any(String) as string, bookmarkId: adminsBookmark("wiki"), granted: "admin", target: "member" }]);
+  });
+
+  it("add no bookmark and leave the rows they do not name as they were", () => {
+    expect(demo.bookmarks).toHaveLength(DEMO_BOOKMARK_COUNT);
+    expect(large.folders).toEqual([]);
+    expect(large.bookmarkShares).toEqual([]);
+    expect(large.bookmarks.every((bookmark) => bookmark.slug === undefined)).toBe(true);
+  });
+
+  it("are left out of a workspace too small to hold the filler", () => {
+    const tiny = buildDemoInstance({ demoBookmarks: 5, largeBookmarks: 1 }).workspaces[0];
+    expect(tiny?.bookmarks.every((bookmark) => bookmark.slug === undefined)).toBe(true);
+    expect(tiny?.folders).toEqual([]);
+    expect(tiny?.bookmarkShares).toEqual([]);
+  });
+});
+
 describe("the shapes that break a UI", () => {
   it("start every workspace's list, in the order of BOOKMARK_SHAPE_NAMES", () => {
     const names = bookmarkShapes({ random: createRandom(1), ids: createIds(createRandom(2), 0), owners: ["owner"], now: new Date(0) }).map((entry) => entry.name);

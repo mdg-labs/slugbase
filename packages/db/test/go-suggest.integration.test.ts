@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { goRepository, TenantContextError } from "../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
+import { seedTeam, shareBookmark, shareThroughFolder } from "./support/share-fixture.ts";
 import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 
 // The slug suggestions of the palette's go mode (doc 02 section 9.2, doc 04 section 10.8, doc 05 sections 3.3 and 4, doc 10 T1, T2 and T12). The failure scenario: a prefix of `%`
@@ -208,6 +209,91 @@ describe("the suggestions of a prefix", () => {
     }
 
     expect(await suggest(a, me, "cut", 2).then((found) => found.map((record) => record.slug))).toEqual(["cut-a", "cut-b"]);
+  });
+});
+
+describe("the suggestions of slugs that others share with the caller (T12)", () => {
+  it("name the caller's own first and then the shared ones by slug, with the owner and the route of each", async () => {
+    const me = await account();
+    const other = await account();
+    const a = await workspace("A", [me, other]);
+    const team = await seedTeam(db, a, [me]);
+    const own = await bookmark(a, me, "go-zz-own");
+    const direct = await bookmark(a, other, "go-a-direct", { title: "Direct" });
+    const viaTeam = await bookmark(a, other, "go-b-team");
+    const viaFolder = await bookmark(a, other, "go-c-folder");
+    await shareBookmark(db, a, direct, other, { accountId: me });
+    await shareBookmark(db, a, viaTeam, other, { teamId: team });
+    await shareThroughFolder(db, a, viaFolder, other, { accountId: me });
+
+    const found = await suggest(a, me, "go-");
+
+    expect(found.map((record) => [record.bookmarkId, record.access])).toEqual([[own, "owner"], [direct, "direct"], [viaTeam, "team"], [viaFolder, "folder"]]);
+    expect(found[1]).toEqual(expect.objectContaining({ slug: "go-a-direct", title: "Direct", host: "example.com", ownerId: other, ownerName: expect.any(String) as string }));
+    expect(await slugs(a, other, "go-")).toEqual(["go-a-direct", "go-b-team", "go-c-folder"]);
+  });
+
+  it("leave out a shared bookmark that does not forward, an archived one, one shared with another member or with a team the caller is not in, and one shared in another workspace", async () => {
+    const me = await account();
+    const stranger = await account();
+    const owner = await account();
+    const a = await workspace("A", [me, stranger, owner]);
+    const b = await workspace("B", [me, owner]);
+    const otherTeam = await seedTeam(db, a, [stranger]);
+    const shown = await bookmark(a, owner, "sh-shown");
+    const paused = await bookmark(a, owner, "sh-paused", { forwarding: false });
+    const archived = await bookmark(a, owner, "sh-archived", { archived: true });
+    const forStranger = await bookmark(a, owner, "sh-stranger");
+    const forTeam = await bookmark(a, owner, "sh-team");
+    const inTeamsFolder = await bookmark(a, owner, "sh-folder");
+    const elsewhere = await bookmark(b, owner, "sh-elsewhere");
+    for (const id of [shown, paused, archived]) {
+      await shareBookmark(db, a, id, owner, { accountId: me });
+    }
+    await shareBookmark(db, a, forStranger, owner, { accountId: stranger });
+    await shareBookmark(db, a, forTeam, owner, { teamId: otherTeam });
+    await shareThroughFolder(db, a, inTeamsFolder, owner, { teamId: otherTeam });
+    await shareBookmark(db, b, elsewhere, owner, { accountId: me });
+
+    expect(await slugs(a, me, "sh-")).toEqual(["sh-shown"]);
+    expect(await slugs(b, me, "sh-")).toEqual(["sh-elsewhere"]);
+    expect(await slugs(a, stranger, "sh-")).toEqual(["sh-folder", "sh-stranger", "sh-team"]);
+  });
+
+  it("find the shared ones among fifty and more candidates of other members that are not the caller's to read, and give the caller's own the places first", async () => {
+    const me = await account();
+    const other = await account();
+    const owner = await account();
+    const a = await workspace("A", [me, other, owner]);
+    await asSystem(
+      db,
+      (tx) => tx`
+        INSERT INTO bookmarks (id, workspace_id, owner_id, url, url_canonical, host, title, slug, forwarding)
+        SELECT gen_random_uuid(), ${a}, ${other}, 'https://example.com/o' || n, 'https://example.com/o' || n, 'example.com', 'Theirs', 'wide-' || lpad(n::text, 3, '0'), true
+        FROM generate_series(1, 60) AS n`,
+    );
+    const shared = await bookmark(a, owner, "wide-zzz");
+    await shareBookmark(db, a, shared, owner, { accountId: me });
+    for (let n = 0; n < 10; n += 1) {
+      await bookmark(a, me, `wide-own-${String(n)}`);
+    }
+
+    expect(await slugs(a, me, "wide-z")).toEqual(["wide-zzz"]);
+    expect(await slugs(a, me, "wide")).toEqual(Array.from({ length: 10 }, (_, n) => `wide-own-${String(n)}`));
+    expect((await slugs(a, owner, "wide-z"))).toEqual(["wide-zzz"]);
+  });
+
+  it("name a bookmark that two routes give once", async () => {
+    const me = await account();
+    const owner = await account();
+    const a = await workspace("A", [me, owner]);
+    const team = await seedTeam(db, a, [me]);
+    const both = await bookmark(a, owner, "twice-1");
+    await shareBookmark(db, a, both, owner, { teamId: team });
+    await shareBookmark(db, a, both, owner, { accountId: me });
+    await shareThroughFolder(db, a, both, owner, { accountId: me });
+
+    expect((await suggest(a, me, "twice")).map((record) => [record.bookmarkId, record.access])).toEqual([[both, "direct"]]);
   });
 });
 

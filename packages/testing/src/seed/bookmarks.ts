@@ -21,6 +21,10 @@ export interface SeedBookmark {
   readonly openCount: number;
   readonly lastOpenedAt: Date | null;
   readonly createdAt: Date;
+  /** The private slug of the bookmark, when the seed gives it one. */
+  readonly slug?: string | null;
+  /** Whether `/go/<slug>` forwards to it; only a bookmark with a slug does. */
+  readonly forwarding?: boolean;
 }
 
 /** The named shapes every bookmark list of the seed starts with. */

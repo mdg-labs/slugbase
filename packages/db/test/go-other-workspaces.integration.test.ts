@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { goRepository, TenantContextError } from "../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
+import { seedTeam, shareBookmark, shareThroughFolder } from "./support/share-fixture.ts";
 import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 
 // The other workspaces of a member in which a slug that resolves to nothing in the active workspace would resolve (doc 02 section 6.2 step 3.5, doc 05 sections 3.3
@@ -206,5 +207,63 @@ describe("the system operation", () => {
 
     expect(await callAs(me, a, SLUG)).toEqual([{ workspace_id: mine, workspace_name: "Mine" }]);
     expect(await callAs(other, a, SLUG)).toEqual([{ workspace_id: theirs, workspace_name: "Theirs" }]);
+  });
+});
+
+describe("the other workspaces of a slug that others share with the caller", () => {
+  it("name a workspace in which the slug is shared with the caller directly, through a team, through a folder or through a folder shared with a team", async () => {
+    const me = await account();
+    const owner = await account();
+    const a = await workspace("A", [me]);
+    const direct = await workspace("Direct", [me, owner]);
+    const viaTeam = await workspace("Team", [me, owner]);
+    const viaFolder = await workspace("Folder", [me, owner]);
+    const viaTeamFolder = await workspace("Team folder", [me, owner]);
+    await shareBookmark(db, direct, await bookmark(direct, owner), owner, { accountId: me });
+    await shareBookmark(db, viaTeam, await bookmark(viaTeam, owner), owner, { teamId: await seedTeam(db, viaTeam, [me]) });
+    await shareThroughFolder(db, viaFolder, await bookmark(viaFolder, owner), owner, { accountId: me });
+    await shareThroughFolder(db, viaTeamFolder, await bookmark(viaTeamFolder, owner), owner, { teamId: await seedTeam(db, viaTeamFolder, [me]) });
+
+    expect(await elsewhere(a, me)).toEqual([
+      { id: direct, name: "Direct" },
+      { id: viaFolder, name: "Folder" },
+      { id: viaTeam, name: "Team" },
+      { id: viaTeamFolder, name: "Team folder" },
+    ]);
+  });
+
+  it("name no workspace in which the slug is a bookmark that does not forward, an archived one, one shared with another member or with a team the caller is not in, or one that is not filed in the shared folder", async () => {
+    const me = await account();
+    const owner = await account();
+    const stranger = await account();
+    const a = await workspace("A", [me]);
+    const paused = await workspace("Paused", [me, owner]);
+    const archived = await workspace("Archived", [me, owner]);
+    const forStranger = await workspace("Stranger", [me, owner, stranger]);
+    const forOtherTeam = await workspace("Other team", [me, owner, stranger]);
+    const inOtherTeamsFolder = await workspace("Other team folder", [me, owner, stranger]);
+    const unshared = await workspace("Unshared", [me, owner]);
+    await shareBookmark(db, paused, await bookmark(paused, owner, { forwarding: false }), owner, { accountId: me });
+    await shareBookmark(db, archived, await bookmark(archived, owner, { archived: true }), owner, { accountId: me });
+    await shareBookmark(db, forStranger, await bookmark(forStranger, owner), owner, { accountId: stranger });
+    await shareBookmark(db, forOtherTeam, await bookmark(forOtherTeam, owner), owner, { teamId: await seedTeam(db, forOtherTeam, [stranger]) });
+    await shareThroughFolder(db, inOtherTeamsFolder, await bookmark(inOtherTeamsFolder, owner), owner, { teamId: await seedTeam(db, inOtherTeamsFolder, [stranger]) });
+    await bookmark(unshared, owner);
+
+    expect(await elsewhere(a, me)).toEqual([]);
+  });
+
+  it("end with the share: the workspace is named while the share lasts and not after it is revoked", async () => {
+    const me = await account();
+    const owner = await account();
+    const a = await workspace("A", [me]);
+    const b = await workspace("B", [me, owner]);
+    const shared = await bookmark(b, owner);
+    await shareBookmark(db, b, shared, owner, { accountId: me });
+    expect(await elsewhere(a, me)).toEqual([{ id: b, name: "B" }]);
+
+    await asSystem(db, (tx) => tx`DELETE FROM bookmark_shares WHERE bookmark_id = ${shared}`);
+
+    expect(await elsewhere(a, me)).toEqual([]);
   });
 });

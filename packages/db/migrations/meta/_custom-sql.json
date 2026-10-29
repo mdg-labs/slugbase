@@ -1,4 +1,4 @@
 {
-  "sha256": "6da4304c802047f2d1cede1af987324034ad30b6e558c261e3898e3f8d98e58b",
-  "migration": "20261029114712_add_invitation_teams"
+  "sha256": "8484adaa4d180f7941787616c1d6571bd1533cf780587f7a8d1115e405fc80e8",
+  "migration": "20261029172118_add_go_sharing"
 }

@@ -6,23 +6,20 @@ import { teamMembers } from "../schema/teams.ts";
 import { uuidArray } from "./folder-links.ts";
 
 // The access predicate of doc 05 section 4: which bookmarks of the workspace an account can read. It is written once, here, so every query that asks whether an account
-// can read a bookmark (the lookup, the open and the lists of `bookmarks.ts`, the favicon host check, and the candidates of `/go` once its item moves to it) asks it the
+// can read a bookmark (the lookup, the open and the lists of `bookmarks.ts`, the favicon host check, and the candidates of `/go`) asks it the
 // same way and a change to the rules of reading is made in one place. A bookmark is readable by its owner, and by an account it is shared with: directly, through a
 // team the account is in, or through a folder it is filed in that is shared with the account or with such a team (doc 02 section 8.2). A grant is read in every case
 // from the same four statements (`grantsTo`), whether a statement asks about one bookmark (`bookmarkReadableBy`, a correlated `EXISTS`) or lists everything an account
 // is granted (`sharedBookmarks`, the set a list is driven from), so a row is readable through a route exactly when the list shows it. A route that two grants give counts
-// once. The fragment never reads a plan-archived bookmark out: that is the statement's own condition, as it is for the owner's bookmarks.
+// once. The fragment never reads a plan-archived bookmark out: that is the statement's own condition, as it is for the owner's bookmarks. The system operations
+// `sys_search`, `sys_go_suggest` and `sys_go_other_workspaces` run as `slugbase_system` and state the same rule in SQL (src/sql/580, 590 and 600); a change to the rules
+// of reading is made there too.
 //
-// A row is named by the columns the rules read. A row that names its owner alone (`BookmarkRow`) can only be asked about ownership, which is the rule the
-// candidate scan of `/go` applies until its item takes it to the full predicate; every other caller names the identifier and the workspace as well (`SharableBookmarkRow`).
+// A row is named by the columns the rules read: its owner, its identifier and its workspace.
 
-/** The columns of the bookmark row a statement applies the predicate to: those of `bookmarks`, or of a subquery that selects them. This one names the owner alone. */
-export interface BookmarkRow {
+/** The columns of the bookmark row a statement applies the predicate to: those of `bookmarks`, or of a subquery that selects them. */
+export interface SharableBookmarkRow {
   readonly ownerId: SQL;
-}
-
-/** A row that names the identifier and the workspace of the bookmark as well as its owner, so the shares can be asked about. */
-export interface SharableBookmarkRow extends BookmarkRow {
   readonly id: SQL;
   readonly workspaceId: SQL;
 }
@@ -57,14 +54,18 @@ function grantsTo(accountId: string, workspaceId: SQL): SQL {
 }
 
 /** The condition that `accountId` can read `row`: it owns it, or it is shared with the account. `accountId` is a UUID, bound as a parameter. */
-export function bookmarkReadableBy(accountId: string, row?: SharableBookmarkRow): SQL;
-/** The condition that `accountId` owns `row`, for a row that names no more than its owner (the candidates of `/go`). */
-export function bookmarkReadableBy(accountId: string, row: BookmarkRow): SQL;
-export function bookmarkReadableBy(accountId: string, row: BookmarkRow | SharableBookmarkRow = BOOKMARKS_TABLE): SQL {
-  if (!("id" in row)) {
-    return sql`${row.ownerId} = ${accountId}::uuid`;
-  }
+export function bookmarkReadableBy(accountId: string, row: SharableBookmarkRow = BOOKMARKS_TABLE): SQL {
   return sql`(${row.ownerId} = ${accountId}::uuid OR EXISTS (SELECT 1 FROM (${grantsTo(accountId, row.workspaceId)}) g WHERE g.bookmark_id = ${row.id}))`;
+}
+
+/**
+ * How `accountId` reads `row`, as a scalar: `owner` for its own bookmark, otherwise the route of a share that gives it, the direct share before the team's before the folder's
+ * (the order of `sharedViaOf`); NULL when no route does. For the few rows a statement has already narrowed to (the candidates of a slug), not for a list.
+ */
+export function bookmarkAccessOf(accountId: string, row: SharableBookmarkRow): SQL {
+  return sql`(CASE WHEN ${row.ownerId} = ${accountId}::uuid THEN 'owner'
+    ELSE (SELECT g.via FROM (${grantsTo(accountId, row.workspaceId)}) g WHERE g.bookmark_id = ${row.id}
+          ORDER BY CASE g.via WHEN 'direct' THEN 0 WHEN 'team' THEN 1 ELSE 2 END LIMIT 1) END)`;
 }
 
 /**

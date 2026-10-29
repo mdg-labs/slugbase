@@ -8,7 +8,7 @@ import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
 //
 // Bookmarks are searched by the system operation `sys_search` (src/sql/590-search.sql): the policy of `bookmarks` is FORCEd and none of the operators of the search is leakproof, so
 // as slugbase_app the indexes of the search would serve the workspace alone. The operation takes the workspace and the account from the transaction, never from an argument, and
-// answers the account's own, not plan-archived bookmarks, ranked; this repository passes it the text and the limit and nothing else.
+// answers the bookmarks the account can read (its own, and those shared with it, as `bookmarkReadableBy` says) that are not plan-archived, ranked; this repository passes it the text and the limit and nothing else.
 //
 // Folders and tags are the caller's own and few: a statement names the workspace and the owner as well as the policy, which puts it on the owner's names in the unique key
 // `(workspace_id, owner_id, name)`, and a name matches when it contains the text, without regard to case, the characters `LIKE` reads as wildcards escaped. An exact name comes

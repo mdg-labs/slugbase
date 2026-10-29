@@ -324,7 +324,7 @@ describe.each(BOOKMARK_SORTS)("the page of the list sorted by %s on a workspace 
 
 describe("the count of the list with a text on a workspace of 50 000 bookmarks", () => {
   it.each([...FEW, ...MANY])("calls the function once and counts what it answers, probing no bookmark, for a text and nothing else (%s)", async (text) => {
-    const statement = await inTenant((tx) => Promise.resolve(planned(matchedCountStatement(tx, { ownerId: accountId, q: text }, 10_001))));
+    const statement = await inTenant((tx) => Promise.resolve(planned(matchedCountStatement(tx, { ownerId: accountId, q: text, scope: "all" }, 10_001))));
 
     const nodes = await analyse(statement);
 
@@ -376,7 +376,7 @@ async function functionCallsOf<T>(work: (repository: ReturnType<typeof bookmarkR
 
 describe("the page of the list with a text and its count, read together on a workspace of 50 000 bookmarks", () => {
   it.each([...FEW, ...MANY])("calls the function once for a text and nothing else, and answers what the page and the count answer apart (%s)", async (text) => {
-    const filter = { ownerId: accountId, q: text };
+    const filter = { ownerId: accountId, q: text, scope: "all" as const };
     const request: BookmarkListRequest = { filter, sort: "recent", after: undefined, limit: PAGE + 1 };
 
     const together = await functionCallsOf((repository) => repository.listWithCount(request, 10_001));
@@ -387,12 +387,12 @@ describe("the page of the list with a text and its count, read together on a wor
   });
 
   it("counts an empty page with the one call of the function too: a page after the last match and the page of a text nothing matches", async () => {
-    const nothing = await functionCallsOf((repository) => repository.listWithCount({ filter: { ownerId: accountId, q: "zzzq" }, sort: "recent", after: undefined, limit: PAGE + 1 }, 10_001));
+    const nothing = await functionCallsOf((repository) => repository.listWithCount({ filter: { ownerId: accountId, q: "zzzq", scope: "all" }, sort: "recent", after: undefined, limit: PAGE + 1 }, 10_001));
     expect(nothing).toEqual({ result: { rows: [], count: 0 }, calls: 1 });
 
-    const last = await inTenant((tx) => bookmarkRepository(tx).list({ filter: { ownerId: accountId, q: "gh" }, sort: "recent", after: undefined, limit: 1000 }));
+    const last = await inTenant((tx) => bookmarkRepository(tx).list({ filter: { ownerId: accountId, q: "gh", scope: "all" }, sort: "recent", after: undefined, limit: 1000 }));
     const end = last.at(-1);
-    const request: BookmarkListRequest = { filter: { ownerId: accountId, q: "gh" }, sort: "recent", after: end === undefined ? undefined : { key: end.key, id: end.bookmark.id }, limit: PAGE + 1 };
+    const request: BookmarkListRequest = { filter: { ownerId: accountId, q: "gh", scope: "all" }, sort: "recent", after: end === undefined ? undefined : { key: end.key, id: end.bookmark.id }, limit: PAGE + 1 };
 
     const { result, calls } = await functionCallsOf((repository) => repository.listWithCount(request, 10_001));
 

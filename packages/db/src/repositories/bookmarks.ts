@@ -523,8 +523,8 @@ export function countQuery(tx: TenantTx, filter: BookmarkListFilter, limit: numb
 }
 
 // A list with a text query (`filter.q`) reads the bookmarks that match through the system operation `sys_bookmark_match` (src/sql/610-bookmark-match.sql): the policy of `bookmarks` is
-// FORCEd and the operators of the search are not leakproof, so as slugbase_app they would never be index conditions. The operation answers the identifiers of the caller's own, not
-// plan-archived matches and nothing else, as one materialised set that the statement below reads once; every other predicate of the list (the filters, the keyset, the owner, the
+// FORCEd and the operators of the search are not leakproof, so as slugbase_app they would never be index conditions. The operation answers the identifiers of the matches that the caller can read (their own and those shared with them), not
+// plan-archived, and nothing else, as one materialised set that the statement below reads once; every other predicate of the list (the scope, the filters, the keyset, the owner, the
 // workspace and the archive state) is still the statement's own, and the policy applies to every row it reads.
 //
 // The cost of the page depends on how many bookmarks match, and the statement does not know that before it runs, so it holds both plans and runs the one that is cheap for the
@@ -576,15 +576,16 @@ export function matchedPageStatement(tx: TenantTx, { filter, sort, after, limit 
 }
 
 /**
- * The filter is a text query and nothing else, the owner is the account of the transaction and the scope is the account's own or its own with the shared ones (`all`): the bookmarks it matches
- * are exactly the answer of `sys_bookmark_match`, which applies the workspace, the account and the plan-archive rule itself, so the answer can be counted without reading the bookmarks. Any
- * other filter narrows the answer by a predicate of the statement, and an owner other than the account matches nothing, so those are counted by probing.
+ * The filter is a text query and nothing else, the owner is the account of the transaction and the scope is the account's own with the shared ones (`all`): the bookmarks it matches
+ * are exactly the answer of `sys_bookmark_match`, which applies the workspace, the account, the access rule and the plan-archive rule itself, so the answer can be counted without reading the
+ * bookmarks. Any other filter narrows the answer by a predicate of the statement (the scope `mine` leaves out the shared matches), and an owner other than the account matches nothing, so those
+ * are counted by probing.
  */
 function matchesAreTheAnswer(tx: TenantTx, filter: BookmarkListFilter): boolean {
   return (
     filter.q !== undefined &&
     filter.ownerId.toLowerCase() === tx.accountId.toLowerCase() &&
-    (filter.scope === undefined || filter.scope === "mine" || filter.scope === "all") &&
+    filter.scope === "all" &&
     filter.pinned === undefined &&
     filter.hasSlug === undefined &&
     filter.forwarding === undefined &&

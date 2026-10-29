@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { resolveSlug } from "@slugbase/core";
 import { goRepository, TenantContextError } from "../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
+import { seedTeam, shareBookmark, shareThroughFolder } from "./support/share-fixture.ts";
 import { seedMember, seedWorkspace } from "./support/workspace-fixture.ts";
 
 // The candidates of a slug, the remembered choice and the table behind it (doc 05 sections 2.6 and 4, doc 02 sections 6.2 to 6.4, doc 10 T1, T2 and
@@ -14,6 +16,9 @@ const HOOK_TIMEOUT_MS = 300_000;
 const ROW_LEVEL_SECURITY = "42501";
 
 let db: TestDatabase;
+
+/** A matcher for an object that has at least these fields. */
+const like = (fields: Record<string, unknown>): unknown => expect.objectContaining(fields);
 
 beforeAll(async () => {
   db = await createTestDatabase();
@@ -200,6 +205,184 @@ describe("the candidates of a slug", () => {
   });
 });
 
+describe("the candidates of a slug that others share with the caller (T12)", () => {
+  function candidatesOf(workspace: Workspace, accountId: string, slug = "mail") {
+    return inTenant(workspace.id, accountId, (tx) => goRepository(tx).candidates({ slug, accountId }));
+  }
+
+  it("include the bookmark shared directly, through a team, through a folder and through a folder shared with a team, each with the route that gives it and the owner's address", async () => {
+    const workspace = await workspaceOf();
+    const team = await seedTeam(db, workspace.id, [workspace.me]);
+    const direct = await seedBookmark(workspace.id, { ownerId: workspace.other, slug: "direct", url: "https://example.com/direct" });
+    const viaTeam = await seedBookmark(workspace.id, { ownerId: workspace.other, slug: "team", url: "https://example.com/team" });
+    const viaFolder = await seedBookmark(workspace.id, { ownerId: workspace.other, slug: "folder", url: "https://example.com/folder" });
+    const viaTeamFolder = await seedBookmark(workspace.id, { ownerId: workspace.other, slug: "teamfolder", url: "https://example.com/teamfolder" });
+    await shareBookmark(db, workspace.id, direct, workspace.other, { accountId: workspace.me });
+    await shareBookmark(db, workspace.id, viaTeam, workspace.other, { teamId: team });
+    await shareThroughFolder(db, workspace.id, viaFolder, workspace.other, { accountId: workspace.me });
+    await shareThroughFolder(db, workspace.id, viaTeamFolder, workspace.other, { teamId: team });
+
+    expect((await candidatesOf(workspace, workspace.me, "direct")).candidates).toEqual([{ id: direct, ownerId: workspace.other, url: "https://example.com/direct", access: "direct" }]);
+    expect((await candidatesOf(workspace, workspace.me, "team")).candidates).toEqual([{ id: viaTeam, ownerId: workspace.other, url: "https://example.com/team", access: "team" }]);
+    expect((await candidatesOf(workspace, workspace.me, "folder")).candidates).toEqual([{ id: viaFolder, ownerId: workspace.other, url: "https://example.com/folder", access: "folder" }]);
+    expect((await candidatesOf(workspace, workspace.me, "teamfolder")).candidates).toEqual([{ id: viaTeamFolder, ownerId: workspace.other, url: "https://example.com/teamfolder", access: "folder" }]);
+  });
+
+  it("name a bookmark that two routes give once, by the first route in the order direct, team, folder", async () => {
+    const workspace = await workspaceOf();
+    const team = await seedTeam(db, workspace.id, [workspace.me]);
+    const both = await seedBookmark(workspace.id, { ownerId: workspace.other, slug: "mail" });
+    await shareThroughFolder(db, workspace.id, both, workspace.other, { accountId: workspace.me });
+    await shareBookmark(db, workspace.id, both, workspace.other, { teamId: team });
+
+    expect((await candidatesOf(workspace, workspace.me)).candidates).toEqual([like({ id: both, access: "team" })]);
+    await shareBookmark(db, workspace.id, both, workspace.other, { accountId: workspace.me });
+    expect((await candidatesOf(workspace, workspace.me)).candidates).toEqual([like({ id: both, access: "direct" })]);
+  });
+
+  it("leave out a shared bookmark that does not forward, an archived one, one shared with another member, one shared with a team the caller is not in, one in a folder shared with that team and one shared in another workspace", async () => {
+    const workspace = await workspaceOf();
+    const elsewhere = await workspaceOf();
+    await seedMember(db, { workspaceId: elsewhere.id, accountId: workspace.me, role: "member" });
+    // A slug is unique among one member's bookmarks, so each bookmark with the slug below is a different member's.
+    const colleague = async (): Promise<string> => {
+      const accountId = await account();
+      await seedMember(db, { workspaceId: workspace.id, accountId, role: "member" });
+      return accountId;
+    };
+    const stranger = await colleague();
+    const otherTeam = await seedTeam(db, workspace.id, [stranger, workspace.other]);
+    const [pausedBy, archivedBy, strangerBy, teamBy, teamFolderBy, unsharedFolderBy] = [await colleague(), await colleague(), await colleague(), await colleague(), await colleague(), await colleague()];
+    const paused = await seedBookmark(workspace.id, { ownerId: pausedBy, slug: "mail", forwarding: false });
+    const archived = await seedBookmark(workspace.id, { ownerId: archivedBy, slug: "mail", archived: true });
+    const forStranger = await seedBookmark(workspace.id, { ownerId: strangerBy, slug: "mail" });
+    const forOtherTeam = await seedBookmark(workspace.id, { ownerId: teamBy, slug: "mail" });
+    const inOtherTeamsFolder = await seedBookmark(workspace.id, { ownerId: teamFolderBy, slug: "mail" });
+    const filedUnshared = await seedBookmark(workspace.id, { ownerId: unsharedFolderBy, slug: "mail" });
+    const inElsewhere = await seedBookmark(elsewhere.id, { ownerId: elsewhere.other, slug: "mail" });
+    await shareBookmark(db, workspace.id, paused, pausedBy, { accountId: workspace.me });
+    await shareBookmark(db, workspace.id, archived, archivedBy, { accountId: workspace.me });
+    await shareBookmark(db, workspace.id, forStranger, strangerBy, { accountId: stranger });
+    await shareBookmark(db, workspace.id, forOtherTeam, teamBy, { teamId: otherTeam });
+    await shareThroughFolder(db, workspace.id, inOtherTeamsFolder, teamFolderBy, { teamId: otherTeam });
+    await asSystem(db, async (tx) => {
+      const folder = freshId();
+      await tx`INSERT INTO folders (id, workspace_id, owner_id, name) VALUES (${folder}, ${workspace.id}, ${unsharedFolderBy}, 'Not shared')`;
+      await tx`INSERT INTO folder_bookmarks (workspace_id, folder_id, bookmark_id) VALUES (${workspace.id}, ${folder}, ${filedUnshared})`;
+    });
+    await shareBookmark(db, elsewhere.id, inElsewhere, elsewhere.other, { accountId: workspace.me });
+
+    expect(await candidatesOf(workspace, workspace.me)).toEqual({ candidates: [], preferredId: undefined });
+    for (const bookmarkId of [paused, archived, forStranger, forOtherTeam, inOtherTeamsFolder, filedUnshared, inElsewhere]) {
+      expect(await inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).remember({ slug: "mail", bookmarkId, accountId: workspace.me })), bookmarkId).toBe(false);
+    }
+    expect(await preferences(workspace.id)).toEqual([]);
+    expect((await candidatesOf(workspace, stranger)).candidates.map((candidate) => candidate.id).toSorted()).toEqual([forStranger, forOtherTeam, inOtherTeamsFolder].toSorted());
+  });
+
+  it("stop at the end of the share: a revoked share, a member who left the team and a bookmark taken out of the shared folder", async () => {
+    const workspace = await workspaceOf();
+    const team = await seedTeam(db, workspace.id, [workspace.me]);
+    const shared = await seedBookmark(workspace.id, { ownerId: workspace.other, slug: "direct" });
+    const viaTeam = await seedBookmark(workspace.id, { ownerId: workspace.other, slug: "team" });
+    const viaFolder = await seedBookmark(workspace.id, { ownerId: workspace.other, slug: "folder" });
+    await shareBookmark(db, workspace.id, shared, workspace.other, { accountId: workspace.me });
+    await shareBookmark(db, workspace.id, viaTeam, workspace.other, { teamId: team });
+    const folder = await shareThroughFolder(db, workspace.id, viaFolder, workspace.other, { accountId: workspace.me });
+    for (const slug of ["direct", "team", "folder"]) {
+      expect((await candidatesOf(workspace, workspace.me, slug)).candidates, slug).toHaveLength(1);
+    }
+
+    await asSystem(db, async (tx) => {
+      await tx`DELETE FROM bookmark_shares WHERE bookmark_id = ${shared}`;
+      await tx`DELETE FROM team_members WHERE team_id = ${team}`;
+      await tx`DELETE FROM folder_bookmarks WHERE folder_id = ${folder}`;
+    });
+
+    for (const slug of ["direct", "team", "folder"]) {
+      expect((await candidatesOf(workspace, workspace.me, slug)).candidates, slug).toEqual([]);
+    }
+  });
+
+  it("are the caller's own and the shared ones together, and the caller's choice among them can be remembered and is forgotten when the access ends", async () => {
+    const workspace = await workspaceOf();
+    const mine = await seedBookmark(workspace.id, { ownerId: workspace.me, slug: "mail", title: "Mine" });
+    const theirs = await seedBookmark(workspace.id, { ownerId: workspace.other, slug: "mail", title: "Theirs" });
+    await shareBookmark(db, workspace.id, theirs, workspace.other, { accountId: workspace.me });
+
+    const found = await candidatesOf(workspace, workspace.me);
+    expect(found.candidates.map((candidate) => [candidate.id, candidate.access]).toSorted()).toEqual([[mine, "owner"], [theirs, "direct"]].toSorted());
+    await rememberFor(workspace, workspace.me, "mail", theirs);
+    expect((await candidatesOf(workspace, workspace.me)).preferredId).toBe(theirs);
+    expect((await candidatesOf(workspace, workspace.other)).candidates).toEqual([like({ id: theirs, access: "owner" })]);
+
+    await asSystem(db, (tx) => tx`DELETE FROM bookmark_shares WHERE bookmark_id = ${theirs}`);
+    expect(await inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).forgetStale({ slug: "mail", bookmarkId: theirs, accountId: workspace.me }))).toBe(true);
+    expect(await preferences(workspace.id)).toEqual([]);
+  });
+
+  it("name the shared bookmark's title, host and owner in the summaries, and none of an unshared one", async () => {
+    const workspace = await workspaceOf();
+    const shared = await seedBookmark(workspace.id, { ownerId: workspace.other, slug: "mail", title: "Shared mail" });
+    const unshared = await seedBookmark(workspace.id, { ownerId: workspace.other, slug: "private", title: "Private" });
+    await shareBookmark(db, workspace.id, shared, workspace.other, { accountId: workspace.me });
+
+    const summaries = await inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).summaries([shared, unshared]));
+
+    expect(summaries).toEqual([like({ id: shared, title: "Shared mail", ownerId: workspace.other, ownerName: expect.any(String) as string })]);
+  });
+});
+
+describe("the resolution of a slug through the store, with shared candidates (Q25)", () => {
+  function resolve(workspace: Workspace, accountId: string, slug = "mail") {
+    return db.tenant.withTenant({ accountId, workspaceId: workspace.id, requestId: "go-resolution-test" }, (tx) => resolveSlug({ store: goRepository(tx) }, { accountId, slug }));
+  }
+
+  it("keeps a shared `mail` from breaking the caller's own `mail`", async () => {
+    const workspace = await workspaceOf();
+    const mine = await seedBookmark(workspace.id, { ownerId: workspace.me, slug: "mail", title: "Mine" });
+    const theirs = await seedBookmark(workspace.id, { ownerId: workspace.other, slug: "mail", title: "Theirs" });
+    await shareBookmark(db, workspace.id, theirs, workspace.other, { accountId: workspace.me });
+
+    expect(await resolve(workspace, workspace.me)).toEqual({ kind: "single", bookmark: like({ id: mine, sharedVia: null, owner: null }) });
+  });
+
+  it("follows the one shared candidate, and offers several shared ones with their title, host, owner and route", async () => {
+    const workspace = await workspaceOf();
+    const third = await account();
+    await seedMember(db, { workspaceId: workspace.id, accountId: third, role: "member" });
+    const team = await seedTeam(db, workspace.id, [workspace.me]);
+    const first = await seedBookmark(workspace.id, { ownerId: workspace.other, slug: "mail", title: "B mail" });
+    const second = await seedBookmark(workspace.id, { ownerId: third, slug: "mail", title: "A mail" });
+    await shareBookmark(db, workspace.id, first, workspace.other, { accountId: workspace.me });
+
+    expect(await resolve(workspace, workspace.me)).toEqual({ kind: "single", bookmark: like({ id: first, sharedVia: "direct", owner: { accountId: workspace.other, displayName: expect.any(String) as string } }) });
+
+    await shareBookmark(db, workspace.id, second, third, { teamId: team });
+    const several = await resolve(workspace, workspace.me);
+
+    expect(several).toEqual({
+      kind: "multiple",
+      candidates: [
+        like({ id: second, title: "A mail", host: "example.com", sharedVia: "team", owner: { accountId: third, displayName: expect.any(String) as string } }),
+        like({ id: first, title: "B mail", host: "example.com", sharedVia: "direct", owner: { accountId: workspace.other, displayName: expect.any(String) as string } }),
+      ],
+    });
+  });
+
+  it("prefers the remembered shared bookmark over the caller's own, and finds nothing where nothing readable has the slug", async () => {
+    const workspace = await workspaceOf();
+    await seedBookmark(workspace.id, { ownerId: workspace.me, slug: "mail", title: "Mine" });
+    const theirs = await seedBookmark(workspace.id, { ownerId: workspace.other, slug: "mail", title: "Theirs" });
+    await seedBookmark(workspace.id, { ownerId: workspace.other, slug: "private", title: "Private" });
+    await shareBookmark(db, workspace.id, theirs, workspace.other, { accountId: workspace.me });
+    await rememberFor(workspace, workspace.me, "mail", theirs);
+
+    expect(await resolve(workspace, workspace.me)).toEqual({ kind: "preferred", bookmark: like({ id: theirs, sharedVia: "direct" }) });
+    expect(await resolve(workspace, workspace.me, "private")).toEqual({ kind: "none", otherWorkspaces: [] });
+  });
+});
+
 describe("remembering a choice", () => {
   it("stores one preference for the account and the slug, and choosing again leaves it as it is", async () => {
     const workspace = await workspaceOf();
@@ -352,7 +535,7 @@ describe("the summaries of candidates", () => {
 
     const summaries = await inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).summaries([mine, theirs, ownerless, freshId()]));
 
-    expect(summaries).toEqual([expect.objectContaining({ id: mine, title: "Mail", host: "example.com", ownerId: workspace.me })]);
+    expect(summaries).toEqual([like({ id: mine, title: "Mail", host: "example.com", ownerId: workspace.me })]);
     expect(await inTenant(workspace.id, workspace.me, (tx) => goRepository(tx).summaries([]))).toEqual([]);
   });
 });

@@ -80,12 +80,60 @@ describe("the large instance", () => {
     expect(instance.fixtures.folderIds.length).toBeGreaterThan(0);
   });
 
+  it("shares forwarding bookmarks of the members with the first account by every route, so its slugs collide with shared ones (doc 02 section 6.3)", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
+    const admin = instance.accounts.find((account) => account.email === instance.fixtures.email);
+    const [first, second] = instance.accounts.filter((account) => account.email.startsWith("perf-member-"));
+    if (admin === undefined || first === undefined || second === undefined) {
+      throw new Error("the large instance has an owner and two members");
+    }
+    const byId = new Map(large.bookmarks.map((bookmark) => [bookmark.id, bookmark]));
+    const [team] = large.teams;
+    expect(large.teams).toHaveLength(1);
+    expect(team?.memberIds.toSorted()).toEqual([admin.id, first.id, second.id].toSorted());
+    const direct = large.bookmarkShares.filter((share) => share.accountId === admin.id);
+    const viaTeam = large.bookmarkShares.filter((share) => share.teamId === team?.id);
+    const viaFolder = large.folderShares.filter((share) => share.accountId === admin.id);
+    expect(direct).toHaveLength(2 + 1 + 2 * 40);
+    expect(viaTeam).toHaveLength(2 * 40);
+    expect(viaFolder).toHaveLength(2);
+    for (const share of large.bookmarkShares) {
+      const bookmark = byId.get(share.subjectId);
+      expect(bookmark?.ownerId, share.subjectId).toBe(share.grantedBy);
+      expect(bookmark?.forwarding).toBe(true);
+      expect([share.accountId === null, share.teamId === null].filter(Boolean)).toHaveLength(1);
+    }
+    const folders = new Map(large.folders.map((folder) => [folder.id, folder.ownerId]));
+    for (const share of viaFolder) {
+      expect(folders.get(share.subjectId)).toBe(share.grantedBy);
+    }
+    const slugsOf = (ids: Iterable<string>): Set<string | null> => new Set([...ids].map((id) => byId.get(id)?.slug ?? null));
+    const owners = new Set(large.bookmarks.filter((bookmark) => bookmark.ownerId === admin.id && bookmark.forwarding).map((bookmark) => bookmark.slug));
+    // The owner's own slugs collide with the shared ones, which the scenarios resolve: the owner's comes first.
+    expect(instance.fixtures.collidingSlugs.length).toBeGreaterThan(10);
+    expect(instance.fixtures.collidingSlugs.every((slug) => owners.has(slug) && slugsOf(large.bookmarkShares.map((share) => share.subjectId)).has(slug) || large.folderBookmarks.some((link) => byId.get(link.bookmarkId)?.slug === slug))).toBe(true);
+    // One slug is shared by one member, one by both, and the owner has neither.
+    expect(instance.fixtures.sharedSlugs).toEqual(["perf-shared-one"]);
+    expect(instance.fixtures.ambiguousSlugs).toEqual(["perf-shared-many"]);
+    expect(instance.fixtures.sharedSearchTerms).toEqual(["perf-shared-one", "perf-shared-many"]);
+    expect(owners.has("perf-shared-one") || owners.has("perf-shared-many")).toBe(false);
+    expect(large.bookmarks.filter((bookmark) => bookmark.slug === "perf-shared-one")).toHaveLength(1);
+    expect(large.bookmarks.filter((bookmark) => bookmark.slug === "perf-shared-many").map((bookmark) => bookmark.ownerId).toSorted()).toEqual([first.id, second.id].toSorted());
+  });
+
   it("is written as one transaction that creates every account and workspace", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     const script = largeSeedScript(buildLargeInstance({ bookmarks: 40, workspaces: 3 }), "$argon2id$stand-in");
     expect(script.startsWith("SET standard_conforming_strings = on;\nBEGIN;\nSET LOCAL ROLE slugbase_system;")).toBe(true);
     expect(script.trimEnd().endsWith("COMMIT;")).toBe(true);
     expect(script.match(/sys_create_account\(/gu)).toHaveLength(2 + 3 + 1);
     expect(script.match(/sys_create_workspace\(/gu)).toHaveLength(4);
+  });
+
+  it("writes the team and the shares of the members with the owner", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
+    const script = largeSeedScript(buildLargeInstance({ bookmarks: 4_000, workspaces: 1 }), "$argon2id$stand-in");
+    expect(script.match(/^INSERT INTO public\.teams /gmu)).toHaveLength(1);
+    expect(script.match(/^INSERT INTO public\.team_members /gmu)).toHaveLength(1);
+    expect(script.match(/^INSERT INTO public\.bookmark_shares /gmu)?.length).toBeGreaterThan(0);
+    expect(script.match(/^INSERT INTO public\.folder_shares /gmu)).toHaveLength(1);
   });
 });
 

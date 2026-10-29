@@ -4,7 +4,7 @@ import { accounts } from "../schema/accounts.ts";
 import { bookmarks } from "../schema/bookmarks.ts";
 import { slugPreferences } from "../schema/slug-preferences.ts";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
-import { bookmarkReadableBy, type BookmarkRow } from "./bookmark-access.ts";
+import { bookmarkAccessOf, bookmarkReadableBy, type SharableBookmarkRow } from "./bookmark-access.ts";
 import { requireIdentifiers, uuidArray } from "./folder-links.ts";
 import { defineScopedRepository } from "./scoped.ts";
 
@@ -12,16 +12,17 @@ import { defineScopedRepository } from "./scoped.ts";
 // query of doc 05 section 4: the bookmarks of the workspace with the slug, forwarding on and not plan-archived, that the account can read
 // (`bookmarkReadableBy`), with the account's remembered choice for the slug read beside it. The slug is compared as `text`, which has a leakproof equality, so the policy of
 // `bookmarks` leaves it an index condition of `bookmarks_slug_idx`, and the id, owner, URL, forwarding and archive state the scan reads are in that index, so on a vacuumed table
-// it is an Index Only Scan (test/go-resolution-plan.integration.test.ts plans it on a workspace of 50 000 bookmarks).
+// it is an Index Only Scan (test/go-resolution-plan.integration.test.ts plans it on a workspace of 50 000 bookmarks). The access predicate and the route that gives access (`access`: the
+// account's own bookmark, or the direct, team or folder share that gives it) are correlated probes of the share tables for each candidate of the slug, which are few, and read no more of the bookmarks.
 // Titles and hosts are not in the index, so they are read by primary key for the candidates only, afterwards.
 //
 // A slug that resolves to nothing is asked about once more across the account's other workspaces (`otherWorkspaces`), which the tenant policies cannot do, since they show one
 // workspace at a time: the system operation `sys_go_other_workspaces` (src/sql/580-go-other-workspaces.sql) takes the account from the transaction, never from an argument,
 // and answers the identifier and the name of each other workspace of which the account is a member and in which it can read a forwarding, non-archived bookmark with the slug
-// (the owner's own today, as `bookmarkReadableBy` says), and no bookmark.
+// (its own, or one shared with it, as `bookmarkReadableBy` says), and no bookmark.
 //
 // The suggestions of the palette's `go` mode (`suggest`) are the system operation `sys_go_suggest` (src/sql/600-go-suggest.sql): the bookmarks of the workspace whose slug starts with a
-// prefix, with the candidate rule of the scan above and its access rule (`bookmarkReadableBy`). A prefix is a `LIKE` condition, which is not leakproof, so as `slugbase_app` it could not be an
+// prefix, with the candidate rule of the scan above and its access rule (`bookmarkReadableBy`): the account's own first, then the ones shared with it. A prefix is a `LIKE` condition, which is not leakproof, so as `slugbase_app` it could not be an
 // index condition under the policy of `bookmarks`; the operation takes the workspace and the account from the transaction, never from an argument, and this repository passes it the prefix alone.
 //
 // A preference is the account's own: `slug_preferences` has a policy on the workspace and the account of the transaction (src/sql/570-slug-preferences.sql),
@@ -73,17 +74,20 @@ type SuggestionRow = { id: string; slug: string; title: string; host: string; ow
 /** The most suggestions `sys_go_suggest` answers. */
 const SUGGEST_MAX = 10;
 
-/** The columns of the candidates the predicate reads: `c` is the name the statement below gives them. */
-const CANDIDATE: BookmarkRow = { ownerId: sql.raw("c.owner_id") };
+/** The columns of the candidates the predicate reads: `c` is the name the statement below gives them, and the workspace is the one of the transaction, given as a parameter. */
+function candidateRow(workspaceId: string): SharableBookmarkRow {
+  return { ownerId: sql.raw("c.owner_id"), id: sql.raw("c.id"), workspaceId: sql`${workspaceId}::uuid` };
+}
 
 /**
  * The candidate scan of doc 05 section 4, exported for the test that plans it: the candidates of the slug in the workspace, then the access predicate over
- * them, which sharing (doc 02 section 8) extends with the shares when it is built. `access` is how the account reads the candidate: always as its owner for now, and
- * sharing says which of the other ways applied. Needs a transaction opened with a workspace.
+ * them (`bookmarkReadableBy`: its own, or shared with the account, doc 02 section 8). `access` is how the account reads the candidate: as its owner, or through the direct, team
+ * or folder share that gives it. Needs a transaction opened with a workspace.
  */
 export function candidatesStatement(tx: TenantTx, { slug, accountId }: { readonly slug: string; readonly accountId: string }): SQL {
   const workspaceId = requireWorkspace(tx, "resolving a slug");
   requireAccount(tx, accountId, "resolves a slug");
+  const row = candidateRow(workspaceId);
   return sql`
     WITH candidates AS (
       SELECT ${bookmarks.id} AS id, ${bookmarks.ownerId} AS owner_id, ${bookmarks.url} AS url
@@ -91,11 +95,11 @@ export function candidatesStatement(tx: TenantTx, { slug, accountId }: { readonl
       WHERE ${bookmarks.workspaceId} = ${workspaceId}::uuid AND ${bookmarks.slug} = ${slug} AND ${bookmarks.forwarding} AND ${bookmarks.planArchivedAt} IS NULL
     )
     SELECT c.id, c.owner_id, c.url,
-           'owner'::text AS access,
+           ${bookmarkAccessOf(accountId, row)} AS access,
            (SELECT ${slugPreferences.bookmarkId} FROM ${slugPreferences}
             WHERE ${slugPreferences.workspaceId} = ${workspaceId}::uuid AND ${slugPreferences.accountId} = ${accountId}::uuid AND ${slugPreferences.slug} = ${slug}) AS preferred_id
     FROM candidates c
-    WHERE ${bookmarkReadableBy(accountId, CANDIDATE)}`;
+    WHERE ${bookmarkReadableBy(accountId, row)}`;
 }
 
 /** The go repository bound to the open transaction; every method needs a transaction opened with a workspace. */
