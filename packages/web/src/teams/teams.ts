@@ -31,8 +31,8 @@ export function teamListQuery(api: ApiClient) {
   });
 }
 
-async function readTeam(api: ApiClient, id: string, signal: AbortSignal): Promise<TeamWithMembers> {
-  const { data, error } = await api.GET("/api/v1/teams/{id}", { params: { path: { id } }, signal });
+async function readTeam(api: ApiClient, id: string, signal?: AbortSignal): Promise<TeamWithMembers> {
+  const { data, error } = await api.GET("/api/v1/teams/{id}", { params: { path: { id } }, ...(signal === undefined ? {} : { signal }) });
   if (data === undefined) {
     throw new Error("The team request did not answer with a document", { cause: error });
   }
@@ -120,6 +120,57 @@ export async function saveTeam(
     applied(current);
   }
   return current;
+}
+
+/**
+ * Brings the teams of one member to `wanted`, given the teams `current` that the member is in as far as the caller knows. Each team
+ * that changes is read again first, with its members, and then replaced through `PUT /teams/{id}/members` with that set plus or
+ * minus the member, so what other people put into the team since the page was read is kept. The requests are sent one after the
+ * other, the teams to leave before the teams to join, and `applied` is called with the member's teams after each one that went
+ * through; a caller that keeps the latest set sends only what remains when it tries again. A step that fails throws and the steps
+ * after it are not sent. A team to leave that is gone already is left; a team to join that is gone is a `404`.
+ */
+export async function saveMemberTeams(
+  api: ApiClient,
+  accountId: string,
+  current: readonly string[],
+  wanted: readonly string[],
+  applied: (teamIds: readonly string[]) => void,
+): Promise<readonly string[]> {
+  let held = [...current];
+  const leaving = current.filter((id) => !wanted.includes(id));
+  const joining = wanted.filter((id) => !current.includes(id));
+  for (const id of [...leaving, ...joining]) {
+    const joins = joining.includes(id);
+    let team: TeamWithMembers;
+    try {
+      team = await readTeam(api, id);
+    } catch (caught) {
+      if (!joins && caught instanceof ApiProblemError && caught.status === 404) {
+        held = held.filter((candidate) => candidate !== id);
+        applied(held);
+        continue;
+      }
+      throw caught;
+    }
+    const memberIds = team.members.map((member) => member.accountId);
+    if (memberIds.includes(accountId) === joins) {
+      // The team already holds the member as wanted: another admin made the change first.
+      held = joins ? [...held, id] : held.filter((candidate) => candidate !== id);
+      applied(held);
+      continue;
+    }
+    const { data, error } = await api.PUT("/api/v1/teams/{id}/members", {
+      params: { path: { id } },
+      body: { accountIds: joins ? [...memberIds, accountId] : memberIds.filter((candidate) => candidate !== accountId) },
+    });
+    if (data === undefined) {
+      throw new Error("The team members did not answer with a document", { cause: error });
+    }
+    held = joins ? [...held, id] : held.filter((candidate) => candidate !== id);
+    applied(held);
+  }
+  return held;
 }
 
 /** Deletes the team with its memberships; the members stay members of the workspace. */

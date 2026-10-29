@@ -1903,6 +1903,7 @@
         "name": "Name",
         "email": "E-Mail",
         "role": "Rolle",
+        "teams": "Teams",
         "joined": "Beigetreten",
         "lastActive": "Zuletzt aktiv",
         "actions": "Aktionen"
@@ -1920,6 +1921,7 @@
         "makeOwner": "Zum Eigentümer machen",
         "makeAdmin": "Zum Admin machen",
         "makeMember": "Zum Mitglied machen",
+        "manageTeams": "Teams verwalten",
         "transfer": "Eigentum übertragen",
         "remove": "Aus dem Workspace entfernen"
       },
@@ -2058,12 +2060,44 @@
           "created": "Die Einladung wurde erstellt. Kopiere ihren Link aus den ausstehenden Einladungen.",
           "alreadyMember": "Bereits Mitglied dieses Workspace.",
           "invalid": "Keine gültige E-Mail-Adresse.",
+          "unknownTeam": "Ein Team, das du gewählt hast, gibt es nicht mehr. Gehe zurück, entferne es und versuche es erneut.",
           "rateLimited": "Zu viele Anfragen. Versuche es in einer Weile erneut.",
           "unavailable": "Der Server ist ausgelastet. Versuche es erneut.",
           "failed": "Die Einladung konnte nicht erstellt werden.",
           "requestId": "Anfrage-ID: {requestId}",
           "tryAgain": "Fehlgeschlagene erneut versuchen",
           "done": "Fertig"
+        },
+        "teams": {
+          "label": "Teams",
+          "description": "Die eingeladenen Personen treten diesen Teams bei, sobald sie die Einladung annehmen. Optional.",
+          "placeholder": "Teams suchen",
+          "empty": "Kein Team passt.",
+          "loading": "Teams werden geladen",
+          "unavailable": "Die Teams konnten nicht geladen werden.",
+          "remove": "{name} entfernen"
+        }
+      },
+      "teams": {
+        "none": "Keine Teams",
+        "of": "Teams von {name}",
+        "title": "Teams von {name}",
+        "description": "Wähle die Teams, zu denen dieses Mitglied gehört.",
+        "close": "Teams-Formular schließen",
+        "label": "Teams",
+        "placeholder": "Teams suchen",
+        "empty": "Kein Team passt. Admins können Teams auf der Seite „Teams“ anlegen.",
+        "loading": "Teams werden geladen",
+        "unavailable": "Die Teams konnten nicht geladen werden.",
+        "remove": "{name} entfernen",
+        "cancel": "Abbrechen",
+        "submit": "Teams speichern",
+        "saved": "Teams von {name} gespeichert.",
+        "error": {
+          "teamGone": "Ein Team, das du gewählt hast, gibt es nicht mehr. Entferne es und versuche es erneut.",
+          "memberGone": "Diese Person ist kein Mitglied dieses Workspace mehr.",
+          "unavailable": "Die Teams konnten gerade nicht gespeichert werden. Versuche es gleich noch einmal.",
+          "partlySaved": "Ein Teil deiner Änderungen wurde gespeichert, aber nicht alle. Speichere erneut, um den Rest zu senden."
         }
       }
     }

@@ -20,6 +20,7 @@ const HEDY: TestMember = {
   role: "admin",
   joinedAt: "2026-09-10T08:00:00.000Z",
   lastActiveAt: "2026-10-17T10:00:00.000Z",
+  teams: [],
 };
 
 /** An owner who joined before the caller did. */
@@ -30,6 +31,7 @@ const OLD_OWNER: TestMember = {
   role: "owner",
   joinedAt: "2026-08-01T08:00:00.000Z",
   lastActiveAt: null,
+  teams: [],
 };
 
 beforeEach(() => {
@@ -104,17 +106,25 @@ describe("removing a member", () => {
     await openList();
 
     await press(within(rowOf("Grace Hopper")).getByRole("button", { name: "Actions for Grace Hopper" }));
-    expect((await screen.findAllByRole("menuitem")).map((item) => item.textContent)).toEqual(["Make owner", "Make admin", "Transfer ownership", "Remove from workspace"]);
+    expect((await screen.findAllByRole("menuitem")).map((item) => item.textContent)).toEqual(["Make owner", "Make admin", "Manage teams", "Transfer ownership", "Remove from workspace"]);
     expect(within(rowOf("Ada Lovelace")).getByRole("button", { name: "Actions for Ada Lovelace" })).toBeTruthy();
   }, SLOW_TEST_TIMEOUT_MS);
 
-  it("offers an admin Remove for a member and neither a menu nor Remove for an owner", async () => {
+  it("offers an admin Remove for a member and, for an owner, nothing but Manage teams", async () => {
     stubWorkspaceSettingsServer({ role: "admin", members: [{ ...SELF, role: "admin" }, { ...OLD_OWNER }, GRACE] });
     await openList();
 
-    expect(within(rowOf("Katherine Johnson")).queryByRole("button", { name: /^Actions for/ })).toBeNull();
+    await press(within(rowOf("Katherine Johnson")).getByRole("button", { name: "Actions for Katherine Johnson" }));
+    expect((await screen.findAllByRole("menuitem")).map((item) => item.textContent)).toEqual(["Manage teams"]);
+    await act(async () => {
+      fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("menu")).toBeNull();
+    });
     await press(within(rowOf("Grace Hopper")).getByRole("button", { name: "Actions for Grace Hopper" }));
-    expect((await screen.findAllByRole("menuitem")).map((item) => item.textContent)).toEqual(["Make admin", "Remove from workspace"]);
+    expect((await screen.findAllByRole("menuitem")).map((item) => item.textContent)).toEqual(["Make admin", "Manage teams", "Remove from workspace"]);
   }, SLOW_TEST_TIMEOUT_MS);
 
   it("starts at transferring the content to the member who removes, then asks to confirm and says what is lost", async () => {

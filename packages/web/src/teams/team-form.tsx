@@ -74,6 +74,8 @@ function TeamFormBody({ initial, onClose }: { initial: TeamWithMembers | undefin
     // A step that went through before a later one failed has changed the list, so it is read again whatever the end.
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: TEAMS_QUERY_KEY });
+      // The members page shows each member's teams.
+      void queryClient.invalidateQueries({ queryKey: MEMBERS_QUERY_KEY });
     },
   });
 

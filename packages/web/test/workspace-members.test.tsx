@@ -19,6 +19,7 @@ const HEDY: TestMember = {
   role: "admin",
   joinedAt: "2026-09-10T08:00:00.000Z",
   lastActiveAt: "2026-10-17T10:00:00.000Z",
+  teams: [],
 };
 
 beforeEach(() => {
@@ -117,18 +118,23 @@ describe("the Members and Teams navigation entries", () => {
 });
 
 describe("the members table", () => {
-  it("lists name, email, role, joined and last active, and marks the caller", async () => {
-    stubWorkspaceSettingsServer({ members: [SELF, GRACE, HEDY] });
+  it("lists name, email, role, teams, joined and last active, and marks the caller", async () => {
+    const design = { id: "0192f3a0-ffff-7000-8000-000000000001", name: "Design" };
+    const support = { id: "0192f3a0-ffff-7000-8000-000000000002", name: "Support" };
+    stubWorkspaceSettingsServer({ members: [SELF, { ...GRACE, teams: [design, support] }, HEDY] });
     await openList();
 
     const columns = within(screen.getByRole("table", { name: "Members" })).getAllByRole("columnheader").map((header) => header.textContent);
-    expect(columns).toEqual(["Name", "Email", "Role", "Joined", "Last active", "Actions"]);
+    expect(columns).toEqual(["Name", "Email", "Role", "Teams", "Joined", "Last active", "Actions"]);
     const cells = (name: string): string[] => within(rowOf(name)).getAllByRole("cell").map((cell) => cell.textContent);
     expect(cells("Ada Lovelace").slice(0, 2)).toEqual(["ALAda LovelaceYou", "ada@example.org"]);
-    expect(cells("Ada Lovelace")[3]).toContain("2026");
+    expect(cells("Ada Lovelace")[3]).toBe("No teams");
     expect(cells("Ada Lovelace")[4]).toContain("2026");
+    expect(cells("Ada Lovelace")[5]).toContain("2026");
     expect(cells("Grace Hopper")[1]).toBe("grace@example.org");
-    expect(cells("Grace Hopper")[4]).toBe("Never");
+    expect(cells("Grace Hopper")[3]).toBe("DesignSupport");
+    expect(within(within(rowOf("Grace Hopper")).getByRole("list", { name: "Teams of Grace Hopper" })).getAllByRole("listitem").map((item) => item.textContent)).toEqual(["Design", "Support"]);
+    expect(cells("Grace Hopper")[5]).toBe("Never");
     expect(within(rowOf("Grace Hopper")).getByRole("combobox", { name: "Role of Grace Hopper" }).textContent).toContain("Member");
   });
 
@@ -145,7 +151,12 @@ describe("the members table", () => {
     expect(await optionsOf("Role of Grace Hopper")).toEqual(["Admin", "Member"]);
     expect(within(rowOf("Hedy Lamarr")).queryByRole("combobox")).toBeNull();
     expect(within(rowOf("Hedy Lamarr")).getByText("Owner")).toBeTruthy();
-    expect(within(rowOf("Hedy Lamarr")).queryByRole("button", { name: /^Actions for/ })).toBeNull();
+    // an admin cannot change an owner or remove one, and can still manage the owner's teams
+    await act(async () => {
+      fireEvent.click(within(rowOf("Hedy Lamarr")).getByRole("button", { name: "Actions for Hedy Lamarr" }));
+      await Promise.resolve();
+    });
+    expect((await screen.findAllByRole("menuitem")).map((item) => item.textContent)).toEqual(["Manage teams"]);
   });
 
   it("changes a role from the Select, sends only that role and shows the answer", async () => {
@@ -169,7 +180,7 @@ describe("the members table", () => {
       await Promise.resolve();
     });
     const items = (await screen.findAllByRole("menuitem")).map((item) => item.textContent);
-    expect(items).toEqual(["Make owner", "Make admin", "Transfer ownership", "Remove from workspace"]);
+    expect(items).toEqual(["Make owner", "Make admin", "Manage teams", "Transfer ownership", "Remove from workspace"]);
     await act(async () => {
       fireEvent.click(screen.getByRole("menuitem", { name: "Make owner" }));
       await Promise.resolve();
@@ -310,7 +321,7 @@ describe("the states of the members page", () => {
     await openList();
 
     expect(screen.getByText("You are the only member")).toBeTruthy();
-    expect(within(rowOf("Ada Lovelace")).getAllByRole("cell")).toHaveLength(6);
+    expect(within(rowOf("Ada Lovelace")).getAllByRole("cell")).toHaveLength(7);
   });
 
   it("does not call a page of two members the only member, and loads the next page on request", async () => {

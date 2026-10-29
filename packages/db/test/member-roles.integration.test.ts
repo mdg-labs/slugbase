@@ -215,10 +215,43 @@ describe("memberRepository.list and member", () => {
     expect(listed).toHaveLength(2);
     expect(listed.map((member) => member.accountId)).toEqual([ada, grace].sort());
     const adaRow = listed.find((member) => member.accountId === ada);
-    expect(adaRow).toEqual({ accountId: ada, displayName: "Ada", email: expect.stringMatching(/^member\d+@example\.test$/) as string, role: "owner", joinedAt, lastActiveAt });
-    expect(Object.keys(adaRow ?? {}).sort()).toEqual(["accountId", "displayName", "email", "joinedAt", "lastActiveAt", "role"]);
+    expect(adaRow).toEqual({ accountId: ada, displayName: "Ada", email: expect.stringMatching(/^member\d+@example\.test$/) as string, role: "owner", joinedAt, lastActiveAt, teams: [] });
+    expect(Object.keys(adaRow ?? {}).sort()).toEqual(["accountId", "displayName", "email", "joinedAt", "lastActiveAt", "role", "teams"]);
     expect(listed.find((member) => member.accountId === grace)?.lastActiveAt).toBeNull();
     expect(listed.some((member) => other.members.some((o) => o.accountId === member.accountId))).toBe(false);
+  });
+
+  it("gives each member the teams of the workspace it belongs to by name, from the list and from one member, and shows nothing of another workspace's teams", async () => {
+    const a = await workspaceOf("owner", "member", "member");
+    const b = await workspaceOf("owner");
+    const [owner, joined, alone] = a.members.map((member) => member.accountId);
+    const team = async (workspaceId: string, name: string, accounts: readonly (string | undefined)[]): Promise<string> => {
+      const id = freshId();
+      await asSystem(db, async (tx) => {
+        await tx`INSERT INTO teams (id, workspace_id, name) VALUES (${id}, ${workspaceId}, ${name})`;
+        for (const accountId of accounts) {
+          await tx`INSERT INTO team_members (workspace_id, team_id, account_id) VALUES (${workspaceId}, ${id}, ${accountId ?? ""})`;
+        }
+      });
+      return id;
+    };
+    const support = await team(a.workspaceId, "support", [owner, joined]);
+    const design = await team(a.workspaceId, "Design", [joined]);
+    await team(b.workspaceId, "Elsewhere", [b.members[0]?.accountId]);
+    const caller = { accountId: owner ?? "", workspaceId: a.workspaceId };
+
+    const listed = await inTenant(caller, (tx) => memberRepository(tx).list(null, 10));
+    const one = await inTenant(caller, (tx) => memberRepository(tx).member(joined ?? ""));
+
+    const teamsOf = (accountId: string | undefined) => listed.find((member) => member.accountId === accountId)?.teams;
+    expect(teamsOf(joined)).toEqual([
+      { id: design, name: "Design" },
+      { id: support, name: "support" },
+    ]);
+    expect(teamsOf(owner)).toEqual([{ id: support, name: "support" }]);
+    expect(teamsOf(alone)).toEqual([]);
+    expect(one?.teams).toEqual(teamsOf(joined));
+    expect(JSON.stringify(listed)).not.toContain("Elsewhere");
   });
 
   it("pages after an account identifier", async () => {

@@ -2117,7 +2117,7 @@ export interface components {
              * @enum {string}
              */
             role: "admin" | "member";
-            /** @description The teams the invited person joins on accepting. Until team membership exists a list with an entry is refused with 422 validation_failed */
+            /** @description The teams the invited person joins on accepting; each must be a team of the workspace, or the request is refused with 422 validation_failed. A team deleted before the invitation is accepted is skipped */
             teamIds?: string[];
         };
         CreateTagRequest: {
@@ -2876,12 +2876,23 @@ export interface components {
              * @enum {string}
              */
             role: "owner" | "admin" | "member";
+            /** @description The teams of the workspace the member belongs to, ordered by name (ignoring case) and then identifier */
+            teams: components["schemas"]["MemberTeam"][];
         };
         MemberList: {
             /** @description One page of the workspace's members, in the order of their account identifiers */
             items: components["schemas"]["Member"][];
             /** @description Passed as `cursor` to get the next page; null on the last page */
             nextCursor: string | null;
+        };
+        MemberTeam: {
+            /**
+             * Format: uuid
+             * @description The team's identifier
+             */
+            id: string;
+            /** @description The team's name */
+            name: string;
         };
         Membership: {
             /** @description The workspace's name */
@@ -8245,7 +8256,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation: an address that is not one, a role other than admin or member (owner included), or a teamIds with an entry, which cannot be invited into yet */
+            /** @description The body did not pass validation: an address that is not one, a role other than admin or member (owner included), or a teamIds with an entry that is no team of the workspace (unknown_team, whether no team has the identifier or another workspace's does) */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -10544,7 +10555,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description One page of the workspace's members, each with the account's display name and email address and nothing else of the account */
+            /** @description One page of the workspace's members, each with the account's display name and email address and nothing else of the account, and the teams of the workspace it belongs to */
             200: {
                 headers: {
                     [name: string]: unknown;

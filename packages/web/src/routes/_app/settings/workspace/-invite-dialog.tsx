@@ -1,10 +1,12 @@
 import { Button, Input } from "@slugbase/ui";
-import { ChoiceCards, FormField, FormOverlay, InlineNote, StatusBadge, type ChoiceCardOption, type StatusBadgeVariant } from "@slugbase/ui/patterns";
+import { ChoiceCards, FormField, FormOverlay, InlineNote, MultiPick, StatusBadge, type ChoiceCardOption, type PickerOption, type StatusBadgeVariant } from "@slugbase/ui/patterns";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useRef, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { useConfig } from "../../../../config/config-context.tsx";
+import { TEAMS_QUERY_KEY } from "../../../../teams/teams.ts";
+import { useAllTeams } from "../../../../teams/use-all-teams.ts";
 import {
   INVITATIONS_QUERY_KEY,
   inviteByEmail,
@@ -43,7 +45,8 @@ const SEPARATED = /[\s,;]/;
 
 /**
  * Invites people (doc 03 section 11.7): a `form-overlay` with the addresses (several, separated by a comma or Enter),
- * the role as `choice-cards`, and one `POST /invitations` per address, each under its own idempotency key. The answer
+ * the role as `choice-cards`, the teams the people join on accepting as a `multi-pick`, and one `POST /invitations` per
+ * address, each under its own idempotency key. The answer
  * lists what became of every address, so a part of them that failed is told apart from the rest and can be sent again.
  */
 export function InviteDialog({ onClose }: { onClose: () => void }): ReactElement {
@@ -56,19 +59,23 @@ export function InviteDialog({ onClose }: { onClose: () => void }): ReactElement
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | undefined>(undefined);
   const [role, setRole] = useState<InvitationRole>("member");
+  const everyone = useAllTeams();
+  const [teamIds, setTeamIds] = useState<readonly string[]>([]);
+  // A chosen team keeps its option whether or not the list of teams still has it.
+  const [teamNames, setTeamNames] = useState<ReadonlyMap<string, string>>(new Map());
   const [results, setResults] = useState<readonly Result[] | undefined>(undefined);
-  // A key stands for one address with one role, so sending it again after a lost answer is a replay, not a second invitation.
+  // A key stands for one address with one role and one set of teams, so sending it again after a lost answer is a replay, not a second invitation.
   const keys = useRef(new Map<string, string>());
 
   const send = useMutation({
     mutationKey: ["workspace", "invitations", "invite"],
-    mutationFn: async ({ emails, as }: { emails: readonly string[]; as: InvitationRole }): Promise<readonly Result[]> => {
+    mutationFn: async ({ emails, as, teams }: { emails: readonly string[]; as: InvitationRole; teams: readonly string[] }): Promise<readonly Result[]> => {
       const collected: Result[] = [];
       for (const email of emails) {
-        const id = `${as}:${email.toLowerCase()}`;
+        const id = `${as}:${email.toLowerCase()}:${[...teams].sort().join(",")}`;
         const key = keys.current.get(id) ?? newIdempotencyKey();
         keys.current.set(id, key);
-        const outcome = await inviteByEmail(api, email, as, key);
+        const outcome = await inviteByEmail(api, email, as, teams, key);
         if (outcome.status === "invited") {
           keys.current.delete(id);
         }
@@ -81,6 +88,8 @@ export function InviteDialog({ onClose }: { onClose: () => void }): ReactElement
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: INVITATIONS_QUERY_KEY });
+      // A refusal for a team that is gone is cleared by reading the teams again.
+      void queryClient.invalidateQueries({ queryKey: TEAMS_QUERY_KEY });
     },
   });
 
@@ -106,7 +115,7 @@ export function InviteDialog({ onClose }: { onClose: () => void }): ReactElement
       setError(t("settings.members.invite.error.required"));
       return;
     }
-    send.mutate({ emails: accepted, as: role });
+    send.mutate({ emails: accepted, as: role, teams: teamIds });
   }
 
   function retryable(result: Result): boolean {
@@ -125,6 +134,8 @@ export function InviteDialog({ onClose }: { onClose: () => void }): ReactElement
         return t("settings.members.invite.result.alreadyMember");
       case "invalid":
         return t("settings.members.invite.result.invalid");
+      case "unknownTeam":
+        return t("settings.members.invite.result.unknownTeam");
       case "rateLimited":
         return t("settings.members.invite.result.rateLimited");
       case "unavailable":
@@ -147,6 +158,18 @@ export function InviteDialog({ onClose }: { onClose: () => void }): ReactElement
     { value: "admin", label: t("settings.members.role.admin"), description: t("settings.members.invite.role.admin") },
     { value: "member", label: t("settings.members.role.member"), description: t("settings.members.invite.role.member") },
   ];
+
+  const teamOptions = new Map<string, PickerOption>();
+  for (const team of everyone.teams) {
+    teamOptions.set(team.id, { value: team.id, label: team.name });
+  }
+  for (const id of teamIds) {
+    const name = teamNames.get(id);
+    if (!teamOptions.has(id) && name !== undefined) {
+      teamOptions.set(id, { value: id, label: name });
+    }
+  }
+  const teamOptionList = [...teamOptions.values()].sort((a, b) => a.label.localeCompare(b.label) || a.value.localeCompare(b.value));
 
   if (results !== undefined) {
     const invited = results.filter(({ outcome }) => outcome.status === "invited").length;
@@ -286,6 +309,28 @@ export function InviteDialog({ onClose }: { onClose: () => void }): ReactElement
           }}
           options={roleOptions}
           value={role}
+        />
+        <MultiPick
+          description={t("settings.members.invite.teams.description")}
+          disabled={send.isPending}
+          emptyLabel={t("settings.members.invite.teams.empty")}
+          label={t("settings.members.invite.teams.label")}
+          loadingLabel={everyone.status === "loading" ? t("settings.members.invite.teams.loading") : undefined}
+          onValueChange={(next) => {
+            setTeamNames((current) => {
+              const known = new Map(current);
+              for (const team of everyone.teams) {
+                known.set(team.id, team.name);
+              }
+              return known;
+            });
+            setTeamIds(next);
+          }}
+          options={teamOptionList}
+          placeholder={t("settings.members.invite.teams.placeholder")}
+          removeLabel={(label) => t("settings.members.invite.teams.remove", { name: label })}
+          unavailableLabel={everyone.status === "failed" ? t("settings.members.invite.teams.unavailable") : undefined}
+          value={teamIds}
         />
         <div className="flex justify-end gap-2">
           <Button disabled={send.isPending} onClick={close} type="button" variant="outline">

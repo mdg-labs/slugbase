@@ -160,7 +160,7 @@ function serve(): void {
         ),
       getEntitlements: () => json(entitlementsBody()),
       listMembers: () =>
-        json({ items: PEOPLE.map((person) => ({ ...person, role: "member", joinedAt: STAMP, lastActiveAt: null })), nextCursor: null }),
+        json({ items: PEOPLE.map((person) => ({ ...person, role: "member", joinedAt: STAMP, lastActiveAt: null, teams: [] })), nextCursor: null }),
       listTeams: async (request) => {
         record(request, undefined);
         return (

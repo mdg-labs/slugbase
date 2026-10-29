@@ -1561,10 +1561,15 @@ export interface ComponentTypes {
             joinedAt: string;
             lastActiveAt: string | null;
             role: "owner" | "admin" | "member";
+            teams: ComponentTypes["schemas"]["MemberTeam"][];
         };
         MemberList: {
             items: ComponentTypes["schemas"]["Member"][];
             nextCursor: string | null;
+        };
+        MemberTeam: {
+            id: string;
+            name: string;
         };
         Membership: {
             name: string;
@@ -5363,6 +5368,10 @@ export const listMembers: {
         }>;
         joinedAt: z.ZodISODateTime;
         lastActiveAt: z.ZodNullable<z.ZodISODateTime>;
+        teams: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        }, z.core.$strict>>;
         }, z.core.$strict>>;
         nextCursor: z.ZodNullable<z.ZodString>;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
@@ -5676,6 +5685,10 @@ export const MemberListSchema: z.ZodObject<{
         }>;
         joinedAt: z.ZodISODateTime;
         lastActiveAt: z.ZodNullable<z.ZodISODateTime>;
+        teams: z.ZodArray<z.ZodObject<{
+            id: z.ZodUUID;
+            name: z.ZodString;
+        }, z.core.$strict>>;
     }, z.core.$strict>>;
     nextCursor: z.ZodNullable<z.ZodString>;
 }, z.core.$strict>;
@@ -5692,6 +5705,10 @@ export const MemberSchema: z.ZodObject<{
     }>;
     joinedAt: z.ZodISODateTime;
     lastActiveAt: z.ZodNullable<z.ZodISODateTime>;
+    teams: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+    }, z.core.$strict>>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -5712,6 +5729,12 @@ export const MembershipSchema: z.ZodObject<{
         admin: "admin";
         owner: "owner";
     }>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const MemberTeamSchema: z.ZodObject<{
+    id: z.ZodUUID;
+    name: z.ZodString;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -17991,6 +18014,10 @@ export const transferWorkspaceOwnership: {
         }>;
         joinedAt: z.ZodISODateTime;
         lastActiveAt: z.ZodNullable<z.ZodISODateTime>;
+        teams: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        }, z.core.$strict>>;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;
@@ -18567,6 +18594,10 @@ export const updateMember: {
         }>;
         joinedAt: z.ZodISODateTime;
         lastActiveAt: z.ZodNullable<z.ZodISODateTime>;
+        teams: z.ZodArray<z.ZodObject<{
+        id: z.ZodUUID;
+        name: z.ZodString;
+        }, z.core.$strict>>;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;
         readonly 400: ProblemResponse;
         readonly 401: ProblemResponse;

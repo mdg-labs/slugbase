@@ -39,6 +39,14 @@ CREATE OR REPLACE FUNCTION public.sys_invitation_inspect(p_token_hash bytea)
 -- workspace's row, which every acceptance into the workspace takes, so two acceptances cannot both take the last seat.
 -- When app_account_id() names an account, p_account_id must be that account.
 --
+-- The account also joins the teams the invitation names (team_ids), in the same transaction as the membership: those
+-- that are teams of the invitation's workspace now. A team that was deleted since the invitation was written, and an
+-- identifier that is a team of another workspace, are skipped without a word, so the outcome is the one an invitation
+-- without teams gets and says nothing of whether a team exists (doc 10 T1 and T19). The teams are locked FOR KEY SHARE
+-- before the memberships are inserted, after the invitation, so a team deleted while the acceptance runs is waited for
+-- and then skipped, instead of failing the insert on its foreign key; the deletion of a team waits for the acceptance
+-- in turn, and takes the membership with it.
+--
 -- Rows are locked parent first and the same way every time: the workspace (FOR NO KEY UPDATE), the account (FOR SHARE,
 -- so a change of its address waits and the address checked is the address the membership is given for), then the
 -- invitation. The invitation is found by its token before any lock, pending and unexpired, only to learn the workspace:
@@ -69,6 +77,7 @@ DECLARE
   v_invitation uuid;
   v_invited_email citext;
   v_role member_role;
+  v_team_ids uuid[];
   v_account_email citext;
   v_account_verified boolean;
 BEGIN
@@ -106,7 +115,7 @@ BEGIN
     RETURN;
   END IF;
 
-  SELECT i.id, i.email, i.role INTO v_invitation, v_invited_email, v_role
+  SELECT i.id, i.email, i.role, i.team_ids INTO v_invitation, v_invited_email, v_role, v_team_ids
   FROM public.workspace_invitations i
   WHERE i.token_hash = p_token_hash AND i.workspace_id = v_workspace AND i.status = 'pending' AND i.expires_at > clock_timestamp()
   FOR UPDATE;
@@ -135,6 +144,11 @@ BEGIN
   END IF;
 
   INSERT INTO public.workspace_members (workspace_id, account_id, role) VALUES (v_workspace, p_account_id, v_role);
+  INSERT INTO public.team_members (workspace_id, team_id, account_id)
+  SELECT v_workspace, t.id, p_account_id
+  FROM (
+    SELECT x.id FROM public.teams x WHERE x.workspace_id = v_workspace AND x.id = ANY (v_team_ids) ORDER BY x.id FOR KEY SHARE
+  ) t;
   UPDATE public.workspace_invitations
   SET status = 'accepted', accepted_by = p_account_id, closed_at = clock_timestamp()
   WHERE id = v_invitation;

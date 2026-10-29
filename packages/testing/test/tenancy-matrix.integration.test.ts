@@ -246,7 +246,7 @@ describe("the matrix over the committed contract and the repository registry", (
   // chain does for a member of B: 403 to a token of an operation that declares no scope, or the write scope when the token may only read (the bookmark read takes
   // a token of either scope), to a plain member where the policy is the admin's (the leaving and the bookmark read are a member's) and to an admin where it is the
   // owner's (the ownership transfer), 404 to the rest. The invitation names a team of B in its body, and the
-  // server refuses any team with 422 because no team can be invited into yet and none can be told from another, so the responder gives an admin and
+  // server refuses a team of B with 422, as it does an unknown one, since an invitation takes only the teams of the workspace of the request, so the responder gives an admin and
   // an owner session that answer (the member and the tokens are refused with 403 before the handler).
   const answersAsTheChainDoes = (call: ApiCall): Promise<ApiResponse> => {
     if (call.operation.operationId === "createInvitation" && !("scope" in call.principal) && call.principal.role !== "member") {

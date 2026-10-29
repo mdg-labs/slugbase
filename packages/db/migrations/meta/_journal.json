@@ -736,6 +736,13 @@
       "when": 1793264009653,
       "tag": "20261029085329_add_folder_shares",
       "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1793274432515,
+      "tag": "20261029114712_add_invitation_teams",
+      "breakpoints": true
     }
   ]
 }

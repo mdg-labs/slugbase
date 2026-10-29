@@ -1566,7 +1566,7 @@
             "type": "string"
           },
           "teamIds": {
-            "description": "The teams the invited person joins on accepting. Until team membership exists a list with an entry is refused with 422 validation_failed",
+            "description": "The teams the invited person joins on accepting; each must be a team of the workspace, or the request is refused with 422 validation_failed. A team deleted before the invitation is accepted is skipped",
             "items": {
               "format": "uuid",
               "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
@@ -3768,6 +3768,13 @@
               "member"
             ],
             "type": "string"
+          },
+          "teams": {
+            "description": "The teams of the workspace the member belongs to, ordered by name (ignoring case) and then identifier",
+            "items": {
+              "$ref": "#/components/schemas/MemberTeam"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -3776,7 +3783,8 @@
           "email",
           "role",
           "joinedAt",
-          "lastActiveAt"
+          "lastActiveAt",
+          "teams"
         ],
         "type": "object"
       },
@@ -3801,6 +3809,26 @@
         "required": [
           "items",
           "nextCursor"
+        ],
+        "type": "object"
+      },
+      "MemberTeam": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "description": "The team's identifier",
+            "format": "uuid",
+            "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
+            "type": "string"
+          },
+          "name": {
+            "description": "The team's name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
         ],
         "type": "object"
       },
@@ -12296,7 +12324,7 @@
                 }
               }
             },
-            "description": "The body did not pass validation: an address that is not one, a role other than admin or member (owner included), or a teamIds with an entry, which cannot be invited into yet"
+            "description": "The body did not pass validation: an address that is not one, a role other than admin or member (owner included), or a teamIds with an entry that is no team of the workspace (unknown_team, whether no team has the identifier or another workspace's does)"
           },
           "429": {
             "content": {
@@ -15349,7 +15377,7 @@
                 }
               }
             },
-            "description": "One page of the workspace's members, each with the account's display name and email address and nothing else of the account"
+            "description": "One page of the workspace's members, each with the account's display name and email address and nothing else of the account, and the teams of the workspace it belongs to"
           },
           "400": {
             "content": {

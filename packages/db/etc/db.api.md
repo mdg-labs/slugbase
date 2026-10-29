@@ -921,6 +921,14 @@ export interface MembershipRepository {
 export function membershipRepository(tx: TenantTx): MembershipRepository;
 
 // @public
+export interface MemberTeam {
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public
 export interface MfaActivation {
     // (undocumented)
     readonly accountId: string;
@@ -1672,6 +1680,7 @@ export interface WorkspaceMember {
     readonly lastActiveAt: Date | null;
     // (undocumented)
     readonly role: MemberRole;
+    readonly teams: readonly MemberTeam[];
 }
 
 // @public

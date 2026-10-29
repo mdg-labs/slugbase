@@ -314,7 +314,7 @@ describe("the walker over the committed document", () => {
     const hooks = await sessionHooks(server, unentitled);
     const report = await walkContract({ document: committed, send: (request) => server.fetch(request), origin, fixtures: FIXTURES, hooks });
     // The walker holds the team it names for workspace B to the 404 it expects for an identifier of another workspace. A team is refused with 422
-    // whichever workspace holds it, because no team can be invited into yet and none can be told from another, which discloses nothing. That answer
+    // whichever workspace holds it, because a team of workspace B is no team of the workspace of the request and is told from an unknown one by nothing, which discloses nothing. That answer
     // is the one difference of the walk, and the exception names exactly it (the status and the code that come with it).
     // The boolean filter `hasSlug` of the bookmark list is picked as an input that can carry an identifier by its name, and the identifier the walk
     // puts in it is refused as a malformed value (422) before any bookmark is looked at, which is the other difference.
@@ -690,7 +690,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
       failures: [...classification.problems.map((problem) => ({ mode: "api" as const, subject: problem.subject, kind: "unclassified_operation", detail: problem.detail })), ...runs.flatMap((run) => run.failures)],
     };
 
-    // A team is refused with 422 whichever workspace holds it, because no team can be invited into yet and none can be told from another, which
+    // A team is refused with 422 whichever workspace holds it, because a team of workspace B is no team of the workspace of the request and is told from an unknown one by nothing, which
     // discloses nothing; the matrix expects 404 for an identifier of workspace B. The exception names exactly that answer, for the two sessions of A
     // that reach the handler (the member and the tokens are refused with 403 before it, as the matrix expects).
     const refusedAs422 = (failure: MatrixFailure): boolean => failure.kind === "unexpected_status" && /answered 422, expected 404/.test(failure.detail);

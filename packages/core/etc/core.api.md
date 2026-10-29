@@ -4435,9 +4435,9 @@ export type InvitationOutcome =
 | {
     readonly kind: "invalid_role";
 }
-/** The request names teams, which cannot be invited into yet; nothing was written. */
+/** The request names an identifier that is no team of the workspace; nothing was written. */
 | {
-    readonly kind: "teams_unavailable";
+    readonly kind: "unknown_team";
 }
 /** The address belongs to a member of the workspace; nothing was written. */
 | {
@@ -4599,6 +4599,7 @@ export interface InvitationStore {
     actorRole(): Promise<WorkspaceRole | undefined>;
     inviteeLocale(invitationId: string): Promise<string | undefined>;
     memberHoldsEmail(email: string): Promise<boolean>;
+    teamsExist(teamIds: readonly string[]): Promise<boolean>;
     writePending(invitation: NewInvitation): Promise<{
         readonly invitation: InvitationRecord;
         readonly resent: boolean;

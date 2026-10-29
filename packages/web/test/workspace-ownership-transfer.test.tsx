@@ -22,6 +22,7 @@ const HEDY: TestMember = {
   role: "admin",
   joinedAt: "2026-09-10T08:00:00.000Z",
   lastActiveAt: "2026-10-17T10:00:00.000Z",
+  teams: [],
 };
 
 const KATHERINE: TestMember = {
@@ -31,6 +32,7 @@ const KATHERINE: TestMember = {
   role: "owner",
   joinedAt: "2026-08-01T08:00:00.000Z",
   lastActiveAt: null,
+  teams: [],
 };
 
 beforeEach(() => {
@@ -71,7 +73,16 @@ async function press(element: HTMLElement): Promise<void> {
 
 async function menuOf(name: string): Promise<(string | null)[]> {
   await press(within(rowOf(name)).getByRole("button", { name: `Actions for ${name}` }));
-  return (await screen.findAllByRole("menuitem")).map((item) => item.textContent);
+  const items = (await screen.findAllByRole("menuitem")).map((item) => item.textContent);
+  // The menu is closed again, so the next one read holds its own items only.
+  await act(async () => {
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+    await Promise.resolve();
+  });
+  await waitFor(() => {
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+  return items;
 }
 
 async function openTransfer(name: string): Promise<HTMLElement> {
@@ -93,8 +104,8 @@ function submit(dialog: HTMLElement): HTMLElement {
 
 describe("the Transfer ownership row action", () => {
   it.each([
-    ["a member", "Grace Hopper", ["Make owner", "Make admin", "Transfer ownership", "Remove from workspace"]],
-    ["an admin", "Hedy Lamarr", ["Make owner", "Make member", "Transfer ownership", "Remove from workspace"]],
+    ["a member", "Grace Hopper", ["Make owner", "Make admin", "Manage teams", "Transfer ownership", "Remove from workspace"]],
+    ["an admin", "Hedy Lamarr", ["Make owner", "Make member", "Manage teams", "Transfer ownership", "Remove from workspace"]],
   ])("is offered to an owner for %s, between the role actions and Remove", async (_who, name, items) => {
     stubWorkspaceSettingsServer({ members: [SELF, GRACE, HEDY, KATHERINE] });
     await openList();
@@ -106,7 +117,7 @@ describe("the Transfer ownership row action", () => {
     stubWorkspaceSettingsServer({ members: [SELF, GRACE, KATHERINE] });
     await openList();
 
-    expect(await menuOf("Katherine Johnson")).toEqual(["Make admin", "Make member", "Remove from workspace"]);
+    expect(await menuOf("Katherine Johnson")).toEqual(["Make admin", "Make member", "Manage teams", "Remove from workspace"]);
     expect(within(rowOf("Ada Lovelace")).getByRole("button", { name: "Actions for Ada Lovelace" })).toBeTruthy();
   }, SLOW_TEST_TIMEOUT_MS);
 
@@ -114,7 +125,7 @@ describe("the Transfer ownership row action", () => {
     stubWorkspaceSettingsServer({ role: "admin", members: [{ ...SELF, role: "admin" }, GRACE, HEDY] });
     await openList();
 
-    expect(await menuOf("Grace Hopper")).toEqual(["Make admin", "Remove from workspace"]);
+    expect(await menuOf("Grace Hopper")).toEqual(["Make admin", "Manage teams", "Remove from workspace"]);
   }, SLOW_TEST_TIMEOUT_MS);
 });
 
@@ -177,9 +188,9 @@ describe("the transfer dialog", () => {
     await waitFor(() => {
       expect(within(rowOf("Ada Lovelace")).getByText("Admin")).toBeTruthy();
     });
-    // an admin cannot touch an owner, so the new owner has no actions left, while a member still has some
-    expect(within(rowOf("Grace Hopper")).queryByRole("button", { name: /^Actions for/ })).toBeNull();
-    expect(await menuOf("Hedy Lamarr")).toEqual(["Make member", "Remove from workspace"]);
+    // an admin cannot touch an owner, so the new owner has only the teams left to manage, while a member still has more
+    expect(await menuOf("Grace Hopper")).toEqual(["Manage teams"]);
+    expect(await menuOf("Hedy Lamarr")).toEqual(["Make member", "Manage teams", "Remove from workspace"]);
   }, SLOW_TEST_TIMEOUT_MS);
 
   it("opens the re-authentication prompt on reauth_required, and sends the transfer again once the password is confirmed", async () => {

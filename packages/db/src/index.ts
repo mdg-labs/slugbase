@@ -70,7 +70,7 @@ export type { FolderRepository } from "./repositories/folders.ts";
 export { workspaceRepository } from "./repositories/workspaces.ts";
 export type { NewWorkspace, WorkspaceDetail, WorkspaceRepository, WorkspaceSummary } from "./repositories/workspaces.ts";
 export { isLastOwnerViolation, memberRepository, OWNER_REQUIRED_CONSTRAINT } from "./repositories/members.ts";
-export type { MemberRepository, WorkspaceMember } from "./repositories/members.ts";
+export type { MemberRepository, MemberTeam, WorkspaceMember } from "./repositories/members.ts";
 export { invitationAcceptanceRepository, invitationRepository } from "./repositories/invitations.ts";
 export type { InvitationAcceptanceRepository, InvitationMailContext, InvitationRepository } from "./repositories/invitations.ts";
 export { IdempotencyBusyError, idempotencyRepository } from "./repositories/idempotency.ts";

@@ -14,7 +14,9 @@ import type { WorkspaceRole } from "../ports/tenant-resolver.ts";
 // a pending invitation is a resend of that invitation: the same row gets the new role and teams, the new
 // inviter, a new expiry and a new token. Where the composition cannot mail the link, a copied link is the
 // only one there is, so such a resend keeps the stored token hash and the link keeps working. An address that
-// already belongs to a member is refused. Teams cannot be invited into until team membership exists. The
+// already belongs to a member is refused. The teams an invitation names must all be teams of the workspace: an
+// identifier that is none, whether no team has it or another workspace's team does, is refused alike and names
+// nothing (the database joins the teams when the invitation is accepted and skips one that is gone by then). The
 // invitation, its audit event and the mail job are one transaction, so each exists exactly when the others
 // do; a failure of a write rejects, so the caller's transaction must not commit.
 //
@@ -81,6 +83,8 @@ export interface InvitationStore {
   actorRole(): Promise<WorkspaceRole | undefined>;
   /** Whether an account that is a member of the workspace of the transaction holds the address. */
   memberHoldsEmail(email: string): Promise<boolean>;
+  /** Whether every identifier is a team of the workspace of the transaction; true for none. A team of another workspace is none. */
+  teamsExist(teamIds: readonly string[]): Promise<boolean>;
   /**
    * Writes the invitation for the workspace of the transaction, or, when the address already has a pending
    * one, replaces that invitation's role, teams, inviter, token hash (unless `keepTokenHash`), mail ticket and expiry;
@@ -167,8 +171,8 @@ export type InvitationOutcome =
   | { readonly kind: "forbidden" }
   /** The role is not one an invitation can grant; nothing was written. */
   | { readonly kind: "invalid_role" }
-  /** The request names teams, which cannot be invited into yet; nothing was written. */
-  | { readonly kind: "teams_unavailable" }
+  /** The request names an identifier that is no team of the workspace; nothing was written. */
+  | { readonly kind: "unknown_team" }
   /** The address belongs to a member of the workspace; nothing was written. */
   | { readonly kind: "already_member" };
 
@@ -184,12 +188,13 @@ export async function inviteMember({ store, audit, newId, ttlSeconds }: Invitati
   if (!isInvitationRole(ask.role)) {
     return { kind: "invalid_role" };
   }
-  if (ask.teamIds.length > 0) {
-    return { kind: "teams_unavailable" };
-  }
   const actorRole = await store.actorRole();
   if (actorRole !== "owner" && actorRole !== "admin") {
     return { kind: "forbidden" };
+  }
+  const teamIds = [...new Set(ask.teamIds.map((teamId) => teamId.toLowerCase()))];
+  if (teamIds.length > 0 && !(await store.teamsExist(teamIds))) {
+    return { kind: "unknown_team" };
   }
   const email = normalizeEmail(ask.email);
   if (await store.memberHoldsEmail(email)) {
@@ -200,7 +205,7 @@ export async function inviteMember({ store, audit, newId, ttlSeconds }: Invitati
     id: newId(),
     email,
     role: ask.role,
-    teamIds: ask.teamIds,
+    teamIds,
     tokenHash: generateCredentialToken().hash,
     keepTokenHash: !ask.mailed,
     mailTicket,

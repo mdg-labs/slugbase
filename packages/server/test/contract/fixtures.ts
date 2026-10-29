@@ -179,7 +179,7 @@ export const FIXTURES: ContractFixtures = {
   },
   // The invitation acts in the workspace of the request and names a team of it by identifier in its body. The walker's server holds the entitlement the
   // operation declares for every account but the one that has none, so the valid request is the declared 201. A team is refused with 422 whichever workspace
-  // holds it, since no team can be invited into yet, so the request naming a team is the declared 422 for a team of workspace B as for any other; the matrix
+  // holds it, since an invitation takes only the teams of the workspace of the request, so the request naming a team is the declared 422 for a team of workspace B as for any other; the matrix
   // and the walker hold that one answer to the 404 they expect for an identifier of another workspace (see contract.integration.test.ts).
   createInvitation: {
     body: { email: "walker-invitee@example.test", role: "member" },

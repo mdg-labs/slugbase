@@ -1903,6 +1903,7 @@
         "name": "Name",
         "email": "Email",
         "role": "Role",
+        "teams": "Teams",
         "joined": "Joined",
         "lastActive": "Last active",
         "actions": "Actions"
@@ -1920,6 +1921,7 @@
         "makeOwner": "Make owner",
         "makeAdmin": "Make admin",
         "makeMember": "Make member",
+        "manageTeams": "Manage teams",
         "transfer": "Transfer ownership",
         "remove": "Remove from workspace"
       },
@@ -2058,12 +2060,44 @@
           "created": "The invitation was created. Copy its link from the pending invitations.",
           "alreadyMember": "Already a member of this workspace.",
           "invalid": "Not a valid email address.",
+          "unknownTeam": "A team you chose no longer exists. Go back, remove it and try again.",
           "rateLimited": "Too many requests. Try again in a while.",
           "unavailable": "The server is busy. Try again.",
           "failed": "The invitation could not be created.",
           "requestId": "Request ID: {requestId}",
           "tryAgain": "Try the failed ones again",
           "done": "Done"
+        },
+        "teams": {
+          "label": "Teams",
+          "description": "The people you invite join these teams when they accept. Optional.",
+          "placeholder": "Search teams",
+          "empty": "No team matches.",
+          "loading": "Loading teams",
+          "unavailable": "The teams could not be loaded.",
+          "remove": "Remove {name}"
+        }
+      },
+      "teams": {
+        "none": "No teams",
+        "of": "Teams of {name}",
+        "title": "Teams of {name}",
+        "description": "Choose the teams this member belongs to.",
+        "close": "Close the teams form",
+        "label": "Teams",
+        "placeholder": "Search teams",
+        "empty": "No team matches. An admin can create teams on the Teams page.",
+        "loading": "Loading teams",
+        "unavailable": "The teams could not be loaded.",
+        "remove": "Remove {name}",
+        "cancel": "Cancel",
+        "submit": "Save teams",
+        "saved": "Teams of {name} saved.",
+        "error": {
+          "teamGone": "A team you chose no longer exists. Remove it and try again.",
+          "memberGone": "This person is no longer a member of this workspace.",
+          "unavailable": "The teams could not be saved right now. Try again in a moment.",
+          "partlySaved": "Some of your changes were saved, but not all of them. Save again to send the rest."
         }
       }
     }

@@ -16,6 +16,7 @@ export interface TestMember {
   readonly role: Role;
   readonly joinedAt: string;
   readonly lastActiveAt: string | null;
+  readonly teams: readonly { readonly id: string; readonly name: string }[];
 }
 
 /** The signed-in account as the member list holds it. */
@@ -26,6 +27,7 @@ export const SELF: TestMember = {
   role: "owner",
   joinedAt: "2026-09-01T08:00:00.000Z",
   lastActiveAt: "2026-10-18T09:30:00.000Z",
+  teams: [],
 };
 
 export const GRACE: TestMember = {
@@ -35,6 +37,7 @@ export const GRACE: TestMember = {
   role: "member",
   joinedAt: "2026-09-05T08:00:00.000Z",
   lastActiveAt: null,
+  teams: [],
 };
 
 export const INVITATIONS_PATH = "/api/v1/invitations";
@@ -363,6 +366,10 @@ export function stubWorkspaceSettingsServer(options: WorkspaceSettingsServerOpti
         role = "admin";
       }
       return json(promoted);
+    }
+    if (pathname === "/api/v1/teams" && request.method === "GET") {
+      // The invite dialog lists the teams to choose from; this workspace has none.
+      return json({ items: [], nextCursor: null });
     }
     if (options.other !== undefined) {
       return options.other(request);

@@ -19,6 +19,7 @@ import { useTranslation } from "react-i18next";
 import { EntitlementGate } from "../entitlements/index.ts";
 import { useFormat } from "../i18n/use-format.ts";
 import { inPlaceRefusals } from "../shell/mutation-error-toasts.tsx";
+import { MEMBERS_QUERY_KEY } from "../shell/workspace-members.ts";
 import { canAdminister, workspaceQuery } from "../shell/workspace.ts";
 import { TeamForm } from "./team-form.tsx";
 import { TEAMS_QUERY_KEY, deleteTeam, teamFailureOf, teamListQuery, teamQuery, type Team } from "./teams.ts";
@@ -75,6 +76,8 @@ function TeamsContent(): ReactElement {
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: TEAMS_QUERY_KEY });
+      // The members page shows each member's teams.
+      void queryClient.invalidateQueries({ queryKey: MEMBERS_QUERY_KEY });
     },
   });
 
