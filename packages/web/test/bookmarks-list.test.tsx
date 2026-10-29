@@ -188,7 +188,8 @@ describe("reaching the page", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await openApp("/bookmarks");
 
     await screen.findByRole("heading", { level: 1, name: "Bookmarks" });
-    expect(screen.getByRole("list", { name: "Bookmarks" }).querySelectorAll("[data-item-id]")).toHaveLength(2);
+    // The heading is drawn while the list request is pending, over a skeleton; the list follows the response.
+    expect((await screen.findByRole("list", { name: "Bookmarks" })).querySelectorAll("[data-item-id]")).toHaveLength(2);
     expect(lists()).toHaveLength(1);
     expect(lists()[0]?.params.get("sort")).toBe("recent");
     expect(lists()[0]?.params.get("limit")).toBe("24");
