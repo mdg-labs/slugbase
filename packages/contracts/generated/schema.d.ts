@@ -3336,10 +3336,10 @@ export interface components {
             name: string;
             /**
              * Format: date-time
-             * @description When the team's name or description last changed, RFC 3339 UTC
+             * @description When the team's version last moved, RFC 3339 UTC
              */
             updatedAt: string;
-            /** @description Moves by one with every change of the name or the description; the ETag header of the single-team operations carries it and If-Match takes it back */
+            /** @description Moves by one with every change of the name, the description or the member set, with every invitation accepted into the workspace, whichever teams it names, and with a replacement of the member set that is refused for adding an account that joined the workspace after the version was written (a member who leaves the workspace takes its memberships without moving it); the ETag header of the single-team operations carries it and If-Match takes it back */
             version: number;
         };
         TeamList: {
@@ -3380,10 +3380,10 @@ export interface components {
             name: string;
             /**
              * Format: date-time
-             * @description When the team's name or description last changed, RFC 3339 UTC
+             * @description When the team's version last moved, RFC 3339 UTC
              */
             updatedAt: string;
-            /** @description Moves by one with every change of the name or the description; the ETag header of the single-team operations carries it and If-Match takes it back */
+            /** @description Moves by one with every change of the name, the description or the member set, with every invitation accepted into the workspace, whichever teams it names, and with a replacement of the member set that is refused for adding an account that joined the workspace after the version was written (a member who leaves the workspace takes its memberships without moving it); the ETag header of the single-team operations carries it and If-Match takes it back */
             version: number;
         };
         TransferOwnershipRequest: {
@@ -12356,7 +12356,9 @@ export interface operations {
     replaceTeamMembers: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "If-Match"?: string;
+            };
             path: {
                 id: string;
             };
@@ -12368,7 +12370,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description The team with the members the request named, whether or not the set changed. Accounts outside the set are removed from the team and accounts in it are added; the team's version does not move, since it covers the name and the description */
+            /** @description The team with the members the request named, whether or not the set changed. Accounts outside the set are removed from the team and accounts in it are added. A set that differs from the team's moves the version by one and the ETag is that of the new version; the set the team has already writes nothing and answers with the unchanged version */
             200: {
                 headers: {
                     /** @description The team's version as an entity tag, for example "3"; the If-Match of the next change */
@@ -12408,6 +12410,15 @@ export interface operations {
             };
             /** @description The workspace the request acts in has no team with this identifier: a team of another workspace and one that never existed are answered alike */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description If-Match names a version other than the team's current one (precondition_failed), read under the team's row lock, or the replacement adds an account that joined the workspace after that version was written; the member set is unchanged, and in the second case only the version has moved, so a new read of the team carries the version to send */
+            412: {
                 headers: {
                     [name: string]: unknown;
                 };

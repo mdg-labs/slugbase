@@ -2172,6 +2172,7 @@
         "error": {
           "teamGone": "Ein Team, das du gewählt hast, gibt es nicht mehr. Entferne es und versuche es erneut.",
           "memberGone": "Diese Person ist kein Mitglied dieses Workspace mehr.",
+          "changedElsewhere": "Ein Team wurde woanders geändert, daher wurde darin nichts überschrieben. Speichere erneut, um deine Änderungen auf die neuesten Mitglieder anzuwenden.",
           "unavailable": "Die Teams konnten gerade nicht gespeichert werden. Versuche es gleich noch einmal.",
           "partlySaved": "Ein Teil deiner Änderungen wurde gespeichert, aber nicht alle. Speichere erneut, um den Rest zu senden."
         }

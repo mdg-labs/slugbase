@@ -31,6 +31,7 @@ interface StoredTeam {
   id: string;
   name: string;
   memberIds: string[];
+  version: number;
 }
 
 const PEOPLE = [
@@ -43,6 +44,7 @@ interface Received {
   readonly method: string;
   readonly path: string;
   readonly body: unknown;
+  readonly ifMatch: string | null;
 }
 
 interface World {
@@ -60,11 +62,11 @@ function newWorld(): World {
 }
 
 function team(id: string, name: string, memberIds: string[]): StoredTeam {
-  return { id, name, memberIds };
+  return { id, name, memberIds, version: 1 };
 }
 
 function listed(stored: StoredTeam) {
-  return { id: stored.id, name: stored.name, description: "", memberCount: stored.memberIds.length, version: 1, createdAt: STAMP, updatedAt: STAMP };
+  return { id: stored.id, name: stored.name, description: "", memberCount: stored.memberIds.length, version: stored.version, createdAt: STAMP, updatedAt: STAMP };
 }
 
 function detailed(stored: StoredTeam) {
@@ -99,7 +101,7 @@ function steered(operationId: string): Response | undefined | Promise<Response |
 }
 
 function record(request: Request, body: unknown): void {
-  world.received.push({ method: request.method, path: new URL(request.url).pathname, body });
+  world.received.push({ method: request.method, path: new URL(request.url).pathname, body, ifMatch: request.headers.get("if-match") });
 }
 
 function teamOf(url: string): StoredTeam | undefined {
@@ -162,7 +164,7 @@ function serve(): void {
       getTeam: async (request) => {
         record(request, undefined);
         const found = teamOf(request.url);
-        return (await steered("getTeam")) ?? (found === undefined ? problem(404, "not_found", "req-404") : json(detailed(found), { headers: { ETag: '"1"' } }));
+        return (await steered("getTeam")) ?? (found === undefined ? problem(404, "not_found", "req-404") : json(detailed(found), { headers: { ETag: `"${String(found.version)}"` } }));
       },
       replaceTeamMembers: async (request) => {
         const body = (await request.json()) as { accountIds: string[] };
@@ -175,8 +177,16 @@ function serve(): void {
         if (found === undefined) {
           return problem(404, "not_found", "req-404");
         }
-        found.memberIds = [...new Set(body.accountIds)];
-        return json(detailed(found), { headers: { ETag: '"1"' } });
+        const ifMatch = request.headers.get("if-match");
+        if (ifMatch !== null && ifMatch !== `"${String(found.version)}"`) {
+          return problem(412, "precondition_failed", "req-412");
+        }
+        const next = [...new Set(body.accountIds)];
+        if (next.length !== found.memberIds.length || next.some((id) => !found.memberIds.includes(id))) {
+          found.version += 1;
+        }
+        found.memberIds = next;
+        return json(detailed(found), { headers: { ETag: `"${String(found.version)}"` } });
       },
     }),
     ...createHandlers(document_, { scenario: { name: "member-teams", fixtures: { listWorkspaces: WORKSPACE_LIST_BODY } } }),
@@ -369,6 +379,59 @@ describe("Manage teams", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     });
   });
 
+  it("makes each replacement against the version of the read it was made from", async () => {
+    world.teams = [PLATFORM_TEAM(), DESIGN_TEAM(), SUPPORT_TEAM()];
+    await openMembers();
+    const dialog = await openManage("Grace Hopper");
+    // Both teams were changed by other admins after the page was read, which moved their versions.
+    const platform = world.teams.find((stored) => stored.id === PLATFORM);
+    const support = world.teams.find((stored) => stored.id === SUPPORT);
+    if (platform !== undefined) {
+      platform.version = 3;
+    }
+    if (support !== undefined) {
+      support.version = 7;
+    }
+
+    await press(within(dialog).getByRole("button", { name: "Remove Platform" }));
+    await chooseTeam(dialog, "Support");
+    await press(within(dialog).getByRole("button", { name: "Save teams" }));
+
+    expect(await screen.findByText("Teams of Grace Hopper saved.")).toBeTruthy();
+    expect(calls("PUT", `${TEAMS_PATH}/${PLATFORM}/members`).map((call) => call.ifMatch)).toEqual(['"3"']);
+    expect(calls("PUT", `${TEAMS_PATH}/${SUPPORT}/members`).map((call) => call.ifMatch)).toEqual(['"7"']);
+  });
+
+  it("shows a conflict and overwrites nothing when a team changed between its read and the replacement, and a second try applies to the latest members", async () => {
+    world.teams = [PLATFORM_TEAM(), DESIGN_TEAM()];
+    const platform = world.teams[0];
+    // Another admin puts Alan into Platform after the team was read and before the replacement is sent.
+    world.refuse.set("replaceTeamMembers", (call) => {
+      if (call === 1 && platform !== undefined) {
+        platform.memberIds.push(ALAN);
+        platform.version += 1;
+      }
+      return undefined;
+    });
+    await openMembers();
+    const dialog = await openManage("Grace Hopper");
+
+    await press(within(dialog).getByRole("button", { name: "Remove Platform" }));
+    await press(within(dialog).getByRole("button", { name: "Save teams" }));
+
+    const alert = await within(dialog).findByRole("alert");
+    expect(alert.textContent).toContain("A team was changed somewhere else, so nothing in it was overwritten.");
+    expect(screen.queryByText("Teams of Grace Hopper saved.")).toBeNull();
+    expect(screen.getByRole("dialog", { name: "Teams of Grace Hopper" })).toBeTruthy();
+    expect(platform?.memberIds).toEqual([ADA, GRACE, ALAN]);
+
+    await press(within(dialog).getByRole("button", { name: "Save teams" }));
+
+    expect(await screen.findByText("Teams of Grace Hopper saved.")).toBeTruthy();
+    expect(platform?.memberIds).toEqual([ADA, ALAN]);
+    expect(calls("PUT", `${TEAMS_PATH}/${PLATFORM}/members`).map((call) => call.ifMatch)).toEqual(['"1"', '"2"']);
+  });
+
   it("sends nothing for a team that is unchanged, and reads and writes only the ones that are not", async () => {
     world.teams = [PLATFORM_TEAM(), DESIGN_TEAM(), SUPPORT_TEAM()];
     await openMembers();
@@ -434,22 +497,63 @@ describe("Manage teams", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(screen.getAllByText("Teams of Grace Hopper saved.")).toHaveLength(1);
   });
 
-  it("says in the dialog that the person is no longer a member", async () => {
-    world.teams = [PLATFORM_TEAM(), DESIGN_TEAM()];
-    world.refuse.set("replaceTeamMembers", () =>
-      json(
-        { type: "https://slugbase.app/problems/validation_failed", title: "x", status: 422, code: "validation_failed", detail: "x", requestId: "req-422", errors: [{ path: "accountIds", code: "unknown_member" }] },
-        { status: 422, contentType: "application/problem+json" },
-      ),
+  const UNKNOWN_MEMBER = () =>
+    json(
+      { type: "https://slugbase.app/problems/validation_failed", title: "x", status: 422, code: "validation_failed", detail: "x", requestId: "req-422", errors: [{ path: "accountIds", code: "unknown_member" }] },
+      { status: 422, contentType: "application/problem+json" },
     );
+
+  it("says in the dialog that the person is no longer a member when a team they are added to still refuses them after it was read again", async () => {
+    world.teams = [PLATFORM_TEAM(), DESIGN_TEAM(), SUPPORT_TEAM()];
+    world.refuse.set("replaceTeamMembers", UNKNOWN_MEMBER);
+    await openMembers();
+    const dialog = await openManage("Grace Hopper");
+
+    await chooseTeam(dialog, "Support");
+    await press(within(dialog).getByRole("button", { name: "Save teams" }));
+
+    expect((await within(dialog).findByRole("alert")).textContent).toContain("This person is no longer a member of this workspace.");
+    expect(screen.queryByText("That did not work", { exact: false })).toBeNull();
+    expect(calls("GET", `${TEAMS_PATH}/${SUPPORT}`)).toHaveLength(2);
+    expect(calls("PUT", `${TEAMS_PATH}/${SUPPORT}/members`)).toHaveLength(2);
+  });
+
+  it("does not blame the person being edited when another member of the team they are taken out of has left the workspace", async () => {
+    world.teams = [PLATFORM_TEAM(), DESIGN_TEAM()];
+    world.refuse.set("replaceTeamMembers", UNKNOWN_MEMBER);
     await openMembers();
     const dialog = await openManage("Grace Hopper");
 
     await press(within(dialog).getByRole("button", { name: "Remove Platform" }));
     await press(within(dialog).getByRole("button", { name: "Save teams" }));
 
-    expect((await within(dialog).findByRole("alert")).textContent).toContain("This person is no longer a member of this workspace.");
-    expect(screen.queryByText("That did not work", { exact: false })).toBeNull();
+    const alert = await within(dialog).findByRole("alert");
+    expect(alert.textContent).toContain("A team was changed somewhere else");
+    expect(alert.textContent).not.toContain("This person is no longer a member");
+    expect(world.teams.find((stored) => stored.id === PLATFORM)?.memberIds).toEqual([ADA, GRACE]);
+  });
+
+  it("reads the team again once when another member left after the read, and then makes the change", async () => {
+    world.teams = [PLATFORM_TEAM(), DESIGN_TEAM()];
+    const platform = world.teams[0];
+    // Ada leaves the workspace after the team was read: the first replacement is refused, the team no longer holds her.
+    world.refuse.set("replaceTeamMembers", (call) => {
+      if (call === 1 && platform !== undefined) {
+        platform.memberIds = platform.memberIds.filter((id) => id !== ADA);
+        platform.version += 1;
+        return UNKNOWN_MEMBER();
+      }
+      return undefined;
+    });
+    await openMembers();
+    const dialog = await openManage("Grace Hopper");
+
+    await press(within(dialog).getByRole("button", { name: "Remove Platform" }));
+    await press(within(dialog).getByRole("button", { name: "Save teams" }));
+
+    expect(await screen.findByText("Teams of Grace Hopper saved.")).toBeTruthy();
+    expect(calls("PUT", `${TEAMS_PATH}/${PLATFORM}/members`).map((call) => call.body)).toEqual([{ accountIds: [ADA] }, { accountIds: [] }]);
+    expect(platform?.memberIds).toEqual([]);
   });
 
   it("shows a wait while the teams load, and says they could not be loaded instead of saying no team matches", async () => {

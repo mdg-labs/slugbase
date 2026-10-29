@@ -1,6 +1,6 @@
 import type postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { isTeamNameTaken, listRepositoryMethods, teamRepository, workspacePurgeOrder } from "../src/index.ts";
+import { instanceRepository, isTeamNameTaken, listRepositoryMethods, teamRepository, workspacePurgeOrder } from "../src/index.ts";
 import { createTestDatabase, type TestDatabase } from "../src/testing.ts";
 import { asSystem, freshId, seedAccount } from "./support/auth-fixture.ts";
 import { seedMember, seedWorkspace, type Role } from "./support/workspace-fixture.ts";
@@ -112,6 +112,11 @@ async function storedTeams(workspaceId: string): Promise<StoredTeam[]> {
   return asSystem(db, (tx) => tx<StoredTeam[]>`SELECT id, name::text AS name, description, version FROM teams WHERE workspace_id = ${workspaceId} ORDER BY name, id`);
 }
 
+async function storedMembersVersion(teamId: string): Promise<number> {
+  const [row] = await asSystem(db, (tx) => tx<{ members_version: number }[]>`SELECT members_version FROM teams WHERE id = ${teamId}`);
+  return row?.members_version ?? -1;
+}
+
 async function storedMembers(teamId: string): Promise<string[]> {
   const rows = await asSystem(db, (tx) => tx<{ account_id: string }[]>`SELECT account_id FROM team_members WHERE team_id = ${teamId} ORDER BY account_id`);
   return rows.map((row) => row.account_id);
@@ -132,6 +137,8 @@ describe("the tables", () => {
       ["version", "int4", "NO"],
       ["created_at", "timestamptz", "NO"],
       ["updated_at", "timestamptz", "NO"],
+      ["members_version", "int4", "NO"],
+      ["versioned_at", "timestamptz", "NO"],
     ]);
     expect(columns.filter((column) => column.table_name === "team_members").map((column) => [column.column_name, column.udt_name, column.is_nullable])).toEqual([
       ["workspace_id", "uuid", "NO"],
@@ -192,7 +199,7 @@ describe("the tables", () => {
     expect(await refusedWith(insert("x", ""))).toBeUndefined();
   });
 
-  it("lets the application role insert the columns of a creation and update the name and the description only", async () => {
+  it("lets the application role insert the columns of a creation and update the name, the description and the member revision only", async () => {
     const workspace = await workspaceOf(["owner"]);
     const owner = memberOf(workspace, 0);
     const tenant = { accountId: owner, workspaceId: workspace.id };
@@ -200,7 +207,10 @@ describe("the tables", () => {
     expect(await refusedWith(appAs(tenant, (tx) => tx`INSERT INTO teams (id, workspace_id, name) VALUES (${teamId}, ${workspace.id}, 'granted')`))).toBeUndefined();
     expect(await refusedWith(appAs(tenant, (tx) => tx`INSERT INTO teams (id, workspace_id, name, version) VALUES (${freshId()}, ${workspace.id}, 'version', 9)`))).toBe(INSUFFICIENT_PRIVILEGE);
     expect(await refusedWith(appAs(tenant, (tx) => tx`UPDATE teams SET description = 'granted' WHERE id = ${teamId}`))).toBeUndefined();
+    expect(await refusedWith(appAs(tenant, (tx) => tx`UPDATE teams SET members_version = 1 WHERE id = ${teamId}`))).toBeUndefined();
     expect(await refusedWith(appAs(tenant, (tx) => tx`UPDATE teams SET version = 7 WHERE id = ${teamId}`))).toBe(INSUFFICIENT_PRIVILEGE);
+    expect(await refusedWith(appAs(tenant, (tx) => tx`UPDATE teams SET versioned_at = now() WHERE id = ${teamId}`))).toBe(INSUFFICIENT_PRIVILEGE);
+    expect(await refusedWith(appAs(tenant, (tx) => tx`INSERT INTO teams (id, workspace_id, name, versioned_at) VALUES (${freshId()}, ${workspace.id}, 'stamped', now())`))).toBe(INSUFFICIENT_PRIVILEGE);
     expect(await refusedWith(appAs(tenant, (tx) => tx`UPDATE teams SET workspace_id = ${freshId()} WHERE id = ${teamId}`))).toBe(INSUFFICIENT_PRIVILEGE);
     expect(await refusedWith(appAs(tenant, (tx) => tx`UPDATE team_members SET account_id = ${owner} WHERE team_id = ${teamId}`))).toBe(INSUFFICIENT_PRIVILEGE);
   });
@@ -220,7 +230,7 @@ describe("the failure scenario: an admin of workspace A addressing the teams of 
         list: await repository.list({ after: undefined, limit: 50 }),
         find: await repository.find(teamOfB),
         update: await repository.update({ teamId: teamOfB, changes: { name: "taken over", description: "mine" }, expectedVersions: undefined }),
-        replace: await repository.replaceMembers({ teamId: teamOfB, accountIds: [memberOf(a, 0)] }),
+        replace: await repository.replaceMembers({ teamId: teamOfB, accountIds: [memberOf(a, 0)], expectedVersions: undefined }),
         remove: await repository.remove(teamOfB),
       };
     });
@@ -335,14 +345,158 @@ describe("the version of a team", () => {
     expect((await storedTeams(workspace.id))[0]).toMatchObject({ name: "Fresh", version: 4 });
   });
 
-  it("is the trigger's alone: a statement cannot set it, and replacing the members leaves it", async () => {
+  it("is the trigger's alone: a statement cannot set it, whatever it writes to the version or the member revision", async () => {
+    const workspace = await workspaceOf();
+    const teamId = await seedTeam(workspace.id, "Steady");
+    await asSystem(db, (tx) => tx`UPDATE teams SET version = 50, name = 'Trigger' WHERE id = ${teamId}`);
+    expect((await storedTeams(workspace.id))[0]).toMatchObject({ name: "Trigger", version: 2 });
+    await asSystem(db, (tx) => tx`UPDATE teams SET version = 50, members_version = 900 WHERE id = ${teamId}`);
+    expect(await storedMembersVersion(teamId)).toBe(1);
+    expect((await storedTeams(workspace.id))[0]).toMatchObject({ version: 3 });
+    await asSystem(db, (tx) => tx`UPDATE teams SET name = 'Both', members_version = 5 WHERE id = ${teamId}`);
+    expect(await storedMembersVersion(teamId)).toBe(2);
+    expect((await storedTeams(workspace.id))[0]).toMatchObject({ name: "Both", version: 4 });
+  });
+
+  it("moves by one with a replacement that changes the member set, and stays for the set the team has", async () => {
     const workspace = await workspaceOf();
     const tenant = { accountId: memberOf(workspace, 1), workspaceId: workspace.id };
     const teamId = await seedTeam(workspace.id, "Steady");
-    await inTenant(tenant, (tx) => teamRepository(tx).replaceMembers({ teamId, accountIds: [memberOf(workspace, 0), memberOf(workspace, 2)] }));
+    const replace = (accountIds: string[], expectedVersions?: readonly number[]) =>
+      inTenant(tenant, (tx) => teamRepository(tx).replaceMembers({ teamId, accountIds, expectedVersions }));
+
+    expect(await replace([memberOf(workspace, 0), memberOf(workspace, 2)])).toMatchObject({ kind: "replaced", team: { version: 2 } });
+    expect(await replace([memberOf(workspace, 2), memberOf(workspace, 0)])).toMatchObject({ kind: "unchanged", team: { version: 2 } });
+    expect(await replace([memberOf(workspace, 0)], [2])).toMatchObject({ kind: "replaced", added: 0, removed: 1, team: { version: 3 } });
+    expect(await replace([memberOf(workspace, 2)], [3])).toMatchObject({ kind: "replaced", added: 1, removed: 1, team: { version: 4 } });
+    expect((await storedTeams(workspace.id))[0]).toMatchObject({ version: 4 });
+    expect(await storedMembersVersion(teamId)).toBe(3);
+  });
+
+  it("is compared under the team's lock: of two replacements made against one version the second is stale and writes nothing", async () => {
+    const workspace = await workspaceOf();
+    const tenant = { accountId: memberOf(workspace, 1), workspaceId: workspace.id };
+    const teamId = await seedTeam(workspace.id, "Contested", [memberOf(workspace, 0)]);
+    const replace = (accountIds: string[], expectedVersions: readonly number[]) =>
+      inTenant(tenant, (tx) => teamRepository(tx).replaceMembers({ teamId, accountIds, expectedVersions }));
+
+    const first = await replace([memberOf(workspace, 0), memberOf(workspace, 2)], [1]);
+    const second = await replace([memberOf(workspace, 0)], [1]);
+
+    expect(first).toMatchObject({ kind: "replaced", team: { version: 2 } });
+    expect(second).toEqual({ kind: "stale" });
+    expect(await storedMembers(teamId)).toEqual(sorted([memberOf(workspace, 0), memberOf(workspace, 2)]));
+    expect((await storedTeams(workspace.id))[0]).toMatchObject({ version: 2 });
+    expect(await replace([], [])).toEqual({ kind: "stale" });
+    expect(await storedMembers(teamId)).toHaveLength(2);
+  });
+
+  it("stamps the start of the transaction that moved it, and leaves the stamp where it was for a write of the values the row has", async () => {
+    const workspace = await workspaceOf(["owner"]);
+    const teamId = await seedTeam(workspace.id, "Stamped");
+    const stampOf = async (): Promise<Date> => {
+      const [row] = await asSystem(db, (tx) => tx<{ versioned_at: Date }[]>`SELECT versioned_at FROM teams WHERE id = ${teamId}`);
+      if (row === undefined) {
+        throw new Error("the team is gone");
+      }
+      return row.versioned_at;
+    };
+    const created = await stampOf();
+
+    await asSystem(db, (tx) => tx`UPDATE teams SET description = '' WHERE id = ${teamId}`);
+    expect((await stampOf()).getTime()).toBe(created.getTime());
+    await asSystem(db, (tx) => tx`UPDATE teams SET description = 'moved' WHERE id = ${teamId}`);
+    const renamed = await stampOf();
+    expect(renamed.getTime()).toBeGreaterThan(created.getTime());
+    await asSystem(db, (tx) => tx`UPDATE teams SET versioned_at = ${created}, members_version = 1 WHERE id = ${teamId}`);
+    expect((await stampOf()).getTime()).toBeGreaterThan(renamed.getTime());
+  });
+
+  describe("when an account that joined the workspace after the version was written is added", () => {
+    interface Scene {
+      readonly workspace: Workspace;
+      readonly owner: string;
+      readonly returning: string;
+      readonly teamId: string;
+    }
+
+    /** An instance admin with a second factor, who is a member of a workspace and of its team Design with its owner. */
+    async function sceneOfAnInstanceAdmin(): Promise<Scene> {
+      const workspace = await workspaceOf(["owner", "member"]);
+      emailNumber += 1;
+      const returning = freshId();
+      await seedAccount(db, { id: returning, email: `teams${String(emailNumber)}@example.test`, passwordHash: "$argon2id$stub", isInstanceAdmin: true, emailVerified: true });
+      await db.owner.begin(async (tx) => {
+        await tx`SELECT set_config('app.account_id', ${returning}, true)`;
+        await tx`UPDATE accounts SET mfa_enabled_at = now(), mfa_secret = ${Buffer.from("sealed")}, mfa_secret_key_id = 'key-1' WHERE id = ${returning}`;
+      });
+      await seedMember(db, { workspaceId: workspace.id, accountId: returning, role: "member", joinedAt: new Date(Date.now() - 60_000) });
+      const owner = memberOf(workspace, 0);
+      const teamId = await seedTeam(workspace.id, "Design", [owner, returning]);
+      return { workspace, owner, returning, teamId };
+    }
+
+    /** The admin leaves the workspace and adds themselves again through the instance operation, which writes no invitation and moves no version. */
+    async function leaveAndAddAgain({ workspace, returning }: Scene): Promise<void> {
+      await asSystem(db, (tx) => tx`DELETE FROM workspace_members WHERE workspace_id = ${workspace.id} AND account_id = ${returning}`);
+      const added = await inTenant({ accountId: returning }, (tx) =>
+        instanceRepository(tx).addMembership({ workspaceId: workspace.id, eventIds: { workspace: freshId(), instance: freshId() } }, null, []),
+      );
+      expect(added).toEqual({ kind: "added" });
+    }
+
+    const replace = ({ workspace, owner, teamId }: Scene, accountIds: string[], expectedVersions: readonly number[]) =>
+      inTenant({ accountId: owner, workspaceId: workspace.id }, (tx) => teamRepository(tx).replaceMembers({ teamId, accountIds, expectedVersions }));
+
+    it("refuses a replacement read before the account left and added themselves again, leaves the set as it was and moves only the version", async () => {
+      const scene = await sceneOfAnInstanceAdmin();
+      const read = 1;
+      await leaveAndAddAgain(scene);
+      expect(await storedMembers(scene.teamId)).toEqual([scene.owner]);
+      expect((await storedTeams(scene.workspace.id)).find((team) => team.id === scene.teamId)?.version).toBe(read);
+
+      expect(await replace(scene, [scene.owner, scene.returning], [read])).toEqual({ kind: "stale" });
+
+      expect(await storedMembers(scene.teamId)).toEqual([scene.owner]);
+      expect((await storedTeams(scene.workspace.id)).find((team) => team.id === scene.teamId)?.version).toBe(read + 1);
+      // The same request made again against the version it read is refused for the version.
+      expect(await replace(scene, [scene.owner, scene.returning], [read])).toEqual({ kind: "stale" });
+      expect(await storedMembers(scene.teamId)).toEqual([scene.owner]);
+    });
+
+    it("applies a replacement read after the account was added again, once the refusal has moved the version", async () => {
+      const scene = await sceneOfAnInstanceAdmin();
+      await leaveAndAddAgain(scene);
+      expect(await replace(scene, [scene.owner, scene.returning], [1])).toEqual({ kind: "stale" });
+
+      expect(await replace(scene, [scene.owner, scene.returning], [2])).toMatchObject({ kind: "replaced", added: 1, removed: 0, team: { version: 3 } });
+      expect(await storedMembers(scene.teamId)).toEqual(sorted([scene.owner, scene.returning]));
+    });
+
+    it("does not refuse a replacement that does not add that account, and one without a precondition applies as it did", async () => {
+      const scene = await sceneOfAnInstanceAdmin();
+      const member = memberOf(scene.workspace, 1);
+      await leaveAndAddAgain(scene);
+
+      expect(await replace(scene, [scene.owner], [1])).toMatchObject({ kind: "unchanged", team: { version: 1 } });
+      expect(await replace(scene, [scene.owner, member], [1])).toMatchObject({ kind: "replaced", added: 1, removed: 0, team: { version: 2 } });
+      const unconditional = await inTenant({ accountId: scene.owner, workspaceId: scene.workspace.id }, (tx) =>
+        teamRepository(tx).replaceMembers({ teamId: scene.teamId, accountIds: [scene.owner, member, scene.returning], expectedVersions: undefined }),
+      );
+      expect(unconditional).toMatchObject({ kind: "replaced", added: 1, removed: 0, team: { version: 3 } });
+    });
+  });
+
+  it("is judged before the accounts: a stale request for an account that is no member is stale, and a current one for it is unknown_members", async () => {
+    const workspace = await workspaceOf();
+    const tenant = { accountId: memberOf(workspace, 1), workspaceId: workspace.id };
+    const teamId = await seedTeam(workspace.id, "Judged");
+    const outsider = freshId();
+    const replace = (expectedVersions: readonly number[]) => inTenant(tenant, (tx) => teamRepository(tx).replaceMembers({ teamId, accountIds: [outsider], expectedVersions }));
+
+    expect(await replace([9])).toEqual({ kind: "stale" });
+    expect(await replace([1])).toEqual({ kind: "unknown_members" });
     expect((await storedTeams(workspace.id))[0]).toMatchObject({ version: 1 });
-    await asSystem(db, (tx) => tx`UPDATE teams SET version = 50, name = 'Trigger' WHERE id = ${teamId}`);
-    expect((await storedTeams(workspace.id))[0]).toMatchObject({ name: "Trigger", version: 2 });
   });
 });
 
@@ -352,7 +506,7 @@ describe("the members of a team", () => {
     const [owner, admin, member] = [memberOf(workspace, 0), memberOf(workspace, 1), memberOf(workspace, 2)];
     const tenant = { accountId: admin, workspaceId: workspace.id };
     const teamId = await seedTeam(workspace.id, "Replaced", [owner, admin]);
-    const result = await inTenant(tenant, (tx) => teamRepository(tx).replaceMembers({ teamId, accountIds: [admin, member, member.toUpperCase()] }));
+    const result = await inTenant(tenant, (tx) => teamRepository(tx).replaceMembers({ teamId, accountIds: [admin, member, member.toUpperCase()], expectedVersions: undefined }));
     expect(result).toMatchObject({ kind: "replaced", added: 1, removed: 1, team: { memberCount: 2 } });
     expect(sorted(result.kind === "replaced" ? result.team.members.map((entry) => entry.accountId) : [])).toEqual(sorted([admin, member]));
     expect(await storedMembers(teamId)).toEqual(sorted([admin, member]));
@@ -362,10 +516,10 @@ describe("the members of a team", () => {
     const workspace = await workspaceOf();
     const tenant = { accountId: memberOf(workspace, 1), workspaceId: workspace.id };
     const teamId = await seedTeam(workspace.id, "Steady", [memberOf(workspace, 0)]);
-    expect(await inTenant(tenant, (tx) => teamRepository(tx).replaceMembers({ teamId, accountIds: [memberOf(workspace, 0)] }))).toMatchObject({ kind: "unchanged", team: { memberCount: 1 } });
-    expect(await inTenant(tenant, (tx) => teamRepository(tx).replaceMembers({ teamId, accountIds: [] }))).toMatchObject({ kind: "replaced", added: 0, removed: 1, team: { memberCount: 0, members: [] } });
+    expect(await inTenant(tenant, (tx) => teamRepository(tx).replaceMembers({ teamId, accountIds: [memberOf(workspace, 0)], expectedVersions: undefined }))).toMatchObject({ kind: "unchanged", team: { memberCount: 1 } });
+    expect(await inTenant(tenant, (tx) => teamRepository(tx).replaceMembers({ teamId, accountIds: [], expectedVersions: undefined }))).toMatchObject({ kind: "replaced", added: 0, removed: 1, team: { memberCount: 0, members: [] } });
     expect(await storedMembers(teamId)).toEqual([]);
-    expect(await inTenant(tenant, (tx) => teamRepository(tx).replaceMembers({ teamId, accountIds: [] }))).toMatchObject({ kind: "unchanged" });
+    expect(await inTenant(tenant, (tx) => teamRepository(tx).replaceMembers({ teamId, accountIds: [], expectedVersions: undefined }))).toMatchObject({ kind: "unchanged" });
   });
 
   it("take only current members of the workspace: an account of another workspace or none at all is refused and nothing is written", async () => {
@@ -375,7 +529,7 @@ describe("the members of a team", () => {
     const teamId = await seedTeam(a.id, "Strict", [memberOf(a, 0)]);
     const stranger = await account("Not a member");
     for (const outsider of [memberOf(b, 0), stranger, freshId()]) {
-      const result = await inTenant(tenant, (tx) => teamRepository(tx).replaceMembers({ teamId, accountIds: [memberOf(a, 2), outsider] }));
+      const result = await inTenant(tenant, (tx) => teamRepository(tx).replaceMembers({ teamId, accountIds: [memberOf(a, 2), outsider], expectedVersions: undefined }));
       expect(result).toEqual({ kind: "unknown_members" });
       expect(await storedMembers(teamId)).toEqual([memberOf(a, 0)]);
     }
@@ -420,7 +574,7 @@ describe("the memberships of a team", () => {
     const teamId = await seedTeam(workspace.id, "Leaving", [memberOf(workspace, 1), memberOf(workspace, 2)]);
     await asSystem(db, (tx) => tx`DELETE FROM workspace_members WHERE workspace_id = ${workspace.id} AND account_id = ${memberOf(workspace, 2)}`);
     expect(await storedMembers(teamId)).toEqual([memberOf(workspace, 1)]);
-    expect(await storedTeams(workspace.id)).toHaveLength(1);
+    expect(await storedTeams(workspace.id)).toMatchObject([{ version: 1 }]);
   });
 
   it("go with a deleted team, which leaves the members in the workspace, and the repeat finds nothing", async () => {
@@ -493,7 +647,7 @@ describe("a member who leaves the workspace while the member set of a team is re
     await Promise.race([held.opened, removal]);
     try {
       const replacing = inTenant({ accountId: memberOf(workspace, 1), workspaceId: workspace.id }, (tx) =>
-        teamRepository(tx).replaceMembers({ teamId, accountIds: [memberOf(workspace, 0), leaving] }),
+        teamRepository(tx).replaceMembers({ teamId, accountIds: [memberOf(workspace, 0), leaving], expectedVersions: undefined }),
       ).then(
         (value) => ({ value }),
         (error: unknown) => ({ error }),
@@ -518,7 +672,7 @@ describe("a member who leaves the workspace while the member set of a team is re
     const held = gateOf();
     const release = gateOf();
     const replacing = inTenant({ accountId: memberOf(workspace, 1), workspaceId: workspace.id }, async (tx) => {
-      const result = await teamRepository(tx).replaceMembers({ teamId, accountIds: [leaving] });
+      const result = await teamRepository(tx).replaceMembers({ teamId, accountIds: [leaving], expectedVersions: undefined });
       held.open();
       await release.opened;
       return result;

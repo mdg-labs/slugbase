@@ -220,7 +220,14 @@ function serve(): void {
         if (found === undefined) {
           return problem(404, "not_found", "req-404");
         }
-        found.memberIds = [...new Set(body.accountIds)];
+        if (request.headers.get("If-Match") !== `"${String(found.version)}"`) {
+          return problem(412, "precondition_failed", "req-412");
+        }
+        const next = [...new Set(body.accountIds)];
+        if (next.length !== found.memberIds.length || next.some((id) => !found.memberIds.includes(id))) {
+          found.version += 1;
+        }
+        found.memberIds = next;
         return json(detailed(found), etag(found));
       },
       deleteTeam: async (request) => {
@@ -615,7 +622,7 @@ describe("changing a team", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(await screen.findByText("Team saved.")).toBeTruthy();
     const patch = calls("PATCH", `${TEAMS_PATH}/${PLATFORM}`);
     expect(patch.map((call) => [call.ifMatch, call.body])).toEqual([['"1"', { name: "Platform team", description: "Runs the stack" }]]);
-    expect(calls("PUT", `${TEAMS_PATH}/${PLATFORM}/members`).map((call) => call.body)).toEqual([{ accountIds: [ADA, ALAN] }]);
+    expect(calls("PUT", `${TEAMS_PATH}/${PLATFORM}/members`).map((call) => [call.ifMatch, call.body])).toEqual([['"2"', { accountIds: [ADA, ALAN] }]]);
     expect(await within(await screen.findByRole("table", { name: "Teams" })).findByText("Platform team")).toBeTruthy();
   });
 
@@ -627,7 +634,7 @@ describe("changing a team", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await press(within(first).getByRole("button", { name: "Save changes" }));
     expect(await screen.findByText("Team saved.")).toBeTruthy();
     expect(calls("PATCH", `${TEAMS_PATH}/${PLATFORM}`)).toHaveLength(0);
-    expect(calls("PUT", `${TEAMS_PATH}/${PLATFORM}/members`).map((call) => call.body)).toEqual([{ accountIds: [ADA] }]);
+    expect(calls("PUT", `${TEAMS_PATH}/${PLATFORM}/members`).map((call) => [call.ifMatch, call.body])).toEqual([['"1"', { accountIds: [ADA] }]]);
     await waitFor(() => {
       expect(screen.queryByRole("dialog", { name: "Edit Platform" })).toBeNull();
     });
@@ -638,7 +645,8 @@ describe("changing a team", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     await waitFor(() => {
       expect(calls("PATCH", `${TEAMS_PATH}/${PLATFORM}`)).toHaveLength(1);
     });
-    expect(calls("PATCH", `${TEAMS_PATH}/${PLATFORM}`)[0]?.ifMatch).toBe('"1"');
+    // The replacement of the members moved the version the second edit read.
+    expect(calls("PATCH", `${TEAMS_PATH}/${PLATFORM}`)[0]?.ifMatch).toBe('"2"');
     expect(calls("PUT", `${TEAMS_PATH}/${PLATFORM}/members`)).toHaveLength(1);
   });
 
@@ -673,6 +681,27 @@ describe("changing a team", { timeout: HEAVY_TEST_TIMEOUT_MS }, () => {
     expect(alert.textContent).toContain("This team was changed somewhere else.");
     expect(calls("PUT", `${TEAMS_PATH}/${PLATFORM}/members`)).toHaveLength(0);
     expect(world.teams[0]?.name).toBe("Platform");
+  });
+
+  it("refuses to overwrite members that were changed elsewhere", async () => {
+    world.teams = [PLATFORM_TEAM()];
+    await openTable();
+    const dialog = await openEdit("Platform");
+    // Another admin puts Alan into the team after this form read it.
+    const stored = world.teams[0];
+    if (stored !== undefined) {
+      stored.memberIds.push(ALAN);
+      stored.version = 2;
+    }
+
+    await press(within(dialog).getByRole("button", { name: "Remove Grace Hopper" }));
+    await press(within(dialog).getByRole("button", { name: "Save changes" }));
+
+    const alert = await within(dialog).findByRole("alert");
+    expect(alert.textContent).toContain("This team was changed somewhere else.");
+    expect(screen.queryByText("Team saved.")).toBeNull();
+    expect(calls("PUT", `${TEAMS_PATH}/${PLATFORM}/members`).map((call) => call.ifMatch)).toEqual(['"1"']);
+    expect(world.teams[0]?.memberIds).toEqual([ADA, GRACE, ALAN]);
   });
 
   it("keeps the name it saved when the members step fails, and a second try sends only the members", async () => {

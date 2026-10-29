@@ -12590,7 +12590,9 @@ export interface OperationTypes {
     replaceTeamMembers: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "If-Match"?: string;
+            };
             path: {
                 id: string;
             };
@@ -12636,6 +12638,14 @@ export interface OperationTypes {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": ComponentTypes["schemas"]["Problem"];
+                };
+            };
+            412: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -17150,6 +17160,9 @@ export const replaceTeamMembers: {
         readonly params: z.ZodObject<{
             id: z.ZodUUID;
         }, z.core.$strict>;
+        readonly headers: z.ZodObject<{
+            "If-Match": z.ZodOptional<z.ZodString>;
+        }, z.core.$strip>;
         readonly body: z.ZodObject<{
             accountIds: z.ZodArray<z.ZodUUID>;
         }, z.core.$strict>;
@@ -17178,6 +17191,7 @@ export const replaceTeamMembers: {
         readonly 401: ProblemResponse;
         readonly 403: ProblemResponse;
         readonly 404: ProblemResponse;
+        readonly 412: ProblemResponse;
         readonly 422: ProblemResponse;
         readonly 429: RateLimitedResponse;
         readonly 503: ProblemResponse;

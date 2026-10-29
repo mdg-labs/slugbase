@@ -69,9 +69,9 @@ export const TeamSchema = z
     name: z.string().describe("The team's name, in the case it was entered in"),
     description: z.string().describe("The team's description; empty when it has none"),
     memberCount: z.number().int().min(0).describe("How many members the team has"),
-    version: z.number().int().min(1).describe("Moves by one with every change of the name or the description; the ETag header of the single-team operations carries it and If-Match takes it back"),
+    version: z.number().int().min(1).describe("Moves by one with every change of the name, the description or the member set, with every invitation accepted into the workspace, whichever teams it names, and with a replacement of the member set that is refused for adding an account that joined the workspace after the version was written (a member who leaves the workspace takes its memberships without moving it); the ETag header of the single-team operations carries it and If-Match takes it back"),
     createdAt: z.iso.datetime().describe("When the team was created, RFC 3339 UTC"),
-    updatedAt: z.iso.datetime().describe("When the team's name or description last changed, RFC 3339 UTC"),
+    updatedAt: z.iso.datetime().describe("When the team's version last moved, RFC 3339 UTC"),
   })
   .meta({ id: "Team" });
 
@@ -105,7 +105,7 @@ export const TeamIfMatchHeaderSchema = z.object({
   "If-Match": z
     .string()
     .optional()
-    .describe('The ETag of the version the change is made against, for example "3". A team at another version answers 412 precondition_failed. Optional, so a caller may leave it out; `*` matches any version'),
+    .describe('The ETag of the version the change is made against, for example "3". A team at another version answers 412 precondition_failed, and its version covers the name, the description and the member set. Optional, so a caller may leave it out; `*` matches any version'),
 });
 
 const TeamEntityTag = {
@@ -246,10 +246,10 @@ export const replaceTeamMembers = defineOperation({
   auth: "admin",
   rate: "write",
   entitlement: "teams.manage",
-  request: { params: TeamParamsSchema, body: ReplaceTeamMembersRequestSchema },
+  request: { params: TeamParamsSchema, headers: TeamIfMatchHeaderSchema, body: ReplaceTeamMembersRequestSchema },
   responses: {
     200: jsonResponse(
-      "The team with the members the request named, whether or not the set changed. Accounts outside the set are removed from the team and accounts in it are added; the team's version does not move, since it covers the name and the description",
+      "The team with the members the request named, whether or not the set changed. Accounts outside the set are removed from the team and accounts in it are added. A set that differs from the team's moves the version by one and the ETag is that of the new version; the set the team has already writes nothing and answers with the unchanged version",
       TeamWithMembersSchema,
       { headers: TeamEntityTag },
     ),
@@ -257,6 +257,7 @@ export const replaceTeamMembers = defineOperation({
     401: problemResponse(NO_SESSION),
     403: problemResponse(CHANGE_REFUSED),
     404: problemResponse(NO_TEAM),
+    412: problemResponse("If-Match names a version other than the team's current one (precondition_failed), read under the team's row lock, or the replacement adds an account that joined the workspace after that version was written; the member set is unchanged, and in the second case only the version has moved, so a new read of the team carries the version to send"),
     422: problemResponse(
       "The identifier or the body did not pass validation: an account that is no current member of the workspace (validation_failed on accountIds, whichever workspace the account belongs to), more than 1 000 identifiers, or a field the operation does not declare. Nothing is written",
     ),

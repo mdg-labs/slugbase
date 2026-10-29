@@ -66,7 +66,8 @@ const list = (world: World, as: Person, query = "") => send(world, "GET", `${TEA
 const read = (world: World, as: Person, id: string) => send(world, "GET", `${TEAMS}/${id}`, { cookie: as.cookie });
 const patch = (world: World, as: Person, id: string, body: unknown, headers: Record<string, string> = {}) => send(world, "PATCH", `${TEAMS}/${id}`, { cookie: as.cookie, ...headers }, body);
 const remove = (world: World, as: Person, id: string) => send(world, "DELETE", `${TEAMS}/${id}`, { cookie: as.cookie });
-const replace = (world: World, as: Person, id: string, accountIds: readonly string[]) => send(world, "PUT", `${TEAMS}/${id}/members`, { cookie: as.cookie }, { accountIds });
+const replace = (world: World, as: Person, id: string, accountIds: readonly string[], headers: Record<string, string> = {}) =>
+  send(world, "PUT", `${TEAMS}/${id}/members`, { cookie: as.cookie, ...headers }, { accountIds });
 
 async function created(world: World, as: Person, body: { name: string; description?: string }): Promise<Team> {
   const response = await create(world, as, body);
@@ -454,9 +455,9 @@ describe("getTeam", () => {
       const response = await read(world, member, team.id);
 
       expect(response.status).toBe(200);
-      expect(response.headers.get("etag")).toBe('"1"');
+      expect(response.headers.get("etag")).toBe('"2"');
       const body = (await response.json()) as Team;
-      expect(body).toMatchObject({ id: team.id, name: "Design", memberCount: 2, version: 1 });
+      expect(body).toMatchObject({ id: team.id, name: "Design", memberCount: 2, version: 2 });
       expect(sorted((body.members ?? []).map((entry) => entry.accountId))).toEqual(sorted([member.account.id, other.account.id]));
       for (const entry of body.members ?? []) {
         expect(Object.keys(entry).sort()).toEqual(["accountId", "displayName", "email"]);
@@ -606,7 +607,7 @@ describe("deleteTeam", () => {
 
 describe("replaceTeamMembers", () => {
   it(
-    "replaces the member set: accounts outside it leave the team, accounts in it join, one named twice counts once, and the version stays",
+    "replaces the member set: accounts outside it leave the team, accounts in it join, one named twice counts once, and the version moves by one",
     async () => {
       const world = harness.serve({ entitlements: GRANTED });
       const { owner, admin, member, other, a } = await setup(world);
@@ -616,12 +617,80 @@ describe("replaceTeamMembers", () => {
       const response = await replace(world, admin, team.id, [member.account.id, other.account.id, other.account.id.toUpperCase()]);
 
       expect(response.status).toBe(200);
-      expect(response.headers.get("etag")).toBe('"1"');
+      expect(response.headers.get("etag")).toBe('"3"');
       const body = (await response.json()) as Team;
-      expect(body).toMatchObject({ memberCount: 2, version: 1 });
+      expect(body).toMatchObject({ memberCount: 2, version: 3 });
       expect(sorted((body.members ?? []).map((entry) => entry.accountId))).toEqual(sorted([member.account.id, other.account.id]));
       expect(await storedMemberships(team.id)).toEqual(sorted([member.account.id, other.account.id]));
       expect((await auditOf(a.workspaceId)).map((event) => event.action)).toEqual(["team.created", "team.members_changed", "team.members_changed"]);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "compares If-Match with the version under the team's lock: two replacements made against one version, the second is 412 with nothing written and the first's set stands",
+    async () => {
+      const world = harness.serve({ entitlements: GRANTED });
+      const { owner, admin, member, other, a } = await setup(world);
+      const team = await created(world, admin, { name: "Design" });
+      const seeded = await replace(world, admin, team.id, [owner.account.id, member.account.id]);
+      const readVersion = seeded.headers.get("etag") ?? "";
+      expect(readVersion).toBe('"2"');
+
+      const first = await replace(world, admin, team.id, [owner.account.id, member.account.id, other.account.id], { "if-match": readVersion });
+      expect(first.status).toBe(200);
+      expect(first.headers.get("etag")).toBe('"3"');
+      const second = await replace(world, owner, team.id, [owner.account.id], { "if-match": readVersion });
+
+      expect(second.status).toBe(412);
+      expect((await problemOf(second)).code).toBe("precondition_failed");
+      expect(await storedMemberships(team.id)).toEqual(sorted([owner.account.id, member.account.id, other.account.id]));
+      expect((await storedTeams()).find((stored) => stored.id === team.id)).toMatchObject({ version: 3 });
+      expect((await auditOf(a.workspaceId)).map((event) => event.action)).toEqual(["team.created", "team.members_changed", "team.members_changed"]);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "reads If-Match like the PATCH does: a list of tags matches any of them, * and no header apply, an unreadable one is 412; the GET answers the version the PUT takes",
+    async () => {
+      const world = harness.serve({ entitlements: GRANTED });
+      const { owner, admin, member } = await setup(world);
+      const team = await created(world, admin, { name: "Design" });
+
+      for (const header of ['"2"', 'W/"1"', "1", '""', '"x"']) {
+        const stale = await replace(world, admin, team.id, [owner.account.id], { "if-match": header });
+        expect(stale.status).toBe(412);
+      }
+      expect(await storedMemberships(team.id)).toEqual([]);
+
+      const read1 = await read(world, admin, team.id);
+      expect(read1.headers.get("etag")).toBe('"1"');
+      expect((await replace(world, admin, team.id, [owner.account.id], { "if-match": read1.headers.get("etag") ?? "" })).status).toBe(200);
+      expect((await replace(world, admin, team.id, [member.account.id], { "if-match": '"1", "2"' })).status).toBe(200);
+      expect((await replace(world, admin, team.id, [owner.account.id], { "if-match": "*" })).status).toBe(200);
+      expect((await replace(world, admin, team.id, [owner.account.id, member.account.id])).status).toBe(200);
+      expect((await read(world, admin, team.id)).headers.get("etag")).toBe('"5"');
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "leaves the version where it is for a set the team has already, as a patch that changes nothing does, and a patch made against the version a replacement moved is 412",
+    async () => {
+      const world = harness.serve({ entitlements: GRANTED });
+      const { owner, admin } = await setup(world);
+      const team = await created(world, admin, { name: "Design" });
+      await replace(world, admin, team.id, [owner.account.id]);
+
+      const repeated = await replace(world, admin, team.id, [owner.account.id], { "if-match": '"2"' });
+      expect(repeated.status).toBe(200);
+      expect(repeated.headers.get("etag")).toBe('"2"');
+      expect((await patch(world, admin, team.id, { name: "Stale" }, { "if-match": '"1"' })).status).toBe(412);
+      const renamed = await patch(world, admin, team.id, { name: "Studio" }, { "if-match": '"2"' });
+      expect(renamed.status).toBe(200);
+      expect(renamed.headers.get("etag")).toBe('"3"');
+      expect((await replace(world, admin, team.id, [], { "if-match": '"2"' })).status).toBe(412);
     },
     TEST_TIMEOUT_MS,
   );

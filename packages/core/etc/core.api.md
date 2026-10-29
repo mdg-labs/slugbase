@@ -6162,6 +6162,8 @@ export interface TeamMembersAsk {
     // (undocumented)
     readonly actor: AuditActor;
     // (undocumented)
+    readonly expectedVersions: readonly number[] | undefined;
+    // (undocumented)
     readonly ipPrefix: string | null;
     // (undocumented)
     readonly teamId: string;
@@ -6179,17 +6181,24 @@ export interface TeamMembersDependencies {
 
 // @public (undocumented)
 export type TeamMembersReplacement =
-/** The set was replaced; `team` has the new members, and `added` and `removed` count the memberships written and deleted. */
+/** The set was replaced and the version moved; `team` has the new members, and `added` and `removed` count the memberships written and deleted. */
     {
     readonly kind: "replaced";
     readonly team: TeamDetail;
     readonly added: number;
     readonly removed: number;
 }
-/** The team has exactly these members already; nothing was written. */
+/** The team has exactly these members already; nothing was written and the version stays. */
 | {
     readonly kind: "unchanged";
     readonly team: TeamDetail;
+}
+/**
+* The version of the team, read under its lock, is none of the accepted ones (nothing was written), or the set adds an account that joined the
+* workspace after that version was written (the team's version moved once and no membership was written).
+*/
+| {
+    readonly kind: "stale";
 }
 /** An account of the set is no member of the workspace; nothing was written. */
 | {
@@ -6197,6 +6206,15 @@ export type TeamMembersReplacement =
 } | {
     readonly kind: "not_found";
 };
+
+// @public (undocumented)
+export interface TeamMembersRequest {
+    // (undocumented)
+    readonly accountIds: readonly string[];
+    readonly expectedVersions: readonly number[] | undefined;
+    // (undocumented)
+    readonly teamId: string;
+}
 
 // @public
 export interface TeamPatch {
@@ -6242,10 +6260,7 @@ export interface TeamStore {
     find(teamId: string): Promise<TeamDetail | undefined>;
     list(request: TeamListRequest): Promise<readonly TeamRecord[]>;
     remove(teamId: string): Promise<string | undefined>;
-    replaceMembers(request: {
-        readonly teamId: string;
-        readonly accountIds: readonly string[];
-    }): Promise<TeamMembersReplacement>;
+    replaceMembers(request: TeamMembersRequest): Promise<TeamMembersReplacement>;
     update(request: TeamUpdateRequest): Promise<TeamUpdateResult>;
 }
 

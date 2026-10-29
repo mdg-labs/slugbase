@@ -13,7 +13,7 @@ export interface TeamRecord {
   readonly name: string;
   readonly description: string;
   readonly memberCount: number;
-  /** The `ETag` of the team; moves by one with every change of the name or the description. */
+  /** The `ETag` of the team; moves by one with every change of the name, the description or the member set. */
   readonly version: number;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -79,11 +79,23 @@ export type TeamUpdateResult =
   | { readonly kind: "name_taken" }
   | { readonly kind: "not_found" };
 
+export interface TeamMembersRequest {
+  readonly teamId: string;
+  readonly accountIds: readonly string[];
+  /** The versions the caller accepts (its `If-Match`); undefined when it makes no precondition. An empty list matches none. */
+  readonly expectedVersions: readonly number[] | undefined;
+}
+
 export type TeamMembersReplacement =
-  /** The set was replaced; `team` has the new members, and `added` and `removed` count the memberships written and deleted. */
+  /** The set was replaced and the version moved; `team` has the new members, and `added` and `removed` count the memberships written and deleted. */
   | { readonly kind: "replaced"; readonly team: TeamDetail; readonly added: number; readonly removed: number }
-  /** The team has exactly these members already; nothing was written. */
+  /** The team has exactly these members already; nothing was written and the version stays. */
   | { readonly kind: "unchanged"; readonly team: TeamDetail }
+  /**
+   * The version of the team, read under its lock, is none of the accepted ones (nothing was written), or the set adds an account that joined the
+   * workspace after that version was written (the team's version moved once and no membership was written).
+   */
+  | { readonly kind: "stale" }
   /** An account of the set is no member of the workspace; nothing was written. */
   | { readonly kind: "unknown_members" }
   | { readonly kind: "not_found" };
@@ -103,10 +115,13 @@ export interface TeamStore {
   /** Deletes the team together with its memberships and answers the name it had; undefined when the workspace has no such team. */
   remove(teamId: string): Promise<string | undefined>;
   /**
-   * Makes `accountIds` the members of the team. The team is locked, and every account must be a current member of the workspace, which is locked
-   * for the rest of the transaction so a member who leaves meanwhile is neither added nor left in the team.
+   * Makes `accountIds` the members of the team. The team is locked, and its version, read under the lock, must be one of
+   * `request.expectedVersions` when that is given (`stale` otherwise, and also when the set adds an account whose membership of the workspace began
+   * after the version was written, which moves the version once and writes no membership). Every account must be a current member of the workspace, which is locked
+   * for the rest of the transaction so a member who leaves meanwhile is neither added nor left in the team. A set that changes moves the team's
+   * version by one; the set the team has is `unchanged` and writes nothing.
    */
-  replaceMembers(request: { readonly teamId: string; readonly accountIds: readonly string[] }): Promise<TeamMembersReplacement>;
+  replaceMembers(request: TeamMembersRequest): Promise<TeamMembersReplacement>;
 }
 
 export type TeamTextRefusal = "empty" | "too_long";

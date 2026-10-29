@@ -17,6 +17,7 @@ export type {
   TeamListRequest,
   TeamMemberRecord,
   TeamMembersReplacement,
+  TeamMembersRequest,
   TeamPosition,
   TeamRecord,
   TeamStore,

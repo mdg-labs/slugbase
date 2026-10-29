@@ -2172,6 +2172,7 @@
         "error": {
           "teamGone": "A team you chose no longer exists. Remove it and try again.",
           "memberGone": "This person is no longer a member of this workspace.",
+          "changedElsewhere": "A team was changed somewhere else, so nothing in it was overwritten. Save again to apply your changes to its latest members.",
           "unavailable": "The teams could not be saved right now. Try again in a moment.",
           "partlySaved": "Some of your changes were saved, but not all of them. Save again to send the rest."
         }

@@ -204,20 +204,20 @@ describe("replaceTeamMembers", () => {
     const { calls, store: teams } = store();
     const { audit, records } = auditor();
 
-    const outcome = await replaceTeamMembers({ store: teams, audit }, { ...ask, teamId: TEAM, accountIds: [MEMBER] });
+    const outcome = await replaceTeamMembers({ store: teams, audit }, { ...ask, teamId: TEAM, accountIds: [MEMBER], expectedVersions: [3] });
 
     expect(outcome).toMatchObject({ kind: "replaced", added: 1 });
-    expect(calls).toEqual([{ method: "replaceMembers", request: { teamId: TEAM, accountIds: [MEMBER] } }]);
+    expect(calls).toEqual([{ method: "replaceMembers", request: { teamId: TEAM, accountIds: [MEMBER], expectedVersions: [3] } }]);
     expect(records).toHaveLength(1);
     expect(records[0]).toMatchObject({ action: "team.members_changed", entityId: TEAM, metadata: { name: "Replaced" } });
     expect(JSON.stringify(records[0]?.metadata)).not.toContain(MEMBER);
   });
 
-  it("records nothing for a set the team has, an account that is no member, or a team that is not there", async () => {
+  it("records nothing for a set the team has, a version that is not the team's, an account that is no member, or a team that is not there", async () => {
     const { audit, records } = auditor();
-    for (const answer of [{ kind: "unchanged", team: detailOf("Same") }, { kind: "unknown_members" }, { kind: "not_found" }] as const) {
+    for (const answer of [{ kind: "unchanged", team: detailOf("Same") }, { kind: "stale" }, { kind: "unknown_members" }, { kind: "not_found" }] as const) {
       const { store: teams } = store({ replaceMembers: () => Promise.resolve(answer) });
-      expect(await replaceTeamMembers({ store: teams, audit }, { ...ask, teamId: TEAM, accountIds: [MEMBER] })).toEqual(answer);
+      expect(await replaceTeamMembers({ store: teams, audit }, { ...ask, teamId: TEAM, accountIds: [MEMBER], expectedVersions: undefined })).toEqual(answer);
     }
     expect(records).toEqual([]);
   });

@@ -5034,13 +5034,13 @@
             "type": "string"
           },
           "updatedAt": {
-            "description": "When the team's name or description last changed, RFC 3339 UTC",
+            "description": "When the team's version last moved, RFC 3339 UTC",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
             "type": "string"
           },
           "version": {
-            "description": "Moves by one with every change of the name or the description; the ETag header of the single-team operations carries it and If-Match takes it back",
+            "description": "Moves by one with every change of the name, the description or the member set, with every invitation accepted into the workspace, whichever teams it names, and with a replacement of the member set that is refused for adding an account that joined the workspace after the version was written (a member who leaves the workspace takes its memberships without moving it); the ETag header of the single-team operations carries it and If-Match takes it back",
             "maximum": 9007199254740991,
             "minimum": 1,
             "type": "integer"
@@ -5143,13 +5143,13 @@
             "type": "string"
           },
           "updatedAt": {
-            "description": "When the team's name or description last changed, RFC 3339 UTC",
+            "description": "When the team's version last moved, RFC 3339 UTC",
             "format": "date-time",
             "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
             "type": "string"
           },
           "version": {
-            "description": "Moves by one with every change of the name or the description; the ETag header of the single-team operations carries it and If-Match takes it back",
+            "description": "Moves by one with every change of the name, the description or the member set, with every invitation accepted into the workspace, whichever teams it names, and with a replacement of the member set that is refused for adding an account that joined the workspace after the version was written (a member who leaves the workspace takes its memberships without moving it); the ETag header of the single-team operations carries it and If-Match takes it back",
             "maximum": 9007199254740991,
             "minimum": 1,
             "type": "integer"
@@ -17803,7 +17803,7 @@
             "name": "If-Match",
             "required": false,
             "schema": {
-              "description": "The ETag of the version the change is made against, for example \"3\". A team at another version answers 412 precondition_failed. Optional, so a caller may leave it out; `*` matches any version",
+              "description": "The ETag of the version the change is made against, for example \"3\". A team at another version answers 412 precondition_failed, and its version covers the name, the description and the member set. Optional, so a caller may leave it out; `*` matches any version",
               "type": "string"
             }
           }
@@ -17963,6 +17963,15 @@
               "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$",
               "type": "string"
             }
+          },
+          {
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "description": "The ETag of the version the change is made against, for example \"3\". A team at another version answers 412 precondition_failed, and its version covers the name, the description and the member set. Optional, so a caller may leave it out; `*` matches any version",
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -17984,7 +17993,7 @@
                 }
               }
             },
-            "description": "The team with the members the request named, whether or not the set changed. Accounts outside the set are removed from the team and accounts in it are added; the team's version does not move, since it covers the name and the description",
+            "description": "The team with the members the request named, whether or not the set changed. Accounts outside the set are removed from the team and accounts in it are added. A set that differs from the team's moves the version by one and the ETag is that of the new version; the set the team has already writes nothing and answers with the unchanged version",
             "headers": {
               "ETag": {
                 "description": "The team's version as an entity tag, for example \"3\"; the If-Match of the next change",
@@ -18034,6 +18043,16 @@
               }
             },
             "description": "The workspace the request acts in has no team with this identifier: a team of another workspace and one that never existed are answered alike"
+          },
+          "412": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "If-Match names a version other than the team's current one (precondition_failed), read under the team's row lock, or the replacement adds an account that joined the workspace after that version was written; the member set is unchanged, and in the second case only the version has moved, so a new read of the team carries the version to send"
           },
           "422": {
             "content": {
