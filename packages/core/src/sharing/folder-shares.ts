@@ -63,7 +63,7 @@ export async function grantFolderShare({ store, audit, newId }: FolderShareDepen
   if (!(await store.ownedFolder({ folderId: ask.folderId, ownerId: ask.actor.accountId, use: "grant" }))) {
     return { kind: "not_found" };
   }
-  if (ask.target.kind === "member" && ask.target.accountId === ask.actor.accountId) {
+  if (ask.target.kind === "member" && ask.target.accountId.toLowerCase() === ask.actor.accountId.toLowerCase()) {
     return { kind: "self" };
   }
   const result = await store.grant({ id: newId(), folderId: ask.folderId, grantedBy: ask.actor.accountId, target: ask.target });
