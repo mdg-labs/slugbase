@@ -515,6 +515,27 @@ export const AUDIT_ACTIONS: {
             };
         };
     };
+    readonly "share.bulk_granted": {
+        readonly category: "share";
+        readonly metadata: {
+            readonly count: {
+                readonly type: "count";
+            };
+            readonly targetKind: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+            readonly targetId: {
+                readonly type: "uuid";
+            };
+            readonly targetName: {
+                readonly type: "text";
+                readonly minLength: number;
+                readonly maxLength: number;
+            };
+        };
+    };
 };
 
 // @public
@@ -1028,7 +1049,7 @@ export interface BillingWithdrawal {
 export function bindOidcState(key: Uint8Array, state: string): string;
 
 // @public (undocumented)
-export const BOOKMARK_BULK_ACTIONS: readonly ["delete", "pin", "unpin", "add_to_folder", "move_to_folder", "remove_from_folder", "add_tags", "remove_tags"];
+export const BOOKMARK_BULK_ACTIONS: readonly ["delete", "pin", "unpin", "add_to_folder", "move_to_folder", "remove_from_folder", "add_tags", "remove_tags", "share"];
 
 // @public (undocumented)
 export const BOOKMARK_BULK_FOLDER_ACTIONS: readonly ["add_to_folder", "move_to_folder", "remove_from_folder"];
@@ -1098,6 +1119,7 @@ export interface BookmarkBulkAsk {
     readonly folderId?: string | undefined;
     // (undocumented)
     readonly ipPrefix: string | null;
+    readonly shareTarget?: ShareTarget | undefined;
     readonly tagIds?: readonly string[] | undefined;
     // (undocumented)
     readonly target: BookmarkBulkTarget;
@@ -1107,6 +1129,7 @@ export interface BookmarkBulkAsk {
 // @public (undocumented)
 export interface BookmarkBulkDependencies {
     readonly audit: AuditWriter;
+    readonly newId: () => string;
     // (undocumented)
     readonly store: BookmarkBulkStore;
 }
@@ -1142,6 +1165,15 @@ export type BookmarkBulkOutcome = {
 /** The folder of a folder action or a tag of a tag action is not one the caller has (another member's, another workspace's or unknown); nothing was written. */
 | {
     readonly kind: "target_not_found";
+}
+/** A share names the caller as the member to share with; nothing was written. */
+| {
+    readonly kind: "self";
+}
+/** A share names an account that is no member of the workspace, or a team that is none of its teams; nothing was written. */
+| {
+    readonly kind: "unknown_target";
+    readonly field: "accountId" | "teamId";
 };
 
 // @public (undocumented)
@@ -1189,6 +1221,55 @@ export type BookmarkBulkPreviewOutcome = {
 };
 
 // @public (undocumented)
+export interface BookmarkBulkSharePreviewAsk {
+    readonly accountId: string;
+    readonly shareTarget: ShareTarget;
+    // (undocumented)
+    readonly target: BookmarkBulkTarget;
+}
+
+// @public (undocumented)
+export interface BookmarkBulkSharePreviewDependencies {
+    // (undocumented)
+    readonly store: Pick<BookmarkBulkStore, "ids" | "previewShare" | "sharedAmong">;
+}
+
+// @public (undocumented)
+export type BookmarkBulkSharePreviewOutcome = {
+    readonly kind: "previewed";
+    readonly requested: number;
+    readonly affected: number;
+    readonly skipped: {
+        readonly not_owner: number;
+        readonly not_found: number;
+    };
+    readonly audience: BookmarkSharePreviewAudience;
+}
+/** The request names more identifiers than `BOOKMARK_BULK_IDS_MAX` or its filter matches more than `BOOKMARK_SELECT_ALL_CAP`. */
+| {
+    readonly kind: "too_many";
+    readonly limit: number;
+}
+/** The `url` filter is not a URL a bookmark can have. */
+| {
+    readonly kind: "url_refused";
+    readonly reason: BookmarkUrlRefusal;
+}
+/** The selection holds a bookmark that is shared with the caller, who may not share it. */
+| {
+    readonly kind: "forbidden";
+}
+/** The target is the caller. */
+| {
+    readonly kind: "self";
+}
+/** The target is no member or team of the workspace. */
+| {
+    readonly kind: "unknown_target";
+    readonly field: "accountId" | "teamId";
+};
+
+// @public (undocumented)
 export interface BookmarkBulkStore {
     fileIn(request: {
         readonly bookmarkIds: readonly string[];
@@ -1197,6 +1278,11 @@ export interface BookmarkBulkStore {
         readonly mode: BookmarkFilingMode;
     }): Promise<BookmarkLinkingResult>;
     ids(filter: BookmarkListFilter, limit: number): Promise<readonly string[]>;
+    previewShare(request: {
+        readonly bookmarkIds: readonly string[];
+        readonly ownerId: string;
+        readonly target: ShareTarget;
+    }): Promise<BookmarkSharePreviewResult>;
     previewTags(request: {
         readonly bookmarkIds: readonly string[];
         readonly ownerId: string;
@@ -1208,6 +1294,12 @@ export interface BookmarkBulkStore {
         readonly ownerId: string;
         readonly pinned: boolean;
     }): Promise<number>;
+    share(request: {
+        readonly bookmarkIds: readonly string[];
+        readonly ownerId: string;
+        readonly target: ShareTarget;
+        readonly newId: () => string;
+    }): Promise<BookmarkShareManyResult>;
     sharedAmong(request: {
         readonly bookmarkIds: readonly string[];
         readonly accountId: string;
@@ -1764,6 +1856,37 @@ export type BookmarkShareListOutcome = {
     readonly kind: "forbidden";
 } | {
     readonly kind: "not_found";
+};
+
+// @public
+export type BookmarkShareManyResult = {
+    readonly kind: "done";
+    readonly affected: number;
+    readonly granted: number;
+    readonly targetName: string;
+} | {
+    readonly kind: "unknown_target";
+};
+
+// @public
+export interface BookmarkSharePreviewAudience {
+    readonly added: number;
+    // (undocumented)
+    readonly id: string;
+    // (undocumented)
+    readonly kind: ShareTarget["kind"];
+    readonly memberCount: number;
+    // (undocumented)
+    readonly name: string;
+}
+
+// @public (undocumented)
+export type BookmarkSharePreviewResult = {
+    readonly kind: "previewed";
+    readonly affected: number;
+    readonly audience: BookmarkSharePreviewAudience;
+} | {
+    readonly kind: "unknown_target";
 };
 
 // @public (undocumented)
@@ -5279,6 +5402,9 @@ export type PortUnavailableCode = Extract<ProblemCode, "unavailable" | "mail_una
 
 // @public
 export function prepareAuditRecord<Name extends AuditAction>(event: AuditEventInput<Name>, newId: () => string): AuditRecord;
+
+// @public
+export function previewBulkShare(input: BookmarkBulkSharePreviewDependencies, ask: BookmarkBulkSharePreviewAsk): Promise<BookmarkBulkSharePreviewOutcome>;
 
 // @public
 export function previewBulkTags(input: BookmarkBulkPreviewDependencies, ask: BookmarkBulkPreviewAsk): Promise<BookmarkBulkPreviewOutcome>;

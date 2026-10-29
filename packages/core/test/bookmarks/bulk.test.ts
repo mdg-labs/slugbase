@@ -4,6 +4,7 @@ import {
   BOOKMARK_SELECT_ALL_CAP,
   bulkBookmarks,
   listBookmarkIds,
+  previewBulkShare,
   previewBulkTags,
   type AuditActor,
   type AuditEventInput,
@@ -12,7 +13,10 @@ import {
   type BookmarkBulkTarget,
   type BookmarkLinkingResult,
   type BookmarkListFilter,
+  type BookmarkShareManyResult,
+  type BookmarkSharePreviewResult,
   type BookmarkTagPreviewResult,
+  type ShareTarget,
 } from "../../src/index.ts";
 
 const WORKSPACE = "0192f3a0-aaaa-7000-8000-0000000000a1";
@@ -22,6 +26,10 @@ const idOf = (index: number): string => `0192f3a0-cccc-7000-8000-${index.toStrin
 const FOLDER = "0192f3a0-dddd-7000-8000-0000000000F1";
 const TAG_A = "0192f3a0-eeee-7000-8000-0000000000A1";
 const TAG_B = "0192f3a0-eeee-7000-8000-0000000000B2";
+const MEMBER = "0192f3a0-ffff-7000-8000-0000000000C1";
+const TEAM = "0192f3a0-ffff-7000-8000-0000000000D1";
+const MEMBER_TARGET: ShareTarget = { kind: "member", accountId: MEMBER };
+const TEAM_TARGET: ShareTarget = { kind: "team", teamId: TEAM };
 
 interface Calls {
   readonly removed: (readonly string[])[];
@@ -32,6 +40,8 @@ interface Calls {
   readonly filed: Parameters<BookmarkBulkStore["fileIn"]>[0][];
   readonly tagged: Parameters<BookmarkBulkStore["tag"]>[0][];
   readonly previewed: Parameters<BookmarkBulkStore["previewTags"]>[0][];
+  readonly shared: Omit<Parameters<BookmarkBulkStore["share"]>[0], "newId">[];
+  readonly sharePreviewed: Parameters<BookmarkBulkStore["previewShare"]>[0][];
 }
 
 interface BulkingOptions {
@@ -43,10 +53,13 @@ interface BulkingOptions {
   /** What the store answers a filing and a tagging; the number of bookmarks it was given when left out. */
   readonly linking?: BookmarkLinkingResult;
   readonly previewing?: BookmarkTagPreviewResult;
+  /** What the store answers a share; the bookmarks it was given, all of them newly shared, when left out. */
+  readonly sharing?: BookmarkShareManyResult;
+  readonly sharePreviewing?: BookmarkSharePreviewResult;
 }
 
 function bulking(options: BulkingOptions = {}) {
-  const calls: Calls = { removed: [], sharedAsked: [], pinned: [], filters: [], events: [], filed: [], tagged: [], previewed: [] };
+  const calls: Calls = { removed: [], sharedAsked: [], pinned: [], filters: [], events: [], filed: [], tagged: [], previewed: [], shared: [], sharePreviewed: [] };
   const dependencies = {
     store: {
       ids: (filter: BookmarkListFilter, limit: number) => {
@@ -77,6 +90,17 @@ function bulking(options: BulkingOptions = {}) {
         calls.previewed.push(request);
         return Promise.resolve(options.previewing ?? ({ kind: "previewed", affected: request.bookmarkIds.length, tags: [] } as const));
       },
+      share: (request: Parameters<BookmarkBulkStore["share"]>[0]) => {
+        calls.shared.push({ bookmarkIds: request.bookmarkIds, ownerId: request.ownerId, target: request.target });
+        return Promise.resolve(options.sharing ?? ({ kind: "done", affected: request.bookmarkIds.length, granted: request.bookmarkIds.length, targetName: "Grace" } as const));
+      },
+      previewShare: (request: Parameters<BookmarkBulkStore["previewShare"]>[0]) => {
+        calls.sharePreviewed.push(request);
+        return Promise.resolve(
+          options.sharePreviewing ??
+            ({ kind: "previewed", affected: request.bookmarkIds.length, audience: { kind: request.target.kind, id: MEMBER, name: "Grace", memberCount: 1, added: request.bookmarkIds.length } } as const),
+        );
+      },
     },
     audit: {
       write: (event: AuditEventInput) => {
@@ -84,11 +108,13 @@ function bulking(options: BulkingOptions = {}) {
         return Promise.resolve();
       },
     },
+    newId: () => "0192f3a0-1111-7000-8000-000000000001",
   };
-  const run = (action: BookmarkBulkAction, target: BookmarkBulkTarget, acting: { readonly folderId?: string; readonly tagIds?: readonly string[] } = {}) =>
+  const run = (action: BookmarkBulkAction, target: BookmarkBulkTarget, acting: { readonly folderId?: string; readonly tagIds?: readonly string[]; readonly shareTarget?: ShareTarget } = {}) =>
     bulkBookmarks(dependencies, { workspaceId: WORKSPACE, accountId: ACCOUNT, actor: ACTOR, ipPrefix: "203.0.0.0/16", action, target, ...acting });
   const preview = (target: BookmarkBulkTarget, tagIds: readonly string[]) => previewBulkTags(dependencies, { accountId: ACCOUNT, target, tagIds });
-  return { calls, run, preview };
+  const previewShare = (target: BookmarkBulkTarget, shareTarget: ShareTarget) => previewBulkShare(dependencies, { accountId: ACCOUNT, target, shareTarget });
+  return { calls, run, preview, previewShare };
 }
 
 const noFilter: BookmarkBulkTarget = { kind: "filter", scope: "mine", pinned: undefined, hasSlug: undefined, forwarding: undefined, url: undefined };
@@ -382,6 +408,7 @@ describe("a selection that holds a bookmark shared with the caller", () => {
     ["remove_from_folder", { folderId: FOLDER }],
     ["add_tags", { tagIds: [TAG_A] }],
     ["remove_tags", { tagIds: [TAG_A] }],
+    ["share", { shareTarget: MEMBER_TARGET }],
   ] as const;
 
   it.each(ACTIONS)("refuses %s as a whole, with nothing written, whether it is named by identifier or matched by a filter", async (action, acting) => {
@@ -396,6 +423,7 @@ describe("a selection that holds a bookmark shared with the caller", () => {
       expect(calls.pinned).toEqual([]);
       expect(calls.filed).toEqual([]);
       expect(calls.tagged).toEqual([]);
+      expect(calls.shared).toEqual([]);
       expect(calls.events).toEqual([]);
     }
   });
@@ -422,5 +450,117 @@ describe("a selection that holds a bookmark shared with the caller", () => {
     expect(await refused.preview({ kind: "ids", ids: [SHARED] }, [TAG_A])).toEqual({ kind: "forbidden" });
     expect(refused.calls.previewed).toEqual([]);
     expect(await allowed.preview({ kind: "ids", ids: [OWN] }, [TAG_A])).toMatchObject({ kind: "previewed", affected: 1 });
+  });
+
+  it("refuses the preview of a share for it too, reading no audience", async () => {
+    const { calls, previewShare } = bulking({ shared: [SHARED] });
+
+    expect(await previewShare({ kind: "ids", ids: [OWN, SHARED] }, MEMBER_TARGET)).toEqual({ kind: "forbidden" });
+    expect(calls.sharePreviewed).toEqual([]);
+  });
+});
+
+describe("bulkBookmarks sharing", () => {
+  const OWN_A = idOf(1);
+  const OWN_B = idOf(2);
+
+  it("shares the distinct identifiers with the member, reports what the store reached as affected, and writes one event with the number of shares made and the target", async () => {
+    const { calls, run } = bulking({ sharing: { kind: "done", affected: 2, granted: 1, targetName: "Grace" } });
+
+    const outcome = await run("share", { kind: "ids", ids: [OWN_A, OWN_B, OWN_A, idOf(3)] }, { shareTarget: { kind: "member", accountId: MEMBER.toUpperCase() } });
+
+    expect(outcome).toEqual({ kind: "done", requested: 3, affected: 2, skipped: { not_owner: 0, not_found: 1 } });
+    expect(calls.shared).toEqual([{ bookmarkIds: [OWN_A, OWN_B, idOf(3)], ownerId: ACCOUNT.toLowerCase(), target: { kind: "member", accountId: MEMBER.toLowerCase() } }]);
+    expect(calls.events).toEqual([
+      {
+        action: "share.bulk_granted",
+        workspaceId: WORKSPACE,
+        actor: ACTOR,
+        metadata: { count: "1", targetKind: "member", targetId: MEMBER.toLowerCase(), targetName: "Grace" },
+        ipPrefix: "203.0.0.0/16",
+      },
+    ]);
+  });
+
+  it("names a team by kind and identifier in the one event", async () => {
+    const { calls, run } = bulking({ sharing: { kind: "done", affected: 2, granted: 2, targetName: "Design" } });
+
+    await run("share", { kind: "ids", ids: [OWN_A, OWN_B] }, { shareTarget: TEAM_TARGET });
+
+    expect(calls.events).toHaveLength(1);
+    expect(calls.events[0]?.metadata).toEqual({ count: "2", targetKind: "team", targetId: TEAM.toLowerCase(), targetName: "Design" });
+  });
+
+  it("writes no event when every bookmark was shared with the target already", async () => {
+    const { calls, run } = bulking({ sharing: { kind: "done", affected: 2, granted: 0, targetName: "Grace" } });
+
+    expect(await run("share", { kind: "ids", ids: [OWN_A, OWN_B] }, { shareTarget: MEMBER_TARGET })).toEqual({ kind: "done", requested: 2, affected: 2, skipped: { not_owner: 0, not_found: 0 } });
+    expect(calls.events).toEqual([]);
+  });
+
+  it("shares the bookmarks a filter matches", async () => {
+    const { calls, run } = bulking({ matching: [OWN_A, OWN_B] });
+
+    expect(await run("share", { ...noFilter, pinned: true }, { shareTarget: TEAM_TARGET })).toMatchObject({ kind: "done", requested: 2, affected: 2 });
+    expect(calls.filters[0]?.filter).toMatchObject({ ownerId: ACCOUNT.toLowerCase(), pinned: true });
+    expect(calls.shared[0]?.bookmarkIds).toEqual([OWN_A, OWN_B]);
+  });
+
+  it("refuses the caller as the member to share with, writing nothing", async () => {
+    const { calls, run } = bulking();
+
+    expect(await run("share", { kind: "ids", ids: [OWN_A] }, { shareTarget: { kind: "member", accountId: ACCOUNT.toUpperCase() } })).toEqual({ kind: "self" });
+    expect(calls.shared).toEqual([]);
+    expect(calls.events).toEqual([]);
+  });
+
+  it.each([
+    [MEMBER_TARGET, "accountId"],
+    [TEAM_TARGET, "teamId"],
+  ] as const)("reports a target the workspace does not have (%j) as unknown_target on %s, writing no event", async (shareTarget, field) => {
+    const { calls, run } = bulking({ sharing: { kind: "unknown_target" } });
+
+    expect(await run("share", { kind: "ids", ids: [OWN_A] }, { shareTarget })).toEqual({ kind: "unknown_target", field });
+    expect(calls.events).toEqual([]);
+  });
+
+  it("asks the store even when no identifier is valid, so the same request is refused whatever the bookmarks", async () => {
+    const { calls, run } = bulking({ sharing: { kind: "unknown_target" } });
+
+    expect(await run("share", { kind: "ids", ids: ["x"] }, { shareTarget: MEMBER_TARGET })).toEqual({ kind: "unknown_target", field: "accountId" });
+    expect(calls.shared).toHaveLength(1);
+  });
+
+  it("shares nothing when the selection holds a bookmark that is shared with the caller, the recipient's access staying as it was", async () => {
+    const RECIPIENT_ONLY = idOf(900);
+    const { calls, run } = bulking({ shared: [RECIPIENT_ONLY] });
+
+    expect(await run("share", { kind: "ids", ids: [OWN_A, RECIPIENT_ONLY] }, { shareTarget: MEMBER_TARGET })).toEqual({ kind: "forbidden" });
+    expect(calls.shared).toEqual([]);
+    expect(calls.events).toEqual([]);
+  });
+});
+
+describe("previewBulkShare", () => {
+  it("counts the caller's own bookmarks the way the bulk share does and answers the audience, writing nothing", async () => {
+    const audience = { kind: "team", id: TEAM.toLowerCase(), name: "Design", memberCount: 4, added: 1 } as const;
+    const { calls, previewShare } = bulking({ sharePreviewing: { kind: "previewed", affected: 2, audience } });
+
+    const outcome = await previewShare({ kind: "ids", ids: [idOf(1), idOf(2), idOf(3)] }, TEAM_TARGET);
+
+    expect(outcome).toEqual({ kind: "previewed", requested: 3, affected: 2, skipped: { not_owner: 0, not_found: 1 }, audience });
+    expect(calls.sharePreviewed).toEqual([{ bookmarkIds: [idOf(1), idOf(2), idOf(3)], ownerId: ACCOUNT.toLowerCase(), target: { kind: "team", teamId: TEAM.toLowerCase() } }]);
+    expect(calls.shared).toEqual([]);
+    expect(calls.events).toEqual([]);
+  });
+
+  it("refuses the caller as the member, a target the workspace does not have, and a selection that is too large", async () => {
+    const unknown = bulking({ sharePreviewing: { kind: "unknown_target" } });
+    const large = bulking();
+
+    expect(await unknown.previewShare({ kind: "ids", ids: [idOf(1)] }, TEAM_TARGET)).toEqual({ kind: "unknown_target", field: "teamId" });
+    expect(await large.previewShare({ kind: "ids", ids: [idOf(1)] }, { kind: "member", accountId: ACCOUNT })).toEqual({ kind: "self" });
+    expect(await large.previewShare({ kind: "ids", ids: Array.from({ length: BOOKMARK_BULK_IDS_MAX + 1 }, (_, index) => idOf(index)) }, MEMBER_TARGET)).toEqual({ kind: "too_many", limit: BOOKMARK_BULK_IDS_MAX });
+    expect(large.calls.sharePreviewed).toEqual([]);
   });
 });

@@ -65,6 +65,7 @@ export type RepositorySamples = Readonly<Record<string, RepositorySample>>;
  * - Invitation identifier: the path parameter `id` of `revokeInvitation`, `createInvitationLink` and `resendInvitation`.
  * - Sharing: the path parameter `id` of `listBookmarkShares`, `createBookmarkShare` and `deleteBookmarkShare` takes a bookmark identifier, the body input `accountId` of
  *   `createBookmarkShare` a member identifier and its `teamId` a team identifier, and the path parameter `shareId` of `deleteBookmarkShare` a share identifier (kind `share`).
+ *   The body inputs `accountId` and `teamId` of `bulkBookmarks` and `previewBulkBookmarks` (the member or team a share action shares with) take a member and a team identifier the same way, and a request function sends the two apart.
  *   The body of `createBookmarkShare` takes one target, so the matrix puts a member of B and a team of B in it together and a request function sends the two apart.
  *   The shares of a folder are mapped the same way: the path parameter `id` of `listFolderShares`, `createFolderShare` and `deleteFolderShare` takes a folder identifier, the body
  *   inputs `accountId` and `teamId` of `createFolderShare` a member and a team identifier, and the path parameter `shareId` of `deleteFolderShare` a share identifier.
@@ -118,12 +119,16 @@ export const PATH_PARAMETER_MAPPING: PathParameterMapping = {
   "bulkBookmarks.filter.tag[]": "tag",
   "bulkBookmarks.folderId": "folder",
   "bulkBookmarks.tagIds[]": "tag",
+  "bulkBookmarks.accountId": "member",
+  "bulkBookmarks.teamId": "team",
   "previewBulkBookmarks.ids[]": "bookmark",
   "previewBulkBookmarks.filter.hasSlug": "bookmark",
   "previewBulkBookmarks.filter.folderId": "folder",
   "previewBulkBookmarks.filter.tag": "tag",
   "previewBulkBookmarks.filter.tag[]": "tag",
   "previewBulkBookmarks.tagIds[]": "tag",
+  "previewBulkBookmarks.accountId": "member",
+  "previewBulkBookmarks.teamId": "team",
   "createInvitation.teamIds[]": "team",
   "getTeam.id": "team",
   "updateTeam.id": "team",

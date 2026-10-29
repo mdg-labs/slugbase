@@ -3,7 +3,7 @@ import { AccountAvatar, AvatarStack, Banner, FormOverlay, InlineNote, Picker, Us
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import type { TFunction } from "i18next";
-import { useEffect, useMemo, useState, type ReactElement } from "react";
+import { useMemo, useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { meQuery } from "../account/me.ts";
 import { ApiProblemError } from "../api/client.ts";
@@ -25,6 +25,7 @@ import {
   type ShareTarget,
 } from "./shares.ts";
 import { SharingGate } from "./sharing-gate.tsx";
+import { useDebounced } from "./use-debounced.ts";
 
 const SEARCH_DELAY_MS = 200;
 const SKELETON_ROWS = ["a", "b"] as const;
@@ -35,19 +36,6 @@ const SHOWN_BY_THE_DIALOG = inPlaceRefusals([
   { status: 422 },
   { status: 429, code: "rate_limited" },
 ]);
-
-function useDebounced<Value>(value: Value, delayMs: number): Value {
-  const [settled, setSettled] = useState(value);
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setSettled(value);
-    }, delayMs);
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [value, delayMs]);
-  return settled;
-}
 
 /** The toast for a refusal the dialog tells itself; any other failure is reported by the shared error toast. */
 function failureMessage(t: TFunction, kind: ShareSubject["kind"], failure: ShareFailure, name: string): string | undefined {

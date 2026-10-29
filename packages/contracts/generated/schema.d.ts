@@ -215,7 +215,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Delete, pin, unpin, file or tag many bookmarks */
+        /** Delete, pin, unpin, file, tag or share many bookmarks */
         post: operations["bulkBookmarks"];
         delete?: never;
         options?: never;
@@ -232,7 +232,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Preview adding tags to many bookmarks */
+        /** Preview adding tags to, or sharing, many bookmarks */
         post: operations["previewBulkBookmarks"];
         delete?: never;
         options?: never;
@@ -1925,6 +1925,8 @@ export interface components {
         BulkBookmarksPreview: {
             /** @description How many of them the action would reach: the caller's own bookmarks that are not plan-archived */
             affected: number;
+            /** @description For share, who the bookmarks the action would reach are shared with afterwards; null for add_tags */
+            audience: components["schemas"]["BulkPreviewAudience"] | null;
             /** @description How many bookmarks the request named (the distinct identifiers) or the filter matched */
             requested: number;
             /** @description How many it would leave alone: requested minus affected */
@@ -1936,28 +1938,43 @@ export interface components {
                 /** @description Bookmarks the caller can read and does not own; always 0, since a selection that holds one is refused as a whole with 403 */
                 not_owner: number;
             };
-            /** @description The tags the bookmarks the action would reach carry afterwards, in the order of their names: the tags they carry now and the tags the action adds */
+            /** @description For add_tags, the tags the bookmarks the action would reach carry afterwards, in the order of their names: the tags they carry now and the tags the action adds; empty for share */
             tags: components["schemas"]["BulkPreviewTag"][];
         };
         BulkBookmarksPreviewRequest: {
             /**
-             * @description The action to preview; only add_tags has a preview
-             * @constant
+             * Format: uuid
+             * @description The member the share action shares the bookmarks with; it must be a current member of the workspace other than the caller. share requires this or teamId, and not both; every other action refuses it
              */
-            action: "add_tags";
+            accountId?: string;
+            /**
+             * @description The action to preview: add_tags, or share
+             * @enum {string}
+             */
+            action: "add_tags" | "share";
             /** @description Previews on the caller's bookmarks that match this filter, which is the list's filters; a filter that matches more than 5 000 bookmarks is refused with 422. Give this or ids, and not both */
             filter?: components["schemas"]["BookmarkFilter"];
             /** @description The bookmarks to act on, 1 to 1 000 identifiers; one named twice counts once. Give this or filter, and not both */
             ids?: string[];
-            /** @description The caller's tags add_tags would put on the bookmarks, 1 to 100 identifiers. A tag that is another member's, another workspace's or unknown is refused with 404 */
-            tagIds: string[];
+            /** @description The caller's tags add_tags would put on the bookmarks, 1 to 100 identifiers; required for add_tags and refused for share. A tag that is another member's, another workspace's or unknown is refused with 404 */
+            tagIds?: string[];
+            /**
+             * Format: uuid
+             * @description The team the share action shares the bookmarks with; it must be a team of the workspace. share requires this or accountId, and not both; every other action refuses it
+             */
+            teamId?: string;
         };
         BulkBookmarksRequest: {
             /**
-             * @description delete removes the bookmarks for good, pin pins them and unpin unpins them. add_to_folder files them in the folder folderId as well as in the folders they are in, move_to_folder files them in that folder alone, and remove_from_folder takes them out of that folder. add_tags puts the tags tagIds on them and remove_tags takes those tags off
+             * Format: uuid
+             * @description The member the share action shares the bookmarks with; it must be a current member of the workspace other than the caller. share requires this or teamId, and not both; every other action refuses it
+             */
+            accountId?: string;
+            /**
+             * @description delete removes the bookmarks for good, pin pins them and unpin unpins them. add_to_folder files them in the folder folderId as well as in the folders they are in, move_to_folder files them in that folder alone, and remove_from_folder takes them out of that folder. add_tags puts the tags tagIds on them and remove_tags takes those tags off. share shares them with the member accountId or the team teamId, read-only; only the caller's own bookmarks are shared, it needs the sharing entitlement of the target's kind, and a bookmark the target is shared with already counts as affected
              * @enum {string}
              */
-            action: "delete" | "pin" | "unpin" | "add_to_folder" | "move_to_folder" | "remove_from_folder" | "add_tags" | "remove_tags";
+            action: "delete" | "pin" | "unpin" | "add_to_folder" | "move_to_folder" | "remove_from_folder" | "add_tags" | "remove_tags" | "share";
             /** @description Acts on the caller's bookmarks that match this filter, which is the list's filters; a filter that matches more than 5 000 bookmarks is refused with 422. Give this or ids, and not both */
             filter?: components["schemas"]["BookmarkFilter"];
             /**
@@ -1969,6 +1986,11 @@ export interface components {
             ids?: string[];
             /** @description The caller's tags add_tags and remove_tags act with, 1 to 100 identifiers; required for them and refused for every other action. A tag that is another member's, another workspace's or unknown is refused with 404 and nothing is changed */
             tagIds?: string[];
+            /**
+             * Format: uuid
+             * @description The team the share action shares the bookmarks with; it must be a team of the workspace. share requires this or accountId, and not both; every other action refuses it
+             */
+            teamId?: string;
         };
         BulkBookmarksResult: {
             /** @description How many of them are now deleted, or are in the state the action asks for: pinned or unpinned, filed in or out of the folder, tagged or untagged (a bookmark that already was is counted) */
@@ -1984,6 +2006,24 @@ export interface components {
                 /** @description Bookmarks the caller can read and does not own; always 0, since a selection that holds one is refused as a whole with 403 */
                 not_owner: number;
             };
+        };
+        BulkPreviewAudience: {
+            /** @description How many of the bookmarks the action would reach are not shared with the target yet, so get a share from the action */
+            added: number;
+            /**
+             * Format: uuid
+             * @description The account identifier of the member, or the identifier of the team
+             */
+            id: string;
+            /**
+             * @description What the bookmarks would be shared with: a member of the workspace, or one of its teams
+             * @enum {string}
+             */
+            kind: "member" | "team";
+            /** @description How many members other than the caller can read the bookmarks through this target: 1 for a member, the members of the team without the caller for a team */
+            memberCount: number;
+            /** @description The member's display name or the team's name */
+            name: string;
         };
         BulkPreviewTag: {
             /** @description How many of them get the tag from the action: those that do not carry it yet */
@@ -4497,7 +4537,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description What the request did, as counts only. The whole request is one transaction: every bookmark it affects changes or none does. Only the caller's own bookmarks change; the others are skipped as not_found without saying whether they exist, and a selection that holds one shared with the caller is refused as a whole with 403. A delete gives the workspace's bookmark count back once for the request, by the bookmarks that were not plan-archived, and records one bookmark.bulk_deleted audit event with the number deleted, never a title or a URL. Filing and tagging write links only: they move no bookmark's version, record no audit event, and leave a plan-archived bookmark alone */
+            /** @description What the request did, as counts only. The whole request is one transaction: every bookmark it affects changes or none does. Only the caller's own bookmarks change; the others are skipped as not_found without saying whether they exist, and a selection that holds one shared with the caller is refused as a whole with 403. A delete gives the workspace's bookmark count back once for the request, by the bookmarks that were not plan-archived, and records one bookmark.bulk_deleted audit event with the number deleted, never a title or a URL. Filing and tagging write links only: they move no bookmark's version, record no audit event, and leave a plan-archived bookmark alone. A share action grants a read-only share of each bookmark it reaches to the member or team, once for a target a bookmark is shared with already, and records one share.bulk_granted audit event with the number of shares it made and the target, none when it made none */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4524,7 +4564,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the selection holds a bookmark that is another member's and shared with the caller, who can read it and may not act on it (forbidden); nothing is changed */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the selection holds a bookmark that is another member's and shared with the caller, who can read it and may not act on it (forbidden), or a share action for a workspace that does not hold the entitlement of the target's kind: sharing.members for a member, sharing.teams for a team (entitlement_required; the problem carries entitlement and upgradeAvailable); nothing is changed */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4542,7 +4582,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation (an unknown action, neither or both of ids and filter, no identifier or more than 1 000, a malformed identifier, a folder action without folderId or a tag action without tagIds, a folderId or tagIds on an action that takes none, more than 100 tags, a filter q that is empty or over 100 characters, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks. Nothing is written */
+            /** @description The body did not pass validation (an unknown action, neither or both of ids and filter, no identifier or more than 1 000, a malformed identifier, a folder action without folderId or a tag action without tagIds, a folderId or tagIds on an action that takes none, more than 100 tags, a share without accountId and teamId or with both, an accountId or teamId on another action, a filter q that is empty or over 100 characters, a field the operation does not declare), the filter's url is not a URL a bookmark can have, the filter matches more than the select-all cap of 5 000 bookmarks, or a share action's target is the caller (cannot_share_with_self on accountId), an account that is no current member of the workspace (unknown_member on accountId) or a team of no team of the workspace (unknown_team on teamId). Nothing is written */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4586,7 +4626,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description What add_tags with the same body would do, without writing anything: the counts as the bulk request reports them, and the tag set the bookmarks it reaches would carry afterwards. Only the caller's own bookmarks are counted; the others are skipped as not_found without saying whether they exist */
+            /** @description What add_tags or share with the same body would do, without writing anything: the counts as the bulk request reports them, and the tag set the bookmarks it reaches would carry afterwards; share does the same for who the bookmarks would be shared with (audience). Only the caller's own bookmarks are counted; the others are skipped as not_found without saying whether they exist */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -4613,7 +4653,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the preview is a POST, so it takes the write scope though it writes nothing; or the selection holds a bookmark that is another member's and shared with the caller, who may not tag it (forbidden) */
+            /** @description The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the preview is a POST, so it takes the write scope though it writes nothing; or the selection holds a bookmark that is another member's and shared with the caller, who may not act on it (forbidden), or a share preview for a workspace that does not hold the entitlement of the target's kind: sharing.members for a member, sharing.teams for a team (entitlement_required; the problem carries entitlement and upgradeAvailable) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4631,7 +4671,7 @@ export interface operations {
                     "application/problem+json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The body did not pass validation (an action other than add_tags, neither or both of ids and filter, no identifier or more than 1 000, no tag or more than 100, a malformed identifier, a filter q that is empty or over 100 characters, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks */
+            /** @description The body did not pass validation (an action other than add_tags or share, neither or both of ids and filter, no identifier or more than 1 000, add_tags without tags or share with tags, more than 100 tags, a malformed identifier, a share without accountId and teamId or with both, an accountId or teamId on add_tags, a filter q that is empty or over 100 characters, a field the operation does not declare), the filter's url is not a URL a bookmark can have, the filter matches more than the select-all cap of 5 000 bookmarks, or a share target that is the caller, no current member of the workspace or no team of it */
             422: {
                 headers: {
                     [name: string]: unknown;

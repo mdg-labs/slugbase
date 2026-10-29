@@ -84,6 +84,8 @@ export const AUDIT_ACTIONS = {
   // The target is named by kind, identifier and the name it had; the deletion of a member's account removes `targetId` from the events that name it (doc 05 section 7.1).
   "share.granted": { category: "share", metadata: { targetKind: SHARE_TARGET_KIND, targetId: { type: "uuid" }, targetName: SHARE_TARGET_NAME } },
   "share.revoked": { category: "share", metadata: { targetKind: SHARE_TARGET_KIND, targetId: { type: "uuid" }, targetName: SHARE_TARGET_NAME } },
+  // A member shared several of their bookmarks with one member or team in one request (doc 02 section 5.8): the number of shares made and the target, and nothing about the bookmarks.
+  "share.bulk_granted": { category: "share", metadata: { count: COUNT, targetKind: SHARE_TARGET_KIND, targetId: { type: "uuid" }, targetName: SHARE_TARGET_NAME } },
 } as const satisfies Record<string, AuditActionDefinition>;
 
 export type AuditAction = keyof typeof AUDIT_ACTIONS;

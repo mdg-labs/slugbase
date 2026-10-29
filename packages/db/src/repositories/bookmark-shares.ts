@@ -1,10 +1,11 @@
-import type { BookmarkShareGrant, BookmarkShareList, BookmarkShareRecord, BookmarkShareStore, NewBookmarkShare, ShareTargetRecord, ShareTargetSearch, ShareTargetStore } from "@slugbase/core";
+import type { BookmarkBulkStore, BookmarkShareGrant, BookmarkShareList, BookmarkShareRecord, BookmarkShareStore, NewBookmarkShare, ShareTargetRecord, ShareTargetSearch, ShareTargetStore } from "@slugbase/core";
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { accounts } from "../schema/accounts.ts";
 import { bookmarks } from "../schema/bookmarks.ts";
 import { bookmarkReadableBy } from "./bookmark-access.ts";
 import { bookmarkShares } from "../schema/shares.ts";
 import { teams } from "../schema/teams.ts";
+import { distinctIdentifiers, requireIdentifiers, uuidArray } from "./folder-links.ts";
 import { TenantContextError, tenantHandle, type TenantTx } from "../tenant.ts";
 import { defineScopedRepository } from "./scoped.ts";
 
@@ -17,7 +18,8 @@ import { defineScopedRepository } from "./scoped.ts";
 // member who leaves the workspace and a team that is deleted at the same time are then either found gone or waited for, and never met half-way by
 // the composite foreign key of the share. The removal of the member or of the team waits for this transaction to end, and its cascade removes the share.
 // Sharing twice with one target is one share: the insert does nothing for a target the bookmark is shared with already, and the share that exists is
-// read back.
+// read back. A bulk share locks the bookmarks it reaches (in the order of their identifiers) and then the target, as a grant does, and writes the
+// missing shares in one statement; it reads the shares again afterwards, so a share another transaction revoked in the meantime is written again.
 
 // The registry entry of `bookmark_shares` for the cross-tenant matrix (doc 08 section 3.3): the application role may read, insert (the columns of a
 // grant) and delete shares, and the policies keep each to the workspace of the transaction and, for a write, to the account's own bookmark. Shares are
@@ -105,7 +107,80 @@ async function audienceOf(tx: TenantTx, bookmarkId: string): Promise<number> {
   return row?.audience ?? 0;
 }
 
-export type BookmarkShareRepository = BookmarkShareStore;
+/** The owner's own bookmarks of `bookmarkIds` in the workspace of the transaction that are not plan-archived, in the order of their identifiers; locked against their deletion when `lock` is true. */
+async function ownedLiveBookmarks(tx: TenantTx, ownerId: string, bookmarkIds: readonly string[], lock: boolean): Promise<string[]> {
+  const workspaceId = requireWorkspace(tx);
+  if (ownerId.toLowerCase() !== tx.accountId.toLowerCase()) {
+    throw new Error("only the account of the transaction shares its own bookmarks");
+  }
+  const wanted = distinctIdentifiers(bookmarkIds);
+  requireIdentifiers(wanted, "sharing bookmarks");
+  if (wanted.length === 0) {
+    return [];
+  }
+  const query = tenantHandle(tx)
+    .select({ id: bookmarks.id })
+    .from(bookmarks)
+    .where(and(eq(bookmarks.workspaceId, workspaceId), eq(bookmarks.ownerId, ownerId), isNull(bookmarks.planArchivedAt), sql`${bookmarks.id} = ANY (${uuidArray(wanted)}::uuid[])`))
+    .orderBy(bookmarks.id);
+  return (lock ? await query.for("key share") : await query).map((row) => row.id);
+}
+
+/**
+ * The name of a member or a team of the workspace of the transaction, or undefined when it is none. With `lock` the member's row of the membership, or the team's row,
+ * is locked against its removal for the rest of the transaction.
+ */
+async function targetName(tx: TenantTx, target: NewBookmarkShare["target"], lock: boolean): Promise<string | undefined> {
+  const workspaceId = requireWorkspace(tx);
+  const handle = tenantHandle(tx);
+  const rows =
+    target.kind === "member"
+      ? await handle.execute<{ name: string }>(sql`
+          SELECT a.display_name AS name
+          FROM public.workspace_members wm
+          JOIN ${accounts} a ON a.id = wm.account_id
+          WHERE wm.workspace_id = ${workspaceId}::uuid AND wm.account_id = ${target.accountId}::uuid
+          ${lock ? sql`FOR KEY SHARE OF wm` : sql``}`)
+      : await handle.execute<{ name: string }>(sql`
+          SELECT t.name::text AS name
+          FROM ${teams} t
+          WHERE t.workspace_id = ${workspaceId}::uuid AND t.id = ${target.teamId}::uuid
+          ${lock ? sql`FOR KEY SHARE OF t` : sql``}`);
+  return rows[0]?.name;
+}
+
+/** Those of `bookmarkIds` that are not shared with `target`. */
+async function unsharedWith(tx: TenantTx, bookmarkIds: readonly string[], target: NewBookmarkShare["target"]): Promise<string[]> {
+  if (bookmarkIds.length === 0) {
+    return [];
+  }
+  const workspaceId = requireWorkspace(tx);
+  const rows = await tenantHandle(tx).execute<{ id: string }>(sql`
+    SELECT b.id::text AS id
+    FROM unnest(${uuidArray(bookmarkIds)}::uuid[]) AS b(id)
+    WHERE NOT EXISTS (
+      SELECT 1 FROM ${bookmarkShares} s
+      WHERE s.workspace_id = ${workspaceId}::uuid AND s.bookmark_id = b.id
+        AND ${target.kind === "member" ? sql`s.target_account_id = ${target.accountId}::uuid` : sql`s.target_team_id = ${target.teamId}::uuid`}
+    )
+    ORDER BY b.id`);
+  return rows.map((row) => row.id);
+}
+
+/** The members other than `ownerId` who read through the target: the member itself, or the members of the team. */
+async function memberCountOf(tx: TenantTx, target: NewBookmarkShare["target"], ownerId: string): Promise<number> {
+  if (target.kind === "member") {
+    return 1;
+  }
+  const workspaceId = requireWorkspace(tx);
+  const [row] = await tenantHandle(tx).execute<{ members: number }>(sql`
+    SELECT count(*)::int AS members
+    FROM public.team_members m
+    WHERE m.workspace_id = ${workspaceId}::uuid AND m.team_id = ${target.teamId}::uuid AND m.account_id <> ${ownerId}::uuid`);
+  return row?.members ?? 0;
+}
+
+export type BookmarkShareRepository = BookmarkShareStore & Pick<BookmarkBulkStore, "share" | "previewShare">;
 
 export function bookmarkShareRepository(tx: TenantTx): BookmarkShareRepository {
   const rows = scoped.bind(tx);
@@ -182,6 +257,50 @@ export function bookmarkShareRepository(tx: TenantTx): BookmarkShareRepository {
         // The share that made the insert do nothing was revoked before it could be read back: the insert is tried again.
       }
       throw new Error("a share could neither be written nor found");
+    },
+
+    async share({ bookmarkIds, ownerId, target, newId }) {
+      const workspaceId = requireWorkspace(tx);
+      // The bookmarks first and then the target, the order of a single grant.
+      const owned = await ownedLiveBookmarks(tx, ownerId, bookmarkIds, true);
+      const name = await targetName(tx, target, true);
+      if (name === undefined) {
+        return { kind: "unknown_target" };
+      }
+      let granted = 0;
+      for (let attempt = 0; ; attempt += 1) {
+        const missing = await unsharedWith(tx, owned, target);
+        if (missing.length === 0) {
+          return { kind: "done", affected: owned.length, granted, targetName: name };
+        }
+        if (attempt >= GRANT_ATTEMPTS) {
+          throw new Error("shares could neither be written nor found");
+        }
+        const ids = missing.map(() => newId().toLowerCase());
+        requireIdentifiers(ids, "sharing bookmarks");
+        // The statement names the columns the application role may insert (a column grant). `ON CONFLICT DO NOTHING` leaves a target a bookmark is shared with already; one that another transaction revoked since is found missing by the next pass.
+        const inserted = await tenantHandle(tx).execute(sql`
+          INSERT INTO ${bookmarkShares} (id, workspace_id, bookmark_id, target_account_id, target_team_id, granted_by)
+          SELECT n.id, ${workspaceId}::uuid, n.bookmark_id, ${target.kind === "member" ? target.accountId : null}::uuid, ${target.kind === "team" ? target.teamId : null}::uuid, ${ownerId}::uuid
+          FROM unnest(${uuidArray(ids)}::uuid[], ${uuidArray(missing)}::uuid[]) AS n(id, bookmark_id)
+          ON CONFLICT DO NOTHING
+          RETURNING id`);
+        granted += inserted.length;
+      }
+    },
+
+    async previewShare({ bookmarkIds, ownerId, target }) {
+      const owned = await ownedLiveBookmarks(tx, ownerId, bookmarkIds, false);
+      const name = await targetName(tx, target, false);
+      if (name === undefined) {
+        return { kind: "unknown_target" };
+      }
+      const added = (await unsharedWith(tx, owned, target)).length;
+      return {
+        kind: "previewed",
+        affected: owned.length,
+        audience: { kind: target.kind, id: target.kind === "member" ? target.accountId : target.teamId, name, memberCount: await memberCountOf(tx, target, ownerId), added },
+      };
     },
 
     async revoke({ bookmarkId, shareId }) {

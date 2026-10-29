@@ -2,6 +2,7 @@ import { z } from "zod";
 import { defineOperation, emptyResponse, jsonResponse, problemResponse, rateLimitedResponse } from "./define.ts";
 import { GO_SHARED_VIA } from "./go.ts";
 import { SEARCH_QUERY_MAX_LENGTH } from "./search.ts";
+import { SHARE_TARGET_KINDS } from "./sharing.ts";
 import { TAG_NAME_MAX_LENGTH } from "./tags.ts";
 import { withoutNul } from "./text.ts";
 
@@ -276,7 +277,10 @@ export const BULK_FOLDER_ACTIONS = ["add_to_folder", "move_to_folder", "remove_f
 
 export const BULK_TAG_ACTIONS = ["add_tags", "remove_tags"] as const;
 
-export const BULK_BOOKMARK_ACTIONS = ["delete", "pin", "unpin", ...BULK_FOLDER_ACTIONS, ...BULK_TAG_ACTIONS] as const;
+export const BULK_BOOKMARK_ACTIONS = ["delete", "pin", "unpin", ...BULK_FOLDER_ACTIONS, ...BULK_TAG_ACTIONS, "share"] as const;
+
+/** The actions `POST /bookmarks/bulk/preview` answers for. */
+export const BULK_PREVIEW_ACTIONS = ["add_tags", "share"] as const;
 
 /** The most tags a bulk request adds or removes at once. */
 export const BOOKMARK_BULK_TAGS_MAX = 100;
@@ -321,12 +325,33 @@ const BulkTagIdsSchema = z.array(z.uuid()).min(1).max(BOOKMARK_BULK_TAGS_MAX);
 
 const isOneOf = (actions: readonly string[], action: string): boolean => actions.includes(action);
 
+const BulkShareAccountIdSchema = z.uuid().optional().describe("The member the share action shares the bookmarks with; it must be a current member of the workspace other than the caller. share requires this or teamId, and not both; every other action refuses it");
+
+const BulkShareTeamIdSchema = z.uuid().optional().describe("The team the share action shares the bookmarks with; it must be a team of the workspace. share requires this or accountId, and not both; every other action refuses it");
+
+/** Adds the issues of a share target that is missing, given twice or given for an action that shares nothing. */
+function checkShareTarget(request: { readonly action: string; readonly accountId?: string | undefined; readonly teamId?: string | undefined }, context: z.RefinementCtx): void {
+  const wantsTarget = request.action === "share";
+  const named = (request.accountId === undefined ? 0 : 1) + (request.teamId === undefined ? 0 : 1);
+  if (wantsTarget && named !== 1) {
+    context.addIssue({ code: "custom", message: "name either accountId or teamId", path: [request.accountId === undefined ? "accountId" : "teamId"] });
+  }
+  if (!wantsTarget) {
+    if (request.accountId !== undefined) {
+      context.addIssue({ code: "custom", message: "this action takes no member", path: ["accountId"] });
+    }
+    if (request.teamId !== undefined) {
+      context.addIssue({ code: "custom", message: "this action takes no team", path: ["teamId"] });
+    }
+  }
+}
+
 export const BulkBookmarksRequestSchema = z
   .strictObject({
     action: z
       .enum(BULK_BOOKMARK_ACTIONS)
       .describe(
-        "delete removes the bookmarks for good, pin pins them and unpin unpins them. add_to_folder files them in the folder folderId as well as in the folders they are in, move_to_folder files them in that folder alone, and remove_from_folder takes them out of that folder. add_tags puts the tags tagIds on them and remove_tags takes those tags off",
+        "delete removes the bookmarks for good, pin pins them and unpin unpins them. add_to_folder files them in the folder folderId as well as in the folders they are in, move_to_folder files them in that folder alone, and remove_from_folder takes them out of that folder. add_tags puts the tags tagIds on them and remove_tags takes those tags off. share shares them with the member accountId or the team teamId, read-only; only the caller's own bookmarks are shared, it needs the sharing entitlement of the target's kind, and a bookmark the target is shared with already counts as affected",
       ),
     ids: BulkIdsSchema.optional(),
     filter: BookmarkFilterSchema.optional().describe(
@@ -339,8 +364,11 @@ export const BulkBookmarksRequestSchema = z
     tagIds: BulkTagIdsSchema.optional().describe(
       "The caller's tags add_tags and remove_tags act with, 1 to 100 identifiers; required for them and refused for every other action. A tag that is another member's, another workspace's or unknown is refused with 404 and nothing is changed",
     ),
+    accountId: BulkShareAccountIdSchema,
+    teamId: BulkShareTeamIdSchema,
   })
   .superRefine((request, context) => {
+    checkShareTarget(request, context);
     if ((request.ids === undefined) === (request.filter === undefined)) {
       context.addIssue({ code: "custom", message: "name either ids or filter" });
     }
@@ -381,14 +409,26 @@ export const BulkBookmarksResultSchema = z
 
 export const BulkBookmarksPreviewRequestSchema = z
   .strictObject({
-    action: z.literal("add_tags").describe("The action to preview; only add_tags has a preview"),
+    action: z.enum(BULK_PREVIEW_ACTIONS).describe("The action to preview: add_tags, or share"),
     ids: BulkIdsSchema.optional(),
     filter: BookmarkFilterSchema.optional().describe(
       "Previews on the caller's bookmarks that match this filter, which is the list's filters; a filter that matches more than 5 000 bookmarks is refused with 422. Give this or ids, and not both",
     ),
-    tagIds: BulkTagIdsSchema.describe("The caller's tags add_tags would put on the bookmarks, 1 to 100 identifiers. A tag that is another member's, another workspace's or unknown is refused with 404"),
+    tagIds: BulkTagIdsSchema.optional().describe(
+      "The caller's tags add_tags would put on the bookmarks, 1 to 100 identifiers; required for add_tags and refused for share. A tag that is another member's, another workspace's or unknown is refused with 404",
+    ),
+    accountId: BulkShareAccountIdSchema,
+    teamId: BulkShareTeamIdSchema,
   })
-  .refine((request) => (request.ids === undefined) !== (request.filter === undefined), { message: "name either ids or filter" })
+  .superRefine((request, context) => {
+    checkShareTarget(request, context);
+    if ((request.ids === undefined) === (request.filter === undefined)) {
+      context.addIssue({ code: "custom", message: "name either ids or filter" });
+    }
+    if ((request.action === "add_tags") !== (request.tagIds !== undefined)) {
+      context.addIssue({ code: "custom", message: request.action === "add_tags" ? "name the tags" : "this action takes no tags", path: ["tagIds"] });
+    }
+  })
   .meta({ id: "BulkBookmarksPreviewRequest" });
 
 export const BulkPreviewTagSchema = z
@@ -400,6 +440,16 @@ export const BulkPreviewTagSchema = z
   })
   .meta({ id: "BulkPreviewTag" });
 
+export const BulkPreviewAudienceSchema = z
+  .strictObject({
+    kind: z.enum(SHARE_TARGET_KINDS).describe("What the bookmarks would be shared with: a member of the workspace, or one of its teams"),
+    id: z.uuid().describe("The account identifier of the member, or the identifier of the team"),
+    name: z.string().describe("The member's display name or the team's name"),
+    memberCount: z.number().int().min(0).describe("How many members other than the caller can read the bookmarks through this target: 1 for a member, the members of the team without the caller for a team"),
+    added: z.number().int().min(0).describe("How many of the bookmarks the action would reach are not shared with the target yet, so get a share from the action"),
+  })
+  .meta({ id: "BulkPreviewAudience" });
+
 export const BulkBookmarksPreviewSchema = z
   .strictObject({
     requested: z.number().int().min(0).describe("How many bookmarks the request named (the distinct identifiers) or the filter matched"),
@@ -408,7 +458,8 @@ export const BulkBookmarksPreviewSchema = z
     skippedReasons: BulkSkippedReasonsSchema,
     tags: z
       .array(BulkPreviewTagSchema)
-      .describe("The tags the bookmarks the action would reach carry afterwards, in the order of their names: the tags they carry now and the tags the action adds"),
+      .describe("For add_tags, the tags the bookmarks the action would reach carry afterwards, in the order of their names: the tags they carry now and the tags the action adds; empty for share"),
+    audience: BulkPreviewAudienceSchema.nullable().describe("For share, who the bookmarks the action would reach are shared with afterwards; null for add_tags"),
   })
   .meta({ id: "BulkBookmarksPreview" });
 
@@ -695,26 +746,26 @@ export const bulkBookmarks = defineOperation({
   path: "/api/v1/bookmarks/bulk",
   operationId: "bulkBookmarks",
   tag: "bookmarks",
-  summary: "Delete, pin, unpin, file or tag many bookmarks",
+  summary: "Delete, pin, unpin, file, tag or share many bookmarks",
   auth: "member",
   rate: "bulk",
   scope: "write",
   request: { body: BulkBookmarksRequestSchema },
   responses: {
     200: jsonResponse(
-      "What the request did, as counts only. The whole request is one transaction: every bookmark it affects changes or none does. Only the caller's own bookmarks change; the others are skipped as not_found without saying whether they exist, and a selection that holds one shared with the caller is refused as a whole with 403. A delete gives the workspace's bookmark count back once for the request, by the bookmarks that were not plan-archived, and records one bookmark.bulk_deleted audit event with the number deleted, never a title or a URL. Filing and tagging write links only: they move no bookmark's version, record no audit event, and leave a plan-archived bookmark alone",
+      "What the request did, as counts only. The whole request is one transaction: every bookmark it affects changes or none does. Only the caller's own bookmarks change; the others are skipped as not_found without saying whether they exist, and a selection that holds one shared with the caller is refused as a whole with 403. A delete gives the workspace's bookmark count back once for the request, by the bookmarks that were not plan-archived, and records one bookmark.bulk_deleted audit event with the number deleted, never a title or a URL. Filing and tagging write links only: they move no bookmark's version, record no audit event, and leave a plan-archived bookmark alone. A share action grants a read-only share of each bookmark it reaches to the member or team, once for a target a bookmark is shared with already, and records one share.bulk_granted audit event with the number of shares it made and the target, none when it made none",
       BulkBookmarksResultSchema,
     ),
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse(
-      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the selection holds a bookmark that is another member's and shared with the caller, who can read it and may not act on it (forbidden); nothing is changed",
+      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope), or the selection holds a bookmark that is another member's and shared with the caller, who can read it and may not act on it (forbidden), or a share action for a workspace that does not hold the entitlement of the target's kind: sharing.members for a member, sharing.teams for a team (entitlement_required; the problem carries entitlement and upgradeAvailable); nothing is changed",
     ),
     404: problemResponse(
       "The request acts in no workspace: the account has none, or the workspace is being deleted; or the folder of a folder action or a tag of a tag action is not one the caller has in it (another member's, another workspace's or unknown), and nothing is changed",
     ),
     422: problemResponse(
-      "The body did not pass validation (an unknown action, neither or both of ids and filter, no identifier or more than 1 000, a malformed identifier, a folder action without folderId or a tag action without tagIds, a folderId or tagIds on an action that takes none, more than 100 tags, a filter q that is empty or over 100 characters, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks. Nothing is written",
+      "The body did not pass validation (an unknown action, neither or both of ids and filter, no identifier or more than 1 000, a malformed identifier, a folder action without folderId or a tag action without tagIds, a folderId or tagIds on an action that takes none, more than 100 tags, a share without accountId and teamId or with both, an accountId or teamId on another action, a filter q that is empty or over 100 characters, a field the operation does not declare), the filter's url is not a URL a bookmark can have, the filter matches more than the select-all cap of 5 000 bookmarks, or a share action's target is the caller (cannot_share_with_self on accountId), an account that is no current member of the workspace (unknown_member on accountId) or a team of no team of the workspace (unknown_team on teamId). Nothing is written",
     ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),
@@ -726,26 +777,26 @@ export const previewBulkBookmarks = defineOperation({
   path: "/api/v1/bookmarks/bulk/preview",
   operationId: "previewBulkBookmarks",
   tag: "bookmarks",
-  summary: "Preview adding tags to many bookmarks",
+  summary: "Preview adding tags to, or sharing, many bookmarks",
   auth: "member",
   rate: "read",
   scope: "write",
   request: { body: BulkBookmarksPreviewRequestSchema },
   responses: {
     200: jsonResponse(
-      "What add_tags with the same body would do, without writing anything: the counts as the bulk request reports them, and the tag set the bookmarks it reaches would carry afterwards. Only the caller's own bookmarks are counted; the others are skipped as not_found without saying whether they exist",
+      "What add_tags or share with the same body would do, without writing anything: the counts as the bulk request reports them, and the tag set the bookmarks it reaches would carry afterwards; share does the same for who the bookmarks would be shared with (audience). Only the caller's own bookmarks are counted; the others are skipped as not_found without saying whether they exist",
       BulkBookmarksPreviewSchema,
     ),
     400: problemResponse("The request was malformed"),
     401: problemResponse("There is no session, or its second factor is not complete"),
     403: problemResponse(
-      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the preview is a POST, so it takes the write scope though it writes nothing; or the selection holds a bookmark that is another member's and shared with the caller, who may not tag it (forbidden)",
+      "The request did not come from the application itself (cross_site_request), or the credential is an API token that may only read (token_scope): the preview is a POST, so it takes the write scope though it writes nothing; or the selection holds a bookmark that is another member's and shared with the caller, who may not act on it (forbidden), or a share preview for a workspace that does not hold the entitlement of the target's kind: sharing.members for a member, sharing.teams for a team (entitlement_required; the problem carries entitlement and upgradeAvailable)",
     ),
     404: problemResponse(
       "The request acts in no workspace: the account has none, or the workspace is being deleted; or a tag of tagIds is not one the caller has in it (another member's, another workspace's or unknown)",
     ),
     422: problemResponse(
-      "The body did not pass validation (an action other than add_tags, neither or both of ids and filter, no identifier or more than 1 000, no tag or more than 100, a malformed identifier, a filter q that is empty or over 100 characters, a field the operation does not declare), the filter's url is not a URL a bookmark can have, or the filter matches more than the select-all cap of 5 000 bookmarks",
+      "The body did not pass validation (an action other than add_tags or share, neither or both of ids and filter, no identifier or more than 1 000, add_tags without tags or share with tags, more than 100 tags, a malformed identifier, a share without accountId and teamId or with both, an accountId or teamId on add_tags, a filter q that is empty or over 100 characters, a field the operation does not declare), the filter's url is not a URL a bookmark can have, the filter matches more than the select-all cap of 5 000 bookmarks, or a share target that is the caller, no current member of the workspace or no team of it",
     ),
     429: rateLimitedResponse("Too many requests; Retry-After says when to try again"),
     503: problemResponse("The service is temporarily unavailable"),

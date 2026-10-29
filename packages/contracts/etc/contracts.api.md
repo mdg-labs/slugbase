@@ -579,10 +579,13 @@ export const BookmarkTagSchema: z.ZodObject<{
 }, z.core.$strict>;
 
 // @public (undocumented)
-export const BULK_BOOKMARK_ACTIONS: readonly ["delete", "pin", "unpin", "add_to_folder", "move_to_folder", "remove_from_folder", "add_tags", "remove_tags"];
+export const BULK_BOOKMARK_ACTIONS: readonly ["delete", "pin", "unpin", "add_to_folder", "move_to_folder", "remove_from_folder", "add_tags", "remove_tags", "share"];
 
 // @public (undocumented)
 export const BULK_FOLDER_ACTIONS: readonly ["add_to_folder", "move_to_folder", "remove_from_folder"];
+
+// @public
+export const BULK_PREVIEW_ACTIONS: readonly ["add_tags", "share"];
 
 // @public (undocumented)
 export const BULK_TAG_ACTIONS: readonly ["add_tags", "remove_tags"];
@@ -593,7 +596,7 @@ export const bulkBookmarks: {
     readonly path: "/api/v1/bookmarks/bulk";
     readonly operationId: "bulkBookmarks";
     readonly tag: "bookmarks";
-    readonly summary: "Delete, pin, unpin, file or tag many bookmarks";
+    readonly summary: "Delete, pin, unpin, file, tag or share many bookmarks";
     readonly auth: "member";
     readonly rate: "bulk";
     readonly scope: "write";
@@ -608,6 +611,7 @@ export const bulkBookmarks: {
                 remove_tags: "remove_tags";
                 pin: "pin";
                 unpin: "unpin";
+                share: "share";
             }>;
             ids: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
             filter: z.ZodOptional<z.ZodObject<{
@@ -627,6 +631,8 @@ export const bulkBookmarks: {
             }, z.core.$strict>>;
             folderId: z.ZodOptional<z.ZodUUID>;
             tagIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+            accountId: z.ZodOptional<z.ZodUUID>;
+            teamId: z.ZodOptional<z.ZodUUID>;
         }, z.core.$strict>;
     };
     readonly responses: {
@@ -651,7 +657,10 @@ export const bulkBookmarks: {
 
 // @public (undocumented)
 export const BulkBookmarksPreviewRequestSchema: z.ZodObject<{
-    action: z.ZodLiteral<"add_tags">;
+    action: z.ZodEnum<{
+        add_tags: "add_tags";
+        share: "share";
+    }>;
     ids: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
     filter: z.ZodOptional<z.ZodObject<{
         scope: z.ZodOptional<z.ZodEnum<{
@@ -668,7 +677,9 @@ export const BulkBookmarksPreviewRequestSchema: z.ZodObject<{
         folderId: z.ZodOptional<z.ZodUUID>;
         tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
     }, z.core.$strict>>;
-    tagIds: z.ZodArray<z.ZodUUID>;
+    tagIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+    accountId: z.ZodOptional<z.ZodUUID>;
+    teamId: z.ZodOptional<z.ZodUUID>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -686,6 +697,16 @@ export const BulkBookmarksPreviewSchema: z.ZodObject<{
         bookmarkCount: z.ZodNumber;
         added: z.ZodNumber;
     }, z.core.$strict>>;
+    audience: z.ZodNullable<z.ZodObject<{
+        kind: z.ZodEnum<{
+            member: "member";
+            team: "team";
+        }>;
+        id: z.ZodUUID;
+        name: z.ZodString;
+        memberCount: z.ZodNumber;
+        added: z.ZodNumber;
+    }, z.core.$strict>>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -699,6 +720,7 @@ export const BulkBookmarksRequestSchema: z.ZodObject<{
         remove_tags: "remove_tags";
         pin: "pin";
         unpin: "unpin";
+        share: "share";
     }>;
     ids: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
     filter: z.ZodOptional<z.ZodObject<{
@@ -718,6 +740,8 @@ export const BulkBookmarksRequestSchema: z.ZodObject<{
     }, z.core.$strict>>;
     folderId: z.ZodOptional<z.ZodUUID>;
     tagIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+    accountId: z.ZodOptional<z.ZodUUID>;
+    teamId: z.ZodOptional<z.ZodUUID>;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -729,6 +753,18 @@ export const BulkBookmarksResultSchema: z.ZodObject<{
         not_owner: z.ZodNumber;
         not_found: z.ZodNumber;
     }, z.core.$strict>;
+}, z.core.$strict>;
+
+// @public (undocumented)
+export const BulkPreviewAudienceSchema: z.ZodObject<{
+    kind: z.ZodEnum<{
+        member: "member";
+        team: "team";
+    }>;
+    id: z.ZodUUID;
+    name: z.ZodString;
+    memberCount: z.ZodNumber;
+    added: z.ZodNumber;
 }, z.core.$strict>;
 
 // @public (undocumented)
@@ -1116,6 +1152,7 @@ export interface ComponentTypes {
         };
         BulkBookmarksPreview: {
             affected: number;
+            audience: ComponentTypes["schemas"]["BulkPreviewAudience"] | null;
             requested: number;
             skipped: number;
             skippedReasons: {
@@ -1125,17 +1162,21 @@ export interface ComponentTypes {
             tags: ComponentTypes["schemas"]["BulkPreviewTag"][];
         };
         BulkBookmarksPreviewRequest: {
-            action: "add_tags";
+            accountId?: string;
+            action: "add_tags" | "share";
             filter?: ComponentTypes["schemas"]["BookmarkFilter"];
             ids?: string[];
-            tagIds: string[];
+            tagIds?: string[];
+            teamId?: string;
         };
         BulkBookmarksRequest: {
-            action: "delete" | "pin" | "unpin" | "add_to_folder" | "move_to_folder" | "remove_from_folder" | "add_tags" | "remove_tags";
+            accountId?: string;
+            action: "delete" | "pin" | "unpin" | "add_to_folder" | "move_to_folder" | "remove_from_folder" | "add_tags" | "remove_tags" | "share";
             filter?: ComponentTypes["schemas"]["BookmarkFilter"];
             folderId?: string;
             ids?: string[];
             tagIds?: string[];
+            teamId?: string;
         };
         BulkBookmarksResult: {
             affected: number;
@@ -1145,6 +1186,13 @@ export interface ComponentTypes {
                 not_found: number;
                 not_owner: number;
             };
+        };
+        BulkPreviewAudience: {
+            added: number;
+            id: string;
+            kind: "member" | "team";
+            memberCount: number;
+            name: string;
         };
         BulkPreviewTag: {
             added: number;
@@ -16356,13 +16404,16 @@ export const previewBulkBookmarks: {
     readonly path: "/api/v1/bookmarks/bulk/preview";
     readonly operationId: "previewBulkBookmarks";
     readonly tag: "bookmarks";
-    readonly summary: "Preview adding tags to many bookmarks";
+    readonly summary: "Preview adding tags to, or sharing, many bookmarks";
     readonly auth: "member";
     readonly rate: "read";
     readonly scope: "write";
     readonly request: {
         readonly body: z.ZodObject<{
-            action: z.ZodLiteral<"add_tags">;
+            action: z.ZodEnum<{
+                add_tags: "add_tags";
+                share: "share";
+            }>;
             ids: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
             filter: z.ZodOptional<z.ZodObject<{
                 scope: z.ZodOptional<z.ZodEnum<{
@@ -16379,7 +16430,9 @@ export const previewBulkBookmarks: {
                 folderId: z.ZodOptional<z.ZodUUID>;
                 tag: z.ZodOptional<z.ZodUnion<readonly [z.ZodUUID, z.ZodArray<z.ZodUUID>]>>;
             }, z.core.$strict>>;
-            tagIds: z.ZodArray<z.ZodUUID>;
+            tagIds: z.ZodOptional<z.ZodArray<z.ZodUUID>>;
+            accountId: z.ZodOptional<z.ZodUUID>;
+            teamId: z.ZodOptional<z.ZodUUID>;
         }, z.core.$strict>;
     };
     readonly responses: {
@@ -16395,6 +16448,16 @@ export const previewBulkBookmarks: {
         id: z.ZodUUID;
         name: z.ZodString;
         bookmarkCount: z.ZodNumber;
+        added: z.ZodNumber;
+        }, z.core.$strict>>;
+        audience: z.ZodNullable<z.ZodObject<{
+        kind: z.ZodEnum<{
+        member: "member";
+        team: "team";
+        }>;
+        id: z.ZodUUID;
+        name: z.ZodString;
+        memberCount: z.ZodNumber;
         added: z.ZodNumber;
         }, z.core.$strict>>;
         }, z.core.$strict>, Readonly<Record<string, ResponseHeader>>>;

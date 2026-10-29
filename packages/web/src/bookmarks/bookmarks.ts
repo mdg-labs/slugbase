@@ -162,8 +162,15 @@ export async function deleteBookmark(api: ApiClient, id: string): Promise<void> 
 
 export type BulkAction = ComponentTypes["schemas"]["BulkBookmarksRequest"]["action"];
 
-/** The folder or the tags a folder or tag action acts with, as the list shows them on a bookmark. */
-export type BulkTarget = { readonly folder: BookmarkFolder } | { readonly tags: readonly BookmarkTag[] };
+/** The member or team a share action shares with, as the share targets list them. */
+export interface BulkShareTarget {
+  readonly kind: "member" | "team";
+  readonly id: string;
+  readonly name: string;
+}
+
+/** The folder or the tags a folder or tag action acts with, as the list shows them on a bookmark, or the member or team a share acts with. */
+export type BulkTarget = { readonly folder: BookmarkFolder } | { readonly tags: readonly BookmarkTag[] } | { readonly shareWith: BulkShareTarget };
 
 export type BookmarkFolder = ComponentTypes["schemas"]["BookmarkFolder"];
 export type BookmarkTag = ComponentTypes["schemas"]["BookmarkTag"];
@@ -200,16 +207,23 @@ export class BulkPartialError extends Error {
   }
 }
 
-function targetBody(target: BulkTarget | undefined): { readonly folderId?: string; readonly tagIds?: string[] } {
+function shareTargetBody(target: BulkShareTarget): { readonly accountId: string } | { readonly teamId: string } {
+  return target.kind === "member" ? { accountId: target.id } : { teamId: target.id };
+}
+
+function targetBody(target: BulkTarget | undefined): { readonly folderId?: string; readonly tagIds?: string[]; readonly accountId?: string; readonly teamId?: string } {
   if (target === undefined) {
     return {};
+  }
+  if ("shareWith" in target) {
+    return shareTargetBody(target.shareWith);
   }
   return "folder" in target ? { folderId: target.folder.id } : { tagIds: target.tags.map((tag) => tag.id) };
 }
 
 /**
- * Deletes, pins, unpins, files or tags the bookmarks `ids` (doc 04 section 6.2); a folder or tag action names its folder or
- * tags in `target`. The API takes at most 1 000 identifiers in a request and each request is one transaction, so a longer
+ * Deletes, pins, unpins, files, tags or shares the bookmarks `ids` (doc 04 section 6.2); a folder or tag action names its folder or
+ * tags in `target`, and a share the member or team. The API takes at most 1 000 identifiers in a request and each request is one transaction, so a longer
  * selection is sent in turns, one after the other, and stops at the first failure: a failure after the first turn raises a
  * `BulkPartialError` that says how far it got.
  */
@@ -268,6 +282,45 @@ export async function previewAddTags(api: ApiClient, ids: readonly string[], tag
     }
   }
   return { requested, affected, skipped, tags: [...tags.values()].sort((a, b) => a.name.localeCompare(b.name)) };
+}
+
+/** What sharing the selection would do: the counts of the request and who the bookmarks it reaches are shared with afterwards. */
+export interface SharePreview {
+  readonly requested: number;
+  readonly affected: number;
+  readonly skipped: number;
+  /** The target, with how many members other than the caller read through it and how many of the bookmarks get a share from the action. */
+  readonly audience: { readonly name: string; readonly memberCount: number; readonly added: number };
+}
+
+/**
+ * Asks what sharing the bookmarks `ids` with `target` would do, writing nothing (`POST /bookmarks/bulk/preview`). A longer
+ * selection than one request takes is asked in turns, whose bookmarks are distinct, so the counts of the turns add up.
+ */
+export async function previewShare(api: ApiClient, ids: readonly string[], target: BulkShareTarget, signal?: AbortSignal): Promise<SharePreview> {
+  let requested = 0;
+  let affected = 0;
+  let skipped = 0;
+  let added = 0;
+  let audience: { readonly name: string; readonly memberCount: number } | undefined;
+  for (let start = 0; start < ids.length; start += BOOKMARK_BULK_IDS_MAX) {
+    const { data, error } = await api.POST("/api/v1/bookmarks/bulk/preview", {
+      body: { action: "share", ids: ids.slice(start, start + BOOKMARK_BULK_IDS_MAX), ...shareTargetBody(target) },
+      ...(signal === undefined ? {} : { signal }),
+    });
+    if (data === undefined || data.audience === null) {
+      throw new Error("The share preview did not answer with an audience", { cause: error });
+    }
+    requested += data.requested;
+    affected += data.affected;
+    skipped += data.skipped;
+    added += data.audience.added;
+    audience = { name: data.audience.name, memberCount: data.audience.memberCount };
+  }
+  if (audience === undefined) {
+    throw new Error("There is nothing to preview");
+  }
+  return { requested, affected, skipped, audience: { ...audience, added } };
 }
 
 export type FieldName = "url" | "title" | "description" | "slug" | "tagNames";

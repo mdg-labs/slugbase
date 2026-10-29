@@ -68,7 +68,7 @@ export type {
 } from "./list.ts";
 export { openBookmark } from "./open.ts";
 export type { BookmarkOpenAsk, BookmarkOpenDependencies, BookmarkOpenOutcome, BookmarkUsage } from "./open.ts";
-export { BOOKMARK_BULK_ACTIONS, BOOKMARK_BULK_FOLDER_ACTIONS, BOOKMARK_BULK_IDS_MAX, BOOKMARK_BULK_TAG_ACTIONS, BOOKMARK_SELECT_ALL_CAP, bulkBookmarks, listBookmarkIds, previewBulkTags } from "./bulk.ts";
+export { BOOKMARK_BULK_ACTIONS, BOOKMARK_BULK_FOLDER_ACTIONS, BOOKMARK_BULK_IDS_MAX, BOOKMARK_BULK_TAG_ACTIONS, BOOKMARK_SELECT_ALL_CAP, bulkBookmarks, listBookmarkIds, previewBulkShare, previewBulkTags } from "./bulk.ts";
 export type {
   BookmarkBulkAction,
   BookmarkBulkAsk,
@@ -77,6 +77,9 @@ export type {
   BookmarkBulkPreviewAsk,
   BookmarkBulkPreviewDependencies,
   BookmarkBulkPreviewOutcome,
+  BookmarkBulkSharePreviewAsk,
+  BookmarkBulkSharePreviewDependencies,
+  BookmarkBulkSharePreviewOutcome,
   BookmarkBulkStore,
   BookmarkBulkTarget,
   BookmarkIdsAsk,
@@ -85,6 +88,9 @@ export type {
   BookmarkFilingMode,
   BookmarkLinkingResult,
   BookmarkPreviewTag,
+  BookmarkShareManyResult,
+  BookmarkSharePreviewAudience,
+  BookmarkSharePreviewResult,
   BookmarkTaggingMode,
   BookmarkTagPreviewResult,
 } from "./bulk.ts";

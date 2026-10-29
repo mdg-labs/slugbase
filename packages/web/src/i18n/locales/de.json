@@ -291,7 +291,8 @@
         "removeFromFolder": "{count, plural, one {# Lesezeichen aus „{folder}“ entfernt.} other {# Lesezeichen aus „{folder}“ entfernt.}}",
         "addTags": "{count, plural, one {Tags zu # Lesezeichen hinzugefügt.} other {Tags zu # Lesezeichen hinzugefügt.}}",
         "removeTags": "{count, plural, one {Tags von # Lesezeichen entfernt.} other {Tags von # Lesezeichen entfernt.}}",
-        "undone": "{count, plural, one {# Lesezeichen wieder in „{folder}“ gelegt.} other {# Lesezeichen wieder in „{folder}“ gelegt.}}"
+        "undone": "{count, plural, one {# Lesezeichen wieder in „{folder}“ gelegt.} other {# Lesezeichen wieder in „{folder}“ gelegt.}}",
+        "share": "{count, plural, one {# Lesezeichen mit {name} geteilt.} other {# Lesezeichen mit {name} geteilt.}}"
       },
       "skipped": "{count, plural, one {# Lesezeichen wurde übersprungen, weil es nicht mehr existiert oder sich nicht ändern lässt.} other {# Lesezeichen wurden übersprungen, weil sie nicht mehr existieren oder sich nicht ändern lassen.}}",
       "error": {
@@ -305,7 +306,9 @@
         "removeTags": "Die Tags konnten nicht entfernt werden. Es wurde nichts geändert. Versuche es gleich noch einmal.",
         "folderGone": "Dieser Ordner existiert nicht mehr. Es wurde nichts geändert.",
         "tagsGone": "Einer dieser Tags existiert nicht mehr. Es wurde nichts geändert.",
-        "undo": "Die Lesezeichen konnten nicht wieder in den Ordner gelegt werden. Versuche es gleich noch einmal."
+        "undo": "Die Lesezeichen konnten nicht wieder in den Ordner gelegt werden. Versuche es gleich noch einmal.",
+        "share": "Die Lesezeichen konnten nicht geteilt werden. Es wurde nichts geändert. Versuche es gleich noch einmal.",
+        "shareTargetGone": "{name} gehört nicht mehr zum Workspace. Es wurde nichts geändert."
       },
       "link": {
         "close": "Schließen",
@@ -340,6 +343,31 @@
           "summary": "{count, plural, one {# Lesezeichen erhält diese Tags.} other {# Lesezeichen erhalten diese Tags.}}",
           "skipped": "{count, plural, one {# Lesezeichen wird übersprungen, weil es nicht mehr existiert oder sich nicht ändern lässt.} other {# Lesezeichen werden übersprungen, weil sie nicht mehr existieren oder sich nicht ändern lassen.}}",
           "tagCount": "{bookmarkCount, plural, one {# Lesezeichen} other {# Lesezeichen}}, {added, number} neu"
+        }
+      },
+      "share": {
+        "action": "Teilen",
+        "close": "Schließen",
+        "cancel": "Abbrechen",
+        "retry": "Erneut versuchen",
+        "title": "{count, plural, one {# Lesezeichen} other {# Lesezeichen}} teilen",
+        "description": "Wähle das Mitglied oder Team, das diese Lesezeichen lesen kann. Eine Freigabe gibt nur Lesezugriff.",
+        "label": "Teilen mit",
+        "placeholder": "Mitglieder und Teams suchen",
+        "empty": "Kein Mitglied und kein Team passt.",
+        "loading": "Mitglieder und Teams werden geladen",
+        "loadFailed": "Mitglieder und Teams konnten nicht geladen werden.",
+        "members": "Mitglieder",
+        "teams": "Teams",
+        "preview": {
+          "title": "Wer sie lesen kann",
+          "loading": "Es wird ermittelt, mit wem diese Lesezeichen geteilt werden",
+          "error": "Die Vorschau konnte nicht geladen werden.",
+          "summary": "{count, plural, one {# Lesezeichen wird mit {name} geteilt.} other {# Lesezeichen werden mit {name} geteilt.}}",
+          "added": "{added, plural, one {Es wird # neue Freigabe erstellt.} other {Es werden # neue Freigaben erstellt.}}",
+          "audience": "{count, plural, one {# Mitglied kann sie lesen.} other {# Mitglieder können sie lesen.}}",
+          "none": "Keines dieser Lesezeichen lässt sich teilen.",
+          "skipped": "{count, plural, one {# Lesezeichen wird übersprungen, weil es nicht mehr existiert oder sich nicht ändern lässt.} other {# Lesezeichen werden übersprungen, weil sie nicht mehr existieren oder sich nicht ändern lassen.}}"
         }
       }
     },

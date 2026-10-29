@@ -270,3 +270,100 @@ describe("an entitlement source that cannot answer", () => {
     TEST_TIMEOUT_MS,
   );
 });
+
+describe("the bulk share and its preview (bulkBookmarks, previewBulkBookmarks)", () => {
+  const bulkPath = `${BOOKMARKS}/bulk`;
+  const bulkShare = (world: World, as: Person, bookmark: string, target: { accountId: string } | { teamId: string }, preview = false) =>
+    send(world, "POST", preview ? `${bulkPath}/preview` : bulkPath, { cookie: as.cookie }, { action: "share", ids: [bookmark], ...target });
+
+  it(
+    "needs sharing.members for a member and sharing.teams for a team, whichever bookmarks are named, and the actions that share nothing need neither",
+    async () => {
+      const source = new LimitedEntitlementSource();
+      const world = harness.serve({ entitlementSource: source });
+      const { owner, member, bookmark, team } = await setup(world);
+      source.deny("sharing.members").deny("sharing.teams").offerUpgrade(true);
+      await database().owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        await tx`UPDATE workspaces SET entitlement_version = entitlement_version + 1`;
+      });
+
+      const refusals = [
+        await bulkShare(world, owner, bookmark, { accountId: member.account.id }),
+        await bulkShare(world, owner, bookmark, { teamId: team }),
+        await bulkShare(world, owner, "0192f3a0-cccc-7000-8000-0000000000aa", { accountId: member.account.id }),
+        await bulkShare(world, owner, bookmark, { accountId: member.account.id }, true),
+        await bulkShare(world, owner, bookmark, { teamId: team }, true),
+      ];
+
+      expect(refusals.map((response) => response.status)).toEqual([403, 403, 403, 403, 403]);
+      const problems = await Promise.all(refusals.map(problemOf));
+      expect(problems.map((problem) => [problem.code, problem.entitlement, problem.upgradeAvailable])).toEqual([
+        ["entitlement_required", "sharing.members", true],
+        ["entitlement_required", "sharing.teams", true],
+        ["entitlement_required", "sharing.members", true],
+        ["entitlement_required", "sharing.members", true],
+        ["entitlement_required", "sharing.teams", true],
+      ]);
+      expect(await shareCount()).toBe(0);
+      expect((await send(world, "POST", bulkPath, { cookie: owner.cookie }, { action: "pin", ids: [bookmark] })).status).toBe(200);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "shares with members only when sharing.teams is withheld, and with teams only when sharing.members is",
+    async () => {
+      const membersOnly = harness.serve({ entitlementSource: sourceWithholding("sharing.teams") });
+      const first = await setup(membersOnly);
+      const toTeam = await bulkShare(membersOnly, first.owner, first.bookmark, { teamId: first.team });
+      expect(toTeam.status).toBe(403);
+      expect(await problemOf(toTeam)).toMatchObject({ code: "entitlement_required", entitlement: "sharing.teams" });
+      expect((await bulkShare(membersOnly, first.owner, first.bookmark, { accountId: first.member.account.id })).status).toBe(200);
+      expect(await shareCount()).toBe(1);
+
+      await database().owner`TRUNCATE accounts CASCADE`;
+      await database().owner`TRUNCATE workspaces CASCADE`;
+      const teamsOnly = harness.serve({ entitlementSource: sourceWithholding("sharing.members") });
+      const second = await setup(teamsOnly);
+      const toMember = await bulkShare(teamsOnly, second.owner, second.bookmark, { accountId: second.member.account.id }, true);
+      expect(toMember.status).toBe(403);
+      expect(await problemOf(toMember)).toMatchObject({ code: "entitlement_required", entitlement: "sharing.members" });
+      expect((await bulkShare(teamsOnly, second.owner, second.bookmark, { teamId: second.team }, true)).status).toBe(200);
+      expect((await bulkShare(teamsOnly, second.owner, second.bookmark, { teamId: second.team })).status).toBe(200);
+      expect(await shareCount()).toBe(1);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    "ends with 503 and writes nothing when the entitlement source cannot answer: an error of the source is never a grant",
+    async () => {
+      const full = new LimitedEntitlementSource();
+      let failing = false;
+      const source: EntitlementSource = {
+        available: true,
+        forWorkspace: (workspaceId) => (failing ? Promise.reject(new PortUnavailable("entitlements", "unavailable")) : full.forWorkspace(workspaceId)),
+        forAccount: (): Promise<AccountEntitlementValues> => Promise.resolve({ "workspaces.ownMax": "unlimited" } as unknown as AccountEntitlementValues),
+      };
+      const world = harness.serve({ entitlementSource: source });
+      const { owner, member, bookmark, team } = await setup(world);
+      failing = true;
+      await database().owner.begin(async (tx) => {
+        await tx`SET LOCAL ROLE slugbase_system`;
+        await tx`UPDATE workspaces SET entitlement_version = entitlement_version + 1`;
+      });
+
+      const answers = [
+        await bulkShare(world, owner, bookmark, { accountId: member.account.id }),
+        await bulkShare(world, owner, bookmark, { teamId: team }),
+        await bulkShare(world, owner, bookmark, { accountId: member.account.id }, true),
+        await bulkShare(world, owner, bookmark, { teamId: team }, true),
+      ];
+
+      expect(answers.map((answer) => answer.status)).toEqual([503, 503, 503, 503]);
+      expect(await shareCount()).toBe(0);
+    },
+    TEST_TIMEOUT_MS,
+  );
+});

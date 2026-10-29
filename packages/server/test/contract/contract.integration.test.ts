@@ -47,29 +47,53 @@ function countOf(response: ApiResponse, name: "affected" | "requested"): number 
 /**
  * Sends one call of the matrix to the bulk request, or to its preview of adding tags, as separate requests, each of which reaches the handler with some of the
  * identifiers of workspace B: `ids` with a pin, the folder of B with a move to it, the tags of B with an add, the folder and the tags of B in the filter with a pin and
- * with a move. The requests are made at the same time: none of them changes anything a sibling reads (each is refused or skips the identifiers of B). The answer returned is the
+ * with a move, and the member of B and the team of B as the target of a share, by `ids` and by the filter. The requests are made at the same time: none of them changes anything a sibling reads (each is refused or skips the identifiers of B). The answer returned is the
  * one the matrix judges (the folder action, and for the preview the tags), and every answer is recorded in `variants`.
  */
-async function sendVariants(call: ApiCall, send: Send, sendByFilter: Send, variants: VariantStatuses[]): Promise<ApiResponse> {
+async function sendVariants(call: ApiCall, senders: { readonly send: Send; readonly sendByFilter: Send; readonly sendShare: Send; readonly sendShareByFilter: Send }, variants: VariantStatuses[]): Promise<ApiResponse> {
+  const { send, sendByFilter, sendShare, sendShareByFilter } = senders;
   const fields = isRecord(call.body) ? call.body : {};
   const given = isRecord(fields.filter) ? fields.filter : {};
   const filter = { folderId: given.folderId, tag: given.tag };
   const using = (body: Record<string, unknown>): ApiCall => ({ ...call, body });
   if (call.operation.operationId === "previewBulkBookmarks") {
-    const [byIds, byFilter] = await Promise.all([send(using({ ids: fields.ids, tagIds: fields.tagIds })), sendByFilter(using({ filter, tagIds: fields.tagIds }))]);
-    variants.push({ operation: "previewBulkBookmarks", statuses: { byIds: byIds.status, byFilter: byFilter.status }, affectedById: undefined, requestedByFilter: undefined });
+    const [byIds, byFilter, shareMemberOfB, shareTeamOfB, shareFilterOfB] = await Promise.all([
+      send(using({ action: "add_tags", ids: fields.ids, tagIds: fields.tagIds })),
+      sendByFilter(using({ action: "add_tags", filter, tagIds: fields.tagIds })),
+      sendShare(using({ action: "share", ids: fields.ids, accountId: fields.accountId })),
+      sendShare(using({ action: "share", ids: fields.ids, teamId: fields.teamId })),
+      sendShareByFilter(using({ action: "share", filter, accountId: fields.accountId })),
+    ]);
+    variants.push({
+      operation: "previewBulkBookmarks",
+      statuses: { byIds: byIds.status, byFilter: byFilter.status, shareMemberOfB: shareMemberOfB.status, shareTeamOfB: shareTeamOfB.status, shareFilterOfB: shareFilterOfB.status },
+      affectedById: undefined,
+      requestedByFilter: undefined,
+    });
     return byIds;
   }
-  const [skippedById, folderOfB, tagsOfB, filterOfB, filterAndFolderOfB] = await Promise.all([
+  const [skippedById, folderOfB, tagsOfB, filterOfB, filterAndFolderOfB, memberOfB, teamOfB, filterMemberOfB] = await Promise.all([
     send(using({ action: "pin", ids: fields.ids })),
     send(using({ action: "move_to_folder", ids: fields.ids, folderId: fields.folderId })),
     send(using({ action: "add_tags", ids: fields.ids, tagIds: fields.tagIds })),
     sendByFilter(using({ action: "pin", filter })),
     sendByFilter(using({ action: "add_to_folder", filter, folderId: fields.folderId })),
+    send(using({ action: "share", ids: fields.ids, accountId: fields.accountId })),
+    send(using({ action: "share", ids: fields.ids, teamId: fields.teamId })),
+    sendByFilter(using({ action: "share", filter, accountId: fields.accountId })),
   ]);
   variants.push({
     operation: "bulkBookmarks",
-    statuses: { skippedById: skippedById.status, folderOfB: folderOfB.status, tagsOfB: tagsOfB.status, filterOfB: filterOfB.status, filterAndFolderOfB: filterAndFolderOfB.status },
+    statuses: {
+      skippedById: skippedById.status,
+      folderOfB: folderOfB.status,
+      tagsOfB: tagsOfB.status,
+      filterOfB: filterOfB.status,
+      filterAndFolderOfB: filterAndFolderOfB.status,
+      memberOfB: memberOfB.status,
+      teamOfB: teamOfB.status,
+      filterMemberOfB: filterMemberOfB.status,
+    },
     affectedById: countOf(skippedById, "affected"),
     requestedByFilter: countOf(filterOfB, "requested"),
   });
@@ -613,6 +637,18 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
       }),
     }));
     const sendByFilter = matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: byFilterFixtures, credentialsOf: (principal) => world.credentialsOf(principal) });
+    // The preview of a share is sent over fixtures that carry no tags and no target: the call names the member or the team of B, and the fixture of the preview of adding tags would add its tags to it.
+    const shareFixtures: ContractFixtures = {
+      ...FIXTURES,
+      previewBulkBookmarks: { body: { action: "share", ids: [UNKNOWN_BOOKMARK_ID] }, status: 422, foreign: { body: { action: "share", ids: [UNKNOWN_BOOKMARK_ID] } } },
+    };
+    const sendShare = matrixRequest({ send: (request) => server.fetch(request), origin, fixtures: shareFixtures, credentialsOf: (principal) => world.credentialsOf(principal) });
+    const sendShareByFilter = matrixRequest({
+      send: (request) => server.fetch(request),
+      origin,
+      fixtures: { ...shareFixtures, previewBulkBookmarks: { body: { action: "share", filter: {} }, status: 422, foreign: { body: { action: "share", filter: {} } } } },
+      credentialsOf: (principal) => world.credentialsOf(principal),
+    });
     const variants: VariantStatuses[] = [];
     const instanceAdminStatuses: number[] = [];
     const resolutions: unknown[] = [];
@@ -622,7 +658,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     const listings: unknown[] = [];
     const selections: unknown[] = [];
     const scoped: { readonly operation: string; readonly scope: string; readonly body: unknown }[] = [];
-    const mapping = { rowId: "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", "getTeam.id": "team", "updateTeam.id": "team", "deleteTeam.id": "team", "replaceTeamMembers.id": "team", "replaceTeamMembers.accountIds[]": "member", "listBookmarkShares.id": "bookmark", "createBookmarkShare.id": "bookmark", "createBookmarkShare.accountId": "member", "createBookmarkShare.teamId": "team", "deleteBookmarkShare.id": "bookmark", "deleteBookmarkShare.shareId": "share", "listFolderShares.id": "folder", "createFolderShare.id": "folder", "createFolderShare.accountId": "member", "createFolderShare.teamId": "team", "deleteFolderShare.id": "folder", "deleteFolderShare.shareId": "share", id: "invitation", "getBookmark.id": "bookmark", "createBookmark.slug": "bookmark", "updateBookmark.slug": "bookmark", "checkSlugAvailability.slug": "bookmark", "checkSlugAvailability.bookmarkId": "bookmark", "resolveSlug.slug": "slug", "chooseSlug.slug": "slug", "chooseSlug.bookmarkId": "bookmark", "deleteGoPreference.slug": "slug", "getFavicon.host": "host", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "listBookmarkIds.folderId": "folder", "listBookmarkIds.tag": "tag", "listBookmarkIds.tag[]": "tag", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark", "bulkBookmarks.filter.folderId": "folder", "bulkBookmarks.filter.tag": "tag", "bulkBookmarks.filter.tag[]": "tag", "bulkBookmarks.folderId": "folder", "bulkBookmarks.tagIds[]": "tag", "previewBulkBookmarks.ids[]": "bookmark", "previewBulkBookmarks.filter.hasSlug": "bookmark", "previewBulkBookmarks.filter.folderId": "folder", "previewBulkBookmarks.filter.tag": "tag", "previewBulkBookmarks.filter.tag[]": "tag", "previewBulkBookmarks.tagIds[]": "tag" } as const;
+    const mapping = { rowId: "bookmark", accountId: "member", transferTo: "member", "teamIds[]": "team", "getTeam.id": "team", "updateTeam.id": "team", "deleteTeam.id": "team", "replaceTeamMembers.id": "team", "replaceTeamMembers.accountIds[]": "member", "listBookmarkShares.id": "bookmark", "createBookmarkShare.id": "bookmark", "createBookmarkShare.accountId": "member", "createBookmarkShare.teamId": "team", "bulkBookmarks.teamId": "team", "previewBulkBookmarks.teamId": "team", "deleteBookmarkShare.id": "bookmark", "deleteBookmarkShare.shareId": "share", "listFolderShares.id": "folder", "createFolderShare.id": "folder", "createFolderShare.accountId": "member", "createFolderShare.teamId": "team", "deleteFolderShare.id": "folder", "deleteFolderShare.shareId": "share", id: "invitation", "getBookmark.id": "bookmark", "createBookmark.slug": "bookmark", "updateBookmark.slug": "bookmark", "checkSlugAvailability.slug": "bookmark", "checkSlugAvailability.bookmarkId": "bookmark", "resolveSlug.slug": "slug", "chooseSlug.slug": "slug", "chooseSlug.bookmarkId": "bookmark", "deleteGoPreference.slug": "slug", "getFavicon.host": "host", "updateBookmark.id": "bookmark", "deleteBookmark.id": "bookmark", "openBookmark.id": "bookmark", "renameTag.id": "tag", "deleteTag.id": "tag", "mergeTag.id": "tag", "mergeTag.intoTagId": "tag", "getFolder.id": "folder", "updateFolder.id": "folder", "deleteFolder.id": "folder", "addFolderBookmarks.id": "folder", "removeFolderBookmarks.id": "folder", "addFolderBookmarks.bookmarkIds[]": "bookmark", "removeFolderBookmarks.bookmarkIds[]": "bookmark", "listBookmarks.folderId": "folder", "createBookmark.folderIds[]": "folder", "updateBookmark.folderIds[]": "folder", "listBookmarks.tag": "tag", "listBookmarks.tag[]": "tag", "createBookmark.tagIds[]": "tag", "updateBookmark.tagIds[]": "tag", "listBookmarks.hasSlug": "bookmark", "listBookmarkIds.hasSlug": "bookmark", "listBookmarkIds.folderId": "folder", "listBookmarkIds.tag": "tag", "listBookmarkIds.tag[]": "tag", "bulkBookmarks.ids[]": "bookmark", "bulkBookmarks.filter.hasSlug": "bookmark", "bulkBookmarks.filter.folderId": "folder", "bulkBookmarks.filter.tag": "tag", "bulkBookmarks.filter.tag[]": "tag", "bulkBookmarks.folderId": "folder", "bulkBookmarks.tagIds[]": "tag", "previewBulkBookmarks.ids[]": "bookmark", "previewBulkBookmarks.filter.hasSlug": "bookmark", "previewBulkBookmarks.filter.folderId": "folder", "previewBulkBookmarks.filter.tag": "tag", "previewBulkBookmarks.filter.tag[]": "tag", "previewBulkBookmarks.tagIds[]": "tag" } as const;
     const request = async (call: ApiCall): Promise<ApiResponse> => {
       if (call.operation.operationId === "createBookmarkShare" || call.operation.operationId === "createFolderShare") {
         const fields = isRecord(call.body) ? call.body : {};
@@ -640,7 +676,7 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
       // handler answers for them in the assertions after the run.
       const operationId = call.operation.operationId;
       const response =
-        operationId === "bulkBookmarks" || operationId === "previewBulkBookmarks" ? await sendVariants(call, send, sendByFilter, variants) : await send(call);
+        operationId === "bulkBookmarks" || operationId === "previewBulkBookmarks" ? await sendVariants(call, { send, sendByFilter, sendShare, sendShareByFilter }, variants) : await send(call);
       if ("instanceAdmin" in call.principal) {
         instanceAdminStatuses.push(response.status);
       }
@@ -712,13 +748,18 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // may only read, the instance admin) every request gets the one answer of the stage before the handler.
     const bulkCalls = variants.filter((variant) => variant.operation === "bulkBookmarks");
     const previewCalls = variants.filter((variant) => variant.operation === "previewBulkBookmarks");
-    expect([bulkCalls.length, previewCalls.length]).toEqual([10 * 2 * 2, 10 * 2 * 2]);
+    // The three members of B in `accountId` multiply the calls, the one team of B in `teamId` does not.
+    expect([bulkCalls.length, previewCalls.length]).toEqual([10 * 2 * 2 * 3, 10 * 2 * 2 * 3]);
     const reaching = bulkCalls.filter((variant) => variant.statuses.skippedById === 200);
-    expect(reaching).toHaveLength(6 * 2 * 2);
+    expect(reaching).toHaveLength(6 * 2 * 2 * 3);
+    // A member of B, and the team of B, are no member and no team of the workspace of the request whatever bookmarks are named, which is the declared 422 and writes nothing.
     expect(reaching.map((variant) => [variant.statuses, variant.affectedById, variant.requestedByFilter])).toEqual(
-      reaching.map(() => [{ skippedById: 200, folderOfB: 404, tagsOfB: 404, filterOfB: 200, filterAndFolderOfB: 404 }, 0, 0]),
+      reaching.map(() => [{ skippedById: 200, folderOfB: 404, tagsOfB: 404, filterOfB: 200, filterAndFolderOfB: 404, memberOfB: 422, teamOfB: 422, filterMemberOfB: 422 }, 0, 0]),
     );
-    for (const variant of [...bulkCalls.filter((candidate) => candidate.statuses.skippedById !== 200), ...previewCalls]) {
+    const previewsReaching = previewCalls.filter((variant) => variant.statuses.byIds === 404 && variant.statuses.shareMemberOfB === 422);
+    expect(previewsReaching).toHaveLength(6 * 2 * 2 * 3);
+    expect(previewsReaching.map((variant) => variant.statuses)).toEqual(previewsReaching.map(() => ({ byIds: 404, byFilter: 404, shareMemberOfB: 422, shareTeamOfB: 422, shareFilterOfB: 422 })));
+    for (const variant of [...bulkCalls.filter((candidate) => candidate.statuses.skippedById !== 200), ...previewCalls.filter((candidate) => !previewsReaching.includes(candidate))]) {
       expect(new Set(Object.values(variant.statuses)).size).toBe(1);
     }
     // the three sessions and the six tokens (a read and a read-write one of each role) of A, once on each of the nine operations that name no member
@@ -742,7 +783,8 @@ describe("the cross-tenant matrix in API mode over the operations of the committ
     // The list of remembered choices names none (one of the seventeen calls that name nothing), and forgetting one names each of the two slugs of B once, the first of which the owner of B has a choice for, which is the declared 404 not_found and leaves it.
     // The creation and the list of teams name none, and the read, the change and the deletion of a team name the one team of B once each, and the replacement of its members names the team and each of the three members of B once.
     // The search for share targets names none, the list of the shares of a bookmark names each of the two bookmarks of B once, the grant each of the two bookmarks with each of the three members of B and the team of B once (as the two requests that carry the member and the team apart), and the revocation each of the two bookmarks with the share of B once. The list of the shares of a folder names the one folder of B once, the grant the folder with each of the three members of B and the team of B once, and the revocation the folder with the share of B once.
-    const calls = 23 + (3 + 3 + 3 + 3 * 3 + 3) + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2 + 1 + 2 + 3 + 3 + 2 + 2 * 3 + 2 + 1 + 3 + 1;
+    // The bulk request and its preview name each of the two bookmarks of B in `ids` once for each of the two in `filter.hasSlug` and for each of the three members of B in `accountId`: twelve calls each, of which the four they had before are in the sum above and the further eight each are added at its end.
+    const calls = 23 + (3 + 3 + 3 + 3 * 3 + 3) + 3 * 2 + 2 * 2 + 2 + 2 + 2 * 2 + 3 + 3 + 2 * 2 + 2 * 2 + 2 * 2 + 2 + 2 * 2 + 2 + 1 + 2 + 3 + 3 + 2 + 2 * 3 + 2 + 1 + 3 + 1 + 2 * (2 * 2 * 3 - 2 * 2);
     expect(report.attempts).toBe(10 * calls);
     // The four exceptions are the identifiers of B in the `hasSlug` filter of the bookmark list and of the select-all, which the query validation refuses before the instance admin's missing membership is looked at.
     expect(instanceAdminStatuses.toSorted()).toEqual([...Array<number>(calls - 4).fill(404), 422, 422, 422, 422]);

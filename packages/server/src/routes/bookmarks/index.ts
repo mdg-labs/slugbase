@@ -1,10 +1,11 @@
 import { BOOKMARK_LIST_TOTAL_CAP, bulkBookmarks as bulkBookmarksOperation, createBookmark as createBookmarkOperation, deleteBookmark as deleteBookmarkOperation, fetchBookmarkMetadata as fetchBookmarkMetadataOperation, getBookmark, listBookmarkIds as listBookmarkIdsOperation, listBookmarks as listBookmarksOperation, openBookmark as openBookmarkOperation, previewBulkBookmarks as previewBulkBookmarksOperation, updateBookmark as updateBookmarkOperation, type BookmarkSchema, type BulkBookmarksRequestSchema } from "@slugbase/contracts";
-import { bulkBookmarks, createAuditWriter, createBookmark, deleteBookmark, listBookmarkIds, listBookmarks, lookupPageMetadata, normalizeSlug, openBookmark, previewBulkTags, readBookmark, updateBookmark, type AuditActor, type BookmarkBulkStore, type BookmarkCursors, type BookmarkEntitlements, type BookmarkListStore, type BookmarkRecord, type BookmarkStore, type BookmarkUsage, type EgressPort, type PageMetadataCache } from "@slugbase/core";
-import { accountProfileRepository, auditEventRepository, bookmarkRepository, isBookmarkSlugTaken, urlMetadataRepository, type TenantTx } from "@slugbase/db";
+import { bulkBookmarks, createAuditWriter, createBookmark, deleteBookmark, listBookmarkIds, listBookmarks, lookupPageMetadata, normalizeSlug, openBookmark, previewBulkShare, previewBulkTags, readBookmark, SHARE_ENTITLEMENTS, updateBookmark, type AuditActor, type BookmarkBulkStore, type BookmarkCursors, type BookmarkEntitlements, type BookmarkListStore, type BookmarkRecord, type BookmarkStore, type BookmarkUsage, type EgressPort, type EntitlementCheck, type EntitlementUpgradeCheck, type PageMetadataCache, type ShareTarget } from "@slugbase/core";
+import { accountProfileRepository, auditEventRepository, bookmarkRepository, bookmarkShareRepository, isBookmarkSlugTaken, urlMetadataRepository, type TenantTx } from "@slugbase/db";
 import type { z } from "zod";
 import { createPageCursorCodec } from "../../auth/page-cursor.ts";
 import { uuidv7 } from "../../auth/uuidv7.ts";
 import { queueDomainEvent } from "../../events/publish.ts";
+import { entitlementRequired } from "../../http/authorize.ts";
 import type { Principal } from "../../http/authenticate.ts";
 import type { ChainContext, RouteBinding } from "../../http/chain.ts";
 import { ProblemError } from "../../http/problem.ts";
@@ -87,7 +88,11 @@ import { acceptedVersions, entityTagOf } from "../workspaces/if-match.ts";
 // filtered bookmarks. `add_to_folder`, `move_to_folder` and `remove_from_folder` act with the `folderId` of the body and `add_tags` and
 // `remove_tags` with its `tagIds`, all the caller's own: one that is not is `404 not_found` and nothing is changed (doc 02 section 5.8). They write
 // links only, so no bookmark moves its version, and a plan-archived bookmark is skipped as `not_found`. POST /api/v1/bookmarks/bulk/preview
-// answers what `add_tags` would do, with the tag set the bookmarks it reaches would carry, and writes nothing; it takes from the `read` bucket and, being a POST, needs a token of the `write` scope.
+// answers what `add_tags` would do, with the tag set the bookmarks it reaches would carry, or what `share` would do, with who the bookmarks it reaches are shared with afterwards, and writes nothing; it takes from the `read` bucket and, being a POST, needs a token of the `write` scope.
+// `share` shares the caller's own bookmarks with the member `accountId` or the team `teamId` of the body: it needs `sharing.members` for a member and `sharing.teams` for a team, decided with the
+// check stage 9 uses before the database is touched (`403 entitlement_required`), and, like the single share, is `422 validation_failed` for the caller as the member (`cannot_share_with_self`) and for an account that is no member
+// or a team that is none of the workspace's (`unknown_member`, `unknown_team`), whichever bookmarks are named, with nothing written. A bookmark the target is shared with already counts as affected and gets no second share;
+// the shares made and one `share.bulk_granted` audit event with their number and the target are the transaction's, and a request that makes none records nothing.
 //
 // POST /api/v1/bookmarks/{id}/open (doc 04 section 10.6, doc 02 section 5.5, doc 01 section 8.1, doc 10 T1, T2 and T12) answers the
 // destination of a bookmark the caller can read and counts the open in the usage buffer of this process, which a timer writes to
@@ -118,6 +123,9 @@ const BAD_CURSOR = "The cursor is not valid.";
 const TOO_MANY_MATCHES = "The filter matches more bookmarks than one request can act on; narrow it.";
 const SLUG_INVALID = "A slug has 1 to 64 lower-case letters, digits and hyphens and does not start with a hyphen.";
 const FORWARDING_NEEDS_SLUG = "A bookmark forwards only while it has a slug; give it one or turn forwarding off.";
+const SELF_SHARE = "A bookmark is not shared with its owner.";
+const NOT_A_MEMBER = "The account must be a current member of the workspace.";
+const NOT_A_TEAM = "The team must be a team of the workspace.";
 const URL_FIELD_CODES = { empty: "too_small", too_long: "too_big", malformed: "invalid_url" } as const;
 
 export interface BookmarkRoutesOptions {
@@ -127,6 +135,10 @@ export interface BookmarkRoutesOptions {
   readonly entitlements: BookmarkEntitlements;
   /** Where an open is counted; the usage buffer of the server process. */
   readonly usage: BookmarkUsage;
+  /** Decides a sharing entitlement of the workspace the request acts in, as stage 9 does. */
+  readonly sharingEntitlements: EntitlementCheck;
+  /** Says whether a refused sharing entitlement has a better plan to offer. */
+  readonly upgradeAvailable: EntitlementUpgradeCheck;
   /** The egress port the metadata of a page is fetched through. */
   readonly egress: EgressPort;
   /** The most the metadata lookup may take, in milliseconds; three seconds when left out. */
@@ -202,6 +214,7 @@ function storeOf(tx: TenantTx): BookmarkStore {
 /** The bulk store over the repository of the open transaction. */
 function bulkStoreOf(tx: TenantTx): BookmarkBulkStore {
   const repository = bookmarkRepository(tx);
+  const shares = bookmarkShareRepository(tx);
   return {
     ids: (filter, limit) => repository.ids(filter, limit),
     sharedAmong: (request) => repository.sharedAmong(request),
@@ -210,6 +223,8 @@ function bulkStoreOf(tx: TenantTx): BookmarkBulkStore {
     fileIn: (request) => repository.fileIn(request),
     tag: (request) => repository.tag(request),
     previewTags: (request) => repository.previewTags(request),
+    share: (request) => shares.share(request),
+    previewShare: (request) => shares.previewShare(request),
   };
 }
 
@@ -257,6 +272,27 @@ function bulkTargetOf(body: { readonly ids?: readonly string[] | undefined; read
   } as const;
 }
 
+/** The member or team a share action of the body shares with; the contract requires exactly one of them for that action. */
+function shareTargetOf(body: { readonly accountId?: string | undefined; readonly teamId?: string | undefined }): ShareTarget {
+  if (body.accountId !== undefined) {
+    return { kind: "member", accountId: body.accountId };
+  }
+  if (body.teamId !== undefined) {
+    return { kind: "team", teamId: body.teamId };
+  }
+  throw new RangeError("a share names a member or a team");
+}
+
+/** The problem a share target that is the caller or is none of the workspace's is answered with. */
+function shareTargetProblem(outcome: { readonly kind: "self" } | { readonly kind: "unknown_target"; readonly field: "accountId" | "teamId" }): ProblemError {
+  if (outcome.kind === "self") {
+    return new ProblemError("validation_failed", SELF_SHARE, { errors: [{ path: "accountId", code: "cannot_share_with_self" }] });
+  }
+  return new ProblemError("validation_failed", outcome.field === "accountId" ? NOT_A_MEMBER : NOT_A_TEAM, {
+    errors: [{ path: outcome.field, code: outcome.field === "accountId" ? "unknown_member" : "unknown_team" }],
+  });
+}
+
 function bookmarkBody(bookmark: BookmarkRecord): z.input<typeof BookmarkSchema> {
   return {
     id: bookmark.id,
@@ -293,8 +329,18 @@ function metadataCacheOf(tenant: RequestTenant): PageMetadataCache {
   };
 }
 
-export function bookmarkRoutes({ entitlements, cursorSecret, usage, egress, metadataBudgetMs = DEFAULT_METADATA_BUDGET_MS }: BookmarkRoutesOptions): RouteBinding[] {
+export function bookmarkRoutes({ entitlements, sharingEntitlements, upgradeAvailable, cursorSecret, usage, egress, metadataBudgetMs = DEFAULT_METADATA_BUDGET_MS }: BookmarkRoutesOptions): RouteBinding[] {
   const cursors = bookmarkCursors(cursorSecret);
+
+  /** Refuses with `403 entitlement_required` unless the workspace may share with the kind of target; an error of the entitlement source ends the request with an error, never with a grant. */
+  async function requireSharingWith(context: ChainContext, tenant: RequestTenant, target: ShareTarget): Promise<void> {
+    const entitlement = SHARE_ENTITLEMENTS[target.kind];
+    const subject = { accountId: tenant.accountId, workspaceId: tenant.workspaceId };
+    if (!(await sharingEntitlements(entitlement, subject, context.req.raw))) {
+      throw entitlementRequired(entitlement, await upgradeAvailable(entitlement, subject, context.req.raw));
+    }
+  }
+
   return [
     route(createBookmarkOperation).handle(async ({ body }, context) => {
       const tenant = tenantOf(context);
@@ -416,6 +462,10 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage, egress, meta
       const tenant = tenantOf(context);
       const ipPrefix = networkPrefixOf(context.get("clientIp")) ?? null;
       const target = bulkTargetOf(body);
+      const shareTarget = body.action === "share" ? shareTargetOf(body) : undefined;
+      if (shareTarget !== undefined) {
+        await requireSharingWith(context, tenant, shareTarget);
+      }
       const outcome = await tenant.withTenant(async (tx) => {
         const profile = await accountProfileRepository(tx).profile();
         if (profile === undefined) {
@@ -423,8 +473,8 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage, egress, meta
         }
         const actor = auditActorOf(context.get("principal"), tenant.accountId, profile.displayName);
         return bulkBookmarks(
-          { store: bulkStoreOf(tx), audit: createAuditWriter({ store: auditEventRepository(tx), newId: uuidv7 }) },
-          { workspaceId: tenant.workspaceId, accountId: tenant.accountId, actor, ipPrefix, action: body.action, target, folderId: body.folderId, tagIds: body.tagIds },
+          { store: bulkStoreOf(tx), audit: createAuditWriter({ store: auditEventRepository(tx), newId: uuidv7 }), newId: uuidv7 },
+          { workspaceId: tenant.workspaceId, accountId: tenant.accountId, actor, ipPrefix, action: body.action, target, folderId: body.folderId, tagIds: body.tagIds, shareTarget },
         );
       });
       switch (outcome.kind) {
@@ -440,12 +490,47 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage, egress, meta
           throw new ProblemError("forbidden", SHARED_READ_ONLY);
         case "target_not_found":
           throw new ProblemError("not_found", body.folderId === undefined ? NO_SUCH_TAG : NO_SUCH_FOLDER);
+        case "self":
+        case "unknown_target":
+          throw shareTargetProblem(outcome);
       }
     }),
 
     route(previewBulkBookmarksOperation).handle(async ({ body }, context) => {
       const tenant = tenantOf(context);
-      const outcome = await tenant.withTenant((tx) => previewBulkTags({ store: bulkStoreOf(tx) }, { accountId: tenant.accountId, target: bulkTargetOf(body), tagIds: body.tagIds }));
+      if (body.action === "share") {
+        const shareTarget = shareTargetOf(body);
+        await requireSharingWith(context, tenant, shareTarget);
+        const outcome = await tenant.withTenant((tx) => previewBulkShare({ store: bulkStoreOf(tx) }, { accountId: tenant.accountId, target: bulkTargetOf(body), shareTarget }));
+        switch (outcome.kind) {
+          case "previewed":
+            return {
+              status: 200,
+              body: {
+                requested: outcome.requested,
+                affected: outcome.affected,
+                skipped: outcome.requested - outcome.affected,
+                skippedReasons: outcome.skipped,
+                tags: [],
+                audience: outcome.audience,
+              },
+            };
+          case "too_many":
+            throw new ProblemError("validation_failed", TOO_MANY_MATCHES, { errors: [{ path: body.ids === undefined ? "filter" : "ids", code: "too_big" }] });
+          case "url_refused":
+            throw new ProblemError("validation_failed", URL_INVALID, { errors: [{ path: "filter.url", code: outcome.reason === "not_http" ? "url_not_allowed" : URL_FIELD_CODES[outcome.reason] }] });
+          case "forbidden":
+            throw new ProblemError("forbidden", SHARED_READ_ONLY);
+          case "self":
+          case "unknown_target":
+            throw shareTargetProblem(outcome);
+        }
+      }
+      if (body.tagIds === undefined) {
+        throw new RangeError("add_tags names tags");
+      }
+      const tagIds = body.tagIds;
+      const outcome = await tenant.withTenant((tx) => previewBulkTags({ store: bulkStoreOf(tx) }, { accountId: tenant.accountId, target: bulkTargetOf(body), tagIds }));
       switch (outcome.kind) {
         case "previewed":
           return {
@@ -456,6 +541,7 @@ export function bookmarkRoutes({ entitlements, cursorSecret, usage, egress, meta
               skipped: outcome.requested - outcome.affected,
               skippedReasons: outcome.skipped,
               tags: outcome.tags.map((tag) => ({ id: tag.id, name: tag.name, bookmarkCount: tag.bookmarkCount, added: tag.added })),
+              audience: null,
             },
           };
         case "too_many":

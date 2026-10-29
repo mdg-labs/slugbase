@@ -1,15 +1,17 @@
 import { Button, Tooltip, TooltipPopup, TooltipTrigger } from "@slugbase/ui";
-import { BulkBar, BulkBarButton, Confirm, type BulkBarAction, ExternalLinkIcon, FolderIcon, PinIcon, PinOffIcon, TagIcon, Trash2Icon, feedbackToast } from "@slugbase/ui/patterns";
+import { BulkBar, BulkBarButton, Confirm, type BulkBarAction, ExternalLinkIcon, FolderIcon, PinIcon, PinOffIcon, Share2Icon, TagIcon, Trash2Icon, feedbackToast } from "@slugbase/ui/patterns";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useState, type ReactElement } from "react";
 import { useTranslation } from "react-i18next";
 import { useFormat } from "../i18n/use-format.ts";
+import { useSharingGranted } from "../sharing/index.ts";
 import type { BulkBookmarks } from "./bookmark-list-actions.ts";
 import type { BookmarkSelection } from "./bookmark-selection.ts";
 import { openInNewTab } from "./bookmark-open.ts";
-import { BOOKMARK_SELECT_ALL_CAP, bookmarkFailureOf, isSharedWithMe, listBookmarkIds, type Bookmark } from "./bookmarks.ts";
+import { BOOKMARK_SELECT_ALL_CAP, bookmarkFailureOf, isSharedWithMe, listBookmarkIds, type Bookmark, type BulkShareTarget } from "./bookmarks.ts";
 import { BulkLinkOverlay, type LinkAction } from "./bulk-link-overlay.tsx";
+import { BulkShareOverlay } from "./bulk-share-overlay.tsx";
 import type { BookmarkFilterParams } from "./list-search.ts";
 
 interface SelectAllRequest {
@@ -53,8 +55,9 @@ export interface BookmarksBulkBarProps {
 
 /**
  * The bar of the bookmark list's selection (doc 03 section 3.4): the count, "Select all matching", and add to a folder,
- * remove from a folder, add tags, remove tags, pin, unpin and delete for the selected bookmarks. The folder and tag actions
- * first ask which folder or tags, over the bookmarks selected when the picker was opened. Select all asks the API for the identifiers the filters match, at most the
+ * remove from a folder, add tags, remove tags, share, pin, unpin and delete for the selected bookmarks. The folder and tag actions
+ * first ask which folder or tags, and a share which member or team with the preview of it, over the bookmarks selected when the
+ * picker was opened. Share is offered where the workspace may share. Select all asks the API for the identifiers the filters match, at most the
  * select-all cap, and says so when more match. Delete first states how many bookmarks it removes and what happens to
  * their slugs. Bookmarks shared with the member can only be opened (doc 02 section 8.2, Q22): where the selection holds one,
  * the actions that change bookmarks stay in the bar disabled, each saying why, and the bar says that only "Open all" is left.
@@ -68,6 +71,8 @@ export function BookmarksBulkBar({ selection, bulk, filters, total, items }: Boo
   const [deleting, setDeleting] = useState<readonly string[] | undefined>(undefined);
   // The same for the folder and tag pickers.
   const [linking, setLinking] = useState<{ readonly action: LinkAction; readonly ids: readonly string[] } | undefined>(undefined);
+  const [sharing, setSharing] = useState<readonly string[] | undefined>(undefined);
+  const sharingGranted = useSharingGranted();
   const [sharedFound, setSharedFound] = useState<SharedFound | undefined>(undefined);
   const selectAll = useMutation({
     mutationKey: ["bookmarks", "select-all"],
@@ -149,6 +154,19 @@ export function BookmarksBulkBar({ selection, bulk, filters, total, items }: Boo
     linkAction("remove_from_folder", t("bookmarks.bulk.removeFromFolder"), <FolderIcon aria-hidden="true" />),
     linkAction("add_tags", t("bookmarks.bulk.addTags"), <TagIcon aria-hidden="true" />),
     linkAction("remove_tags", t("bookmarks.bulk.removeTags"), <TagIcon aria-hidden="true" />),
+    ...(sharingGranted
+      ? [
+          {
+            id: "share",
+            label: t("bookmarks.bulk.share.action"),
+            icon: <Share2Icon aria-hidden="true" />,
+            loading: bulk.running === "share",
+            onSelect: () => {
+              setSharing(ids);
+            },
+          },
+        ]
+      : []),
     { id: "pin", label: t("bookmarks.bulk.pin"), icon: <PinIcon aria-hidden="true" />, loading: bulk.running === "pin", onSelect: () => { bulk.run("pin", ids); } },
     { id: "unpin", label: t("bookmarks.bulk.unpin"), icon: <PinOffIcon aria-hidden="true" />, loading: bulk.running === "unpin", onSelect: () => { bulk.run("unpin", ids); } },
     { id: "delete", label: t("bookmarks.bulk.delete.action"), icon: <Trash2Icon aria-hidden="true" />, destructive: true, loading: bulk.running === "delete", onSelect: () => { setDeleting(ids); } },
@@ -165,6 +183,10 @@ export function BookmarksBulkBar({ selection, bulk, filters, total, items }: Boo
     }
   };
   const deletingCount = deleting?.length ?? 0;
+  const shareWith = (named: readonly string[], target: BulkShareTarget): void => {
+    bulk.run("share", named, { target: { shareWith: target } });
+    setSharing(undefined);
+  };
 
   return (
     <>
@@ -208,6 +230,17 @@ export function BookmarksBulkBar({ selection, bulk, filters, total, items }: Boo
           onSubmit={(target) => {
             bulk.run(linking.action, linking.ids, { target });
             setLinking(undefined);
+          }}
+        />
+      )}
+      {sharing === undefined ? null : (
+        <BulkShareOverlay
+          ids={sharing}
+          onClose={() => {
+            setSharing(undefined);
+          }}
+          onSubmit={(target) => {
+            shareWith(sharing, target);
           }}
         />
       )}
